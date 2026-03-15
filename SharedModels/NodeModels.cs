@@ -154,6 +154,9 @@ namespace SharedModels
         public bool Enabled { get; set; } = true;
         public int IntervalMs { get; set; } = 1000;
         public string Language { get; set; } = "CSharp";
+
+        /// <summary>Optional folder path for editor organization (e.g. "Alarms/Temperature"). Ignored by the server.</summary>
+        public string Group { get; set; } = "";
     }
 
     /// <summary>
@@ -170,6 +173,9 @@ namespace SharedModels
 
         /// <summary>Programming language: ST (Structured Text), IL (Instruction List), or LD (Ladder Diagram).</summary>
         public string Language { get; set; } = "ST";
+
+        /// <summary>Optional folder path for editor organization (e.g. "Motion/Axis1"). Ignored by the server.</summary>
+        public string Group { get; set; } = "";
     }
 
     /// <summary>
@@ -323,6 +329,9 @@ namespace SharedModels
 
         /// <summary>Gap between grid cells in pixels (responsive layout).</summary>
         public int GridGap { get; set; } = 8;
+
+        /// <summary>Optional folder path for editor organization (e.g. "Main/Popups"). Ignored by the server.</summary>
+        public string Group { get; set; } = "";
 
         public List<ScreenSymbol> Symbols { get; set; } = new();
     }

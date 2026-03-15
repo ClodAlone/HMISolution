@@ -210,6 +210,38 @@ public class PlcProgramNode : TreeNode
     public void SyncName() => PlcProgram.Name = Name;
 }
 
+/// <summary>
+/// A folder node for organizing scripts, screens, or PLC programs within their group.
+/// The folder itself has no model counterpart — it derives the Group path from its position in the tree.
+/// </summary>
+public class ResourceFolderNode : TreeNode
+{
+    public override string TypeName => "ResourceFolder";
+    public override string Icon => "📁";
+
+    /// <summary>Which resource type this folder contains.</summary>
+    public string ResourceKind { get; }
+
+    public ResourceFolderNode(string name, string resourceKind)
+    {
+        Name = name;
+        ResourceKind = resourceKind;
+    }
+
+    /// <summary>Builds the full group path from the tree hierarchy (e.g. "Alarms/Temperature").</summary>
+    public string GetGroupPath()
+    {
+        var parts = new List<string>();
+        TreeNode? current = this;
+        while (current is ResourceFolderNode rf)
+        {
+            parts.Insert(0, rf.Name);
+            current = current.Parent;
+        }
+        return string.Join("/", parts);
+    }
+}
+
 public class RecipeGroupNode : TreeNode
 {
     public override string TypeName => "RecipeGroup";

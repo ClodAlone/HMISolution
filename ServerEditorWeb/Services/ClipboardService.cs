@@ -247,10 +247,10 @@ public class ClipboardService
     {
         "Variable" or "Variables" => target is FolderNode or VariableGroupNode,
         "Folder" or "Folders" => target is FolderNode or VariableGroupNode,
-        "Script" or "Scripts" => target is ScriptGroupNode,
-        "PlcProgram" or "PlcPrograms" => target is PlcGroupNode,
+        "Script" or "Scripts" => target is ScriptGroupNode or ResourceFolderNode { ResourceKind: "Script" },
+        "PlcProgram" or "PlcPrograms" => target is PlcGroupNode or ResourceFolderNode { ResourceKind: "PlcProgram" },
         "Recipe" or "Recipes" => target is RecipeGroupNode,
-        "Screen" or "Screens" => target is ScreenGroupNode,
+        "Screen" or "Screens" => target is ScreenGroupNode or ResourceFolderNode { ResourceKind: "Screen" },
         _ => false
     };
 

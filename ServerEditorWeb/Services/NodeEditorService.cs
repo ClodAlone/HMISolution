@@ -228,7 +228,10 @@ public class NodeEditorService
 
     public void AddScript()
     {
-        if (SelectedItem is ScriptGroupNode parent)
+        var parent = SelectedItem is ResourceFolderNode rf && rf.ResourceKind == "Script"
+            ? (TreeNode)rf
+            : SelectedItem is ScriptGroupNode ? SelectedItem : null;
+        if (parent != null)
         {
             var newScript = new ScriptConfig { Name = "New Script", Code = "var val = Read(\"MyVar\");\nWrite(\"MyVar\", 123);", IntervalMs = 1000, Enabled = true };
             var newNode = new ScriptNode(newScript) { Parent = parent };
@@ -242,7 +245,10 @@ public class NodeEditorService
 
     public void AddPlcProgram()
     {
-        if (SelectedItem is PlcGroupNode parent)
+        var parent = SelectedItem is ResourceFolderNode rf && rf.ResourceKind == "PlcProgram"
+            ? (TreeNode)rf
+            : SelectedItem is PlcGroupNode ? SelectedItem : null;
+        if (parent != null)
         {
             var newPlc = new PlcProgramConfig
             {
@@ -262,7 +268,10 @@ public class NodeEditorService
 
     public void AddScreen()
     {
-        if (SelectedItem is ScreenGroupNode parent)
+        var parent = SelectedItem is ResourceFolderNode rf && rf.ResourceKind == "Screen"
+            ? (TreeNode)rf
+            : SelectedItem is ScreenGroupNode ? SelectedItem : null;
+        if (parent != null)
         {
             var newScreen = new ScreenConfig { Name = "New Screen", Width = 800, Height = 600 };
             var newNode = new ScreenNode(newScreen) { Parent = parent };
@@ -288,6 +297,39 @@ public class NodeEditorService
             parent.Children.Add(newNode);
             parent.IsExpanded = true;
             SelectedItem = newNode;
+            HasUnsavedChanges = true;
+            NotifyStateChanged();
+        }
+    }
+
+    /// <summary>
+    /// Adds a resource folder under the current selection (Script/PLC/Screen group or folder).
+    /// </summary>
+    public void AddResourceFolder()
+    {
+        string? kind = null;
+        TreeNode? parent = null;
+
+        switch (SelectedItem)
+        {
+            case ScriptGroupNode:
+                kind = "Script"; parent = SelectedItem; break;
+            case PlcGroupNode:
+                kind = "PlcProgram"; parent = SelectedItem; break;
+            case ScreenGroupNode:
+                kind = "Screen"; parent = SelectedItem; break;
+            case ResourceFolderNode rf:
+                kind = rf.ResourceKind; parent = rf; break;
+        }
+
+        if (kind != null && parent != null)
+        {
+            var folder = new ResourceFolderNode("New Folder", kind) { Parent = parent };
+            // Insert folders before leaf items
+            var insertIdx = parent.Children.Count(c => c is ResourceFolderNode);
+            parent.Children.Insert(insertIdx, folder);
+            parent.IsExpanded = true;
+            SelectedItem = folder;
             HasUnsavedChanges = true;
             NotifyStateChanged();
         }
@@ -398,6 +440,40 @@ public class NodeEditorService
                 rn.SyncName();
                 clipboard.CopyRecipe(rn.Recipe);
                 break;
+            case ResourceFolderNode rf:
+                CopyResourceFolder(rf, clipboard);
+                break;
+        }
+    }
+
+    private void CopyResourceFolder(ResourceFolderNode folder, ClipboardService clipboard)
+    {
+        switch (folder.ResourceKind)
+        {
+            case "Script":
+            {
+                var items = new List<ScriptConfig>();
+                CollectResourceItems<ScriptNode, ScriptConfig>(folder, "", n => { n.SyncName(); return n.Script; },
+                    (item, group) => { }, items);
+                if (items.Count > 0) clipboard.CopyScripts(items);
+                break;
+            }
+            case "PlcProgram":
+            {
+                var items = new List<PlcProgramConfig>();
+                CollectResourceItems<PlcProgramNode, PlcProgramConfig>(folder, "", n => { n.SyncName(); return n.PlcProgram; },
+                    (item, group) => { }, items);
+                if (items.Count > 0) clipboard.CopyPlcPrograms(items);
+                break;
+            }
+            case "Screen":
+            {
+                var items = new List<ScreenConfig>();
+                CollectResourceItems<ScreenNode, ScreenConfig>(folder, "", n => { n.SyncName(); return n.Screen; },
+                    (item, group) => { }, items);
+                if (items.Count > 0) clipboard.CopyScreens(items);
+                break;
+            }
         }
     }
 
@@ -469,37 +545,40 @@ public class NodeEditorService
                 NotifyStateChanged();
                 break;
             }
-            case "Script" when SelectedItem is ScriptGroupNode scriptGroup:
+            case "Script" when SelectedItem is ScriptGroupNode or ResourceFolderNode { ResourceKind: "Script" }:
             {
+                var pasteTarget = SelectedItem!;
                 var newScript = clipboard.PasteScript();
                 if (newScript == null) return;
-                var newNode = new ScriptNode(newScript) { Parent = scriptGroup };
-                scriptGroup.Children.Add(newNode);
-                scriptGroup.IsExpanded = true;
+                var newNode = new ScriptNode(newScript) { Parent = pasteTarget };
+                pasteTarget.Children.Add(newNode);
+                pasteTarget.IsExpanded = true;
                 SelectedItem = newNode;
                 HasUnsavedChanges = true;
                 NotifyStateChanged();
                 break;
             }
-            case "PlcProgram" when SelectedItem is PlcGroupNode plcGroup:
+            case "PlcProgram" when SelectedItem is PlcGroupNode or ResourceFolderNode { ResourceKind: "PlcProgram" }:
             {
+                var pasteTarget = SelectedItem!;
                 var newPlc = clipboard.PastePlcProgram();
                 if (newPlc == null) return;
-                var newNode = new PlcProgramNode(newPlc) { Parent = plcGroup };
-                plcGroup.Children.Add(newNode);
-                plcGroup.IsExpanded = true;
+                var newNode = new PlcProgramNode(newPlc) { Parent = pasteTarget };
+                pasteTarget.Children.Add(newNode);
+                pasteTarget.IsExpanded = true;
                 SelectedItem = newNode;
                 HasUnsavedChanges = true;
                 NotifyStateChanged();
                 break;
             }
-            case "Screen" when SelectedItem is ScreenGroupNode screenGroup:
+            case "Screen" when SelectedItem is ScreenGroupNode or ResourceFolderNode { ResourceKind: "Screen" }:
             {
+                var pasteTarget = SelectedItem!;
                 var newScreen = clipboard.PasteScreen();
                 if (newScreen == null) return;
-                var newNode = new ScreenNode(newScreen) { Parent = screenGroup };
-                screenGroup.Children.Add(newNode);
-                screenGroup.IsExpanded = true;
+                var newNode = new ScreenNode(newScreen) { Parent = pasteTarget };
+                pasteTarget.Children.Add(newNode);
+                pasteTarget.IsExpanded = true;
                 SelectedItem = newNode;
                 HasUnsavedChanges = true;
                 NotifyStateChanged();
@@ -548,35 +627,38 @@ public class NodeEditorService
                 NotifyStateChanged();
                 break;
             }
-            case "Scripts" when SelectedItem is ScriptGroupNode sg:
+            case "Scripts" when SelectedItem is ScriptGroupNode or ResourceFolderNode { ResourceKind: "Script" }:
             {
+                var pt = SelectedItem!;
                 var items = clipboard.PasteScripts();
                 if (items == null) return;
                 foreach (var s in items)
-                    sg.Children.Add(new ScriptNode(s) { Parent = sg });
-                sg.IsExpanded = true;
+                    pt.Children.Add(new ScriptNode(s) { Parent = pt });
+                pt.IsExpanded = true;
                 HasUnsavedChanges = true;
                 NotifyStateChanged();
                 break;
             }
-            case "PlcPrograms" when SelectedItem is PlcGroupNode pg:
+            case "PlcPrograms" when SelectedItem is PlcGroupNode or ResourceFolderNode { ResourceKind: "PlcProgram" }:
             {
+                var pt = SelectedItem!;
                 var items = clipboard.PastePlcPrograms();
                 if (items == null) return;
                 foreach (var p in items)
-                    pg.Children.Add(new PlcProgramNode(p) { Parent = pg });
-                pg.IsExpanded = true;
+                    pt.Children.Add(new PlcProgramNode(p) { Parent = pt });
+                pt.IsExpanded = true;
                 HasUnsavedChanges = true;
                 NotifyStateChanged();
                 break;
             }
-            case "Screens" when SelectedItem is ScreenGroupNode scg:
+            case "Screens" when SelectedItem is ScreenGroupNode or ResourceFolderNode { ResourceKind: "Screen" }:
             {
+                var pt = SelectedItem!;
                 var items = clipboard.PasteScreens();
                 if (items == null) return;
                 foreach (var s in items)
-                    scg.Children.Add(new ScreenNode(s) { Parent = scg });
-                scg.IsExpanded = true;
+                    pt.Children.Add(new ScreenNode(s) { Parent = pt });
+                pt.IsExpanded = true;
                 HasUnsavedChanges = true;
                 NotifyStateChanged();
                 break;
@@ -749,22 +831,16 @@ public class NodeEditorService
         var scriptGroup = new ScriptGroupNode();
         if (_rootModel?.Scripts != null)
         {
-            foreach (var script in _rootModel.Scripts)
-            {
-                var sNode = new ScriptNode(script) { Parent = scriptGroup };
-                scriptGroup.Children.Add(sNode);
-            }
+            BuildResourceTree(scriptGroup, _rootModel.Scripts, "Script",
+                s => s.Group, s => new ScriptNode(s) { });
         }
         RootItems.Add(scriptGroup);
 
         var plcGroup = new PlcGroupNode();
         if (_rootModel?.PlcPrograms != null)
         {
-            foreach (var plc in _rootModel.PlcPrograms)
-            {
-                var pNode = new PlcProgramNode(plc) { Parent = plcGroup };
-                plcGroup.Children.Add(pNode);
-            }
+            BuildResourceTree(plcGroup, _rootModel.PlcPrograms, "PlcProgram",
+                p => p.Group, p => new PlcProgramNode(p) { });
         }
         RootItems.Add(plcGroup);
 
@@ -782,11 +858,8 @@ public class NodeEditorService
         var screenGroup = new ScreenGroupNode();
         if (_rootModel?.Screens != null)
         {
-            foreach (var screen in _rootModel.Screens)
-            {
-                var scNode = new ScreenNode(screen) { Parent = screenGroup };
-                screenGroup.Children.Add(scNode);
-            }
+            BuildResourceTree(screenGroup, _rootModel.Screens, "Screen",
+                s => s.Group, s => new ScreenNode(s) { });
         }
         RootItems.Add(screenGroup);
 
@@ -849,6 +922,77 @@ public class NodeEditorService
         return node;
     }
 
+    /// <summary>
+    /// Builds a folder tree from a flat list of resource items using their Group path.
+    /// Items with an empty Group go directly under the parent; others are nested in ResourceFolderNodes.
+    /// </summary>
+    private static void BuildResourceTree<T>(TreeNode parent, List<T> items, string resourceKind,
+        Func<T, string> getGroup, Func<T, TreeNode> createNode)
+    {
+        // Cache of group-path → folder node
+        var folderCache = new Dictionary<string, ResourceFolderNode>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var item in items)
+        {
+            var group = getGroup(item)?.Trim() ?? "";
+            TreeNode target;
+
+            if (string.IsNullOrEmpty(group))
+            {
+                target = parent;
+            }
+            else
+            {
+                target = EnsureResourceFolder(parent, group, resourceKind, folderCache);
+            }
+
+            var node = createNode(item);
+            node.Parent = target;
+            target.Children.Add(node);
+        }
+    }
+
+    /// <summary>
+    /// Ensures the folder hierarchy exists for a given group path (e.g. "Alarms/Temperature").
+    /// Creates intermediate ResourceFolderNodes as needed.
+    /// </summary>
+    private static ResourceFolderNode EnsureResourceFolder(TreeNode root, string groupPath,
+        string resourceKind, Dictionary<string, ResourceFolderNode> cache)
+    {
+        if (cache.TryGetValue(groupPath, out var existing))
+            return existing;
+
+        var parts = groupPath.Split('/');
+        TreeNode current = root;
+        var pathSoFar = "";
+
+        foreach (var part in parts)
+        {
+            pathSoFar = string.IsNullOrEmpty(pathSoFar) ? part : $"{pathSoFar}/{part}";
+
+            if (!cache.TryGetValue(pathSoFar, out var folder))
+            {
+                // Look for an existing child folder with this name
+                folder = current.Children.OfType<ResourceFolderNode>()
+                    .FirstOrDefault(f => f.Name.Equals(part, StringComparison.OrdinalIgnoreCase));
+
+                if (folder == null)
+                {
+                    folder = new ResourceFolderNode(part, resourceKind) { Parent = current };
+                    // Insert folders before leaf items
+                    var insertIdx = current.Children.Count(c => c is ResourceFolderNode);
+                    current.Children.Insert(insertIdx, folder);
+                }
+
+                cache[pathSoFar] = folder;
+            }
+
+            current = folder;
+        }
+
+        return cache[groupPath];
+    }
+
     private void RebuildModelStructure()
     {
         foreach (var root in RootItems)
@@ -872,23 +1016,20 @@ public class NodeEditorService
             else if (root is ScriptGroupNode sgNode && _rootModel != null)
             {
                 _rootModel.Scripts.Clear();
-                foreach (var child in sgNode.Children)
+                CollectResourceItems<ScriptNode, ScriptConfig>(sgNode, "", n =>
                 {
-                    if (child is ScriptNode sNode)
-                        _rootModel.Scripts.Add(sNode.Script);
-                }
+                    n.SyncName();
+                    return n.Script;
+                }, (item, group) => item.Group = group, _rootModel.Scripts);
             }
             else if (root is PlcGroupNode pgNode && _rootModel != null)
             {
                 _rootModel.PlcPrograms.Clear();
-                foreach (var child in pgNode.Children)
+                CollectResourceItems<PlcProgramNode, PlcProgramConfig>(pgNode, "", n =>
                 {
-                    if (child is PlcProgramNode pNode)
-                    {
-                        pNode.SyncName();
-                        _rootModel.PlcPrograms.Add(pNode.PlcProgram);
-                    }
-                }
+                    n.SyncName();
+                    return n.PlcProgram;
+                }, (item, group) => item.Group = group, _rootModel.PlcPrograms);
             }
             else if (root is RecipeGroupNode rgNode && _rootModel != null)
             {
@@ -905,14 +1046,11 @@ public class NodeEditorService
             else if (root is ScreenGroupNode scrNode && _rootModel != null)
             {
                 _rootModel.Screens.Clear();
-                foreach (var child in scrNode.Children)
+                CollectResourceItems<ScreenNode, ScreenConfig>(scrNode, "", n =>
                 {
-                    if (child is ScreenNode scNode)
-                    {
-                        scNode.SyncName();
-                        _rootModel.Screens.Add(scNode.Screen);
-                    }
-                }
+                    n.SyncName();
+                    return n.Screen;
+                }, (item, group) => item.Group = group, _rootModel.Screens);
 
                 // Sync camera configs from ipcamera symbols to top-level Cameras list
                 _rootModel.Cameras.Clear();
@@ -976,6 +1114,32 @@ public class NodeEditorService
             {
                 childVar.SyncName();
                 fNode.Folder.Variables.Add(childVar.Variable);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Recursively collects resource items from a tree that may contain ResourceFolderNodes,
+    /// flattening them into a list and setting the Group path on each item.
+    /// </summary>
+    private static void CollectResourceItems<TNode, TConfig>(TreeNode parent, string groupPath,
+        Func<TNode, TConfig> getConfig, Action<TConfig, string> setGroup, List<TConfig> result)
+        where TNode : TreeNode
+    {
+        foreach (var child in parent.Children)
+        {
+            if (child is ResourceFolderNode folder)
+            {
+                var childPath = string.IsNullOrEmpty(groupPath)
+                    ? folder.Name
+                    : $"{groupPath}/{folder.Name}";
+                CollectResourceItems<TNode, TConfig>(folder, childPath, getConfig, setGroup, result);
+            }
+            else if (child is TNode itemNode)
+            {
+                var config = getConfig(itemNode);
+                setGroup(config, groupPath);
+                result.Add(config);
             }
         }
     }

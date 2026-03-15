@@ -247,17 +247,17 @@ else
 
         @* Add operations *@
         <button class="iconbar-btn" title="Add Folder" @onclick="AddFolder"
-                disabled="@(Editor.SelectedItem is not (FolderNode or VariableGroupNode))">📁</button>
+                disabled="@(!CanAddFolder())">📁</button>
         <button class="iconbar-btn" title="Add Variable" @onclick="AddVariable"
                 disabled="@(Editor.SelectedItem is not (FolderNode or VariableGroupNode))">🏷️</button>
         <button class="iconbar-btn" title="Add Script" @onclick="AddScript"
-                disabled="@(Editor.SelectedItem is not ScriptGroupNode)">⚡</button>
+                disabled="@(Editor.SelectedItem is not (ScriptGroupNode or ResourceFolderNode { ResourceKind: "Script" }))">⚡</button>
         <button class="iconbar-btn" title="Add PLC Program" @onclick="AddPlcProgram"
-                disabled="@(Editor.SelectedItem is not PlcGroupNode)">⚙️</button>
+                disabled="@(Editor.SelectedItem is not (PlcGroupNode or ResourceFolderNode { ResourceKind: "PlcProgram" }))">⚙️</button>
         <button class="iconbar-btn" title="Add Recipe" @onclick="AddRecipe"
                 disabled="@(Editor.SelectedItem is not RecipeGroupNode)">📦</button>
         <button class="iconbar-btn" title="Add Screen" @onclick="AddScreen"
-                disabled="@(Editor.SelectedItem is not ScreenGroupNode)">🖼️</button>
+                disabled="@(Editor.SelectedItem is not (ScreenGroupNode or ResourceFolderNode { ResourceKind: "Screen" }))">🖼️</button>
 
         <span class="iconbar-sep"></span>
 
@@ -469,7 +469,14 @@ else
         new() { Id = "crashes", Title = "Crash Reports", Icon = "🐛", Zone = "bottom" },
     ];
 
-private void OnAddFolder(TreeNode node) { Editor.SelectNode(node); Editor.AddFolder(); }
+private void OnAddFolder(TreeNode node)
+{
+    Editor.SelectNode(node);
+    if (node is FolderNode or VariableGroupNode)
+        Editor.AddFolder();
+    else
+        Editor.AddResourceFolder();
+}
 private void OnAddVariable(TreeNode node) { Editor.SelectNode(node); Editor.AddVariable(); }
 private void OnAddScript(TreeNode node) { Editor.SelectNode(node); Editor.AddScript(); }
 private void OnAddPlcProgram(TreeNode node) { Editor.SelectNode(node); Editor.AddPlcProgram(); }
@@ -672,7 +679,13 @@ private void OnPasteNode(TreeNode node) { Editor.SelectNode(node); Editor.PasteF
         _dockContainer?.ActivatePanel(panelId);
     }
 
-    private void AddFolder() { Editor.AddFolder(); }
+    private void AddFolder()
+    {
+        if (Editor.SelectedItem is FolderNode or VariableGroupNode)
+            Editor.AddFolder();
+        else
+            Editor.AddResourceFolder();
+    }
     private void AddVariable() { Editor.AddVariable(); }
     private void AddScript() { Editor.AddScript(); }
     private void AddPlcProgram() { Editor.AddPlcProgram(); }
@@ -680,11 +693,14 @@ private void OnPasteNode(TreeNode node) { Editor.SelectNode(node); Editor.PasteF
     private void AddScreen() { Editor.AddScreen(); }
     private void Delete() { Editor.DeleteSelected(); }
 
+    private bool CanAddFolder() => Editor.SelectedItem is FolderNode or VariableGroupNode
+        or ScriptGroupNode or PlcGroupNode or ScreenGroupNode or ResourceFolderNode;
+
     private bool CanCopySelection()
     {
         if (Editor.SelectedItems.Count == 0) return false;
         return Editor.SelectedItems.All(n => n is VariableNode or FolderNode { Parent: not null }
-            or ScriptNode or PlcProgramNode or ScreenNode or RecipeNode);
+            or ScriptNode or PlcProgramNode or ScreenNode or RecipeNode or ResourceFolderNode);
     }
 
     private bool CanDeleteSelection()
