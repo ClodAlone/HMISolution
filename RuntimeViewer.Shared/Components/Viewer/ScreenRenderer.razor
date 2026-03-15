@@ -10,7 +10,7 @@ else if (Screen.LayoutMode == "responsive")
 {
     @* ─── Responsive HTML Grid Layout ─────────────────────── *@
     <div class="rv-responsive-grid @(IsKiosk ? "rv-responsive-kiosk" : "")"
-         style="background: @Screen.Background; gap: @(Screen.GridGap)px; grid-template-columns: repeat(@Screen.GridColumns, 1fr);">
+         style="background: @Screen.Background;@(string.IsNullOrEmpty(Screen.BackgroundImage) ? "" : $" background-image: url('{Screen.BackgroundImage}'); background-size: cover; background-position: center;") gap: @(Screen.GridGap)px; grid-template-columns: repeat(@Screen.GridColumns, 1fr);">
         @foreach (var sym in Screen.Symbols.OrderBy(s => s.Order))
         {
             var liveValue = Opc.GetValue(sym.VariablePath ?? "");
@@ -133,6 +133,13 @@ else
          class="rv-canvas @(IsKiosk ? "rv-canvas-kiosk" : "")"
          style="background: @Screen.Background;"
          @onmouseup="OnGlobalMouseUp">
+
+        @if (!string.IsNullOrEmpty(Screen.BackgroundImage))
+        {
+            <image href="@Screen.BackgroundImage" x="0" y="0"
+                   width="@Screen.Width" height="@Screen.Height"
+                   preserveAspectRatio="xMidYMid slice" />
+        }
 
         @foreach (var sym in Screen.Symbols)
         {

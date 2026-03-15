@@ -90,6 +90,14 @@
                 <label class="form-label mb-0 small">BG:</label>
                 <input type="color" class="form-control form-control-sm form-control-color" style="width: 35px; height: 28px;"
                        @bind="screen.Background" @bind:after="OnChanged" />
+                <label class="form-label mb-0 small">BG Image:</label>
+                <InputFile OnChange="(e) => OnBackgroundImageSelected(e, screen)" accept="image/*"
+                           class="form-control form-control-sm" style="width: 130px; font-size: 10px;" />
+                @if (!string.IsNullOrEmpty(screen.BackgroundImage))
+                {
+                    <button class="btn btn-sm btn-outline-danger py-0 px-1" style="font-size: 10px;"
+                            @onclick="() => { screen.BackgroundImage = string.Empty; OnChanged(); }" title="Remove background image">✕</button>
+                }
 
                 <span class="ms-auto small text-muted">Symbols: @screen.Symbols.Count</span>
 
@@ -110,6 +118,13 @@
                      @onmousedown="OnCanvasMouseDown"
                      @onmousemove="OnCanvasMouseMove"
                      @onmouseup="OnCanvasMouseUp">
+
+                    @if (!string.IsNullOrEmpty(screen.BackgroundImage))
+                    {
+                        <image href="@screen.BackgroundImage" x="0" y="0"
+                               width="@screen.Width" height="@screen.Height"
+                               preserveAspectRatio="xMidYMid slice" />
+                    }
 
                     @foreach (var sym in screen.Symbols)
                     {
@@ -692,6 +707,20 @@
     }
 
     private void OnOpcChanged() => InvokeAsync(StateHasChanged);
+
+    private async Task OnBackgroundImageSelected(InputFileChangeEventArgs e, ScreenConfig screen)
+    {
+        var file = e.File;
+        if (file == null) return;
+
+        const long maxSize = 10 * 1024 * 1024; // 10 MB
+        using var stream = file.OpenReadStream(maxSize);
+        using var ms = new System.IO.MemoryStream();
+        await stream.CopyToAsync(ms);
+        var base64 = Convert.ToBase64String(ms.ToArray());
+        screen.BackgroundImage = $"data:{file.ContentType};base64,{base64}";
+        OnChanged();
+    }
 
     private ScreenConfig? GetScreen()
     {

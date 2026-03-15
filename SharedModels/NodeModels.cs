@@ -321,6 +321,12 @@ namespace SharedModels
         public int Height { get; set; } = 600;
         public string Background { get; set; } = "#ffffff";
 
+        /// <summary>
+        /// Optional background raster image stored as a base64 data URI (e.g. "data:image/png;base64,...").
+        /// When set, the image is rendered behind all symbols, covering the entire screen canvas.
+        /// </summary>
+        public string BackgroundImage { get; set; } = "";
+
         /// <summary>Layout mode: "svg" for fixed SVG canvas, "responsive" for responsive HTML grid.</summary>
         public string LayoutMode { get; set; } = "svg";
 
