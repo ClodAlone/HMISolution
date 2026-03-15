@@ -332,7 +332,7 @@ else
                 }
                 else if (context.Id == "screen")
                 {
-                    <ScreenEditorPanel Node="Editor.SelectedItem" OnPropertyChanged="OnPropertyChanged" />
+                    <ScreenEditorPanel @ref="_screenEditorPanel" Node="Editor.SelectedItem" OnPropertyChanged="OnPropertyChanged" />
                 }
                 else if (context.Id == "symbols")
                 {
@@ -422,6 +422,7 @@ else
     private LogViewerService _appLogService = new();
     private JsonEditor? _jsonEditor;
     private DockContainer? _dockContainer;
+    private ScreenEditorPanel? _screenEditorPanel;
 
     private string _selectedFile = "";
     private string[] _availableFiles = [];
@@ -505,6 +506,7 @@ private void OnPasteNode(TreeNode node) { Editor.SelectNode(node); Editor.PasteF
     {
         Editor.StateChanged += OnEditorStateChanged;
         Editor.ScreenSelectionChanged += OnScreenSelectionChanged;
+        Editor.SetUndoService(UndoRedo);
         Theme.ThemeChanged += OnThemeChanged;
         UndoRedo.StateChanged += OnUndoRedoStateChanged;
         PropertyGrid.OnPropertySet += OnPropertyGridValueSet;
@@ -954,6 +956,21 @@ private void OnPasteNode(TreeNode node) { Editor.SelectNode(node); Editor.PasteF
         {
             if (_dockContainer.IsMaximized)
                 _dockContainer.ToggleMaximize();
+        }
+        InvokeAsync(StateHasChanged);
+    }
+
+    [JSInvokable]
+    public void OnKeyboardDelete()
+    {
+        // If a screen editor has selected symbols, delete those; otherwise delete the tree node
+        if (Editor.SelectedScreenSymbols.Count > 0)
+        {
+            _screenEditorPanel?.DeleteSelectedFromKeyboard();
+        }
+        else if (CanDeleteSelection())
+        {
+            Delete();
         }
         InvokeAsync(StateHasChanged);
     }

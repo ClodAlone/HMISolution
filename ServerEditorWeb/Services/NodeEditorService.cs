@@ -8,6 +8,7 @@ public class NodeEditorService
 {
     private string _nodesPath = "";
     private NodeModel? _rootModel;
+    private UndoRedoService? _undoRedo;
 
     public List<TreeNode> RootItems { get; } = new();
     public TreeNode? SelectedItem { get; set; }
@@ -19,6 +20,9 @@ public class NodeEditorService
     public List<string> RecentFiles { get; } = new();
     public string CurrentFilePath => _nodesPath;
     public NodeModel? RootModel => _rootModel;
+
+    /// <summary>Inject the UndoRedoService so structural changes can be undone.</summary>
+    public void SetUndoService(UndoRedoService undoRedo) => _undoRedo = undoRedo;
 
     public event Action? StateChanged;
 
@@ -385,20 +389,89 @@ public class NodeEditorService
         var toDelete = SelectedItems.Where(n => n.Parent != null).ToList();
         if (toDelete.Count == 0) return;
 
+        // Capture state for undo: each deleted item's parent, index, and any model objects
+        var deletedInfo = new List<(TreeNode Item, TreeNode Parent, int Index, UserConfig? User, UserGroupConfig? Group, List<UserConfig>? GroupUsers)>();
+
         foreach (var item in toDelete)
         {
+            var parent = item.Parent!;
+            var index = parent.Children.IndexOf(item);
+
+            UserConfig? user = null;
+            UserGroupConfig? group = null;
+            List<UserConfig>? groupUsers = null;
+
             if (item is UserNode un)
+            {
+                user = un.User;
                 _rootModel?.Users.Remove(un.User);
+            }
             else if (item is UserGroupNode ugn)
             {
+                group = ugn.UserGroup;
+                groupUsers = ugn.Children.OfType<UserNode>().Select(u => u.User).ToList();
                 _rootModel?.UserGroups.Remove(ugn.UserGroup);
                 foreach (var child in ugn.Children.OfType<UserNode>())
                     _rootModel?.Users.Remove(child.User);
             }
 
-            item.Parent!.Children.Remove(item);
+            deletedInfo.Add((item, parent, index, user, group, groupUsers));
+            parent.Children.Remove(item);
             item.IsSelected = false;
         }
+
+        var description = toDelete.Count == 1
+            ? $"Delete {toDelete[0].Name}"
+            : $"Delete {toDelete.Count} items";
+
+        _undoRedo?.RecordAction(new CollectionAction
+        {
+            Description = description,
+            UndoCallback = () =>
+            {
+                // Re-insert in reverse order so indices stay valid
+                for (int i = deletedInfo.Count - 1; i >= 0; i--)
+                {
+                    var (item, parent, index, user, group, groupUsers) = deletedInfo[i];
+                    var insertAt = Math.Min(index, parent.Children.Count);
+                    parent.Children.Insert(insertAt, item);
+                    item.Parent = parent;
+
+                    if (group != null)
+                    {
+                        _rootModel?.UserGroups.Add(group);
+                        if (groupUsers != null)
+                            foreach (var u in groupUsers)
+                                _rootModel?.Users.Add(u);
+                    }
+                    else if (user != null)
+                    {
+                        _rootModel?.Users.Add(user);
+                    }
+                }
+                NotifyStateChanged();
+            },
+            RedoCallback = () =>
+            {
+                foreach (var (item, parent, _, user, group, groupUsers) in deletedInfo)
+                {
+                    if (user != null)
+                        _rootModel?.Users.Remove(user);
+                    if (group != null)
+                    {
+                        _rootModel?.UserGroups.Remove(group);
+                        if (groupUsers != null)
+                            foreach (var u in groupUsers)
+                                _rootModel?.Users.Remove(u);
+                    }
+                    parent.Children.Remove(item);
+                    item.IsSelected = false;
+                }
+                SelectedItems.Clear();
+                SelectedItem = null;
+                NotifyStateChanged();
+            }
+        });
 
         SelectedItems.Clear();
         SelectedItem = null;

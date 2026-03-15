@@ -66,5 +66,11 @@ window.editorShortcuts = {
         if (e.key === 'Escape' && !isEditable) {
             ref.invokeMethodAsync('OnKeyboardEscape');
         }
+
+        // Delete key — delete selected symbol or tree node
+        if (e.key === 'Delete' && !isEditable) {
+            e.preventDefault();
+            ref.invokeMethodAsync('OnKeyboardDelete');
+        }
     }
 };
