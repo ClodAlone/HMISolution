@@ -484,6 +484,8 @@ private void OnPasteNode(TreeNode node) { Editor.SelectedItem = node; Editor.Pas
         Editor.StateChanged += OnEditorStateChanged;
         Editor.ScreenSelectionChanged += OnScreenSelectionChanged;
         Theme.ThemeChanged += OnThemeChanged;
+        UndoRedo.StateChanged += OnUndoRedoStateChanged;
+        PropertyGrid.OnPropertySet += OnPropertyGridValueSet;
         _availableFiles = Editor.GetAvailableFiles();
         _serverLogService.Start();
         _appLogService.AddLog("INF", "Server Editor Web started.");
@@ -569,6 +571,16 @@ private void OnPasteNode(TreeNode node) { Editor.SelectedItem = node; Editor.Pas
         InvokeAsync(StateHasChanged);
     }
 
+    private void OnUndoRedoStateChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void OnPropertyGridValueSet(object target, System.Reflection.PropertyInfo property, object? oldValue, object? newValue)
+    {
+        UndoRedo.RecordPropertyChange(target, property, oldValue, newValue);
+    }
+
     private void LoadFile()
     {
         if (string.IsNullOrEmpty(_selectedFile)) return;
@@ -576,6 +588,7 @@ private void OnPasteNode(TreeNode node) { Editor.SelectedItem = node; Editor.Pas
         ShowToast(success, msg);
         if (success)
         {
+            UndoRedo.Clear();
             SetupLogDirectory();
             _requiresLogin = AuthService.IsLoginRequired(Editor.RootModel);
         }
@@ -614,6 +627,7 @@ private void OnPasteNode(TreeNode node) { Editor.SelectedItem = node; Editor.Pas
     private void NewFile()
     {
         Editor.NewFile();
+        UndoRedo.Clear();
         _selectedFile = "";
         _appLogService.AddLog("INF", "New configuration created.");
     }

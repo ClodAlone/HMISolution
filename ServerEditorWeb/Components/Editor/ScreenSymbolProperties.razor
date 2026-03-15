@@ -643,6 +643,7 @@ else
 @code {
     [Inject] private NodeEditorService Editor { get; set; } = default!;
     [Inject] private OpcClientService Opc { get; set; } = default!;
+    [Inject] private UndoRedoService UndoRedo { get; set; } = default!;
 
     [Parameter] public EventCallback OnPropertyChanged { get; set; }
 
@@ -651,6 +652,9 @@ else
 
     private static int _nextCmdId = 1;
 
+    // Snapshot-based undo for screen symbol properties
+    private string? _symbolSnapshot;
+
     protected override void OnInitialized()
     {
         Editor.ScreenSelectionChanged += OnSelectionChanged;
@@ -658,11 +662,31 @@ else
 
     private void OnSelectionChanged()
     {
+        // Take a snapshot when a new symbol is selected
+        CaptureSymbolSnapshot();
         InvokeAsync(StateHasChanged);
+    }
+
+    private void CaptureSymbolSnapshot()
+    {
+        if (_selectedSymbol != null)
+            _symbolSnapshot = System.Text.Json.JsonSerializer.Serialize(_selectedSymbol);
+        else
+            _symbolSnapshot = null;
     }
 
     private void OnChanged()
     {
+        // Record undo from snapshot
+        if (_selectedSymbol != null && _symbolSnapshot != null)
+        {
+            var newJson = System.Text.Json.JsonSerializer.Serialize(_selectedSymbol);
+            if (newJson != _symbolSnapshot)
+            {
+                UndoRedo.RecordSnapshot(_selectedSymbol, _symbolSnapshot, newJson, "Change symbol property");
+                _symbolSnapshot = newJson; // Update snapshot for next change
+            }
+        }
         OnPropertyChanged.InvokeAsync();
     }
 
