@@ -345,7 +345,7 @@ namespace SharedModels
     public class ScreenSymbol
     {
         public string Id { get; set; } = "";
-        public string Type { get; set; } = "rect"; // rect, circle, ellipse, text, line, gauge, indicator, svg, alarmlist, hdachart, hdagrid, eventlog, editbox, ipcamera, recipe, screenembed, imagemap
+        public string Type { get; set; } = "rect"; // rect, circle, ellipse, text, line, gauge, indicator, svg, alarmlist, hdachart, hdagrid, eventlog, editbox, ipcamera, recipe, screenembed, imagemap, trend
         public double X { get; set; }
         public double Y { get; set; }
         public double Width { get; set; } = 80;
@@ -486,12 +486,52 @@ namespace SharedModels
 
         /// <summary>
         /// List of condition-to-image mappings for the Image Map widget (Type == "imagemap").
-        /// Each entry defines a condition evaluated against the bound variable value and a
-        /// raster image (base64 data URI) to display when the condition is true.
-        /// Entries are evaluated in order; the first matching condition wins.
-        /// A condition of "*" or "" acts as the default/fallback.
         /// </summary>
         public List<ImageMapEntry> ImageMapEntries { get; set; } = new();
+
+        // ─── Realtime Trend properties (Type == "trend") ─────────
+        /// <summary>Pen definitions for the Realtime Trend widget.</summary>
+        public List<TrendPen> TrendPens { get; set; } = new();
+
+        /// <summary>Visible time window in seconds. Default 60.</summary>
+        public int TrendTimeWindowSeconds { get; set; } = 60;
+
+        /// <summary>Whether to show horizontal grid lines. Default true.</summary>
+        public bool TrendShowGrid { get; set; } = true;
+
+        /// <summary>Whether the interactive cursor crosshair is enabled. Default true.</summary>
+        public bool TrendShowCursor { get; set; } = true;
+
+        /// <summary>Whether to show the legend bar below the chart. Default true.</summary>
+        public bool TrendShowLegend { get; set; } = true;
+
+        /// <summary>Y-axis minimum. Null = auto-scale.</summary>
+        public double? TrendYMin { get; set; }
+
+        /// <summary>Y-axis maximum. Null = auto-scale.</summary>
+        public double? TrendYMax { get; set; }
+
+        /// <summary>Background color of the trend plot area. Default "#111827".</summary>
+        public string TrendBackground { get; set; } = "#111827";
+    }
+
+    /// <summary>
+    /// A single pen (trace) in the Realtime Trend widget.
+    /// Each pen is bound to a variable and drawn as a polyline.
+    /// </summary>
+    public class TrendPen
+    {
+        /// <summary>Variable path to sample at each tick.</summary>
+        public string VariablePath { get; set; } = "";
+
+        /// <summary>Display name shown in the legend. Empty = last segment of VariablePath.</summary>
+        public string Label { get; set; } = "";
+
+        /// <summary>Line color. Default is auto-assigned from palette.</summary>
+        public string Color { get; set; } = "";
+
+        /// <summary>Line width in pixels. Default 1.5.</summary>
+        public double LineWidth { get; set; } = 1.5;
     }
 
     /// <summary>

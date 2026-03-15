@@ -35,6 +35,7 @@
                 <button class="btn btn-sm btn-outline-info" @onclick='() => AddSymbol(screen, "recipe")' title="Recipe control panel">📦 Recipe</button>
                 <button class="btn btn-sm btn-outline-secondary" @onclick='() => AddSymbol(screen, "screenembed")' title="Embed other screens (tabbed if multiple)">🪟 Screen</button>
                 <button class="btn btn-sm btn-outline-info" @onclick='() => AddSymbol(screen, "imagemap")' title="Image Map (show raster images based on variable condition)">🖼️ ImageMap</button>
+                <button class="btn btn-sm btn-outline-success" @onclick='() => AddSymbol(screen, "trend")' title="Realtime Trend (live variable traces with pens and cursors)">📈 Trend</button>
 
                 <span class="mx-1">|</span>
 
@@ -364,6 +365,23 @@
                                                 @RenderSvgText(sym.Width / 2, sym.Height / 2 + 12, "middle", "middle", "#94a3b8", 9, "Image Map")
                                             }
                                             @RenderSvgText(sym.Width / 2, sym.Height + 12, "middle", null, "#6b7280", 7, $"{sym.ImageMapEntries.Count} image(s)")
+                                            break;
+                                        case "trend":
+                                            var tw = sym.Width - 12;
+                                            var tMid = sym.Height / 2 + 4;
+                                            var tAmp = (sym.Height - 40) * 0.3;
+                                            <rect width="@sym.Width" height="@sym.Height"
+                                                  fill="@(sym.TrendBackground ?? "#111827")" stroke="@sym.Stroke" stroke-width="@sym.StrokeWidth" rx="4" />
+                                            @RenderSvgText(sym.Width / 2, 14, "middle", "middle", "#e0e0e0", 10, "📈 Realtime Trend")
+                                            <line x1="4" y1="22" x2="@(sym.Width - 4)" y2="22" stroke="#334155" stroke-width="1" />
+                                            <polyline points="@($"6,{tMid} {6 + tw * 0.15},{tMid - tAmp} {6 + tw * 0.3},{tMid + tAmp * 0.5} {6 + tw * 0.5},{tMid - tAmp * 0.7} {6 + tw * 0.7},{tMid + tAmp * 0.3} {6 + tw * 0.85},{tMid - tAmp * 0.4} {6 + tw},{tMid + tAmp * 0.1}")"
+                                                       fill="none" stroke="#3b82f6" stroke-width="1.5" />
+                                            @if (sym.TrendPens.Count > 1)
+                                            {
+                                                <polyline points="@($"6,{tMid + 4} {6 + tw * 0.1},{tMid + tAmp * 0.6} {6 + tw * 0.25},{tMid - tAmp * 0.3} {6 + tw * 0.45},{tMid + tAmp * 0.8} {6 + tw * 0.6},{tMid - tAmp * 0.2} {6 + tw * 0.8},{tMid + tAmp * 0.5} {6 + tw},{tMid - tAmp * 0.3}")"
+                                                           fill="none" stroke="#ef4444" stroke-width="1.5" />
+                                            }
+                                            @RenderSvgText(sym.Width / 2, sym.Height - 6, "middle", null, "#6b7280", 7, $"{sym.TrendPens.Count} pen(s) · {sym.TrendTimeWindowSeconds}s")
                                             break;
                             }
 

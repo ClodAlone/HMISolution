@@ -1,0 +1,365 @@
+@using SharedModels
+@using RuntimeViewer.Shared.Services
+@implements IDisposable
+
+<div style="width: 100%; height: 100%; display: flex; flex-direction: column; font-family: sans-serif; font-size: 11px; background: @Background; color: #e0e0e0; border: 1px solid #333; border-radius: 4px; overflow: hidden;">
+    @* Toolbar *@
+    <div style="display: flex; align-items: center; gap: 6px; padding: 2px 6px; background: #0d1117; border-bottom: 1px solid #333; flex-shrink: 0;">
+        <span style="font-weight: bold; font-size: 12px;">📈 Trend</span>
+        <span style="font-size: 10px; color: #888;">@Pens.Count pen(s) &middot; @(_timeWindowSec)s</span>
+        <span style="flex: 1;"></span>
+        <button class="hda-btn" @onclick="TogglePause" title="@(_paused ? "Resume" : "Pause")">@(_paused ? "▶" : "⏸")</button>
+        <button class="hda-btn" @onclick="ClearBuffers" title="Clear history">🗑</button>
+    </div>
+
+    @* Chart *@
+    <div style="flex: 1; position: relative; min-height: 0;" @onmousemove="OnChartMouseMove" @onmouseleave="OnChartMouseLeave">
+        <svg viewBox="0 0 @_chartW @_chartH" width="100%" height="100%" preserveAspectRatio="none"
+             xmlns="http://www.w3.org/2000/svg" style="display: block;">
+
+            @* Background *@
+            <rect width="@_chartW" height="@_chartH" fill="@Background" />
+
+            @* Grid *@
+            @if (ShowGrid)
+            {
+                @for (int i = 0; i <= _gridYDivs; i++)
+                {
+                    var y = _mTop + (_plotH * i / (double)_gridYDivs);
+                    <line x1="@_mLeft" y1="@Fmt(y)" x2="@(_chartW - _mRight)" y2="@Fmt(y)"
+                          stroke="#1f2937" stroke-width="1" />
+                }
+                @for (int i = 0; i <= _gridXDivs; i++)
+                {
+                    var x = _mLeft + (_plotW * i / (double)_gridXDivs);
+                    <line x1="@Fmt(x)" y1="@_mTop" x2="@Fmt(x)" y2="@(_chartH - _mBottom)"
+                          stroke="#1f2937" stroke-width="1" />
+                }
+            }
+
+            @* Axes *@
+            <line x1="@_mLeft" y1="@_mTop" x2="@_mLeft" y2="@(_chartH - _mBottom)"
+                  stroke="#374151" stroke-width="1" />
+            <line x1="@_mLeft" y1="@(_chartH - _mBottom)"
+                  x2="@(_chartW - _mRight)" y2="@(_chartH - _mBottom)"
+                  stroke="#374151" stroke-width="1" />
+
+            @* Y-axis labels *@
+            @for (int i = 0; i <= _gridYDivs; i++)
+            {
+                var y = _mTop + (_plotH * i / (double)_gridYDivs);
+                var val = _yMax - ((_yMax - _yMin) * i / (double)_gridYDivs);
+                @RenderSvgLabel(_mLeft - 4, y + 3, "end", "#6b7280", 8, Fmt(val))
+            }
+
+            @* X-axis labels (time offsets) *@
+            @for (int i = 0; i <= _gridXDivs; i++)
+            {
+                var x = _mLeft + (_plotW * i / (double)_gridXDivs);
+                var secAgo = _timeWindowSec - (_timeWindowSec * i / (double)_gridXDivs);
+                var lbl = secAgo >= 60 ? $"-{secAgo / 60:F0}m" : $"-{secAgo:F0}s";
+                if (i == _gridXDivs) lbl = "now";
+                @RenderSvgLabel(x, _chartH - _mBottom + 12, "middle", "#6b7280", 7, lbl)
+            }
+
+            @* Pen polylines *@
+            @for (int p = 0; p < Pens.Count; p++)
+            {
+                var pen = Pens[p];
+                var buf = GetBuffer(p);
+                if (buf.Count < 2) continue;
+                var color = GetPenColor(pen, p);
+                var lw = pen.LineWidth > 0 ? pen.LineWidth : 1.5;
+                var pts = BuildPolyline(buf);
+                <polyline points="@pts" fill="none" stroke="@color" stroke-width="@Fmt(lw)"
+                          stroke-linejoin="round" vector-effect="non-scaling-stroke" />
+            }
+
+            @* Cursor crosshair *@
+            @if (ShowCursor && _cursorX.HasValue)
+            {
+                var cx = _cursorX.Value;
+                <line x1="@Fmt(cx)" y1="@_mTop" x2="@Fmt(cx)" y2="@(_chartH - _mBottom)"
+                      stroke="#ffffff40" stroke-width="1" stroke-dasharray="3,2" />
+
+                var cursorTime = XToTime(cx);
+                var labelY = _mTop + 12.0;
+                @for (int p = 0; p < Pens.Count; p++)
+                {
+                    var pen2 = Pens[p];
+                    var buf2 = GetBuffer(p);
+                    var val2 = InterpolateAtTime(buf2, cursorTime);
+                    if (val2 == null) continue;
+                    var color2 = GetPenColor(pen2, p);
+                    var cy = ValueToY(val2.Value);
+
+                    <circle cx="@Fmt(cx)" cy="@Fmt(cy)" r="3" fill="@color2" stroke="white" stroke-width="0.5" />
+                    @RenderSvgLabel(cx + 6, labelY, "start", color2, 8, $"{GetPenLabel(pen2)}: {Fmt(val2.Value)}")
+                    labelY += 11;
+                }
+            }
+        </svg>
+    </div>
+
+    @* Legend *@
+    @if (ShowLegend && Pens.Count > 0)
+    {
+        <div style="display: flex; gap: 8px; padding: 2px 6px; background: #0d1117; border-top: 1px solid #333; flex-wrap: wrap; flex-shrink: 0; font-size: 10px;">
+            @for (int p = 0; p < Pens.Count; p++)
+            {
+                var pen = Pens[p];
+                var color = GetPenColor(pen, p);
+                var buf = GetBuffer(p);
+                var lastVal = buf.Count > 0 ? buf[^1].Value : (double?)null;
+                <span>
+                    <span style="display:inline-block;width:12px;height:3px;background:@color;vertical-align:middle;margin-right:3px;"></span>
+                    @GetPenLabel(pen)
+                    @if (lastVal.HasValue)
+                    {
+                        <span style="color:#9ca3af;"> = @Fmt(lastVal.Value)</span>
+                    }
+                </span>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public List<TrendPen> Pens { get; set; } = new();
+    [Parameter] public int TimeWindowSeconds { get; set; } = 60;
+    [Parameter] public bool ShowGrid { get; set; } = true;
+    [Parameter] public bool ShowCursor { get; set; } = true;
+    [Parameter] public bool ShowLegend { get; set; } = true;
+    [Parameter] public double? YMin { get; set; }
+    [Parameter] public double? YMax { get; set; }
+    [Parameter] public string Background { get; set; } = "#111827";
+
+    [Inject] private OpcRuntimeClient Opc { get; set; } = default!;
+
+    private record struct Sample(DateTime Time, double Value);
+
+    private readonly List<List<Sample>> _buffers = new();
+    private System.Threading.Timer? _sampleTimer;
+    private bool _paused;
+    private int _timeWindowSec = 60;
+    private double? _cursorX;
+
+    // Chart layout
+    private const int _chartW = 800;
+    private const int _chartH = 280;
+    private const int _mLeft = 55;
+    private const int _mRight = 8;
+    private const int _mTop = 8;
+    private const int _mBottom = 20;
+    private const int _plotW = _chartW - _mLeft - _mRight;
+    private const int _plotH = _chartH - _mTop - _mBottom;
+    private const int _gridYDivs = 5;
+    private const int _gridXDivs = 6;
+
+    private double _yMin;
+    private double _yMax;
+
+    private static readonly string[] _palette =
+    [
+        "#3b82f6", "#ef4444", "#10b981", "#f59e0b", "#8b5cf6",
+        "#ec4899", "#06b6d4", "#84cc16", "#f97316", "#6366f1"
+    ];
+
+    protected override void OnInitialized()
+    {
+        _timeWindowSec = TimeWindowSeconds > 0 ? TimeWindowSeconds : 60;
+        EnsureBuffers();
+        _sampleTimer = new System.Threading.Timer(_ =>
+        {
+            if (!_paused) SampleAll();
+            InvokeAsync(StateHasChanged);
+        }, null, 500, 250);
+    }
+
+    protected override void OnParametersSet()
+    {
+        _timeWindowSec = TimeWindowSeconds > 0 ? TimeWindowSeconds : 60;
+        EnsureBuffers();
+    }
+
+    private void EnsureBuffers()
+    {
+        while (_buffers.Count < Pens.Count)
+            _buffers.Add(new());
+        while (_buffers.Count > Pens.Count)
+            _buffers.RemoveAt(_buffers.Count - 1);
+    }
+
+    private void SampleAll()
+    {
+        var now = DateTime.UtcNow;
+        var cutoff = now.AddSeconds(-_timeWindowSec * 1.2);
+
+        for (int i = 0; i < Pens.Count && i < _buffers.Count; i++)
+        {
+            var path = Pens[i].VariablePath;
+            if (string.IsNullOrEmpty(path)) continue;
+            var raw = Opc.GetValue(path);
+            if (raw != null && double.TryParse(raw, System.Globalization.NumberStyles.Any,
+                    System.Globalization.CultureInfo.InvariantCulture, out var d))
+            {
+                _buffers[i].Add(new Sample(now, d));
+            }
+            // Trim old samples
+            _buffers[i].RemoveAll(s => s.Time < cutoff);
+        }
+
+        ComputeYRange();
+    }
+
+    private void ComputeYRange()
+    {
+        if (YMin.HasValue && YMax.HasValue)
+        {
+            _yMin = YMin.Value;
+            _yMax = YMax.Value;
+            return;
+        }
+
+        var lo = double.MaxValue;
+        var hi = double.MinValue;
+        foreach (var buf in _buffers)
+        {
+            foreach (var s in buf)
+            {
+                if (s.Value < lo) lo = s.Value;
+                if (s.Value > hi) hi = s.Value;
+            }
+        }
+
+        if (lo == double.MaxValue) { lo = 0; hi = 100; }
+        if (Math.Abs(hi - lo) < 0.001) { lo -= 1; hi += 1; }
+
+        var range = hi - lo;
+        lo -= range * 0.05;
+        hi += range * 0.05;
+
+        _yMin = YMin ?? lo;
+        _yMax = YMax ?? hi;
+    }
+
+    private List<Sample> GetBuffer(int idx) =>
+        idx >= 0 && idx < _buffers.Count ? _buffers[idx] : new();
+
+    private string BuildPolyline(List<Sample> buf)
+    {
+        var sb = new System.Text.StringBuilder();
+        var now = DateTime.UtcNow;
+        var rangeY = _yMax - _yMin;
+        if (rangeY == 0) rangeY = 1;
+
+        foreach (var s in buf)
+        {
+            var secAgo = (now - s.Time).TotalSeconds;
+            if (secAgo > _timeWindowSec) continue;
+            var xFrac = 1.0 - secAgo / _timeWindowSec;
+            var yFrac = (s.Value - _yMin) / rangeY;
+
+            var px = _mLeft + xFrac * _plotW;
+            var py = _mTop + (1 - yFrac) * _plotH;
+
+            if (sb.Length > 0) sb.Append(' ');
+            sb.Append(Fmt(px)); sb.Append(','); sb.Append(Fmt(py));
+        }
+
+        return sb.ToString();
+    }
+
+    private double ValueToY(double val)
+    {
+        var rangeY = _yMax - _yMin;
+        if (rangeY == 0) rangeY = 1;
+        var yFrac = (val - _yMin) / rangeY;
+        return _mTop + (1 - yFrac) * _plotH;
+    }
+
+    private DateTime XToTime(double x)
+    {
+        var frac = (x - _mLeft) / _plotW;
+        var secAgo = (1 - frac) * _timeWindowSec;
+        return DateTime.UtcNow.AddSeconds(-secAgo);
+    }
+
+    private double? InterpolateAtTime(List<Sample> buf, DateTime t)
+    {
+        if (buf.Count == 0) return null;
+        if (t <= buf[0].Time) return buf[0].Value;
+        if (t >= buf[^1].Time) return buf[^1].Value;
+
+        for (int i = 1; i < buf.Count; i++)
+        {
+            if (buf[i].Time >= t)
+            {
+                var dt = (buf[i].Time - buf[i - 1].Time).TotalSeconds;
+                if (dt <= 0) return buf[i].Value;
+                var frac = (t - buf[i - 1].Time).TotalSeconds / dt;
+                return buf[i - 1].Value + frac * (buf[i].Value - buf[i - 1].Value);
+            }
+        }
+        return buf[^1].Value;
+    }
+
+    private void OnChartMouseMove(Microsoft.AspNetCore.Components.Web.MouseEventArgs e)
+    {
+        // Map from offsetX (pixels relative to the div) to SVG viewBox coordinates.
+        // Since the SVG has preserveAspectRatio="none" and fills the container,
+        // we store raw OffsetX. This is approximate when the container != 800px,
+        // but provides good-enough cursor tracking without JS interop.
+        var x = e.OffsetX;
+        if (x >= _mLeft && x <= _chartW - _mRight)
+            _cursorX = x;
+        else
+            _cursorX = null;
+    }
+
+    private void OnChartMouseLeave(Microsoft.AspNetCore.Components.Web.MouseEventArgs e)
+    {
+        _cursorX = null;
+    }
+
+    private void TogglePause() => _paused = !_paused;
+
+    private void ClearBuffers()
+    {
+        foreach (var b in _buffers) b.Clear();
+    }
+
+    private static string GetPenColor(TrendPen pen, int index) =>
+        !string.IsNullOrEmpty(pen.Color) ? pen.Color : _palette[index % _palette.Length];
+
+    private static string GetPenLabel(TrendPen pen) =>
+        !string.IsNullOrEmpty(pen.Label) ? pen.Label : GetShortName(pen.VariablePath);
+
+    private static string GetShortName(string path)
+    {
+        var idx = path.LastIndexOf('.');
+        return idx >= 0 ? path[(idx + 1)..] : path;
+    }
+
+    private static string Fmt(double v) =>
+        v.ToString("F1", System.Globalization.CultureInfo.InvariantCulture);
+
+    private RenderFragment RenderSvgLabel(double x, double y, string anchor, string fill, int fontSize, string content) => builder =>
+    {
+        int seq = 0;
+        builder.OpenElement(seq++, "text");
+        builder.AddAttribute(seq++, "x", Fmt(x));
+        builder.AddAttribute(seq++, "y", Fmt(y));
+        builder.AddAttribute(seq++, "text-anchor", anchor);
+        builder.AddAttribute(seq++, "fill", fill);
+        builder.AddAttribute(seq++, "font-size", fontSize);
+        builder.AddAttribute(seq++, "font-family", "monospace");
+        builder.AddContent(seq++, content);
+        builder.CloseElement();
+    };
+
+    public void Dispose()
+    {
+        _sampleTimer?.Dispose();
+    }
+}

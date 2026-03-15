@@ -124,6 +124,16 @@ else if (Screen.LayoutMode == "responsive")
                             <div class="rv-responsive-indicator" style="background: @fillColor;">@resolvedLabel</div>
                         }
                         break;
+                    case "trend":
+                        <RealtimeTrendWidget Pens="@sym.TrendPens"
+                                             TimeWindowSeconds="@sym.TrendTimeWindowSeconds"
+                                             ShowGrid="@sym.TrendShowGrid"
+                                             ShowCursor="@sym.TrendShowCursor"
+                                             ShowLegend="@sym.TrendShowLegend"
+                                             YMin="@sym.TrendYMin"
+                                             YMax="@sym.TrendYMax"
+                                             Background="@sym.TrendBackground" />
+                        break;
                 }
 
                 @if (isLocked)
@@ -310,6 +320,20 @@ else
                             @RenderSvgText(sym.Width / 2, sym.Height / 2, "middle", "middle", "#64748b", 10, "No image")
                         }
                         break;
+                    case "trend":
+                        <foreignObject width="@sym.Width" height="@sym.Height">
+                            <div xmlns="http://www.w3.org/1999/xhtml" style="width: @(sym.Width)px; height: @(sym.Height)px;">
+                                <RealtimeTrendWidget Pens="@sym.TrendPens"
+                                                     TimeWindowSeconds="@sym.TrendTimeWindowSeconds"
+                                                     ShowGrid="@sym.TrendShowGrid"
+                                                     ShowCursor="@sym.TrendShowCursor"
+                                                     ShowLegend="@sym.TrendShowLegend"
+                                                     YMin="@sym.TrendYMin"
+                                                     YMax="@sym.TrendYMax"
+                                                     Background="@sym.TrendBackground" />
+                            </div>
+                        </foreignObject>
+                        break;
                 }
 
                 @if (!string.IsNullOrEmpty(resolvedLabel) && sym.Type is not "text")
@@ -392,6 +416,16 @@ else
 
                     foreach (var rv in GetRecipeVariables(sym.RecipeName))
                         paths.Add(rv.VariablePath);
+                }
+
+                // Monitor realtime trend pen variables
+                if (sym.Type == "trend")
+                {
+                    foreach (var pen in sym.TrendPens)
+                    {
+                        if (!string.IsNullOrEmpty(pen.VariablePath))
+                            paths.Add(pen.VariablePath);
+                    }
                 }
             }
 
