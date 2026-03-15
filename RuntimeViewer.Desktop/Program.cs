@@ -56,6 +56,7 @@ static class Program
                 .SetTitle(title)
                 .SetUseOsDefaultSize(false)
                 .SetSize(1280, 800)
+                .SetMaximized(true)
 #if DEBUG
                 .SetDevToolsEnabled(true)
 #endif
@@ -63,7 +64,9 @@ static class Program
 
             if (isKiosk)
             {
-                window.SetFullScreen(true).SetChromeless(true);
+                window
+                    .SetFullScreen(true)
+                    .SetChromeless(true);
             }
 
             AppDomain.CurrentDomain.UnhandledException += (_, e) =>
