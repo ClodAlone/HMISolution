@@ -1,5 +1,6 @@
 using Opc.Ua;
 using Opc.Ua.Server;
+using Serilog;
 using SharedModels;
 using System;
 using System.Collections.Generic;
@@ -855,7 +856,7 @@ namespace SimpleOpcFileServer
 
             // Configure drivers
             bool connectedToDriver = false;
-            if (variable.DriverConfigs != null)
+            if (variable.DriverConfigs != null && variable.DriverConfigs.Count > 0)
             {
                 foreach(var driver in _drivers)
                 {
@@ -1063,25 +1064,74 @@ namespace SimpleOpcFileServer
                 new LocalizedText(variableState.DisplayName.Text + " Alarm"),
                 true);
 
-            alarm.NodeId = alarmNodeId;
+            // Ensure BranchId is initialized — required by ConditionState.IsBranch().
+            // Some SDK versions do not auto-create this property in Create().
+            if (alarm.BranchId == null)
+            {
+                alarm.BranchId = new PropertyState<NodeId>(alarm)
+                {
+                    NodeId = new NodeId(variablePath + ".Alarm.BranchId", _namespaceIndex),
+                    BrowseName = BrowseNames.BranchId,
+                    DisplayName = BrowseNames.BranchId,
+                    DataType = DataTypeIds.NodeId,
+                    ValueRank = ValueRanks.Scalar,
+                    Value = NodeId.Null,
+                    AccessLevel = AccessLevels.CurrentRead,
+                    UserAccessLevel = AccessLevels.CurrentRead,
+                    ReferenceTypeId = ReferenceTypeIds.HasProperty,
+                    TypeDefinitionId = VariableTypeIds.PropertyType
+                };
+                alarm.AddChild(alarm.BranchId);
+            }
+            else if (alarm.BranchId.Value == null)
+            {
+                alarm.BranchId.Value = NodeId.Null;
+            }
 
             // Source & condition references
             alarm.SourceNode.Value = variableState.NodeId;
             alarm.SourceName.Value = variablePath;
             alarm.ConditionName.Value = alarmConfig.Message;
 
-            // Limits
-            alarm.HighHighLimit = new PropertyState<double>(alarm) { Value = alarmConfig.HighHighLimit ?? alarmConfig.HighLimit };
-            alarm.HighLimit = new PropertyState<double>(alarm) { Value = alarmConfig.HighLimit };
-            alarm.LowLimit = new PropertyState<double>(alarm) { Value = alarmConfig.LowLimit };
-            alarm.LowLowLimit = new PropertyState<double>(alarm) { Value = alarmConfig.LowLowLimit ?? alarmConfig.LowLimit };
+            // Set limit values on the properties already created by Create().
+            // Do NOT replace the PropertyState objects — they have NodeIds wired up.
+            if (alarm.HighHighLimit != null)
+                alarm.HighHighLimit.Value = alarmConfig.HighHighLimit ?? alarmConfig.HighLimit;
+            if (alarm.HighLimit != null)
+                alarm.HighLimit.Value = alarmConfig.HighLimit;
+            if (alarm.LowLimit != null)
+                alarm.LowLimit.Value = alarmConfig.LowLimit;
+            if (alarm.LowLowLimit != null)
+                alarm.LowLowLimit.Value = alarmConfig.LowLowLimit ?? alarmConfig.LowLimit;
 
-            // Initial state — inactive
-            alarm.SetEnableState(SystemContext, true);
-            alarm.SetActiveState(SystemContext, false);
-            alarm.SetAcknowledgedState(SystemContext, true);
-            alarm.SetConfirmedState(SystemContext, true);
-            alarm.SetSuppressedState(SystemContext, false);
+            // Initial state — set directly on the property values to avoid
+            // the SetEnableState/SetActiveState call chain that can throw in some SDK versions.
+            alarm.EnabledState.Value = new LocalizedText("en", "Enabled");
+            alarm.EnabledState.Id.Value = true;
+            alarm.EnabledState.TransitionTime.Value = DateTime.UtcNow;
+
+            alarm.ActiveState.Value = new LocalizedText("en", "Inactive");
+            alarm.ActiveState.Id.Value = false;
+            alarm.ActiveState.TransitionTime.Value = DateTime.UtcNow;
+
+            if (alarm.AckedState != null)
+            {
+                alarm.AckedState.Value = new LocalizedText("en", "Acknowledged");
+                alarm.AckedState.Id.Value = true;
+            }
+
+            if (alarm.ConfirmedState != null)
+            {
+                alarm.ConfirmedState.Value = new LocalizedText("en", "Confirmed");
+                alarm.ConfirmedState.Id.Value = true;
+            }
+
+            if (alarm.SuppressedState != null)
+            {
+                alarm.SuppressedState.Value = new LocalizedText("en", "Unsuppressed");
+                alarm.SuppressedState.Id.Value = false;
+            }
+
             alarm.Retain.Value = false;
             alarm.AutoReportStateChanges = true;
 
@@ -1137,17 +1187,60 @@ namespace SimpleOpcFileServer
                 new LocalizedText(variableState.DisplayName.Text + " Alarm"),
                 true);
 
-            alarm.NodeId = alarmNodeId;
+            // Ensure BranchId is initialized — required by ConditionState.IsBranch()
+            if (alarm.BranchId == null)
+            {
+                alarm.BranchId = new PropertyState<NodeId>(alarm)
+                {
+                    NodeId = new NodeId(variablePath + ".Alarm.BranchId", _namespaceIndex),
+                    BrowseName = BrowseNames.BranchId,
+                    DisplayName = BrowseNames.BranchId,
+                    DataType = DataTypeIds.NodeId,
+                    ValueRank = ValueRanks.Scalar,
+                    Value = NodeId.Null,
+                    AccessLevel = AccessLevels.CurrentRead,
+                    UserAccessLevel = AccessLevels.CurrentRead,
+                    ReferenceTypeId = ReferenceTypeIds.HasProperty,
+                    TypeDefinitionId = VariableTypeIds.PropertyType
+                };
+                alarm.AddChild(alarm.BranchId);
+            }
+            else if (alarm.BranchId.Value == null)
+            {
+                alarm.BranchId.Value = NodeId.Null;
+            }
 
             alarm.SourceNode.Value = variableState.NodeId;
             alarm.SourceName.Value = variablePath;
             alarm.ConditionName.Value = alarmConfig.Message;
 
-            alarm.SetEnableState(SystemContext, true);
-            alarm.SetActiveState(SystemContext, false);
-            alarm.SetAcknowledgedState(SystemContext, true);
-            alarm.SetConfirmedState(SystemContext, true);
-            alarm.SetSuppressedState(SystemContext, false);
+            // Initial state — set directly on property values to avoid SDK internal NRE
+            alarm.EnabledState.Value = new LocalizedText("en", "Enabled");
+            alarm.EnabledState.Id.Value = true;
+            alarm.EnabledState.TransitionTime.Value = DateTime.UtcNow;
+
+            alarm.ActiveState.Value = new LocalizedText("en", "Inactive");
+            alarm.ActiveState.Id.Value = false;
+            alarm.ActiveState.TransitionTime.Value = DateTime.UtcNow;
+
+            if (alarm.AckedState != null)
+            {
+                alarm.AckedState.Value = new LocalizedText("en", "Acknowledged");
+                alarm.AckedState.Id.Value = true;
+            }
+
+            if (alarm.ConfirmedState != null)
+            {
+                alarm.ConfirmedState.Value = new LocalizedText("en", "Confirmed");
+                alarm.ConfirmedState.Id.Value = true;
+            }
+
+            if (alarm.SuppressedState != null)
+            {
+                alarm.SuppressedState.Value = new LocalizedText("en", "Unsuppressed");
+                alarm.SuppressedState.Id.Value = false;
+            }
+
             alarm.Retain.Value = false;
             alarm.AutoReportStateChanges = true;
 

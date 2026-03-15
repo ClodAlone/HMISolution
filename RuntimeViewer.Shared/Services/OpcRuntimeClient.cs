@@ -31,6 +31,29 @@ public class OpcRuntimeClient : IDisposable
     public string? ErrorMessage { get; private set; }
 
     public event Action? ValuesChanged;
+    public event Action? StateChanged;
+
+    // ─── Diagnostic log ─────────────────────────────────────
+    private readonly List<string> _diagnosticLog = new();
+    private const int MaxLogEntries = 200;
+
+    /// <summary>Returns a snapshot of the diagnostic log entries.</summary>
+    public IReadOnlyList<string> DiagnosticLog
+    {
+        get { lock (_lock) { return _diagnosticLog.ToList(); } }
+    }
+
+    private void Log(string message)
+    {
+        var entry = $"[{DateTime.Now:HH:mm:ss.fff}] {message}";
+        lock (_lock)
+        {
+            _diagnosticLog.Add(entry);
+            if (_diagnosticLog.Count > MaxLogEntries)
+                _diagnosticLog.RemoveAt(0);
+        }
+        StateChanged?.Invoke();
+    }
 
     public string? GetValue(string variablePath)
     {
@@ -44,6 +67,7 @@ public class OpcRuntimeClient : IDisposable
     {
         try
         {
+            Log($"CONNECT: Connecting to {endpointUrl}");
             Disconnect();
 
             var pkiRoot = "%LocalApplicationData%/RuntimeViewer/pki";
@@ -108,9 +132,14 @@ public class OpcRuntimeClient : IDisposable
             }
 
             // Discover endpoints
+            Log($"CONNECT: Discovering endpoints at {endpointUrl}");
             var client = DiscoveryClient.Create(new Uri(endpointUrl));
             var endpoints = client.GetEndpoints(null);
             client.Dispose();
+
+            Log($"CONNECT: Discovered {endpoints.Count} endpoint(s)");
+            foreach (var ep in endpoints)
+                Log($"  EP: {ep.EndpointUrl} | Security: {ep.SecurityMode}/{ep.SecurityPolicyUri?.Split('/').LastOrDefault()}");
 
             var endpointDescription =
                 endpoints.FirstOrDefault(e => e.SecurityMode == MessageSecurityMode.None
@@ -121,6 +150,8 @@ public class OpcRuntimeClient : IDisposable
 
             if (endpointDescription == null)
                 throw new Exception("No endpoints found");
+
+            Log($"CONNECT: Selected endpoint {endpointDescription.EndpointUrl}");
 
             // Override host/port with user-provided URL
             if (Uri.TryCreate(endpointDescription.EndpointUrl, UriKind.Absolute, out var discoveredUri) &&
@@ -137,10 +168,14 @@ public class OpcRuntimeClient : IDisposable
             var endpointConfiguration = EndpointConfiguration.Create(_appConfig);
             var endpoint = new ConfiguredEndpoint(null, endpointDescription, endpointConfiguration);
 
+            Log($"CONNECT: Creating session...");
             _session = await Session.Create(
                 _appConfig, endpoint, false,
                 "RuntimeViewerSession", 60000,
                 new UserIdentity(new AnonymousIdentityToken()), null);
+
+            Log($"CONNECT: Session created. Connected={_session.Connected}, SessionId={_session.SessionId}");
+            Log($"CONNECT: Server namespaces: [{string.Join(", ", _session.NamespaceUris.ToArray())}]");
 
             _subscription = new Subscription(_session.DefaultSubscription)
             {
@@ -153,25 +188,40 @@ public class OpcRuntimeClient : IDisposable
             _session.AddSubscription(_subscription);
             _subscription.Create();
 
+            Log($"CONNECT: Subscription created. Id={_subscription.Id}, PublishingInterval={_subscription.CurrentPublishingInterval}ms");
+
             ErrorMessage = null;
+            Log("CONNECT: ✓ Connected successfully");
         }
         catch (Exception ex)
         {
             ErrorMessage = ex.Message;
+            Log($"CONNECT: ✗ FAILED — {ex.GetType().Name}: {ex.Message}");
         }
     }
 
     public void MonitorVariables(IEnumerable<string> variablePaths, ushort namespaceIndex = 2)
     {
-        if (_subscription == null || _session == null) return;
-
-        // Remove existing monitored items
-        if (_subscription.MonitoredItemCount > 0)
+        if (_subscription == null || _session == null)
         {
-            _subscription.RemoveItems(_subscription.MonitoredItems);
+            Log($"MONITOR: Skipped — subscription={(_subscription != null ? "ok" : "NULL")}, session={(_session != null ? "ok" : "NULL")}");
+            return;
         }
 
-        foreach (var path in variablePaths.Where(p => !string.IsNullOrEmpty(p)))
+        var pathList = variablePaths.Where(p => !string.IsNullOrEmpty(p)).ToList();
+        Log($"MONITOR: Setting up {pathList.Count} variable(s) with ns={namespaceIndex}");
+
+        // Remove existing monitored items — snapshot to a list first to avoid
+        // modifying the subscription's internal collection while iterating it.
+        var existing = _subscription.MonitoredItems.ToList();
+        if (existing.Count > 0)
+        {
+            Log($"MONITOR: Removing {existing.Count} existing monitored item(s)");
+            _subscription.RemoveItems(existing);
+            _subscription.ApplyChanges();
+        }
+
+        foreach (var path in pathList)
         {
             var nodeId = new NodeId(path, namespaceIndex);
             var item = new MonitoredItem(_subscription.DefaultItem)
@@ -188,16 +238,34 @@ public class OpcRuntimeClient : IDisposable
         }
 
         _subscription.ApplyChanges();
+
+        // Log the status of each monitored item after ApplyChanges
+        foreach (var mi in _subscription.MonitoredItems)
+        {
+            var statusName = mi.Status?.Error?.StatusCode.ToString() ?? "Good";
+            Log($"  ITEM: \"{mi.DisplayName}\" → NodeId={mi.StartNodeId} | Created={mi.Status?.Created} | Status={statusName}");
+        }
+
+        Log($"MONITOR: ✓ ApplyChanges done. {_subscription.MonitoredItemCount} active monitored item(s)");
     }
+
+    private int _notificationCount;
 
     private void OnMonitoredItemNotification(MonitoredItem item, MonitoredItemNotificationEventArgs e)
     {
         if (e.NotificationValue is MonitoredItemNotification notification)
         {
             var val = notification.Value?.WrappedValue.ToString() ?? "";
+            var statusCode = notification.Value?.StatusCode ?? StatusCodes.Bad;
             lock (_lock)
             {
                 _values[item.DisplayName] = val;
+            }
+            _notificationCount++;
+            // Log first 20 notifications, then every 50th to avoid flooding
+            if (_notificationCount <= 20 || _notificationCount % 50 == 0)
+            {
+                Log($"NOTIFY[{_notificationCount}]: \"{item.DisplayName}\" = \"{val}\" (status={statusCode})");
             }
             ValuesChanged?.Invoke();
         }
@@ -269,17 +337,22 @@ public class OpcRuntimeClient : IDisposable
 
     public void Disconnect()
     {
+        Log("DISCONNECT: Closing session...");
         try
         {
             _subscription?.Delete(true);
             _session?.Close();
         }
-        catch { }
+        catch (Exception ex)
+        {
+            Log($"DISCONNECT: Error during close — {ex.Message}");
+        }
         finally
         {
             _subscription = null;
             _session = null;
         }
+        Log("DISCONNECT: Done");
     }
 
     /// <summary>

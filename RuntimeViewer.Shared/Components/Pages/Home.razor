@@ -137,6 +137,8 @@ else
                     <span class="rv-badge" style="background:#555;color:#ccc;" title="@Auth.Group">@Auth.Username</span>
                     <button class="rv-btn" style="background:#dc3545;" @onclick="DoLogout">Logout</button>
                 }
+                <button class="rv-btn" style="background:@(_showDiag ? "#2563eb" : "#374151"); font-size:10px;"
+                        @onclick="ToggleDiag" title="OPC Diagnostics">🔍 Diag</button>
             </div>
         </div>
     }
@@ -146,6 +148,54 @@ else
         <div class="rv-kiosk-logout">
             <span class="small" style="color:#aaa;">@Auth.Username</span>
             <button class="rv-btn" style="background:#dc3545;font-size:10px;" @onclick="DoLogout">Logout</button>
+        </div>
+    }
+
+    @* -- Diagnostics panel -- *@
+    @if (_showDiag)
+    {
+        <div class="rv-diag-panel">
+            <div class="rv-diag-header">
+                <span>🔍 OPC Diagnostics</span>
+                <span style="flex:1;"></span>
+                <span class="rv-diag-badge">Session: @(Opc.IsConnected ? "✓ Connected" : "✗ Disconnected")</span>
+                <span class="rv-diag-badge">Values: @(_diagValueCount)</span>
+                <button class="rv-diag-btn" @onclick="ToggleDiag">✕ Close</button>
+            </div>
+            <div class="rv-diag-body" @ref="_diagScrollRef">
+                @foreach (var line in Opc.DiagnosticLog)
+                {
+                    var cls = line.Contains("✗") || line.Contains("FAILED") || line.Contains("Error")
+                        ? "rv-diag-err"
+                        : line.Contains("✓") ? "rv-diag-ok"
+                        : line.Contains("NOTIFY") ? "rv-diag-notify"
+                        : "";
+                    <div class="rv-diag-line @cls">@line</div>
+                }
+                @if (Opc.DiagnosticLog.Count == 0)
+                {
+                    <div class="rv-diag-line" style="color:#666;">No log entries yet. Waiting for OPC activity…</div>
+                }
+            </div>
+            <div class="rv-diag-footer">
+                <span style="color:#888;font-size:9px;">Live values cache:</span>
+                @{ var cachedValues = GetCachedValues(); }
+                @if (cachedValues.Count == 0)
+                {
+                    <span style="color:#666;font-size:9px;margin-left:8px;">empty — no values received yet</span>
+                }
+                else
+                {
+                    @foreach (var kv in cachedValues.Take(20))
+                    {
+                        <span class="rv-diag-val"><b>@kv.Key</b> = @kv.Value</span>
+                    }
+                    @if (cachedValues.Count > 20)
+                    {
+                        <span style="color:#888;font-size:9px;">… +@(cachedValues.Count - 20) more</span>
+                    }
+                }
+            </div>
         </div>
     }
 
@@ -293,6 +343,12 @@ else
     private System.Threading.Timer? _idleTimer;
     private DotNetObjectReference<Home>? _idleRef;
 
+    // Diagnostics
+    private bool _showDiag;
+    private int _diagValueCount;
+    private System.Threading.Timer? _diagTimer;
+    private ElementReference _diagScrollRef;
+
     protected override void OnInitialized()
     {
         _loginRequired = RuntimeAuthService.IsLoginRequired(Project.Model);
@@ -390,14 +446,9 @@ else
 
         _connecting = false;
 
-        if (Opc.IsConnected && _currentScreen != null)
-        {
-            var paths = _currentScreen.Symbols
-                .Where(s => !string.IsNullOrEmpty(s.VariablePath))
-                .Select(s => s.VariablePath!)
-                .Distinct();
-            Opc.MonitorVariables(paths);
-        }
+        // Note: ScreenRenderer.OnParametersSet() will call Opc.MonitorVariables()
+        // with the full set of variable paths (including commands, recipes, trends, etc.)
+        // when the component re-renders after this StateHasChanged().
 
         StateHasChanged();
     }
@@ -603,6 +654,50 @@ else
         catch { /* best effort */ }
     }
 
+    private void ToggleDiag()
+    {
+        _showDiag = !_showDiag;
+        if (_showDiag)
+        {
+            Opc.StateChanged += OnDiagStateChanged;
+            _diagTimer = new System.Threading.Timer(_ =>
+            {
+                _diagValueCount = GetCachedValues().Count;
+                InvokeAsync(StateHasChanged);
+            }, null, 500, 1000);
+        }
+        else
+        {
+            Opc.StateChanged -= OnDiagStateChanged;
+            _diagTimer?.Dispose();
+            _diagTimer = null;
+        }
+    }
+
+    private void OnDiagStateChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    private List<KeyValuePair<string, string>> GetCachedValues()
+    {
+        // Collect all known variable paths from current screen and read their cached values
+        var result = new List<KeyValuePair<string, string>>();
+        if (_currentScreen == null) return result;
+
+        var paths = _currentScreen.Symbols
+            .Where(s => !string.IsNullOrEmpty(s.VariablePath))
+            .Select(s => s.VariablePath!)
+            .Distinct();
+
+        foreach (var p in paths)
+        {
+            var v = Opc.GetValue(p);
+            result.Add(new KeyValuePair<string, string>(p, v ?? "(null)"));
+        }
+        return result;
+    }
+
     public async void Dispose()
     {
         Commands.NavigateScreen -= DoNavigateScreen;
@@ -611,7 +706,9 @@ else
         Commands.RequestLogin -= OnCommandLogin;
         Commands.RequestLogout -= OnCommandLogout;
         Commands.ChangeLanguage -= OnChangeLanguage;
+        Opc.StateChanged -= OnDiagStateChanged;
         _idleTimer?.Dispose();
+        _diagTimer?.Dispose();
         _idleRef?.Dispose();
         if (_kioskModule != null)
         {
