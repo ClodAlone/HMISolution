@@ -3,6 +3,9 @@ using SharedModels;
 
 namespace ServerEditorWeb.Models;
 
+/// <summary>Carries a tree node click with modifier key state.</summary>
+public record TreeNodeClickArgs(TreeNode Node, bool CtrlKey, bool ShiftKey);
+
 public abstract class TreeNode
 {
     public string Name { get; set; } = "";

@@ -237,11 +237,11 @@ else
         <button class="iconbar-btn" title="@($"Redo{(UndoRedo.RedoDescription != null ? $" — {UndoRedo.RedoDescription}" : "")} (Ctrl+Y)")" @onclick="PerformRedo"
                 disabled="@(!UndoRedo.CanRedo)">↪️</button>
         <button class="iconbar-btn" title="Copy (Ctrl+C)" @onclick="() => Editor.CopySelected(Clipboard)"
-                disabled="@(Editor.SelectedItem is not (VariableNode or FolderNode { Parent: not null } or ScriptNode or PlcProgramNode or ScreenNode))">📋</button>
+                disabled="@(!CanCopySelection())">📋</button>
         <button class="iconbar-btn" title="Paste (Ctrl+V)" @onclick="() => Editor.PasteFromClipboard(Clipboard)"
                 disabled="@(!Clipboard.CanPasteInto(Editor.SelectedItem))">📌</button>
         <button class="iconbar-btn" title="Delete (Del)" @onclick="Delete"
-                disabled="@(Editor.SelectedItem?.Parent == null)">🗑️</button>
+                disabled="@(!CanDeleteSelection())">🗑️</button>
 
         <span class="iconbar-sep"></span>
 
@@ -293,6 +293,10 @@ else
                     @if (Editor.SelectedScreenSymbol != null && Editor.SelectedItem is ScreenNode)
                     {
                         <ScreenSymbolProperties OnPropertyChanged="OnPropertyChanged" />
+                    }
+                    else if (Editor.SelectedItems.Count > 1)
+                    {
+                        <PropertyGridPanel Nodes="Editor.SelectedItems" OnPropertyChanged="OnPropertyChanged" />
                     }
                     else
                     {
@@ -465,17 +469,28 @@ else
         new() { Id = "crashes", Title = "Crash Reports", Icon = "🐛", Zone = "bottom" },
     ];
 
-private void OnAddFolder(TreeNode node) { Editor.SelectedItem = node; Editor.AddFolder(); }
-private void OnAddVariable(TreeNode node) { Editor.SelectedItem = node; Editor.AddVariable(); }
-private void OnAddScript(TreeNode node) { Editor.SelectedItem = node; Editor.AddScript(); }
-private void OnAddPlcProgram(TreeNode node) { Editor.SelectedItem = node; Editor.AddPlcProgram(); }
-private void OnAddRecipe(TreeNode node) { Editor.SelectedItem = node; Editor.AddRecipe(); }
-private void OnAddScreen(TreeNode node) { Editor.SelectedItem = node; Editor.AddScreen(); }
-private void OnAddUserGroup(TreeNode node) { Editor.SelectedItem = node; Editor.AddUserGroup(); }
-private void OnAddUser(TreeNode node) { Editor.SelectedItem = node; Editor.AddUser(); }
-private void OnDelete(TreeNode node) { Editor.SelectedItem = node; Editor.DeleteSelected(); }
-private void OnCopyNode(TreeNode node) { Editor.SelectedItem = node; Editor.CopySelected(Clipboard); }
-private void OnPasteNode(TreeNode node) { Editor.SelectedItem = node; Editor.PasteFromClipboard(Clipboard); }
+private void OnAddFolder(TreeNode node) { Editor.SelectNode(node); Editor.AddFolder(); }
+private void OnAddVariable(TreeNode node) { Editor.SelectNode(node); Editor.AddVariable(); }
+private void OnAddScript(TreeNode node) { Editor.SelectNode(node); Editor.AddScript(); }
+private void OnAddPlcProgram(TreeNode node) { Editor.SelectNode(node); Editor.AddPlcProgram(); }
+private void OnAddRecipe(TreeNode node) { Editor.SelectNode(node); Editor.AddRecipe(); }
+private void OnAddScreen(TreeNode node) { Editor.SelectNode(node); Editor.AddScreen(); }
+private void OnAddUserGroup(TreeNode node) { Editor.SelectNode(node); Editor.AddUserGroup(); }
+private void OnAddUser(TreeNode node) { Editor.SelectNode(node); Editor.AddUser(); }
+private void OnDelete(TreeNode node)
+{
+    // If the right-clicked node is part of multi-selection, delete all selected
+    if (!Editor.SelectedItems.Contains(node))
+        Editor.SelectNode(node);
+    Editor.DeleteSelected();
+}
+private void OnCopyNode(TreeNode node)
+{
+    if (!Editor.SelectedItems.Contains(node))
+        Editor.SelectNode(node);
+    Editor.CopySelected(Clipboard);
+}
+private void OnPasteNode(TreeNode node) { Editor.SelectNode(node); Editor.PasteFromClipboard(Clipboard); }
 
     private DotNetObjectReference<Home>? _shortcutRef;
 
@@ -632,10 +647,10 @@ private void OnPasteNode(TreeNode node) { Editor.SelectedItem = node; Editor.Pas
         _appLogService.AddLog("INF", "New configuration created.");
     }
 
-    private void SelectNode(TreeNode node)
+    private void SelectNode(TreeNodeClickArgs e)
     {
-        Editor.SelectNode(node);
-        if (node is not ScreenNode)
+        Editor.SelectNode(e.Node, e.CtrlKey, e.ShiftKey);
+        if (e.Node is not ScreenNode)
             Editor.SetScreenSelection(null, []);
     }
 
@@ -664,6 +679,18 @@ private void OnPasteNode(TreeNode node) { Editor.SelectedItem = node; Editor.Pas
     private void AddRecipe() { Editor.AddRecipe(); }
     private void AddScreen() { Editor.AddScreen(); }
     private void Delete() { Editor.DeleteSelected(); }
+
+    private bool CanCopySelection()
+    {
+        if (Editor.SelectedItems.Count == 0) return false;
+        return Editor.SelectedItems.All(n => n is VariableNode or FolderNode { Parent: not null }
+            or ScriptNode or PlcProgramNode or ScreenNode or RecipeNode);
+    }
+
+    private bool CanDeleteSelection()
+    {
+        return Editor.SelectedItems.Any(n => n.Parent != null);
+    }
 
     // ─── Menu helpers ───────────────────────────────────────
 

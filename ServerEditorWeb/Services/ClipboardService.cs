@@ -86,6 +86,56 @@ public class ClipboardService
         Changed?.Invoke();
     }
 
+    // ─── Multi-copy operations ──────────────────────────────
+
+    public void CopyVariables(List<Variable> items)
+    {
+        ContentType = "Variables";
+        ContentJson = JsonSerializer.Serialize(items, _jsonOpts);
+        Label = $"{items.Count} variables";
+        Changed?.Invoke();
+    }
+
+    public void CopyFolders(List<Folder> items)
+    {
+        ContentType = "Folders";
+        ContentJson = JsonSerializer.Serialize(items, _jsonOpts);
+        Label = $"{items.Count} folders";
+        Changed?.Invoke();
+    }
+
+    public void CopyScripts(List<ScriptConfig> items)
+    {
+        ContentType = "Scripts";
+        ContentJson = JsonSerializer.Serialize(items, _jsonOpts);
+        Label = $"{items.Count} scripts";
+        Changed?.Invoke();
+    }
+
+    public void CopyPlcPrograms(List<PlcProgramConfig> items)
+    {
+        ContentType = "PlcPrograms";
+        ContentJson = JsonSerializer.Serialize(items, _jsonOpts);
+        Label = $"{items.Count} PLC programs";
+        Changed?.Invoke();
+    }
+
+    public void CopyRecipes(List<RecipeConfig> items)
+    {
+        ContentType = "Recipes";
+        ContentJson = JsonSerializer.Serialize(items, _jsonOpts);
+        Label = $"{items.Count} recipes";
+        Changed?.Invoke();
+    }
+
+    public void CopyScreens(List<ScreenConfig> items)
+    {
+        ContentType = "Screens";
+        ContentJson = JsonSerializer.Serialize(items, _jsonOpts);
+        Label = $"{items.Count} screens";
+        Changed?.Invoke();
+    }
+
     // ─── Paste operations ───────────────────────────────────
 
     public Variable? PasteVariable()
@@ -142,15 +192,65 @@ public class ClipboardService
         return JsonSerializer.Deserialize<List<ScreenSymbol>>(ContentJson, _jsonOpts);
     }
 
+    // ─── Multi-paste operations ─────────────────────────────
+
+    public List<Variable>? PasteVariables()
+    {
+        if (ContentType != "Variables" || ContentJson == null) return null;
+        var items = JsonSerializer.Deserialize<List<Variable>>(ContentJson, _jsonOpts);
+        items?.ForEach(v => v.Name += " (Copy)");
+        return items;
+    }
+
+    public List<Folder>? PasteFolders()
+    {
+        if (ContentType != "Folders" || ContentJson == null) return null;
+        var items = JsonSerializer.Deserialize<List<Folder>>(ContentJson, _jsonOpts);
+        items?.ForEach(f => f.Name += " (Copy)");
+        return items;
+    }
+
+    public List<ScriptConfig>? PasteScripts()
+    {
+        if (ContentType != "Scripts" || ContentJson == null) return null;
+        var items = JsonSerializer.Deserialize<List<ScriptConfig>>(ContentJson, _jsonOpts);
+        items?.ForEach(s => s.Name += " (Copy)");
+        return items;
+    }
+
+    public List<PlcProgramConfig>? PastePlcPrograms()
+    {
+        if (ContentType != "PlcPrograms" || ContentJson == null) return null;
+        var items = JsonSerializer.Deserialize<List<PlcProgramConfig>>(ContentJson, _jsonOpts);
+        items?.ForEach(p => p.Name += " (Copy)");
+        return items;
+    }
+
+    public List<RecipeConfig>? PasteRecipes()
+    {
+        if (ContentType != "Recipes" || ContentJson == null) return null;
+        var items = JsonSerializer.Deserialize<List<RecipeConfig>>(ContentJson, _jsonOpts);
+        items?.ForEach(r => r.Name += " (Copy)");
+        return items;
+    }
+
+    public List<ScreenConfig>? PasteScreens()
+    {
+        if (ContentType != "Screens" || ContentJson == null) return null;
+        var items = JsonSerializer.Deserialize<List<ScreenConfig>>(ContentJson, _jsonOpts);
+        items?.ForEach(s => s.Name += " (Copy)");
+        return items;
+    }
+
     /// <summary>Checks if the clipboard content can be pasted into the given target context.</summary>
     public bool CanPasteInto(TreeNode? target) => ContentType switch
     {
-        "Variable" => target is FolderNode or VariableGroupNode,
-        "Folder" => target is FolderNode or VariableGroupNode,
-        "Script" => target is ScriptGroupNode,
-        "PlcProgram" => target is PlcGroupNode,
-        "Recipe" => target is RecipeGroupNode,
-        "Screen" => target is ScreenGroupNode,
+        "Variable" or "Variables" => target is FolderNode or VariableGroupNode,
+        "Folder" or "Folders" => target is FolderNode or VariableGroupNode,
+        "Script" or "Scripts" => target is ScriptGroupNode,
+        "PlcProgram" or "PlcPrograms" => target is PlcGroupNode,
+        "Recipe" or "Recipes" => target is RecipeGroupNode,
+        "Screen" or "Screens" => target is ScreenGroupNode,
         _ => false
     };
 

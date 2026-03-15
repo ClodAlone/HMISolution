@@ -11,6 +11,7 @@ public class NodeEditorService
 
     public List<TreeNode> RootItems { get; } = new();
     public TreeNode? SelectedItem { get; set; }
+    public List<TreeNode> SelectedItems { get; } = new();
     public bool HasUnsavedChanges { get; set; }
     public string JsonEditorText { get; set; } = "";
     public string DiffText { get; set; } = "";
@@ -339,35 +340,45 @@ public class NodeEditorService
 
     public void DeleteSelected()
     {
-        if (SelectedItem?.Parent != null)
+        var toDelete = SelectedItems.Where(n => n.Parent != null).ToList();
+        if (toDelete.Count == 0) return;
+
+        foreach (var item in toDelete)
         {
-            // Keep RootModel lists in sync when deleting user/group nodes
-            if (SelectedItem is UserNode un)
+            if (item is UserNode un)
                 _rootModel?.Users.Remove(un.User);
-            else if (SelectedItem is UserGroupNode ugn)
+            else if (item is UserGroupNode ugn)
             {
                 _rootModel?.UserGroups.Remove(ugn.UserGroup);
-                // Also remove users belonging to this group
                 foreach (var child in ugn.Children.OfType<UserNode>())
                     _rootModel?.Users.Remove(child.User);
             }
 
-            SelectedItem.Parent.Children.Remove(SelectedItem);
-            SelectedItem = null;
-            HasUnsavedChanges = true;
-            NotifyStateChanged();
+            item.Parent!.Children.Remove(item);
+            item.IsSelected = false;
         }
+
+        SelectedItems.Clear();
+        SelectedItem = null;
+        HasUnsavedChanges = true;
+        NotifyStateChanged();
     }
 
     public void CopySelected(ClipboardService clipboard)
     {
+        // Multi-copy: if multiple homogeneous nodes are selected, copy them all
+        if (SelectedItems.Count > 1)
+        {
+            CopyMultiple(clipboard);
+            return;
+        }
+
         switch (SelectedItem)
         {
             case VariableNode vn:
                 clipboard.CopyVariable(vn.Variable);
                 break;
             case FolderNode fn:
-                // Sync the folder model before copying
                 UpdateFolderModel(fn);
                 clipboard.CopyFolder(fn.Folder);
                 break;
@@ -386,6 +397,40 @@ public class NodeEditorService
             case RecipeNode rn:
                 rn.SyncName();
                 clipboard.CopyRecipe(rn.Recipe);
+                break;
+        }
+    }
+
+    private void CopyMultiple(ClipboardService clipboard)
+    {
+        // Only copy if all selected items are of the same type
+        var first = SelectedItems[0];
+        if (!SelectedItems.All(n => n.GetType() == first.GetType())) return;
+
+        switch (first)
+        {
+            case VariableNode:
+                clipboard.CopyVariables(SelectedItems.Cast<VariableNode>().Select(n => n.Variable).ToList());
+                break;
+            case FolderNode:
+                foreach (var fn in SelectedItems.Cast<FolderNode>()) UpdateFolderModel(fn);
+                clipboard.CopyFolders(SelectedItems.Cast<FolderNode>().Select(n => n.Folder).ToList());
+                break;
+            case ScriptNode:
+                foreach (var sn in SelectedItems.Cast<ScriptNode>()) sn.SyncName();
+                clipboard.CopyScripts(SelectedItems.Cast<ScriptNode>().Select(n => n.Script).ToList());
+                break;
+            case PlcProgramNode:
+                foreach (var pn in SelectedItems.Cast<PlcProgramNode>()) pn.SyncName();
+                clipboard.CopyPlcPrograms(SelectedItems.Cast<PlcProgramNode>().Select(n => n.PlcProgram).ToList());
+                break;
+            case ScreenNode:
+                foreach (var scn in SelectedItems.Cast<ScreenNode>()) scn.SyncName();
+                clipboard.CopyScreens(SelectedItems.Cast<ScreenNode>().Select(n => n.Screen).ToList());
+                break;
+            case RecipeNode:
+                foreach (var rn in SelectedItems.Cast<RecipeNode>()) rn.SyncName();
+                clipboard.CopyRecipes(SelectedItems.Cast<RecipeNode>().Select(n => n.Recipe).ToList());
                 break;
         }
     }
@@ -472,19 +517,176 @@ public class NodeEditorService
                 NotifyStateChanged();
                 break;
             }
+
+            // ─── Multi-paste cases ──────────────────────────────
+            case "Variables" when target is FolderNode pf:
+            {
+                var items = clipboard.PasteVariables();
+                if (items == null) return;
+                foreach (var v in items)
+                {
+                    var n = new VariableNode(v) { Parent = pf };
+                    pf.Children.Add(n);
+                }
+                pf.IsExpanded = true;
+                HasUnsavedChanges = true;
+                NotifyStateChanged();
+                break;
+            }
+            case "Folders" when target is FolderNode pf2:
+            {
+                var items = clipboard.PasteFolders();
+                if (items == null) return;
+                foreach (var f in items)
+                {
+                    var n = CreateFolderNode(f);
+                    n.Parent = pf2;
+                    pf2.Children.Add(n);
+                }
+                pf2.IsExpanded = true;
+                HasUnsavedChanges = true;
+                NotifyStateChanged();
+                break;
+            }
+            case "Scripts" when SelectedItem is ScriptGroupNode sg:
+            {
+                var items = clipboard.PasteScripts();
+                if (items == null) return;
+                foreach (var s in items)
+                    sg.Children.Add(new ScriptNode(s) { Parent = sg });
+                sg.IsExpanded = true;
+                HasUnsavedChanges = true;
+                NotifyStateChanged();
+                break;
+            }
+            case "PlcPrograms" when SelectedItem is PlcGroupNode pg:
+            {
+                var items = clipboard.PastePlcPrograms();
+                if (items == null) return;
+                foreach (var p in items)
+                    pg.Children.Add(new PlcProgramNode(p) { Parent = pg });
+                pg.IsExpanded = true;
+                HasUnsavedChanges = true;
+                NotifyStateChanged();
+                break;
+            }
+            case "Screens" when SelectedItem is ScreenGroupNode scg:
+            {
+                var items = clipboard.PasteScreens();
+                if (items == null) return;
+                foreach (var s in items)
+                    scg.Children.Add(new ScreenNode(s) { Parent = scg });
+                scg.IsExpanded = true;
+                HasUnsavedChanges = true;
+                NotifyStateChanged();
+                break;
+            }
+            case "Recipes" when SelectedItem is RecipeGroupNode rg:
+            {
+                var items = clipboard.PasteRecipes();
+                if (items == null) return;
+                foreach (var r in items)
+                    rg.Children.Add(new RecipeNode(r) { Parent = rg });
+                rg.IsExpanded = true;
+                HasUnsavedChanges = true;
+                NotifyStateChanged();
+                break;
+            }
         }
     }
 
-    public void SelectNode(TreeNode? node)
+    public void SelectNode(TreeNode? node, bool ctrl = false, bool shift = false)
     {
-        if (SelectedItem != null)
-            SelectedItem.IsSelected = false;
+        if (node == null)
+        {
+            ClearSelection();
+            return;
+        }
 
-        SelectedItem = node;
-        if (node != null)
-            node.IsSelected = true;
+        if (ctrl)
+        {
+            // Toggle the node in the multi-selection
+            if (SelectedItems.Contains(node))
+            {
+                node.IsSelected = false;
+                SelectedItems.Remove(node);
+                SelectedItem = SelectedItems.LastOrDefault();
+            }
+            else
+            {
+                node.IsSelected = true;
+                SelectedItems.Add(node);
+                SelectedItem = node;
+            }
+        }
+        else if (shift && SelectedItem != null)
+        {
+            // Range select: find siblings between the anchor and the target
+            var siblings = GetSiblings(SelectedItem, node);
+            if (siblings != null)
+            {
+                // Clear previous selection
+                foreach (var n in SelectedItems)
+                    n.IsSelected = false;
+                SelectedItems.Clear();
+
+                foreach (var n in siblings)
+                {
+                    n.IsSelected = true;
+                    SelectedItems.Add(n);
+                }
+                SelectedItem = node;
+            }
+            else
+            {
+                // Not siblings — just select the new node
+                SetSingleSelection(node);
+            }
+        }
+        else
+        {
+            SetSingleSelection(node);
+        }
 
         NotifyStateChanged();
+    }
+
+    public void ClearSelection()
+    {
+        foreach (var n in SelectedItems)
+            n.IsSelected = false;
+        SelectedItems.Clear();
+        if (SelectedItem != null)
+            SelectedItem.IsSelected = false;
+        SelectedItem = null;
+        NotifyStateChanged();
+    }
+
+    private void SetSingleSelection(TreeNode node)
+    {
+        foreach (var n in SelectedItems)
+            n.IsSelected = false;
+        SelectedItems.Clear();
+
+        node.IsSelected = true;
+        SelectedItems.Add(node);
+        SelectedItem = node;
+    }
+
+    /// <summary>Returns the range of sibling nodes between a and b (inclusive), or null if not siblings.</summary>
+    private static List<TreeNode>? GetSiblings(TreeNode a, TreeNode b)
+    {
+        if (a.Parent == null || b.Parent == null) return null;
+        if (a.Parent != b.Parent) return null;
+
+        var children = a.Parent.Children;
+        int idxA = children.IndexOf(a);
+        int idxB = children.IndexOf(b);
+        if (idxA < 0 || idxB < 0) return null;
+
+        int start = Math.Min(idxA, idxB);
+        int end = Math.Max(idxA, idxB);
+        return children.GetRange(start, end - start + 1);
     }
 
     public void RefreshJsonFromTree()
@@ -530,6 +732,8 @@ public class NodeEditorService
     private void ReloadViewModels()
     {
         RootItems.Clear();
+        SelectedItems.Clear();
+        SelectedItem = null;
 
         var variableGroup = new VariableGroupNode();
         if (_rootModel?.Folder != null)

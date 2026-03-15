@@ -1,4 +1,6 @@
 @using ServerEditorWeb.Services
+@using Microsoft.JSInterop
+@implements IDisposable
 
 <div class="symbol-library-panel">
     <div class="symbol-library-toolbar">
@@ -15,8 +17,62 @@
             <button class="btn btn-sm @(_selectedCategory == c ? "btn-primary" : "btn-outline-secondary")"
                     @onclick="() => _selectedCategory = c">@c</button>
         }
-        <button class="btn btn-sm btn-outline-info ms-auto" @onclick="Refresh" title="Reload from disk">🔄</button>
+        <button class="btn btn-sm btn-outline-success ms-auto" @onclick="ShowUploadDialog" title="Import SVG files from a folder">📤 Import</button>
+        <button class="btn btn-sm btn-outline-info" @onclick="Refresh" title="Reload from disk">🔄</button>
     </div>
+
+    @if (_showUpload)
+    {
+        <div class="symbol-library-upload-overlay" @onclick="CancelUpload">
+            <div class="symbol-library-upload-dialog" @onclick:stopPropagation>
+                <h6 class="mb-2">📤 Import SVG Files</h6>
+                <p class="text-muted small mb-2">Select a folder containing <code>.svg</code> files to import into the symbol library.</p>
+
+                <div class="mb-2">
+                    <label class="form-label small mb-1">Category</label>
+                    <div class="d-flex gap-1 flex-wrap mb-1">
+                        @foreach (var cat in Library.GetCategories())
+                        {
+                            var c = cat;
+                            <button class="btn btn-xs @(_uploadCategory == c ? "btn-primary" : "btn-outline-secondary")"
+                                    @onclick="() => _uploadCategory = c">@c</button>
+                        }
+                    </div>
+                    <input type="text" class="form-control form-control-sm" placeholder="New category or type name…"
+                           @bind="_uploadCategory" />
+                </div>
+
+                <div class="mb-2">
+                    <label class="form-label small mb-1">SVG Files</label>
+                    <div class="d-flex gap-2 align-items-center">
+                        <button class="btn btn-sm btn-outline-primary" @onclick="PickFolder">📁 Choose Folder…</button>
+                        <button class="btn btn-sm btn-outline-secondary" @onclick="PickFiles">📄 Choose Files…</button>
+                    </div>
+                    @if (_pendingFileCount > 0)
+                    {
+                        <div class="small text-success mt-1">@_pendingFileCount SVG file(s) selected</div>
+                    }
+                </div>
+
+                @if (!string.IsNullOrEmpty(_uploadStatus))
+                {
+                    <div class="alert @(_uploadSuccess ? "alert-success" : "alert-danger") py-1 small mb-2">@_uploadStatus</div>
+                }
+
+                <div class="d-flex gap-2 justify-content-end">
+                    <button class="btn btn-sm btn-secondary" @onclick="CancelUpload">Cancel</button>
+                    <button class="btn btn-sm btn-primary" @onclick="DoUpload"
+                            disabled="@(string.IsNullOrWhiteSpace(_uploadCategory) || _pendingFileCount == 0 || _uploading)">
+                        @if (_uploading)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        Import @_pendingFileCount file(s)
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
 
     <div class="symbol-library-grid">
         @foreach (var sym in GetFilteredSymbols())
@@ -37,13 +93,31 @@
     </div>
 </div>
 
+@* Hidden file inputs for folder and file selection *@
+<input type="file" @ref="_folderInput" style="display:none" accept=".svg"
+       webkitdirectory directory multiple />
+<input type="file" @ref="_fileInput" style="display:none" accept=".svg" multiple />
+
 @code {
     [Inject] private SymbolLibraryService Library { get; set; } = default!;
+    [Inject] private IJSRuntime JS { get; set; } = default!;
 
     [Parameter] public EventCallback<SymbolLibraryItem> OnSymbolSelected { get; set; }
 
     private string? _selectedCategory;
     private string _searchText = "";
+
+    // Upload state
+    private bool _showUpload;
+    private string _uploadCategory = "";
+    private int _pendingFileCount;
+    private string _uploadStatus = "";
+    private bool _uploadSuccess;
+    private bool _uploading;
+    private ElementReference _folderInput;
+    private ElementReference _fileInput;
+    private DotNetObjectReference<SymbolLibraryPanel>? _selfRef;
+    private List<(string FileName, byte[] Content)> _pendingFiles = [];
 
     private IEnumerable<SymbolLibraryItem> GetFilteredSymbols()
     {
@@ -64,5 +138,105 @@
     {
         Library.Refresh();
         StateHasChanged();
+    }
+
+    private async Task ShowUploadDialog()
+    {
+        _showUpload = true;
+        _uploadCategory = _selectedCategory ?? "";
+        _pendingFileCount = 0;
+        _pendingFiles.Clear();
+        _uploadStatus = "";
+        _uploading = false;
+
+        _selfRef ??= DotNetObjectReference.Create(this);
+        await JS.InvokeVoidAsync("symbolUpload.init", _selfRef);
+    }
+
+    private void CancelUpload()
+    {
+        _showUpload = false;
+        _pendingFiles.Clear();
+        _pendingFileCount = 0;
+    }
+
+    private async Task PickFolder()
+    {
+        await JS.InvokeVoidAsync("symbolUpload.pickFolder", _folderInput);
+    }
+
+    private async Task PickFiles()
+    {
+        await JS.InvokeVoidAsync("symbolUpload.pickFiles", _fileInput);
+    }
+
+    [JSInvokable]
+    public void OnFilesSelected(int count)
+    {
+        _pendingFileCount = count;
+        _uploadStatus = "";
+        InvokeAsync(StateHasChanged);
+    }
+
+    [JSInvokable]
+    public void OnFileData(string fileName, byte[] data)
+    {
+        _pendingFiles.Add((fileName, data));
+        InvokeAsync(StateHasChanged);
+    }
+
+    [JSInvokable]
+    public void OnAllFilesRead()
+    {
+        _pendingFileCount = _pendingFiles.Count;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private async Task DoUpload()
+    {
+        if (string.IsNullOrWhiteSpace(_uploadCategory) || _uploading) return;
+
+        _uploading = true;
+        _uploadStatus = "";
+        StateHasChanged();
+
+        // If files haven't been read yet (JS sends them via OnFileData), trigger the read
+        if (_pendingFiles.Count == 0 && _pendingFileCount > 0)
+        {
+            await JS.InvokeVoidAsync("symbolUpload.readFiles");
+            // Wait for JS to call OnFileData/OnAllFilesRead
+            var deadline = DateTime.UtcNow.AddSeconds(30);
+            while (_pendingFiles.Count < _pendingFileCount && DateTime.UtcNow < deadline)
+                await Task.Delay(100);
+        }
+
+        try
+        {
+            var saved = Library.ImportSvgFiles(_uploadCategory, _pendingFiles);
+            _uploadSuccess = true;
+            _uploadStatus = $"Imported {saved} SVG file(s) into '{_uploadCategory}'.";
+            _selectedCategory = _uploadCategory;
+
+            // Auto-close after success
+            await Task.Delay(1200);
+            _showUpload = false;
+            _pendingFiles.Clear();
+            _pendingFileCount = 0;
+        }
+        catch (Exception ex)
+        {
+            _uploadSuccess = false;
+            _uploadStatus = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            _uploading = false;
+            StateHasChanged();
+        }
+    }
+
+    public void Dispose()
+    {
+        _selfRef?.Dispose();
     }
 }

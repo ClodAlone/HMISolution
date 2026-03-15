@@ -2,7 +2,7 @@
 
 <div class="tree-item">
     <div class="tree-item-header @(Node.IsSelected ? "selected" : "")"
-         @onclick="() => OnSelect.InvokeAsync(Node)"
+         @onclick="OnClick"
          @onclick:stopPropagation="true"
          @ondblclick="() => OnDoubleClick.InvokeAsync(Node)"
          @ondblclick:stopPropagation="true"
@@ -61,7 +61,7 @@
 @code {
     [Parameter] public TreeNode Node { get; set; } = default!;
     [Parameter] public TreeNode? SelectedNode { get; set; }
-    [Parameter] public EventCallback<TreeNode> OnSelect { get; set; }
+    [Parameter] public EventCallback<TreeNodeClickArgs> OnSelect { get; set; }
     [Parameter] public EventCallback<TreeNode> OnDoubleClick { get; set; }
     [Parameter] public EventCallback<TreeNode> OnAddFolder { get; set; }
     [Parameter] public EventCallback<TreeNode> OnAddVariable { get; set; }
@@ -78,6 +78,11 @@
 
     private bool _contextMenuVisible;
     private double _contextMenuX, _contextMenuY;
+
+    private void OnClick(MouseEventArgs e)
+    {
+        OnSelect.InvokeAsync(new TreeNodeClickArgs(Node, e.CtrlKey, e.ShiftKey));
+    }
 
     private void ShowContextMenu(MouseEventArgs e)
     {

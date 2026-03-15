@@ -35,6 +35,39 @@ public class SymbolLibraryService
         _items = null;
     }
 
+    /// <summary>
+    /// Saves uploaded SVG files into the given category folder.
+    /// Creates the category directory if it doesn't exist.
+    /// Returns the number of files saved.
+    /// </summary>
+    public int ImportSvgFiles(string category, IReadOnlyList<(string FileName, byte[] Content)> files)
+    {
+        if (string.IsNullOrWhiteSpace(category)) return 0;
+
+        // Sanitize category name to a safe directory name
+        var safeName = string.Concat(category.Select(c =>
+            Path.GetInvalidFileNameChars().Contains(c) ? '_' : c));
+        var categoryDir = Path.Combine(_libraryPath, safeName);
+        Directory.CreateDirectory(categoryDir);
+
+        int count = 0;
+        foreach (var (fileName, content) in files)
+        {
+            if (!fileName.EndsWith(".svg", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var safeFn = string.Concat(Path.GetFileName(fileName).Select(c =>
+                Path.GetInvalidFileNameChars().Contains(c) ? '_' : c));
+            var dest = Path.Combine(categoryDir, safeFn);
+            File.WriteAllBytes(dest, content);
+            count++;
+        }
+
+        // Force reload on next access
+        _items = null;
+        return count;
+    }
+
     private List<SymbolLibraryItem> LoadSymbols()
     {
         var items = new List<SymbolLibraryItem>();
