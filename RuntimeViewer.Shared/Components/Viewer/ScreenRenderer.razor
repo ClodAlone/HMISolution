@@ -113,6 +113,17 @@ else if (Screen.LayoutMode == "responsive")
                     case "screenembed":
                         <ScreenEmbedWidget ScreenNames="@sym.EmbeddedScreens" />
                         break;
+                    case "imagemap":
+                        var imgMapSrcR = ResolveImageMap(sym, liveValue);
+                        @if (!string.IsNullOrEmpty(imgMapSrcR))
+                        {
+                            <img src="@imgMapSrcR" style="width: 100%; height: 100%; object-fit: contain;" />
+                        }
+                        else
+                        {
+                            <div class="rv-responsive-indicator" style="background: @fillColor;">@resolvedLabel</div>
+                        }
+                        break;
                 }
 
                 @if (isLocked)
@@ -284,6 +295,20 @@ else
                                 <ScreenEmbedWidget ScreenNames="@sym.EmbeddedScreens" />
                             </div>
                         </foreignObject>
+                        break;
+                    case "imagemap":
+                        var imgMapSrc = ResolveImageMap(sym, liveValue);
+                        @if (!string.IsNullOrEmpty(imgMapSrc))
+                        {
+                            <image href="@imgMapSrc" x="0" y="0"
+                                   width="@sym.Width" height="@sym.Height"
+                                   preserveAspectRatio="xMidYMid meet" />
+                        }
+                        else
+                        {
+                            <rect width="@sym.Width" height="@sym.Height" fill="#1e293b" stroke="@sym.Stroke" stroke-width="@sym.StrokeWidth" rx="4" />
+                            @RenderSvgText(sym.Width / 2, sym.Height / 2, "middle", "middle", "#64748b", 10, "No image")
+                        }
                         break;
                 }
 
@@ -623,6 +648,42 @@ else
     }
 
     // ─── SVG text helper ────────────────────────────────────
+
+    /// <summary>
+    /// Resolves the active image from an imagemap widget's entry list.
+    /// Evaluates each entry's condition against the live variable value in order;
+    /// returns the ImageData of the first matching entry. "*" or "" = default/fallback.
+    /// </summary>
+    private string? ResolveImageMap(ScreenSymbol sym, string? liveValue)
+    {
+        if (sym.ImageMapEntries.Count == 0) return null;
+
+        var numVal = ParseNumericValue(liveValue);
+        string? fallback = null;
+
+        foreach (var entry in sym.ImageMapEntries)
+        {
+            if (string.IsNullOrEmpty(entry.ImageData)) continue;
+
+            var cond = entry.Condition?.Trim() ?? "";
+            if (cond is "" or "*")
+            {
+                fallback ??= entry.ImageData;
+                continue;
+            }
+
+            if (liveValue == null) continue;
+
+            try
+            {
+                if (EvalSimpleBool(cond, liveValue, numVal))
+                    return entry.ImageData;
+            }
+            catch { }
+        }
+
+        return fallback ?? (sym.ImageMapEntries.FirstOrDefault(e => !string.IsNullOrEmpty(e.ImageData))?.ImageData);
+    }
 
     private RenderFragment RenderSvgText(double x, double y, string? anchor, string? baseline,
         string fill, int fontSize, string content) => builder =>

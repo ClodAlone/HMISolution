@@ -28,6 +28,7 @@
                 <button class="btn btn-sm btn-outline-info" @onclick='() => AddWidget(screen, "recipe")' title="Recipe">📦 Recipe</button>
                 <button class="btn btn-sm btn-outline-secondary" @onclick='() => AddWidget(screen, "screenembed")' title="Embed other screens (tabbed if multiple)">🪟 Screen</button>
                 <button class="btn btn-sm btn-outline-info" @onclick='() => AddWidget(screen, "svg")' title="SVG Symbol (from library)">🏭 SVG</button>
+                <button class="btn btn-sm btn-outline-info" @onclick='() => AddWidget(screen, "imagemap")' title="Image Map (show raster images based on variable condition)">🖼️ ImageMap</button>
 
                 <span class="mx-1">|</span>
 
@@ -167,6 +168,16 @@
                             case "screenembed":
                                 <div class="responsive-placeholder">🪟 @(s.EmbeddedScreens.Count > 0 ? string.Join(", ", s.EmbeddedScreens) : "(configure in properties)") @(s.EmbeddedScreens.Count > 1 ? $"({s.EmbeddedScreens.Count} tabs)" : "")</div>
                                 break;
+                            case "imagemap":
+                                @if (s.ImageMapEntries.Count > 0 && !string.IsNullOrEmpty(s.ImageMapEntries[0].ImageData))
+                                {
+                                    <img src="@s.ImageMapEntries[0].ImageData" style="max-width: 100%; max-height: 100%; object-fit: contain;" alt="@(s.ImageMapEntries[0].Label)" />
+                                }
+                                else
+                                {
+                                    <div class="responsive-placeholder">🖼️ Image Map @(s.ImageMapEntries.Count > 0 ? $"({s.ImageMapEntries.Count} images)" : "(configure in properties)")</div>
+                                }
+                                break;
                             default:
                                 <div class="responsive-placeholder">@s.Type</div>
                                 break;
@@ -295,6 +306,52 @@
                         <label class="form-label mb-0 small">Recipe Name</label>
                         <input type="text" class="form-control form-control-sm"
                                @bind="_selectedSymbol.RecipeName" @bind:after="OnChanged" placeholder="Recipe name" />
+                    </div>
+                }
+
+                @if (_selectedSymbol.Type == "imagemap")
+                {
+                    <div class="mb-2">
+                        <label class="form-label mb-0 small">Image Map Entries (@_selectedSymbol.ImageMapEntries.Count)</label>
+                        <div class="form-text mb-1" style="font-size: 9px;">
+                            First matching condition wins. Use <code>*</code> for default.
+                        </div>
+
+                        @for (var i = 0; i < _selectedSymbol.ImageMapEntries.Count; i++)
+                        {
+                            var idx = i;
+                            var entry = _selectedSymbol.ImageMapEntries[idx];
+                            <div class="border rounded p-1 mb-1" style="font-size: 10px; background: #0f172a;">
+                                <div class="d-flex gap-1 align-items-center mb-1">
+                                    <input type="text" class="form-control form-control-sm" style="font-size: 10px; width: 110px;"
+                                           placeholder="value == @idx"
+                                           @bind="entry.Condition" @bind:after="OnChanged" />
+                                    <input type="text" class="form-control form-control-sm" style="font-size: 10px; width: 70px;"
+                                           placeholder="Label"
+                                           @bind="entry.Label" @bind:after="OnChanged" />
+                                    <button class="btn btn-sm btn-outline-danger py-0 px-1" style="font-size: 9px;"
+                                            @onclick="() => { _selectedSymbol.ImageMapEntries.RemoveAt(idx); OnChanged(); }">✕</button>
+                                </div>
+                                @if (!string.IsNullOrEmpty(entry.ImageData))
+                                {
+                                    <div class="d-flex align-items-center gap-1">
+                                        <img src="@entry.ImageData" style="max-width: 40px; max-height: 30px; border: 1px solid #334155; border-radius: 2px;" />
+                                        <button class="btn btn-sm btn-outline-warning py-0 px-1" style="font-size: 9px;"
+                                                @onclick="() => { entry.ImageData = string.Empty; OnChanged(); }">Clear</button>
+                                        <InputFile OnChange="(e) => OnImageMapFileSelected(e, entry)" accept="image/*"
+                                                   class="form-control form-control-sm" style="width: 100px; font-size: 9px;" />
+                                    </div>
+                                }
+                                else
+                                {
+                                    <InputFile OnChange="(e) => OnImageMapFileSelected(e, entry)" accept="image/*"
+                                               class="form-control form-control-sm" style="font-size: 9px;" />
+                                }
+                            </div>
+                        }
+
+                        <button class="btn btn-sm btn-outline-success w-100 py-0" style="font-size: 10px;"
+                                @onclick="() => { _selectedSymbol.ImageMapEntries.Add(new ImageMapEntry()); OnChanged(); }">＋ Add Image</button>
                     </div>
                 }
 
@@ -494,6 +551,20 @@
             _selectedSymbol.Camera ??= new CameraConfig();
     }
 
+    private async Task OnImageMapFileSelected(InputFileChangeEventArgs e, ImageMapEntry entry)
+    {
+        var file = e.File;
+        if (file == null) return;
+
+        const long maxSize = 10 * 1024 * 1024; // 10 MB
+        using var stream = file.OpenReadStream(maxSize);
+        using var ms = new System.IO.MemoryStream();
+        await stream.CopyToAsync(ms);
+        var base64 = Convert.ToBase64String(ms.ToArray());
+        entry.ImageData = $"data:{file.ContentType};base64,{base64}";
+        OnChanged();
+    }
+
     // ─── Live values ────────────────────────────────────────
 
     private string? GetLiveValue(ScreenSymbol sym)
@@ -534,6 +605,7 @@
         "ipcamera" => 6,
         "recipe" => 6,
         "svg" => 4,
+        "imagemap" => 4,
         _ => 4
     };
 
@@ -547,6 +619,7 @@
         "ipcamera" => 260,
         "recipe" => 320,
         "svg" => 150,
+        "imagemap" => 200,
         _ => 150
     };
 
@@ -559,6 +632,7 @@
         "alarmlist" or "hdachart" or "hdagrid" or "eventlog" => 500,
         "ipcamera" => 320,
         "recipe" => 280,
+        "imagemap" => 120,
         _ => 80
     };
 
@@ -572,6 +646,7 @@
         "hdachart" or "hdagrid" or "eventlog" => 220,
         "ipcamera" => 240,
         "recipe" => 300,
+        "imagemap" => 120,
         _ => 40
     };
 
@@ -594,6 +669,7 @@
         "editbox" => "#1e293b",
         "ipcamera" => "#0a0a0a",
         "recipe" => "#1a1a2e",
+        "imagemap" => "#1e293b",
         _ => "#4a90d9"
     };
 
@@ -613,6 +689,7 @@
         "editbox" => "✏️",
         "ipcamera" => "📷",
         "recipe" => "📦",
+        "imagemap" => "🖼️",
         _ => "■"
     };
 
@@ -632,6 +709,7 @@
         "editbox" => "EditBox",
         "ipcamera" => "Camera",
         "recipe" => "Recipe",
+        "imagemap" => "Image Map",
         _ => type
     };
 

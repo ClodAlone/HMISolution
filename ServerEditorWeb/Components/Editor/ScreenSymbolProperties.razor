@@ -442,6 +442,64 @@
             }
         }
 
+        @if (_selectedSymbol.Type is "imagemap")
+        {
+            <hr class="my-2" />
+            <h6 class="mb-2 small" style="color: #38bdf8;">🖼️ Image Map Settings</h6>
+            <div class="form-text mb-2" style="font-size: 9px;">
+                Define images and conditions. The first matching condition wins at runtime.
+                Use <code>*</code> as a default/fallback. Condition syntax: <code>value == 1</code>, <code>value &gt; 50</code>, <code>value == true</code>.
+            </div>
+
+            @for (var i = 0; i < _selectedSymbol.ImageMapEntries.Count; i++)
+            {
+                var idx = i;
+                var entry = _selectedSymbol.ImageMapEntries[idx];
+                <div class="border rounded p-1 mb-2" style="font-size: 11px; background: #0f172a;">
+                    <div class="d-flex gap-1 mb-1 align-items-center">
+                        <div class="flex-grow-1">
+                            <label class="form-label mb-0" style="font-size: 9px; color: #94a3b8;">Condition</label>
+                            <input type="text" class="form-control form-control-sm" style="font-size: 10px;"
+                                   placeholder="value == @idx  or  *  (default)"
+                                   @bind="entry.Condition" @bind:after="OnChanged" />
+                        </div>
+                        <div style="width: 80px;">
+                            <label class="form-label mb-0" style="font-size: 9px; color: #94a3b8;">Label</label>
+                            <input type="text" class="form-control form-control-sm" style="font-size: 10px;"
+                                   placeholder="(optional)"
+                                   @bind="entry.Label" @bind:after="OnChanged" />
+                        </div>
+                        <div class="d-flex flex-column align-items-center">
+                            <button class="btn btn-sm btn-outline-danger py-0 px-1" style="font-size: 9px; margin-top: 14px;"
+                                    @onclick="() => { _selectedSymbol.ImageMapEntries.RemoveAt(idx); OnChanged(); }"
+                                    title="Remove entry">✕</button>
+                        </div>
+                    </div>
+                    <div class="mb-1">
+                        @if (!string.IsNullOrEmpty(entry.ImageData))
+                        {
+                            <div class="d-flex align-items-center gap-1">
+                                <img src="@entry.ImageData" style="max-width: 60px; max-height: 40px; border: 1px solid #334155; border-radius: 3px;" />
+                                <button class="btn btn-sm btn-outline-warning py-0 px-1" style="font-size: 9px;"
+                                        @onclick="() => { entry.ImageData = string.Empty; OnChanged(); }">Clear</button>
+                                <InputFile OnChange="(e) => OnImageMapFileSelected(e, entry)" accept="image/*"
+                                           class="form-control form-control-sm" style="width: 120px; font-size: 9px;" />
+                            </div>
+                        }
+                        else
+                        {
+                            <label class="form-label mb-0" style="font-size: 9px; color: #94a3b8;">Image</label>
+                            <InputFile OnChange="(e) => OnImageMapFileSelected(e, entry)" accept="image/*"
+                                       class="form-control form-control-sm" style="font-size: 9px;" />
+                        }
+                    </div>
+                </div>
+            }
+
+            <button class="btn btn-sm btn-outline-success w-100 py-0" style="font-size: 10px;"
+                    @onclick="() => { _selectedSymbol.ImageMapEntries.Add(new ImageMapEntry()); OnChanged(); }">＋ Add Image</button>
+        }
+
         @if (_selectedSymbol.Type is "eventlog")
         {
             <hr class="my-2" />
@@ -742,6 +800,22 @@ else
     private void AddEmbeddedScreen()
     {
         _selectedSymbol?.EmbeddedScreens.Add("");
+        OnChanged();
+    }
+
+    // ─── Image Map helpers ──────────────────────────────────
+
+    private async Task OnImageMapFileSelected(InputFileChangeEventArgs e, ImageMapEntry entry)
+    {
+        var file = e.File;
+        if (file == null) return;
+
+        const long maxSize = 10 * 1024 * 1024; // 10 MB
+        using var stream = file.OpenReadStream(maxSize);
+        using var ms = new System.IO.MemoryStream();
+        await stream.CopyToAsync(ms);
+        var base64 = Convert.ToBase64String(ms.ToArray());
+        entry.ImageData = $"data:{file.ContentType};base64,{base64}";
         OnChanged();
     }
 

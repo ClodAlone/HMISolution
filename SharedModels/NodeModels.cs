@@ -345,7 +345,7 @@ namespace SharedModels
     public class ScreenSymbol
     {
         public string Id { get; set; } = "";
-        public string Type { get; set; } = "rect"; // rect, circle, ellipse, text, line, gauge, indicator, svg, alarmlist, hdachart, hdagrid, eventlog, editbox, ipcamera, recipe, screenembed
+        public string Type { get; set; } = "rect"; // rect, circle, ellipse, text, line, gauge, indicator, svg, alarmlist, hdachart, hdagrid, eventlog, editbox, ipcamera, recipe, screenembed, imagemap
         public double X { get; set; }
         public double Y { get; set; }
         public double Width { get; set; } = 80;
@@ -450,6 +450,36 @@ namespace SharedModels
 
         /// <summary>Display order in the responsive grid (lower = first).</summary>
         public int Order { get; set; }
+
+        /// <summary>
+        /// List of condition-to-image mappings for the Image Map widget (Type == "imagemap").
+        /// Each entry defines a condition evaluated against the bound variable value and a
+        /// raster image (base64 data URI) to display when the condition is true.
+        /// Entries are evaluated in order; the first matching condition wins.
+        /// A condition of "*" or "" acts as the default/fallback.
+        /// </summary>
+        public List<ImageMapEntry> ImageMapEntries { get; set; } = new();
+    }
+
+    /// <summary>
+    /// A single condition-to-image mapping used by the Image Map widget.
+    /// Condition syntax examples: "value == 1", "value > 50", "value == true", "*" (default).
+    /// ImageData stores the raster image as a base64 data URI (e.g. "data:image/png;base64,...").
+    /// </summary>
+    public class ImageMapEntry
+    {
+        /// <summary>
+        /// Condition expression evaluated against the live variable value.
+        /// Supports: "value == 1", "value > 50", "value &lt;= 10", "value == true", "value != 0".
+        /// Use "*" or "" as a catch-all default.
+        /// </summary>
+        public string Condition { get; set; } = "*";
+
+        /// <summary>Display label for this entry in the editor (optional).</summary>
+        public string Label { get; set; } = "";
+
+        /// <summary>Raster image stored as a base64 data URI.</summary>
+        public string ImageData { get; set; } = "";
     }
 
     /// <summary>
