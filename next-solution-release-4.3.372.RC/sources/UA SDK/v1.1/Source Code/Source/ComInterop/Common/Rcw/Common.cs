@@ -1,0 +1,345 @@
+/* ========================================================================
+ * Copyright (c) 2005-2010 The OPC Foundation, Inc. All rights reserved.
+ *
+ * OPC Reciprocal Community Binary License ("RCBL") Version 1.00
+ * 
+ * Unless explicitly acquired and licensed from Licensor under another 
+ * license, the contents of this file are subject to the Reciprocal 
+ * Community Binary License ("RCBL") Version 1.00, or subsequent versions 
+ * as allowed by the RCBL, and You may not copy or use this file in either 
+ * source code or executable form, except in compliance with the terms and 
+ * conditions of the RCBL.
+ * 
+ * All software distributed under the RCBL is provided strictly on an 
+ * "AS IS" basis, WITHOUT WARRANTY OF ANY KIND, EITHER EXPRESS OR IMPLIED, 
+ * AND LICENSOR HEREBY DISCLAIMS ALL SUCH WARRANTIES, INCLUDING WITHOUT 
+ * LIMITATION, ANY WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR 
+ * PURPOSE, QUIET ENJOYMENT, OR NON-INFRINGEMENT. See the RCBL for specific 
+ * language governing rights and limitations under the RCBL.
+ *
+ * The complete license agreement can be found here:
+ * http://opcfoundation.org/License/RCBL/1.00/
+ * ======================================================================*/
+
+using System;
+using System.Collections.Generic;
+using System.Text;
+using System.Runtime.InteropServices;
+
+#pragma warning disable 1591
+
+namespace OpcRcw.Comn
+{   
+    /// <exclude />
+	[StructLayout(LayoutKind.Sequential, CharSet=CharSet.Auto)]    
+    public struct CONNECTDATA 
+    {
+        [MarshalAs(UnmanagedType.IUnknown)]
+        object pUnk;
+        [MarshalAs(UnmanagedType.I4)]
+        int dwCookie;
+    }
+
+    /// <exclude />
+    [ComImport]
+    [GuidAttribute("B196B287-BAB4-101A-B69C-00AA00341D07")]
+    [InterfaceTypeAttribute(ComInterfaceType.InterfaceIsIUnknown)] 
+    public interface IEnumConnections
+    {
+        void RemoteNext(
+            [MarshalAs(UnmanagedType.I4)]
+            int cConnections,
+            [Out]
+            IntPtr rgcd,
+            [Out][MarshalAs(UnmanagedType.I4)]
+            out int pcFetched);
+
+        void Skip(
+            [MarshalAs(UnmanagedType.I4)]
+            int cConnections);
+
+        void Reset();
+
+        void Clone(
+            [Out]
+            out IEnumConnections ppEnum);
+    }
+
+    /// <exclude />
+    [ComImport]
+    [GuidAttribute("B196B286-BAB4-101A-B69C-00AA00341D07")]
+    [InterfaceTypeAttribute(ComInterfaceType.InterfaceIsIUnknown)] 
+    public interface IConnectionPoint
+    {
+        void GetConnectionInterface(
+            [Out]
+            out Guid pIID);
+
+        void GetConnectionPointContainer(
+            [Out]
+            out IConnectionPointContainer ppCPC);
+
+        void Advise(
+            [MarshalAs(UnmanagedType.IUnknown)]
+            object pUnkSink,
+            [Out][MarshalAs(UnmanagedType.I4)]
+            out int pdwCookie);
+
+        void Unadvise(
+            [MarshalAs(UnmanagedType.I4)]
+            int dwCookie);
+
+        void EnumConnections(
+            [Out]
+            out IEnumConnections ppEnum);
+    }
+
+    /// <exclude />
+    [ComImport]
+    [GuidAttribute("B196B285-BAB4-101A-B69C-00AA00341D07")]
+    [InterfaceTypeAttribute(ComInterfaceType.InterfaceIsIUnknown)] 
+    public interface IEnumConnectionPoints 
+    {
+        void RemoteNext(
+            [MarshalAs(UnmanagedType.I4)]
+            int cConnections,
+            [Out]
+            IntPtr ppCP,
+            [Out][MarshalAs(UnmanagedType.I4)]
+            out int pcFetched);
+
+        void Skip(
+            [MarshalAs(UnmanagedType.I4)]
+            int cConnections);
+
+        void Reset();
+
+        void Clone(
+            [Out]
+            out IEnumConnectionPoints ppEnum);
+    }
+
+    /// <exclude />
+    [ComImport]
+    [GuidAttribute("B196B284-BAB4-101A-B69C-00AA00341D07")]
+    [InterfaceTypeAttribute(ComInterfaceType.InterfaceIsIUnknown)] 
+    public interface IConnectionPointContainer
+    {
+        void EnumConnectionPoints(
+            [Out]
+            out IEnumConnectionPoints ppEnum);
+
+        void FindConnectionPoint(
+            ref Guid riid,
+            [Out]
+            out IConnectionPoint ppCP);
+    }
+
+    /// <exclude />
+	[ComImport]
+	[GuidAttribute("F31DFDE1-07B6-11d2-B2D8-0060083BA1FB")]
+	[InterfaceTypeAttribute(ComInterfaceType.InterfaceIsIUnknown)] 
+    public interface IOPCShutdown
+    {
+        void ShutdownRequest(
+			[MarshalAs(UnmanagedType.LPWStr)]
+			string szReason);
+    }
+
+    /// <exclude />
+	[ComImport]
+	[GuidAttribute("F31DFDE2-07B6-11d2-B2D8-0060083BA1FB")]
+	[InterfaceTypeAttribute(ComInterfaceType.InterfaceIsIUnknown)] 
+	public interface IOPCCommon 
+	{
+		void SetLocaleID(
+			[MarshalAs(UnmanagedType.I4)]
+			int dwLcid);
+
+		void GetLocaleID(
+			[Out][MarshalAs(UnmanagedType.I4)]
+			out int pdwLcid);
+
+		void QueryAvailableLocaleIDs( 
+			[Out][MarshalAs(UnmanagedType.I4)]
+			out int pdwCount,	
+			[Out]
+			out IntPtr pdwLcid);
+
+		void GetErrorString( 
+			[MarshalAs(UnmanagedType.I4)]
+			int dwError,
+			[Out][MarshalAs(UnmanagedType.LPWStr)]
+			out String ppString);
+
+		void SetClientName(
+			[MarshalAs(UnmanagedType.LPWStr)] 
+			String szName);
+	}
+
+    /// <exclude />
+	[ComImport]
+	[GuidAttribute("13486D50-4821-11D2-A494-3CB306C10000")]
+	[InterfaceTypeAttribute(ComInterfaceType.InterfaceIsIUnknown)] 
+	public interface IOPCServerList 
+    {
+        void EnumClassesOfCategories(
+		    [MarshalAs(UnmanagedType.I4)]
+            int cImplemented,
+            [MarshalAs(UnmanagedType.LPArray, ArraySubType=UnmanagedType.LPStruct, SizeParamIndex=0)]
+            Guid[] rgcatidImpl,
+		    [MarshalAs(UnmanagedType.I4)]
+            int cRequired,
+            [MarshalAs(UnmanagedType.LPArray, ArraySubType=UnmanagedType.LPStruct, SizeParamIndex=2)]
+            Guid[] rgcatidReq,
+		    [Out][MarshalAs(UnmanagedType.IUnknown)]
+            out object ppenumClsid);
+
+        void GetClassDetails(
+            ref Guid clsid, 
+            [Out][MarshalAs(UnmanagedType.LPWStr)]
+            out string ppszProgID,
+            [Out][MarshalAs(UnmanagedType.LPWStr)]
+            out string ppszUserType);
+
+        void CLSIDFromProgID(
+		    [MarshalAs(UnmanagedType.LPWStr)]
+            string szProgId,
+            [Out]
+            out Guid clsid);
+    }
+
+    /// <exclude />
+	[ComImport]
+	[GuidAttribute("55C382C8-21C7-4e88-96C1-BECFB1E3F483")]
+	[InterfaceTypeAttribute(ComInterfaceType.InterfaceIsIUnknown)] 
+    public interface IOPCEnumGUID 
+    {
+        void Next(
+		    [MarshalAs(UnmanagedType.I4)]
+            int celt,
+            [Out]
+            IntPtr rgelt,
+            [Out][MarshalAs(UnmanagedType.I4)]
+            out int pceltFetched);
+
+        void Skip(
+		    [MarshalAs(UnmanagedType.I4)]
+            int celt);
+
+        void Reset();
+
+        void Clone(
+            [Out]
+            out IOPCEnumGUID ppenum);
+    }
+
+    /// <exclude />
+	[ComImport]
+	[GuidAttribute("0002E000-0000-0000-C000-000000000046")]
+	[InterfaceTypeAttribute(ComInterfaceType.InterfaceIsIUnknown)] 
+    public interface IEnumGUID 
+    {
+        void Next(
+		    [MarshalAs(UnmanagedType.I4)]
+            int celt,
+            [Out]
+            IntPtr rgelt,
+            [Out][MarshalAs(UnmanagedType.I4)]
+            out int pceltFetched);
+
+        void Skip(
+		    [MarshalAs(UnmanagedType.I4)]
+            int celt);
+
+        void Reset();
+
+        void Clone(
+            [Out]
+            out IEnumGUID ppenum);
+    }
+
+    /// <exclude />
+	[ComImport]
+	[GuidAttribute("00000100-0000-0000-C000-000000000046")]
+	[InterfaceTypeAttribute(ComInterfaceType.InterfaceIsIUnknown)] 
+    public interface IEnumUnknown 
+    {
+        void RemoteNext(
+		    [MarshalAs(UnmanagedType.I4)]
+            int celt,
+            [Out]
+            IntPtr rgelt,
+            [Out][MarshalAs(UnmanagedType.I4)]
+            out int pceltFetched);
+
+        void Skip(
+		    [MarshalAs(UnmanagedType.I4)]
+            int celt);
+
+        void Reset();
+
+        void Clone(
+            [Out]
+            out IEnumUnknown ppenum);
+    }
+
+    /// <exclude />
+	[ComImport]
+	[GuidAttribute("00000101-0000-0000-C000-000000000046")]
+	[InterfaceTypeAttribute(ComInterfaceType.InterfaceIsIUnknown)] 
+    public interface IEnumString 
+    {
+        [PreserveSig]
+        int RemoteNext(
+		    [MarshalAs(UnmanagedType.I4)]
+            int celt,
+            IntPtr rgelt,
+            [Out][MarshalAs(UnmanagedType.I4)]
+            out int pceltFetched);
+
+        void Skip(
+		    [MarshalAs(UnmanagedType.I4)]
+            int celt);
+
+        void Reset();
+
+        void Clone(
+            [Out]
+            out IEnumString ppenum);
+    }
+
+    /// <exclude />
+	[ComImport]
+	[GuidAttribute("9DD0B56C-AD9E-43ee-8305-487F3188BF7A")]
+	[InterfaceTypeAttribute(ComInterfaceType.InterfaceIsIUnknown)] 
+    public interface IOPCServerList2
+    {
+        void EnumClassesOfCategories(
+            [MarshalAs(UnmanagedType.I4)]
+            int cImplemented,
+            [MarshalAs(UnmanagedType.LPArray, ArraySubType=UnmanagedType.LPStruct, SizeParamIndex=0)]
+            Guid[] rgcatidImpl,
+            [MarshalAs(UnmanagedType.I4)]
+            int cRequired,
+            [MarshalAs(UnmanagedType.LPArray, ArraySubType=UnmanagedType.LPStruct, SizeParamIndex=0)]
+            Guid[] rgcatidReq,
+            [Out]
+            out IOPCEnumGUID ppenumClsid);
+
+        void GetClassDetails(
+            ref Guid clsid, 
+		    [Out][MarshalAs(UnmanagedType.LPWStr)]
+            out string ppszProgID,
+            [Out][MarshalAs(UnmanagedType.LPWStr)]
+            out string ppszUserType,
+            [Out][MarshalAs(UnmanagedType.LPWStr)]
+            out string ppszVerIndProgID);
+
+        void CLSIDFromProgID(
+		    [MarshalAs(UnmanagedType.LPWStr)]
+            string szProgId,
+            [Out]
+            out Guid clsid);
+    }
+}

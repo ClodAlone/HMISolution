@@ -1,0 +1,505 @@
+﻿<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="clr-namespace:Syncfusion.UI.Xaml.Schedule">
+
+    <local:BoolToVisibilityConverter x:Key="booltovisible"/>
+    <local:VisibileToHiddenConverter x:Key="visibleToHiddenConv"/>
+
+    <Style x:Key="scroll" TargetType="ScrollViewer">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate  TargetType="ScrollViewer">
+                    <Grid x:Name="Grid" Background="{TemplateBinding Background}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="5.1*"/>
+                            <ColumnDefinition Width="4.9*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <Rectangle x:Name="Corner" HorizontalAlignment="Right" Grid.Column="1" Fill="{DynamicResource {x:Static SystemColors.ControlBrushKey}}" Grid.Row="1"/>
+                        <ScrollContentPresenter x:Name="PART_ScrollContentPresenter" CanContentScroll="{TemplateBinding CanContentScroll}" CanHorizontallyScroll="False" CanVerticallyScroll="False" ContentTemplate="{TemplateBinding ContentTemplate}" Content="{TemplateBinding Content}" Grid.Column="0" Margin="{TemplateBinding Padding}" Grid.Row="0" Grid.ColumnSpan="2"/>
+                        <ScrollBar BorderThickness="0"  HorizontalAlignment="Right" x:Name="PART_VerticalScrollBar" AutomationProperties.AutomationId="VerticalScrollBar" Cursor="Arrow" Grid.Column="1" Maximum="{TemplateBinding ScrollableHeight}" Minimum="0" Grid.Row="0" Visibility="{TemplateBinding ComputedVerticalScrollBarVisibility}" Value="{Binding VerticalOffset, Mode=OneWay, RelativeSource={RelativeSource TemplatedParent}}" ViewportSize="{TemplateBinding ViewportHeight}">
+                            <ScrollBar.Background>
+                                <SolidColorBrush Opacity="0.5" Color="LightGray"/>
+                            </ScrollBar.Background>
+                        </ScrollBar>
+                        <ScrollBar  BorderThickness="0"  x:Name="PART_HorizontalScrollBar" AutomationProperties.AutomationId="HorizontalScrollBar" Cursor="Arrow" Grid.Column="0" Maximum="{TemplateBinding ScrollableWidth}" Minimum="0" Orientation="Horizontal" Grid.Row="1" Visibility="{TemplateBinding ComputedHorizontalScrollBarVisibility}" Value="{Binding HorizontalOffset, Mode=OneWay, RelativeSource={RelativeSource TemplatedParent}}" ViewportSize="{TemplateBinding ViewportWidth}" Grid.ColumnSpan="2" >
+                            <ScrollBar.Background>
+                                <SolidColorBrush Opacity="0.5" Color="LightGray"/>
+                            </ScrollBar.Background>
+                        </ScrollBar>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="scroll1" TargetType="ScrollViewer">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate  TargetType="ScrollViewer">
+                    <Grid x:Name="Grid" Background="{TemplateBinding Background}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="5.1*"/>
+                            <ColumnDefinition Width="4.9*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <Rectangle x:Name="Corner" HorizontalAlignment="Right" Grid.Column="1" Fill="{DynamicResource {x:Static SystemColors.ControlBrushKey}}" Grid.Row="1"/>
+                        <ScrollContentPresenter x:Name="PART_ScrollContentPresenter" CanContentScroll="{TemplateBinding CanContentScroll}" CanHorizontallyScroll="False" CanVerticallyScroll="False" ContentTemplate="{TemplateBinding ContentTemplate}" Content="{TemplateBinding Content}" Grid.Column="0" Margin="{TemplateBinding Padding}" Grid.Row="0" Grid.ColumnSpan="2"/>
+                        <ScrollBar BorderThickness="0"  HorizontalAlignment="Right" x:Name="PART_VerticalScrollBar" AutomationProperties.AutomationId="VerticalScrollBar" Cursor="Arrow" Grid.Column="1" Maximum="{TemplateBinding ScrollableHeight}" Minimum="0" Grid.Row="0" Visibility="{TemplateBinding ComputedVerticalScrollBarVisibility}" Value="{Binding VerticalOffset, Mode=OneWay, RelativeSource={RelativeSource TemplatedParent}}" ViewportSize="{TemplateBinding ViewportHeight}">
+                            <ScrollBar.Background>
+                                <SolidColorBrush Opacity="0.5" Color="LightGray"/>
+                            </ScrollBar.Background>
+                        </ScrollBar>
+                        <ScrollBar  BorderThickness="0"  x:Name="PART_HorizontalScrollBar" AutomationProperties.AutomationId="HorizontalScrollBar" Cursor="Arrow" Grid.Column="0" Maximum="{TemplateBinding ScrollableWidth}" Minimum="0" Orientation="Horizontal" Grid.Row="1" Visibility="{TemplateBinding ComputedHorizontalScrollBarVisibility, Converter={StaticResource visibleToHiddenConv}}" Value="{Binding HorizontalOffset, Mode=OneWay, RelativeSource={RelativeSource TemplatedParent}}" ViewportSize="{TemplateBinding ViewportWidth}" Grid.ColumnSpan="2" >
+                            <ScrollBar.Background>
+                                <SolidColorBrush Opacity="0.5" Color="LightGray" />
+                            </ScrollBar.Background>
+                        </ScrollBar>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Region ScheduleDaysView -->
+    <Style TargetType="local:ScheduleDaysView">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="local:ScheduleDaysView">
+                    <Grid FocusVisualStyle="{x:Null}" x:Name="daysgrid" VerticalAlignment="Top">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="auto" />
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Text="All Day" FontSize="14" FontWeight="Light" FontFamily="Segoe UI" Margin="0,10,0,5" 
+                                   VerticalAlignment="Bottom" HorizontalAlignment="Center" IsHitTestVisible="False"
+                                   Visibility="{Binding Path=ShowAllDay,RelativeSource={RelativeSource TemplatedParent},Converter={StaticResource booltovisible}}">
+                        </TextBlock>
+
+                        <ScrollViewer FocusVisualStyle="{x:Null}" x:Name="Scrollviewer1" Grid.Row="1" Grid.Column="0"
+                                      VerticalAlignment="Top" VerticalScrollBarVisibility="Hidden"  
+                                      HorizontalScrollBarVisibility="{Binding HorizontalScrollBarVisibility, ElementName=Scrollviewer}" 
+                                      Style="{StaticResource scroll1}" SnapsToDevicePixels="True">
+                            <Grid>
+                                <local:ScheduleTimeLineItemsControl x:Name="PART_TimeLineItemsControl" HorizontalAlignment="Right" VerticalAlignment="Top"
+                                                                    Background="White" BorderBrush="#FFA9B0B8" FontWeight="Light" FontStretch="Condensed"
+                                                                    Foreground="{TemplateBinding Foreground}"
+                                                                    Height="{Binding ElementName=Appointmentcontainer,Path=ActualHeight}"
+																	Minimum="{Binding WorkStartHour, RelativeSource={RelativeSource TemplatedParent}}"
+                                                                    Maximum="{Binding WorkEndHour, RelativeSource={RelativeSource TemplatedParent}}"
+                                                                    ShowNonWorkingHours="{Binding ShowNonWorkingHours, RelativeSource={RelativeSource TemplatedParent}}"
+                                                                    MajorTickVisibility="{Binding Path=MajorTickVisibility,RelativeSource={RelativeSource TemplatedParent}}"
+                                                                    MinorTickVisibility="{Binding Path=MinorTickVisibility,RelativeSource={RelativeSource TemplatedParent}}"
+                                                                    MinorTickStroke="{Binding Path=MinorTickStroke,RelativeSource={RelativeSource TemplatedParent}}"
+                                                                    MajorTickStroke="{Binding Path=MajorTickStroke,RelativeSource={RelativeSource TemplatedParent}}"
+                                                                    MajorTickStrokeDashArray="{Binding MajorTickStrokeDashArray, RelativeSource={RelativeSource TemplatedParent}}"
+                                                                    MinorTickStrokeDashArray="{Binding MinorTickStrokeDashArray, RelativeSource={RelativeSource TemplatedParent}}"
+                                                                    MinorTickLabelStroke="{Binding Path=MinorTickLabelStroke,RelativeSource={RelativeSource TemplatedParent}}"
+                                                                    MajorTickLabelStroke ="{Binding Path=MajorTickLabelStroke,RelativeSource={RelativeSource TemplatedParent}}"
+                                                                    TimeInterval="{Binding Path=TimeInterval,RelativeSource={RelativeSource TemplatedParent}}"
+                                                                    TimeMode="{Binding Path=TimeMode,RelativeSource={RelativeSource TemplatedParent}}"
+                                                                    IntervalHeight="{Binding Path=IntervalHeight,RelativeSource={RelativeSource TemplatedParent}}">
+                                </local:ScheduleTimeLineItemsControl>
+
+                                <ItemsControl x:Name="PART_NonAccessibleTimeItemsControl" Height="{Binding ElementName=verticalslot,Path=Height}" 
+                                              ItemsSource="{Binding NonAccessibleBlocks, RelativeSource={RelativeSource TemplatedParent}}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <Grid/>
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <ContentPresenter VerticalAlignment="Top" Margin="{Binding Margin}" Height="{Binding Size}">
+                                                <ContentPresenter.Content>
+                                                    <Border Background="{Binding Background}" Opacity="0.3"/>
+                                                </ContentPresenter.Content>
+                                            </ContentPresenter>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                                <Canvas>
+                                    <ContentPresenter x:Name="PART_DayCurrentTimeIndicator" MinHeight="4" HorizontalAlignment="Right" VerticalAlignment="Top"
+                                                      Width="{Binding CurrentTimeIndicatorWidth, RelativeSource={RelativeSource TemplatedParent}}"
+                                                      Visibility="{Binding CurrentTimeIndicatorVisibility,RelativeSource={RelativeSource TemplatedParent}}"  
+                                                      ContentTemplate="{Binding CurrentTimeIndicatorTemplate,RelativeSource={RelativeSource TemplatedParent}}" 
+                                                      Margin="{Binding CurrentTimeIndicatorMargin,RelativeSource={RelativeSource TemplatedParent}}">
+                                    </ContentPresenter>
+                                </Canvas>
+                            </Grid>
+                        </ScrollViewer>
+
+                        <ScrollViewer FocusVisualStyle="{x:Null}" x:Name="View" Grid.Row="0" Grid.Column="1"
+                                      HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Hidden" 
+                                      Style="{StaticResource scroll}" SnapsToDevicePixels="True" >
+                            <Grid x:Name="headergrid">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="*"/>
+                                    <RowDefinition Height="*" />
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+
+                                <ItemsControl x:Name="ResourceContainer" Grid.Row="{Binding RelativeSource={RelativeSource Mode=TemplatedParent},Path=ResourceHeaderRow}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <local:UniformStackPanel Orientation="Vertical"/>
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                </ItemsControl>
+
+                                <local:ScheduleDaysHeaderViewItemsControl x:Name="PART_ScheduleDaysHeaderViewItemsControl"
+                                                                          Grid.Row="{Binding RelativeSource={RelativeSource Mode=TemplatedParent},Path=DayHeaderRow}"                                                                      
+                                                                          DayViewColumnCount="{Binding DayViewColumnCount, RelativeSource={RelativeSource TemplatedParent}}"
+                                                                          ResourceCount="{Binding RelativeSource={RelativeSource Mode=TemplatedParent},Path=ResourceCount}" 
+                                                                          DayHeaderOrder="{Binding RelativeSource={RelativeSource Mode=TemplatedParent},Path=DayHeaderOrder}"  
+                                                                          Foreground="{TemplateBinding Foreground}"
+                                                                          Background="{Binding RelativeSource={RelativeSource TemplatedParent},Path=HeaderBackground}"  
+                                                                          CurrentDateBackground="{Binding RelativeSource={RelativeSource TemplatedParent},Path=CurrentDateBackground}"
+                                                                          CurrentScheduleType="{Binding Path=CurrentScheduleType,RelativeSource={RelativeSource TemplatedParent}}"
+                                                                          SelectedDates="{Binding Path=SelectedDates,RelativeSource={RelativeSource TemplatedParent}}">
+                                </local:ScheduleDaysHeaderViewItemsControl>
+
+                                <local:ScheduleAllDaysAppointmentItemsControl x:Name="PART_AllDaysAppointmentsLayout" Grid.Row="2" MinHeight="30" 
+                                                                              Visibility="{Binding Path=ShowAllDay,RelativeSource={RelativeSource TemplatedParent},Converter={StaticResource booltovisible}}"
+                                                                              AppointmentSelectionBrush="{Binding AppointmentSelectionBrush, RelativeSource={RelativeSource TemplatedParent}}">
+                                </local:ScheduleAllDaysAppointmentItemsControl>
+                            </Grid>
+                        </ScrollViewer>
+
+                        <Grid x:Name="Parentgrid" Grid.Row="1" Grid.Column="1">
+                            <ScrollViewer FocusVisualStyle="{x:Null}" x:Name="Scrollviewer" Grid.Row="0" HorizontalScrollBarVisibility="Visible" 
+                                          Style="{StaticResource scroll}" SnapsToDevicePixels="True">
+                                <Grid Background="{TemplateBinding Background}" HorizontalAlignment="Left" VerticalAlignment="Top">
+                                    <local:ScheduleNonWorkingDayItemsControl x:Name="PART_NonWorkingDaysLayout" 
+                                                                             Width="{Binding ActualWidth, ElementName=PART_ScheduleDaysHeaderViewItemsControl}">
+                                        <local:ScheduleNonWorkingDayItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <local:ScheduleNonWorkingDayPanel/>
+                                            </ItemsPanelTemplate>
+                                        </local:ScheduleNonWorkingDayItemsControl.ItemsPanel>
+                                    </local:ScheduleNonWorkingDayItemsControl>
+
+                                    <Canvas >
+                                        <Rectangle x:Name="selectionRectangle" Fill="#BCBEC0" Visibility="{TemplateBinding RectVisibility}"  
+                                                   Height="{TemplateBinding RectHeight}" Width="{TemplateBinding RectWidth}" 
+                                                   Canvas.Left="{TemplateBinding RectXPosition}" Canvas.Top="{TemplateBinding RectYPosition}">
+                                        </Rectangle>
+                                    </Canvas>
+
+                                    <local:ScheduleHorizontalTimeSlotItemsControl x:Name="PART_HorizontalSlot" VerticalAlignment="Top" 
+                                                                                  Width="{Binding ActualWidth, ElementName=PART_ScheduleDaysHeaderViewItemsControl}"
+                                                                                  ShowNonWorkingHours="{Binding ShowNonWorkingHours, RelativeSource={RelativeSource TemplatedParent}}"
+                                                                                  Minimum="{Binding WorkStartHour, RelativeSource={RelativeSource TemplatedParent}}"
+                                                                                  Maximum="{Binding WorkEndHour, RelativeSource={RelativeSource TemplatedParent}}"
+                                                                                  DayViewColumnCount="{Binding DayViewColumnCount, RelativeSource={RelativeSource TemplatedParent}}"
+                                                                                  ResourceCount="{TemplateBinding ResourceCount}"
+                                                                                  TimeInterval="{TemplateBinding TimeInterval}" 
+                                                                                  MajorTickStroke="{Binding MajorTickStroke, RelativeSource={RelativeSource TemplatedParent}}"
+                                                                                  MinorTickStroke="{Binding MinorTickStroke, RelativeSource={RelativeSource TemplatedParent}}"
+                                                                                  MajorTickLabelStroke="{Binding MajorTickLabelStroke, RelativeSource={RelativeSource TemplatedParent}}"
+                                                                                  MinorTickLabelStroke="{Binding MinorTickLabelStroke, RelativeSource={RelativeSource TemplatedParent}}"
+                                                                                  MajorTickStrokeDashArray="{Binding MajorTickStrokeDashArray, RelativeSource={RelativeSource TemplatedParent}}"
+                                                                                  MinorTickStrokeDashArray="{Binding MinorTickStrokeDashArray, RelativeSource={RelativeSource TemplatedParent}}"
+                                                                                  IntervalHeight="{TemplateBinding IntervalHeight}">
+                                    </local:ScheduleHorizontalTimeSlotItemsControl>
+
+                                    <local:ScheduleVerticalTimeSlotItemsControl x:Name="verticalslot" VerticalAlignment="Top" 
+                                                                                Width="{Binding ActualWidth, ElementName=PART_ScheduleDaysHeaderViewItemsControl}"
+                                                                                Height="{Binding Height, ElementName=PART_HorizontalSlot, Mode=TwoWay}"
+                                                                                DayViewColumnCount="{Binding DayViewColumnCount, RelativeSource={RelativeSource TemplatedParent}}"
+                                                                                ResourceCount="{TemplateBinding ResourceCount}"
+                                                                                SelectedDates="{TemplateBinding SelectedDates}" 
+                                                                                DayViewVerticaLineStroke ="{TemplateBinding DayViewVerticaLineStroke}"
+                                                                                TimeInterval="{TemplateBinding TimeInterval}"
+                                                                                IntervalHeight="{TemplateBinding IntervalHeight}">
+                                    </local:ScheduleVerticalTimeSlotItemsControl>
+
+                                    <local:ScheduleDaysAppointmentLayoutItemsControl x:Name="PART_DaysAppointmentsLayout"
+                                                                                     Width="{Binding ActualWidth, ElementName=PART_ScheduleDaysHeaderViewItemsControl}"
+                                                                                     Height="{Binding ElementName=verticalslot,Path=Height}" 
+                                                                                     AppointmentTemplate="{Binding AppointmentTemplate, RelativeSource={RelativeSource TemplatedParent}}"
+                                                                                     AppointmentSelectionBrush="{Binding AppointmentSelectionBrush, RelativeSource={RelativeSource TemplatedParent}}"
+                                                                                     AppointmentToolTipTemplate="{Binding AppointmentToolTipTemplate, RelativeSource={RelativeSource TemplatedParent}}"
+                                                                                     AppointmentTooltipVisibility ="{Binding AppointmentTooltipVisibility, RelativeSource={RelativeSource TemplatedParent}}">
+                                    </local:ScheduleDaysAppointmentLayoutItemsControl>
+
+                                    <ItemsControl x:Name="PART_NonAccessibleBlocksItemsControl" Height="{Binding ElementName=verticalslot,Path=Height}" 
+                                                  ItemsSource="{Binding NonAccessibleBlocks, RelativeSource={RelativeSource TemplatedParent}}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <Grid/>
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Grid Height="{Binding Size}" Margin="{Binding Margin}" VerticalAlignment="Top" HorizontalAlignment="Stretch" Background="Transparent" >
+                                                            <ContentPresenter   VerticalAlignment="Top"  
+                                                                         HorizontalAlignment="Center"  ContentTemplate="{Binding CustomTemplate}"/>
+                                                        </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+
+                                    <Canvas>
+                                        <TextBox x:Name="AppText"  Visibility="{TemplateBinding AppTextVisibility}"  Background="#FF1BA1E2"
+                                                 Height="{TemplateBinding RectHeight}" Width="{TemplateBinding RectWidth}" TextWrapping="Wrap"
+                                                 Canvas.Left="{TemplateBinding RectXPosition}" Canvas.Top="{TemplateBinding RectYPosition}">
+                                        </TextBox>
+                                    </Canvas>
+                                </Grid>
+                            </ScrollViewer>
+                        </Grid>
+
+                        <ContentPresenter x:Name="PrevApp" Grid.Row="1" Grid.Column="1" HorizontalAlignment="Left" local:Clip.ToBounds="True" 
+                                          ContentTemplate="{Binding PreviousNavigationButtonTemplate, RelativeSource={RelativeSource TemplatedParent}}"
+                                          Visibility="{Binding ShowAppointmentNavigationButtons, RelativeSource={RelativeSource TemplatedParent}, Converter={StaticResource booltovisible}}">
+                        </ContentPresenter>
+
+                        <ContentPresenter x:Name="NextApp" Grid.Row="1" Grid.Column="1" HorizontalAlignment="Right" local:Clip.ToBounds="True" 
+                                          ContentTemplate="{Binding NextNavigationButtonTemplate, RelativeSource={RelativeSource TemplatedParent}}"
+                                          Visibility="{Binding ShowAppointmentNavigationButtons, RelativeSource={RelativeSource TemplatedParent}, Converter={StaticResource booltovisible}}">
+                        </ContentPresenter>
+
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <!-- EndRegion -->
+
+    <!-- Region ScheduleDaysHeaderViewItemsControl -->
+    <ItemsPanelTemplate x:Key="ScheduleDaysHeaderItemsPanelKey">
+        <local:ScheduleDaysHeaderViewLayoutPanel/>
+    </ItemsPanelTemplate>
+
+    <Style TargetType="local:ScheduleDaysHeaderViewItemsControl">
+        <Setter Property="ItemsPanel" Value="{StaticResource ScheduleDaysHeaderItemsPanelKey}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="local:ScheduleDaysHeaderViewItemsControl">
+                    <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}">
+                        <Grid>
+                            <ItemsPresenter/>
+                        </Grid>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <!-- EndRegion -->
+
+    <!-- Region ScheduleDaysHeaderViewControl -->
+    <Style TargetType="local:ScheduleDaysHeaderViewControl">
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="local:ScheduleDaysHeaderViewControl">
+                    <Grid>
+                        <Border x:Name="border" BorderThickness="1,0,0,0"                               
+                                Background="{TemplateBinding HeaderBrush}"
+                                BorderBrush="{TemplateBinding DayViewVerticaLineStroke}">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="0.5*" MaxHeight="30"/>
+                                </Grid.RowDefinitions>
+
+                                <Rectangle x:Name="PART_CurrentRectangle"
+                                           Grid.Row="0"
+                                           VerticalAlignment="Top"
+                                           Visibility="Collapsed"/>
+
+                                <Border VerticalAlignment="Center">
+                                    <local:CustomTextBlock HorizontalAlignment="Left" Margin="15,5,0,5" 
+                                                           Foreground="{Binding TextForeground, RelativeSource={RelativeSource TemplatedParent}}"
+                                                           x:Name="DaysTextBlock"
+                                                           VerticalAlignment="Center" 
+                                                           DateTimeValue="{Binding DayText, RelativeSource={RelativeSource TemplatedParent}}" 
+                                                           DateTimeFormat="{Binding Format, RelativeSource={RelativeSource TemplatedParent}}"  
+                                                           FontSize="{TemplateBinding FontSize}"
+                                                           FontStyle="Normal"/>
+                                </Border>
+                            </Grid>
+                        </Border>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <!-- EndRegion -->
+
+    <!-- Region TimeLineItemsControl -->
+    <ItemsPanelTemplate x:Key="TimeLinePanelTemplateKey">
+        <local:UniformStackPanel Orientation="Vertical" />
+    </ItemsPanelTemplate>
+
+    <Style TargetType="local:ScheduleTimeLineItemsControl">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="local:ScheduleTimeLineItemsControl">
+                    <Border BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}">
+                        <Grid>
+                            <local:UniformStackPanel Width="{Binding RelativeSource={RelativeSource Mode=TemplatedParent}, Path=Width}" x:Name="timelineitemspanel" Orientation="Vertical"/>
+                            <local:UniformStackPanel Width="{Binding RelativeSource={RelativeSource Mode=TemplatedParent}, Path=Width}" Margin="0,2,0,0" x:Name="timelinelabelspanel" Orientation="Vertical"/>
+                        </Grid>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <!-- EndRegion-->
+
+    <!--Region TimeLineHourControl -->
+    <Style x:Key="TimelineHourTextBlockStyle" TargetType="TextBlock">
+        <Setter Property="VerticalAlignment" Value="Top"/>
+        <Setter Property="Foreground" Value="#FF626262"/>
+        <Setter Property="FontFamily" Value="Trebuchet MS"/>
+        <Setter Property="FontWeight" Value="Light"/>
+        <Setter Property="FontStretch" Value="Condensed"/>
+    </Style>
+    <!-- EndRegion-->
+
+    <!-- Region ScheduleVerticalTimeSlotItemsControl -->
+    <ItemsPanelTemplate x:Key="uniformTimeSlotPanel">
+        <local:UniformTimeSlotPanel/>
+    </ItemsPanelTemplate>
+
+    <Style TargetType="local:ScheduleVerticalTimeSlotItemsControl">
+        <Setter Property="ItemsPanel" Value="{StaticResource uniformTimeSlotPanel}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="local:ScheduleVerticalTimeSlotItemsControl">
+                    <Border BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}">
+                        <Grid>
+                            <ItemsPresenter/>
+                        </Grid>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <!-- EndRegion-->
+
+    <!-- Region ScheduleHorizontalTimeSlotItemsControl -->
+    <ItemsPanelTemplate x:Key="uniformTimeSlotPanelKey">
+        <local:UniformTimeSlotPanel/>
+    </ItemsPanelTemplate>
+
+    <Style TargetType="local:ScheduleHorizontalTimeSlotItemsControl">
+        <Setter Property="ItemsPanel" Value="{StaticResource uniformTimeSlotPanelKey}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="local:ScheduleHorizontalTimeSlotItemsControl">
+                    <Border BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}">
+                        <Grid>
+                            <ItemsPresenter/>
+                        </Grid>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <!-- EndRegion-->
+
+    <!--Region ScheduleAllDaysAppointmentItemsControl -->
+    <Style TargetType="local:ScheduleAllDaysAppointmentItemsControl">
+        <Setter Property="ItemsPanel">
+            <Setter.Value>
+                <ItemsPanelTemplate>
+                    <local:ScheduleAllDaysAppointmentLayoutPanel/>
+                </ItemsPanelTemplate>
+            </Setter.Value>
+        </Setter>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="local:ScheduleAllDaysAppointmentItemsControl">
+                    <Border BorderBrush="LightGray" BorderThickness="0,1,0,0">
+                        <ItemsPresenter x:Name="PART_ItemsPresenter"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <!-- EndRegion-->
+
+    <!--Region ScheduleDaysAppointmentLayoutItemsControl -->
+    <Style TargetType="local:ScheduleDaysAppointmentLayoutItemsControl">
+        <Setter Property="ItemsPanel">
+            <Setter.Value>
+                <ItemsPanelTemplate>
+                    <local:ScheduleDaysAppointmentLayoutPanel/>
+                </ItemsPanelTemplate>
+            </Setter.Value>
+        </Setter>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="local:ScheduleDaysAppointmentLayoutItemsControl">
+                    <Border BorderBrush="LightGray" BorderThickness="0">
+                        <Grid>
+                            <ItemsPresenter x:Name="PART_ItemsPresenter"/>
+                        </Grid>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <!-- EndRegion-->
+
+    <!--DayViewItemHeader (For MultiResource support)-->
+    <Style TargetType="local:DayViewItemHeader">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="local:DayViewItemHeader">
+                    <Grid>
+                        <Border Background="#FF1BA1E2" BorderBrush="white" BorderThickness="0,0,1,1">
+                            <TextBlock Foreground="White" Margin="15,5,0,5" FontSize="16" FontWeight="Light" FontFamily="Segoe UI" HorizontalAlignment="Left" VerticalAlignment="Center"  Text="{Binding DisplayName}">
+                            </TextBlock>
+                        </Border>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!--ResourceHeaderItemsControl (For SubResource support)-->
+    <Style TargetType="local:ResourceHeaderItemsControl">
+        <Setter Property="ItemsPanel">
+            <Setter.Value>
+                <ItemsPanelTemplate>
+                    <local:UniformStackPanel Orientation="Horizontal"/>
+                </ItemsPanelTemplate>
+            </Setter.Value>
+        </Setter>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="local:ResourceHeaderItemsControl">
+                    <Grid>
+                        <ItemsPresenter/>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+</ResourceDictionary>

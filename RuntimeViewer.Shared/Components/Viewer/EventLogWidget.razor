@@ -1,0 +1,254 @@
+@using RuntimeViewer.Shared.Services
+@implements IDisposable
+
+<div class="eventlog-widget">
+    @* Toolbar *@
+    <div class="eventlog-toolbar">
+        <span style="font-weight: bold; font-size: 12px;">📓 Event Log</span>
+        <span style="font-size: 10px; color: #888;">
+            @if (_events.Count > 0)
+            {
+                <text>(@_events.Count rows)</text>
+            }
+        </span>
+        <span style="flex: 1;"></span>
+
+        <select class="eventlog-select" @bind="_timeRangeMinutes" @bind:after="Reload">
+            <option value="5">5 min</option>
+            <option value="15">15 min</option>
+            <option value="60">1 hour</option>
+            <option value="360">6 hours</option>
+            <option value="1440">24 hours</option>
+            <option value="10080">7 days</option>
+            <option value="0">All</option>
+        </select>
+
+        <select class="eventlog-select" @bind="_categoryFilter" @bind:after="Reload">
+            <option value="">All Categories</option>
+            <option value="Alarm">Alarm</option>
+            <option value="Auth">Auth</option>
+            <option value="Driver">Driver</option>
+            <option value="System">System</option>
+        </select>
+
+        <button class="eventlog-btn" @onclick="Reload" disabled="@_loading" title="Refresh">🔄</button>
+        <button class="eventlog-btn" @onclick="ToggleAutoRefresh" title="@(_autoRefresh ? "Disable auto-refresh" : "Enable auto-refresh")">
+            @(_autoRefresh ? "⏸" : "▶")
+        </button>
+    </div>
+
+    @* Table *@
+    <div class="eventlog-body">
+        @if (_loading && _events.Count == 0)
+        {
+            <div style="text-align: center; padding: 30px; color: #888;">⏳ Loading events…</div>
+        }
+        else if (_events.Count == 0)
+        {
+            <div style="text-align: center; padding: 30px; color: #888;">📭 No events found</div>
+        }
+        else
+        {
+            <table class="eventlog-table">
+                <thead>
+                    <tr>
+                        <th class="eventlog-th-time">Time</th>
+                        <th class="eventlog-th-cat">Category</th>
+                        <th class="eventlog-th-sev">Severity</th>
+                        <th class="eventlog-th-src">Source</th>
+                        <th>Message</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var evt in _events)
+                    {
+                        <tr class="@GetSeverityRowClass(evt.Severity)">
+                            <td class="eventlog-time">@evt.Time.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</td>
+                            <td><span class="eventlog-badge @GetCategoryClass(evt.Category)">@evt.Category</span></td>
+                            <td><span class="eventlog-sev @GetSeverityClass(evt.Severity)">@evt.Severity</span></td>
+                            <td class="eventlog-source" title="@evt.Source">@Truncate(evt.Source, 30)</td>
+                            <td title="@evt.Details">@evt.Message</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+
+    @* Footer *@
+    @if (_events.Count > 0)
+    {
+        <div class="eventlog-footer">
+            @{
+                var alarms = _events.Count(e => e.Category == "Alarm");
+                var auths = _events.Count(e => e.Category == "Auth");
+                var drivers = _events.Count(e => e.Category == "Driver");
+                var systems = _events.Count(e => e.Category == "System");
+            }
+            @if (alarms > 0) { <span class="eventlog-stat alarm">🔔 @alarms</span> }
+            @if (auths > 0) { <span class="eventlog-stat auth">🔑 @auths</span> }
+            @if (drivers > 0) { <span class="eventlog-stat driver">⚙ @drivers</span> }
+            @if (systems > 0) { <span class="eventlog-stat system">🖥 @systems</span> }
+        </div>
+    }
+</div>
+
+<style>
+    .eventlog-widget {
+        width: 100%; height: 100%; display: flex; flex-direction: column;
+        font-family: sans-serif; font-size: 11px;
+        background: var(--evtlog-bg, #0f172a); color: var(--evtlog-text, #e2e8f0);
+        border: 1px solid var(--evtlog-border, #334155); border-radius: 4px; overflow: hidden;
+    }
+    .eventlog-toolbar {
+        display: flex; gap: 4px; align-items: center; padding: 4px 6px;
+        background: var(--evtlog-header-bg, #1e293b); border-bottom: 1px solid var(--evtlog-border, #334155); flex-shrink: 0;
+    }
+    .eventlog-btn {
+        border: 1px solid #475569; background: transparent; color: #e2e8f0;
+        padding: 1px 6px; border-radius: 3px; cursor: pointer; font-size: 11px;
+    }
+    .eventlog-btn:hover { background: #334155; }
+    .eventlog-btn:disabled { opacity: 0.4; cursor: default; }
+    .eventlog-select {
+        background: #1e293b; color: #e2e8f0; border: 1px solid #475569;
+        padding: 1px 4px; border-radius: 3px; font-size: 10px;
+    }
+    .eventlog-body { flex: 1; overflow-y: auto; }
+    .eventlog-table { width: 100%; border-collapse: collapse; }
+    .eventlog-table thead { position: sticky; top: 0; z-index: 1; }
+    .eventlog-table th {
+        background: #1e293b; color: #94a3b8; font-weight: 600;
+        padding: 4px 6px; border-bottom: 1px solid #334155; text-align: left; font-size: 10px;
+        white-space: nowrap;
+    }
+    .eventlog-table td { padding: 3px 6px; border-bottom: 1px solid #1e293b; }
+    .eventlog-table tr:hover { background: #1e293b; }
+    .eventlog-th-time { width: 140px; }
+    .eventlog-th-cat { width: 70px; }
+    .eventlog-th-sev { width: 70px; }
+    .eventlog-th-src { width: 140px; }
+    .eventlog-time { font-family: monospace; font-size: 10px; color: #94a3b8; white-space: nowrap; }
+    .eventlog-source { font-family: monospace; font-size: 10px; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .eventlog-badge {
+        display: inline-block; padding: 1px 5px; border-radius: 3px;
+        font-size: 9px; font-weight: 600; text-transform: uppercase;
+    }
+    .eventlog-badge.cat-alarm { background: #7f1d1d; color: #fca5a5; }
+    .eventlog-badge.cat-auth { background: #1e3a5f; color: #93c5fd; }
+    .eventlog-badge.cat-driver { background: #713f12; color: #fde68a; }
+    .eventlog-badge.cat-system { background: #164e63; color: #67e8f9; }
+    .eventlog-sev {
+        display: inline-block; padding: 1px 5px; border-radius: 3px;
+        font-size: 9px; font-weight: 600;
+    }
+    .eventlog-sev.sev-critical { background: #991b1b; color: #fca5a5; }
+    .eventlog-sev.sev-error { background: #9a3412; color: #fdba74; }
+    .eventlog-sev.sev-warning { background: #854d0e; color: #fde68a; }
+    .eventlog-sev.sev-info { background: #1e3a5f; color: #93c5fd; }
+    .eventlog-row-critical { background: rgba(153, 27, 27, 0.15); }
+    .eventlog-row-error { background: rgba(154, 52, 18, 0.1); }
+    .eventlog-row-warning { background: rgba(133, 77, 14, 0.08); }
+    .eventlog-footer {
+        display: flex; gap: 8px; padding: 3px 8px;
+        background: var(--evtlog-header-bg, #1e293b); border-top: 1px solid var(--evtlog-border, #334155);
+        font-size: 10px; flex-shrink: 0;
+    }
+    .eventlog-stat { color: #94a3b8; }
+</style>
+
+@code {
+    [Parameter] public int MaxRows { get; set; } = 200;
+    [Parameter] public int TimeRangeMinutes { get; set; } = 1440;
+    [Parameter] public string Categories { get; set; } = "";
+
+    [Inject] private EventLogReaderService Reader { get; set; } = default!;
+
+    private List<EventLogEntry> _events = new();
+    private bool _loading;
+    private bool _autoRefresh = true;
+    private int _timeRangeMinutes = 1440;
+    private string _categoryFilter = "";
+    private System.Threading.Timer? _refreshTimer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _timeRangeMinutes = TimeRangeMinutes > 0 ? TimeRangeMinutes : 1440;
+        _categoryFilter = Categories ?? "";
+        await Reload();
+        StartAutoRefresh();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_events.Count == 0)
+            await Reload();
+    }
+
+    private async Task Reload()
+    {
+        _loading = true;
+        StateHasChanged();
+
+        var effectiveCategories = _categoryFilter;
+        _events = await Reader.ReadEventsAsync(_timeRangeMinutes, MaxRows, effectiveCategories);
+
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private void StartAutoRefresh()
+    {
+        _refreshTimer?.Dispose();
+        if (_autoRefresh)
+        {
+            _refreshTimer = new System.Threading.Timer(async _ =>
+            {
+                await InvokeAsync(async () =>
+                {
+                    await Reload();
+                });
+            }, null, 10000, 10000);
+        }
+    }
+
+    private void ToggleAutoRefresh()
+    {
+        _autoRefresh = !_autoRefresh;
+        StartAutoRefresh();
+    }
+
+    private static string GetCategoryClass(string category) => category switch
+    {
+        "Alarm" => "cat-alarm",
+        "Auth" => "cat-auth",
+        "Driver" => "cat-driver",
+        "System" => "cat-system",
+        _ => ""
+    };
+
+    private static string GetSeverityClass(string severity) => severity switch
+    {
+        "Critical" => "sev-critical",
+        "Error" => "sev-error",
+        "Warning" => "sev-warning",
+        _ => "sev-info"
+    };
+
+    private static string GetSeverityRowClass(string severity) => severity switch
+    {
+        "Critical" => "eventlog-row-critical",
+        "Error" => "eventlog-row-error",
+        "Warning" => "eventlog-row-warning",
+        _ => ""
+    };
+
+    private static string Truncate(string s, int max) =>
+        s.Length > max ? s[..max] + "…" : s;
+
+    public void Dispose()
+    {
+        _refreshTimer?.Dispose();
+    }
+}
+

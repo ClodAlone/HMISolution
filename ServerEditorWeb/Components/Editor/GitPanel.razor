@@ -1,0 +1,107 @@
+@using ServerEditorWeb.Services
+
+<div class="git-panel">
+    <h6>Git Integration</h6>
+
+    @if (!_gitService.IsGitRepository())
+    {
+        <button class="btn btn-sm btn-outline-primary mb-2" @onclick="InitRepo">Initialize Git Repository</button>
+    }
+
+    <div class="mb-2">
+        <label class="form-label">User Name</label>
+        <input type="text" class="form-control form-control-sm" @bind="_userName" />
+    </div>
+    <div class="mb-2">
+        <label class="form-label">User Email</label>
+        <input type="email" class="form-control form-control-sm" @bind="_userEmail" />
+    </div>
+    <button class="btn btn-sm btn-outline-secondary mb-3" @onclick="ConfigureUser"
+            disabled="@(string.IsNullOrWhiteSpace(_userName) || string.IsNullOrWhiteSpace(_userEmail))">
+        Set Identity
+    </button>
+
+    <div class="mb-2">
+        <label class="form-label">Remote URL</label>
+        <input type="text" class="form-control form-control-sm" @bind="_remoteUrl" />
+    </div>
+    <button class="btn btn-sm btn-outline-secondary mb-3" @onclick="SetRemote"
+            disabled="@string.IsNullOrWhiteSpace(_remoteUrl)">
+        Set Remote Origin
+    </button>
+
+    <div class="mb-2">
+        <label class="form-label">Commit Message</label>
+        <input type="text" class="form-control form-control-sm" @bind="CommitMessage" />
+    </div>
+    <div class="d-flex gap-2 flex-wrap mb-2">
+        <button class="btn btn-sm btn-primary" @onclick="CommitAndPush" disabled="@(!_gitService.IsGitRepository())">Commit & Push</button>
+        <button class="btn btn-sm btn-outline-secondary" @onclick="Pull" disabled="@(!_gitService.IsGitRepository())">Pull</button>
+        <button class="btn btn-sm btn-outline-secondary" @onclick="GetStatus" disabled="@(!_gitService.IsGitRepository())">Status</button>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_result))
+    {
+        <pre class="mt-2 p-2 bg-light border rounded small">@_result</pre>
+    }
+</div>
+
+@code {
+    [Parameter] public string NodesPath { get; set; } = "";
+    [Parameter] public string CommitMessage { get; set; } = "Update nodes.json";
+
+    [Inject] private GitService _gitService { get; set; } = default!;
+
+    private string _userName = "";
+    private string _userEmail = "";
+    private string _remoteUrl = "";
+    private string _result = "";
+
+    protected override void OnParametersSet()
+    {
+        if (!string.IsNullOrEmpty(NodesPath))
+        {
+            var dir = Path.GetDirectoryName(Path.GetFullPath(NodesPath));
+            if (dir != null)
+                _gitService.SetWorkingDirectory(dir);
+        }
+    }
+
+    private async Task InitRepo()
+    {
+        _result = await _gitService.InitRepoAsync();
+    }
+
+    private async Task ConfigureUser()
+    {
+        _result = await _gitService.SetUserIdentityAsync(_userName, _userEmail);
+    }
+
+    private async Task SetRemote()
+    {
+        _result = await _gitService.SetRemoteOriginAsync(_remoteUrl);
+    }
+
+    private async Task CommitAndPush()
+    {
+        if (string.IsNullOrEmpty(NodesPath)) return;
+        var fileName = Path.GetFileName(NodesPath);
+        var msg = string.IsNullOrWhiteSpace(CommitMessage) ? "Update nodes.json" : CommitMessage;
+        _result = await _gitService.CommitChangesAsync(fileName, msg);
+        if (!_result.StartsWith("Error"))
+        {
+            var pushResult = await _gitService.PushAsync();
+            _result += "\n" + pushResult;
+        }
+    }
+
+    private async Task Pull()
+    {
+        _result = await _gitService.PullAsync();
+    }
+
+    private async Task GetStatus()
+    {
+        _result = await _gitService.GetStatusAsync();
+    }
+}

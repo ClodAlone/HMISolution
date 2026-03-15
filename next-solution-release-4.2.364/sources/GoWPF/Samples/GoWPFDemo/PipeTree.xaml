@@ -1,0 +1,67 @@
+﻿<!-- Copyright © Northwoods Software Corporation, 2008-2015. All Rights Reserved. -->
+
+<UserControl x:Class="PipeTree.PipeTree"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" 
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" 
+    xmlns:go="http://schemas.nwoods.com/GoXam"
+    xmlns:local="clr-namespace:PipeTree">
+
+  <UserControl.Resources>
+    <!-- these converters depend on the value of PipeInfo.Current -->
+    <local:CurrentBrushConverter x:Key="theCurrentBrushConverter" />
+    <local:CurrentTextBrushConverter x:Key="theCurrentTextBrushConverter" />
+    <local:CurrentFontSizeConverter x:Key="theCurrentFontSizeConverter" />
+
+    <!-- a DataTemplate for each node: a maybe-rotated TextBlock within a Rectangle,
+         stretched to cover the breadth of its subtree -->
+    <DataTemplate x:Key="NodeTemplate">
+      <go:SpotPanel go:Part.SelectionAdorned="True"
+                    go:Part.SelectionElementName="Background"
+                    go:Node.LocationElementName="Background">
+        <!-- this Rectangle will appear to surround the TextBlock,
+             but its actual size is quite different from the parent
+             panel's size if the text is rotated -->
+        <Rectangle x:Name="Background" go:SpotPanel.Main="True"
+                   Fill="{Binding Path=Data.Current,
+                          Converter={StaticResource theCurrentBrushConverter}}" />
+        <!-- there's no LayoutTransform in Silverlight, so this TextBlock is
+             measured horizontally, but may be rendered at 90 degrees,
+             depending on depth in tree -->
+        <TextBlock x:Name="TextBlock"
+                   Text="{Binding Path=Data.Text}" TextAlignment="Center"
+                   Foreground="{Binding Path=Data.Current,
+                                Converter={StaticResource theCurrentTextBrushConverter}}"
+                   FontSize="{Binding Path=Data.Current,
+                              Converter={StaticResource theCurrentFontSizeConverter}}">
+        </TextBlock>
+      </go:SpotPanel>
+    </DataTemplate>
+
+    <!-- a DataTemplate that doesn't display anything -->
+    <DataTemplate x:Key="LinkTemplate">
+      <Canvas />
+      <!-- WPF permits no element at all here; but Silverlight requires one -->
+    </DataTemplate>
+  </UserControl.Resources>
+
+  <Grid KeyDown="Grid_KeyDown">
+    <go:Diagram x:Name="myDiagram"
+                AllowCopy="False" AllowMove="False"
+                NodeTemplate="{StaticResource NodeTemplate}"
+                LinkTemplate="{StaticResource LinkTemplate}"
+                HorizontalContentAlignment="Center"
+                VerticalContentAlignment="Center">
+      <go:Diagram.Layout>
+        <!-- this TreeLayout needs two sets of consistent values,
+             one for each of the two Angles -->
+        <local:PipeTreeLayout TreeStyle="Alternating"
+            Angle="90" Alignment="Start"
+            NodeIndent="10" NodeSpacing="20"
+            LayerSpacing="0"
+            AlternateAngle="0" AlternateAlignment="Start"
+            AlternateNodeIndent="10" AlternateNodeSpacing="20"
+            AlternateLayerSpacing="0" />
+      </go:Diagram.Layout>
+    </go:Diagram>
+  </Grid>
+</UserControl>

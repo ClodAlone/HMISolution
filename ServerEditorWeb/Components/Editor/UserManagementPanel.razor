@@ -1,0 +1,386 @@
+@using ServerEditorWeb.Models
+@using ServerEditorWeb.Services
+@using SharedModels
+
+<div class="user-mgmt-panel">
+    <div class="d-flex align-items-center gap-2 mb-2 p-2 border-bottom">
+        <span class="fw-bold small">👥 User Management</span>
+        <span class="ms-auto small text-muted">
+            @(_users.Count) users, @(_groups.Count) groups
+        </span>
+    </div>
+
+    <div class="p-2">
+        @* ── Server Auth Settings ── *@
+        <div class="card mb-3">
+            <div class="card-header py-1 small fw-bold">🔒 Authentication Settings</div>
+            <div class="card-body py-2">
+                <div class="form-check mb-2">
+                    <input type="checkbox" class="form-check-input" id="enableEditorLogin"
+                           checked="@_enableEditorLogin"
+                           @onchange="(e) => { _enableEditorLogin = (bool)(e.Value ?? false); UpdateServerSettings(); }" />
+                    <label class="form-check-label small" for="enableEditorLogin">
+                        Require login to access editor
+                    </label>
+                </div>
+                <div class="form-check mb-2">
+                    <input type="checkbox" class="form-check-input" id="enableRuntimeLogin"
+                           checked="@_enableRuntimeLogin"
+                           @onchange="(e) => { _enableRuntimeLogin = (bool)(e.Value ?? false); UpdateServerSettings(); }" />
+                    <label class="form-check-label small" for="enableRuntimeLogin">
+                        Require login to access runtime viewer
+                    </label>
+                </div>
+                <div class="form-check mb-2">
+                    <input type="checkbox" class="form-check-input" id="enableAnonymous"
+                           checked="@_enableAnonymous"
+                           @onchange="(e) => { _enableAnonymous = (bool)(e.Value ?? false); UpdateServerSettings(); }" />
+                    <label class="form-check-label small" for="enableAnonymous">
+                        Allow anonymous OPC connections
+                    </label>
+                </div>
+                <div class="form-check mb-2">
+                    <input type="checkbox" class="form-check-input" id="requireStrongPassword"
+                           checked="@_requireStrongPassword"
+                           @onchange="(e) => { _requireStrongPassword = (bool)(e.Value ?? false); UpdateServerSettings(); }" />
+                    <label class="form-check-label small" for="requireStrongPassword">
+                        Require strong passwords
+                    </label>
+                    <div class="form-text" style="font-size: 10px;">
+                        Min 8 chars, uppercase, lowercase, digit, and special character.
+                    </div>
+                </div>
+                <div class="mb-1">
+                    <label class="form-label small mb-0">Startup Screen (RuntimeViewer)</label>
+                    <select class="form-select form-select-sm" style="font-size: 11px;"
+                            @bind="_startupScreen" @bind:after="UpdateServerSettings">
+                        <option value="">(first screen)</option>
+                        @foreach (var scr in _screenNames)
+                        {
+                            <option value="@scr">@scr</option>
+                        }
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        @* ── User Groups ── *@
+        <div class="card mb-3">
+            <div class="card-header py-1 d-flex align-items-center">
+                <span class="small fw-bold">🛡️ User Groups</span>
+                <button class="btn btn-sm btn-outline-success py-0 px-1 ms-auto" style="font-size: 11px;"
+                        @onclick="AddGroup">＋ Add Group</button>
+            </div>
+            <div class="card-body p-0">
+                @if (_groups.Count == 0)
+                {
+                    <div class="text-muted small p-3 text-center">No groups defined.</div>
+                }
+                else
+                {
+                    <table class="table table-sm table-hover mb-0" style="font-size: 12px;">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Access Level</th>
+                                <th>Editor</th>
+                                <th>Runtime</th>
+                                <th style="width: 40px;"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var group in _groups)
+                            {
+                                var g = group;
+                                <tr>
+                                    <td>
+                                        <input type="text" class="form-control form-control-sm" style="font-size: 11px;"
+                                               @bind="g.Name" @bind:after="OnChanged" />
+                                    </td>
+                                    <td>
+                                        <select class="form-select form-select-sm" style="font-size: 11px;"
+                                                @bind="g.AccessLevel" @bind:after="OnChanged">
+                                            <option value="Read">Read</option>
+                                            <option value="Write">Write</option>
+                                            <option value="ReadWrite">ReadWrite</option>
+                                        </select>
+                                    </td>
+                                    <td class="text-center">
+                                        <input type="checkbox" class="form-check-input"
+                                               checked="@g.CanAccessEditor"
+                                               @onchange="(e) => { g.CanAccessEditor = (bool)(e.Value ?? false); OnChanged(); }" />
+                                    </td>
+                                    <td class="text-center">
+                                        <input type="checkbox" class="form-check-input"
+                                               checked="@g.CanAccessRuntime"
+                                               @onchange="(e) => { g.CanAccessRuntime = (bool)(e.Value ?? false); OnChanged(); }" />
+                                    </td>
+                                    <td>
+                                        <button class="btn btn-sm btn-outline-danger py-0 px-1" style="font-size: 10px;"
+                                                @onclick="() => RemoveGroup(g)" title="Delete group">🗑</button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+        </div>
+
+        @* ── Users ── *@
+        <div class="card">
+            <div class="card-header py-1 d-flex align-items-center">
+                <span class="small fw-bold">👤 Users</span>
+                <button class="btn btn-sm btn-outline-success py-0 px-1 ms-auto" style="font-size: 11px;"
+                        @onclick="AddUser" disabled="@(_groups.Count == 0)">＋ Add User</button>
+            </div>
+            <div class="card-body p-0">
+                @if (_users.Count == 0)
+                {
+                    <div class="text-muted small p-3 text-center">
+                        No users defined. @if (_groups.Count == 0) { <span>Create a group first.</span> }
+                    </div>
+                }
+                else
+                {
+                    <table class="table table-sm table-hover mb-0" style="font-size: 12px;">
+                        <thead>
+                            <tr>
+                                <th>Username</th>
+                                <th>Group</th>
+                                <th>Password</th>
+                                <th style="width: 90px;">Auto Logoff</th>
+                                <th style="width: 80px;">Pw Expiry</th>
+                                <th style="width: 40px;" title="Must change password on first login">1st</th>
+                                <th style="width: 40px;"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var user in _users)
+                            {
+                                var u = user;
+                                <tr>
+                                    <td>
+                                        <input type="text" class="form-control form-control-sm" style="font-size: 11px;"
+                                               @bind="u.Username" @bind:after="OnChanged" />
+                                    </td>
+                                    <td>
+                                        <select class="form-select form-select-sm" style="font-size: 11px;"
+                                                @bind="u.Group" @bind:after="OnChanged">
+                                            @foreach (var g in _groups)
+                                            {
+                                                <option value="@g.Name">@g.Name</option>
+                                            }
+                                        </select>
+                                    </td>
+                                    <td>
+                                        @if (!string.IsNullOrEmpty(u.PasswordHash))
+                                        {
+                                            <span class="badge bg-success" style="font-size: 9px;">🔒 Encrypted</span>
+                                            <button class="btn btn-sm btn-outline-secondary py-0 px-1 ms-1" style="font-size: 9px;"
+                                                    @onclick="() => StartResetPassword(u)">Reset</button>
+                                        }
+                                        else
+                                        {
+                                            <div class="input-group input-group-sm">
+                                                <input type="password" class="form-control form-control-sm" style="font-size: 11px;"
+                                                       placeholder="Set password…"
+                                                       @bind="_newPasswords[u.Username]" />
+                                                <button class="btn btn-sm btn-outline-primary" style="font-size: 10px;"
+                                                        @onclick="() => SetPassword(u)">Set</button>
+                                            </div>
+                                        }
+                                    </td>
+                                    <td>
+                                        <div class="input-group input-group-sm">
+                                            <input type="number" class="form-control form-control-sm" style="font-size: 10px; width: 50px;"
+                                                   min="0" placeholder="0"
+                                                   @bind="u.AutoLogOffSeconds" @bind:after="OnChanged" />
+                                            <span class="input-group-text" style="font-size: 9px; padding: 1px 4px;">s</span>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="input-group input-group-sm">
+                                            <input type="number" class="form-control form-control-sm" style="font-size: 10px; width: 50px;"
+                                                   min="0" placeholder="0"
+                                                   @bind="u.PasswordExpiryDays" @bind:after="OnChanged" />
+                                            <span class="input-group-text" style="font-size: 9px; padding: 1px 4px;">d</span>
+                                        </div>
+                                    </td>
+                                    <td class="text-center">
+                                        <input type="checkbox" class="form-check-input"
+                                               checked="@u.MustChangePasswordOnFirstLogin"
+                                               @onchange="(e) => { u.MustChangePasswordOnFirstLogin = (bool)(e.Value ?? false); OnChanged(); }"
+                                               title="Must change password on first login" />
+                                    </td>
+                                    <td>
+                                        <button class="btn btn-sm btn-outline-danger py-0 px-1" style="font-size: 10px;"
+                                                @onclick="() => RemoveUser(u)" title="Delete user">🗑</button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+        </div>
+
+        @* Password reset dialog *@
+        @if (_resetUser != null)
+        {
+            <div class="mt-2 p-2 border rounded bg-body-secondary">
+                <div class="small fw-bold mb-1">🔑 Reset Password for @_resetUser.Username</div>
+                <div class="input-group input-group-sm">
+                    <input type="password" class="form-control" placeholder="New password"
+                           @bind="_resetPassword" />
+                    <button class="btn btn-primary" @onclick="ApplyResetPassword">Apply</button>
+                    <button class="btn btn-secondary" @onclick="() => _resetUser = null">Cancel</button>
+                </div>
+            </div>
+        }
+
+        @if (!string.IsNullOrEmpty(_passwordValidationError))
+        {
+            <div class="mt-2 alert alert-danger py-1 small alert-dismissible">
+                @_passwordValidationError
+                <button type="button" class="btn-close btn-close-sm" @onclick="() => _passwordValidationError = string.Empty"></button>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public EventCallback OnPropertyChanged { get; set; }
+
+    [Inject] private NodeEditorService Editor { get; set; } = default!;
+
+    private List<UserConfig> _users = new();
+    private List<UserGroupConfig> _groups = new();
+    private bool _enableEditorLogin;
+    private bool _enableRuntimeLogin;
+    private bool _enableAnonymous = true;
+    private bool _requireStrongPassword;
+    private string _startupScreen = "";
+    private List<string> _screenNames = new();
+    private Dictionary<string, string> _newPasswords = new();
+    private UserConfig? _resetUser;
+    private string _resetPassword = "";
+    private string _passwordValidationError = "";
+
+    protected override void OnParametersSet()
+    {
+        var model = Editor.RootModel;
+        if (model != null)
+        {
+            _users = model.Users;
+            _groups = model.UserGroups;
+            _enableEditorLogin = model.Server.EnableEditorLogin;
+            _enableRuntimeLogin = model.Server.EnableRuntimeLogin;
+            _enableAnonymous = model.Server.EnableAnonymous;
+            _requireStrongPassword = model.Server.RequireStrongPassword;
+            _startupScreen = model.Server.StartupScreen;
+            _screenNames = model.Screens.Select(s => s.Name).ToList();
+
+            // Ensure password dict has entries
+            foreach (var u in _users)
+            {
+                _newPasswords.TryAdd(u.Username, "");
+            }
+        }
+    }
+
+    private void OnChanged()
+    {
+        Editor.MarkChanged();
+        OnPropertyChanged.InvokeAsync();
+    }
+
+    private void UpdateServerSettings()
+    {
+        var model = Editor.RootModel;
+        if (model != null)
+        {
+            model.Server.EnableEditorLogin = _enableEditorLogin;
+            model.Server.EnableRuntimeLogin = _enableRuntimeLogin;
+            model.Server.EnableAnonymous = _enableAnonymous;
+            model.Server.RequireStrongPassword = _requireStrongPassword;
+            model.Server.StartupScreen = _startupScreen;
+        }
+        OnChanged();
+    }
+
+    private void AddGroup()
+    {
+        var group = new UserGroupConfig { Name = $"Group{_groups.Count + 1}", AccessLevel = "Read" };
+        _groups.Add(group);
+        OnChanged();
+    }
+
+    private void RemoveGroup(UserGroupConfig group)
+    {
+        _groups.Remove(group);
+        OnChanged();
+    }
+
+    private void AddUser()
+    {
+        var defaultGroup = _groups.FirstOrDefault()?.Name ?? "";
+        var user = new UserConfig { Username = $"user{_users.Count + 1}", Group = defaultGroup };
+        _users.Add(user);
+        _newPasswords[user.Username] = "";
+        OnChanged();
+    }
+
+    private void RemoveUser(UserConfig user)
+    {
+        _users.Remove(user);
+        _newPasswords.Remove(user.Username);
+        OnChanged();
+    }
+
+    private void SetPassword(UserConfig user)
+    {
+        _passwordValidationError = "";
+        if (_newPasswords.TryGetValue(user.Username, out var pwd) && !string.IsNullOrEmpty(pwd))
+        {
+            var (valid, error) = PasswordValidator.Validate(pwd, _requireStrongPassword);
+            if (!valid)
+            {
+                _passwordValidationError = $"{user.Username}: {error}";
+                return;
+            }
+            user.PasswordHash = PasswordHasher.Hash(pwd);
+            user.Password = "";
+            user.PasswordChangedDate = DateTime.UtcNow;
+            _newPasswords[user.Username] = "";
+            OnChanged();
+        }
+    }
+
+    private void StartResetPassword(UserConfig user)
+    {
+        _resetUser = user;
+        _resetPassword = "";
+    }
+
+    private void ApplyResetPassword()
+    {
+        _passwordValidationError = "";
+        if (_resetUser != null && !string.IsNullOrEmpty(_resetPassword))
+        {
+            var (valid, error) = PasswordValidator.Validate(_resetPassword, _requireStrongPassword);
+            if (!valid)
+            {
+                _passwordValidationError = $"{_resetUser.Username}: {error}";
+                return;
+            }
+            _resetUser.PasswordHash = PasswordHasher.Hash(_resetPassword);
+            _resetUser.Password = "";
+            _resetUser.PasswordChangedDate = DateTime.UtcNow;
+            _resetUser.HasLoggedInBefore = false;
+            _resetUser = null;
+            _resetPassword = "";
+            OnChanged();
+        }
+    }
+}

@@ -1,0 +1,659 @@
+<ResourceDictionary mc:Ignorable="cs"
+                    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:cs="colorscheme_ignorable_uri"
+                    xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+                    xmlns:dxi="http://schemas.devexpress.com/winfx/2008/xaml/core/internal"
+                    xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+                    xmlns:dxt="http://schemas.devexpress.com/winfx/2008/xaml/core/themekeys"
+                    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                    xmlns:sys="clr-namespace:System;assembly=mscorlib"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <ResourceDictionary.MergedDictionaries>
+        <dxt:ResourceDictionaryEx Source="{dx:DynamicThemeResource PseudoWindow.xaml, ResourcePath=Themes, ResourcePathInTheme='Core/Core/Themes', TypeInTargetAssembly={x:Type dxi:RenderTemplate}}"/>
+    </ResourceDictionary.MergedDictionaries>
+
+    <dxmvvm:NumericToVisibilityConverter x:Key="NumericToVisibilityConverter"/>
+
+    <Label x:Key="DefaultDXDialogContent"/>
+
+    <!--DXHeaderTemplate-->
+
+    <ControlTemplate x:Key="{dxt:DXWindowThemeKey ResourceKey=HeaderTemplate}" TargetType="{x:Type ContentControl}">
+        <dx:DXWindowHeader x:Name="PART_Header"
+                           Background="{DynamicResource {dxt:DXWindowThemeKey ResourceKey=ActiveHeaderBackground}}"
+                           CornerRadius="0"
+                           Focusable="False">
+            <Grid>
+                <Thumb x:Name="PART_DragWidget" Template="{DynamicResource {dxt:FloatingContainerThemeKey IsVisibleInBlend=True, ResourceKey=FloatingContainerDragWidgetTemplate}}"/>
+                <DockPanel Name="PART_HeaderDock"
+                           LastChildFill="True"
+                           Margin="{DynamicResource {dxt:FloatingContainerThemeKey ResourceKey=FloatingContainerHeaderDockMargin}}">
+                    <Image x:Name="PART_Icon"
+                           DockPanel.Dock="Left"
+                           Source="{Binding Path=(dx:FloatingContainer.FloatingContainer).Icon, RelativeSource={RelativeSource AncestorType=ContentPresenter}}"
+                           Style="{DynamicResource {dxt:FloatingContainerThemeKey ResourceKey=DXWindowIconStyle}}"/>
+                    <Grid x:Name="PART_Grid"
+                          DockPanel.Dock="Right"
+                          Focusable="False"
+                          UseLayoutRounding="True">
+                        <ItemsControl Style="{DynamicResource {dxt:DXTabbedWindowThemeKey ResourceKey=ButtonContainerStyle}}" Visibility="Hidden">
+                            <dx:HeaderItemControl DockPanel.Dock="Right" Style="{DynamicResource {dxt:FloatingContainerThemeKey ResourceKey=FloatingContainerHeaderCloseButtonStyle}}"/>
+                        </ItemsControl>
+                        <ItemsControl x:Name="PART_HeaderButtons"
+                                      Focusable="False"
+                                      IsTabStop="False"
+                                      Style="{DynamicResource {dxt:DXTabbedWindowThemeKey ResourceKey=ButtonContainerStyle}}">
+                            <dx:HeaderItemControl x:Name="PART_CloseButton"
+                                                  DockPanel.Dock="Right"
+                                                  Style="{DynamicResource {dxt:FloatingContainerThemeKey ResourceKey=FloatingContainerHeaderCloseButtonStyle}}"
+                                                  Visibility="Collapsed"/>
+                            <dx:HeaderItemControl x:Name="PART_Maximize"
+                                                  DockPanel.Dock="Right"
+                                                  Style="{DynamicResource {dxt:FloatingContainerThemeKey ResourceKey=FloatingContainerHeaderButtonStyle}}"
+                                                  Visibility="{Binding Path=(dx:FloatingContainer.IsMaximized), Converter={dx:BooleanToVisibilityConverter Invert=True}, RelativeSource={RelativeSource Self}}"/>
+                            <dx:HeaderItemControl x:Name="PART_Restore"
+                                                  DockPanel.Dock="Right"
+                                                  Style="{DynamicResource {dxt:FloatingContainerThemeKey ResourceKey=FloatingContainerHeaderButtonStyle}}"
+                                                  Visibility="{Binding Path=(dx:FloatingContainer.IsMaximized), Converter={dx:BooleanToVisibilityConverter Invert=False}, RelativeSource={RelativeSource Self}}"/>
+                            <dx:HeaderItemControl x:Name="PART_Minimize"
+                                                  DockPanel.Dock="Right"
+                                                  Style="{DynamicResource {dxt:FloatingContainerThemeKey ResourceKey=FloatingContainerHeaderButtonStyle}}"/>
+                            <dx:ThemedWindowHeaderItemsControl x:Name="PART_HeaderCustomItems"
+                                                               DockPanel.Dock="Right"
+                                                               Focusable="False"
+                                                               IsTabStop="False"
+                                                               Margin="{DynamicResource {dxt:FloatingContainerThemeKey ResourceKey=HeaderItemsControlMargin}}"
+                                                               Style="{DynamicResource {dxt:DXTabbedWindowThemeKey ResourceKey=ControlContainerStyle}}"/>
+                        </ItemsControl>
+                    </Grid>
+                    <ContentPresenter x:Name="PART_CaptionContentPresenter"
+                                      Content="{x:Null}"
+                                      ContentTemplate="{DynamicResource {dxt:FloatingContainerThemeKey IsVisibleInBlend=True, ResourceKey=FloatingContainerCaptionTemplate}}"
+                                      DockPanel.Dock="Left"/>
+                </DockPanel>
+            </Grid>
+        </dx:DXWindowHeader>
+        <ControlTemplate.Triggers>
+            <DataTrigger Binding="{Binding Path=WindowStyle, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=Window}, FallbackValue={x:Static sys:String.Empty}}" Value="None">
+                <Setter Property="Visibility"
+                        TargetName="PART_Maximize"
+                        Value="Collapsed"/>
+                <Setter Property="Visibility"
+                        TargetName="PART_Restore"
+                        Value="Collapsed"/>
+                <Setter Property="Visibility"
+                        TargetName="PART_Minimize"
+                        Value="Collapsed"/>
+                <Setter Property="Visibility"
+                        TargetName="PART_HeaderCustomItems"
+                        Value="Collapsed"/>
+            </DataTrigger>
+            <MultiDataTrigger>
+                <MultiDataTrigger.Conditions>
+                    <Condition Binding="{Binding Path=(dx:FloatingContainer.IsActive)}" Value="False"/>
+                    <Condition Binding="{Binding Path=(dxi:WindowButtonHelper.IsActiveAppearance)}" Value="False"/>
+                </MultiDataTrigger.Conditions>
+                <MultiDataTrigger.Setters>
+                    <Setter Property="Background"
+                            TargetName="PART_Header"
+                            Value="{DynamicResource {dxt:DXWindowThemeKey ResourceKey=InactiveHeaderBackground}}"/>
+                    <Setter Property="Opacity"
+                            TargetName="PART_CaptionContentPresenter"
+                            Value="{DynamicResource {dxt:DXWindowThemeKey ResourceKey=InactiveHeaderOpacity}}"/>
+                </MultiDataTrigger.Setters>
+            </MultiDataTrigger>
+            <!--<DataTrigger Binding="{Binding Path=(dx:FloatingContainer.IsActive)}" Value="False">
+                <Setter Property="Background" TargetName="PART_Header" Value="{DynamicResource {dxt:DXWindowThemeKey ResourceKey=InactiveHeaderBackground}}"/>
+                <Setter Property="Opacity" TargetName="PART_CaptionContentPresenter" Value="{DynamicResource {dxt:DXWindowThemeKey ResourceKey=InactiveHeaderOpacity}}"/>
+            </DataTrigger>-->
+            <Trigger Property="Source"
+                     SourceName="PART_Icon"
+                     Value="{x:Null}">
+                <Setter Property="Visibility"
+                        TargetName="PART_Icon"
+                        Value="Collapsed"/>
+            </Trigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+    <!--FloatingContainerTamplate-->
+
+    <DataTemplate x:Key="{dxt:FloatingContainerThemeKey ResourceKey=FloatingContainerTemplate}">
+        <Grid TextElement.Foreground="{DynamicResource {dxt:ThemeColorsThemeKey ResourceKey=DXMessageBoxForegroundColor}}">
+            <Control x:Name="PART_ActiveBorder"
+                     Focusable="False"
+                     Template="{DynamicResource {dxt:DXWindowThemeKey ResourceKey=FloatingActiveBorder}}"/>
+            <Control x:Name="PART_InactiveBorder"
+                     Focusable="False"
+                     Template="{DynamicResource {dxt:DXWindowThemeKey ResourceKey=FloatingInactiveBorder}}"
+                     Visibility="Collapsed"/>
+            <Grid Margin="{DynamicResource {dxt:DXWindowThemeKey ResourceKey=FloatingContainerBorderPadding}}">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition/>
+                </Grid.RowDefinitions>
+                <ContentControl x:Name="Header"
+                                dx:HeaderItemControl.CloseTemplateProvider="{DynamicResource {dxt:DXWindowThemeKey ResourceKey=HeaderItemControlCloseTemplateProvider}}"
+                                dx:HeaderItemControl.CommonTemplateProvider="{DynamicResource {dxt:DXWindowThemeKey ResourceKey=HeaderItemControlCommonTemplateProvider}}"
+                                Focusable="False"
+                                Template="{DynamicResource {dxt:DXWindowThemeKey ResourceKey=HeaderTemplate}}"/>
+                <Grid x:Name="PART_ContentOffset"
+                      Grid.Row="1"
+                      Margin="{Binding Path=(dx:FloatingContainerControl.ContentOffset), RelativeSource={RelativeSource Self} }">
+                    <Control x:Name="PART_ContentBackground"
+                             Focusable="False"
+                             Template="{DynamicResource {dxt:DXWindowThemeKey ResourceKey=FloatingBackground}}"/>
+                    <Control x:Name="PART_InactiveContentBackground"
+                             Focusable="False"
+                             Template="{DynamicResource {dxt:DXWindowThemeKey ResourceKey=InactiveFloatingBackground}}"
+                             Visibility="Collapsed"/>
+                    <Grid Margin="1">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <ContentPresenter x:Name="PART_ContainerContent" Content="{Binding}"/>
+                    </Grid>
+                </Grid>
+            </Grid>
+            <StackPanel x:Name="PART_StatusPanel"
+                        Grid.Row="0"
+                        Margin="{DynamicResource {dxt:DXWindowThemeKey ResourceKey=SizeGripMargin}}"
+                        VerticalAlignment="Bottom"
+                        Visibility="Collapsed">
+                <Thumb x:Name="PART_SizeGrip"
+                       Cursor="SizeNWSE"
+                       Height="16"
+                       HorizontalAlignment="Right"
+                       Template="{DynamicResource {dxt:FloatingContainerThemeKey IsVisibleInBlend=True, ResourceKey=FloatingContainerSizeGripTemplate}}"
+                       VerticalAlignment="Bottom"
+                       Width="16"/>
+            </StackPanel>
+            <Control x:Name="PART_ResizeFrame"
+                     Focusable="False"
+                     Template="{DynamicResource {dxt:FloatingContainerThemeKey ResourceKey=FloatingContainerResizeFrame}}"
+                     Visibility="{Binding Path=(dx:FloatingContainer.IsMaximized), Converter={dx:BooleanToVisibilityConverter Invert=True}}"/>
+            <Thumb x:Name="AdditionalDragWidget"
+                   Height="1"
+                   Template="{DynamicResource {dxt:FloatingContainerThemeKey IsVisibleInBlend=True, ResourceKey=FloatingContainerDragWidgetTemplate}}"
+                   VerticalAlignment="Top"/>
+        </Grid>
+        <DataTemplate.Triggers>
+            <MultiDataTrigger>
+                <MultiDataTrigger.Conditions>
+                    <Condition Binding="{Binding Path=(dx:FloatingContainer.IsActive)}" Value="False"/>
+                    <Condition Binding="{Binding Path=(dxi:WindowButtonHelper.IsActiveAppearance)}" Value="False"/>
+                </MultiDataTrigger.Conditions>
+                <MultiDataTrigger.Setters>
+                    <Setter Property="Visibility"
+                            TargetName="PART_InactiveBorder"
+                            Value="Visible"/>
+                    <Setter Property="Visibility"
+                            TargetName="PART_ActiveBorder"
+                            Value="Collapsed"/>
+                    <Setter Property="Visibility"
+                            TargetName="PART_InactiveContentBackground"
+                            Value="Visible"/>
+                    <Setter Property="Visibility"
+                            TargetName="PART_ContentBackground"
+                            Value="Collapsed"/>
+                </MultiDataTrigger.Setters>
+            </MultiDataTrigger>
+            <!--<DataTrigger Binding="{Binding Path=(dx:FloatingContainer.IsActive)}" Value="False">
+                <Setter Property="Visibility" TargetName="PART_InactiveBorder" Value="Visible"/>
+                <Setter Property="Visibility" TargetName="PART_ActiveBorder" Value="Collapsed"/>
+                <Setter Property="Visibility" TargetName="PART_InactiveContentBackground" Value="Visible"/>
+                <Setter Property="Visibility" TargetName="PART_ContentBackground" Value="Collapsed"/>
+            </DataTrigger>-->
+            <DataTrigger Binding="{Binding Path=(dx:FloatingContainer.FloatingContainer).AllowSizing, RelativeSource={RelativeSource Self}}" Value="false">
+                <Setter Property="Visibility"
+                        TargetName="PART_StatusPanel"
+                        Value="Collapsed"/>
+                <Setter Property="Visibility"
+                        TargetName="PART_ResizeFrame"
+                        Value="Collapsed"/>
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Path=WindowStyle, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=Window}, FallbackValue={x:Static sys:String.Empty}}" Value="None">
+                <Setter Property="Visibility"
+                        TargetName="AdditionalDragWidget"
+                        Value="Collapsed"/>
+            </DataTrigger>
+        </DataTemplate.Triggers>
+    </DataTemplate>
+
+    <!--FullDXWindowTemplate-->
+
+    <ControlTemplate x:Key="DXWindowTemplate" TargetType="{x:Type dx:DXWindow}">
+        <Grid x:Name="Root_Grid">
+            <Border BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}">
+                <AdornerDecorator x:Name="PART_WindowAdornerDecorator" ClipToBounds="True">
+                    <ContentPresenter x:Name="PART_RootContentPresenter"
+                                      ContentTemplate="{TemplateBinding ActualWindowTemplate}"
+                                      DataContext="{TemplateBinding DataContext}">
+                        <ContentPresenter.Content>
+                            <dx:DXWindowBackgroundPanel DataContext="{TemplateBinding DataContext}" Focusable="False">
+                                <dx:DXWindowBackgroundPanel.ContentTemplate>
+                                    <Binding Path="ContentTemplate" RelativeSource="{RelativeSource TemplatedParent}"/>
+                                </dx:DXWindowBackgroundPanel.ContentTemplate>
+                                <dx:DXWindowBackgroundPanel.Content>
+                                    <Binding Path="Content" RelativeSource="{RelativeSource TemplatedParent}"/>
+                                </dx:DXWindowBackgroundPanel.Content>
+                            </dx:DXWindowBackgroundPanel>
+                        </ContentPresenter.Content>
+                    </ContentPresenter>
+                </AdornerDecorator>
+            </Border>
+        </Grid>
+    </ControlTemplate>
+
+    <!--EmptyDXWindowTemplate-->
+
+    <ControlTemplate x:Key="DXWindowEmptyTemplate" TargetType="{x:Type dx:DXWindow}">
+        <Grid x:Name="Root_Grid"
+              Height="Auto"
+              Margin="0,0,0,0"
+              VerticalAlignment="Stretch">
+            <Border BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}">
+                <AdornerDecorator x:Name="PART_WindowAdornerDecorator" ClipToBounds="True">
+                    <ContentPresenter x:Name="PART_RootContentPresenter"
+                                      ContentTemplate="{TemplateBinding ActualWindowTemplate}"
+                                      Height="Auto"
+                                      Width="Auto">
+                        <ContentPresenter.Content>
+                            <Border/>
+                        </ContentPresenter.Content>
+                    </ContentPresenter>
+                </AdornerDecorator>
+            </Border>
+        </Grid>
+    </ControlTemplate>
+
+    <!--ThemedWindowStyle-->
+
+    <!--
+    
+    <Style TargetType="{x:Type dx:ThemedWindow}">
+        <Setter Property="AllowsTransparency" Value="False"/>
+        <Setter Property="WindowStyle" Value="None"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate>
+                    <Border Background="BlueViolet"/>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>-->
+
+    <!--DXWindowStyle-->
+
+    <Style x:Key="{dxt:DefaultStyleThemeKey FullName=DevExpress.Xpf.Core.DXWindow}" TargetType="{x:Type dx:DXWindow}">
+        <Setter Property="MinHeight" Value="42"/>
+        <!--SPECIFICTHEME MetropolisDark, MetropolisLight <Setter Property="MinHeight" Value="50" /> SPECIFICTHEME-->
+        <!--SPECIFICTHEME TouchlineDark 
+        <Setter Property="TextElement.FontSize" Value="{DynamicResource {dxt:FloatingContainerThemeKey ResourceKey=GlobalFontSize}}" />
+        <Setter Property="TextElement.FontFamily" Value="{DynamicResource {dxt:FloatingContainerThemeKey ResourceKey=GlobalFontFamily}}" />
+        <Setter Property="Control.Foreground" Value="{DynamicResource {dxt:ThemeColorsThemeKey ResourceKey=WhiteForegroundColor}}" /> SPECIFICTHEME-->
+        <Setter Property="ResizeMode" Value="CanResize"/>
+        <Setter Property="ResizeBorderThicknessInAeroMode" Value="{DynamicResource {dxt:DXWindowThemeKey ResourceKey=AeroWindowResizeBorderThickness}}"/>
+        <Setter Property="ResizeBorderThickness" Value="{DynamicResource {dxt:DXWindowThemeKey ResourceKey=ResizeBorderThickness}}"/>
+        <Setter Property="BorderEffectOffset" Value="{DynamicResource {dxt:DXWindowThemeKey ResourceKey=BorderEffectOffset}}"/>
+        <Setter Property="BorderEffectActiveColor" Value="{DynamicResource {dxt:DXWindowThemeKey ResourceKey=BorderEffectActiveColor}}"/>
+        <Setter Property="BorderEffectInactiveColor" Value="{DynamicResource {dxt:DXWindowThemeKey ResourceKey=BorderEffectInactiveColor}}"/>
+        <Setter Property="BorderEffectLeftMargins" Value="{DynamicResource {dxt:DXWindowThemeKey ResourceKey=BorderEffectLeftMargins}}"/>
+        <Setter Property="BorderEffectRightMargins" Value="{DynamicResource {dxt:DXWindowThemeKey ResourceKey=BorderEffectRightMargins}}"/>
+        <Setter Property="BorderEffectTopMargins" Value="{DynamicResource {dxt:DXWindowThemeKey ResourceKey=BorderEffectTopMargins}}"/>
+        <Setter Property="BorderEffectBottomMargins" Value="{DynamicResource {dxt:DXWindowThemeKey ResourceKey=BorderEffectBottomMargins}}"/>
+        <Setter Property="AeroWindowTemplate" Value="{DynamicResource {dxt:DXWindowThemeKey ResourceKey=AeroWindowTemplate}}"/>
+        <Setter Property="AeroBorderSize" Value="{DynamicResource {dxt:DXWindowThemeKey ResourceKey=AeroWindowBorderSize}}"/>
+        <Setter Property="WindowTemplate" Value="{DynamicResource {dxt:FloatingContainerThemeKey ResourceKey=FloatingContainerTemplate}}"/>
+        <Setter Property="Padding" Value="{DynamicResource {dxt:DXWindowThemeKey ResourceKey=FloatingContainerBodyMargin}}"/>
+        <Setter Property="Template" Value="{StaticResource DXWindowTemplate}"/>
+        <Style.Triggers>
+            <Trigger Property="HasContent" Value="False">
+                <Setter Property="Template" Value="{StaticResource DXWindowEmptyTemplate}"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!--DXDialogTemplate-->
+
+    <ControlTemplate x:Key="DXDialogTemplate" TargetType="{x:Type dx:DXDialog}">
+        <Grid x:Name="Root_Grid">
+            <Border BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}">
+                <AdornerDecorator x:Name="PART_WindowAdornerDecorator" ClipToBounds="True">
+                    <ContentPresenter x:Name="PART_RootContentPresenter"
+                                      ContentTemplate="{TemplateBinding ActualWindowTemplate}"
+                                      DataContext="{TemplateBinding DataContext}">
+                        <ContentPresenter.Content>
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="*"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <dx:DXWindowBackgroundPanel DataContext="{TemplateBinding DataContext}">
+                                    <dx:DXWindowBackgroundPanel.ContentTemplate>
+                                        <Binding Path="ContentTemplate" RelativeSource="{RelativeSource TemplatedParent}"/>
+                                    </dx:DXWindowBackgroundPanel.ContentTemplate>
+                                    <dx:DXWindowBackgroundPanel.Content>
+                                        <Binding Path="Content" RelativeSource="{RelativeSource TemplatedParent}"/>
+                                    </dx:DXWindowBackgroundPanel.Content>
+                                </dx:DXWindowBackgroundPanel>
+                                <StackPanel x:Name="Footer"
+                                            Grid.Row="2"
+                                            HorizontalAlignment="Right"
+                                            Margin="12"
+                                            Orientation="Horizontal">
+                                    <Button x:Name="YesButton"
+                                            Content="{dx:DXMessageBoxStringId StringId=Yes}"
+                                            IsDefault="True"
+                                            Margin="6,0,0,0"
+                                            MinHeight="22"
+                                            MinWidth="65"/>
+                                    <Button x:Name="NoButton"
+                                            Content="{dx:DXMessageBoxStringId StringId=No}"
+                                            IsCancel="True"
+                                            Margin="6,0,0,0"
+                                            MinHeight="22"
+                                            MinWidth="65"/>
+                                    <Button x:Name="OkButton"
+                                            Content="{dx:DXMessageBoxStringId StringId=Ok}"
+                                            IsDefault="True"
+                                            Margin="6,0,0,0"
+                                            MinHeight="22"
+                                            MinWidth="65"/>
+                                    <Button x:Name="CancelButton"
+                                            Content="{dx:DXMessageBoxStringId StringId=Cancel}"
+                                            IsCancel="True"
+                                            Margin="6,0,0,0"
+                                            MinHeight="22"
+                                            MinWidth="65"/>
+                                </StackPanel>
+                            </Grid>
+                        </ContentPresenter.Content>
+                    </ContentPresenter>
+                </AdornerDecorator>
+            </Border>
+        </Grid>
+    </ControlTemplate>
+
+    <!--DXDialogStyle-->
+
+    <Style x:Key="{dxt:DefaultStyleThemeKey FullName=DevExpress.Xpf.Core.DXDialog}"
+           BasedOn="{StaticResource {dxt:DefaultStyleThemeKey FullName=DevExpress.Xpf.Core.DXWindow}}"
+           TargetType="{x:Type dx:DXDialog}">
+        <!--SPECIFICTHEME TouchlineDark 
+        <Setter Property="TextElement.FontSize" Value="{DynamicResource {dxt:FloatingContainerThemeKey ResourceKey=GlobalFontSize}}" />
+        <Setter Property="TextElement.FontFamily" Value="{DynamicResource {dxt:FloatingContainerThemeKey ResourceKey=GlobalFontFamily}}" />
+        <Setter Property="Control.Foreground" Value="{DynamicResource {dxt:ThemeColorsThemeKey ResourceKey=WhiteForegroundColor}}" /> SPECIFICTHEME-->
+        <Setter Property="Template" Value="{StaticResource DXDialogTemplate}"/>
+    </Style>
+
+    <!--DXDialogWindowTemplate-->
+
+    <ControlTemplate x:Key="DXDialogWindowTemplate" TargetType="{x:Type dx:DXDialogWindow}">
+        <Grid x:Name="Root_Grid">
+            <Border BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}">
+                <AdornerDecorator x:Name="PART_WindowAdornerDecorator" ClipToBounds="True">
+                    <ContentPresenter x:Name="PART_RootContentPresenter"
+                                      ContentTemplate="{TemplateBinding ActualWindowTemplate}"
+                                      DataContext="{TemplateBinding DataContext}">
+                        <ContentPresenter.Content>
+                            <Grid>
+                                <Grid.Resources>
+                                    <dxmvvm:BooleanToObjectConverter x:Key="DialogFooterMarginConverter">
+                                        <dxmvvm:BooleanToObjectConverter.TrueValue>
+                                            <Thickness>6,12,12,12</Thickness>
+                                        </dxmvvm:BooleanToObjectConverter.TrueValue>
+                                        <dxmvvm:BooleanToObjectConverter.FalseValue>
+                                            <Thickness>0</Thickness>
+                                        </dxmvvm:BooleanToObjectConverter.FalseValue>
+                                    </dxmvvm:BooleanToObjectConverter>
+                                </Grid.Resources>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="*"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <dx:DXWindowBackgroundPanel>
+                                    <dx:DXWindowBackgroundPanel.ContentTemplate>
+                                        <Binding Path="ContentTemplate" RelativeSource="{RelativeSource TemplatedParent}"/>
+                                    </dx:DXWindowBackgroundPanel.ContentTemplate>
+                                    <dx:DXWindowBackgroundPanel.Content>
+                                        <PriorityBinding>
+                                            <Binding Path="Content" RelativeSource="{RelativeSource TemplatedParent}"/>
+                                            <Binding Source="{StaticResource DefaultDXDialogContent}"/>
+                                        </PriorityBinding>
+                                    </dx:DXWindowBackgroundPanel.Content>
+                                </dx:DXWindowBackgroundPanel>
+                                <ItemsControl x:Name="Footer"
+                                              Focusable="False"
+                                              Grid.Row="1"
+                                              ItemsPanel="{Binding CommandButtonsPanel, RelativeSource={RelativeSource TemplatedParent}}"
+                                              ItemsSource="{Binding CommandButtons, RelativeSource={RelativeSource TemplatedParent}}"
+                                              Visibility="{Binding Path=CommandButtons.Count, RelativeSource={RelativeSource TemplatedParent}, Converter={StaticResource NumericToVisibilityConverter}}"/>
+                                <ContentControl x:Name="FooterContainer"
+                                                Focusable="False"
+                                                Grid.Row="1"
+                                                HorizontalContentAlignment="Stretch"
+                                                VerticalContentAlignment="Stretch">
+                                    <dx:NonLogicalDecorator x:Name="FooterPresenter"
+                                                            DataContext="{x:Null}"
+                                                            Margin="{Binding HasFooterButtons, RelativeSource={RelativeSource TemplatedParent}, Converter={StaticResource DialogFooterMarginConverter}}"/>
+                                </ContentControl>
+                            </Grid>
+                        </ContentPresenter.Content>
+                    </ContentPresenter>
+                </AdornerDecorator>
+            </Border>
+        </Grid>
+    </ControlTemplate>
+
+    <!--DXDialogWindowCommandButtonStyle-->
+
+    <Style x:Key="DXDialogWindowCommandButtonStyle" TargetType="Button">
+        <Setter Property="MinWidth" Value="65"/>
+        <Setter Property="MinHeight" Value="22"/>
+        <Setter Property="Margin" Value="6,0,0,0"/>
+        <Setter Property="ContentTemplate" Value="{Binding ContentTemplate, RelativeSource={RelativeSource TemplatedParent}}"/>
+        <Setter Property="ContentTemplateSelector" Value="{Binding ContentTemplateSelector, RelativeSource={RelativeSource TemplatedParent}}"/>
+    </Style>
+
+    <!--DXDialogWindowStyle-->
+
+    <Style x:Key="{dxt:DefaultStyleThemeKey FullName=DevExpress.Xpf.Core.DXDialogWindow}"
+           BasedOn="{StaticResource {dxt:DefaultStyleThemeKey FullName=DevExpress.Xpf.Core.DXWindow}}"
+           TargetType="{x:Type dx:DXDialogWindow}">
+        <!--SPECIFICTHEME TouchlineDark 
+        <Setter Property="TextElement.FontSize" Value="{DynamicResource {dxt:FloatingContainerThemeKey ResourceKey=GlobalFontSize}}" />
+        <Setter Property="TextElement.FontFamily" Value="{DynamicResource {dxt:FloatingContainerThemeKey ResourceKey=GlobalFontFamily}}" />
+        <Setter Property="Control.Foreground" Value="{DynamicResource {dxt:ThemeColorsThemeKey ResourceKey=WhiteForegroundColor}}" /> SPECIFICTHEME-->
+        <Setter Property="Template" Value="{StaticResource DXDialogWindowTemplate}"/>
+        <Setter Property="CommandButtonStyle" Value="{StaticResource DXDialogWindowCommandButtonStyle}"/>
+        <Setter Property="CommandButtonsPanel">
+            <Setter.Value>
+                <ItemsPanelTemplate>
+                    <StackPanel HorizontalAlignment="Right"
+                                Margin="12"
+                                Orientation="Horizontal"/>
+                </ItemsPanelTemplate>
+            </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+            <Trigger Property="HasContent" Value="False">
+                <Setter Property="Template" Value="{StaticResource DXDialogWindowTemplate}"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!--DialogButtonStyle-->
+
+    <Style x:Key="{dxt:DefaultStyleThemeKey FullName=DevExpress.Xpf.Core.DialogButton}" TargetType="dx:DialogButton">
+        <Setter Property="Focusable" Value="False"/>
+        <Setter Property="CommandButtonStyle" Value="{StaticResource DXDialogWindowCommandButtonStyle}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="dx:DialogButton">
+                    <Button Command="{Binding ActualCommand, RelativeSource={RelativeSource TemplatedParent}}"
+                            Content="{Binding ActualContent, RelativeSource={RelativeSource TemplatedParent}}"
+                            IsCancel="{Binding ActualIsCancel, RelativeSource={RelativeSource TemplatedParent}}"
+                            IsDefault="{Binding ActualIsDefault, RelativeSource={RelativeSource TemplatedParent}}"
+                            Style="{Binding CommandButtonStyle, RelativeSource={RelativeSource TemplatedParent}}"
+                            Visibility="{Binding CommandButtonVisibility, RelativeSource={RelativeSource TemplatedParent}}"/>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!--DialogButtonControlStyle-->
+
+    <Style x:Key="{dxt:DefaultStyleThemeKey FullName=DevExpress.Xpf.Core.DialogButtonsControl}" TargetType="dx:DialogButtonsControl">
+        <Setter Property="Focusable" Value="False"/>
+        <Setter Property="ItemsSource" Value="{Binding Path=(dx:DialogButtonsControl.CommandsSource), RelativeSource={RelativeSource Self}}"/>
+        <Setter Property="HorizontalAlignment" Value="Right"/>
+        <Setter Property="ItemsPanel">
+            <Setter.Value>
+                <ItemsPanelTemplate>
+                    <StackPanel Orientation="Horizontal"/>
+                </ItemsPanelTemplate>
+            </Setter.Value>
+        </Setter>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="dx:DialogButtonsControl">
+                    <ItemsPresenter Margin="{TemplateBinding Padding}" Visibility="{Binding HasItems, Converter={dxmvvm:BooleanToVisibilityConverter}, RelativeSource={RelativeSource TemplatedParent}}"/>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!--HeaderButtonTemplate-->
+
+    <ControlTemplate x:Key="{dxt:FloatingContainerThemeKey ResourceKey=FloatingContainerHeaderButtonTemplate}" TargetType="{x:Type dx:HeaderItemControl}">
+        <Grid>
+            <Control Name="PART_Background"
+                     Focusable="False"
+                     Template="{Binding Path=TemplateProvider.NormalBackgroundTemplate, RelativeSource={RelativeSource TemplatedParent}}"/>
+            <Border Name="MarginBorder"
+                    Background="Transparent"
+                    Margin="4,0"
+                    cs:id="Border_0000">
+                <ContentPresenter x:Name="PART_ContentPresenter"
+                                  Focusable="False"
+                                  HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                  Margin="{TemplateBinding Padding}"
+                                  RecognizesAccessKey="True"
+                                  SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}"
+                                  VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+            </Border>
+        </Grid>
+        <ControlTemplate.Triggers>
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Opacity" Value="0.5"/>
+            </Trigger>
+            <Trigger Property="Name" Value="PART_Minimize">
+                <Setter Property="ContentTemplate"
+                        TargetName="PART_ContentPresenter"
+                        Value="{Binding Path=TemplateProvider.(dx:CommonHeaderItemControlTemplateProvider.MinimizeGlyphTemplate), RelativeSource={RelativeSource TemplatedParent}}"/>
+                <Setter Property="Margin"
+                        TargetName="MarginBorder"
+                        Value="0"/>
+            </Trigger>
+            <Trigger Property="Name" Value="PART_Maximize">
+                <Setter Property="ContentTemplate"
+                        TargetName="PART_ContentPresenter"
+                        Value="{Binding Path=TemplateProvider.(dx:CommonHeaderItemControlTemplateProvider.MaximizeGlyphTemplate), RelativeSource={RelativeSource TemplatedParent}}"/>
+                <Setter Property="Margin"
+                        TargetName="MarginBorder"
+                        Value="0"/>
+            </Trigger>
+            <Trigger Property="Name" Value="PART_MinimizeRestore">
+                <Setter Property="ContentTemplate"
+                        TargetName="PART_ContentPresenter"
+                        Value="{Binding Path=TemplateProvider.(dx:CommonHeaderItemControlTemplateProvider.RestoreGlyphTemplate), RelativeSource={RelativeSource TemplatedParent}}"/>
+                <Setter Property="Margin"
+                        TargetName="MarginBorder"
+                        Value="0"/>
+            </Trigger>
+            <Trigger Property="Name" Value="PART_Restore">
+                <Setter Property="ContentTemplate"
+                        TargetName="PART_ContentPresenter"
+                        Value="{Binding Path=TemplateProvider.(dx:CommonHeaderItemControlTemplateProvider.RestoreGlyphTemplate), RelativeSource={RelativeSource TemplatedParent}}"/>
+                <Setter Property="Margin"
+                        TargetName="MarginBorder"
+                        Value="0"/>
+            </Trigger>
+            <Trigger Property="Name" Value="PART_CloseButton">
+                <Setter Property="ContentTemplate"
+                        TargetName="PART_ContentPresenter"
+                        Value="{Binding Path=TemplateProvider.(dx:CloseHeaderItemControlTemplateProvider.CloseGlyphTemplate), RelativeSource={RelativeSource TemplatedParent}}"/>
+                <Setter Property="Margin"
+                        TargetName="MarginBorder"
+                        Value="0"/>
+            </Trigger>
+            <!--test isMouseOver-->
+            <Trigger Property="dxi:WindowButtonHelper.IsMouseOver" Value="True">
+                <Setter Property="Template"
+                        TargetName="PART_Background"
+                        Value="{Binding Path=TemplateProvider.MouseOverBackgroundTemplate, RelativeSource={RelativeSource TemplatedParent}}"/>
+                <Setter Property="Foreground" Value="{Binding Path=TemplateProvider.MouseOverForeground, RelativeSource={RelativeSource Self}}"/>
+            </Trigger>
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="IsMouseOver" Value="True"/>
+                    <Condition Property="ShowBorder" Value="True"/>
+                </MultiTrigger.Conditions>
+                <Setter Property="Template"
+                        TargetName="PART_Background"
+                        Value="{Binding Path=TemplateProvider.MouseOverBackgroundTemplate, RelativeSource={RelativeSource TemplatedParent}}"/>
+                <Setter Property="Foreground" Value="{Binding Path=TemplateProvider.MouseOverForeground, RelativeSource={RelativeSource Self}}"/>
+            </MultiTrigger>
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="IsPressed" Value="True"/>
+                    <Condition Property="ShowBorder" Value="True"/>
+                </MultiTrigger.Conditions>
+                <Setter Property="Template"
+                        TargetName="PART_Background"
+                        Value="{Binding Path=TemplateProvider.PressedBackgroundTemplate, RelativeSource={RelativeSource TemplatedParent}}"/>
+                <Setter Property="Foreground" Value="{Binding Path=TemplateProvider.PressedForeground, RelativeSource={RelativeSource Self}}"/>
+            </MultiTrigger>
+            <Trigger Property="ShowBorder" Value="False">
+                <Setter Property="Visibility"
+                        TargetName="PART_Background"
+                        Value="Collapsed"/>
+            </Trigger>
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="IsMouseOver" Value="False"/>
+                    <Condition Property="IsPressed" Value="False"/>
+                </MultiTrigger.Conditions>
+                <Setter Property="Foreground" Value="{Binding Path=TemplateProvider.NormalForeground, RelativeSource={RelativeSource Self}}"/>
+            </MultiTrigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+    <!--CommonTemplateProvider-->
+
+    <dx:CommonHeaderItemControlTemplateProvider x:Key="{dxt:DXWindowThemeKey ResourceKey=HeaderItemControlCommonTemplateProvider}"
+                                                MaximizeGlyphTemplate="{StaticResource ResourceKey={dxt:FloatingContainerThemeKey ResourceKey=FloatingContainerMaximizeButtonGlyph}}"
+                                                MinimizeGlyphTemplate="{StaticResource ResourceKey={dxt:FloatingContainerThemeKey ResourceKey=FloatingContainerMinimizeButtonGlyph}}"
+                                                MouseOverBackgroundTemplate="{StaticResource ResourceKey={dxt:FloatingContainerThemeKey ResourceKey=FloatingContainerDefaultButtonBackgroundMouseOverState}}"
+                                                MouseOverForeground="{StaticResource ResourceKey={dxt:FloatingContainerThemeKey ResourceKey=FloatingContainerDefaultButtonForegroundMouseOverState}}"
+                                                NormalBackgroundTemplate="{StaticResource ResourceKey={dxt:FloatingContainerThemeKey ResourceKey=FloatingContainerDefaultButtonBackgroundNormalState}}"
+                                                NormalForeground="{StaticResource ResourceKey={dxt:FloatingContainerThemeKey ResourceKey=FloatingContainerDefaultButtonForegroundNormalState}}"
+                                                PressedBackgroundTemplate="{StaticResource ResourceKey={dxt:FloatingContainerThemeKey ResourceKey=FloatingContainerDefaultButtonBackgroundPressedState}}"
+                                                PressedForeground="{StaticResource ResourceKey={dxt:FloatingContainerThemeKey ResourceKey=FloatingContainerDefaultButtonForegroundPressedState}}"
+                                                RestoreGlyphTemplate="{StaticResource ResourceKey={dxt:FloatingContainerThemeKey ResourceKey=FloatingContainerRestoreButtonGlyph}}"/>
+
+    <!--CloseTemplateProvider-->
+
+    <dx:CloseHeaderItemControlTemplateProvider x:Key="{dxt:DXWindowThemeKey ResourceKey=HeaderItemControlCloseTemplateProvider}"
+                                               CloseGlyphTemplate="{StaticResource ResourceKey={dxt:FloatingContainerThemeKey ResourceKey=FloatingContainerCloseButtonGlyph}}"
+                                               MouseOverBackgroundTemplate="{StaticResource ResourceKey={dxt:FloatingContainerThemeKey ResourceKey=FloatingContainerCloseButtonBackgroundMouseOverState}}"
+                                               MouseOverForeground="{StaticResource ResourceKey={dxt:FloatingContainerThemeKey ResourceKey=FloatingContainerCloseButtonForegroundMouseOverState}}"
+                                               NormalBackgroundTemplate="{StaticResource ResourceKey={dxt:FloatingContainerThemeKey ResourceKey=FloatingContainerCloseButtonBackgroundNormalState}}"
+                                               NormalForeground="{StaticResource ResourceKey={dxt:FloatingContainerThemeKey ResourceKey=FloatingContainerCloseButtonForegroundNormalState}}"
+                                               PressedBackgroundTemplate="{StaticResource ResourceKey={dxt:FloatingContainerThemeKey ResourceKey=FloatingContainerCloseButtonBackgroundPressedState}}"
+                                               PressedForeground="{StaticResource ResourceKey={dxt:FloatingContainerThemeKey ResourceKey=FloatingContainerCloseButtonForegroundPressedState}}"/>
+
+</ResourceDictionary>

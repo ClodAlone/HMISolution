@@ -1,0 +1,927 @@
+﻿<div id="LinearMeterControl" class="LinearMeterControl" style="height:100%;">
+    <img src="cl.gif" alt="" onload="onLinearMeterControlLoaded(this)" id="loadingImage" />
+
+    <!--<div id="indicator"></div>-->
+    <div id="linearmetercontainer" style="position:relative; height:100%;">
+        <div id="metervaluelabel" style="position:absolute; z-index: 3;"></div>
+        <div id="eunitLabel" style="display:none; position:absolute; z-index: 3;"></div>
+        <div id="linearmeter" style="position:relative; z-index: 1;"></div>
+    </div>
+
+    <script>
+        function onLinearMeterControlLoaded(obj) {
+            var thisPage = $(obj).parent();
+            thisPage.localize();
+            var scope = thisPage.scope();
+            if (!scope)
+                return;
+            var paratt = thisPage.data(dataparameters);
+            if (!paratt)
+                return;
+
+            var thisParent = thisPage.parent();
+
+            $(obj).remove();
+
+            setOpacity(scope, thisParent, thisPage);
+
+            //var noDataText = i18next.t1('ConnectingToServer');
+            var deregisterListener;
+            var deregisterListenerMin;
+            var deregisterListenerMax;
+            var onSettingValue;
+            
+            var tickmarkLengthFactor = 6;
+            var tickmarkWidthFactor = 1.5;
+            var animationDuration = 1000;
+            var rangeBarCorrection = 11;
+            var decimalSeparator = getDecimalSeparator(scope);
+            
+            var bDragging;
+            var bDragNotifyingServer;
+            var rangeContainer;
+            var writeTimeout;
+            var nextWriteTimeout;
+            var dragDetectTimeout;
+            var latestServerInvokeTime;
+            var serverWriteTimeoutDefaultMS = scope.configurationSettings.serverInvokeMinFreqOnDrag;
+            var meterRect;
+            var rotatedMeterRect;
+            var latestDraggedValue;
+            var tickReq;
+
+            var deregisterListenerActiveLanguage;
+            $(thisPage).bind('destroyed', function () {
+                if (deregisterListener)
+                    deregisterListener();
+                if (deregisterListenerMin)
+                    deregisterListenerMin();
+                if (deregisterListenerMax)
+                    deregisterListenerMax();
+                if (deregisterListenerActiveLanguage)
+                    deregisterListenerActiveLanguage();
+                if (writeTimeout)
+                    clearTimeout(writeTimeout);
+                if (nextWriteTimeout)
+                    clearTimeout(nextWriteTimeout);
+                if (dragDetectTimeout)
+                    clearTimeout(dragDetectTimeout);
+                if (tickReq)
+                    cancelAnimationFrame(tickReq);
+            });
+
+            var parameters = JSON.parse(paratt);
+            if (parameters.bFitInWindow)
+                thisParent.css("overflow", "visible");
+
+            var viewboxRatio;
+            var parentScreen = $("#" + parameters.screenId);
+            var webKitRenderCorrection = thisPage.hasClass("webKitRenderCorrection");
+            if (webKitRenderCorrection) {
+                if (parameters.bKeepAspectRatio)
+                    viewboxRatio = parameters.parentViewbox.width / parameters.parentViewbox.height;
+                thisPage.css("will-change", "opacity");
+            }
+
+            var customFonts = [parameters.LabelFontSettings.FontFamily, parameters.ValueFontSettings.FontFamily, parameters.EngeneeringUnitFontSettings.FontFamily];
+            if (parameters.FontSettingList)
+                $.each(parameters.FontSettingList, function (index, item) {
+                    customFonts.push(item.FontFamily);
+                });
+            loadCustomFonts(customFonts);
+            var dynamicFontElements = [];
+            
+            var bMeterInteractive = parameters.MarkerIsInteractive || parameters.LevelIsInteractive || parameters.RangeBarIsInteractive;
+            var bRangesOnTop = Math.max(parameters.Range1ZIndex, parameters.Range2ZIndex, parameters.Range3ZIndex) >= parameters.RangeBarZIndex;
+
+            var container = thisPage.find("#linearmeter");
+            var outerContainer = thisPage.find("#linearmetercontainer");
+
+            if (scope.biOS)
+                webkitMoveRotateTransform(thisParent, thisPage, outerContainer);
+
+            var options = {};
+            setObjectBorder(options, parameters);
+            if (!$.isEmptyObject(options))
+                outerContainer.css(options);
+
+            var valueFontSize = parseInt(parameters.ValueFontSettings.FontSize, 10);
+            var labelFontSize = parseInt(parameters.LabelFontSettings.FontSize, 10);
+            var meterOrientation = parameters.LayoutMode >= 2 ? "vertical" : "horizontal";
+            var isVertical = meterOrientation == "vertical";
+            var bUseTermometer = parameters.LinearBaseModel == "UseTermometer";
+            var floatingPointPos = parameters.ValueStringFormat.indexOf(invariantNumberDecimalSeparator);
+            var floatingPointPosLabel = parameters.LabelStringFormat.indexOf(invariantNumberDecimalSeparator);
+            var decimals = floatingPointPos == -1 ? 0 : parameters.ValueStringFormat.substring(floatingPointPos + 1).length;
+            var labelDecimals = floatingPointPosLabel == -1 ? 0 : parameters.LabelStringFormat.substring(floatingPointPosLabel + 1).length;
+            var bTagHasDynamicLimits;
+            var bTagHasEU;
+            var bFirstDrawn = true;
+            var bHasSubvalueIndicator;
+            var eunitLabel;
+            var isFastControl = parameters.IsFastLinearMeterControl;
+            var barTopMargin = isFastControl ? 0 : 5;
+            var barLeftMargin = isFastControl ? 0 : 5;
+            var barWidthMargin = isFastControl ? 0 : 5;
+            var barHeightMargin = isFastControl ? 0 : 5;
+            var trackerContainer;
+            var gaugeContainerSize;
+            var trackerContainerBBox;
+            var levelBackgroundTemplate;
+            var minmax;
+            var axisContainer;
+            var labelsContainer;
+            var meterScale;
+            var linearmeter;
+            var metervaluelabel;
+            var subvalueIndicator;
+            var bIsEmptyBar = parameters.LevelBackgroundTemplate.indexOf("_EmptyBar_") !== -1;
+            var bInvisibleBarBackground = bIsEmptyBar || !parameters.LevelVisible;
+            var rangesWidth = 10;
+
+            var rw = Math.max(parameters.Range1Thickness, parameters.Range2Thickness, parameters.Range3Thickness);
+            if (!isNaN(rw))
+                rangesWidth = rw;
+            
+            var svgFOEmptyMargin = !parameters.SvgFOEmptyMargin ? bIsEmptyBar ? 58 : 76 : parameters.SvgFOEmptyMargin;
+            var labelFormat = devExtremeHelpers.getLabelsFormat(parameters.LabelStringFormat);
+
+            var majorCustomTicks = devExtremeHelpers.getCustomTicks(parameters, parseFloat(parameters.MinValue), parseFloat(parameters.MaxValue), isFastControl ? parameters.MeterScaleMinorInterval : parameters.MinorIntervalCount, isFastControl ? parameters.MeterScaleMajorInterval : parameters.MajorIntervalCount);
+            var minorCustomTicks = devExtremeHelpers.getCustomTicks(parameters, parseFloat(parameters.MinValue), parseFloat(parameters.MaxValue), isFastControl ? parameters.MeterScaleMinorInterval : parameters.MinorIntervalCount, isFastControl ? parameters.MeterScaleMajorInterval : parameters.MajorIntervalCount, true, majorCustomTicks);
+            var bRemoveLabels;
+            if (bInvisibleBarBackground)
+                bRemoveLabels = isTransparent(parameters.LabelForeground.Color) || (majorCustomTicks.length == 0 && minorCustomTicks.length == 0) || (isTransparent(parameters.MinorTickmarkFill.Color) && isTransparent(parameters.MajorTickmarkFill.Color))
+
+            var meterOptions = {
+                animation: {
+                    enabled: true,
+                    duration: animationDuration
+                },
+                disabled: thisParent.hasClass(disabledClass),
+                size: {
+                    height: thisParent.attr("height") - (isVertical ? svgFOEmptyMargin : 0), //* (meterOrientation == "vertical" ? 0.75 : 1),
+                    width: thisParent.attr("width") - (isVertical ? 0 : svgFOEmptyMargin) //* (meterOrientation == "horizontal" ? 0.80 : 1),
+                },
+                onDrawn: function (e) {
+                    var el = e.component.element();
+                    if (bFirstDrawn) {
+                        fastdom.measure(function () {
+                            var scaleRangeContainer = el.find("g.dxg-scale, g.dxg-range-container");
+                            var gaugeSvg = el.find(".dxg-linear-gauge")[0];
+                            //gaugeSvgPoint = gaugeSvg.createSVGPoint();
+                            labelsContainer = el.find("g.dxg-scale-elements");
+                            axisContainer = el.find("g.dxg-axis");
+                            gaugeContainerSize = {
+                                w: $(gaugeSvg).attr("width"),
+                                h: $(gaugeSvg).attr("height")
+                            };
+                            trackerContainer = el.find(".dxg-value-indicator")[0];
+                            subvalueIndicator = linearmeter.element().find(".dxg-subvalue-indicator");
+                            var dxgElements = el.find(".dxg-elements");
+
+                            fastdom.mutate(function () {
+                                var rangeTranslate = -20 + (bInvisibleBarBackground ? rangeBarCorrection : 0);
+
+                                if (isVertical) {
+                                    el.css("top", (thisParent.attr("height") - meterOptions.size.height) / 2);
+                                    if (isFastControl || parameters.MajorTickmarkOffset == 1)
+                                        scaleRangeContainer.css("transform", "translate(" + rangeTranslate + "px, 0px)");
+                                }
+                                else {
+                                    el.css("left", (thisParent.attr("width") - meterOptions.size.width) / 2);
+                                    if (isFastControl || parameters.MajorTickmarkOffset == 1)
+                                        scaleRangeContainer.css("transform", "translate(0px, " + rangeTranslate + "px)");
+                                }
+
+                                $(gaugeSvg).css({ "position": "relative", "z-index": 1, "overflow": "visible" });
+
+                                var trackerContainerDefaultTranslate = 0;
+                                if (bUseTermometer)
+                                    $(trackerContainer).css("transform", isVertical ? "translateX(-13px)" : "translateY(-18px)");
+                                else {
+                                    $(trackerContainer).css("transform", isVertical ? "translateX(-5px)" : "translateY(-5px)");
+                                    trackerContainerDefaultTranslate = -5;
+                                }
+                                
+                                trackerContainerBBox = trackerContainer.getBBox();
+
+                                //var svgRect = gaugeSvg.getBBox();
+
+                                if (!bUseTermometer) {
+                                    if (isVertical) {
+                                        dxgElements.css("transform", "translateX(7px)");
+                                        var centeredPositionLeft = gaugeContainerSize.w / 2;
+                                        var currentRelativePosition = trackerContainerBBox.x;
+                                        var finalLeft = centeredPositionLeft - currentRelativePosition + parameters.LevelOptions.Offset;
+                                        if (!isScaleVisible)
+                                            finalLeft += -14.5;
+                                        else
+                                            finalLeft += 2;
+                                        container.css("left", finalLeft);
+                                    }
+                                    else {
+                                        dxgElements.css("transform", "translateY(5px)");
+                                        var centeredPositionTop = gaugeContainerSize.h / 2;
+                                        var currentRelativePosition = trackerContainerBBox.y /* - svgRect.y*/;
+                                        var finalTop = centeredPositionTop - currentRelativePosition + parameters.LevelOptions.Offset;
+                                        if (!isScaleVisible)
+                                            finalTop += -3.5;
+                                        container.css("top", finalTop);
+                                    }
+                                }
+
+                                if (!isFastControl && parameters.RangeBarVisible) {
+                                    var rangeBarOffsetNormalized = isVertical ? parameters.RangeBarOffset - 10 : parameters.RangeBarOffset - 4;
+                                    var translateValue = trackerContainerDefaultTranslate + rangeBarOffsetNormalized;
+                                    $(trackerContainer).css("transform", isVertical ? "translateX(" + translateValue + "px)" : "translateY(" + translateValue + "px)");
+                                }
+
+                                loadBarSvgStyle(e.component, trackerContainerBBox, gaugeContainerSize.w, gaugeContainerSize.h, subvalueIndicator);
+                                if (!bUseTermometer && parameters.MarkerVisible) {
+                                    if (!isVertical) {
+                                        e.component.option("size.width", parseFloat(e.component.option("size.width")) + parameters.MarkerFactorWidth);
+                                        container.css("left", parseFloat(container.css("left")) - parameters.MarkerFactorWidth / 2);
+                                    }
+                                    else {
+                                        e.component.option("size.height", parseFloat(e.component.option("size.height")) + parameters.MarkerFactorWidth);
+                                        container.css("top", parseFloat(container.css("top")) - parameters.MarkerFactorWidth / 2);
+                                    }
+                                }
+
+                                meterScale = labelsContainer.clone().appendTo(axisContainer);
+                                labelsContainer.hide();
+
+                                try {
+                                    if (parameters.Range1Visible) {
+                                        var singleRangesOffset1 = parameters.Range1Offset + 10 - ((rangesWidth - 10) / 2);
+                                        if (singleRangesOffset1 != 0)
+                                            el.find(".dxg-range.dxg-range-0").css("transform", isVertical ? "translateX(" + singleRangesOffset1 + "px)" : "translateY(" + singleRangesOffset1 + "px)");
+                                    }
+                                    if (parameters.Range2Visible) {
+                                        var singleRangesOffset2 = parameters.Range2Offset + 10 - ((rangesWidth - 10) / 2);
+                                        if (singleRangesOffset2 != 0)
+                                            el.find(".dxg-range.dxg-range-1").css("transform", isVertical ? "translateX(" + singleRangesOffset2 + "px)" : "translateY(" + singleRangesOffset2 + "px)");
+                                    }
+                                    if (parameters.Range3Visible) {
+                                        var singleRangesOffset3 = parameters.Range3Offset + 10 - ((rangesWidth - 10) / 2);
+                                        if (singleRangesOffset3 != 0)
+                                            el.find(".dxg-range.dxg-range-2").css("transform", isVertical ? "translateX(" + singleRangesOffset3 + "px)" : "translateY(" + singleRangesOffset3 + "px)");
+                                    }
+                                }
+                                catch { }
+
+                                bHasSubvalueIndicator = subvalueIndicator && subvalueIndicator.length > 0;
+                                if (bHasSubvalueIndicator) {
+                                    fastdom.measure(function () {
+                                        var rangeContainer = el.find("g.dxg-range-container");
+                                        fastdom.mutate(function () {
+                                            subvalueIndicator.insertAfter(rangeContainer);
+                                        });
+                                    });
+                                }
+                            });
+                        });
+                    }
+                    else if (levelBackgroundTemplate) {
+                        fastdom.measure(function () {
+                            var newBBox = trackerContainer.getBBox();
+                            if (newBBox.width != trackerContainerBBox.width || newBBox.height != trackerContainerBBox.height || newBBox.x != trackerContainerBBox.x || newBBox.y != trackerContainerBBox.y) {
+                                trackerContainerBBox = newBBox;
+                                var newBarPosition = getBarCssPosition(newBBox, gaugeContainerSize.w, gaugeContainerSize.h);
+                                fastdom.mutate(function () {
+                                    levelBackgroundTemplate.css(newBarPosition);
+                                });
+                            }
+                        });
+                    }
+
+                    if (bRangesOnTop) {
+                        fastdom.measure(function () {
+                            var rangeContainer = el.find("g.dxg-range-container");
+                            fastdom.mutate(function () {
+                                rangeContainer.insertAfter(trackerContainer);
+                            });
+                        });
+                    }
+                    if (bHasSubvalueIndicator) {
+                        fastdom.measure(function () {
+                            var indicatorPath = subvalueIndicator.find("path");
+                            fastdom.mutate(function () {
+                                indicatorPath.attr("stroke", parameters.MarkerStroke.Color);
+                                if (isFastControl)
+                                    indicatorPath.attr("stroke-width", parameters.MarkerBorderThickness);
+                            });
+                        });
+                    }
+                    bFirstDrawn = false;
+                },
+                geometry: { orientation: meterOrientation },
+                scale: {
+                    startValue: parameters.MinValue,
+                    endValue: parameters.MaxValue,
+                    tickInterval: 10,
+                    minorTickInterval: 2,
+                    tick: {
+                        color: parameters.MajorTickmarkFill.Color,
+                        length: parameters.MajorTickmarkFactorLength * tickmarkLengthFactor * 2,
+                        width: parameters.MajorTickmarkFactorThickness * tickmarkWidthFactor,
+                        visible:  isFastControl ? true : parameters.MajorTickmarkOffset == 1
+                    },
+                    minorTick: {
+                        color: parameters.MinorTickmarkFill.Color,
+                        visible: isFastControl ? true : parameters.MajorTickmarkOffset == 1,
+                        length: parameters.MinorTickmarkFactorLength * tickmarkLengthFactor,
+                        width: parameters.MinorTickmarkFactorThickness * tickmarkWidthFactor
+                    },
+                    customTicks: majorCustomTicks,
+                    customMinorTicks: minorCustomTicks,
+                    label: {
+                        overlappingBehavior: "none",
+                        indentFromTick: parseInt(parameters.LabelOffset, 10) + 20,
+                        font: {
+                            family: parameters.LabelFontSettings.FontFamily,
+                            size: labelFontSize /** (1 - innerGaugeScaleFactor) + paramFontSize*/,
+                            color: parameters.LabelForeground.Color
+                        },
+                        customizeText: function (arg) {
+                            if (arg.valueText.charAt(0) === decimalSeparator)
+                                return "0" + arg.valueText;
+                            return labelDecimals <= 0 ? parseInt(arg.valueText, 10) : arg.valueText;
+                        },
+                        visible: !bRemoveLabels
+                    }
+                },
+                allowDecimals: false,
+                rangeContainer: {
+                    backgroundColor: "none",
+                    ranges: [],
+                    width: rangesWidth
+                },
+                valueIndicator: {
+                    type: 'rangebar',
+                    color: urlReferenceReplace(parameters.LevelFill.Color, parameters.screenId),
+                    size: parameters.LevelOptions.Thickness * 5.5
+                },
+                value: 0,
+                subvalues: [0],
+                subvalueIndicator: {
+                    type: "none",
+                    color: parameters.MarkerFill.Color
+                }
+            };
+
+            var isScaleVisible = !isTransparent(parameters.MajorTickmarkFill.Color) || !isTransparent(parameters.MinorTickmarkFill.Color) || !isTransparent(parameters.LabelForeground.Color);
+
+            minmax = getMinMaxControlValues(scope, parameters, bTagHasDynamicLimits, bTagHasEU);
+            meterOptions.rangeContainer.ranges = getRanges(minmax.min, minmax.max);
+
+            if (/*parameters.LevelVisible && */ parameters.MarkerVisible) {
+                meterOptions.subvalueIndicator.type = "triangleMarker";
+                meterOptions.subvalueIndicator.length = parameters.MarkerFactorHeight;
+                meterOptions.subvalueIndicator.width = parameters.MarkerFactorWidth;
+                if (isVertical)
+                    meterOptions.subvalueIndicator.horizontalOrientation = "right";
+                else
+                    meterOptions.subvalueIndicator.verticalOrientation = "bottom";
+                meterOptions.subvalueIndicator.offset = parameters.MarkerOffset + (isFastControl ? 5 : 0);
+            }
+
+            if (labelFormat)
+                meterOptions.scale.label.format = labelFormat;
+
+            var mutateFunc = function () {
+                linearmeter = container.dxLinearGauge(meterOptions).dxLinearGauge("instance");
+                loadBackgroundSvgStyle();
+
+                if (parameters.TagMinValue && parameters.TagMinValue.SVGReferenceId) {
+                    deregisterListenerMin = scope.$on(onDataChanged + parameters.screenId + parameters.TagMinValue.SVGReferenceId, function (e, value) {
+                        if (scope.dataValues[parameters.screenId][parameters.TagMinValue.SVGReferenceId].isGood) {
+                            bTagHasDynamicLimits = true;
+                            updateMeterScale();
+                        }
+                    });
+                }
+
+                if (parameters.TagMinValue) {
+                    if (parameters.screenId in scope.dataValues && parameters.TagMinValue.SVGReferenceId in scope.dataValues[parameters.screenId] &&
+                        scope.dataValues[parameters.screenId][parameters.TagMinValue.SVGReferenceId].isGood) {
+                        bTagHasDynamicLimits = true;
+                        updateMeterScale();
+                    }
+                }
+
+                if (parameters.TagMaxValue && parameters.TagMaxValue.SVGReferenceId) {
+                    deregisterListenerMax = scope.$on(onDataChanged + parameters.screenId + parameters.TagMaxValue.SVGReferenceId, function (e, value) {
+                        if (scope.dataValues[parameters.screenId][parameters.TagMaxValue.SVGReferenceId].isGood) {
+                            bTagHasDynamicLimits = true;
+                            updateMeterScale();
+                        }
+                    });
+                }
+
+                if (parameters.TagMaxValue) {
+                    if (parameters.screenId in scope.dataValues && parameters.TagMaxValue.SVGReferenceId in scope.dataValues[parameters.screenId] &&
+                        scope.dataValues[parameters.screenId][parameters.TagMaxValue.SVGReferenceId].isGood) {
+                        bTagHasDynamicLimits = true;
+                        updateMeterScale();
+                    }
+                }
+
+                if (bMeterInteractive) {
+                    container.on("mousedown touchstart", function (e) {
+                        if (writeTimeout) {
+                            clearTimeout(writeTimeout);
+                            writeTimeout = null;
+                        }
+                        if (nextWriteTimeout)
+                            clearTimeout(nextWriteTimeout);
+                        if (!bDragging) {
+                            container.on("touchmove mousemove", onDragging);
+                            bDragging = true;
+                        }
+                    }).on("mouseup touchend", function (e) {
+                        bDragging = false;
+                        container.off("touchmove mousemove", onDragging);
+                        if (writeTimeout) {
+                            clearTimeout(writeTimeout);
+                            writeTimeout = null;
+                        }
+                        if (nextWriteTimeout)
+                            clearTimeout(nextWriteTimeout);
+                        if (!rangeContainer)
+                            rangeContainer = thisPage.find(".dxg-range-container")[0];
+                        setLinearMeterValue(e, rangeContainer);
+                    });
+                }
+
+                metervaluelabel = thisPage.find("#metervaluelabel")[0];
+                dynamicFontElements.push($(metervaluelabel));
+                $(metervaluelabel).css({
+                    "display": parameters.ShowValue ? "block" : "none",
+                    "color": parameters.ValueForeground.Color,
+                    "font-size": valueFontSize,
+                    "font-family": parameters.ValueFontSettings.FontFamily,
+                    "font-weight": fontWeightConverter(parameters.ValueFontSettings.FontWeight),
+                    "top": parameters.ValueOffset.Top,
+                    "left": parameters.ValueOffset.Left
+                });
+
+                if (parameters.ShowEngeneeringUnit) {
+                    eunitLabel = thisPage.find("#eunitLabel")[0];
+                    dynamicFontElements.push($(eunitLabel));
+                    $(eunitLabel).css({
+                        "white-space": "nowrap",
+                        "display": "block",
+                        "color": parameters.EngeneeringUnitForeground.Color,
+                        "font-size": parameters.EngeneeringUnitFontSettings.FontSize,
+                        "font-family": parameters.EngeneeringUnitFontSettings.FontFamily,
+                        "font-weight": fontWeightConverter(parameters.EngeneeringUnitFontSettings.FontWeight),
+                        "top": parameters.EngeneeringOffset.Top,
+                        "left": parameters.EngeneeringOffset.Left
+                    });
+                    $(eunitLabel).text(i18next.t1(parameters.EngeneeringUnit));
+
+                    deregisterListenerActiveLanguage = scope.$on(onActiveLanguageChanged, function (e, value) {
+                        decimalSeparator = getDecimalSeparator(scope, value);
+                        fastdom.mutate(function () {
+                            $(eunitLabel).text(i18next.t1(parameters.EngeneeringUnit));
+                            if (parameters.FontSettingList && (value in parameters.FontSettingList) !== -1) {
+                                var fontOpts = applyFontSettingList(dynamicFontElements, parameters.FontSettingList[value]);
+                                if (linearmeter)
+                                    linearmeter.element().find(".dxg-scale-elements text").css(fontOpts);
+                            }
+                        });
+                    });
+                }
+
+                onMeterDataChanged();
+                
+                applyTagQualityStyle(webKitRenderCorrection ? thisPage : thisParent, scope, parameters.screenId, parameters.SVGReferenceId);
+                deregisterListener = scope.$on(onDataChanged + parameters.screenId + parameters.SVGReferenceId, function (e, value) {
+                    applyTagQualityStyle(webKitRenderCorrection ? thisPage : thisParent, scope, parameters.screenId, parameters.SVGReferenceId);            
+                    onMeterDataChanged();
+                });
+
+                checkEnableLinearMeter(scope, linearmeter, thisParent, parameters.SVGReferenceId, parameters.screenId);
+
+                $(thisParent).bind(disabledClassEvent, function () {
+                    checkEnableLinearMeter(scope, linearmeter, thisParent, parameters.SVGReferenceId, parameters.screenId);
+                });
+            };
+            mutateHandler.scheduleMutate(parameters.screenId, mutateFunc);
+
+            function loadBackgroundSvgStyle() {
+                if (!parameters.LinearBaseModel || !scope.Styles || !scope.Styles[parameters.screenId])
+                    return;
+                
+                var styleSvg = SVG(scope.Styles[parameters.screenId]);
+                var meterStyle = styleSvg.find('#' + parameters.LinearBaseModel);
+                if (meterStyle.length > 0)
+                    meterStyle = meterStyle[0]; //.clone();
+
+                if (parameters.Background) {
+                    var tagsBG = styleSvg.find("[tag='BG']");
+                    for (var i = 0; i < tagsBG.length; i++) {
+                        tagsBG[i].addClass(parameters.Background);
+                    }
+                }
+
+                $(meterStyle.node).appendTo(outerContainer).css({
+                    "position": "absolute",
+                    "top": 0,
+                    "left": 0,
+                    "z-index": 0
+                });
+            }
+
+            function getBarCssPosition(valueBarBBox, containerWidth, containerHeight) {
+                var barWidth;
+                var barHeight;
+                var bExtendedBarSize = bInvisibleBarBackground && bRemoveLabels;
+                if (bExtendedBarSize) {
+                    barWidth = isVertical ? valueBarBBox.width : meterOptions.size.width + barTopMargin * 2;
+                    barHeight = isVertical ? meterOptions.size.height : valueBarBBox.height + barLeftMargin * 2;
+                }
+                else {
+                    barWidth = isVertical ? valueBarBBox.width + barTopMargin * 2 : parseFloat(containerWidth) + barWidthMargin;
+                    barHeight = isVertical ? parseFloat(containerHeight) + barHeightMargin : valueBarBBox.height + barLeftMargin * 2;
+                    if (isFastControl) {
+                        if (isVertical)
+                            barHeight = valueBarBBox.height;
+                        else
+                            barWidth = valueBarBBox.width;
+                    }
+                }
+                var cssPos = {
+                    "position": "absolute",
+                    "width": barWidth,
+                    "height": barHeight,
+                };
+                if (!bUseTermometer) {
+                    cssPos["top"] = isVertical ? (bExtendedBarSize ? 0 : - barHeightMargin / 2 + (isFastControl ? valueBarBBox.y : 0)) + (parameters.MarkerVisible && (bRemoveLabels || !isFastControl) ? parameters.MarkerFactorWidth / 2 : 0) : valueBarBBox.y - barTopMargin;
+                    cssPos["left"] = isVertical ? valueBarBBox.x - barLeftMargin : (bExtendedBarSize ? 0 : - barWidthMargin / 2 + (isFastControl ? valueBarBBox.x : 0)) + (parameters.MarkerVisible && (bRemoveLabels || !isFastControl) ? parameters.MarkerFactorWidth / 2 : 0);
+                }
+                else {
+                    cssPos["top"] = isVertical ? - barHeightMargin / 2 + (isFastControl ? valueBarBBox.y : 0) : "calc(50% - " + barHeight / 2 + "px)";
+                    cssPos["left"] = isVertical ? "calc(50% - " + barWidth / 2 + "px)" : - barWidthMargin / 2 + (isFastControl ? valueBarBBox.x : 0);
+                }
+                return cssPos;
+            }
+
+            function loadBarSvgStyle(component, valueBarBBox, containerWidth, containerHeight, subvalueIndicator) {
+                if (!parameters.LevelBackgroundTemplate || !scope.Styles || !scope.Styles[parameters.screenId])
+                    return;
+
+                if (!isFastControl && bInvisibleBarBackground) {
+                    setTimeout(function () {
+                        thisPage.find(".dxg-back-bar").addClass(parameters.LevelBackgroundFill);
+                        thisPage.find(".dxg-line").addClass(isVertical ? "dxgVerticalTicksline" : "dxgHorizontalTicksline");
+                    }, 0);
+                    var prevOffset = parseFloat(component.option("subvalueIndicator.offset"));
+                    if (isNaN(prevOffset))
+                        prevOffset = 0;
+                    if (subvalueIndicator[1])
+                        component.option("subvalueIndicator.offset", prevOffset + (isVertical ? valueBarBBox.width + rangeBarCorrection : valueBarBBox.height + rangeBarCorrection));
+                    return;
+                }
+
+                var styleSvg = SVG(scope.Styles[parameters.screenId]);
+                var meterStyle = styleSvg.find('#' + parameters.LevelBackgroundTemplate);
+                if (meterStyle.length > 0)
+                    meterStyle = meterStyle[0]; //.clone();
+
+                if (parameters.Background) {
+                    var tagsBG = styleSvg.find("[tag='BG']");
+                    for (var i = 0; i < tagsBG.length; i++) {
+                        tagsBG[i].addClass(parameters.LevelFill);
+                    }
+                    var tagsFG = styleSvg.find("[tag='FG']");
+                    for (var i = 0; i < tagsFG.length; i++) {
+                        tagsFG[i].addClass(parameters.LevelBackgroundFill);
+                    }
+                }
+
+                if (isFastControl) {
+                    if (isVertical)
+                        barHeight = valueBarBBox.height;
+                    else
+                        barWidth = valueBarBBox.width;
+                }
+                var barCss = getBarCssPosition(valueBarBBox, containerWidth, containerHeight);
+                if (!bUseTermometer)
+                    barCss["transform"] = isVertical ? "translateX(-5.4px)" : "translateY(-5.4px)";
+                levelBackgroundTemplate = $(meterStyle.node);
+                levelBackgroundTemplate.appendTo(container).css(barCss);
+
+                if (subvalueIndicator[1])
+                    component.option("subvalueIndicator.offset", component.option("subvalueIndicator.offset") + (isVertical ? barCss.width : barCss.height));
+
+                if (bUseTermometer) {
+                    var rx = isVertical ? 7 : 28.25;
+                    var ry = isVertical ? 28.25 : 7;
+                    var cx = isVertical ? '50%' : 0;
+                    var cy = isVertical ? -ry / 2 : 0;
+                    var svgEllipse = document.createElementNS('http://www.w3.org/2000/svg', 'ellipse');
+                    $(svgEllipse).attr({
+                        cx: cx,
+                        cy: cy,
+                        rx: rx,
+                        ry: ry
+                    }).css({
+                        fill: urlReferenceReplace(parameters.LevelFill.Color, parameters.screenId),
+                        transform: "translateY(" + (isVertical ? "100%" : "50%") + ")"
+                    });
+                    $(levelBackgroundTemplate).add(thisParent).css("overflow", "visible");
+                    $(svgEllipse).appendTo(levelBackgroundTemplate);
+                }
+            }
+
+            function onDragging(e) {
+                e.preventDefault();
+
+                if (!rangeContainer)
+                    rangeContainer = thisPage.find(".dxg-range-container")[0];
+                latestDraggedValue = getNewMeterValue(e, rangeContainer);
+
+                var bReapplyTickbarLayout;
+                if (scope.biOS && linearmeter.option("animation.enabled"))
+                    bReapplyTickbarLayout = true;
+
+                linearmeter.option({
+                    "animation.enabled": false,
+                    "value": latestDraggedValue,
+                    "subvalues": [latestDraggedValue]
+                });
+                updateValueLabel(latestDraggedValue);
+
+                if (bReapplyTickbarLayout)
+                    reapplyTickbarLayout(true);
+
+                bDragNotifyingServer = true;
+                if (dragDetectTimeout)
+                    clearTimeout(dragDetectTimeout);
+                dragDetectTimeout = setTimeout(function () {
+                    if (writeTimeout) {
+                        clearTimeout(writeTimeout);
+                        writeTimeout = null;
+                    }
+                    bDragNotifyingServer = false;
+                }, serverWriteTimeoutDefaultMS * 2);
+
+                if (!writeTimeout)
+                    writeTimeout = setTimeout(notifyServerOnDragging, serverWriteTimeoutDefaultMS);
+            }
+
+            function notifyServerOnDragging() {
+                latestServerInvokeTime = Date.now();
+                scope.corehubconnection.invoke("SetValue", parameters.SVGReferenceId, String(latestDraggedValue), parameters.screenId).finally(() => {
+                    if (!bDragging || !bDragNotifyingServer)
+                        return;
+
+                    var nextInvokeTimeout = serverWriteTimeoutDefaultMS - (Date.now() - latestServerInvokeTime);
+                    if (nextInvokeTimeout <= 0)
+                        notifyServerOnDragging();
+                    else {
+                        if (nextWriteTimeout)
+                            clearTimeout(nextWriteTimeout);
+                        nextWriteTimeout = setTimeout(notifyServerOnDragging, nextInvokeTimeout);
+                    }
+                });
+            }
+
+            function getNewMeterValue(e, renderedMeterRangebar) {
+                var boundingRect;
+                if (!parentScreen.hasClass("rotated")) {
+                    if (!meterRect)
+                        meterRect = renderedMeterRangebar.getBoundingClientRect();
+                    boundingRect = meterRect;
+                }
+                else {
+                    if (!rotatedMeterRect)
+                        rotatedMeterRect = renderedMeterRangebar.getBoundingClientRect();
+                    boundingRect = rotatedMeterRect;
+                }
+                var posX;
+                var posY;
+                var renderedRange;
+                if (!scope.biOS) {
+                    renderedRange = isVertical ? boundingRect.height : boundingRect.width;
+                    posX = e.clientX - $(renderedMeterRangebar).offset().left;
+                    posY = e.clientY - $(renderedMeterRangebar).offset().top;
+                }
+                else {
+                    if (typeof (offsetX) == "undefined" || typeof (offsetY) == "undefined") { //touchmove
+                        renderedRange = isVertical ? boundingRect.height : boundingRect.width;
+
+                        if (webKitRenderCorrection) {
+                            var transformMatrix = new WebKitCSSMatrix(window.getComputedStyle(thisPage[0]).webkitTransform);
+                            var scaleY = transformMatrix.d;
+                            var scaleX = transformMatrix.a;
+                            posX = e.pageX * scaleX - boundingRect.left;
+                            posY = e.pageY * scaleY - boundingRect.top;
+                            if (parameters.bKeepAspectRatio) {
+                                var karOffset = getKeepAspectRatioOffset(viewboxRatio);
+                                posY += karOffset.y;
+                                posX += karOffset.x;
+                            }
+                        }
+                        else {
+                            posX = e.clientX - boundingRect.left;
+                            posY = e.clientY - boundingRect.top;
+                        }
+                    }
+                    else {
+                        var barBox = renderedMeterRangebar.getBBox();
+                        var renderedRange = isVertical ? barBox.height : barBox.width;
+                        posX = e.offsetX - barBox.x;
+                        posY = e.offsetY - barBox.y;
+                    }
+                }
+                var finalPos = renderedRange - (isVertical ? posY : renderedRange - posX);
+                
+                var realRange = minmax.max - minmax.min;
+                var renderedRange_clickedPercentage = 100 * finalPos / renderedRange;
+                return Math.max(minmax.min, Math.min(minmax.max, parseFloat(minmax.min + (realRange * renderedRange_clickedPercentage / 100), 10)));
+            }
+
+            function setLinearMeterValue(e, renderedMeterRangebar) {
+                if (onSettingValue)
+                    return;
+                if (!(parameters.screenId in scope.dataValues) || !(parameters.SVGReferenceId in scope.dataValues[parameters.screenId]))
+                    return;
+                if (!scope.dataValues[parameters.screenId][parameters.SVGReferenceId].isGood)
+                    return;
+
+                linearmeter.option("disabled", true);
+
+                var realRange_finalValue = getNewMeterValue(e, renderedMeterRangebar);
+                
+                scope.corehubconnection.invoke("SetValue", parameters.SVGReferenceId, String(realRange_finalValue), parameters.screenId)
+                    .then((ret) => {
+                        linearmeter.option("disabled", false);
+                    })
+                    .catch(err => {
+                        console.error(err.toString());
+
+                        linearmeter.option("disabled", false);
+                        linearmeter.option({
+                            "value": e.previousValue,
+                            "subvalues": [e.previousValue]
+                        });
+                        if (decimalSeparator != invariantNumberDecimalSeparator)
+                            newValFormatted = parseFloat(e.previousValue.replace(decimalSeparator, invariantNumberDecimalSeparator)).toFixed(decimals).replace(invariantNumberDecimalSeparator, decimalSeparator);
+                        else
+                            newValFormatted = parseFloat(e.previousValue).toFixed(decimals);
+                        $(metervaluelabel).text(e.previousValue);
+                        scope.$broadcast(onError, { ex: err, value: "Error setting value : " + err.toString() + " for item : " + parameters.SVGItemId });
+                    })
+                    .finally(() => {
+                        linearmeter.option("animation.enabled", true);
+                        if (scope.biOS)
+                            reapplyTickbarLayout();
+                    });
+            }
+
+            function reapplyTickbarLayout() {
+                if (tickReq == null) {
+                    tickReq = window.requestAnimationFrame(() => {
+                        var dxgLine = thisPage.find(".dxg-line");
+                        dxgLine.css("opacity", "0").removeClass(isVertical ? "dxgVerticalTicksline" : "dxgHorizontalTicksline");
+                        setTimeout(function () {
+                            dxgLine.addClass(isVertical ? "dxgVerticalTicksline" : "dxgHorizontalTicksline").css("opacity", "1");
+                            tickReq = null;
+                        }, 0);
+                    });
+                }
+            }
+            
+            function onMeterDataChanged() {
+                if (bDragging)
+                    return;
+
+                onSettingValue = true;
+                try {
+                    var newValue = Number.NaN;
+                    if (parameters.screenId in scope.dataValues && parameters.SVGReferenceId in scope.dataValues[parameters.screenId] &&
+                        scope.dataValues[parameters.screenId][parameters.SVGReferenceId].isGood) {
+                        var referenceObject = scope.dataValues[parameters.screenId][parameters.SVGReferenceId];
+                        newValue = normalizeDataValue(referenceObject).dataValue;
+
+                        linearmeter.option({
+                            "value": newValue,
+                            "subvalues": [newValue]
+                        });
+                        
+                        if (!notNumeric(scope.dataValues[parameters.screenId][parameters.SVGReferenceId].rangeLow)) {
+                            bTagHasEU = true;
+                            updateMeterScale();
+                        }
+                        if (!notNumeric(scope.dataValues[parameters.screenId][parameters.SVGReferenceId].rangeHigh)) {
+                            bTagHasEU = true;
+                            updateMeterScale();
+                        }
+                        
+                        if (eunitLabel && parameters.UseEUnit && !parameters.EngeneeringUnit && scope.dataValues[parameters.screenId][parameters.SVGReferenceId].displayName) {
+                            $(eunitLabel).text(scope.dataValues[parameters.screenId][parameters.SVGReferenceId].displayName);
+                        }
+
+                        updateValueLabel(newValue);
+
+                        //if (parameters.LevelVisible) {
+                        //    setTimeout(function () {
+                        //        var valueBarRect = thisPage.find(".dxg-tracker")[0].getBoundingClientRect();
+                        //        $(indicator).css({
+                        //            "top": (valueBarRect.top - foreignObjectTop) + "px",
+                        //            "left": (valueBarRect.left - foreignObjectLeft) + "px"
+                        //        });
+                        //    }, 2000);
+                        //}
+
+                        //if (parameters.UseEUnit) {
+                        //    if (!isNaN(scope.dataValues[parameters.screenId][parameters.SVGReferenceId].rangeLow))
+                        //        customslider.noUiSlider.updateOptions({ range: { 'min': scope.dataValues[parameters.screenId][parameters.SVGReferenceId].rangeLow } });
+                        //    if (!isNaN(scope.dataValues[parameters.screenId][parameters.SVGReferenceId].rangeHigh))
+                        //        customslider.noUiSlider.updateOptions({ range: { 'max': scope.dataValues[parameters.screenId][parameters.SVGReferenceId].rangeHigh } });
+                        //}
+                    }
+                    checkEnableLinearMeter(scope, linearmeter, thisParent, parameters.SVGReferenceId, parameters.screenId);
+                }
+                finally {
+                    onSettingValue = false;
+                }
+            }
+
+            function updateValueLabel(newValue) {
+                var newValueString = newValue.toString();
+                if (decimalSeparator != invariantNumberDecimalSeparator)
+                    newValFormatted = parseFloat(newValueString.replace(decimalSeparator, invariantNumberDecimalSeparator)).toFixed(decimals).replace(invariantNumberDecimalSeparator, decimalSeparator);
+                else
+                    newValFormatted = parseFloat(newValueString).toFixed(decimals);
+                $(metervaluelabel).text(newValFormatted);
+            }
+
+            function checkEnableLinearMeter(scope, linearmeter, thisParent, SVGReferenceId, screenId) {
+                var enabled = false;
+                if (screenId in scope.dataValues && SVGReferenceId in scope.dataValues[screenId]) {
+                    enabled = !thisParent.hasClass(disabledClass) && scope.dataValues[screenId][SVGReferenceId].isGood && (!bMeterInteractive || (scope.dataValues[screenId][SVGReferenceId].isWritable && scope.dataValues[screenId][SVGReferenceId].isUserWritable));
+                }
+                var wasDisabled = linearmeter.option("disabled");
+                linearmeter.option("disabled", !enabled);
+            }
+
+            function getRanges(minValue, maxValue) {
+                var ranges = [];
+                if (parameters.Range1Visible && parameters.Range1Fill)
+                    ranges.push({
+                        "startValue": (maxValue - minValue) * parameters.Range1StartValue * 0.01 + parseFloat(minValue),
+                        "endValue": (maxValue - minValue) * parameters.Range1EndValue * 0.01 + parseFloat(minValue),
+                        "color": parameters.Range1Fill.Color
+                    });
+                if (parameters.Range2Visible && parameters.Range2Fill)
+                    ranges.push({
+                        "startValue": (maxValue - minValue) * parameters.Range2StartValue * 0.01 + parseFloat(minValue),
+                        "endValue": (maxValue - minValue) * parameters.Range2EndValue * 0.01 + parseFloat(minValue),
+                        "color": parameters.Range2Fill.Color
+                    });
+                if (parameters.Range3Visible && parameters.Range3Fill)
+                    ranges.push({
+                        "startValue": (maxValue - minValue) * parameters.Range3StartValue * 0.01 + parseFloat(minValue),
+                        "endValue": (maxValue - minValue) * parameters.Range3EndValue * 0.01 + parseFloat(minValue),
+                        "color": parameters.Range3Fill.Color
+                    });
+                return ranges;
+            }
+
+            function updateMeterScale() {
+                var mm = getMinMaxControlValues(scope, parameters, bTagHasDynamicLimits, bTagHasEU);
+                if (minmax)
+                    if ((mm.min == minmax.min && mm.max == minmax.max) || isNaN(mm.min) || isNaN(mm.max))
+                        return;
+
+                minmax = mm;
+
+                majorCustomTicks = devExtremeHelpers.getCustomTicks(parameters, minmax.min, minmax.max, isFastControl ? parameters.MeterScaleMinorInterval : parameters.MinorIntervalCount, isFastControl ? parameters.MeterScaleMajorInterval : parameters.MajorIntervalCount);
+
+                fastdom.mutate(function () {
+                    linearmeter.option("animation.enabled", false);
+
+                    linearmeter.option({
+                        "min": minmax.min,
+                        "max": minmax.max,
+                        "scale.startValue": minmax.min,
+                        "scale.endValue": minmax.max,
+                        "scale.customTicks": majorCustomTicks,
+                        "scale.customMinorTicks": devExtremeHelpers.getCustomTicks(parameters, minmax.min, minmax.max, isFastControl ? parameters.MeterScaleMinorInterval : parameters.MinorIntervalCount, isFastControl ? parameters.MeterScaleMajorInterval : parameters.MajorIntervalCount, true, majorCustomTicks),
+                        "rangeContainer.ranges": getRanges(minmax.min, minmax.max)
+                    });
+                    if (labelsContainer && meterScale) {
+                        var newScale = labelsContainer.clone();
+                        meterScale.replaceWith(newScale);
+                        newScale.show();
+                    }
+                    linearmeter.option("animation.enabled", true);
+                });
+            }
+        }
+    </script>
+</div>

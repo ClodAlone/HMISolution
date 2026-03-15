@@ -1,0 +1,129 @@
+﻿<UserControl x:Class="ReportParameters.UserControls.EditReportCallParameters"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:system="clr-namespace:System;assembly=mscorlib"
+             xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors" 
+             xmlns:dxg="http://schemas.devexpress.com/winfx/2008/xaml/grid"
+             xmlns:properties="clr-namespace:ReportParameters.Properties" 
+             xmlns:local="clr-namespace:ReportParameters.UserControls"
+             xmlns:converters="clr-namespace:ReportParameters.Converters"
+             xmlns:cconverters="clr-namespace:Converters;assembly=Converters"
+             xmlns:ReportParameters="clr-namespace:ReportParameters"
+             mc:Ignorable="d" Width="400" Height="300"
+             d:DesignHeight="300" d:DesignWidth="412">
+    
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+              <ResourceDictionary Source="/SharedResources;component/Resources/SharedImages.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+            <local:CellTemplateSelector x:Key="cellTemplateSelector">
+                <local:CellTemplateSelector.TemplateBoolean>
+                    <DataTemplate>
+                        <dxe:CheckEdit x:Name="PART_Editor" IsThreeState="False" />
+                    </DataTemplate>
+                </local:CellTemplateSelector.TemplateBoolean>
+                <local:CellTemplateSelector.TemplateInteger>
+                    <DataTemplate>
+                        <dxe:SpinEdit x:Name="PART_Editor" IsFloatValue="False" />
+                    </DataTemplate>
+                </local:CellTemplateSelector.TemplateInteger>
+                <local:CellTemplateSelector.TemplateDecimal>
+                    <DataTemplate>
+                        <dxe:SpinEdit x:Name="PART_Editor" IsFloatValue="True" />
+                    </DataTemplate>
+                </local:CellTemplateSelector.TemplateDecimal>
+                <local:CellTemplateSelector.TemplateString>
+                    <DataTemplate>
+                        <dxe:TextEdit x:Name="PART_Editor" />
+                    </DataTemplate>
+                </local:CellTemplateSelector.TemplateString>
+                <local:CellTemplateSelector.TemplateDateTime>
+                    <DataTemplate>
+                        <dxe:DateEdit x:Name="PART_Editor" />
+                    </DataTemplate>
+                </local:CellTemplateSelector.TemplateDateTime>
+            </local:CellTemplateSelector>
+            <ObjectDataProvider x:Key="typeParameters"
+                                MethodName="GetValues"
+                                ObjectType="{x:Type system:Enum}" >
+                <ObjectDataProvider.MethodParameters>
+                    <x:Type TypeName="ReportParameters:ParameterType" />
+                </ObjectDataProvider.MethodParameters>
+            </ObjectDataProvider>
+            <converters:OPCUAEntityReferenceDisplayNameConverter x:Key="opcuaEntityReferenceDisplayNameConverter" />
+            <cconverters:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="90*" />
+            <RowDefinition Height="10*" />
+        </Grid.RowDefinitions>
+        <dxg:GridControl x:Name="gridControl" >
+            <dxg:GridControl.Columns>
+                <dxg:GridColumn FieldName="Name" Header="{x:Static properties:Resources.NameColumnHeader}" />
+                <dxg:GridColumn FieldName="Type" Header="{x:Static properties:Resources.TypeColumnHeader}" >
+                    <dxg:GridColumn.EditSettings>
+                        <dxe:ComboBoxEditSettings ItemsSource="{Binding Source={StaticResource typeParameters}}" IsTextEditable="False" />
+                    </dxg:GridColumn.EditSettings>
+                </dxg:GridColumn>
+                <dxg:GridColumn FieldName="Value" Header="{x:Static properties:Resources.ValueColumnHeader}" 
+                                CellTemplateSelector="{StaticResource cellTemplateSelector}" />
+                <dxg:GridColumn FieldName="TagRef" Header="{x:Static properties:Resources.TagColumnHeader}" >
+                    <!--<dxg:GridColumn.EditSettings>
+                        <dxe:ButtonEditSettings DefaultButtonClick="ButtonEditSettings_DefaultButtonClick" 
+                                                NullValueButtonPlacement="EditBox"
+                                                DisplayTextConverter="{StaticResource opcuaEntityReferenceDisplayNameConverter}" 
+                                                IsTextEditable="False" />
+                    </dxg:GridColumn.EditSettings>-->
+                    <dxg:GridColumn.CellTemplate>
+                        <DataTemplate>
+                            <DockPanel LastChildFill="True">
+                                <ProgressBar DockPanel.Dock="Left" IsIndeterminate="True" Width="20" Height="20" Visibility="{Binding Path=RowData.Row.Loading, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" x:Name="progressBar" VerticalAlignment="Top"/>
+                                <Button Tag="{Binding Path=RowData.Row, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" DockPanel.Dock="Right" Click="DlgButton_Click_Clear" >
+                                    <Button.Content>
+                                        <Image Source="{StaticResource CancelSmall}" Height="16" Width="16" />
+                                    </Button.Content>
+                                </Button>
+                                <Button Tag="{Binding Path=RowData.Row.TagRef, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" DockPanel.Dock="Right" Click="ButtonEditSettings_DefaultButtonClick" HorizontalAlignment="Stretch" VerticalAlignment="Center">
+                                    <Button.Content>
+                                        <Image Source="{StaticResource EditGeneralSmall}" Height="16" Width="16" />
+                                    </Button.Content>
+                                </Button>
+                                <dxe:ComboBoxEdit
+                                    x:Name="uriLabel" 
+                                    Tag="{Binding Path=RowData.Row.TagRef, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                    Text="{Binding Path=RowData.Row.StringRef, Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}" 
+                                    PopupOpening="uriLabel_PopupOpening"
+                                    LostFocus="uriLabel_LostFocus" PreviewKeyDown="uriLabel_KeyDown" GotFocus="uriLabel_GotFocus"
+                                    SelectedIndexChanged="uriLabel_SelectedIndexChanged"
+                                    ShowSizeGrip="False" AutoComplete="True" ImmediatePopup="True" FindButtonPlacement="Popup"/>
+                            </DockPanel>
+                        </DataTemplate>
+                    </dxg:GridColumn.CellTemplate>
+                </dxg:GridColumn>
+            </dxg:GridControl.Columns>
+            <dxg:GridControl.View>
+                <dxg:TableView AutoWidth="True" NavigationStyle="Cell" EditorButtonShowMode="ShowAlways"
+                               ShowGroupPanel="False" ShowColumnHeaders="True" 
+                               ShowHorizontalLines="True" AllowEditing="True" />
+            </dxg:GridControl.View>
+        </dxg:GridControl>
+
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition />
+                <ColumnDefinition />
+                <ColumnDefinition />
+            </Grid.ColumnDefinitions>
+
+            <Button Content="{x:Static properties:Resources.ReportAddNewParameter}" Command="{Binding Path=AddNew, RelativeSource={RelativeSource AncestorType=UserControl, Mode=FindAncestor}}" />
+            <Button Content="{x:Static properties:Resources.ReportRemoveSelectedParameter}" Grid.Column="1" Command="{Binding Path=RemoveSelected, RelativeSource={RelativeSource AncestorType=UserControl, Mode=FindAncestor}}" />
+            <Button Content="{x:Static properties:Resources.ReportRemoveAllParameters}" Grid.Column="2" Command="{Binding Path=RemoveAll, RelativeSource={RelativeSource AncestorType=UserControl, Mode=FindAncestor}}" />
+        </Grid>
+    </Grid>
+</UserControl>

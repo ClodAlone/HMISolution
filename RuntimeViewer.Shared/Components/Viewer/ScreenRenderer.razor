@@ -1,0 +1,726 @@
+@using SharedModels
+@using RuntimeViewer.Shared.Services
+@implements IDisposable
+
+@if (Screen == null)
+{
+    <div class="rv-empty">No screen to display.</div>
+}
+else if (Screen.LayoutMode == "responsive")
+{
+    @* ─── Responsive HTML Grid Layout ─────────────────────── *@
+    <div class="rv-responsive-grid @(IsKiosk ? "rv-responsive-kiosk" : "")"
+         style="background: @Screen.Background; gap: @(Screen.GridGap)px; grid-template-columns: repeat(@Screen.GridColumns, 1fr);">
+        @foreach (var sym in Screen.Symbols.OrderBy(s => s.Order))
+        {
+            var liveValue = Opc.GetValue(sym.VariablePath ?? "");
+            var fillColor = EvalFillBinding(sym, liveValue);
+            var visible = EvalVisibilityBinding(sym, liveValue);
+            var labelText = EvalLabelBinding(sym, liveValue);
+            var resolvedLabel = Localization.Resolve(labelText ?? sym.Label);
+
+            if (!visible) continue;
+            if (!string.IsNullOrEmpty(sym.RequiredAccess) && !Auth.HasReadAccess(sym.RequiredAccess))
+                continue;
+
+            var hasCmd = sym.Commands.Count > 0;
+            var canExecute = hasCmd && Auth.HasWriteAccess(sym.RequiredAccess);
+            var isLocked = hasCmd && !canExecute && !string.IsNullOrEmpty(sym.RequiredAccess);
+
+            <div class="rv-responsive-widget @(hasCmd ? "rv-responsive-interactive" : "") @(isLocked ? "rv-responsive-locked" : "")"
+                 style="grid-column: span @Math.Clamp(sym.ColSpan, 1, Screen.GridColumns); grid-row: span @Math.Max(1, sym.RowSpan); min-height: @(sym.RowHeight)px; order: @sym.Order;"
+                 @onclick="() => OnSymbolClick(sym)"
+                 @onmousedown="(e) => OnSymbolMouseDown(e, sym)"
+                 @onmouseup="(e) => OnSymbolMouseUp(e, sym)">
+
+                @switch (sym.Type)
+                {
+                    case "rect":
+                        <svg viewBox="0 0 @sym.Width @sym.Height" class="rv-responsive-svg" preserveAspectRatio="xMidYMid meet">
+                            <rect width="@sym.Width" height="@sym.Height" fill="@fillColor" stroke="@sym.Stroke" stroke-width="@sym.StrokeWidth" rx="3" />
+                        </svg>
+                        break;
+                    case "circle":
+                        var cr = Math.Min(sym.Width, sym.Height) / 2;
+                        <svg viewBox="0 0 @sym.Width @sym.Height" class="rv-responsive-svg" preserveAspectRatio="xMidYMid meet">
+                            <circle cx="@F(sym.Width / 2)" cy="@F(sym.Height / 2)" r="@F(cr)" fill="@fillColor" stroke="@sym.Stroke" stroke-width="@sym.StrokeWidth" />
+                        </svg>
+                        break;
+                    case "ellipse":
+                        <svg viewBox="0 0 @sym.Width @sym.Height" class="rv-responsive-svg" preserveAspectRatio="xMidYMid meet">
+                            <ellipse cx="@F(sym.Width / 2)" cy="@F(sym.Height / 2)" rx="@F(sym.Width / 2)" ry="@F(sym.Height / 2)"
+                                     fill="@fillColor" stroke="@sym.Stroke" stroke-width="@sym.StrokeWidth" />
+                        </svg>
+                        break;
+                    case "text":
+                        <div class="rv-responsive-text" style="color: @fillColor;">@resolvedLabel</div>
+                        break;
+                    case "gauge":
+                        var gaugeValStr = liveValue;
+                        var gaugeNum = ParseDouble(gaugeValStr);
+                        var gMin = sym.MinValue ?? 0;
+                        var gMax = sym.MaxValue ?? 100;
+                        var gPct = gMax > gMin ? (gaugeNum - gMin) / (gMax - gMin) * 100 : 0;
+                        <div class="rv-responsive-gauge">
+                            <div class="rv-responsive-gauge-bar" style="width: @F(gPct)%; background: @fillColor;"></div>
+                            <span class="rv-responsive-gauge-label">@F(gaugeNum) / @gMax</span>
+                        </div>
+                        break;
+                    case "indicator":
+                        <div class="rv-responsive-indicator" style="background: @fillColor;">@resolvedLabel</div>
+                        break;
+                    case "svg":
+                        @if (!string.IsNullOrEmpty(sym.SvgContent))
+                        {
+                            <div class="rv-responsive-svg-wrap">@((MarkupString)StripSvgWrapper(sym.SvgContent))</div>
+                        }
+                        break;
+                    case "alarmlist":
+                        <AlarmListWidget />
+                        break;
+                    case "hdachart":
+                        <HdaChartWidget VariablePaths="@sym.HdaVariablePaths"
+                                        TimeRangeMinutes="@sym.HdaTimeRangeMinutes"
+                                        MaxPoints="@sym.HdaMaxPoints" />
+                        break;
+                    case "hdagrid":
+                        <HdaGridWidget VariablePaths="@sym.HdaVariablePaths"
+                                       TimeRangeMinutes="@sym.HdaTimeRangeMinutes"
+                                       MaxPoints="@sym.HdaMaxPoints" />
+                        break;
+                    case "eventlog":
+                        <EventLogWidget MaxRows="@sym.EventLogMaxRows"
+                                        TimeRangeMinutes="@sym.EventLogTimeRangeMinutes"
+                                        Categories="@sym.EventLogCategories" />
+                        break;
+                    case "editbox":
+                        <EditBoxWidget VariablePath="@sym.VariablePath"
+                                       Step="@sym.EditBoxStep"
+                                       Format="@sym.EditBoxFormat"
+                                       Min="@sym.MinValue"
+                                       Max="@sym.MaxValue" />
+                        break;
+                    case "ipcamera":
+                        <IpCameraWidget CameraId="@(sym.Camera?.CameraId ?? "")"
+                                        ServerBaseUrl=""
+                                        ShowOverlay="@(sym.Camera?.EnableYolo == true)"
+                                        DetectionVariablePrefix="@(sym.Camera?.DetectionVariablePrefix ?? "")" />
+                        break;
+                    case "recipe":
+                        var recipeVarsR = GetRecipeVariables(sym.RecipeName);
+                        <RecipeWidget RecipeName="@sym.RecipeName" Variables="@recipeVarsR" />
+                        break;
+                    case "screenembed":
+                        <ScreenEmbedWidget ScreenNames="@sym.EmbeddedScreens" />
+                        break;
+                }
+
+                @if (isLocked)
+                {
+                    <span class="rv-responsive-lock">🔒</span>
+                }
+            </div>
+        }
+    </div>
+}
+else
+{
+    <svg xmlns="http://www.w3.org/2000/svg"
+         viewBox="0 0 @Screen.Width @Screen.Height"
+         width="@(IsKiosk ? null : Screen.Width)"
+         height="@(IsKiosk ? null : Screen.Height)"
+         preserveAspectRatio="xMidYMid meet"
+         class="rv-canvas @(IsKiosk ? "rv-canvas-kiosk" : "")"
+         style="background: @Screen.Background;"
+         @onmouseup="OnGlobalMouseUp">
+
+        @foreach (var sym in Screen.Symbols)
+        {
+            var liveValue = Opc.GetValue(sym.VariablePath ?? "");
+            var fillColor = EvalFillBinding(sym, liveValue);
+            var visible = EvalVisibilityBinding(sym, liveValue);
+            var rotation = EvalRotationBinding(sym, liveValue);
+            var labelText = EvalLabelBinding(sym, liveValue);
+
+            // Resolve localized strings: labels starting with @ are string IDs
+            var resolvedLabel = Localization.Resolve(labelText ?? sym.Label);
+
+            if (!visible) continue;
+
+            // Access-level visibility: if symbol requires access and user lacks read → hide
+            if (!string.IsNullOrEmpty(sym.RequiredAccess) && !Auth.HasReadAccess(sym.RequiredAccess))
+                continue;
+
+            var hasCmd = sym.Commands.Count > 0;
+            var canExecute = hasCmd && Auth.HasWriteAccess(sym.RequiredAccess);
+            var isHovered = _hoveredSymbolId == sym.Id;
+            var isPressed = _pressedSymbolId == sym.Id;
+            var isLocked = hasCmd && !canExecute && !string.IsNullOrEmpty(sym.RequiredAccess);
+
+            <g transform="translate(@sym.X, @sym.Y) rotate(@F(rotation), @F(sym.Width / 2), @F(sym.Height / 2))"
+               class="@(hasCmd ? "rv-interactive" : "") @(isHovered && hasCmd ? "rv-hovered" : "") @(isPressed ? "rv-pressed" : "") @(isLocked ? "rv-locked" : "")"
+               style="@(hasCmd ? "cursor: pointer;" : "")"
+               @onmouseenter="() => OnSymbolEnter(sym)"
+               @onmouseleave="() => OnSymbolLeave(sym)"
+               @onmousedown="(e) => OnSymbolMouseDown(e, sym)" @onmousedown:stopPropagation
+               @onmouseup="(e) => OnSymbolMouseUp(e, sym)" @onmouseup:stopPropagation
+               @onclick="() => OnSymbolClick(sym)" @onclick:stopPropagation>
+
+                @* Invisible hit area *@
+                <rect width="@sym.Width" height="@sym.Height" fill="transparent" stroke="none" />
+
+                @switch (sym.Type)
+                {
+                    case "rect":
+                        <rect width="@sym.Width" height="@sym.Height"
+                              fill="@fillColor" stroke="@sym.Stroke" stroke-width="@sym.StrokeWidth" rx="3" />
+                        break;
+                    case "circle":
+                        var r = Math.Min(sym.Width, sym.Height) / 2;
+                        <circle cx="@F(sym.Width / 2)" cy="@F(sym.Height / 2)" r="@F(r)"
+                                fill="@fillColor" stroke="@sym.Stroke" stroke-width="@sym.StrokeWidth" />
+                        break;
+                    case "ellipse":
+                        <ellipse cx="@F(sym.Width / 2)" cy="@F(sym.Height / 2)"
+                                 rx="@F(sym.Width / 2)" ry="@F(sym.Height / 2)"
+                                 fill="@fillColor" stroke="@sym.Stroke" stroke-width="@sym.StrokeWidth" />
+                        break;
+                    case "text":
+                        @RenderSvgText(sym.Width / 2, sym.Height / 2 + 5, "middle", "middle", fillColor, 14, resolvedLabel)
+                        break;
+                    case "line":
+                        <line x1="0" y1="@sym.Height" x2="@sym.Width" y2="0"
+                              stroke="@sym.Stroke" stroke-width="@sym.StrokeWidth" />
+                        break;
+                    case "gauge":
+                        @RenderGauge(sym, fillColor, liveValue)
+                        break;
+                    case "indicator":
+                        <circle cx="@F(sym.Width / 2)" cy="@F(sym.Height / 2)"
+                                r="@F(Math.Min(sym.Width, sym.Height) / 2 - 2)"
+                                fill="@fillColor" stroke="@sym.Stroke" stroke-width="@sym.StrokeWidth" />
+                        @RenderSvgText(sym.Width / 2, sym.Height / 2 + 4, "middle", "middle", "white", 10, resolvedLabel)
+                        break;
+                    case "svg":
+                        @if (!string.IsNullOrEmpty(sym.SvgContent))
+                        {
+                            @RenderLibrarySvg(sym)
+                        }
+                        break;
+                    case "alarmlist":
+                        <foreignObject width="@sym.Width" height="@sym.Height">
+                            <div xmlns="http://www.w3.org/1999/xhtml" style="width: @(sym.Width)px; height: @(sym.Height)px;">
+                                <AlarmListWidget />
+                            </div>
+                        </foreignObject>
+                        break;
+                    case "hdachart":
+                        <foreignObject width="@sym.Width" height="@sym.Height">
+                            <div xmlns="http://www.w3.org/1999/xhtml" style="width: @(sym.Width)px; height: @(sym.Height)px;">
+                                <HdaChartWidget VariablePaths="@sym.HdaVariablePaths"
+                                                TimeRangeMinutes="@sym.HdaTimeRangeMinutes"
+                                                MaxPoints="@sym.HdaMaxPoints" />
+                            </div>
+                        </foreignObject>
+                        break;
+                    case "hdagrid":
+                        <foreignObject width="@sym.Width" height="@sym.Height">
+                            <div xmlns="http://www.w3.org/1999/xhtml" style="width: @(sym.Width)px; height: @(sym.Height)px;">
+                                <HdaGridWidget VariablePaths="@sym.HdaVariablePaths"
+                                               TimeRangeMinutes="@sym.HdaTimeRangeMinutes"
+                                               MaxPoints="@sym.HdaMaxPoints" />
+                            </div>
+                        </foreignObject>
+                        break;
+                    case "eventlog":
+                        <foreignObject width="@sym.Width" height="@sym.Height">
+                            <div xmlns="http://www.w3.org/1999/xhtml" style="width: @(sym.Width)px; height: @(sym.Height)px;">
+                                <EventLogWidget MaxRows="@sym.EventLogMaxRows"
+                                                TimeRangeMinutes="@sym.EventLogTimeRangeMinutes"
+                                                Categories="@sym.EventLogCategories" />
+                            </div>
+                        </foreignObject>
+                        break;
+                    case "editbox":
+                        <foreignObject width="@sym.Width" height="@sym.Height">
+                            <div xmlns="http://www.w3.org/1999/xhtml" style="width: @(sym.Width)px; height: @(sym.Height)px;">
+                                <EditBoxWidget VariablePath="@sym.VariablePath"
+                                               Step="@sym.EditBoxStep"
+                                               Format="@sym.EditBoxFormat"
+                                               Min="@sym.MinValue"
+                                               Max="@sym.MaxValue" />
+                            </div>
+                        </foreignObject>
+                        break;
+                    case "ipcamera":
+                        <foreignObject width="@sym.Width" height="@sym.Height">
+                            <div xmlns="http://www.w3.org/1999/xhtml" style="width: @(sym.Width)px; height: @(sym.Height)px;">
+                                <IpCameraWidget CameraId="@(sym.Camera?.CameraId ?? "")"
+                                                ServerBaseUrl="@(sym.Camera != null ? "" : "")"
+                                                ShowOverlay="@(sym.Camera?.EnableYolo == true)"
+                                                DetectionVariablePrefix="@(sym.Camera?.DetectionVariablePrefix ?? "")" />
+                            </div>
+                        </foreignObject>
+                        break;
+                    case "recipe":
+                        var recipeVars = GetRecipeVariables(sym.RecipeName);
+                        <foreignObject width="@sym.Width" height="@sym.Height">
+                            <div xmlns="http://www.w3.org/1999/xhtml" style="width: @(sym.Width)px; height: @(sym.Height)px;">
+                                <RecipeWidget RecipeName="@sym.RecipeName"
+                                              Variables="@recipeVars" />
+                            </div>
+                        </foreignObject>
+                        break;
+                    case "screenembed":
+                        <foreignObject width="@sym.Width" height="@sym.Height">
+                            <div xmlns="http://www.w3.org/1999/xhtml" style="width: @(sym.Width)px; height: @(sym.Height)px; overflow: hidden;">
+                                <ScreenEmbedWidget ScreenNames="@sym.EmbeddedScreens" />
+                            </div>
+                        </foreignObject>
+                        break;
+                }
+
+                @if (!string.IsNullOrEmpty(resolvedLabel) && sym.Type is not "text")
+                {
+                    @RenderSvgText(sym.Width / 2, sym.Height + 14, "middle", null, "#333", 11, resolvedLabel)
+                }
+
+                @* Hover highlight outline *@
+                @if (isHovered && hasCmd)
+                {
+                    <rect x="-2" y="-2" width="@(sym.Width + 4)" height="@(sym.Height + 4)"
+                          fill="none" stroke="@(isLocked ? "#dc3545" : "#0d6efd")" stroke-width="2" stroke-dasharray="4,2" rx="4"
+                          opacity="0.7" style="pointer-events: none;" />
+                }
+
+                @* Lock icon for symbols requiring write access the user doesn't have *@
+                @if (isLocked)
+                {
+                    @RenderSvgText(sym.Width - 2, 12, "end", null, "#dc3545", 12, "🔒")
+                }
+            </g>
+        }
+    </svg>
+}
+
+@code {
+    [Parameter] public ScreenConfig? Screen { get; set; }
+    [Parameter] public bool IsKiosk { get; set; }
+    [Parameter] public EventCallback OnRequestLogin { get; set; }
+    [Inject] private OpcRuntimeClient Opc { get; set; } = default!;
+    [Inject] private CommandService Commands { get; set; } = default!;
+    [Inject] private RuntimeAuthService Auth { get; set; } = default!;
+    [Inject] private LocalizationService Localization { get; set; } = default!;
+    [Inject] private ProjectService Project { get; set; } = default!;
+
+    private System.Threading.Timer? _refreshTimer;
+    private string? _hoveredSymbolId;
+    private string? _pressedSymbolId;
+
+    protected override void OnInitialized()
+    {
+        Opc.ValuesChanged += OnValuesChanged;
+        Localization.LanguageChanged += OnLanguageChanged;
+        _refreshTimer = new System.Threading.Timer(_ =>
+        {
+            InvokeAsync(StateHasChanged);
+        }, null, 500, 250);
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (Screen != null && Opc.IsConnected)
+        {
+            var paths = Screen.Symbols
+                .Where(s => !string.IsNullOrEmpty(s.VariablePath))
+                .Select(s => s.VariablePath!)
+                .Distinct()
+                .ToList();
+
+            // Also monitor variables referenced by commands
+            foreach (var sym in Screen.Symbols)
+            {
+                foreach (var cmd in sym.Commands)
+                {
+                    if (!string.IsNullOrEmpty(cmd.VariablePath))
+                        paths.Add(cmd.VariablePath);
+                }
+
+                // Monitor recipe OPC command/status variables and recipe variable paths
+                if (sym.Type == "recipe" && !string.IsNullOrEmpty(sym.RecipeName))
+                {
+                    var prefix = $"Recipe.{sym.RecipeName}";
+                    paths.Add($"{prefix}.ActiveName");
+                    paths.Add($"{prefix}.RecipeList");
+                    paths.Add($"{prefix}.LastStatus");
+                    paths.Add($"{prefix}.Load");
+                    paths.Add($"{prefix}.Save");
+                    paths.Add($"{prefix}.Activate");
+                    paths.Add($"{prefix}.Delete");
+
+                    foreach (var rv in GetRecipeVariables(sym.RecipeName))
+                        paths.Add(rv.VariablePath);
+                }
+            }
+
+            Opc.MonitorVariables(paths.Distinct());
+        }
+    }
+
+    private void OnValuesChanged() { }
+
+    private void OnLanguageChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    // ─── Mouse interaction ──────────────────────────────────
+
+    private void OnSymbolEnter(ScreenSymbol sym) => _hoveredSymbolId = sym.Id;
+    private void OnSymbolLeave(ScreenSymbol sym)
+    {
+        if (_hoveredSymbolId == sym.Id) _hoveredSymbolId = null;
+    }
+
+    private async Task OnSymbolMouseDown(MouseEventArgs e, ScreenSymbol sym)
+    {
+        if (sym.Commands.Count > 0 && !Auth.HasWriteAccess(sym.RequiredAccess))
+        {
+            await OnRequestLogin.InvokeAsync();
+            return;
+        }
+
+        _pressedSymbolId = sym.Id;
+
+        foreach (var cmd in sym.Commands)
+        {
+            if (cmd.Trigger is "MouseDown" or "WhilePressed")
+                await Commands.ExecuteAsync(cmd);
+        }
+    }
+
+    private async Task OnSymbolMouseUp(MouseEventArgs e, ScreenSymbol sym)
+    {
+        if (sym.Commands.Count > 0 && !Auth.HasWriteAccess(sym.RequiredAccess))
+            return;
+
+        // MouseUp trigger
+        foreach (var cmd in sym.Commands)
+        {
+            if (cmd.Trigger == "MouseUp")
+                await Commands.ExecuteAsync(cmd);
+        }
+
+        // WhilePressed release
+        if (_pressedSymbolId == sym.Id)
+        {
+            foreach (var cmd in sym.Commands)
+            {
+                if (cmd.Trigger == "WhilePressed")
+                    await Commands.ExecuteReleaseAsync(cmd);
+            }
+        }
+
+        _pressedSymbolId = null;
+    }
+
+    private async Task OnSymbolClick(ScreenSymbol sym)
+    {
+        if (sym.Commands.Count > 0 && !Auth.HasWriteAccess(sym.RequiredAccess))
+        {
+            await OnRequestLogin.InvokeAsync();
+            return;
+        }
+
+        foreach (var cmd in sym.Commands)
+        {
+            if (cmd.Trigger == "Click")
+                await Commands.ExecuteAsync(cmd);
+        }
+    }
+
+    private async Task OnGlobalMouseUp(MouseEventArgs e)
+    {
+        // Release WhilePressed if mouse leaves the symbol area
+        if (_pressedSymbolId != null && Screen != null)
+        {
+            var sym = Screen.Symbols.FirstOrDefault(s => s.Id == _pressedSymbolId);
+            if (sym != null)
+            {
+                foreach (var cmd in sym.Commands)
+                {
+                    if (cmd.Trigger == "WhilePressed")
+                        await Commands.ExecuteReleaseAsync(cmd);
+                }
+            }
+            _pressedSymbolId = null;
+        }
+    }
+
+    // ─── Formatting ─────────────────────────────────────────
+
+    private static string F(double v) => v.ToString("F1", System.Globalization.CultureInfo.InvariantCulture);
+
+    private static double ParseDouble(string? val)
+    {
+        if (val != null && double.TryParse(val, System.Globalization.NumberStyles.Any,
+                System.Globalization.CultureInfo.InvariantCulture, out var d))
+            return d;
+        return 0;
+    }
+
+    private static string StripSvgWrapper(string svg)
+    {
+        // Return raw SVG content wrapped in a container so it renders inside the div
+        return $"<svg xmlns='http://www.w3.org/2000/svg' style='width:100%;height:100%' preserveAspectRatio='xMidYMid meet'>{svg}</svg>";
+    }
+
+    // ─── Binding evaluations ────────────────────────────────
+
+    private double? ParseNumericValue(string? val)
+    {
+        if (val == null) return null;
+        if (double.TryParse(val, System.Globalization.NumberStyles.Any,
+            System.Globalization.CultureInfo.InvariantCulture, out var d))
+            return d;
+        if (bool.TryParse(val, out var b))
+            return b ? 1 : 0;
+        return null;
+    }
+
+    private string EvalFillBinding(ScreenSymbol sym, string? liveValue)
+    {
+        if (string.IsNullOrEmpty(sym.FillBinding) || liveValue == null)
+            return sym.Fill;
+        try
+        {
+            var numVal = ParseNumericValue(liveValue);
+            if (sym.FillBinding.Contains('?') && sym.FillBinding.Contains(':'))
+            {
+                var result = EvalSimpleCondition(sym.FillBinding, liveValue, numVal);
+                if (result != null) return result;
+            }
+        }
+        catch { }
+        return sym.Fill;
+    }
+
+    private bool EvalVisibilityBinding(ScreenSymbol sym, string? liveValue)
+    {
+        if (string.IsNullOrEmpty(sym.VisibilityBinding) || liveValue == null)
+            return true;
+        try
+        {
+            var numVal = ParseNumericValue(liveValue);
+            return EvalSimpleBool(sym.VisibilityBinding, liveValue, numVal);
+        }
+        catch { }
+        return true;
+    }
+
+    private double EvalRotationBinding(ScreenSymbol sym, string? liveValue)
+    {
+        if (string.IsNullOrEmpty(sym.RotationBinding) || liveValue == null)
+            return sym.Rotation;
+        try
+        {
+            var numVal = ParseNumericValue(liveValue);
+            if (numVal.HasValue)
+            {
+                var expr = sym.RotationBinding.Replace("value",
+                    numVal.Value.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                if (expr.Contains('*'))
+                {
+                    var parts = expr.Split('*');
+                    if (parts.Length == 2
+                        && double.TryParse(parts[0].Trim(), System.Globalization.NumberStyles.Any,
+                            System.Globalization.CultureInfo.InvariantCulture, out var a)
+                        && double.TryParse(parts[1].Trim(), System.Globalization.NumberStyles.Any,
+                            System.Globalization.CultureInfo.InvariantCulture, out var b))
+                        return a * b;
+                }
+                if (double.TryParse(expr.Trim(), System.Globalization.NumberStyles.Any,
+                    System.Globalization.CultureInfo.InvariantCulture, out var d))
+                    return d;
+            }
+        }
+        catch { }
+        return sym.Rotation;
+    }
+
+    private string? EvalLabelBinding(ScreenSymbol sym, string? liveValue)
+    {
+        if (string.IsNullOrEmpty(sym.LabelBinding) || liveValue == null)
+            return null;
+        try
+        {
+            if (sym.LabelBinding.Contains("value"))
+            {
+                var result = sym.LabelBinding.Replace("value", liveValue);
+                result = result.Replace("+ '", "").Replace("' +", "").Replace("'", "")
+                    .Replace("+", "").Replace("  ", " ").Trim();
+                if (!string.IsNullOrEmpty(result))
+                    return $"{liveValue} {result.Replace(liveValue, "").Trim()}".Trim();
+                return liveValue;
+            }
+        }
+        catch { }
+        return liveValue;
+    }
+
+    private string? EvalSimpleCondition(string binding, string liveValue, double? numVal)
+    {
+        var qIdx = binding.IndexOf('?');
+        var cIdx = binding.IndexOf(':', qIdx + 1);
+        if (qIdx < 0 || cIdx < 0) return null;
+        var condition = binding[..qIdx].Trim();
+        var trueVal = binding[(qIdx + 1)..cIdx].Trim().Trim('\'', '"', ' ');
+        var falseVal = binding[(cIdx + 1)..].Trim().Trim('\'', '"', ' ');
+        return EvalSimpleBool(condition, liveValue, numVal) ? trueVal : falseVal;
+    }
+
+    private bool EvalSimpleBool(string condition, string liveValue, double? numVal)
+    {
+        condition = condition.Trim();
+        if (condition.Contains("=="))
+        {
+            var parts = condition.Split("==", 2);
+            var right = parts[1].Trim().Trim('\'', '"');
+            if (right.Equals("true", StringComparison.OrdinalIgnoreCase))
+                return liveValue.Equals("True", StringComparison.OrdinalIgnoreCase) || liveValue == "1";
+            if (right.Equals("false", StringComparison.OrdinalIgnoreCase))
+                return liveValue.Equals("False", StringComparison.OrdinalIgnoreCase) || liveValue == "0";
+            if (numVal.HasValue && double.TryParse(right, System.Globalization.NumberStyles.Any,
+                    System.Globalization.CultureInfo.InvariantCulture, out var rn))
+                return Math.Abs(numVal.Value - rn) < 0.0001;
+            return liveValue == right;
+        }
+        if (numVal.HasValue)
+        {
+            if (condition.Contains(">=")) return TryCompare(condition, ">=", numVal.Value, (a, b) => a >= b);
+            if (condition.Contains("<=")) return TryCompare(condition, "<=", numVal.Value, (a, b) => a <= b);
+            if (condition.Contains('>')) return TryCompare(condition, ">", numVal.Value, (a, b) => a > b);
+            if (condition.Contains('<')) return TryCompare(condition, "<", numVal.Value, (a, b) => a < b);
+            if (condition.Contains("!=")) return TryCompare(condition, "!=", numVal.Value, (a, b) => Math.Abs(a - b) > 0.0001);
+        }
+        return true;
+    }
+
+    private static bool TryCompare(string expr, string op, double value, Func<double, double, bool> compare)
+    {
+        var parts = expr.Split(op, 2);
+        if (parts.Length == 2 && double.TryParse(parts[1].Trim(), System.Globalization.NumberStyles.Any,
+                System.Globalization.CultureInfo.InvariantCulture, out var threshold))
+            return compare(value, threshold);
+        return true;
+    }
+
+    // ─── SVG text helper ────────────────────────────────────
+
+    private RenderFragment RenderSvgText(double x, double y, string? anchor, string? baseline,
+        string fill, int fontSize, string content) => builder =>
+    {
+        int seq = 0;
+        builder.OpenElement(seq++, "text");
+        builder.AddAttribute(seq++, "x", x);
+        builder.AddAttribute(seq++, "y", y);
+        if (anchor != null) builder.AddAttribute(seq++, "text-anchor", anchor);
+        if (baseline != null) builder.AddAttribute(seq++, "dominant-baseline", baseline);
+        builder.AddAttribute(seq++, "fill", fill);
+        builder.AddAttribute(seq++, "font-size", fontSize);
+        builder.AddAttribute(seq++, "font-family", "sans-serif");
+        builder.AddContent(seq++, content);
+        builder.CloseElement();
+    };
+
+    // ─── Library SVG symbol renderer ────────────────────────
+
+    private RenderFragment RenderLibrarySvg(ScreenSymbol sym) => builder =>
+    {
+        var svg = sym.SvgContent ?? "";
+        var viewBox = "0 0 64 64";
+        var vbMatch = System.Text.RegularExpressions.Regex.Match(svg, @"viewBox\s*=\s*""([^""]+)""");
+        if (vbMatch.Success) viewBox = vbMatch.Groups[1].Value;
+        var innerContent = svg;
+        var openTagEnd = svg.IndexOf('>');
+        var closeTag = svg.LastIndexOf("</svg>", StringComparison.OrdinalIgnoreCase);
+        if (openTagEnd > 0 && closeTag > openTagEnd)
+            innerContent = svg[(openTagEnd + 1)..closeTag];
+        int seq = 0;
+        builder.OpenElement(seq++, "svg");
+        builder.AddAttribute(seq++, "viewBox", viewBox);
+        builder.AddAttribute(seq++, "width", sym.Width);
+        builder.AddAttribute(seq++, "height", sym.Height);
+        builder.AddAttribute(seq++, "overflow", "visible");
+        builder.AddMarkupContent(seq++, innerContent);
+        builder.CloseElement();
+    };
+
+    // ─── Gauge rendering ────────────────────────────────────
+
+    private RenderFragment RenderGauge(ScreenSymbol sym, string fill, string? liveValue) => builder =>
+    {
+        int seq = 0;
+        var cx = sym.Width / 2;
+        var cy = sym.Height / 2;
+        var r = Math.Min(cx, cy) - 4;
+        var numVal = ParseNumericValue(liveValue);
+        var min = sym.MinValue ?? 0;
+        var max = sym.MaxValue ?? 100;
+        var pct = numVal.HasValue ? Math.Clamp((numVal.Value - min) / (max - min), 0, 1) : 0;
+        var angle = -135 + pct * 270;
+        var radians = angle * Math.PI / 180;
+        var nx = cx + r * 0.7 * Math.Cos(radians);
+        var ny = cy + r * 0.7 * Math.Sin(radians);
+        var ci = System.Globalization.CultureInfo.InvariantCulture;
+
+        builder.OpenElement(seq++, "circle");
+        builder.AddAttribute(seq++, "cx", cx); builder.AddAttribute(seq++, "cy", cy);
+        builder.AddAttribute(seq++, "r", r); builder.AddAttribute(seq++, "fill", "#f0f0f0");
+        builder.AddAttribute(seq++, "stroke", sym.Stroke); builder.AddAttribute(seq++, "stroke-width", sym.StrokeWidth);
+        builder.CloseElement();
+
+        builder.OpenElement(seq++, "circle");
+        builder.AddAttribute(seq++, "cx", cx); builder.AddAttribute(seq++, "cy", cy);
+        builder.AddAttribute(seq++, "r", r * 0.85); builder.AddAttribute(seq++, "fill", "none");
+        builder.AddAttribute(seq++, "stroke", fill); builder.AddAttribute(seq++, "stroke-width", 4);
+        builder.AddAttribute(seq++, "stroke-dasharray", $"{(pct * 270 / 360 * 2 * Math.PI * r * 0.85).ToString("F1", ci)} 999");
+        builder.AddAttribute(seq++, "stroke-dashoffset", "0");
+        builder.AddAttribute(seq++, "transform", $"rotate(-225, {cx.ToString("F1", ci)}, {cy.ToString("F1", ci)})");
+        builder.CloseElement();
+
+        builder.OpenElement(seq++, "line");
+        builder.AddAttribute(seq++, "x1", cx); builder.AddAttribute(seq++, "y1", cy);
+        builder.AddAttribute(seq++, "x2", nx.ToString("F1", ci)); builder.AddAttribute(seq++, "y2", ny.ToString("F1", ci));
+        builder.AddAttribute(seq++, "stroke", "#333"); builder.AddAttribute(seq++, "stroke-width", 2);
+        builder.CloseElement();
+
+        builder.OpenElement(seq++, "circle");
+        builder.AddAttribute(seq++, "cx", cx); builder.AddAttribute(seq++, "cy", cy);
+        builder.AddAttribute(seq++, "r", 3); builder.AddAttribute(seq++, "fill", "#333");
+        builder.CloseElement();
+
+        builder.OpenElement(seq++, "text");
+        builder.AddAttribute(seq++, "x", cx); builder.AddAttribute(seq++, "y", cy + r * 0.45);
+        builder.AddAttribute(seq++, "text-anchor", "middle"); builder.AddAttribute(seq++, "fill", "#333");
+        builder.AddAttribute(seq++, "font-size", "10"); builder.AddAttribute(seq++, "font-family", "sans-serif");
+        builder.AddContent(seq++, liveValue ?? "—");
+        builder.CloseElement();
+    };
+
+    private List<RecipeVariable> GetRecipeVariables(string recipeName)
+    {
+        if (string.IsNullOrEmpty(recipeName)) return new();
+        var recipe = Project.Model?.Recipes
+            .FirstOrDefault(r => r.Name.Equals(recipeName, StringComparison.OrdinalIgnoreCase));
+        return recipe?.Variables ?? new();
+    }
+
+    public void Dispose()
+    {
+        Opc.ValuesChanged -= OnValuesChanged;
+        Localization.LanguageChanged -= OnLanguageChanged;
+        _refreshTimer?.Dispose();
+    }
+}
+

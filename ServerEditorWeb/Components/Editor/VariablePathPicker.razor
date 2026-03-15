@@ -1,0 +1,205 @@
+@using SharedModels
+@using ServerEditorWeb.Services
+
+<div class="var-picker" @onfocusin="OnFocusIn" @onfocusout="OnFocusOutDelayed">
+    <div class="var-picker-input-wrap">
+        <input type="text" class="form-control form-control-sm var-picker-input"
+               style="@InputStyle"
+               value="@Value"
+               @oninput="OnInput"
+               @onkeydown="OnKeyDown"
+               placeholder="@Placeholder" />
+        <button type="button" class="var-picker-toggle" tabindex="-1" @onclick="ToggleDropdown" title="Browse variables">▾</button>
+    </div>
+
+    @if (_showDropdown && _filteredPaths.Count > 0)
+    {
+        <div class="var-picker-dropdown">
+            @for (var i = 0; i < _filteredPaths.Count; i++)
+            {
+                var item = _filteredPaths[i];
+                var idx = i;
+                <div class="var-picker-item @(idx == _highlightIndex ? "var-picker-item-hl" : "")"
+                     @onmousedown="() => SelectItem(item)" @onmousedown:preventDefault>
+                    <span class="var-picker-item-icon">@(item.IsFolder ? "📁" : "📊")</span>
+                    <span class="var-picker-item-path">@item.Path</span>
+                    @if (!item.IsFolder)
+                    {
+                        <span class="var-picker-item-type">@item.Type</span>
+                    }
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public EventCallback<string?> ValueChanged { get; set; }
+    [Parameter] public EventCallback OnChanged { get; set; }
+    [Parameter] public string Placeholder { get; set; } = "Select variable…";
+    [Parameter] public string InputStyle { get; set; } = "";
+
+    [Inject] private NodeEditorService Editor { get; set; } = default!;
+
+    private bool _showDropdown;
+    private int _highlightIndex = -1;
+    private string _filter = "";
+    private List<VarPathEntry> _allPaths = new();
+    private List<VarPathEntry> _filteredPaths = new();
+
+    protected override void OnParametersSet()
+    {
+        RebuildPaths();
+    }
+
+    private void RebuildPaths()
+    {
+        _allPaths.Clear();
+        var root = Editor.RootModel?.Folder;
+        if (root != null)
+        {
+            CollectPaths(root, "");
+        }
+        ApplyFilter();
+    }
+
+    private void CollectPaths(Folder folder, string prefix)
+    {
+        var folderPath = string.IsNullOrEmpty(prefix) ? folder.Name : $"{prefix}.{folder.Name}";
+
+        // Add folder entry (for browsing context)
+        if (!string.IsNullOrEmpty(prefix))
+        {
+            _allPaths.Add(new VarPathEntry { Path = folderPath, IsFolder = true });
+        }
+
+        foreach (var v in folder.Variables)
+        {
+            _allPaths.Add(new VarPathEntry
+            {
+                Path = $"{folderPath}.{v.Name}",
+                Type = v.Type,
+                IsFolder = false
+            });
+        }
+
+        foreach (var sub in folder.Folders)
+        {
+            CollectPaths(sub, folderPath);
+        }
+    }
+
+    private void ApplyFilter()
+    {
+        if (string.IsNullOrWhiteSpace(_filter))
+        {
+            // Show variables only (not folders) when no filter
+            _filteredPaths = _allPaths.Where(p => !p.IsFolder).ToList();
+        }
+        else
+        {
+            _filteredPaths = _allPaths
+                .Where(p => p.Path.Contains(_filter, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+        }
+        _highlightIndex = -1;
+    }
+
+    private async Task OnInput(ChangeEventArgs e)
+    {
+        var val = e.Value?.ToString() ?? "";
+        _filter = val;
+        Value = val;
+        await ValueChanged.InvokeAsync(val);
+        await OnChanged.InvokeAsync();
+        RebuildPaths();
+        _showDropdown = true;
+    }
+
+    private void OnFocusIn()
+    {
+        RebuildPaths();
+        _filter = Value ?? "";
+        _showDropdown = true;
+    }
+
+    private async Task OnFocusOutDelayed()
+    {
+        // Small delay to allow mousedown on dropdown items to fire first
+        await Task.Delay(200);
+        _showDropdown = false;
+        StateHasChanged();
+    }
+
+    private void ToggleDropdown()
+    {
+        if (_showDropdown)
+        {
+            _showDropdown = false;
+        }
+        else
+        {
+            _filter = "";
+            RebuildPaths();
+            _showDropdown = true;
+        }
+    }
+
+    private async Task SelectItem(VarPathEntry item)
+    {
+        if (item.IsFolder)
+        {
+            // Selecting a folder filters to its children
+            _filter = item.Path + ".";
+            Value = _filter;
+            await ValueChanged.InvokeAsync(Value);
+            ApplyFilter();
+        }
+        else
+        {
+            Value = item.Path;
+            _showDropdown = false;
+            await ValueChanged.InvokeAsync(Value);
+            await OnChanged.InvokeAsync();
+        }
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (!_showDropdown || _filteredPaths.Count == 0)
+        {
+            if (e.Key == "ArrowDown")
+            {
+                _filter = Value ?? "";
+                RebuildPaths();
+                _showDropdown = true;
+            }
+            return;
+        }
+
+        switch (e.Key)
+        {
+            case "ArrowDown":
+                _highlightIndex = Math.Min(_highlightIndex + 1, _filteredPaths.Count - 1);
+                break;
+            case "ArrowUp":
+                _highlightIndex = Math.Max(_highlightIndex - 1, 0);
+                break;
+            case "Enter":
+                if (_highlightIndex >= 0 && _highlightIndex < _filteredPaths.Count)
+                    await SelectItem(_filteredPaths[_highlightIndex]);
+                break;
+            case "Escape":
+                _showDropdown = false;
+                break;
+        }
+    }
+
+    private class VarPathEntry
+    {
+        public string Path { get; set; } = "";
+        public string Type { get; set; } = "";
+        public bool IsFolder { get; set; }
+    }
+}

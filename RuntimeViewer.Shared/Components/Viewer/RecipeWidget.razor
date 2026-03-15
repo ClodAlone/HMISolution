@@ -1,0 +1,275 @@
+@using RuntimeViewer.Shared.Services
+@using SharedModels
+@implements IDisposable
+
+<div class="recipe-widget" @onclick:stopPropagation @onmousedown:stopPropagation @onmouseup:stopPropagation>
+    <div class="recipe-header">
+        <span class="recipe-title">📦 @RecipeName</span>
+        <span class="recipe-active" title="Active recipe">@(_activeName ?? "—")</span>
+    </div>
+
+    <div class="recipe-body">
+        @* Recipe name input + action buttons *@
+        <div class="recipe-actions">
+            <input type="text" class="recipe-input" placeholder="Recipe name…"
+                   @bind="_inputName" @onkeydown="OnKeyDown" />
+            <button class="recipe-btn recipe-btn-load" @onclick="LoadRecipe" title="Load values from recipe into OPC variables"
+                    disabled="@string.IsNullOrWhiteSpace(_inputName)">▼ Load</button>
+            <button class="recipe-btn recipe-btn-save" @onclick="SaveRecipe" title="Save current OPC variable values to recipe"
+                    disabled="@string.IsNullOrWhiteSpace(_inputName)">▲ Save</button>
+            <button class="recipe-btn recipe-btn-activate" @onclick="ActivateRecipe" title="Load + set as active recipe"
+                    disabled="@string.IsNullOrWhiteSpace(_inputName)">⚡ Activate</button>
+            <button class="recipe-btn recipe-btn-delete" @onclick="DeleteRecipe" title="Delete recipe from database"
+                    disabled="@string.IsNullOrWhiteSpace(_inputName)">🗑</button>
+        </div>
+
+        @* Stored recipes list *@
+        <div class="recipe-list-section">
+            <div class="recipe-list-header">Stored Recipes</div>
+            <div class="recipe-list">
+                @if (_recipeNames.Length == 0)
+                {
+                    <div class="recipe-list-empty">No recipes stored yet</div>
+                }
+                else
+                {
+                    @foreach (var name in _recipeNames)
+                    {
+                        var isActive = name == _activeName;
+                        var isSelected = name == _inputName;
+                        <div class="recipe-list-item @(isActive ? "active" : "") @(isSelected ? "selected" : "")"
+                             @onclick="() => SelectRecipe(name)" @ondblclick="() => ActivateRecipeByName(name)">
+                            <span>@name</span>
+                            @if (isActive) { <span class="recipe-active-badge">●</span> }
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+
+        @* Live variable values *@
+        @if (Variables.Count > 0)
+        {
+            <div class="recipe-vars-section">
+                <div class="recipe-vars-header">Variables</div>
+                <div class="recipe-vars">
+                    @foreach (var rv in Variables)
+                    {
+                        var val = Opc.GetValue(rv.VariablePath);
+                        <div class="recipe-var-row">
+                            <span class="recipe-var-name" title="@rv.VariablePath">
+                                @(!string.IsNullOrEmpty(rv.DisplayName) ? rv.DisplayName : rv.VariablePath)
+                            </span>
+                            <span class="recipe-var-value">@(val ?? "—")</span>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+
+    @if (!string.IsNullOrEmpty(_statusMessage))
+    {
+        <div class="recipe-status @(_statusIsError ? "recipe-status-err" : "recipe-status-ok")">@_statusMessage</div>
+    }
+</div>
+
+<style>
+    .recipe-widget {
+        width: 100%; height: 100%; display: flex; flex-direction: column;
+        font-family: sans-serif; font-size: 12px;
+        background: #1a1a2e; color: #e2e8f0;
+        border: 1px solid #334155; border-radius: 4px;
+        overflow: hidden; box-sizing: border-box;
+    }
+    .recipe-header {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 4px 8px; background: #16213e; border-bottom: 1px solid #334155;
+        font-size: 11px; font-weight: 600; flex-shrink: 0;
+    }
+    .recipe-title { color: #94a3b8; }
+    .recipe-active { color: #6ee7b7; font-weight: normal; font-size: 10px; }
+    .recipe-body {
+        flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; padding: 6px;
+    }
+    .recipe-actions {
+        display: flex; gap: 3px; flex-shrink: 0; flex-wrap: wrap;
+    }
+    .recipe-input {
+        flex: 1; min-width: 80px; border: 1px solid #475569; background: #0f172a; color: #f1f5f9;
+        border-radius: 3px; padding: 3px 6px; font-size: 11px; outline: none;
+    }
+    .recipe-input:focus { border-color: #3b82f6; }
+    .recipe-btn {
+        border: none; border-radius: 3px; padding: 3px 6px; font-size: 10px;
+        cursor: pointer; white-space: nowrap; color: #e2e8f0;
+    }
+    .recipe-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .recipe-btn-load { background: #1e40af; }
+    .recipe-btn-load:hover:not(:disabled) { background: #2563eb; }
+    .recipe-btn-save { background: #065f46; }
+    .recipe-btn-save:hover:not(:disabled) { background: #047857; }
+    .recipe-btn-activate { background: #7c3aed; }
+    .recipe-btn-activate:hover:not(:disabled) { background: #8b5cf6; }
+    .recipe-btn-delete { background: #7f1d1d; }
+    .recipe-btn-delete:hover:not(:disabled) { background: #991b1b; }
+
+    .recipe-list-section { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+    .recipe-list-header {
+        font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px;
+        color: #64748b; padding: 2px 0; flex-shrink: 0;
+    }
+    .recipe-list {
+        flex: 1; overflow-y: auto; border: 1px solid #1e293b; border-radius: 3px;
+        background: #0f172a; max-height: 120px;
+    }
+    .recipe-list-empty {
+        padding: 8px; color: #475569; font-style: italic; text-align: center; font-size: 10px;
+    }
+    .recipe-list-item {
+        padding: 3px 8px; cursor: pointer; display: flex; justify-content: space-between;
+        align-items: center; font-size: 11px; border-bottom: 1px solid #1e293b;
+    }
+    .recipe-list-item:hover { background: #1e293b; }
+    .recipe-list-item.selected { background: #1e3a5f; }
+    .recipe-list-item.active { color: #6ee7b7; }
+    .recipe-active-badge { color: #22c55e; font-size: 8px; }
+
+    .recipe-vars-section { flex-shrink: 0; }
+    .recipe-vars-header {
+        font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px;
+        color: #64748b; padding: 2px 0;
+    }
+    .recipe-vars {
+        border: 1px solid #1e293b; border-radius: 3px; background: #0f172a;
+        max-height: 100px; overflow-y: auto;
+    }
+    .recipe-var-row {
+        display: flex; justify-content: space-between; padding: 2px 6px;
+        border-bottom: 1px solid #1e293b; font-size: 10px;
+    }
+    .recipe-var-name { color: #94a3b8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 60%; }
+    .recipe-var-value { color: #f1f5f9; font-family: monospace; }
+
+    .recipe-status {
+        font-size: 9px; padding: 2px 6px; text-align: center; flex-shrink: 0;
+    }
+    .recipe-status-ok { background: #064e3b; color: #6ee7b7; }
+    .recipe-status-err { background: #7f1d1d; color: #fca5a5; }
+</style>
+
+@code {
+    [Parameter] public string RecipeName { get; set; } = "";
+    [Parameter] public List<RecipeVariable> Variables { get; set; } = new();
+
+    [Inject] private OpcRuntimeClient Opc { get; set; } = default!;
+
+    private string _inputName = "";
+    private string? _activeName;
+    private string[] _recipeNames = [];
+    private string _statusMessage = "";
+    private bool _statusIsError;
+    private System.Threading.Timer? _statusTimer;
+    private System.Threading.Timer? _pollTimer;
+
+    private string Prefix => $"Recipe.{RecipeName}";
+
+    protected override void OnInitialized()
+    {
+        // Poll the status variables periodically
+        _pollTimer = new System.Threading.Timer(_ =>
+        {
+            InvokeAsync(() =>
+            {
+                RefreshFromOpc();
+                StateHasChanged();
+            });
+        }, null, 500, 1000);
+    }
+
+    private void RefreshFromOpc()
+    {
+        _activeName = Opc.GetValue($"{Prefix}.ActiveName");
+        var listStr = Opc.GetValue($"{Prefix}.RecipeList");
+        _recipeNames = string.IsNullOrWhiteSpace(listStr)
+            ? []
+            : listStr.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        var status = Opc.GetValue($"{Prefix}.LastStatus");
+        if (!string.IsNullOrEmpty(status) && status != _lastSeenStatus)
+        {
+            _lastSeenStatus = status;
+            ShowStatus(status, status.StartsWith("Error", StringComparison.OrdinalIgnoreCase));
+        }
+    }
+
+    private string? _lastSeenStatus;
+
+    private void SelectRecipe(string name)
+    {
+        _inputName = name;
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(_inputName))
+            await DoActivate(_inputName);
+    }
+
+    private async Task LoadRecipe()
+    {
+        if (string.IsNullOrWhiteSpace(_inputName)) return;
+        var ok = await Opc.WriteValueAsync($"{Prefix}.Load", _inputName);
+        if (!ok) ShowStatus("Write failed", true);
+    }
+
+    private async Task SaveRecipe()
+    {
+        if (string.IsNullOrWhiteSpace(_inputName)) return;
+        var ok = await Opc.WriteValueAsync($"{Prefix}.Save", _inputName);
+        if (!ok) ShowStatus("Write failed", true);
+    }
+
+    private async Task ActivateRecipe()
+    {
+        if (string.IsNullOrWhiteSpace(_inputName)) return;
+        await DoActivate(_inputName);
+    }
+
+    private async Task ActivateRecipeByName(string name)
+    {
+        _inputName = name;
+        await DoActivate(name);
+    }
+
+    private async Task DoActivate(string name)
+    {
+        var ok = await Opc.WriteValueAsync($"{Prefix}.Activate", name);
+        if (!ok) ShowStatus("Write failed", true);
+    }
+
+    private async Task DeleteRecipe()
+    {
+        if (string.IsNullOrWhiteSpace(_inputName)) return;
+        var ok = await Opc.WriteValueAsync($"{Prefix}.Delete", _inputName);
+        if (!ok) ShowStatus("Write failed", true);
+    }
+
+    private void ShowStatus(string msg, bool isError)
+    {
+        _statusMessage = msg;
+        _statusIsError = isError;
+        _statusTimer?.Dispose();
+        _statusTimer = new System.Threading.Timer(_ =>
+        {
+            InvokeAsync(() => { _statusMessage = ""; StateHasChanged(); });
+        }, null, 3000, Timeout.Infinite);
+    }
+
+    public void Dispose()
+    {
+        _statusTimer?.Dispose();
+        _pollTimer?.Dispose();
+    }
+}
+

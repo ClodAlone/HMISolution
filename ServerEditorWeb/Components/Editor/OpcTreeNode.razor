@@ -1,0 +1,61 @@
+@using ServerEditorWeb.Services
+
+<div class="opc-tree-item">
+    <div class="d-flex align-items-center py-1 px-1 rounded @(_isSelected ? "bg-primary text-white" : "tree-item-hover")"
+         style="cursor: pointer; user-select: none;"
+         @onclick="Select">
+        @if (Node.HasChildren)
+        {
+            <span class="me-1" style="font-size: 0.7em; width: 14px; text-align: center; cursor: pointer;" @onclick="Toggle" @onclick:stopPropagation="true">
+                @(Node.IsExpanded ? "▼" : "▶")
+            </span>
+        }
+        else
+        {
+            <span class="me-1" style="width: 14px;"></span>
+        }
+        <span class="me-1">@GetIcon()</span>
+        <span class="text-truncate small">@Node.DisplayName</span>
+    </div>
+
+    @if (Node.IsExpanded && Node.ChildrenLoaded)
+    {
+        <div style="padding-left: 16px;">
+            @foreach (var child in Node.Children)
+            {
+                <OpcTreeNode Node="child" OnSelect="OnSelect" OnExpand="OnExpand" SelectedNodeId="@SelectedNodeId" />
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public OpcBrowseNode Node { get; set; } = default!;
+    [Parameter] public EventCallback<OpcBrowseNode> OnSelect { get; set; }
+    [Parameter] public EventCallback<OpcBrowseNode> OnExpand { get; set; }
+    [Parameter] public string SelectedNodeId { get; set; } = "";
+
+    private bool _isSelected => Node.NodeIdString == SelectedNodeId;
+
+    private async Task Toggle()
+    {
+        Node.IsExpanded = !Node.IsExpanded;
+        if (Node.IsExpanded && !Node.ChildrenLoaded)
+        {
+            await OnExpand.InvokeAsync(Node);
+        }
+    }
+
+    private async Task Select()
+    {
+        await OnSelect.InvokeAsync(Node);
+    }
+
+    private string GetIcon() => Node.NodeClass switch
+    {
+        "Variable" => "📊",
+        "Method" => "⚡",
+        "Object" => "📁",
+        _ => "📄"
+    };
+}

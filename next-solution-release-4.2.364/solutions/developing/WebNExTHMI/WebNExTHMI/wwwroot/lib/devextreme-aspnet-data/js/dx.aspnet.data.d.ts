@@ -1,0 +1,24 @@
+import CustomStore from "devextreme/data/custom_store";
+
+interface Options {
+    key?: string|Array<string>,
+    errorHandler?: (e: Error) => void,
+
+    loadUrl?: string,
+    loadParams?: Object,
+    loadMethod?: string,
+
+    updateUrl?: string,
+    updateMethod?: string,
+
+    insertUrl?: string,
+    insertMethod?: string,
+
+    deleteUrl?: string,
+    deleteMethod?: string,
+
+    onBeforeSend?: (operation: string, ajaxSettings: JQueryAjaxSettings) => void,
+    onAjaxError?: (e: { xhr: JQueryXHR, error: string | Error }) => void
+}
+
+export function createStore(options: Options): CustomStore;

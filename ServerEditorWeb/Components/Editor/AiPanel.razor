@@ -1,0 +1,81 @@
+@using ServerEditorWeb.Services
+
+<div class="ai-panel">
+    <h6>AI Assistant</h6>
+    <div class="mb-2">
+        <label class="form-label">Engine</label>
+        <select class="form-select form-select-sm" @bind="_selectedEngine">
+            @foreach (var engine in AiService.AvailableEngines)
+            {
+                <option value="@engine">@engine</option>
+            }
+        </select>
+    </div>
+    <div class="mb-2">
+        <label class="form-label">Prompt</label>
+        <textarea class="form-control" rows="3" @bind="_prompt" placeholder="Describe the changes you want to make to the JSON..."></textarea>
+    </div>
+    <button class="btn btn-sm btn-primary" @onclick="Ask"
+            disabled="@(_isProcessing || string.IsNullOrWhiteSpace(_prompt))">
+        @if (_isProcessing)
+        {
+            <span class="spinner-border spinner-border-sm me-1"></span>
+        }
+        Ask AI
+    </button>
+
+    @if (!string.IsNullOrEmpty(_comments))
+    {
+        <div class="mt-2 alert alert-info">
+            <strong>AI Comments:</strong><br />@_comments
+        </div>
+    }
+    @if (!string.IsNullOrEmpty(_error))
+    {
+        <div class="mt-2 alert alert-danger">@_error</div>
+    }
+</div>
+
+@code {
+    [Parameter] public string CurrentJson { get; set; } = "";
+    [Parameter] public EventCallback<string> OnJsonResult { get; set; }
+
+    [Inject] private AiService AiService { get; set; } = default!;
+
+    private string _selectedEngine = "OpenAI";
+    private string _prompt = "";
+    private string _comments = "";
+    private string _error = "";
+    private bool _isProcessing;
+
+    private async Task Ask()
+    {
+        if (string.IsNullOrWhiteSpace(_prompt)) return;
+
+        _isProcessing = true;
+        _comments = "";
+        _error = "";
+
+        try
+        {
+            var (newJson, comments) = await AiService.AskAsync(_selectedEngine, _prompt, CurrentJson);
+            if (!string.IsNullOrEmpty(newJson))
+            {
+                _comments = comments;
+                await OnJsonResult.InvokeAsync(newJson);
+            }
+            else if (!string.IsNullOrEmpty(comments))
+            {
+                _error = comments;
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = $"AI Error: {ex.Message}";
+        }
+        finally
+        {
+            _isProcessing = false;
+        }
+    }
+}

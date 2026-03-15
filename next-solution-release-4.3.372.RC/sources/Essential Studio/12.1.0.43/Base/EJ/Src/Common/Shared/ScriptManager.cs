@@ -1,0 +1,36 @@
+#region Copyright Syncfusion Inc. 2001 - 2014
+// Copyright Syncfusion Inc. 2001 - 2014. All rights reserved.
+// Use of this code is subject to the terms of our license.
+// A copy of the current license can be obtained at any time by e-mailing
+// licensing@syncfusion.com. Any infringement will be prosecuted under
+// applicable laws. 
+#endregion
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace Syncfusion.JavaScript
+{
+    public static class ScriptManager
+    {
+        public static Dictionary<String, String> RegisterControl(String id, String jsonData)
+        {
+            if(!Utils.IdJsonPair.ContainsKey(id))
+                Utils.IdJsonPair.Add(id, jsonData);
+            return Utils.IdJsonPair;
+        }
+        public static String RenderScriptElement()
+        {
+            StringBuilder scriptElement = new StringBuilder();
+            scriptElement.Append(Utils.startScript);
+            foreach (var element in Utils.IdJsonPair)
+            {
+                scriptElement.Append(element.Value);
+            }
+            scriptElement.Append(Utils.endScript);
+            return scriptElement.ToString();
+        }
+    }
+}

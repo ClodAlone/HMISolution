@@ -1,0 +1,285 @@
+﻿<UserControl xmlns:dxg="http://schemas.devexpress.com/winfx/2008/xaml/grid"  x:Class="DataAnalisysRTControl.Controls.Settings"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+             xmlns:properties="clr-namespace:DataAnalisysRTControl.Properties"
+             xmlns:smartutils="clr-namespace:SmartControlUtilities.Controls;assembly=SmartControlUtilities"
+             xmlns:converters="clr-namespace:Converters;assembly=Converters"
+             xmlns:commoncontrols="http://progea.com/CommonControls"
+             mc:Ignorable="d" Width="900" Height="300">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/RuntimeLightSharedResources;component/Resources/SharedImages.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+            <converters:InverseBooleanConverter x:Key="InverseBooleanConverter"/>
+        </ResourceDictionary>
+    </UserControl.Resources>
+    <Grid>
+        <Grid Grid.Row="4">
+            <Grid.RowDefinitions>
+                <RowDefinition />
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+            <Grid Grid.Row="1"  x:Name="commands">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition/>
+                    <ColumnDefinition/>
+                    <ColumnDefinition/>
+                </Grid.ColumnDefinitions>
+                <Button Click="OnAdd" ToolTip="{x:Static properties:Resources.AddButtonTitle}" Margin="5">
+                    <Button.Content>
+                        <Image Margin="2" Source="{StaticResource AddNewSmall}" Height="16" Width="16" />
+                    </Button.Content>
+                </Button>
+                <Button Grid.Column="1" IsEnabled="False" x:Name="btnDelete" 
+                        ToolTip="{x:Static properties:Resources.DeleteButtonTitle}" Click="OnDelete" Margin="5">
+                    <Button.Content>
+                        <Image Margin="2" Source="{StaticResource RemoveMinusSmall}" Height="16" Width="16" />
+                    </Button.Content>
+                </Button>
+                <Button Grid.Column="2" IsEnabled="True" x:Name="btnClearAll" 
+                        ToolTip="{x:Static properties:Resources.ClearAll}" Click="ClearAll_Click">
+                    <Button.Content>
+                        <Image Margin="2" Source="{StaticResource CancelSmall}" Height="16" Width="16" />
+                    </Button.Content>
+                </Button>
+            </Grid>
+            <dxg:GridControl Visibility="Visible" ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                                 AllowDrop="False" Grid.Row="0" MinWidth="2" x:Name="gridControl">
+                <dxg:GridControl.Columns>
+                    <dxg:GridColumn DisplayMemberBinding="{Binding Path=color, Mode=TwoWay}" Header="{x:Static properties:Resources.Color}">
+                        <dxg:GridColumn.CellTemplate>
+                            <DataTemplate>
+                                <commoncontrols:CustomPopupColorEdit Name="PART_Editor" Document="{Binding Document, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=UserControl}}" BrushSelected="OnBrushSelected" Color="{Binding RowData.Row.color, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            </DataTemplate>
+                        </dxg:GridColumn.CellTemplate>
+                    </dxg:GridColumn>
+                    <!--<dxg:GridColumn DisplayMemberBinding="{Binding Path=title, Mode=TwoWay}" Header="{x:Static properties:Resources.Title}">-->
+                    <!--<dxg:GridColumn.EditSettings>
+                            <dxe:TextEditSettings/>
+                        </dxg:GridColumn.EditSettings>-->
+                    <dxg:GridColumn MinWidth="50" Header="{x:Static properties:Resources.Title}">
+                        <dxg:GridColumn.CellTemplate>
+                            <DataTemplate>
+                                <DockPanel LastChildFill="True" Grid.Column="1" Grid.Row="1"
+                                               HorizontalAlignment="Stretch" VerticalAlignment="Center">
+                                    <!--<Button DockPanel.Dock="Right" Click="DlgButton_Click_ClearName" HorizontalAlignment="Stretch" VerticalAlignment="Center">
+                                        <Button.Content>
+                                            <Image Source="{StaticResource CancelSmall}" Height="16" Width="16" />
+                                        </Button.Content>
+                                    </Button>
+                                    <Button DockPanel.Dock="Right" Click="DlgButton_Click_Name" HorizontalAlignment="Stretch" VerticalAlignment="Center">
+                                        <Button.Content>
+                                            <Image Source="{StaticResource EditGeneralSmall}" Height="16" Width="16" />
+                                        </Button.Content>
+                                    </Button>-->
+                                    <TextBox IsReadOnly="False" IsHitTestVisible="True" x:Name="text" HorizontalAlignment="Stretch" 
+                                                 Text="{Binding Path=Data.title, UpdateSourceTrigger=PropertyChanged}" TextChanged="text_TextChanged" VerticalAlignment="Center"/>
+                                </DockPanel>
+                            </DataTemplate>
+                        </dxg:GridColumn.CellTemplate>
+                    </dxg:GridColumn>
+                    <dxg:GridColumn  Header="{x:Static properties:Resources.Dlrsource}">
+                        <dxg:GridColumn.CellTemplate>
+                            <DataTemplate>
+                                <DockPanel LastChildFill="True" Grid.Column="1" Grid.Row="1"
+                                               HorizontalAlignment="Stretch" VerticalAlignment="Center">
+                                    <CheckBox Click="CheckBox_Click" HorizontalAlignment="Center" IsChecked="{Binding Data.dlrsource, Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}"/>
+                                </DockPanel>
+                            </DataTemplate>
+                        </dxg:GridColumn.CellTemplate>
+                    </dxg:GridColumn>
+                    <dxg:GridColumn MinWidth="50" AllowDrop="False" AllowEditing="False" DisplayMemberBinding="{Binding Path=tagName, Mode=TwoWay}" Header="{x:Static properties:Resources.TagName}">
+                        <dxg:GridColumn.CellTemplate>
+                            <DataTemplate>
+                                <smartutils:TagSelector NodeID="nodeID" OnlyHistoricalTags="False" RuntimeVersion="True" ReferencedTag="tagReference" HistoricalPropName="historicalName" ColumnPropName="tagName" DlrsourcePropName="dlrsource" TagName="tagName"
+                                    OnApplyChanges="TagSelector_OnApplyChanges" DataContext="{Binding RowData.Row, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Document="{Binding Document, RelativeSource={RelativeSource AncestorType=UserControl, Mode=FindAncestor}, Mode=OneWay}" />
+                            </DataTemplate>
+                        </dxg:GridColumn.CellTemplate>
+                    </dxg:GridColumn>
+                  <dxg:GridColumn MinWidth="50" AllowDrop="False" AllowEditing="False" Header="{x:Static properties:Resources.TagConditionalName}">
+                    <dxg:GridColumn.CellTemplate>
+                      <DataTemplate>
+                        <smartutils:TagSelector RuntimeVersion="True" ReferencedTag="conditionalTag"  OnlyHistoricalTags="False" HitTestVisiblePropName="dlrsource"
+                                                UpdateRelatedProperties="False" OnApplyChanges="TagSelector_OnApplyChanges" DataContext="{Binding RowData.Row, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                Document="{Binding Document, RelativeSource={RelativeSource AncestorType=UserControl, Mode=FindAncestor}, Mode=OneWay}" />
+                      </DataTemplate>
+                    </dxg:GridColumn.CellTemplate>
+                  </dxg:GridColumn>
+                  <dxg:GridColumn AllowDrop="False" AllowEditing="False" DisplayMemberBinding="{Binding Path=historicalName, Mode=TwoWay}" Header="{x:Static properties:Resources.HistoricalName}">
+                        <dxg:GridColumn.CellTemplate>
+                            <DataTemplate>
+                                <DockPanel LastChildFill="True" ToolTip="{Binding Data.historicalName}" Grid.Column="1" Grid.Row="1"
+                                           HorizontalAlignment="Stretch" VerticalAlignment="Center">
+                                    <TextBox IsReadOnly="True" IsHitTestVisible="False" x:Name="historical" HorizontalAlignment="Stretch" VerticalAlignment="Center"
+                                                 ToolTip="{Binding Data.historicalName}" Text="{Binding Data.historicalName}" />
+                                </DockPanel>
+                            </DataTemplate>
+                        </dxg:GridColumn.CellTemplate>
+                    </dxg:GridColumn>
+                    <dxg:GridColumn DisplayMemberBinding="{Binding Path=usesourcetimestamp, Mode=TwoWay}" Header="{x:Static properties:Resources.SourceTimeStampTitle}">
+                        <dxg:GridColumn.EditSettings>
+                            <dxe:CheckEditSettings/>
+                        </dxg:GridColumn.EditSettings>
+                    </dxg:GridColumn>
+                    <dxg:GridColumn DisplayMemberBinding="{Binding Path=localizeSourceTimeStamp, Mode=TwoWay}" Header="{x:Static properties:Resources.LocalizeSourceTimeStampTitle}">
+                        <dxg:GridColumn.EditSettings>
+                            <dxe:CheckEditSettings/>
+                        </dxg:GridColumn.EditSettings>
+                        <dxg:GridColumn.CellTemplate>
+                            <DataTemplate>
+                                <dxe:CheckEdit Name="PART_Editor" 
+                                      IsEnabled="{Binding RowData.Row.usesourcetimestamp}"/>
+                            </DataTemplate>
+                        </dxg:GridColumn.CellTemplate>
+                    </dxg:GridColumn>
+                    <dxg:GridColumn DisplayMemberBinding="{Binding Path=useTableAggregation, Mode=TwoWay}" Header="{x:Static properties:Resources.UseTableAggregation}">
+                        <dxg:GridColumn.EditSettings>
+                            <dxe:CheckEditSettings/>
+                        </dxg:GridColumn.EditSettings>
+                        <dxg:GridColumn.CellTemplate>
+                            <DataTemplate>
+                                <dxe:CheckEdit Name="PART_Editor" 
+                                      IsEnabled="{Binding RowData.Row.dlrsource}"/>
+                            </DataTemplate>
+                        </dxg:GridColumn.CellTemplate>
+                    </dxg:GridColumn>
+                    <dxg:GridColumn DisplayMemberBinding="{Binding Path=minAggregation, Mode=TwoWay}" Header="{x:Static properties:Resources.ShowMinAggregation}">
+                        <dxg:GridColumn.EditSettings>
+                            <dxe:CheckEditSettings/>
+                        </dxg:GridColumn.EditSettings>
+                        <dxg:GridColumn.CellTemplate>
+                            <DataTemplate>
+                                <dxe:CheckEdit Name="PART_Editor" 
+                                      IsEnabled="{Binding RowData.Row.useTableAggregation}"/>
+                            </DataTemplate>
+                        </dxg:GridColumn.CellTemplate>
+                    </dxg:GridColumn>
+                    <dxg:GridColumn DisplayMemberBinding="{Binding Path=avgAggregation, Mode=TwoWay}" Header="{x:Static properties:Resources.ShowAvgAggregation}">
+                        <dxg:GridColumn.EditSettings>
+                            <dxe:CheckEditSettings/>
+                        </dxg:GridColumn.EditSettings>
+                        <dxg:GridColumn.CellTemplate>
+                            <DataTemplate>
+                                <dxe:CheckEdit Name="PART_Editor" 
+                                      IsEnabled="{Binding RowData.Row.useTableAggregation}"/>
+                            </DataTemplate>
+                        </dxg:GridColumn.CellTemplate>
+                    </dxg:GridColumn>
+                    <dxg:GridColumn DisplayMemberBinding="{Binding Path=maxAggregation, Mode=TwoWay}" Header="{x:Static properties:Resources.ShowMaxAggregation}">
+                        <dxg:GridColumn.EditSettings>
+                            <dxe:CheckEditSettings/>
+                        </dxg:GridColumn.EditSettings>
+                        <dxg:GridColumn.CellTemplate>
+                            <DataTemplate>
+                                <dxe:CheckEdit Name="PART_Editor" 
+                                      IsEnabled="{Binding RowData.Row.useTableAggregation}"/>
+                            </DataTemplate>
+                        </dxg:GridColumn.CellTemplate>
+                    </dxg:GridColumn>
+                    <dxg:GridColumn DisplayMemberBinding="{Binding Path=isVisible, Mode=TwoWay}" Header="{x:Static properties:Resources.VisibleTitle}">
+                        <dxg:GridColumn.EditSettings>
+                            <dxe:CheckEditSettings/>
+                        </dxg:GridColumn.EditSettings>
+                    </dxg:GridColumn>
+                    <dxg:GridColumn DisplayMemberBinding="{Binding Path=isstatisticenabled, Mode=TwoWay}" Header="{x:Static properties:Resources.StatisticsLineTitle}">
+                        <dxg:GridColumn.EditSettings>
+                            <dxe:CheckEditSettings/>
+                        </dxg:GridColumn.EditSettings>
+                        <dxg:GridColumn.CellTemplate>
+                            <DataTemplate>
+                                <dxe:CheckEdit Name="PART_Editor" 
+                                      IsEnabled="{Binding RowData.Row.useTableAggregation,Converter={StaticResource InverseBooleanConverter}}"/>
+                            </DataTemplate>
+                        </dxg:GridColumn.CellTemplate>
+                    </dxg:GridColumn>
+                    <dxg:GridColumn DisplayMemberBinding="{Binding Path=showaxis, Mode=TwoWay}" Header="{x:Static properties:Resources.ShowAxisTitle}">
+                        <dxg:GridColumn.EditSettings>
+                            <dxe:CheckEditSettings/>
+                        </dxg:GridColumn.EditSettings>
+                    </dxg:GridColumn>
+                    <dxg:GridColumn DisplayMemberBinding="{Binding Path=logarithmicYScale, Mode=TwoWay}" Header="{x:Static properties:Resources.LogarithmicYScaleTitle}">
+                        <dxg:GridColumn.EditSettings>
+                            <dxe:CheckEditSettings/>
+                        </dxg:GridColumn.EditSettings>
+                    </dxg:GridColumn>
+                    <dxg:GridColumn DisplayMemberBinding="{Binding Path=logarithmicbaseYScale, Mode=TwoWay}" Header="{x:Static properties:Resources.LogarithmicBaseYScaleTitle}">
+                        <dxg:GridColumn.EditSettings>
+                            <dxe:TextEditSettings MaskType="Numeric" Mask="d" />
+                        </dxg:GridColumn.EditSettings>
+                    </dxg:GridColumn>
+                    <dxg:GridColumn DisplayMemberBinding="{Binding Path=authomaticscale, Mode=TwoWay}" Header="{x:Static properties:Resources.AuthomaticScaleTitle}">
+                        <dxg:GridColumn.EditSettings>
+                            <dxe:CheckEditSettings/>
+                        </dxg:GridColumn.EditSettings>
+                    </dxg:GridColumn>
+                    <dxg:GridColumn DisplayMemberBinding="{Binding Path=min, Mode=TwoWay}" Header="{x:Static properties:Resources.MinValTitle}">
+                        <dxg:GridColumn.EditSettings>
+                            <dxe:TextEditSettings MaskType="Numeric" Mask="g" />
+                        </dxg:GridColumn.EditSettings>
+                    </dxg:GridColumn>
+                    <dxg:GridColumn DisplayMemberBinding="{Binding Path=max, Mode=TwoWay}" Header="{x:Static properties:Resources.MaxValTitle}">
+                        <dxg:GridColumn.EditSettings>
+                            <dxe:TextEditSettings MaskType="Numeric" Mask="g" />
+                        </dxg:GridColumn.EditSettings>
+                    </dxg:GridColumn>
+                    <dxg:GridColumn x:Name="useEUMinMaxColumn" DisplayMemberBinding="{Binding Path=useeuminmax, Mode=TwoWay}" Header="{x:Static properties:Resources.UseEUMinMaxTitle}">
+                        <dxg:GridColumn.EditSettings>
+                            <dxe:CheckEditSettings/>
+                        </dxg:GridColumn.EditSettings>
+                    </dxg:GridColumn>
+                    <dxg:GridColumn DisplayMemberBinding="{Binding Path=serieTypeLine, Mode=TwoWay}" Header="{x:Static properties:Resources.LineType}">
+
+                        <dxg:GridColumn.EditTemplate>
+                            <ControlTemplate>
+                                <dxe:ComboBoxEdit Name="PART_Editor" IsEnabled="{Binding RowData.Row.useTableAggregation,Converter={StaticResource InverseBooleanConverter}}" 
+                                          HorizontalContentAlignment="Left"                                        
+                                          EditValue="{Binding Path=EditValue, RelativeSource={RelativeSource TemplatedParent}}" 
+                                          SelectedItem="{Binding Path=EditValue, RelativeSource={RelativeSource TemplatedParent}}"
+                                          EditorActivated="LINE_Editor_DropDownOpened"
+                                          IsTextEditable="False"
+                                          AllowNullInput="False" 
+                                          AcceptsReturn="False"
+                                          AutoComplete="False" 
+                                          ImmediatePopup="True">
+                                </dxe:ComboBoxEdit>
+                            </ControlTemplate>
+                        </dxg:GridColumn.EditTemplate>
+                        <dxg:GridColumn.CellTemplate>
+                            <DataTemplate>
+                                <dxe:TextEdit Name="PART_Editor" 
+                                      IsEnabled="{Binding RowData.Row.useTableAggregation,Converter={StaticResource InverseBooleanConverter}}"/>
+                            </DataTemplate>
+                        </dxg:GridColumn.CellTemplate>
+                    </dxg:GridColumn>
+                    <dxg:GridColumn x:Name="arrayIndex" DisplayMemberBinding="{Binding Path=arrayindex, Mode=TwoWay}" Header="{x:Static properties:Resources.ArrayIndex}">
+                        <dxg:GridColumn.EditSettings>
+                            <dxe:TextEditSettings MaskType="Numeric" Mask="d" />
+                        </dxg:GridColumn.EditSettings>
+                    </dxg:GridColumn>
+                    <dxg:GridColumn DisplayMemberBinding="{Binding Path=thickness, Mode=TwoWay}" Header="{x:Static properties:Resources.Thickness}">
+                        <dxg:GridColumn.EditSettings>
+                            <dxe:TextEditSettings MaskType="Numeric" Mask="d" />
+                        </dxg:GridColumn.EditSettings>
+                    </dxg:GridColumn>
+                    <dxg:GridColumn DisplayMemberBinding="{Binding Path=pointPrecision, Mode=TwoWay}" Header="{x:Static properties:Resources.PointPrecision}">
+                        <dxg:GridColumn.EditSettings>
+                            <dxe:TextEditSettings MaskType="Numeric" Mask="d" />
+                        </dxg:GridColumn.EditSettings>
+                    </dxg:GridColumn>
+                </dxg:GridControl.Columns>
+                <dxg:GridControl.View>
+                    <dxg:TableView AllowMoveColumnToDropArea="False" 
+                                       Name="tableView" ShowTotalSummary="False" 
+                                       FocusedRowChanged="tableView_FocusedRowChanged"
+                                       CellValueChanging="tableView_CellValueChanging"
+                                       CellValueChanged="tableView_CellValueChanged" 
+                                       AutoWidth="true" ShowGroupPanel="False" />
+                </dxg:GridControl.View>
+            </dxg:GridControl>
+        </Grid>
+    </Grid>
+</UserControl>

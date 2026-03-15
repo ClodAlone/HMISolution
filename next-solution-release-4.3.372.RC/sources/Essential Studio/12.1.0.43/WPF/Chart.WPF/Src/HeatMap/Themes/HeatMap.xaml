@@ -1,0 +1,162 @@
+﻿<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="clr-namespace:Syncfusion.Windows.Chart"
+    >
+    <RelativeSource x:Key="controlAncestor"
+                          Mode="FindAncestor"
+                          AncestorType="{x:Type local:HeatMapControl}"
+                          AncestorLevel="1"
+                        />
+    
+    <ItemsPanelTemplate x:Key="stdPanel">
+        <local:HeatMapsPanel  SnapsToDevicePixels="True"/>
+    </ItemsPanelTemplate>
+    
+    <ItemsPanelTemplate x:Key="sqfdPanel">
+        <local:SquarifiedHeatMapsPanel  SnapsToDevicePixels="True"/>
+    </ItemsPanelTemplate>
+    
+    <ItemsPanelTemplate x:Key="horSlicesPanel">
+        <local:HorizontalSlicesPanel  SnapsToDevicePixels="True"/>
+    </ItemsPanelTemplate>
+    
+    <ItemsPanelTemplate x:Key="vertSlicesPanel">
+        <local:VerticalSlicesPanel  SnapsToDevicePixels="True"/>
+    </ItemsPanelTemplate>
+    
+    <local:MyBGColorConverter x:Key="myBGColorConverter"/>
+    <local:MyItemContentProvider x:Key="myItemContentProvider"/>
+    
+        
+    <Style TargetType="{x:Type local:HeatMapControl}">
+        <Setter Property="ItemsPanel" Value="{StaticResource stdPanel}"></Setter>
+
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type local:HeatMapControl}">
+                    <Border
+                        x:Name="Bd"
+                        BorderBrush="{TemplateBinding BorderBrush}"
+                        BorderThickness="{TemplateBinding BorderThickness}"
+                        Background="{TemplateBinding Background}"
+                        Padding="{TemplateBinding Padding}"
+                        SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}"
+                        >
+                            <ItemsPresenter/>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+
+        <Style.Triggers>
+            <Trigger Property="ItemsLayoutMode" Value="Squarified">
+                <Setter Property="ItemsPanel" Value="{StaticResource sqfdPanel}"></Setter>
+            </Trigger>
+            <Trigger Property="ItemsLayoutMode" Value="SliceAndDiceHorizontal">
+                <Setter Property="ItemsPanel" Value="{StaticResource horSlicesPanel}"></Setter>
+            </Trigger>
+            <Trigger Property="ItemsLayoutMode" Value="SliceAndDiceVertical">
+                <Setter Property="ItemsPanel" Value="{StaticResource vertSlicesPanel}"></Setter>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+  
+    <Style TargetType="{x:Type local:HeatMapItem}">
+       
+        <Setter Property="WeightValuePath">
+            <Setter.Value>
+                <Binding Path="WeightValuePath" RelativeSource="{StaticResource controlAncestor}">
+                </Binding>
+            </Setter.Value>
+        </Setter>
+        
+        <Setter Property="ColorWeightValuePath">
+            <Setter.Value>
+                <Binding Path="ColorValuePath" RelativeSource="{StaticResource controlAncestor}">
+                </Binding>
+            </Setter.Value>
+        </Setter>
+
+        <Setter Property="ItemsLayoutMode">
+            <Setter.Value>
+                <Binding Path="ItemsLayoutMode" RelativeSource="{StaticResource controlAncestor}"></Binding>
+            </Setter.Value>
+        </Setter>
+
+        <Setter Property="Background">
+            <Setter.Value>
+                <MultiBinding Converter="{StaticResource myBGColorConverter}">
+                    <MultiBinding.Bindings>
+                    
+                        <Binding RelativeSource="{x:Static RelativeSource.Self}" />
+                        <Binding RelativeSource="{x:Static RelativeSource.Self}"  Path="IsColorInfoAvailable"></Binding>
+                        <Binding RelativeSource="{x:Static RelativeSource.Self}"  Path="ColorWeight"></Binding>
+                        <Binding Path="HighestWeightColor" RelativeSource="{StaticResource controlAncestor}" ></Binding>
+                        <Binding Path="LowestWeightColor" RelativeSource="{StaticResource controlAncestor}"></Binding>
+                        <Binding Path="MedianWeightColor" RelativeSource="{StaticResource controlAncestor}"></Binding>
+                        <Binding Path="MedianWeight" RelativeSource="{StaticResource controlAncestor}"></Binding>
+                        <Binding Path="ColorCalculationLevel" RelativeSource="{StaticResource controlAncestor}"></Binding>
+                    </MultiBinding.Bindings>
+                </MultiBinding>
+            </Setter.Value>
+        </Setter>
+       
+        <Setter Property="BorderThickness" Value="1"></Setter>
+        <Setter Property="BorderBrush" Value="{x:Static SystemColors.ActiveBorderBrush}"></Setter>
+        <Setter Property="VerticalAlignment" Value="Stretch"></Setter>
+        <Setter Property="HorizontalAlignment" Value="Stretch"></Setter>
+        <Setter Property="VerticalContentAlignment" Value="Stretch"></Setter>
+        <Setter Property="HorizontalContentAlignment" Value="Stretch"></Setter>
+
+        <Setter Property="ItemsPanel" Value="{StaticResource stdPanel}"></Setter>
+        
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type local:HeatMapItem}">
+                    <Border
+                    Background="{Binding Background, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type local:HeatMapItem}}}"
+                    BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}"
+                    Padding="{TemplateBinding Padding}"
+                    SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}"
+                    Visibility="{TemplateBinding Visibility}"
+                    Margin="{TemplateBinding Margin}"
+                    ClipToBounds="True"
+                    >
+                        <Grid>
+                            <local:ContentPanel IntersectAction="{Binding TextIntersectAction, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type local:HeatMapControl}}}">
+                                <Canvas>
+                                <TextBlock Background="Transparent" >                              
+                            <ContentPresenter                                
+                            x:Name="PART_Header"
+                            Content="{TemplateBinding HeaderedContentControl.Header}"
+                            ContentTemplate="{TemplateBinding HeaderedContentControl.HeaderTemplate}" 
+                            ContentSource="Header"
+                          
+                            >
+                            </ContentPresenter>                                  
+                                    </TextBlock>
+                                    </Canvas>
+                                </local:ContentPanel>
+                            <ItemsPresenter
+                                x:Name="ItemsHost"
+                                Grid.Row="1"
+                              />
+                        </Grid>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+            <Trigger Property="ItemsLayoutMode" Value="Squarified">
+                <Setter Property="ItemsPanel" Value="{StaticResource sqfdPanel}"></Setter>
+            </Trigger>
+            <Trigger Property="ItemsLayoutMode" Value="SliceAndDiceHorizontal">
+                <Setter Property="ItemsPanel" Value="{StaticResource horSlicesPanel}"></Setter>
+            </Trigger>
+            <Trigger Property="ItemsLayoutMode" Value="SliceAndDiceVertical">
+                <Setter Property="ItemsPanel" Value="{StaticResource vertSlicesPanel}"></Setter>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+</ResourceDictionary>

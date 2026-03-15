@@ -1,0 +1,142 @@
+<syncfusion:ChromelessWindow
+    Name="memberEditorWindow"
+    x:Class="Syncfusion.Windows.Tools.Olap.MemberEditor"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:local="clr-namespace:Syncfusion.Windows.Tools.Olap"
+    xmlns:sfshared="clr-namespace:Syncfusion.Windows.Shared;assembly=Syncfusion.Shared.WPF"
+    xmlns:syncfusion="http://schemas.syncfusion.com/wpf"
+    xmlns:System="clr-namespace:System;assembly=mscorlib"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:resources="clr-namespace:Syncfusion.Windows.Tools.Olap.Resources"
+    Width="250" Height="325" MinHeight="325" MinWidth="250"
+    DataContext="{Binding RelativeSource={RelativeSource self}}"
+    Icon="../../Images/App.ico"
+    ResizeMode="CanResizeWithGrip" FontSize="12"
+    Title="{Binding ElementName=textBlockTitle, Path=Text}"  WindowStyle="ToolWindow" AllowsTransparency="True">
+    <syncfusion:ChromelessWindow.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Syncfusion.OlapTools.WPF;component/CubeDimensionBrowser/Themes/MainTemplate.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+
+            <!--Image convertor-->
+            <Image x:Key="checked" Source="pack://application:,,,/Syncfusion.OlapTools.WPF;component//Images/CheckAll.png"/>
+            <Image x:Key="unChecked" Source="pack://application:,,,/Syncfusion.OlapTools.WPF;component//Images/UnCheckAll.png"/>
+            <ControlTemplate x:Key="buttonTemplate"/>
+            <local:ImageConverter x:Key="imageConverter"/>
+
+            <!--Image height and width convertor-->
+            <local:WidthHeightConvertor x:Key="widthHeightConvertor"/>
+
+            <!--Cube dimension browser Hierarchical data template-->
+            <HierarchicalDataTemplate x:Key="DTPopupTreeView" ItemsSource="{Binding Path=ChildNodes}">
+                <ItemsControl>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="16px"/>
+                            <ColumnDefinition Width="20"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <!--MemberEditor item check box-->
+                        <CheckBox
+                            Grid.Column="0"
+                            Margin="1,3,1,1"
+                            ClickMode="Press"
+                            IsChecked="{Binding Path=IsSelected, 
+                                  Mode=TwoWay, 
+                                  UpdateSourceTrigger=PropertyChanged}"
+                            Tag="{Binding}"/>
+
+                        <!--MemberEditor item image-->
+                        <Image
+                            Width="{Binding Converter={StaticResource widthHeightConvertor}}"
+                            Height="{Binding Converter={StaticResource widthHeightConvertor}}"
+                            Grid.Column="1"
+                            Margin="1,1,1,1"
+                            SnapsToDevicePixels="True"
+                            Source="{Binding Converter={StaticResource imageConverter}}"/>
+
+                        <!--MemberEditor item text-->
+                        <TextBlock Grid.Column="2" Margin="1,2,1,1" Text="{Binding Path=Caption}"/>
+                    </Grid>
+                </ItemsControl>
+            </HierarchicalDataTemplate>
+
+            <!--FontSize for the member editor items-->
+            <System:Double x:Key="FontSize">12
+            </System:Double>
+
+            <resources:MemberEditorResourceWrapper x:Key="ResourceWrapperKeys" />
+        </ResourceDictionary>
+    </syncfusion:ChromelessWindow.Resources>
+    <Grid>
+        <!-- Since, Resource wrapper is added as resource of the window. We can't bind the title directly. 
+            So, we are binding this text block with the title. The Title will bind to this text block-->
+        <TextBlock x:Name="textBlockTitle" Text="{Binding Source={StaticResource ResourceWrapperKeys}, Path=OlapToolsMemberEditorTitle}" Visibility="Collapsed" />
+
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="25px"/>
+                <RowDefinition Height="25px"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="30px"/>
+            </Grid.RowDefinitions>
+            <!--MemberEditor item caption-->
+            <TextBlock
+                x:Name="lblPopName"
+                Grid.Row="0"
+                Margin="5,0,0,0"
+                VerticalAlignment="Center"
+                FontSize="{DynamicResource FontSize}"
+                FontWeight="Bold"
+                Text="{Binding PopupTittle}"/>
+            <!--Check All and uncheck all buttons-->
+            <Grid Grid.Row="1" Margin="5,0,0,0" VerticalAlignment="Top">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <CheckBox
+                    x:Name="btnCheck"
+                    Grid.Column="0"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Center"
+                    Click="btnCheck_Click"
+                    Content="{Binding Source={StaticResource ResourceWrapperKeys}, Path=OlapToolsMemberEditorCheckAllUnCheckAll}"
+                    ToolTip="{Binding Source={StaticResource ResourceWrapperKeys}, Path=OlapToolsMemberEditorCheckAllUnCheckAll}">
+                </CheckBox>
+            </Grid>
+            <!--Cube Dimension with template-->
+            <Grid Grid.Row="2">
+                <local:CubeDimensionBrowser
+                    x:Name="tvPopupData"
+                    Margin="5"
+                    AllowNodeDragging="False"
+                    IncludeMembers="True"
+                    ItemTemplate="{StaticResource DTPopupTreeView}" Style="{StaticResource DefaultCubeDimensionBrowser}"/>
+            </Grid>
+            <!--Finally OK and Cancel buttons-->
+            <Grid Height="25" Grid.Row="3" VerticalAlignment="Bottom" Margin="0,0,7,7">
+                <!--OK Button-->
+                <Button
+                    x:Name="btnPopupOK"
+                    Width="60"
+                    HorizontalAlignment="Right"
+                    Margin="0,0,75,0"
+                    VerticalAlignment="Bottom"
+                    Click="btnPopupOK_Click"
+                    Content="{Binding Source={StaticResource ResourceWrapperKeys}, Path=OlapToolsEditorOk}"
+                    IsDefault="True"/>
+                <!--Cancel Button-->
+                <Button
+                    x:Name="btnPopupCancel"
+                    Width="65"
+                    VerticalAlignment="Bottom"
+                    HorizontalAlignment="Right"
+                    Click="btnPopupCancel_Click"
+                    Content="{Binding Source={StaticResource ResourceWrapperKeys}, Path=OlapToolsEditorCancel}"
+                    IsCancel="True"/>
+            </Grid>
+        </Grid>
+    </Grid>
+</syncfusion:ChromelessWindow>

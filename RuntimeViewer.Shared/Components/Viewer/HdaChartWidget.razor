@@ -1,0 +1,292 @@
+@using SharedModels
+@using RuntimeViewer.Shared.Services
+@implements IDisposable
+
+<div class="hda-chart-widget" style="width: 100%; height: 100%; display: flex; flex-direction: column; font-family: sans-serif; font-size: 11px; background: var(--hda-bg, #111827); color: var(--hda-text, #e0e0e0); border: 1px solid var(--hda-border, #333); border-radius: 4px; overflow: hidden;">
+    @* Toolbar *@
+    <div class="hda-toolbar">
+        <span style="font-weight: bold; font-size: 12px;">📊 HDA</span>
+        <span style="font-size: 10px; color: #888;">
+            @if (_series.Count > 0)
+            {
+                <text>(@_series.Sum(s => s.Points.Count) pts)</text>
+            }
+        </span>
+        <span style="flex: 1;"></span>
+
+        <select class="hda-select" @bind="_timeRangeMinutes" @bind:after="Reload">
+            <option value="5">5 min</option>
+            <option value="15">15 min</option>
+            <option value="60">1 hour</option>
+            <option value="360">6 hours</option>
+            <option value="1440">24 hours</option>
+        </select>
+
+        <button class="hda-btn" @onclick="Reload" disabled="@_loading" title="Refresh">🔄</button>
+        <button class="hda-btn" @onclick="ToggleAutoRefresh" title="@(_autoRefresh ? "Disable auto-refresh" : "Enable auto-refresh")">
+            @(_autoRefresh ? "⏸" : "▶")
+        </button>
+    </div>
+
+    @* Chart area *@
+    <div class="hda-chart-area" @ref="_chartRef">
+        @if (_loading && _series.Count == 0)
+        {
+            <div style="text-align: center; padding: 30px; color: #888;">⏳ Loading history…</div>
+        }
+        else if (_series.Count == 0 || _series.All(s => s.Points.Count == 0))
+        {
+            <div style="text-align: center; padding: 30px; color: #888;">📭 No historical data</div>
+        }
+        else
+        {
+            <svg viewBox="0 0 @_chartWidth @_chartHeight" width="100%" height="100%" preserveAspectRatio="none"
+                 xmlns="http://www.w3.org/2000/svg" style="display: block;">
+
+                @* Grid lines *@
+                @for (int i = 0; i <= 4; i++)
+                {
+                    var y = _marginTop + (_plotHeight * i / 4.0);
+                    <line x1="@_marginLeft" y1="@Fmt(y)" x2="@(_chartWidth - _marginRight)" y2="@Fmt(y)"
+                          stroke="#1f2937" stroke-width="1" />
+                }
+                @for (int i = 0; i <= 6; i++)
+                {
+                    var x = _marginLeft + (_plotWidth * i / 6.0);
+                    <line x1="@Fmt(x)" y1="@_marginTop" x2="@Fmt(x)" y2="@(_chartHeight - _marginBottom)"
+                          stroke="#1f2937" stroke-width="1" />
+                }
+
+                @* Axes *@
+                <line x1="@_marginLeft" y1="@_marginTop" x2="@_marginLeft" y2="@(_chartHeight - _marginBottom)"
+                      stroke="#374151" stroke-width="1" />
+                <line x1="@_marginLeft" y1="@(_chartHeight - _marginBottom)"
+                      x2="@(_chartWidth - _marginRight)" y2="@(_chartHeight - _marginBottom)"
+                      stroke="#374151" stroke-width="1" />
+
+                @* Y-axis labels *@
+                @for (int i = 0; i <= 4; i++)
+                {
+                    var y = _marginTop + (_plotHeight * i / 4.0);
+                    var val = _globalMax - ((_globalMax - _globalMin) * i / 4.0);
+                    @RenderSvgLabel(_marginLeft - 4, y + 3, "end", "#6b7280", 8, Fmt(val))
+                }
+
+                @* X-axis labels *@
+                @for (int i = 0; i <= 6; i++)
+                {
+                    var x = _marginLeft + (_plotWidth * i / 6.0);
+                    var t = _timeMin.AddTicks((long)((_timeMax - _timeMin).Ticks * i / 6.0));
+                    @RenderSvgLabel(x, _chartHeight - _marginBottom + 12, "middle", "#6b7280", 7, t.ToLocalTime().ToString("HH:mm:ss"))
+                }
+
+                @* Data series *@
+                @{ int seriesIdx = 0; }
+                @foreach (var s in _series)
+                {
+                    if (s.Points.Count > 1)
+                    {
+                        var color = _seriesColors[seriesIdx % _seriesColors.Length];
+                        var pathData = BuildPolyline(s);
+                        <polyline points="@pathData" fill="none" stroke="@color" stroke-width="1.5"
+                                  stroke-linejoin="round" vector-effect="non-scaling-stroke" />
+                    }
+                    seriesIdx++;
+                }
+            </svg>
+        }
+    </div>
+
+    @* Legend *@
+    @if (_series.Count > 0)
+    {
+        <div class="hda-legend">
+            @{ int legendIdx = 0; }
+            @foreach (var s in _series)
+            {
+                var color = _seriesColors[legendIdx % _seriesColors.Length];
+                var lastVal = s.Points.LastOrDefault()?.Value;
+                <span class="hda-legend-item">
+                    <span style="display:inline-block;width:10px;height:3px;background:@color;vertical-align:middle;margin-right:3px;"></span>
+                    @GetShortName(s.VariableName)
+                    @if (lastVal.HasValue)
+                    {
+                        <span style="color:#9ca3af;"> = @Fmt(lastVal.Value)</span>
+                    }
+                </span>
+                legendIdx++;
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public List<string> VariablePaths { get; set; } = new();
+    [Parameter] public int TimeRangeMinutes { get; set; } = 60;
+    [Parameter] public int MaxPoints { get; set; } = 500;
+
+    [Inject] private HdaReaderService Hda { get; set; } = default!;
+
+    private ElementReference _chartRef;
+    private List<HdaSeries> _series = new();
+    private bool _loading;
+    private bool _autoRefresh = true;
+    private int _timeRangeMinutes = 60;
+    private System.Threading.Timer? _refreshTimer;
+
+    // Chart layout
+    private const int _chartWidth = 800;
+    private const int _chartHeight = 300;
+    private const int _marginLeft = 55;
+    private const int _marginRight = 10;
+    private const int _marginTop = 10;
+    private const int _marginBottom = 22;
+    private const int _plotWidth = _chartWidth - _marginLeft - _marginRight;
+    private const int _plotHeight = _chartHeight - _marginTop - _marginBottom;
+
+    private double _globalMin;
+    private double _globalMax;
+    private DateTime _timeMin;
+    private DateTime _timeMax;
+
+    private static readonly string[] _seriesColors =
+    [
+        "#3b82f6", "#ef4444", "#10b981", "#f59e0b", "#8b5cf6",
+        "#ec4899", "#06b6d4", "#84cc16", "#f97316", "#6366f1"
+    ];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _timeRangeMinutes = TimeRangeMinutes > 0 ? TimeRangeMinutes : 60;
+        await Reload();
+        StartAutoRefresh();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (VariablePaths.Count > 0 && _series.Count == 0)
+            await Reload();
+    }
+
+    private async Task Reload()
+    {
+        var paths = VariablePaths.Where(p => !string.IsNullOrWhiteSpace(p)).ToList();
+        if (paths.Count == 0) return;
+
+        _loading = true;
+        StateHasChanged();
+
+        _series = await Hda.ReadHistoryAsync(paths, _timeRangeMinutes, MaxPoints);
+        ComputeGlobalRange();
+
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private void ComputeGlobalRange()
+    {
+        _globalMin = double.MaxValue;
+        _globalMax = double.MinValue;
+        _timeMin = DateTime.MaxValue;
+        _timeMax = DateTime.MinValue;
+
+        foreach (var s in _series)
+        {
+            if (s.Points.Count == 0) continue;
+            if (s.MinValue < _globalMin) _globalMin = s.MinValue;
+            if (s.MaxValue > _globalMax) _globalMax = s.MaxValue;
+            if (s.Points[0].Time < _timeMin) _timeMin = s.Points[0].Time;
+            if (s.Points[^1].Time > _timeMax) _timeMax = s.Points[^1].Time;
+        }
+
+        if (_globalMin == double.MaxValue) { _globalMin = 0; _globalMax = 100; }
+        if (Math.Abs(_globalMax - _globalMin) < 0.001)
+        {
+            _globalMin -= 1;
+            _globalMax += 1;
+        }
+
+        // Add 5% padding
+        var range = _globalMax - _globalMin;
+        _globalMin -= range * 0.05;
+        _globalMax += range * 0.05;
+
+        if (_timeMin == DateTime.MaxValue) _timeMin = DateTime.UtcNow.AddMinutes(-_timeRangeMinutes);
+        if (_timeMax == DateTime.MinValue) _timeMax = DateTime.UtcNow;
+        if (_timeMax <= _timeMin) _timeMax = _timeMin.AddMinutes(1);
+    }
+
+    private string BuildPolyline(HdaSeries s)
+    {
+        var sb = new System.Text.StringBuilder();
+        var timeSpan = (_timeMax - _timeMin).TotalSeconds;
+        var valueRange = _globalMax - _globalMin;
+
+        foreach (var p in s.Points)
+        {
+            if (!p.Value.HasValue) continue;
+            var xFrac = (p.Time - _timeMin).TotalSeconds / timeSpan;
+            var yFrac = (p.Value.Value - _globalMin) / valueRange;
+
+            var px = _marginLeft + xFrac * _plotWidth;
+            var py = _marginTop + (1 - yFrac) * _plotHeight;
+
+            if (sb.Length > 0) sb.Append(' ');
+            sb.Append(Fmt(px));
+            sb.Append(',');
+            sb.Append(Fmt(py));
+        }
+
+        return sb.ToString();
+    }
+
+    private void StartAutoRefresh()
+    {
+        _refreshTimer?.Dispose();
+        if (_autoRefresh)
+        {
+            _refreshTimer = new System.Threading.Timer(async _ =>
+            {
+                await InvokeAsync(async () =>
+                {
+                    await Reload();
+                });
+            }, null, 10000, 10000);
+        }
+    }
+
+    private void ToggleAutoRefresh()
+    {
+        _autoRefresh = !_autoRefresh;
+        StartAutoRefresh();
+    }
+
+    private static string GetShortName(string path)
+    {
+        var idx = path.LastIndexOf('.');
+        return idx >= 0 ? path[(idx + 1)..] : path;
+    }
+
+    private static string Fmt(double v) =>
+        v.ToString("F1", System.Globalization.CultureInfo.InvariantCulture);
+
+    private RenderFragment RenderSvgLabel(double x, double y, string anchor, string fill, int fontSize, string content) => builder =>
+    {
+        int seq = 0;
+        builder.OpenElement(seq++, "text");
+        builder.AddAttribute(seq++, "x", Fmt(x));
+        builder.AddAttribute(seq++, "y", Fmt(y));
+        builder.AddAttribute(seq++, "text-anchor", anchor);
+        builder.AddAttribute(seq++, "fill", fill);
+        builder.AddAttribute(seq++, "font-size", fontSize);
+        builder.AddAttribute(seq++, "font-family", "monospace");
+        builder.AddContent(seq++, content);
+        builder.CloseElement();
+    };
+
+    public void Dispose()
+    {
+        _refreshTimer?.Dispose();
+    }
+}
+

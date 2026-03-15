@@ -1,0 +1,39 @@
+#region Copyright Syncfusion Inc. 2001 - 2014
+// Copyright Syncfusion Inc. 2001 - 2014. All rights reserved.
+// Use of this code is subject to the terms of our license.
+// A copy of the current license can be obtained at any time by e-mailing
+// licensing@syncfusion.com. Any infringement will be prosecuted under
+// applicable laws. 
+#endregion
+using System;
+using System.Net;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Documents;
+using System.Windows.Ink;
+using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Media.Animation;
+using System.Windows.Shapes;
+
+namespace Syncfusion.Windows.Shared
+{
+    internal interface IOverviewPanel
+    {
+        double Scale { get; set; }
+        double ZoomFactor { get; set; }
+        double MinimumZoom { get; set; }
+        double MaximumZoom { get; set; }
+        bool IsZoomInEnabled { get; set; }
+        ICommand ZoomIn { get; set; }
+        bool IsZoomOutEnabled { get; set; }
+        ICommand ZoomOut { get; set; }
+        bool IsZoomToEnabled { get; set; }
+        ICommand ZoomTo { get; set; }
+        bool IsZoomResetEnabled { get; set; }
+        ICommand ZoomReset { get; set; }
+        ZoomMode ZoomMode { get; set; }
+        bool AllowResize { get; set; }
+        bool IsPanEnabled { get; set; }
+    }
+}

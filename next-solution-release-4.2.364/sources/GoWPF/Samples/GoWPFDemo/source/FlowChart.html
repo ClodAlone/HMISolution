@@ -1,0 +1,123 @@
+﻿<html>
+<head>
+  <title></title>
+  <style type="text/css">
+    .style1 {
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 10pt;
+    }
+  </style>
+</head>
+<body class="style1">
+<p>
+The FlowChart sample demonstrates several key features of GoXam, 
+namely Palettes, Linkable nodes, Drag/Drop behavior, TextEditing on the NodePanel, and the use of DataTemplateDictionaries in Diagrams.
+</p>
+<p>
+The left side of the sample features a Palette.  Palettes allow for automatic readjusting of rows and columns.
+This is demonstrated when the GridSplitter is moved in order to increase the size of the left column.
+The implementation of a Palette in the .xaml file is very similar to that of a Diagram, as shown in the following code segment.	        
+</p>
+<pre>
+    &lt;go:Palette x:Name="myPalette" NodeTemplateDictionary="{StaticResource NodeTemplateDictionaryKey}" 
+                AllowDragOut="True" AllowDrop="False" AllowMove="False" AllowLink="False"&gt;
+    &lt;/go:Palette&gt;
+</pre>
+<p>
+In order for the Palette to place Nodes in the order in which they are declared in the NodesSource, 
+the content of Palette.Layout must be set to a go:GridLayout with the Sorting property set to "Forward".  
+This implementation is shown in the following code segement. 
+</p>
+<pre>
+    &lt;go:Palette.Layout&gt;
+        &lt;go:GridLayout Sorting="Forward" ... /&gt;
+    &lt;/go:Palette.Layout&gt;
+</pre>
+<p>
+Nodes in the Diagram are made Linkable by setting several properties.  
+The distance at which the preview Link snaps to the Ports is set by setting the PortGravity property on the contained LinkingTool.
+</p>
+<pre>
+In the .xaml.cs file
+    diagramModel.Modifiable = true;
+    
+In the .xaml file
+    &lt;go:Diagram ... IsReadOnly="False" ... &gt; 
+      &lt;go:Diagram.LinkingTool&gt;
+        &lt;go:LinkingTool PortGravity="20" /&gt;
+      &lt;/go:Diagram.LinkingTool&gt;
+    &lt;/go:Diagram&gt;
+</pre>
+<p>
+Finally, the Node.LinkableFrom and Node.LinkableTo are set to true on most ellipses, which act as ports.  
+Ellipses representing Top Ports are not LinkableFrom and Ellipses representing Bottom Ports are not LinkableTo.
+</p>
+<pre>
+    &lt;Style TargetType="Ellipse" x:Key="EllipseStyle" &gt;
+      ...
+      &lt;Setter Property="go:Node.LinkableFrom" Value="True" /&gt;
+      &lt;Setter Property="go:Node.LinkableTo" Value="True" /&gt;
+    &lt;Style&gt;
+</pre>
+<p>
+    The Drag/Drop behavior is created by setting AllowDrop to true on the Diagram and AllowDragOut to true on the Palette. 
+</p>
+<p>
+    Instead of binding every property of the nodes to a property in the data class, a DataTemplateDictionary is used.
+    This allows for a seperate DataTemplate for each category of Node.  In order for the right DataTemplate to be used for a Node, 
+    the Model.NodeCategoryPath must be set equal to a property in the Node data class.  In this case, the following code was used.
+</p>
+<pre>
+In the .xaml.cs file    
+        diagramModel.NodeCategoryPath = "Category";
+    ...
+    public class MyNodeData : GraphLinksModelNodeData&lt;string&gt; {
+        public string Category { get; set;}
+        ...
+    }
+    
+In the .xaml file
+     &lt;go:DataTemplateDictionary x:Key="NodeTemplateDictionary" /&gt;  
+     ...
+     &lt;go:Diagram ... NodeTemplateDictionary="{StaticResource NodeTemplateDictionary}" /&gt;
+</pre>
+<p>
+    In order to add the DataTemplates declared in the .xaml file to the DataTemplateDictionary, 
+    the FindResource method is used to get the DataTemplates from the UserControl.Resources.
+</p>
+<pre>
+    DataTemplateDictionary dtd = Diagram.FindResource&lt;DataTemplateDictionary&gt;(this, "NodeTemplateDictionary");
+    ...
+    dtd.Add("Comment", Diagram.FindResource&lt;DataTemplate&gt;(this, "CommentNodeTemplate"));
+</pre>
+<p>
+    TextBlocks within NodePanels can be edited by setting the NodePanel.AllowTextEditing property to true, which is done in TextBlockStyle in this sample.
+    While a Node is selected, this allows for single-click focusing of a collapsed TextBox which shares the same Text as the TextBlock.
+    Editing the text in the TextBox also changes the text in the TextBlock.
+</p>
+<p>
+    An UndoManager was implemented by setting the myDiagram.Model.HasUndoManager to true in the .xaml.cs file.
+    The UndoManager accounts for movement by binding the SpotPanel's Location property in a TwoWay binding.
+</p>
+<pre>
+    &lt;go:SpotPanel x:Name="Spot" Style="{StaticResource SpotPanelStyle}" go:Node.Location="{Binding Path=Data.Location, Mode=TwoWay}" &gt;
+</pre>
+<p>
+    In order for undo/redo functionality to work correctly for a property, the mode of the binding must be TwoWay.
+    The property must also be implemented to call RaisePropertyChanged as is shown in the following code sample.
+</p>
+<pre>
+     public string Text { 
+      get { return _Text; } 
+      set {
+        if (_Text != value) {
+          string old = _Text;
+          _Text = value;
+          RaisePropertyChanged("Text", old, value);
+        }
+      } 
+    }
+    private string _Text = null;
+</pre>
+</body>
+</html>

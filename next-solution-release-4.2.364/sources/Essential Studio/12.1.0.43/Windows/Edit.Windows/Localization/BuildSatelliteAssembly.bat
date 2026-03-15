@@ -1,0 +1,12 @@
+REM #############################################################################
+REM This sample command line creates a Syncfusion.Edit.resources.dll from 
+REM a set or .resources files in the de-DEResources sub-dir.
+REM This sub-dir and the files are not provided by default and needs to be created
+REM before running this batch file.
+REM
+REM This batch file will also utilize the sf.publicsnk file to create the delay signed assembly.
+REM #############################################################################
+
+
+al /target:lib /culture:de-DE /out:Syncfusion.Edit.Windows.resources.dll /v:2.0.0.0 /delay+ /keyf:sf.publicsnk /embed:de-DEResources/Syncfusion.Windows.Forms.Edit.Dialogs.frmFindDialog.de-DE.resources /embed:de-DEResources/Syncfusion.Windows.Forms.Edit.Dialogs.BasePopupForm.resources /embed:de-DEResources/Syncfusion.Windows.Forms.Edit.Dialogs.ConfigurationDialog.de-DE.resources /embed:de-DEResources/Syncfusion.Windows.Forms.Edit.Dialogs.ContextChoice.de-DE.resources /embed:de-DEResources/Syncfusion.Windows.Forms.Edit.Dialogs.ContextPrompt.de-DE.resources /embed:de-DEResources/Syncfusion.Windows.Forms.Edit.Dialogs.controlFormatsList.de-DE.resources /embed:de-DEResources/Syncfusion.Windows.Forms.Edit.Dialogs.controlFormatsSettings.de-DE.resources /embed:de-DEResources/Syncfusion.Windows.Forms.Edit.Dialogs.controlLanguageSelector.de-DE.resources /embed:de-DEResources/Syncfusion.Windows.Forms.Edit.Dialogs.frmCreateLangDialog.de-DE.resources /embed:de-DEResources/Syncfusion.Windows.Forms.Edit.Dialogs.frmFindDialog.de-DE.resources /embed:de-DEResources/Syncfusion.Windows.Forms.Edit.Dialogs.frmFormatsConfig.de-DE.resources /embed:de-DEResources/Syncfusion.Windows.Forms.Edit.Dialogs.frmGoDialog.de-DE.resources /embed:de-DEResources/Syncfusion.Windows.Forms.Edit.Dialogs.frmKeysBinding.de-DE.resources /embed:de-DEResources/Syncfusion.Windows.Forms.Edit.Dialogs.frmNotificationDialog.de-DE.resources /embed:de-DEResources/Syncfusion.Windows.Forms.Edit.Dialogs.frmReplaceDialog.de-DE.resources /embed:de-DEResources/Syncfusion.Windows.Forms.Edit.Dialogs.frmSimpleAdd.de-DE.resources /embed:de-DEResources/Syncfusion.Windows.Forms.Edit.Dialogs.LineStyleDialog.de-DE.resources /embed:de-DEResources/Syncfusion.Windows.Forms.Edit.Dialogs.ListItemsEditor.de-DE.resources /embed:de-DEResources/Syncfusion.Windows.Forms.Edit.Dialogs.ShortcutTextBox.de-DE.resources /embed:de-DEResources/Syncfusion.Windows.Forms.Edit.Dialogs.ToolTipEx.de-DE.resources /embed:de-DEResources/Syncfusion.Windows.Forms.Edit.Localization.SR.de-DE.resources 
+pause

@@ -1,0 +1,667 @@
+﻿<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:local="clr-namespace:Mindscape.WpfElements"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    
+  <ResourceDictionary.MergedDictionaries>
+    <ResourceDictionary Source="/Mindscape.WpfElements;component/Themes/AlloyLight.Common.xaml" />
+  </ResourceDictionary.MergedDictionaries>
+
+  <!-- ======================== -->
+  <!--   DateTimePicker style   -->
+  <!-- ======================== -->
+
+  <Style x:Key="SpinTextBox" TargetType="ComboBox">
+    <Setter Property="IsEditable" Value="True" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="ComboBox">
+          <TextBox Name="PART_EditableTextBox" BorderThickness="0" Background="{TemplateBinding Background}"
+                   Foreground="{TemplateBinding Foreground}" Padding="0,2,0,2" BorderBrush="Transparent" />
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <DataTemplate x:Key="NumericElementTemplate">
+    <local:SpinDecorator ShowSpinUI="False" Change="1" BorderThickness="0" Background="Transparent">
+      <local:IntegerTextBox Value="{Binding Value}" Culture="{Binding Culture}" Minimum="{Binding Minimum}" Maximum="{Binding Maximum}" Padding="0,2,0,2"
+                            Precision="{Binding Precision}" ShowSeparators="False" BorderThickness="0" Background="Transparent" BorderBrush="Transparent" Foreground="{Binding Foreground}" />
+    </local:SpinDecorator>
+  </DataTemplate>
+
+  <DataTemplate x:Key="ReadOnlyElementTemplate">
+    <TextBox Text="{Binding Text, Mode=OneWay}" IsReadOnly="True" BorderThickness="0" Background="Transparent" Focusable="False"
+             Foreground="{Binding Foreground}" Padding="0,2,0,2" BorderBrush="Transparent" />
+  </DataTemplate>
+
+  <DataTemplate x:Key="SelectElementTemplate">
+    <ComboBox SelectedValue="{Binding Text}" Style="{StaticResource SpinTextBox}" ItemsSource="{Binding PermittedValues}" Background="Transparent"
+              Foreground="{Binding Foreground}" Padding="0,2,0,2" />
+  </DataTemplate>
+
+  <local:DateTimePartTemplateSelector x:Key="DateTimePartTemplateSelector"
+                                      NumericElementTemplate="{StaticResource NumericElementTemplate}"
+                                      SelectElementTemplate="{StaticResource SelectElementTemplate}"
+                                      ReadOnlyElementTemplate="{StaticResource ReadOnlyElementTemplate}" />
+
+  <Style TargetType="{x:Type local:DateTimePicker}">
+    <Setter Property="SnapsToDevicePixels" Value="True" />
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="1" />
+    <Setter Property="Background" Value="{StaticResource EditorBackground}" />
+    <Setter Property="Foreground" Value="{StaticResource Foreground}" />
+    <Setter Property="BorderBrush" Value="{StaticResource Border}" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="{x:Type local:DateTimePicker}">
+          <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"
+                  CornerRadius="4">
+            <ItemsControl ItemsSource="{TemplateBinding DisplayElements}" Padding="{TemplateBinding Padding}" VerticalAlignment="Center" Background="Transparent"
+                          Foreground="{TemplateBinding Foreground}" ItemTemplateSelector="{StaticResource DateTimePartTemplateSelector}">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <local:ProportionalStackPanel Orientation="Horizontal" />
+                </ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemContainerStyle>
+                <Style>
+                  <Setter Property="local:ProportionalStackPanel.Proportion" Value="{Binding EstimatedProportion}" />
+                </Style>
+              </ItemsControl.ItemContainerStyle>
+            </ItemsControl>
+          </Border>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- ======================= -->
+  <!--   MonthCalendar style   -->
+  <!-- ======================= -->
+
+  <SolidColorBrush x:Key="CalendarHeaderBackground" Color="#B6B6B6" />
+  <SolidColorBrush x:Key="OutOfMonthForeground" Color="#888888" />
+
+  <local:SameMonthConverter x:Key="SameMonth" />
+
+  <DataTemplate x:Key="NonDayTemplate">
+    <TextBlock />
+  </DataTemplate>
+
+  <DataTemplate x:Key="DayTemplate">
+    <TextBlock Name="TextBlock" HorizontalAlignment="Center" VerticalAlignment="Center" Text="{Binding Day}" />
+    <DataTemplate.Triggers>
+      <DataTrigger Value="False">
+        <DataTrigger.Binding>
+          <MultiBinding Converter="{StaticResource SameMonth}">
+            <Binding />
+            <Binding RelativeSource="{RelativeSource AncestorType={x:Type local:MonthCalendar}}" Path="VisibleMonth" />
+          </MultiBinding>
+        </DataTrigger.Binding>
+        <Setter TargetName="TextBlock" Property="Foreground" Value="{StaticResource OutOfMonthForeground}" />
+      </DataTrigger>
+    </DataTemplate.Triggers>
+  </DataTemplate>
+
+  <local:DayTemplateSelector x:Key="DayTemplateSelector" DayTemplate="{StaticResource DayTemplate}" NonDayTemplate="{StaticResource NonDayTemplate}" />
+
+  <Style x:Key="{x:Static local:MonthCalendar.SelectButtonStyleKey}" TargetType="ButtonBase" BasedOn="{StaticResource ButtonBaseStyle}">
+    <Setter Property="Focusable" Value="False" />
+  </Style>
+
+  <DataTemplate x:Key="DayOfWeekTemplate">
+    <TextBlock Text="{Binding}" HorizontalAlignment="Center" Margin="3,0,3,0" />
+  </DataTemplate>
+
+  <Style TargetType="{x:Type local:MonthCalendar}">
+    <Setter Property="SnapsToDevicePixels" Value="True" />
+    <Setter Property="FocusVisualStyle"	Value="{x:Null}" />
+    <Setter Property="Background" Value="{StaticResource CalendarHeaderBackground}" />
+    <Setter Property="Foreground" Value="{StaticResource Foreground}" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="{x:Type local:MonthCalendar}">
+          <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}">
+            <DockPanel>
+              <DockPanel DockPanel.Dock="Top">
+                <RepeatButton DockPanel.Dock="Left" Style="{StaticResource {x:Static local:MonthCalendar.SelectButtonStyleKey}}" Width="18" Height="20"
+                              Command="{x:Static local:CalendarCommands.MonthBack}" Margin="2" Name="LeftButton" BorderBrush="{StaticResource ButtonBackground}">
+                  <Path Data="M 1 0 L 0 0.5 L 1 1" Stroke="{Binding Foreground, ElementName=LeftButton}" StrokeThickness="2" Stretch="Fill"
+                        StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Width="6" Height="8" />
+                </RepeatButton>
+                <RepeatButton DockPanel.Dock="Right" Style="{StaticResource {x:Static local:MonthCalendar.SelectButtonStyleKey}}" Width="18" Height="20"
+                              Command="{x:Static local:CalendarCommands.MonthForward}" Margin="2" Name="RightButton" BorderBrush="{StaticResource ButtonBackground}">
+                  <Path Data="M 0 0 L 1 0.5 L 0 1" Stroke="{Binding Foreground, ElementName=RightButton}" StrokeThickness="2" Stretch="Fill"
+                        StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Width="6" Height="8" />
+                </RepeatButton>
+                <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center">
+                  <TextBlock Text="{TemplateBinding MonthText}" />
+                  <TextBlock Text="{Binding SelectedDate.Year, RelativeSource={RelativeSource AncestorType={x:Type local:MonthCalendar}}}" />
+                </TextBlock>
+              </DockPanel>
+              <ItemsControl x:Name="PART_DaysOfWeekList" HorizontalContentAlignment="Center" DockPanel.Dock="Top" ItemTemplate="{StaticResource DayOfWeekTemplate}">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <UniformGrid Columns="7" Rows="1" />
+                  </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+              </ItemsControl>
+              <Button Command="{x:Static local:CalendarCommands.SelectToday}" HorizontalAlignment="Center" Height="24" Margin="2" DockPanel.Dock="Bottom"
+                      Style="{StaticResource {x:Static local:MonthCalendar.SelectButtonStyleKey}}" Padding="4,2,4,2"
+                      Content="{DynamicResource {x:Static local:MonthCalendar.TodayButtonContentKey}}" />
+              <ListBox x:Name="PART_DaysList" ItemTemplateSelector="{StaticResource DayTemplateSelector}" 
+                       HorizontalContentAlignment="Center" Background="{StaticResource EditorBackground}" BorderThickness="0"
+                       Foreground="{TemplateBinding Foreground}" KeyboardNavigation.DirectionalNavigation="None"
+                       ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Disabled">
+                <ListBox.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <UniformGrid Columns="7" Rows="{Binding WeeksToDisplay, RelativeSource={RelativeSource AncestorType={x:Type local:MonthCalendar}}}" />
+                  </ItemsPanelTemplate>
+                </ListBox.ItemsPanel>
+              </ListBox>
+            </DockPanel>
+          </Border>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- ============================ -->
+  <!--   DropDownDatePicker style   -->
+  <!-- ============================ -->
+
+  <Style TargetType="{x:Type local:DropDownDatePicker}">
+    <Style.Resources>
+      <DataTemplate x:Key="HeaderTemplate">
+        <local:DateTimePicker Value="{Binding Value, UpdateSourceTrigger=PropertyChanged, Mode=TwoWay}" Padding="0"
+                              BorderThickness="0" Background="{Binding Background}" Culture="{Binding Culture}"
+							  Minimum="{Binding Minimum, RelativeSource={RelativeSource AncestorType={x:Type local:DropDownDatePicker}}}"
+							  Maximum="{Binding Maximum, RelativeSource={RelativeSource AncestorType={x:Type local:DropDownDatePicker}}}"
+                              Format="{Binding Format}" CustomFormat="{Binding CustomFormat}" Foreground="{Binding Foreground}" />
+      </DataTemplate>
+      <DataTemplate x:Key="DropDownTemplate">
+        <local:MonthCalendar SelectedDate="{Binding Value, UpdateSourceTrigger=PropertyChanged, Mode=TwoWay}"
+                             Culture="{Binding Culture}" Foreground="{Binding Foreground}" TodayButtonTimeAction="{Binding TodayButtonTimeAction}"
+                             BorderThickness="1" BorderBrush="{StaticResource PopupBorder}"
+							 Minimum="{Binding Minimum, RelativeSource={RelativeSource AncestorType={x:Type local:DropDownDatePicker}}}"
+							 Maximum="{Binding Maximum, RelativeSource={RelativeSource AncestorType={x:Type local:DropDownDatePicker}}}"
+                             local:DropDownEditBox.RequestCloseOnAction="{Binding CloseOnSelect, RelativeSource={RelativeSource AncestorType={x:Type local:DropDownDatePicker}}}" />
+      </DataTemplate>
+    </Style.Resources>
+    <Setter Property="SnapsToDevicePixels" Value="True" />
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="BorderBrush" Value="{StaticResource Border}" />
+    <Setter Property="Background" Value="{StaticResource EditorBackground}" />
+    <Setter Property="Foreground" Value="{StaticResource Foreground}" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="{x:Type local:DropDownDatePicker}">
+          <local:DropDownEditBox Background="{StaticResource EditorBackground}" Padding="{TemplateBinding Padding}"
+                                 BorderThickness="{TemplateBinding BorderThickness}" BorderBrush="{TemplateBinding BorderBrush}"
+                                 Content="{Binding RelativeSource={RelativeSource AncestorType={x:Type local:DropDownDatePicker}}}"
+                                 HeaderTemplate="{StaticResource HeaderTemplate}" DropDownTemplate="{StaticResource DropDownTemplate}" />
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- ==================== -->
+  <!--   TimePicker style   -->
+  <!-- ==================== -->
+
+  <local:TimeOfDayToStringConverter x:Key="TimeOfDayConverter" />
+  <local:TimeOfDayToStringConverter x:Key="TimeOfDay24HourConverter" TimeDisplayMode="TwentyFourHourTime" />
+
+  <DataTemplate x:Key="TimeOfDayTemplate">
+    <TextBlock Text="{Binding Converter={StaticResource TimeOfDayConverter}}" />
+  </DataTemplate>
+
+  <DataTemplate x:Key="TimeOfDay24HourTemplate">
+    <TextBlock Text="{Binding Converter={StaticResource TimeOfDay24HourConverter}}" />
+  </DataTemplate>
+
+  <Style x:Key="TimePickerToggleButtonStyle" TargetType="ToggleButton">
+    <Setter Property="SnapsToDevicePixels" Value="True" />
+    <Setter Property="FocusVisualStyle"	Value="{x:Null}" />
+    <Setter Property="OverridesDefaultStyle" Value="True" />
+    <Setter Property="Background" Value="{StaticResource DropDownButtonBackground}" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="Padding" Value="2" />
+    <Setter Property="Foreground" Value="{StaticResource DropDownArrowBrush}" />
+    <Setter Property="Focusable" Value="False" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="ToggleButton">
+          <Border Name="Border" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}" CornerRadius="3" BorderThickness="1" BorderBrush="Transparent">
+            <Path Style="{StaticResource DropDownArrowStyle}" VerticalAlignment="{TemplateBinding VerticalContentAlignment}" HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" />
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="Border" Property="Background" Value="{StaticResource MouseOverDropDownButtonBackground}" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <Style x:Key="InvisiblePrompt" TargetType="Inline">
+    <Setter Property="Foreground" Value="Transparent" />
+  </Style>
+
+  <Style x:Key="{x:Type local:TimePicker}" TargetType="{x:Type local:TimePicker}">
+    <Setter Property="SnapsToDevicePixels" Value="True" />
+    <Setter Property="FocusVisualStyle"	Value="{x:Null}" />
+    <Setter Property="BorderBrush" Value="{StaticResource Border}" />
+    <Setter Property="Background" Value="{StaticResource EditorBackground}" />
+    <Setter Property="Padding" Value="4,2,0,3" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="{x:Type local:TimePicker}">
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <Border Name="Border" Grid.ColumnSpan="3" Background="{TemplateBinding BorderBrush}" CornerRadius="3" IsHitTestVisible="False">
+              <Border Background="{TemplateBinding Background}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3" />
+            </Border>
+            <TextBox Text="{Binding Text, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}"
+                     Padding="{TemplateBinding Padding}" BorderBrush="Transparent" Name="TextBox" Visibility="Collapsed"
+                     IsReadOnly="{Binding IsReadOnly, RelativeSource={RelativeSource TemplatedParent}}" />
+            <local:MaskedTextBox Mask="#0:00??" BorderBrush="Transparent" Background="Transparent" Padding="{TemplateBinding Padding}"
+                                 Text="{Binding Text, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}"
+                                 PromptStyle="{StaticResource InvisiblePrompt}" Name="MaskedTextBox" />
+            <Grid Visibility="{Binding IsUpDownVisible, Converter={StaticResource bvc}, RelativeSource={RelativeSource TemplatedParent}}"
+                  Width="14" Grid.Column="1" Margin="0,1,0,1">
+              <Grid.RowDefinitions>
+                <RowDefinition Height="*" />
+                <RowDefinition Height="1" />
+                <RowDefinition Height="*" />
+              </Grid.RowDefinitions>
+              <RepeatButton Command="{x:Static local:SpinCommands.Increase}" Style="{StaticResource {x:Static local:Spin.SpinButtonStyleKey}}">
+                <Polygon Points="4,0 8,3 0,3" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type RepeatButton}}}" />
+              </RepeatButton>
+              <RepeatButton Grid.Row="2" Command="{x:Static local:SpinCommands.Decrease}" Style="{StaticResource {x:Static local:Spin.SpinButtonStyleKey}}">
+                <Polygon Points="4,3 8,0 0,0" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type RepeatButton}}}" />
+              </RepeatButton>
+            </Grid>
+            <ToggleButton Name="DropDownToggle" Grid.Column="2" Width="16" Style="{StaticResource TimePickerToggleButtonStyle}"
+                          Visibility="{Binding IsDropDownToggleVisible, Converter={StaticResource bvc}, RelativeSource={RelativeSource TemplatedParent}}"
+                          IsChecked="{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}">
+              <Path Style="{StaticResource DropDownArrowStyle}" />
+            </ToggleButton>
+            <Popup Name="Popup" IsOpen="{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}}" Placement="Bottom" AllowsTransparency="True">
+              <Grid Name="PopupGrid">
+                <Border MinWidth="{Binding ActualWidth, ElementName=Border}" MaxHeight="200" Style="{StaticResource ShadowStyle}"
+                        BorderBrush="{StaticResource PopupBorder}" BorderThickness="1">
+                  <ListBox Name="SelectionAdapter" ItemsSource="{TemplateBinding ItemsSource}" SelectedItem="{Binding SelectedTime, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"
+                           ScrollViewer.HorizontalScrollBarVisibility="Auto" ScrollViewer.VerticalScrollBarVisibility="Auto" ItemTemplate="{StaticResource TimeOfDayTemplate}" />
+                </Border>
+              </Grid>
+            </Popup>
+          </Grid>
+          <ControlTemplate.Triggers>
+            <Trigger Property="TimeDisplayMode" Value="TwentyFourHourTime">
+              <Setter TargetName="SelectionAdapter" Property="ItemTemplate" Value="{StaticResource TimeOfDay24HourTemplate}" />
+              <Setter TargetName="MaskedTextBox" Property="Mask" Value="#0:00" />
+            </Trigger>
+            <Trigger Property="IsMaskEnabled" Value="False">
+              <!-- TODO: This next line breaks the TimePicker mask feature. But remove it causes unusual problems in the scheduler add appointment dialog in the online demo. -->
+              <!--Setter TargetName="MaskedTextBox" Property="Mask" Value="" /-->
+
+              <Setter TargetName="MaskedTextBox" Property="Text" Value="" />
+              <Setter TargetName="MaskedTextBox" Property="Visibility" Value="Collapsed" />
+              <Setter TargetName="TextBox" Property="Visibility" Value="Visible" />
+            </Trigger>
+            <Trigger SourceName="Popup" Property="AllowsTransparency" Value="True">
+              <Setter TargetName="PopupGrid" Property="Margin" Value="0,0,20,20" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- ======================== -->
+  <!--   TimeSpanPicker style   -->
+  <!-- ======================== -->
+
+  <local:TimeSpanToStringConverter x:Key="TimeSpanConverter" />
+
+  <DataTemplate x:Key="TimeSpanTemplate">
+    <TextBlock Text="{Binding Converter={StaticResource TimeSpanConverter}}" />
+  </DataTemplate>
+
+  <Style x:Key="{x:Type local:TimeSpanPicker}" TargetType="{x:Type local:TimeSpanPicker}">
+    <Setter Property="SnapsToDevicePixels" Value="True" />
+    <Setter Property="FocusVisualStyle"	Value="{x:Null}" />
+    <Setter Property="BorderBrush" Value="{StaticResource Border}" />
+    <Setter Property="Background" Value="{StaticResource EditorBackground}" />
+    <Setter Property="Padding" Value="4,2,0,3" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="{x:Type local:TimeSpanPicker}">
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <Border Name="Border" Grid.ColumnSpan="3" Background="{TemplateBinding BorderBrush}" CornerRadius="3" IsHitTestVisible="False">
+              <Border Background="{TemplateBinding Background}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3" />
+            </Border>
+            <TextBox Text="{Binding Text, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}" Padding="{TemplateBinding Padding}"
+                     BorderBrush="Transparent" IsReadOnly="{Binding IsReadOnly, RelativeSource={RelativeSource TemplatedParent}}"
+                     VerticalContentAlignment="Center" VerticalAlignment="Center" />
+            <Grid Visibility="{Binding IsUpDownVisible, Converter={StaticResource bvc}, RelativeSource={RelativeSource TemplatedParent}}"
+                  Width="14" Grid.Column="1" Margin="0,1,0,1">
+              <Grid.RowDefinitions>
+                <RowDefinition Height="*" />
+                <RowDefinition Height="1" />
+                <RowDefinition Height="*" />
+              </Grid.RowDefinitions>
+              <RepeatButton Command="{x:Static local:SpinCommands.Increase}" Style="{StaticResource {x:Static local:Spin.SpinButtonStyleKey}}">
+                <Polygon Points="4,0 8,3 0,3" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type RepeatButton}}}" />
+              </RepeatButton>
+              <RepeatButton Grid.Row="2" Command="{x:Static local:SpinCommands.Decrease}" Style="{StaticResource {x:Static local:Spin.SpinButtonStyleKey}}">
+                <Polygon Points="4,3 8,0 0,0" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type RepeatButton}}}" />
+              </RepeatButton>
+            </Grid>
+            <ToggleButton Name="DropDownToggle" Grid.Column="2" Width="16" Style="{StaticResource TimePickerToggleButtonStyle}"
+                          Visibility="{Binding IsDropDownToggleVisible, Converter={StaticResource bvc}, RelativeSource={RelativeSource TemplatedParent}}"
+                          IsChecked="{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}">
+              <Path Style="{StaticResource DropDownArrowStyle}" />
+            </ToggleButton>
+            <Popup Name="Popup" IsOpen="{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}}" Placement="Bottom" AllowsTransparency="True">
+              <Grid Name="PopupGrid">
+                <Border MinWidth="{Binding ActualWidth, ElementName=Border}" MaxHeight="200" Style="{StaticResource ShadowStyle}"
+                        BorderBrush="{StaticResource PopupBorder}" BorderThickness="1">
+                  <ListBox ItemsSource="{TemplateBinding ItemsSource}" SelectedItem="{Binding SelectedTimeSpan, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"
+                           ScrollViewer.HorizontalScrollBarVisibility="Auto" ScrollViewer.VerticalScrollBarVisibility="Auto" ItemTemplate="{StaticResource TimeSpanTemplate}" />
+                </Border>
+              </Grid>
+            </Popup>
+          </Grid>
+          <ControlTemplate.Triggers>
+            <Trigger SourceName="Popup" Property="AllowsTransparency" Value="True">
+              <Setter TargetName="PopupGrid" Property="Margin" Value="0,0,20,20" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+  
+  <!-- ====================== -->
+  <!--   TimeExplorer style   -->
+  <!-- ====================== -->
+
+  <!-- Main dual slider styles -->
+
+  <SolidColorBrush x:Key="TimeExplorerMainDualSliderForeground" Color="Black" />
+
+  <Style x:Key="TimeExplorerMainHorizontalStartThumbStyle" TargetType="Thumb">
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Thumb">
+          <Border Name="Border" Background="{StaticResource ThumbBackground}" Width="11" Margin="-9,0,9,0" />
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="Border" Property="Background" Value="{StaticResource MouseOverThumbBackground}" />
+            </Trigger>
+            <Trigger Property="IsDragging" Value="True">
+              <Setter TargetName="Border" Property="Background" Value="{StaticResource PressedThumbBackground}" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <Style x:Key="TimeExplorerMainHorizontalEndThumbStyle" TargetType="Thumb">
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Thumb">
+          <Border Name="Border" Background="{StaticResource ThumbBackground}" Width="11" Margin="-3,0,0,0" />
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="Border" Property="Background" Value="{StaticResource MouseOverThumbBackground}" />
+            </Trigger>
+            <Trigger Property="IsDragging" Value="True">
+              <Setter TargetName="Border" Property="Background" Value="{StaticResource PressedThumbBackground}" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <Style x:Key="TimeExplorerMainHorizontalRangeThumbStyle" TargetType="Thumb">
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Thumb">
+          <Border Name="Border" Background="{StaticResource ThumbBackground}" />
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="Border" Property="Background" Value="{StaticResource MouseOverThumbBackground}" />
+            </Trigger>
+            <Trigger Property="IsDragging" Value="True">
+              <Setter TargetName="Border" Property="Background" Value="{StaticResource PressedThumbBackground}" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <ControlTemplate x:Key="InvisibleRepeatButton" TargetType="RepeatButton">
+    <Border Background="Transparent" />
+  </ControlTemplate>
+
+  <SolidColorBrush x:Key="TimeExplorerMarkerBackground" Color="#555555" />
+
+  <Style x:Key="TimeExplorerMainDualSliderStyle" TargetType="{x:Type local:TimeExplorerMainDualSlider}">
+    <Setter Property="Background" Value="{StaticResource ScrollBarBackground}" />
+    <Setter Property="EndBuffer" Value="9" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="{x:Type local:TimeExplorerMainDualSlider}">
+          <Grid Background="{TemplateBinding Background}">
+            <Grid Background="Transparent" VerticalAlignment="Center" Margin="1">
+              <Border Name="PART_InternalMarker" Height="9" VerticalAlignment="Center" HorizontalAlignment="Left" Background="{StaticResource TimeExplorerMarkerBackground}" />
+              <RepeatButton Name="PART_LargeDecreaseButton" HorizontalAlignment="Left" Template="{StaticResource InvisibleRepeatButton}" />
+              <RepeatButton Name="PART_LargeIncreaseButton" HorizontalAlignment="Left" Template="{StaticResource InvisibleRepeatButton}" />
+              <Thumb Name="PART_RangeThumb" Style="{StaticResource TimeExplorerMainHorizontalRangeThumbStyle}" HorizontalAlignment="Left" Height="13" />
+              <Thumb Name="PART_StartThumb" Style="{StaticResource TimeExplorerMainHorizontalStartThumbStyle}" HorizontalAlignment="Left" Cursor="SizeWE" />
+              <Thumb Name="PART_EndThumb" Style="{StaticResource TimeExplorerMainHorizontalEndThumbStyle}" HorizontalAlignment="Left" Cursor="SizeWE" />
+            </Grid>
+          </Grid>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- Internal dual slider styles -->
+
+  <SolidColorBrush x:Key="TimeExplorerInternalDualSliderForeground" Color="Black" />
+
+  <Style x:Key="TimeExplorerInternalHorizontalStartThumbStyle" TargetType="Thumb">
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Thumb">
+          <Grid Width="8">
+            <Border Name="Border" Background="{StaticResource ThumbBackground}" />
+            <Path Data="M 0 2.5 L 3 0 L 3 5 Z" Width="3" Height="5" Fill="{StaticResource TimeExplorerInternalDualSliderForeground}" VerticalAlignment="Center" HorizontalAlignment="Left" Margin="2,0,0,0" />
+          </Grid>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="Border" Property="Background" Value="{StaticResource MouseOverThumbBackground}" />
+            </Trigger>
+            <Trigger Property="IsDragging" Value="True">
+              <Setter TargetName="Border" Property="Background" Value="{StaticResource PressedThumbBackground}" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <Style x:Key="TimeExplorerInternalHorizontalEndThumbStyle" TargetType="Thumb">
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Thumb">
+          <Grid Width="8" Margin="-7,0,0,0">
+            <Border Name="Border" Background="{StaticResource ThumbBackground}" />
+            <Path Data="M 0 0 L 3 2.5 L 0 5 Z" Width="3" Height="5" Fill="{StaticResource TimeExplorerInternalDualSliderForeground}" VerticalAlignment="Center" HorizontalAlignment="Left" Margin="3,0,0,0" />
+          </Grid>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="Border" Property="Background" Value="{StaticResource MouseOverThumbBackground}" />
+            </Trigger>
+            <Trigger Property="IsDragging" Value="True">
+              <Setter TargetName="Border" Property="Background" Value="{StaticResource PressedThumbBackground}" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <Style x:Key="TimeExplorerInternalHorizontalRangeThumbStyle" TargetType="Thumb">
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Thumb">
+          <Grid>
+            <Border Name="Border" Background="{StaticResource ThumbBackground}" Height="13" VerticalAlignment="Bottom" />
+            <Border BorderThickness="1,1,1,0" BorderBrush="{StaticResource ThumbBackground}" Margin="0,0,0,12" IsHitTestVisible="False" />
+          </Grid>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="Border" Property="Background" Value="{StaticResource MouseOverThumbBackground}" />
+            </Trigger>
+            <Trigger Property="IsDragging" Value="True">
+              <Setter TargetName="Border" Property="Background" Value="{StaticResource PressedThumbBackground}" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <SolidColorBrush x:Key="TimeExplorerClearRepeatButtonBackground" Color="#444444" />
+
+  <ControlTemplate x:Key="ClearRepeatButtonTemplate" TargetType="RepeatButton">
+    <Border Background="{StaticResource TimeExplorerClearRepeatButtonBackground}" Opacity="0.7" IsHitTestVisible="False" />
+  </ControlTemplate>
+
+  <Style x:Key="TimeExplorerInternalDualSliderStyle" TargetType="{x:Type local:DualSlider}">
+    <Setter Property="EndBuffer" Value="0" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="{x:Type local:DualSlider}">
+          <Grid>
+            <RepeatButton Name="PART_LargeDecreaseButton" HorizontalAlignment="Left" Template="{StaticResource ClearRepeatButtonTemplate}" />
+            <RepeatButton Name="PART_LargeIncreaseButton" HorizontalAlignment="Left" Template="{StaticResource ClearRepeatButtonTemplate}" />
+            <Thumb Name="PART_RangeThumb" Style="{StaticResource TimeExplorerInternalHorizontalRangeThumbStyle}" HorizontalAlignment="Left" />
+            <Thumb Name="PART_StartThumb" Style="{StaticResource TimeExplorerInternalHorizontalStartThumbStyle}" HorizontalAlignment="Left" Cursor="SizeWE" Height="19" VerticalAlignment="Center"
+			       Visibility="{Binding CanEditRangeMagnitude, Converter={StaticResource bvc}, RelativeSource={RelativeSource AncestorType={x:Type local:TimeExplorer}}}" />
+            <Thumb Name="PART_EndThumb" Style="{StaticResource TimeExplorerInternalHorizontalEndThumbStyle}" HorizontalAlignment="Left" Cursor="SizeWE" Height="19" VerticalAlignment="Center"
+			       Visibility="{Binding CanEditRangeMagnitude, Converter={StaticResource bvc}, RelativeSource={RelativeSource AncestorType={x:Type local:TimeExplorer}}}" />
+          </Grid>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- TimeExplorer time unit buttons -->
+
+  <SolidColorBrush x:Key="TimeExplorerBackground" Color="#EDEDED" />
+  <SolidColorBrush x:Key="MouseOverTimeExplorerTimeUnitBackground" Color="#22000000" />
+  <SolidColorBrush x:Key="TimeExplorerMinorTimeUnitBackground" Color="#19000000" />
+
+  <DataTemplate x:Key="TimeExplorerMinorTimeUnitTemplate">
+    <Grid Name="Grid" Margin="1,0,0,0" Background="{StaticResource TimeExplorerMinorTimeUnitBackground}">
+      <Border Name="Border" Background="Transparent" />
+      <TextBlock Foreground="{StaticResource Foreground}" FontSize="9" VerticalAlignment="Bottom" HorizontalAlignment="Center"
+                 Text="{Binding Label}" Width="{Binding Width}" TextAlignment="Center" Margin="0,0,0,2" />
+    </Grid>
+    <DataTemplate.Triggers>
+      <Trigger SourceName="Grid" Property="IsMouseOver" Value="True">
+        <Setter TargetName="Border" Property="Background" Value="{StaticResource MouseOverTimeExplorerTimeUnitBackground}" />
+      </Trigger>
+      <DataTrigger Binding="{Binding IsSelected}" Value="True">
+        <Setter TargetName="Border" Property="Background" Value="{StaticResource MouseOverTimeExplorerTimeUnitBackground}" />
+      </DataTrigger>
+    </DataTemplate.Triggers>
+  </DataTemplate>
+
+  <DataTemplate x:Key="TimeExplorerMajorTimeUnitTemplate">
+    <Grid Name="Grid" Background="Transparent">
+      <Border Width="{Binding Width}" BorderThickness="1,0,0,0" BorderBrush="{StaticResource Border}" />
+      <TextBlock Foreground="{StaticResource Foreground}" FontSize="10" VerticalAlignment="Top" HorizontalAlignment="Center" Text="{Binding Label}" Width="{Binding Width}" TextAlignment="Center" />
+    </Grid>
+    <DataTemplate.Triggers>
+      <Trigger SourceName="Grid" Property="IsMouseOver" Value="True">
+        <Setter TargetName="Grid" Property="Background" Value="{StaticResource MouseOverTimeExplorerTimeUnitBackground}" />
+      </Trigger>
+      <DataTrigger Binding="{Binding IsSelected}" Value="True">
+        <Setter TargetName="Grid" Property="Background" Value="{StaticResource MouseOverTimeExplorerTimeUnitBackground}" />
+      </DataTrigger>
+    </DataTemplate.Triggers>
+  </DataTemplate>
+
+  <!-- TimeExplorer style -->
+
+  <Style x:Key="{x:Type local:TimeExplorer}" TargetType="{x:Type local:TimeExplorer}">
+    <Setter Property="SnapsToDevicePixels" Value="True" />
+    <Setter Property="FocusVisualStyle"	Value="{x:Null}" />
+    <Setter Property="Background" Value="{StaticResource TimeExplorerBackground}" />
+    <Setter Property="BorderBrush" Value="{StaticResource Border}" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="{x:Type local:TimeExplorer}">
+          <Grid Background="{TemplateBinding Background}">
+            <Grid.RowDefinitions>
+              <RowDefinition Height="*" />
+              <RowDefinition Height="16" />
+            </Grid.RowDefinitions>
+            <Border BorderThickness="1" BorderBrush="{TemplateBinding BorderBrush}">
+              <Grid ClipToBounds="True" Margin="-1,0,0,0">
+                <ContentPresenter Content="{TemplateBinding Chart}" Margin="0,20,0,27" />
+                <ItemsControl x:Name="PART_MajorButtonHost" HorizontalAlignment="Left" Padding="0" BorderThickness="0" Background="Transparent" Margin="0,0,-100000,12"
+                              ItemTemplate="{StaticResource TimeExplorerMajorTimeUnitTemplate}">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                      <StackPanel Orientation="Horizontal" />
+                    </ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                </ItemsControl>
+                <ItemsControl x:Name="PART_MinorButtonHost" HorizontalAlignment="Left" Padding="0" BorderThickness="0" Background="Transparent" Margin="0,15,-100000,12"
+                              ItemTemplate="{StaticResource TimeExplorerMinorTimeUnitTemplate}">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                      <StackPanel Orientation="Horizontal" />
+                    </ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                </ItemsControl>
+                <local:DualSlider Name="PART_InternalDualSlider" Style="{StaticResource TimeExplorerInternalDualSliderStyle}" MinimumRange="10" SnapToTickMarks="True" />
+              </Grid>
+            </Border>
+            <Border Grid.Row="1" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1,0,1,1">
+              <local:TimeExplorerMainDualSlider x:Name="PART_MainDualSlider" Style="{StaticResource TimeExplorerMainDualSliderStyle}"
+                                                InternalRangeStart="{Binding RangeStart, ElementName=PART_InternalDualSlider}"
+                                                InternalRangeEnd="{Binding RangeEnd, ElementName=PART_InternalDualSlider}" />
+            </Border>
+            <Border BorderThickness="1" BorderBrush="{TemplateBinding BorderBrush}" Grid.RowSpan="2" />
+          </Grid>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+</ResourceDictionary>

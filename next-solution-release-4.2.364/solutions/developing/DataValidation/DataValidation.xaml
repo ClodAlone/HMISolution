@@ -1,0 +1,546 @@
+﻿<UserControl x:Class="DataValidation.DataValidation"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:dxg="http://schemas.devexpress.com/winfx/2008/xaml/grid"
+             xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+             xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+             xmlns:dxci="http://schemas.devexpress.com/winfx/2008/xaml/core/internal"
+             xmlns:dxgt="http://schemas.devexpress.com/winfx/2008/xaml/grid/themekeys"
+             xmlns:dxp="http://schemas.devexpress.com/winfx/2008/xaml/printing"
+             xmlns:dxfui="http://schemas.devexpress.com/winfx/2008/xaml/core/filteringui"
+             xmlns:cc="http://progea.com/CommonControls"
+             xmlns:converters="clr-namespace:Converters;assembly=Converters"
+             xmlns:localConverters="clr-namespace:DataValidation.Converters"
+             xmlns:commonproperties="clr-namespace:WPFUtilities.Properties;assembly=WPFUtilities"
+             xmlns:local="clr-namespace:DataValidation"
+             xmlns:properties="clr-namespace:DataValidation.Properties"
+             xmlns:utilities="clr-namespace:WPFUtilities;assembly=WPFUtilities"
+             xmlns:sys="clr-namespace:System;assembly=mscorlib"
+             xmlns:dxb="http://schemas.devexpress.com/winfx/2008/xaml/bars"
+             xmlns:helpers="clr-namespace:DataValidation.Helpers"
+             mc:Ignorable="d" >
+
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/RuntimeLightSharedResources;component/Resources/SharedImages.xaml" />
+                <ResourceDictionary Source="/RuntimeLightSharedResources;component/Resources/DataError.xaml" />
+              <ResourceDictionary Source="/RuntimeLightSharedResources;component/Resources/DataValidation.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <local:DataValidationViewModel x:Key="DataValidationViewModel" />
+            <localConverters:ValidationResultToVisiblityConverter x:Key="ValidationResultToVisiblityConverter" />
+            <localConverters:ValidationResultToInvertionVisiblityConverter x:Key="ValidationResultToInvertionVisiblityConverter" />
+            <localConverters:ValidationResultToInvertionBooleanConverter x:Key="ValidationResultToInvertionBooleanConverter" />
+            <localConverters:IsValidToBackgroundConverter x:Key="IsValidToBackgroundConverter" />
+            <localConverters:DynamicColumnDataExtractor x:Key="DynamicColumnDataExtractor" />
+            <localConverters:BooleanToSizeConverter x:Key="BooleanToSizeConverter" />
+            <localConverters:NullToVisibilityConverter x:Key="NullToVisibilityConverter" />
+            <localConverters:AdjustWidthConverter x:Key="AdjustWidthConverter" />
+            <localConverters:ValidationResultToStringConverter x:Key="ValidationResultToStringConverter" />
+            <localConverters:ValidationResultToColorConverter x:Key="ValidationResultToColorConverter" />
+                        
+            <converters:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+            <converters:BooleanToInvertionVisibilityConverter x:Key="BooleanToInvertionVisibilityConverter" />
+            <converters:InverseBooleanConverter x:Key="InverseBooleanConverter" />
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <DockPanel LastChildFill="True" x:Name="view" DataContext="{StaticResource DataValidationViewModel}" DataContextChanged="OnDataContextChanged">
+        <DockPanel.Resources>
+            <DataTemplate x:Key="DefaultColumnTemplate">
+                <ContentControl>
+                    <dxg:GridColumn FieldName="{Binding Path=(dxci:DependencyObjectExtensions.DataContext).FieldName, RelativeSource={RelativeSource Self}}" 
+                         helpers:ColumnsBindingHelper.ColumnBindingExpression="{Binding Path=(dxci:DependencyObjectExtensions.DataContext).BindingExpression, RelativeSource={RelativeSource Self}}"
+
+                                    Header="{Binding Path=(dxci:DependencyObjectExtensions.DataContext).HeaderName, RelativeSource={RelativeSource Self}}">
+
+                        <dxg:GridColumn.EditSettings>
+                            <dxe:MemoEditSettings/>
+                        </dxg:GridColumn.EditSettings>
+                        <dxg:GridColumn.CellTemplate>
+                            <DataTemplate>
+                                <TextBlock>
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding RowData.Row.IsValid}" Value="False">
+                                                    <Setter Property="Background">
+                                                        <Setter.Value>
+                                                            <SolidColorBrush Color="{Binding RowsInErrorColor, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}}"/>
+                                                        </Setter.Value>
+                                                    </Setter>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding RowData.Row.IsValid}" Value="True">
+                                                    <Setter Property="Background" Value="Transparent"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                    <TextBlock.Text>
+                                        <MultiBinding Converter="{StaticResource DynamicColumnDataExtractor}">
+                                            <Binding Path="RowData.Row.DataRow" Mode="OneWay" />
+                                            <Binding Path="Column.FieldName"/>
+                                        </MultiBinding>
+                                    </TextBlock.Text>
+                                </TextBlock>
+                            </DataTemplate>
+                        </dxg:GridColumn.CellTemplate>
+                        <dxg:GridColumn.PrintCellStyle>
+                            <Style TargetType="dxe:MemoEdit" BasedOn="{StaticResource {dxgt:TableViewThemeKey ResourceKey=DefaultPrintCellStyle}}">
+                                <Style.Setters>
+                                    <Setter Property="dxp:ExportSettings.TargetType" Value="Panel" />
+                                    <Setter Property="DisplayTemplate">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="dxe:MemoEdit">
+                                                <dxe:TextEdit Margin="1" VerticalAlignment="Center" IsPrintingMode="True">
+                                                    <dxe:TextEdit.Background>
+                                                        <MultiBinding Converter="{StaticResource IsValidToBackgroundConverter}">
+                                                            <Binding />
+                                                            <Binding Path="RowData.Row.IsValid"/>
+                                                        </MultiBinding>
+                                                    </dxe:TextEdit.Background>
+                                                    
+                                                </dxe:TextEdit>
+                                            </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                                </Style.Setters>
+                            </Style>
+                        </dxg:GridColumn.PrintCellStyle>
+                    </dxg:GridColumn>
+                </ContentControl>
+            </DataTemplate>
+        </DockPanel.Resources>
+
+        <!--<Image x:Name="watermarkImage" Visibility="Collapsed" IsHitTestVisible="False">
+            <Image.Style>
+                <Style TargetType="Image">
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding ValidationResult}" Value="Successful">
+                            <Setter Property="Source" Value="{StaticResource SuccessfulImage}"/>
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding ValidationResult}" Value="Aborted">
+                            <Setter Property="Source" Value="{StaticResource AbortedImage}"/>
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding ValidationResult}" Value="Failed">
+                            <Setter Property="Source" Value="{StaticResource FailedImage}"/>
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding ValidationResult}" Value="Error">
+                            <Setter Property="Source" Value="{StaticResource UnknownImage}"/>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Image.Style>
+        </Image>-->
+
+        <dxb:BarContainerControl ContainerType="Top" DockPanel.Dock="Top" x:Name="toolbar">
+            <dxb:ToolBarControl UseWholeRow="True" BarItemDisplayMode="ContentAndGlyph"
+                               dxb:MergingProperties.ToolBarMergeStyle="All" dxb:MergingProperties.ElementMergingBehavior="InternalWithExternal"
+                               dxb:MergingProperties.AllowMerging="False" IsMultiLine="False" ShowDragWidget="False" AllowCustomizationMenu="False" AllowQuickCustomization="False" AllowDrop="False">
+              <dxb:BarLinkContainerItem x:Name="toolbarSettings" IsVisible="{Binding Editable, Mode=OneWay, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}}">
+                  <dxb:BarStaticItem ShowBorder="False" x:Name="configMemoryTitle" Content="{x:Static properties:Resources.ActualSettings}" />
+                  <dxb:BarEditItem x:Name="configMemory" Content="{x:Static properties:Resources.ActualSettings}"
+                                  UseLightweightTemplates="False" EditValueChanged="configMemory_SelectionChanged" LostFocus="configMemory_LostFocus" PreviewKeyDown="configMemory_PreviewKeyDown">
+                    <dxb:BarEditItem.EditTemplate>
+                      <DataTemplate>
+                        <dxe:ComboBoxEdit 
+                                        ItemsSource="{Binding RelativeSource={RelativeSource AncestorType={x:Type dxb:IBarEditItemLinkControl}}, Path=DataContext}"
+                                        Name="PART_Editor" MinWidth="{Binding Source={x:Static commonproperties:Settings.Default},Path=RibbonBaseEditMinWidth}" IsTextEditable="True" />
+                      </DataTemplate>
+                    </dxb:BarEditItem.EditTemplate>
+                  </dxb:BarEditItem>
+
+                    <dxb:BarButtonItem Glyph="{StaticResource ClearSmall}" GlyphSize="Custom" CustomGlyphSize="16,16" x:Name="clearSmall" Command="{Binding ResetCommand, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}}" ToolTipService.ShowOnDisabled="True" ToolTip="{x:Static properties:Resources.ResetSettingsTooltip}"/>
+                    <dxb:BarButtonItem Glyph="{StaticResource SaveSmall}" GlyphSize="Custom" CustomGlyphSize="16,16" x:Name="saveSmall" Command="{Binding SaveCommand, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}}" ToolTipService.ShowOnDisabled="True" ToolTip="{x:Static properties:Resources.SaveConfiguration}"/>
+                    <dxb:BarButtonItem Glyph="{StaticResource CancelSmall}" GlyphSize="Custom" CustomGlyphSize="16,16" x:Name="cancelSmall" Command="{Binding RemoveCommand, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}}" ToolTipService.ShowOnDisabled="True" ToolTip="{x:Static properties:Resources.DeleteSettings}"/>
+                </dxb:BarLinkContainerItem>
+                <dxb:BarButtonItem x:Name="bestFit" Content="{x:Static properties:Resources.BestFit}" ItemClick="Click_BestFit" />
+
+                <dxb:BarEditItem x:Name="DataSourceLabel" EditWidth="150" Content="{x:Static properties:Resources.DataSourceNameLabel}"
+                                 UseLightweightTemplates="False" IsEnabled="{Binding AllowChangeItemSource}" EditValueChanged="OnCurrentItemChanged" EditValue="{Binding CurrentItem}">
+                    <dxb:BarEditItem.EditSettings>
+                        <dxe:ComboBoxEditSettings DisplayMember="Name" IsTextEditable="False" ItemsSource="{Binding ItemsSource}" />
+                    </dxb:BarEditItem.EditSettings>
+                </dxb:BarEditItem>
+
+                <dxb:BarItemSeparator />
+
+                <dxb:BarEditItem UseLightweightTemplates="False" x:Name="StartDateTimeLabel" EditWidth="150" Content="{x:Static properties:Resources.StartDateTimeLabel}" EditValue="{Binding StartDateTime, UpdateSourceTrigger=PropertyChanged, Mode=TwoWay}">
+                    <dxb:BarEditItem.EditSettings>
+                        <dxe:DateEditSettings Mask="d" MaskUseAsDisplayFormat="True" AllowNullInput="True" ShowWeekNumbers="True" />
+                    </dxb:BarEditItem.EditSettings>
+                </dxb:BarEditItem>
+
+                <dxb:BarEditItem UseLightweightTemplates="False" x:Name="EndDateTimeLabel" EditWidth="150" Content="{x:Static properties:Resources.EndDateTimeLabel}" EditValue="{Binding EndDateTime, UpdateSourceTrigger=PropertyChanged, Mode=TwoWay}">
+                    <dxb:BarEditItem.EditSettings>
+                        <dxe:DateEditSettings Mask="d" MaskUseAsDisplayFormat="True" AllowNullInput="True" ShowWeekNumbers="True" />
+                    </dxb:BarEditItem.EditSettings>
+                </dxb:BarEditItem>
+
+                <dxb:BarStaticItem x:Name="ValidationResultLabel" Content="{x:Static properties:Resources.LastValidationResultLabel}" IsVisible="{Binding ValidationResult, Mode=OneWay, UpdateSourceTrigger=PropertyChanged, Converter={StaticResource ValidationResultToInvertionBooleanConverter}, ConverterParameter={x:Static local:ValidationResults.None}}" />
+                <dxb:BarButtonItem Tag="{Binding ValidationResult}" IsVisible="{Binding ValidationResult, Mode=OneWay, UpdateSourceTrigger=PropertyChanged, Converter={StaticResource ValidationResultToInvertionBooleanConverter}, ConverterParameter={x:Static local:ValidationResults.None}}">
+                    <dxb:BarButtonItem.Style>
+                        <Style TargetType="dxb:BarButtonItem">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding ValidationResult}" Value="Successful">
+                                    <Setter Property="Glyph" Value="{StaticResource DVSuccessfulSmall}"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding ValidationResult}" Value="Aborted">
+                                    <Setter Property="Glyph" Value="{StaticResource DVAbortedSmall}"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding ValidationResult}" Value="Failed">
+                                    <Setter Property="Glyph" Value="{StaticResource DVFailedSmall}"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding ValidationResult}" Value="Error">
+                                    <Setter Property="Glyph" Value="{StaticResource DVUnknownSmall}"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </dxb:BarButtonItem.Style>
+                    <dxb:BarButtonItem.SuperTip>
+                        <dx:SuperTip>
+                            <dx:SuperTipHeaderItem x:Name="totUnauthAccess" Content="{x:Static properties:Resources.TotalUnauthorizedAccessLabel}"/>
+                            <dx:SuperTipItem Content="{Binding TotalUnauthorizedAccess, Mode=OneWay, UpdateSourceTrigger=PropertyChanged}"/>
+                        </dx:SuperTip>
+                    </dxb:BarButtonItem.SuperTip>
+                </dxb:BarButtonItem>
+
+                <dxb:BarButtonItem Glyph="{StaticResource Print}" GlyphSize="Custom" CustomGlyphSize="16,16" x:Name="printBut" ToolTipService.ShowOnDisabled="True" ToolTip="{x:Static properties:Resources.PrintTitle}" Command="{Binding PrintCommand, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}}"/>
+            </dxb:ToolBarControl>
+        </dxb:BarContainerControl>
+
+        <Grid MinHeight="40" DockPanel.Dock="Top" x:Name="options" Grid.Row="0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="8*" />
+                <ColumnDefinition Width="8*" />
+                <ColumnDefinition Width="8*" />
+                <ColumnDefinition Width="8*" />
+                <ColumnDefinition Width="8*" />
+                <ColumnDefinition Width="8*" />
+                <ColumnDefinition Width="8*" />
+            </Grid.ColumnDefinitions>
+            <Button ToolTipService.ShowOnDisabled="True" x:Name="Button1" Grid.Row="1" Content="{x:Static properties:Resources.Filter_Minute}" Grid.Column="0" 
+                    Command="{Binding Path=LoadDataCommand}" CommandParameter="{x:Static utilities:DateSpan.Minute}" />
+            <Button ToolTipService.ShowOnDisabled="True" x:Name="Button2" Grid.Row="1" Content="{x:Static properties:Resources.Filter_Hour}" Grid.Column="1"
+    		        Command="{Binding Path=LoadDataCommand}" CommandParameter="{x:Static utilities:DateSpan.Hour}" />
+            <Button ToolTipService.ShowOnDisabled="True" x:Name="Button3" Grid.Row="1" Content="{x:Static properties:Resources.Filter_Day}" Grid.Column="2" 
+                    Command="{Binding Path=LoadDataCommand}" CommandParameter="{x:Static utilities:DateSpan.Day}" />
+            <Button ToolTipService.ShowOnDisabled="True" x:Name="Button4" Grid.Row="1" Content="{x:Static properties:Resources.Filter_Week}" Grid.Column="3" 
+                    Command="{Binding Path=LoadDataCommand}" CommandParameter="{x:Static utilities:DateSpan.Week}" />
+            <Button ToolTipService.ShowOnDisabled="True" x:Name="Button5" Grid.Row="1" Content="{x:Static properties:Resources.Filter_Month}" Grid.Column="4" 
+                    Command="{Binding Path=LoadDataCommand}" CommandParameter="{x:Static utilities:DateSpan.Month}" />
+            <Button ToolTipService.ShowOnDisabled="True" x:Name="Button6" Grid.Row="1" Content="{x:Static properties:Resources.Filter_Year}" Grid.Column="5" 
+                    Command="{Binding Path=LoadDataCommand}" CommandParameter="{x:Static utilities:DateSpan.Year}" />
+            <Button ToolTipService.ShowOnDisabled="True" x:Name="Button7" Grid.Row="1" Content="{x:Static properties:Resources.Filter_All}" Grid.Column="6" 
+                    Command="{Binding Path=LoadDataCommand}" CommandParameter="{x:Static utilities:DateSpan.All}" />
+        </Grid>
+        <Grid MinHeight="40" DockPanel.Dock="Bottom" x:Name="commands">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition />
+                    <ColumnDefinition />
+                    <ColumnDefinition />
+                    <ColumnDefinition />
+                    <ColumnDefinition Width="{Binding AllowSelectBackupFiles, Mode=OneWay, UpdateSourceTrigger=PropertyChanged, 
+                    RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}, Converter={StaticResource BooleanToSizeConverter}}" />
+                    <!--<ColumnDefinition />
+                    <ColumnDefinition />-->
+                </Grid.ColumnDefinitions>
+
+                <Button x:Name="ReadDataBtn" ToolTipService.ShowOnDisabled="True" 
+                        ToolTip="{x:Static properties:Resources.ReadDataBtnTitle}"
+                        Command="{Binding LoadDataCommand}" CommandParameter="{x:Static utilities:DateSpan.None}">
+                    <StackPanel>
+                    <TextBlock x:Name="ReadDataTxt" Background="{x:Null}" 
+                                   Text="{x:Static properties:Resources.ReadDataBtnTitle}" 
+                                   Visibility="{Binding UseIcon, Converter={StaticResource BooleanToInvertionVisibilityConverter}, Mode=OneWay, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}}" />
+                    <Image Width="18" Height="18" x:Name="readDataImage"
+                               Source="{StaticResource DVRefresh}"
+                               Visibility="{Binding UseIcon, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}}" />
+                    </StackPanel>
+                </Button>
+
+                <Button x:Name="StartValidateBtn" Grid.Column="1" ToolTipService.ShowOnDisabled="True" 
+                    ToolTip="{x:Static properties:Resources.StartValidateBtnTitle}"
+                    Command="{Binding ValidateDataCommand}">
+                    <StackPanel>
+                        <TextBlock x:Name="StartValidateTxt" Background="{x:Null}" 
+                               Text="{x:Static properties:Resources.StartValidateBtnTitle}" 
+                               Visibility="{Binding UseIcon, Converter={StaticResource BooleanToInvertionVisibilityConverter}, Mode=OneWay, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}}" />
+                        <Image Width="18" Height="18" x:Name="startImage"
+                           Source="{StaticResource DVStartValidationCommand}"
+                           Visibility="{Binding UseIcon, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}}" />
+                    </StackPanel>
+                </Button>
+
+                <Button x:Name="AbortValidateBtn" Grid.Column="2" ToolTipService.ShowOnDisabled="True" 
+                    ToolTip="{x:Static properties:Resources.AbortValidateBtnTitle}" 
+                    Command="{Binding AbortCommand}">
+                    <StackPanel>
+                        <TextBlock x:Name="AbortValidateTxt" Background="{x:Null}" 
+                               Text="{x:Static properties:Resources.AbortValidateBtnTitle}" 
+                               Visibility="{Binding UseIcon, Converter={StaticResource BooleanToInvertionVisibilityConverter}, Mode=OneWay, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}}" />
+                        <Image Width="18" Height="18" x:Name="abortImage"
+                           Source="{StaticResource DVAbortValidationCommand}"
+                           Visibility="{Binding UseIcon, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}}" />
+                    </StackPanel>
+                </Button>
+
+                <ToggleButton x:Name="AbortOnFirstErrorBtn" Grid.Column="3" IsThreeState="False" ToolTipService.ShowOnDisabled="True" 
+                          ToolTip="{x:Static properties:Resources.AbortOnFirstError}"
+                          IsEnabled="{Binding IsRunning, Mode=OneWay, UpdateSourceTrigger=PropertyChanged, Converter={StaticResource InverseBooleanConverter}}"
+                          IsChecked="{Binding AbortOnFirstError, UpdateSourceTrigger=PropertyChanged, Mode=TwoWay}">
+                    <StackPanel>
+                        <TextBlock x:Name="AbortOnFirstErrorTxt" Background="{x:Null}" 
+                               Text="{x:Static properties:Resources.AbortOnFirstError}" 
+                               Visibility="{Binding UseIcon, Converter={StaticResource BooleanToInvertionVisibilityConverter}, Mode=OneWay, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}}" />
+                        <Image Width="18" Height="18" x:Name="abortOnErrorImage"
+                           Source="{StaticResource DVAbortOnFirstErrorToggle}"
+                           Visibility="{Binding UseIcon, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}}" />
+                    </StackPanel>
+                </ToggleButton>
+
+                <ToggleButton x:Name="ShowBackupFileBtn" Grid.Column="4" IsThreeState="False" ToolTipService.ShowOnDisabled="True" 
+                          ToolTip="{x:Static properties:Resources.ShowBackupFileBtnTitle}"
+                          IsChecked="{Binding ShowBackupFilesMode, UpdateSourceTrigger=PropertyChanged, Mode=TwoWay}"
+                          IsEnabled="{Binding IsRunning, Mode=OneWay, UpdateSourceTrigger=PropertyChanged, Converter={StaticResource InverseBooleanConverter}}"
+                          Visibility="{Binding AllowSelectBackupFiles, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}}">
+                    <StackPanel>
+                        <TextBlock x:Name="ShowBackupFileTxt" Background="{x:Null}" 
+                               Text="{x:Static properties:Resources.ShowBackupFileBtnTitle}" 
+                               Visibility="{Binding UseIcon, Converter={StaticResource BooleanToInvertionVisibilityConverter}, Mode=OneWay, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}}" />
+                        <Image Width="18" Height="18" x:Name="showBackupFilesImage"
+                           Source="{StaticResource DVShowBackupFilesToggle}"
+                           Visibility="{Binding UseIcon, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}}" />
+                    </StackPanel>
+                </ToggleButton>
+                <Button Grid.Column="5" Visibility="Collapsed"
+    		        MinWidth="16" x:Name="exportButton" ToolTipService.ShowOnDisabled="True" 
+                    ToolTip="{x:Static properties:Resources.ExportDataCommand}"
+    		        Command="{Binding Path=ExportDataCommand, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}}" CommandParameter="1"
+    		        Tag="ButtonExportData">
+                    <StackPanel>
+                        <TextBlock x:Name="txtExport" Background="{x:Null}" 
+                                   Text="{x:Static properties:Resources.ExportDataCommand}" 
+                                   Visibility="{Binding UseIcon, Converter={StaticResource BooleanToInvertionVisibilityConverter}, Mode=OneWay, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}}" />
+                        <Image Width="18" Height="18" x:Name="exportImage"
+                               Source="{StaticResource DVExport}"
+                               Visibility="{Binding UseIcon, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}}" />
+                    </StackPanel>
+                </Button>
+                <ComboBox MinWidth="90" Visibility="Collapsed" Grid.Column="6" x:Name="cmbExportType" />
+
+        </Grid>
+
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <Grid Visibility="{Binding ShowBackupFilesMode, Mode=OneWay, UpdateSourceTrigger=PropertyChanged, Converter={StaticResource BooleanToInvertionVisibilityConverter}}" >
+                <dxg:GridControl x:Name="gridControl" ItemsSource="{Binding CurrentItem.Rows}"
+                                 ColumnsSource="{Binding CurrentItem.Columns}"
+                                 ColumnGeneratorTemplate="{StaticResource DefaultColumnTemplate}" FilterChanged="gridControl_FilterChanged"
+                                 dx:DXSerializer.StoreLayoutMode="All">
+                    <!--<dxg:GridControl.Resources>
+                        <ControlTemplate x:Key="{dxgt:TableViewThemeKey IsThemeIndependent=true, ResourceKey=DataPresenterTemplate}" TargetType="{x:Type dxg:DataPresenter}">
+                            <Border>
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding ValidationResult}" Value="Successful">
+                                                <Setter Property="Background">
+                                                    <Setter.Value>
+                                                        <ImageBrush Opacity="0.2" ImageSource="{StaticResource SuccessfulImage}" TileMode="Tile" Stretch="Uniform" AlignmentY="Top"  Viewport="0,0,512,512" ViewportUnits="Absolute"/>
+                                                    </Setter.Value>
+                                                </Setter>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding ValidationResult}" Value="Aborted">
+                                                <Setter Property="Background">
+                                                    <Setter.Value>
+                                                        <ImageBrush Opacity="0.2" ImageSource="{StaticResource AbortedImage}" TileMode="Tile" Stretch="Uniform" AlignmentY="Top" Viewport="0,0,512,512" ViewportUnits="Absolute" />
+                                                    </Setter.Value>
+                                                </Setter>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding ValidationResult}" Value="Failed">
+                                                <Setter Property="Background">
+                                                    <Setter.Value>
+                                                        <ImageBrush Opacity="0.2" ImageSource="{StaticResource FailedImage}" TileMode="Tile" Stretch="Uniform" AlignmentY="Top" Viewport="0,0,512,512" ViewportUnits="Absolute" />
+                                                    </Setter.Value>
+                                                </Setter>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding ValidationResult}" Value="Error">
+                                                <Setter Property="Background">
+                                                    <Setter.Value>
+                                                        <ImageBrush Opacity="0.2" ImageSource="{StaticResource UnknownImage}" TileMode="Tile" Stretch="Uniform" AlignmentY="Top" Viewport="0,0,512,512" ViewportUnits="Absolute" />
+                                                    </Setter.Value>
+                                                </Setter>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <ContentPresenter />
+                            </Border>
+                        </ControlTemplate>
+                    </dxg:GridControl.Resources>-->
+                    <dxg:GridControl.View>
+                        <dxg:TableView AllowGrouping="False" AllowBestFit="True" AllowSorting="True" 
+                                       PrintAutoWidth="False" x:Name="tableView"
+                                       ShowGroupPanel="False" Tag="{Binding RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}}"
+                                       VerticalScrollbarVisibility="Auto" HorizontalScrollbarVisibility="Auto"
+                                       NavigationStyle="Row">
+                            <dxg:TableView.FilterEditorTemplate>
+                                <DataTemplate>
+                                    <dxfui:FilterEditorControl x:Name="FilterEditor" QueryOperators="FilterEditorControl_QueryOperators"/>
+                                </DataTemplate>
+                            </dxg:TableView.FilterEditorTemplate>
+                        </dxg:TableView>
+                    </dxg:GridControl.View>
+                </dxg:GridControl>
+
+                <Border IsHitTestVisible="False"
+                    Visibility="{Binding ValidationResult, Mode=OneWay, UpdateSourceTrigger=PropertyChanged, 
+                        Converter={StaticResource ValidationResultToInvertionVisiblityConverter}, 
+                        ConverterParameter={x:Static local:ValidationResults.None}}">
+                    <TextBlock Opacity="{Binding Source={x:Static properties:Settings.Default}, Path=WatermarkImageTransparency}" VerticalAlignment="Center" HorizontalAlignment="Center" RenderTransformOrigin="0.5, 0.5"
+                               Text="{Binding ValidationResult, Mode=OneWay, Converter={StaticResource ValidationResultToStringConverter}}"
+                               Foreground="{Binding ValidationResult, Mode=OneWay, Converter={StaticResource ValidationResultToColorConverter}}"
+                               FontSize="{Binding Path=ActualHeight, 
+                                        ElementName=gridControl, Mode=OneWay, 
+                                        Converter={StaticResource AdjustWidthConverter}}">
+                        <TextBlock.RenderTransform>
+                            <RotateTransform Angle="315" />
+                        </TextBlock.RenderTransform>
+                    </TextBlock>
+                </Border>
+
+                <Border HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                    BorderThickness="1" BorderBrush="#FFA9A9A9" 
+                    Visibility="{Binding LastError, Mode=OneWay, UpdateSourceTrigger=PropertyChanged, Converter={StaticResource NullToVisibilityConverter}}">
+                    <DockPanel VerticalAlignment="Center" HorizontalAlignment="Center" >
+                        <Image Source="{StaticResource Diamond}" Width="16" Height="16" Margin="2,2,2,2" />
+                        <Button Margin="5,0,0,0" HorizontalAlignment="Left" VerticalAlignment="Center" 
+                            IsEnabled="False" Background="{x:Null}">
+                            <Button.Content>
+                                <TextBlock Text="{Binding LastError}" VerticalAlignment="Center" HorizontalAlignment="Left" 
+                               TextWrapping="Wrap" FontFamily="Segoe UI" FontWeight="Light" Foreground="White" FontSize="16" />
+                            </Button.Content>
+                        </Button>
+                    </DockPanel>
+                </Border>
+            </Grid>
+
+            <Grid x:Name="backupFiles" Visibility="{Binding ShowBackupFilesMode, Mode=OneWay, UpdateSourceTrigger=PropertyChanged, Converter={StaticResource BooleanToVisibilityConverter}}" >
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <dxg:GridControl x:Name="gridBackupFiles" ItemsSource="{Binding BackupFiles}">
+                    <dxg:GridControl.Columns>
+                        <dxg:GridColumn Header="{x:Static properties:Resources.BackupFilePathHeader}">
+                            <dxg:GridColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox x:Name="txtFilePath" 
+                                                 Text="{Binding Path=RowData.Row.FilePath, Mode=TwoWay, ValidatesOnDataErrors=True, UpdateSourceTrigger=PropertyChanged}"
+                                                 IsReadOnly="{Binding Path=RowData.Row.IsReadOnly, Mode=OneWay}"
+                                                 Validation.ErrorTemplate="{x:Null}" />
+                                        <ContentPresenter Grid.Column="1" 
+                                                          Content="{Binding ElementName=txtFilePath, Path=(Validation.Errors).CurrentItem}"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </dxg:GridColumn.CellTemplate>
+                        </dxg:GridColumn>
+                    </dxg:GridControl.Columns>
+
+                    <dxg:GridControl.View>
+                        <dxg:TableView AllowGrouping="False" AllowBestFit="True" AllowSorting="False" AutoWidth="True"
+                                       ShowGroupPanel="False" VerticalScrollbarVisibility="Auto" HorizontalScrollbarVisibility="Auto"
+                                       NavigationStyle="Row" />
+                    </dxg:GridControl.View>
+                </dxg:GridControl>
+                <Grid Grid.Column="1">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <Button Grid.Row="0" ToolTipService.ShowOnDisabled="True"
+                            ToolTip="{x:Static properties:Resources.AddBackupFileTooltip}" 
+                            Command="{Binding AddBackupFileCommand, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}}">
+                        <StackPanel>
+                            <TextBlock Background="{x:Null}" 
+                               Text="{x:Static properties:Resources.AddBtnTitle}" 
+                               Visibility="{Binding UseIcon, Converter={StaticResource BooleanToInvertionVisibilityConverter}, Mode=OneWay, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}}" />
+                            <Image Width="18" Height="18" 
+                           Source="{StaticResource AddNewSmall}"
+                           Visibility="{Binding UseIcon, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}}" />
+                        </StackPanel>
+                    </Button>
+                    <Button Grid.Row="1" ToolTipService.ShowOnDisabled="True"
+                            ToolTip="{x:Static properties:Resources.RemoveBackupFileTooltip}" 
+                            Command="{Binding RemoveBackupFileCommand, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}}">
+                        <StackPanel>
+                            <TextBlock Background="{x:Null}" 
+                               Text="{x:Static properties:Resources.RemoveBtnTitle}" 
+                               Visibility="{Binding UseIcon, Converter={StaticResource BooleanToInvertionVisibilityConverter}, Mode=OneWay, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}}" />
+                            <Image Width="18" Height="18" 
+                           Source="{StaticResource RemoveSmall}"
+                           Visibility="{Binding UseIcon, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}}" />
+                        </StackPanel>
+                    </Button>
+                    <Button Grid.Row="2" ToolTipService.ShowOnDisabled="True"
+                            ToolTip="{x:Static properties:Resources.ClearBackupFilesTooltip}" 
+                            Command="{Binding ClearBackupFilesCommand, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}}">
+                        <StackPanel>
+                            <TextBlock Background="{x:Null}" 
+                               Text="{x:Static properties:Resources.ClearBtnTitle}" 
+                               Visibility="{Binding UseIcon, Converter={StaticResource BooleanToInvertionVisibilityConverter}, Mode=OneWay, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}}" />
+                            <Image Width="18" Height="18" 
+                           Source="{StaticResource ReloadSmall}"
+                           Visibility="{Binding UseIcon, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}}" />
+                        </StackPanel>
+                    </Button>
+                </Grid>
+
+                <Border Grid.Column="0" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                    BorderThickness="1" BorderBrush="#FFA9A9A9" 
+                    Visibility="{Binding BackupFilesError, Mode=OneWay, UpdateSourceTrigger=PropertyChanged, Converter={StaticResource NullToVisibilityConverter}}">
+                    <DockPanel VerticalAlignment="Center" HorizontalAlignment="Center" >
+                        <Image Source="{StaticResource Diamond}" Width="16" Height="16" Margin="2,2,2,2" />
+                        <Button Margin="5,0,0,0" HorizontalAlignment="Left" VerticalAlignment="Center" 
+                            IsEnabled="False" Background="{x:Null}">
+                            <Button.Content>
+                                <TextBlock Text="{Binding BackupFilesError}" VerticalAlignment="Center" HorizontalAlignment="Left" 
+                               TextWrapping="Wrap" FontFamily="Segoe UI" FontWeight="Light" Foreground="White" FontSize="16" />
+                            </Button.Content>
+                        </Button>
+                    </DockPanel>
+                </Border>
+            </Grid>
+
+            <ProgressBar Grid.Row="1" x:Name="progressBar"
+                         Height="20" IsIndeterminate="False" Minimum="0" 
+                         Maximum="{Binding TotalRows, Mode=OneWay, UpdateSourceTrigger=PropertyChanged}" 
+                         Value="{Binding ProcessedRows, Mode=OneWay, UpdateSourceTrigger=PropertyChanged}"
+                         Visibility="{Binding IsRunning, Mode=OneWay, UpdateSourceTrigger=PropertyChanged, Converter={StaticResource BooleanToVisibilityConverter}}" />
+
+            <Grid x:Name="busyControl"
+                Visibility="{Binding IsRunning, Mode=OneWay, UpdateSourceTrigger=PropertyChanged, Converter={StaticResource BooleanToVisibilityConverter}}">
+                <cc:CircularProgressBar Background="Black" Opacity="0.5" />
+                <TextBlock Text="{Binding WaitText, Mode=OneWay, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center" HorizontalAlignment="Center"
+                           TextWrapping="Wrap" FontFamily="Segoe UI" FontWeight="Light" Margin="5,0,0,0" Foreground="White" FontSize="16" />
+                <Border BorderThickness="1" BorderBrush="Gray" Background="{x:Null}"/>
+            </Grid>
+        </Grid>
+    </DockPanel>
+</UserControl>

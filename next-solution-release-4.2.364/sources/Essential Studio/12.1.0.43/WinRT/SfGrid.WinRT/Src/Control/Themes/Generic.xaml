@@ -1,0 +1,1264 @@
+﻿<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:local="using:Syncfusion.UI.Xaml.Grid">
+    <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Default">
+            <SolidColorBrush x:Key="AddNewRowBackgroundBrush">#FF666666</SolidColorBrush>
+            <SolidColorBrush x:Key="AddNewRowForegroundBrush">#FFD1D1D1</SolidColorBrush>
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="Light">
+            <SolidColorBrush x:Key="AddNewRowBackgroundBrush">#FFE5E5E5</SolidColorBrush>
+            <SolidColorBrush x:Key="AddNewRowForegroundBrush">#FF515151</SolidColorBrush>
+        </ResourceDictionary>
+    </ResourceDictionary.ThemeDictionaries>
+    <local:BoolToVisiblityConverter x:Key="VisiblityConverter" />
+    <local:SortDirectionToVisibilityConverter x:Key="sortDirectionToVisibilityConverter" />
+    <local:SortDirectionToWidthConverter x:Key="sortDirectionToWidthConverter" />
+
+    <!--  Error Template  -->
+    <ControlTemplate x:Key="ValidationToolTipTemplate">
+        <Grid x:Name="PART_ToolTipPresenter"
+              Margin="5,0"
+              Opacity="0"
+              RenderTransformOrigin="0,0">
+            <Grid.RenderTransform>
+                <TranslateTransform x:Name="Transform" X="-25" />
+            </Grid.RenderTransform>
+            <VisualStateManager.VisualStateGroups>
+                <VisualStateGroup x:Name="OpenStates">
+                    <VisualStateGroup.Transitions>
+                        <VisualTransition GeneratedDuration="0" />
+                        <VisualTransition GeneratedDuration="0:0:0.2" To="Opened">
+                            <Storyboard>
+                                <DoubleAnimation Duration="0:0:0.2"
+                                                 Storyboard.TargetName="Transform"
+                                                 Storyboard.TargetProperty="X"
+                                                 To="0">
+                                    <DoubleAnimation.EasingFunction>
+                                        <BackEase Amplitude=".3" EasingMode="EaseOut" />
+                                    </DoubleAnimation.EasingFunction>
+                                </DoubleAnimation>
+                                <DoubleAnimation Duration="0:0:0.2"
+                                                 Storyboard.TargetName="PART_ToolTipPresenter"
+                                                 Storyboard.TargetProperty="Opacity"
+                                                 To="1" />
+                            </Storyboard>
+                        </VisualTransition>
+                    </VisualStateGroup.Transitions>
+                    <VisualState x:Name="Closed">
+                        <Storyboard>
+                            <DoubleAnimation Duration="0"
+                                             Storyboard.TargetName="PART_ToolTipPresenter"
+                                             Storyboard.TargetProperty="Opacity"
+                                             To="0" />
+                        </Storyboard>
+                    </VisualState>
+                    <VisualState x:Name="Opened">
+                        <Storyboard>
+                            <DoubleAnimation Duration="0"
+                                             Storyboard.TargetName="Transform"
+                                             Storyboard.TargetProperty="X"
+                                             To="0" />
+                            <DoubleAnimation Duration="0"
+                                             Storyboard.TargetName="PART_ToolTipPresenter"
+                                             Storyboard.TargetProperty="Opacity"
+                                             To="1" />
+                        </Storyboard>
+                    </VisualState>
+                </VisualStateGroup>
+            </VisualStateManager.VisualStateGroups>
+
+            <Border Margin="4,4,-4,-4"
+                    Background="#052A2E31"
+                    CornerRadius="5" />
+            <Border Margin="3,3,-3,-3"
+                    Background="#152A2E31"
+                    CornerRadius="4" />
+            <Border Margin="2,2,-2,-2"
+                    Background="#252A2E31"
+                    CornerRadius="3" />
+            <Border Margin="1,1,-1,-1"
+                    Background="#352A2E31"
+                    CornerRadius="2" />
+
+            <Border Background="#FFDC000C" CornerRadius="2" />
+            <Border CornerRadius="2">
+                <TextBlock MaxWidth="250"
+                           Margin="8,4,8,4"
+                           Foreground="White"
+                           Text="{TemplateBinding Tag}"
+                           TextWrapping="Wrap"
+                           UseLayoutRounding="false" />
+            </Border>
+        </Grid>
+    </ControlTemplate>
+
+    <!--  Stacked header Cell Style  -->
+    <Style TargetType="local:GridStackedHeaderCellControl">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Gray" />
+        <Setter Property="BorderThickness" Value="0,0,1,1" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="Padding" Value="10,3,10,3" />
+        <Setter Property="FontFamily" Value="Segoe UI" />
+        <Setter Property="Foreground" Value="{StaticResource ApplicationForegroundThemeBrush}" />
+        <Setter Property="FontSize" Value="16" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="local:GridStackedHeaderCellControl">
+                    <Border Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}">
+
+                        <Grid Margin="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                              FontFamily="{TemplateBinding FontFamily}"
+                                              FontSize="{TemplateBinding FontSize}"
+                                              FontWeight="{TemplateBinding FontWeight}" />
+                        </Grid>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+
+    <Style TargetType="local:GridRowHeaderIndentCell">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Gray" />
+        <Setter Property="BorderThickness" Value="0,0,1,1" />
+        <Setter Property="Padding" Value="0,0,0,0" />
+        <Setter Property="FontFamily" Value=" Segoe UI" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="IsTabStop" Value="False" />
+
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="local:GridRowHeaderIndentCell">
+                    <Border Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}" />
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+
+    </Style>
+
+    <Style TargetType="local:GridRowHeaderCell">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Gray" />
+        <Setter Property="BorderThickness" Value="0,0,1,1" />
+        <Setter Property="Padding" Value="0,0,0,0" />
+        <Setter Property="FontFamily" Value=" Segoe UI" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="IsTabStop" Value="False" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="local:GridRowHeaderCell">
+                    <Border x:Name="PART_RowHeaderCellBorder"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}">
+
+                        <VisualStateManager.VisualStateGroups>
+
+                            <VisualStateGroup x:Name="BorderStates">
+                                <VisualState x:Name="Footer">
+                                    <Storyboard BeginTime="0">
+                                        <ObjectAnimationUsingKeyFrames BeginTime="0"
+                                                                       Duration="1"
+                                                                       Storyboard.TargetName="PART_RowHeaderCellBorder"
+                                                                       Storyboard.TargetProperty="BorderThickness">
+                                            <DiscreteObjectKeyFrame KeyTime="0" Value="0" />
+                                        </ObjectAnimationUsingKeyFrames>
+                                    </Storyboard>
+                                </VisualState>
+                            </VisualStateGroup>
+
+                            <VisualStateGroup x:Name="IndicationStates">
+
+                                <VisualState x:Name="Normal" />
+
+                                <VisualState x:Name="Error_CurrentRow">
+                                    <Storyboard>
+                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="PART_RowHeaderIndicator" Storyboard.TargetProperty="Data">
+                                            <DiscreteObjectKeyFrame KeyTime="0">
+                                                <DiscreteObjectKeyFrame.Value>
+                                                    <Geometry>F1 M 397.333,276.552L 395.445,274.666L 392,278.112L 388.555,274.666L 386.667,276.552L 390.113,279.999L 386.667,283.445L 388.555,285.334L 392,281.887L 395.445,285.334L 397.333,283.445L 393.887,279.999L 397.333,276.552 Z</Geometry>
+                                                </DiscreteObjectKeyFrame.Value>
+                                            </DiscreteObjectKeyFrame>
+                                        </ObjectAnimationUsingKeyFrames>
+
+                                        <ColorAnimationUsingKeyFrames Storyboard.TargetName="PART_RowHeaderIndicator" Storyboard.TargetProperty="(Shape.Fill).(SolidColorBrush.Color)">
+                                            <EasingColorKeyFrame KeyTime="0" Value="#FFFF3D2E" />
+                                        </ColorAnimationUsingKeyFrames>
+                                    </Storyboard>
+                                </VisualState>
+
+                                <VisualState x:Name="Error">
+                                    <Storyboard>
+                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="PART_RowHeaderIndicator" Storyboard.TargetProperty="Data">
+                                            <DiscreteObjectKeyFrame KeyTime="0">
+                                                <DiscreteObjectKeyFrame.Value>
+                                                    <Geometry>F1 M 397.333,276.552L 395.445,274.666L 392,278.112L 388.555,274.666L 386.667,276.552L 390.113,279.999L 386.667,283.445L 388.555,285.334L 392,281.887L 395.445,285.334L 397.333,283.445L 393.887,279.999L 397.333,276.552 Z</Geometry>
+                                                </DiscreteObjectKeyFrame.Value>
+                                            </DiscreteObjectKeyFrame>
+                                        </ObjectAnimationUsingKeyFrames>
+
+                                        <ColorAnimationUsingKeyFrames Storyboard.TargetName="PART_RowHeaderIndicator" Storyboard.TargetProperty="(Shape.Fill).(SolidColorBrush.Color)">
+                                            <EasingColorKeyFrame KeyTime="0" Value="#FFEC777C" />
+                                        </ColorAnimationUsingKeyFrames>
+
+                                    </Storyboard>
+                                </VisualState>
+
+                                <VisualState x:Name="CurrentRow">
+                                    <Storyboard>
+                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="PART_RowHeaderIndicator" Storyboard.TargetProperty="Data">
+                                            <DiscreteObjectKeyFrame KeyTime="0">
+                                                <DiscreteObjectKeyFrame.Value>
+                                                    <Geometry>F1 M 390.741,274.667L 387.928,274.667L 393.048,280L 387.927,285.333L 390.741,285.333L 396.073,280L 390.741,274.667 Z</Geometry>
+                                                </DiscreteObjectKeyFrame.Value>
+                                            </DiscreteObjectKeyFrame>
+                                        </ObjectAnimationUsingKeyFrames>
+
+                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="PART_ToolTip" Storyboard.TargetProperty="(UIElement.Visibility)">
+                                            <DiscreteObjectKeyFrame KeyTime="0">
+                                                <DiscreteObjectKeyFrame.Value>
+                                                    <Visibility>Collapsed</Visibility>
+                                                </DiscreteObjectKeyFrame.Value>
+                                            </DiscreteObjectKeyFrame>
+                                        </ObjectAnimationUsingKeyFrames>
+                                    </Storyboard>
+                                </VisualState>
+
+                                <VisualState x:Name="EditingRow">
+                                    <Storyboard>
+                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="PART_RowHeaderIndicator" Storyboard.TargetProperty="Data">
+                                            <DiscreteObjectKeyFrame KeyTime="0">
+                                                <DiscreteObjectKeyFrame.Value>
+                                                    <Geometry>M6.8007798,1.7332839 L8.97791,3.9143763 2.8868401,10.034073 0,10.666874 0.70837402,7.8491302 z M9.1967516,0.00016105175 C9.5903473,-0.0053596497 9.9693098,0.13107061 10.251301,0.41431141 10.856801,1.0224026 10.794301,2.067961 10.110801,2.7515601 L7.9219999,0.5588423 C8.2858057,0.19500291 8.7506762,0.0064178705 9.1967516,0.00016105175z</Geometry>
+                                                </DiscreteObjectKeyFrame.Value>
+                                            </DiscreteObjectKeyFrame>
+                                        </ObjectAnimationUsingKeyFrames>
+
+                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="PART_ToolTip" Storyboard.TargetProperty="(UIElement.Visibility)">
+                                            <DiscreteObjectKeyFrame KeyTime="0">
+                                                <DiscreteObjectKeyFrame.Value>
+                                                    <Visibility>Collapsed</Visibility>
+                                                </DiscreteObjectKeyFrame.Value>
+                                            </DiscreteObjectKeyFrame>
+                                        </ObjectAnimationUsingKeyFrames>
+
+                                    </Storyboard>
+                                </VisualState>
+                                <VisualState x:Name="AddNewRow">
+                                    <Storyboard>
+                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="PART_RowHeaderIndicator" Storyboard.TargetProperty="Data">
+                                            <DiscreteObjectKeyFrame KeyTime="0">
+                                                <DiscreteObjectKeyFrame.Value>
+                                                    <Geometry>F1 M 397.333,278.825L 393.176,278.825L 393.176,274.667L 390.824,274.667L 390.824,278.825L 386.667,278.825L 386.667,281.175L 390.824,281.175L 390.824,285.333L 393.176,285.333L 393.176,281.175L 397.333,281.175L 397.333,278.825 Z</Geometry>
+                                                </DiscreteObjectKeyFrame.Value>
+                                            </DiscreteObjectKeyFrame>
+                                        </ObjectAnimationUsingKeyFrames>
+                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="PART_ToolTip" Storyboard.TargetProperty="(UIElement.Visibility)">
+                                            <DiscreteObjectKeyFrame KeyTime="0">
+                                                <DiscreteObjectKeyFrame.Value>
+                                                    <Visibility>Collapsed</Visibility>
+                                                </DiscreteObjectKeyFrame.Value>
+                                            </DiscreteObjectKeyFrame>
+                                        </ObjectAnimationUsingKeyFrames>
+                                    </Storyboard>
+                                </VisualState>
+                            </VisualStateGroup>
+                        </VisualStateManager.VisualStateGroups>
+                        <Path x:Name="PART_RowHeaderIndicator"
+                              Width="10.667"
+                              Height="10.667"
+                              HorizontalAlignment="Center"
+                              VerticalAlignment="Center"
+                              Fill="{StaticResource ApplicationForegroundThemeBrush}"
+                              Stretch="Fill">
+                            <ToolTipService.ToolTip>
+
+                                <ToolTip x:Name="PART_ToolTip"
+                                         Background="#FFDB000C"
+                                         Placement="Right"
+                                         Tag="{TemplateBinding RowErrorMessage}"
+                                         Template="{StaticResource ValidationToolTipTemplate}" />
+
+                            </ToolTipService.ToolTip>
+                        </Path>
+
+                    </Border>
+
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <!--  Filter Toggle button  -->
+    <Style TargetType="local:FilterToggleButton">
+        <Setter Property="Foreground" Value="{StaticResource ApplicationForegroundThemeBrush}" />
+        <Setter Property="Margin" Value="4" />
+        <Setter Property="Opacity" Value="0.8" />
+        <Setter Property="HorizontalContentAlignment" Value="Right" />
+        <Setter Property="VerticalContentAlignment" Value="Bottom" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="local:FilterToggleButton">
+                    <Grid>
+                        <VisualStateManager.VisualStateGroups>
+                            <VisualStateGroup x:Name="FilterStates">
+                                <VisualState x:Name="Filtered">
+                                    <Storyboard BeginTime="0">
+                                        <ObjectAnimationUsingKeyFrames BeginTime="0"
+                                                                       Duration="1"
+                                                                       Storyboard.TargetName="PART_FilterToggleButtonIndicator"
+                                                                       Storyboard.TargetProperty="Data">
+                                            <DiscreteObjectKeyFrame KeyTime="0" Value="M2.1299944,9.9798575L55.945994,9.9798575 35.197562,34.081179 35.197562,62.672859 23.428433,55.942383 23.428433,33.52121z M1.3001332,0L56.635813,0C57.355887,0,57.935946,0.5891428,57.935946,1.3080959L57.935946,2.8258877C57.935946,3.5448422,57.355887,4.133985,56.635813,4.133985L1.3001332,4.133985C0.58005941,4.133985,-2.3841858E-07,3.5448422,0,2.8258877L0,1.3080959C-2.3841858E-07,0.5891428,0.58005941,0,1.3001332,0z" />
+                                        </ObjectAnimationUsingKeyFrames>
+                                    </Storyboard>
+                                </VisualState>
+                                <VisualState x:Name="UnFiltered">
+                                    <Storyboard BeginTime="0">
+                                        <ObjectAnimationUsingKeyFrames BeginTime="0"
+                                                                       Duration="1"
+                                                                       Storyboard.TargetName="PART_FilterToggleButtonIndicator"
+                                                                       Storyboard.TargetProperty="Data">
+                                            <DiscreteObjectKeyFrame KeyTime="0" Value="M0,0 L118.49799,0 L72.811813,53.068943 L72.811813,116.02525 L46.897243,101.20534 L46.897243,51.835941 z" />
+                                        </ObjectAnimationUsingKeyFrames>
+                                    </Storyboard>
+                                </VisualState>
+                            </VisualStateGroup>
+                        </VisualStateManager.VisualStateGroups>
+                        <Border Width="{TemplateBinding Width}"
+                                Height="{TemplateBinding Height}"
+                                Background="Transparent">
+                            <Path Name="PART_FilterToggleButtonIndicator"
+                                  Margin="{TemplateBinding Margin}"
+                                  HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                  VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                  Data="M0,0 L118.49799,0 L72.811813,53.068943 L72.811813,116.02525 L46.897243,101.20534 L46.897243,51.835941 z"
+                                  Fill="{TemplateBinding Foreground}"
+                                  Opacity="{TemplateBinding Opacity}"
+                                  Stretch="Fill" />
+                        </Border>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!--  Header Cell Style  -->
+    <Style TargetType="local:GridHeaderCellControl">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Gray" />
+        <Setter Property="BorderThickness" Value="0,0,1,1" />
+        <Setter Property="HorizontalContentAlignment" Value="Left" />
+        <Setter Property="Padding" Value="10,3,10,3" />
+        <Setter Property="FontFamily" Value="Segoe UI" />
+        <Setter Property="Foreground" Value="{StaticResource ApplicationForegroundThemeBrush}" />
+        <Setter Property="FontSize" Value="16" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="local:GridHeaderCellControl">
+                    <Grid>
+                        <VisualStateManager.VisualStateGroups>
+                            <VisualStateGroup x:Name="HiddenColumnsResizingStates">
+
+                                <VisualState x:Name="LastColumnHidden">
+                                    <Storyboard>
+                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="PART_HeaderCellBorder" Storyboard.TargetProperty="BorderThickness">
+                                            <DiscreteObjectKeyFrame KeyTime="0" Value="0,0,3,1" />
+                                        </ObjectAnimationUsingKeyFrames>
+                                    </Storyboard>
+                                </VisualState>
+
+                                <VisualState x:Name="HiddenState">
+                                    <Storyboard>
+                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="PART_HeaderCellBorder" Storyboard.TargetProperty="BorderThickness">
+                                            <DiscreteObjectKeyFrame KeyTime="0" Value="3,0,3,1" />
+                                        </ObjectAnimationUsingKeyFrames>
+                                    </Storyboard>
+                                </VisualState>
+
+                                <VisualState x:Name="PreviousColumnHidden">
+                                    <Storyboard>
+                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="PART_HeaderCellBorder" Storyboard.TargetProperty="BorderThickness">
+                                            <DiscreteObjectKeyFrame KeyTime="0" Value="3,0,1,1" />
+                                        </ObjectAnimationUsingKeyFrames>
+                                    </Storyboard>
+                                </VisualState>
+
+                                <VisualState x:Name="Normal" />
+                            </VisualStateGroup>
+                        </VisualStateManager.VisualStateGroups>
+                        <Border x:Name="PART_HeaderCellBorder"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}">
+
+                            <Grid Margin="{TemplateBinding Padding}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="0" MinWidth="{Binding Path=SortDirection, Mode=OneWay, RelativeSource={RelativeSource TemplatedParent}, Converter={StaticResource sortDirectionToWidthConverter}}" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <ContentPresenter Margin="{TemplateBinding Padding}"
+                                                  HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                  VerticalAlignment="Center"
+                                                  FontFamily="{TemplateBinding FontFamily}"
+                                                  FontSize="{TemplateBinding FontSize}"
+                                                  FontWeight="{TemplateBinding FontWeight}" />
+                                <Grid Grid.Column="1">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="18" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Path Width="10.84"
+                                          Height="9.87"
+                                          HorizontalAlignment="Center"
+                                          VerticalAlignment="Center"
+                                          Data="F1M753.644,-13.0589L753.736,-12.9639 753.557,-12.7816 732.137,8.63641 732.137,29.7119 756.445,5.40851 764.094,-2.24384 764.275,-2.42352 771.834,5.1286 796.137,29.4372 796.137,8.36163 774.722,-13.0589 764.181,-23.5967 753.644,-13.0589z"
+                                          Fill="{StaticResource ApplicationForegroundThemeBrush}"
+                                          Stretch="Fill"
+                                          Visibility="{Binding Path=SortDirection,
+                                                               RelativeSource={RelativeSource TemplatedParent},
+                                                               ConverterParameter=Ascending,
+                                                               Converter={StaticResource sortDirectionToVisibilityConverter}}">
+                                        <Path.RenderTransform>
+                                            <TransformGroup>
+                                                <TransformGroup.Children>
+                                                    <RotateTransform Angle="0" />
+                                                    <ScaleTransform ScaleX="1" ScaleY="1" />
+                                                </TransformGroup.Children>
+                                            </TransformGroup>
+                                        </Path.RenderTransform>
+                                    </Path>
+
+                                    <Path Width="10.84"
+                                          Height="9.87"
+                                          HorizontalAlignment="Center"
+                                          VerticalAlignment="Center"
+                                          Data="F1M181.297,177.841L181.205,177.746 181.385,177.563 202.804,156.146 202.804,135.07 178.497,159.373 170.847,167.026 170.666,167.205 163.107,159.653 138.804,135.345 138.804,156.42 160.219,177.841 170.76,188.379 181.297,177.841z"
+                                          Fill="{StaticResource ApplicationForegroundThemeBrush}"
+                                          Stretch="Fill"
+                                          Visibility="{Binding Path=SortDirection,
+                                                               RelativeSource={RelativeSource TemplatedParent},
+                                                               ConverterParameter=Decending,
+                                                               Converter={StaticResource sortDirectionToVisibilityConverter}}">
+                                        <Path.RenderTransform>
+                                            <TransformGroup>
+                                                <TransformGroup.Children>
+                                                    <RotateTransform Angle="0" />
+                                                    <ScaleTransform ScaleX="1" ScaleY="1" />
+                                                </TransformGroup.Children>
+                                            </TransformGroup>
+                                        </Path.RenderTransform>
+                                    </Path>
+                                    <TextBlock Grid.Column="1"
+                                               Margin="0,-4,0,0"
+                                               VerticalAlignment="Center"
+                                               FontSize="10"
+                                               Foreground="{TemplateBinding Foreground}"
+                                               Text="{TemplateBinding SortNumber}"
+                                               Visibility="{TemplateBinding SortNumberVisibility}" />
+                                </Grid>
+                                <local:FilterToggleButton x:Name="PART_FilterToggleButton"
+                                                          Grid.Column="2"
+                                                          Width="28"
+                                                          Height="28"
+                                                          HorizontalAlignment="Stretch"
+                                                          VerticalAlignment="Stretch"
+                                                          IsTabStop="False"
+                                                          Visibility="{TemplateBinding FilterIconVisiblity}" />
+                                <Border x:Name="PART_FilterPopUpPresenter" />
+                            </Grid>
+                        </Border>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!--  DataGridControl's Style  -->
+    <Style TargetType="local:SfDataGrid">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Gray" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Auto" />
+        <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto" />
+        <Setter Property="ScrollViewer.HorizontalScrollMode" Value="Enabled" />
+        <Setter Property="ScrollViewer.IsHorizontalRailEnabled" Value="True" />
+        <Setter Property="ScrollViewer.VerticalScrollMode" Value="Enabled" />
+        <Setter Property="ScrollViewer.IsVerticalRailEnabled" Value="True" />
+        <Setter Property="ScrollViewer.BringIntoViewOnFocusChange" Value="True" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="local:SfDataGrid">
+                    <Grid>
+                        <VisualStateManager.VisualStateGroups>
+                            <VisualStateGroup x:Name="CommonStates">
+                                <VisualState x:Name="Busy">
+                                    <Storyboard>
+                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="PART_BusyIndicatorBorder" Storyboard.TargetProperty="(UIElement.Visibility)">
+                                            <DiscreteObjectKeyFrame KeyTime="0" Value="Visible" />
+                                        </ObjectAnimationUsingKeyFrames>
+                                    </Storyboard>
+                                </VisualState>
+                                <VisualState x:Name="Normal" />
+                            </VisualStateGroup>
+                        </VisualStateManager.VisualStateGroups>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <Border Grid.Row="0" Visibility="{Binding Path=ShowGroupDropArea, RelativeSource={RelativeSource TemplatedParent}, Converter={StaticResource VisiblityConverter}}">
+                            <local:GroupDropArea x:Name="PART_GroupDropArea" />
+                        </Border>
+
+                        <Border Grid.Row="1"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}">
+                            <ScrollViewer x:Name="PART_ScrollViewer"
+                                          BringIntoViewOnFocusChange="{TemplateBinding ScrollViewer.BringIntoViewOnFocusChange}"
+                                          HorizontalScrollBarVisibility="{TemplateBinding ScrollViewer.HorizontalScrollBarVisibility}"
+                                          HorizontalScrollMode="{TemplateBinding ScrollViewer.HorizontalScrollMode}"
+                                          IsDeferredScrollingEnabled="False"
+                                          IsHorizontalRailEnabled="{TemplateBinding ScrollViewer.IsHorizontalRailEnabled}"
+                                          IsHorizontalScrollChainingEnabled="{TemplateBinding ScrollViewer.IsHorizontalScrollChainingEnabled}"
+                                          IsVerticalRailEnabled="{TemplateBinding ScrollViewer.IsVerticalRailEnabled}"
+                                          VerticalScrollBarVisibility="{TemplateBinding ScrollViewer.VerticalScrollBarVisibility}"
+                                          VerticalScrollMode="{TemplateBinding ScrollViewer.VerticalScrollMode}"
+                                          ZoomMode="Disabled">
+                                <local:VisualContainer x:Name="PART_VisualContainer"
+                                                       Background="Transparent"
+                                                       HortizontalScrollBarOffset="{Binding Path=HorizontalOffset,
+                                                                                            ElementName=PART_ScrollViewer,
+                                                                                            Mode=OneWay}"
+                                                       ManipulationMode="{TemplateBinding ManipulationMode}"
+                                                       VerticalScrollBarOffset="{Binding Path=VerticalOffset,
+                                                                                         ElementName=PART_ScrollViewer,
+                                                                                         Mode=OneWay}" />
+                            </ScrollViewer>
+                        </Border>
+                        <Border x:Name="PART_BusyIndicatorBorder"
+                                Grid.Row="1"
+                                Width="200"
+                                Height="100"
+                                Background="{StaticResource AppBarBackgroundThemeBrush}"
+                                BorderBrush="{StaticResource ApplicationForegroundThemeBrush}"
+                                BorderThickness="1"
+                                Visibility="Collapsed">
+
+                            <ProgressRing Width="60"
+                                          Height="60"
+                                          Foreground="#FF1196CD"
+                                          IsActive="True" />
+                        </Border>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!--  Header Row Style  -->
+    <Style TargetType="local:HeaderRowControl">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Gray" />
+        <Setter Property="BorderThickness" Value="1,0,0,0" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="local:HeaderRowControl">
+                    <Border Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}">
+                        <ContentPresenter />
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!--  Row Style  -->
+    <Style TargetType="local:VirtualizingCellsControl">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Gray" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="RowHighlightBorderThickness" Value="0" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="local:VirtualizingCellsControl">
+                    <Grid>
+                        <Rectangle x:Name="PART_CurrentFocusRow"
+                                   Margin="{TemplateBinding CurrentFocusBorderMargin}"
+                                   Stroke="DarkGray"
+                                   StrokeDashArray="3,3"
+                                   StrokeThickness="1"
+                                   Visibility="{TemplateBinding CurrentFocusRowVisibility}" />
+                        <Border Margin="1"
+                                Background="{TemplateBinding RowHoverBackgroundBrush}"
+                                BorderBrush="{TemplateBinding RowHoverBackgroundBrush}"
+                                BorderThickness="{TemplateBinding RowHighlightBorderThickness}"
+                                Clip="{TemplateBinding HighlightBorderClipRect}"
+                                Visibility="{TemplateBinding HighlightSelectionBorderVisiblity}" />
+                        <Rectangle Clip="{TemplateBinding RowBackgroundClip}" Fill="{TemplateBinding Background}" />
+                        <Border Background="{TemplateBinding RowSelectionBrush}"
+                                Clip="{TemplateBinding SelectionBorderClipRect}"
+                                Visibility="{TemplateBinding SelectionBorderVisiblity}" />
+                        <Border BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}">
+                            <ContentPresenter />
+                        </Border>
+
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!--  TableSummaryRow Control Row Style  -->
+    <Style TargetType="local:TableSummaryRowControl">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Gray" />
+        <Setter Property="FontFamily" Value=" Segoe UI" />
+        <Setter Property="FontSize" Value="16" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="BorderThickness" Value="1,1,0,0" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="local:TableSummaryRowControl">
+                    <Border x:Name="PART_RowBorder"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}">
+                        <VisualStateManager.VisualStateGroups>
+                            <VisualStateGroup x:Name="BorderStates">
+                                <VisualState x:Name="FooterRow" />
+                                <VisualState x:Name="HeaderRow">
+                                    <Storyboard BeginTime="0">
+                                        <ObjectAnimationUsingKeyFrames BeginTime="0"
+                                                                       Duration="1"
+                                                                       Storyboard.TargetName="PART_RowBorder"
+                                                                       Storyboard.TargetProperty="BorderThickness">
+                                            <DiscreteObjectKeyFrame KeyTime="0" Value="1, 0, 0, 1" />
+                                        </ObjectAnimationUsingKeyFrames>
+                                    </Storyboard>
+                                </VisualState>
+                                <VisualState x:Name="LastFooterRow">
+                                    <Storyboard BeginTime="0">
+                                        <ObjectAnimationUsingKeyFrames BeginTime="0"
+                                                                       Duration="1"
+                                                                       Storyboard.TargetName="PART_RowBorder"
+                                                                       Storyboard.TargetProperty="BorderThickness">
+                                            <DiscreteObjectKeyFrame KeyTime="0" Value="1, 1, 0, 1" />
+                                        </ObjectAnimationUsingKeyFrames>
+                                    </Storyboard>
+                                </VisualState>
+                            </VisualStateGroup>
+                        </VisualStateManager.VisualStateGroups>
+                        <ContentPresenter />
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!--  Grid Cell Style  -->
+    <Style TargetType="local:GridCell">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Gray" />
+        <Setter Property="BorderThickness" Value="0,0,1,1" />
+        <Setter Property="Padding" Value="0,0,0,0" />
+        <Setter Property="FontFamily" Value=" Segoe UI" />
+        <Setter Property="FontSize" Value="16" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="local:GridCell">
+                    <Grid>
+                        <VisualStateManager.VisualStateGroups>
+                            <VisualStateGroup x:Name="IndicationStates">
+                                <VisualState x:Name="HasError">
+                                    <Storyboard>
+                                        <DoubleAnimationUsingKeyFrames Storyboard.TargetName="PART_InValidCellBorder" Storyboard.TargetProperty="Width">
+                                            <EasingDoubleKeyFrame KeyTime="0" Value="0" />
+                                            <EasingDoubleKeyFrame KeyTime="0" Value="10" />
+                                        </DoubleAnimationUsingKeyFrames>
+                                    </Storyboard>
+                                </VisualState>
+
+                                <VisualState x:Name="NoError">
+                                    <Storyboard BeginTime="0">
+                                        <DoubleAnimationUsingKeyFrames Storyboard.TargetName="PART_InValidCellBorder" Storyboard.TargetProperty="Width">
+                                            <EasingDoubleKeyFrame KeyTime="0" Value="1" />
+                                            <EasingDoubleKeyFrame KeyTime="0" Value="0" />
+                                        </DoubleAnimationUsingKeyFrames>
+                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="PART_InValidCellBorder" Storyboard.TargetProperty="(UIElement.Visibility)">
+                                            <DiscreteObjectKeyFrame KeyTime="0">
+                                                <DiscreteObjectKeyFrame.Value>
+                                                    <Visibility>Collapsed</Visibility>
+                                                </DiscreteObjectKeyFrame.Value>
+                                            </DiscreteObjectKeyFrame>
+                                        </ObjectAnimationUsingKeyFrames>
+                                    </Storyboard>
+                                </VisualState>
+                            </VisualStateGroup>
+                        </VisualStateManager.VisualStateGroups>
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}">
+                            <Grid>
+                                <ContentPresenter Margin="{TemplateBinding Padding}"
+                                                  FontFamily="{TemplateBinding FontFamily}"
+                                                  FontSize="{TemplateBinding FontSize}"
+                                                  Foreground="{TemplateBinding Foreground}" />
+                            </Grid>
+                        </Border>
+                        <Border Margin="0,0,0,0"
+                                Background="Transparent"
+                                BorderBrush="{TemplateBinding CurrentCellBorderBrush}"
+                                BorderThickness="{TemplateBinding CurrentCellBorderThickness}"
+                                IsHitTestVisible="False"
+                                Visibility="{TemplateBinding CurrentCellBorderVisibility}" />
+                        <Border x:Name="PART_InValidCellBorder"
+                                Width="10"
+                                Height="10"
+                                HorizontalAlignment="Right"
+                                VerticalAlignment="Top">
+                            <ToolTipService.ToolTip>
+
+                                <ToolTip Background="#FFDB000C"
+                                         Placement="Right"
+                                         Tag="{TemplateBinding ErrorMessage}"
+                                         Template="{StaticResource ValidationToolTipTemplate}" />
+
+                            </ToolTipService.ToolTip>
+                            <Path Data="M0.5,0.5 L12.652698,0.5 12.652698,12.068006 z"
+                                  Fill="Red"
+                                  Stretch="Fill" />
+                        </Border>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+
+    </Style>
+    <!--  Group Caption Row Style  -->
+    <Style TargetType="local:CaptionSummaryRowControl">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Gray" />
+        <Setter Property="FontFamily" Value=" Segoe UI" />
+        <Setter Property="FontSize" Value="16" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="local:CaptionSummaryRowControl">
+                    <Grid>
+                        <VisualStateManager.VisualStateGroups>
+                            <VisualStateGroup x:Name="BorderStates">
+                                <VisualState x:Name="Normal" />
+                                <VisualState x:Name="FixedCaption">
+                                    <Storyboard BeginTime="0">
+                                        <ObjectAnimationUsingKeyFrames BeginTime="0"
+                                                                       Duration="1"
+                                                                       Storyboard.TargetName="PART_CaptionSummaryRowBorder"
+                                                                       Storyboard.TargetProperty="BorderThickness">
+                                            <DiscreteObjectKeyFrame KeyTime="0" Value="0, 1, 0, 0" />
+                                        </ObjectAnimationUsingKeyFrames>
+                                    </Storyboard>
+                                </VisualState>
+                            </VisualStateGroup>
+                        </VisualStateManager.VisualStateGroups>
+                        <Rectangle x:Name="PART_CurrentFocusRow"
+                                   Margin="{TemplateBinding CurrentFocusBorderMargin}"
+                                   Stroke="DarkGray"
+                                   StrokeDashArray="3,3"
+                                   StrokeThickness="1"
+                                   Visibility="{TemplateBinding CurrentFocusRowVisibility}" />
+                        <Border Background="{TemplateBinding GroupRowSelectionBrush}"
+                                Clip="{TemplateBinding SelectionBorderClipRect}"
+                                Visibility="{TemplateBinding SelectionBorderVisiblity}" />
+
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}">
+                            <Grid>
+                                <ContentPresenter VerticalAlignment="Center"
+                                                  Content="{TemplateBinding Content}"
+                                                  FontSize="14"
+                                                  FontWeight="SemiBold" />
+                                <Grid x:Name="PART_CaptionSummaryRowGrid" IsHitTestVisible="False">
+                                    <Border x:Name="PART_CaptionSummaryRowBorder"
+                                            HorizontalAlignment="Left"
+                                            BorderBrush="{TemplateBinding BorderBrush}"
+                                            BorderThickness="{TemplateBinding BorderThickness}">
+                                        <local:GridExpanderCellControl Width="10"
+                                                                       Height="10"
+                                                                       HorizontalAlignment="Center"
+                                                                       IsExpanded="{TemplateBinding IsExpanded}" />
+                                    </Border>
+                                </Grid>
+                            </Grid>
+                        </Border>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <!--  Group Summary Row control  -->
+    <Style TargetType="local:GroupSummaryRowControl">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Gray" />
+        <Setter Property="FontFamily" Value=" Segoe UI" />
+        <Setter Property="FontSize" Value="16" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="local:GroupSummaryRowControl">
+                    <Grid>
+                        <Rectangle x:Name="PART_CurrentFocusRow"
+                                   Margin="{TemplateBinding CurrentFocusBorderMargin}"
+                                   Stroke="DarkGray"
+                                   StrokeDashArray="3,3"
+                                   StrokeThickness="1"
+                                   Visibility="{TemplateBinding CurrentFocusRowVisibility}" />
+                        <Border Background="{TemplateBinding GroupRowSelectionBrush}"
+                                Clip="{TemplateBinding SelectionBorderClipRect}"
+                                Visibility="{TemplateBinding SelectionBorderVisiblity}" />
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter />
+                        </Border>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!--  Grid Group Summary Cell Style  -->
+    <Style TargetType="local:GridGroupSummaryCell">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Gray" />
+        <Setter Property="BorderThickness" Value="0,0,0,1" />
+        <Setter Property="Padding" Value="3,0,3,0" />
+        <Setter Property="HorizontalContentAlignment" Value="Left" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="local:GridGroupSummaryCell">
+                    <Border x:Name="PART_GridGroupSummaryCellBorder"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}">
+                        <VisualStateManager.VisualStateGroups>
+                            <VisualStateGroup x:Name="BorderStates">
+                                <VisualState x:Name="LastCell">
+                                    <Storyboard BeginTime="0">
+                                        <ObjectAnimationUsingKeyFrames BeginTime="0"
+                                                                       Duration="1"
+                                                                       Storyboard.TargetName="PART_GridGroupSummaryCellBorder"
+                                                                       Storyboard.TargetProperty="BorderThickness">
+                                            <DiscreteObjectKeyFrame KeyTime="0" Value="0,0,1,1" />
+                                        </ObjectAnimationUsingKeyFrames>
+                                    </Storyboard>
+                                </VisualState>
+                                <VisualState x:Name="NormalCell">
+                                    <Storyboard BeginTime="0">
+                                        <ObjectAnimationUsingKeyFrames BeginTime="0"
+                                                                       Duration="1"
+                                                                       Storyboard.TargetName="PART_GridGroupSummaryCellBorder"
+                                                                       Storyboard.TargetProperty="BorderThickness">
+                                            <DiscreteObjectKeyFrame KeyTime="0" Value="0,0,0,1" />
+                                        </ObjectAnimationUsingKeyFrames>
+                                    </Storyboard>
+                                </VisualState>
+                            </VisualStateGroup>
+                        </VisualStateManager.VisualStateGroups>
+                        <ContentPresenter Margin="{TemplateBinding Padding}"
+                                          HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                          VerticalAlignment="Center"
+                                          FontFamily="{TemplateBinding FontFamily}"
+                                          FontSize="{TemplateBinding FontSize}"
+                                          FontWeight="{TemplateBinding FontWeight}"
+                                          Foreground="{TemplateBinding Foreground}" />
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!--  GridCaptionSummaryCell Style  -->
+    <Style TargetType="local:GridCaptionSummaryCell">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Gray" />
+        <Setter Property="BorderThickness" Value="0,0,0,1" />
+        <Setter Property="Padding" Value="3,0,3,0" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="local:GridCaptionSummaryCell">
+                    <Border x:Name="PART_GridCaptionSummaryCellBorder"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}">
+
+                        <VisualStateManager.VisualStateGroups>
+                            <VisualStateGroup x:Name="BorderStates">
+                                <VisualState x:Name="LastCell">
+                                    <Storyboard BeginTime="0">
+                                        <ObjectAnimationUsingKeyFrames BeginTime="0"
+                                                                       Duration="1"
+                                                                       Storyboard.TargetName="PART_GridCaptionSummaryCellBorder"
+                                                                       Storyboard.TargetProperty="BorderThickness">
+                                            <DiscreteObjectKeyFrame KeyTime="0" Value="0,0,1,1" />
+                                        </ObjectAnimationUsingKeyFrames>
+                                    </Storyboard>
+                                </VisualState>
+                                <VisualState x:Name="NormalCell">
+                                    <Storyboard BeginTime="0">
+                                        <ObjectAnimationUsingKeyFrames BeginTime="0"
+                                                                       Duration="1"
+                                                                       Storyboard.TargetName="PART_GridCaptionSummaryCellBorder"
+                                                                       Storyboard.TargetProperty="BorderThickness">
+                                            <DiscreteObjectKeyFrame KeyTime="0" Value="0,0,0,1" />
+                                        </ObjectAnimationUsingKeyFrames>
+                                    </Storyboard>
+                                </VisualState>
+                                <VisualState x:Name="Fixed_NormalCell">
+                                    <Storyboard BeginTime="0">
+                                        <ObjectAnimationUsingKeyFrames BeginTime="0"
+                                                                       Duration="1"
+                                                                       Storyboard.TargetName="PART_GridCaptionSummaryCellBorder"
+                                                                       Storyboard.TargetProperty="BorderThickness">
+                                            <DiscreteObjectKeyFrame KeyTime="0" Value="0, 1, 0, 1" />
+                                        </ObjectAnimationUsingKeyFrames>
+                                    </Storyboard>
+                                </VisualState>
+                                <VisualState x:Name="Fixed_LastCell">
+                                    <Storyboard BeginTime="0">
+                                        <ObjectAnimationUsingKeyFrames BeginTime="0"
+                                                                       Duration="1"
+                                                                       Storyboard.TargetName="PART_GridCaptionSummaryCellBorder"
+                                                                       Storyboard.TargetProperty="BorderThickness">
+                                            <DiscreteObjectKeyFrame KeyTime="0" Value="0, 1, 1, 1" />
+                                        </ObjectAnimationUsingKeyFrames>
+                                    </Storyboard>
+                                </VisualState>
+                            </VisualStateGroup>
+                        </VisualStateManager.VisualStateGroups>
+                        <ContentPresenter Margin="{TemplateBinding Padding}"
+                                          VerticalAlignment="Center"
+                                          FontFamily="{TemplateBinding FontFamily}"
+                                          FontSize="{TemplateBinding FontSize}"
+                                          FontWeight="{TemplateBinding FontWeight}"
+                                          Foreground="{TemplateBinding Foreground}" />
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!--  Table Summary Cell Style  -->
+    <Style TargetType="local:GridTableSummaryCell">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Gray" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="3,0,3,0" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="local:GridTableSummaryCell">
+                    <Border x:Name="PART_GridTableSummaryCellBorder"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}">
+
+                        <VisualStateManager.VisualStateGroups>
+                            <VisualStateGroup x:Name="BorderStates">
+                                <VisualState x:Name="LastCell">
+                                    <Storyboard BeginTime="0">
+                                        <ObjectAnimationUsingKeyFrames BeginTime="0"
+                                                                       Duration="1"
+                                                                       Storyboard.TargetName="PART_GridTableSummaryCellBorder"
+                                                                       Storyboard.TargetProperty="BorderThickness">
+                                            <DiscreteObjectKeyFrame KeyTime="0" Value="0,0,1,0" />
+                                        </ObjectAnimationUsingKeyFrames>
+                                    </Storyboard>
+                                </VisualState>
+                                <VisualState x:Name="NormalCell">
+                                    <Storyboard BeginTime="0">
+                                        <ObjectAnimationUsingKeyFrames BeginTime="0"
+                                                                       Duration="1"
+                                                                       Storyboard.TargetName="PART_GridTableSummaryCellBorder"
+                                                                       Storyboard.TargetProperty="BorderThickness">
+                                            <DiscreteObjectKeyFrame KeyTime="0" Value="0" />
+                                        </ObjectAnimationUsingKeyFrames>
+                                    </Storyboard>
+                                </VisualState>
+                            </VisualStateGroup>
+                        </VisualStateManager.VisualStateGroups>
+                        <ContentPresenter Margin="{TemplateBinding Padding}"
+                                          VerticalAlignment="Center"
+                                          FontFamily="{TemplateBinding FontFamily}"
+                                          FontSize="{TemplateBinding FontSize}"
+                                          FontWeight="{TemplateBinding FontWeight}"
+                                          Foreground="{TemplateBinding Foreground}" />
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!--  Group Caption Control Style  -->
+    <Style TargetType="local:GridIndentCell">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Gray" />
+        <Setter Property="BorderThickness" Value="0,0,1,0" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="local:GridIndentCell">
+                    <Border x:Name="PART_GridIndentCellBorder"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}">
+                        <VisualStateManager.VisualStateGroups>
+                            <VisualStateGroup x:Name="BorderStates">
+                                <VisualState x:Name="DataRow" />
+                                <VisualState x:Name="SummaryRow" />
+                                <VisualState x:Name="TableSummaryRow">
+                                    <Storyboard BeginTime="0">
+                                        <ObjectAnimationUsingKeyFrames BeginTime="0"
+                                                                       Duration="1"
+                                                                       Storyboard.TargetName="PART_GridIndentCellBorder"
+                                                                       Storyboard.TargetProperty="BorderThickness">
+                                            <DiscreteObjectKeyFrame KeyTime="0" Value="0" />
+                                        </ObjectAnimationUsingKeyFrames>
+                                    </Storyboard>
+                                </VisualState>
+                                <VisualState x:Name="Expander_Collapsed">
+                                    <Storyboard BeginTime="0">
+                                        <ObjectAnimationUsingKeyFrames BeginTime="0"
+                                                                       Duration="1"
+                                                                       Storyboard.TargetName="PART_GridIndentCellBorder"
+                                                                       Storyboard.TargetProperty="BorderThickness">
+                                            <DiscreteObjectKeyFrame KeyTime="0" Value="0, 0, 0, 1" />
+                                        </ObjectAnimationUsingKeyFrames>
+                                    </Storyboard>
+                                </VisualState>
+                                <VisualState x:Name="After_Expander">
+                                    <Storyboard BeginTime="0">
+                                        <ObjectAnimationUsingKeyFrames BeginTime="0"
+                                                                       Duration="1"
+                                                                       Storyboard.TargetName="PART_GridIndentCellBorder"
+                                                                       Storyboard.TargetProperty="BorderThickness">
+                                            <DiscreteObjectKeyFrame KeyTime="0" Value="0, 0, 0, 1" />
+                                        </ObjectAnimationUsingKeyFrames>
+                                    </Storyboard>
+                                </VisualState>
+                                <VisualState x:Name="Before_Expander">
+                                    <Storyboard BeginTime="0">
+                                        <ObjectAnimationUsingKeyFrames BeginTime="0"
+                                                                       Duration="1"
+                                                                       Storyboard.TargetName="PART_GridIndentCellBorder"
+                                                                       Storyboard.TargetProperty="BorderThickness">
+                                            <DiscreteObjectKeyFrame KeyTime="0" Value="0, 0, 1, 0" />
+                                        </ObjectAnimationUsingKeyFrames>
+                                    </Storyboard>
+                                </VisualState>
+                                <VisualState x:Name="Expander_Expanded">
+                                    <Storyboard BeginTime="0">
+                                        <ObjectAnimationUsingKeyFrames BeginTime="0"
+                                                                       Duration="1"
+                                                                       Storyboard.TargetName="PART_GridIndentCellBorder"
+                                                                       Storyboard.TargetProperty="BorderThickness">
+                                            <DiscreteObjectKeyFrame KeyTime="0" Value="0" />
+                                        </ObjectAnimationUsingKeyFrames>
+                                    </Storyboard>
+                                </VisualState>
+                                <VisualState x:Name="Last_GroupRow">
+                                    <Storyboard BeginTime="0">
+                                        <ObjectAnimationUsingKeyFrames BeginTime="0"
+                                                                       Duration="1"
+                                                                       Storyboard.TargetName="PART_GridIndentCellBorder"
+                                                                       Storyboard.TargetProperty="BorderThickness">
+                                            <DiscreteObjectKeyFrame KeyTime="0" Value="0, 0, 1, 1" />
+                                        </ObjectAnimationUsingKeyFrames>
+                                    </Storyboard>
+                                </VisualState>
+                                <VisualState x:Name="Fixed_NormalCell">
+                                    <Storyboard BeginTime="0">
+                                        <ObjectAnimationUsingKeyFrames BeginTime="0"
+                                                                       Duration="1"
+                                                                       Storyboard.TargetName="PART_GridIndentCellBorder"
+                                                                       Storyboard.TargetProperty="BorderThickness">
+                                            <DiscreteObjectKeyFrame KeyTime="0" Value="0, 1, 0, 1" />
+                                        </ObjectAnimationUsingKeyFrames>
+                                    </Storyboard>
+                                </VisualState>
+                            </VisualStateGroup>
+                        </VisualStateManager.VisualStateGroups>
+                        <ContentPresenter VerticalAlignment="Center" />
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <Style TargetType="local:GridHeaderIndentCell">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Gray" />
+        <Setter Property="BorderThickness" Value="0,0,1,1" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="local:GridHeaderIndentCell">
+                    <Border x:Name="PART_GridHeaderIndentCellBorder"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}">
+                        <VisualStateManager.VisualStateGroups>
+                            <VisualStateGroup x:Name="BorderStates">
+                                <VisualState x:Name="TableSummaryRow">
+                                    <Storyboard BeginTime="0">
+                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="PART_GridHeaderIndentCellBorder" Storyboard.TargetProperty="(Border.BorderThickness)">
+                                            <DiscreteObjectKeyFrame KeyTime="0" Value="0" />
+                                        </ObjectAnimationUsingKeyFrames>
+                                    </Storyboard>
+                                </VisualState>
+                            </VisualStateGroup>
+                        </VisualStateManager.VisualStateGroups>
+                        <ContentPresenter VerticalAlignment="Center" />
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!--  Expander Cell Style  -->
+    <Style TargetType="local:GridExpanderCellControl">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="local:GridExpanderCellControl">
+                    <Border Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}">
+                        <VisualStateManager.VisualStateGroups>
+                            <VisualStateGroup x:Name="ExpansionStates">
+                                <VisualState x:Name="Expanded">
+                                    <Storyboard>
+                                        <ObjectAnimationUsingKeyFrames BeginTime="00:00:00"
+                                                                       Duration="00:00:00"
+                                                                       Storyboard.TargetName="PART_GridExpanderCellPath"
+                                                                       Storyboard.TargetProperty="Path.RenderTransform">
+                                            <DiscreteObjectKeyFrame KeyTime="00:00:00">
+                                                <DiscreteObjectKeyFrame.Value>
+                                                    <RotateTransform Angle="0" />
+                                                </DiscreteObjectKeyFrame.Value>
+                                            </DiscreteObjectKeyFrame>
+                                        </ObjectAnimationUsingKeyFrames>
+                                    </Storyboard>
+                                </VisualState>
+                                <VisualState x:Name="Collapsed">
+                                    <Storyboard>
+                                        <ObjectAnimationUsingKeyFrames BeginTime="00:00:00"
+                                                                       Duration="00:00:00"
+                                                                       Storyboard.TargetName="PART_GridExpanderCellPath"
+                                                                       Storyboard.TargetProperty="Path.RenderTransform">
+                                            <DiscreteObjectKeyFrame KeyTime="00:00:00">
+                                                <DiscreteObjectKeyFrame.Value>
+                                                    <RotateTransform Angle="180" CenterX="5" CenterY="5" />
+                                                </DiscreteObjectKeyFrame.Value>
+                                            </DiscreteObjectKeyFrame>
+                                        </ObjectAnimationUsingKeyFrames>
+                                    </Storyboard>
+                                </VisualState>
+                            </VisualStateGroup>
+                        </VisualStateManager.VisualStateGroups>
+                        <Path x:Name="PART_GridExpanderCellPath"
+                              Width="{TemplateBinding Width}"
+                              Height="{TemplateBinding Height}"
+                              HorizontalAlignment="Center"
+                              VerticalAlignment="Center"
+                              Data="F1M1464.78,374.21C1466.31,374.21,1466.94,375.538,1466.17,376.861L1435.89,429.439C1435.12,430.759,1433.87,430.823,1433.11,429.5L1402.82,376.827C1402.06,375.507,1402.69,374.21,1404.21,374.21L1464.78,374.21"
+                              Fill="{StaticResource ApplicationForegroundThemeBrush}"
+                              Stretch="Fill"
+                              Stroke="{StaticResource ApplicationForegroundThemeBrush}"
+                              UseLayoutRounding="False">
+
+                            <Path.RenderTransform>
+                                <TransformGroup>
+                                    <TransformGroup.Children>
+                                        <RotateTransform Angle="180" CenterX="5" CenterY="5" />
+                                    </TransformGroup.Children>
+                                </TransformGroup>
+                            </Path.RenderTransform>
+                        </Path>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style TargetType="local:AddNewRowControl">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="local:AddNewRowControl">
+                    <Grid>
+                        <VisualStateManager.VisualStateGroups>
+                            <VisualStateGroup x:Name="AddNewRowStates">
+                                <VisualState x:Name="Normal" />
+                                <VisualState x:Name="Edit">
+                                    <Storyboard>
+                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="PART_AddNewRowTextBorder" Storyboard.TargetProperty="(UIElement.Visibility)">
+                                            <DiscreteObjectKeyFrame KeyTime="0">
+                                                <DiscreteObjectKeyFrame.Value>
+                                                    <Visibility>Collapsed</Visibility>
+                                                </DiscreteObjectKeyFrame.Value>
+                                            </DiscreteObjectKeyFrame>
+                                        </ObjectAnimationUsingKeyFrames>
+                                    </Storyboard>
+                                </VisualState>
+                            </VisualStateGroup>
+                        </VisualStateManager.VisualStateGroups>
+                        <Rectangle x:Name="PART_CurrentFocusRow"
+                                   Margin="{TemplateBinding CurrentFocusBorderMargin}"
+                                   Stroke="DarkGray"
+                                   StrokeDashArray="3,3"
+                                   StrokeThickness="1"
+                                   Visibility="{TemplateBinding CurrentFocusRowVisibility}" />
+                        <Border Background="{TemplateBinding RowSelectionBrush}"
+                                Clip="{TemplateBinding SelectionBorderClipRect}"
+                                Visibility="{TemplateBinding SelectionBorderVisiblity}" />
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}">
+                            <ContentPresenter />
+                        </Border>
+                        <Border x:Name="PART_AddNewRowTextBorder"
+                                Background="{StaticResource AddNewRowBackgroundBrush}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="0,0,1,1"
+                                Clip="{TemplateBinding TextBorderClip}"
+                                IsHitTestVisible="False">
+                            <ContentPresenter Margin="{TemplateBinding TextMargin}"
+                                              HorizontalAlignment="Left"
+                                              VerticalAlignment="Center"
+                                              Content="{TemplateBinding AddNewRowText}"
+                                              FontSize="16"
+                                              FontWeight="Light"
+                                              Foreground="{StaticResource AddNewRowForegroundBrush}" />
+                        </Border>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+</ResourceDictionary>

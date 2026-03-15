@@ -1,0 +1,760 @@
+﻿<div id="EditDisplay" class="EditDisplay" style="height: 100%;">
+    <img src="cl.gif" alt="" onload="onEditDisplayLoaded(this)" id="loadingImage" />
+
+    <div id="edit" style="border-radius: 0px;"></div>
+
+    <script>
+
+        function onEditDisplayLoaded(obj) {
+            var thisPage = $(obj).parent();
+            thisPage.localize();
+
+            var scope = thisPage.scope();
+            if (!scope)
+                return;
+            var paratt = thisPage.data(dataparameters);
+            if (!paratt)
+                return;
+
+            $(obj).remove();
+            var thisParent = thisPage.parent();
+
+            setOpacity(scope, thisParent, thisPage);
+
+            var interval;
+            var deregisterListener;
+            var deregisterListenerMin;
+            var deregisterListenerMax;
+            var deregisterListenerActiveLanguage;
+            $(thisPage).bind('destroyed', function () {
+                if (interval)
+                    clearInterval(interval);
+                if (deregisterListener)
+                    deregisterListener();
+                if (deregisterListenerMin)
+                    deregisterListenerMin();
+                if (deregisterListenerMax)
+                    deregisterListenerMax();
+                if (increasingInterval)
+                    clearInterval(increasingInterval);
+                if (decreasingInterval)
+                    clearInterval(decreasingInterval);
+                if (increasingTimeout)
+                    clearTimeout(increasingTimeout);
+                if (decreasingTimeout)
+                    clearTimeout(decreasingTimeout);
+                if (deregisterListenerActiveLanguage)
+                    deregisterListenerActiveLanguage();
+            });
+
+            var parameters = JSON.parse(paratt);
+            var webKitRenderCorrection = thisPage.hasClass("webKitRenderCorrection");
+            
+            var customFonts = [parameters.ValueFontSettings.FontFamily, parameters.MeasFontSettings.FontFamily, parameters.FontFamily];
+            if (parameters.FontSettingList)
+                $.each(parameters.FontSettingList, function (index, item) {
+                    customFonts.push(item.FontFamily);
+                });
+            loadCustomFonts(customFonts);
+            var dynamicFontElements = [];
+
+            var minValue = parameters.MinValue;
+            var maxValue = parameters.MaxValue;
+            var editcontainer = thisPage.children().first();
+            if (scope.biOS) {
+                webkitMoveRotateTransform(thisParent, thisPage, editcontainer);
+                if (webKitRenderCorrection) {
+                    editcontainer.css("position", "relative");
+                    thisPage.css("will-change", "opacity");
+                }
+                else
+                    thisPage.css("transform", "translate(0, 0)");
+            }
+            var onSettingValue;
+            var precisionDigits = parseInt(parameters.PrecisionDigits, 10);
+            var spinStep = parseFloat(parameters.SpinStep, 10) || 1;
+            var el;
+            var bExitValueChanged;
+            var topBtn;
+            var btmBtn;
+            var euc;
+            var decimalSeparator = getDecimalSeparator(scope);
+            var groupSeparator = getGroupSeparator(scope);
+
+            var increasingInterval;
+            var increasingTimeout;
+            var decreasingInterval;
+            var decreasingTimeout;
+            var bTopBtnIsDown = false;
+            var bBottomBtnIsDown = false;
+            var bLastTouchOnSpins = false;
+            var displayErrorIndicator;
+            var bDisplayInit;
+            var bTopBtnInit;
+            var bBottomBtnInit;
+            var measUnitOffsetFactor = 0.55;
+
+            var buttonsMarginTop = 0;
+            if (parameters.SpinEnabled) {
+                var innerDisplayHeight = thisParent.height();
+                if (parameters.BorderThickness) {
+                    if (parameters.BorderThickness.Top > 0 || parameters.BorderThickness.Bottom > 0) {
+                        innerDisplayHeight -= parameters.BorderThickness.Top + parameters.BorderThickness.Bottom;
+                    }
+                }
+                if (innerDisplayHeight < 42)
+                    buttonsMarginTop = innerDisplayHeight - 42;
+            }
+
+            var bNeedsWrapping = parameters.TextWrapping != 1;
+
+            var editOptions = {
+                height: thisParent.height(),
+                //width: thisParent.width(),
+                value: "?",
+                mode: parameters.PasswordStyle ? "password" : "text",
+                readOnly: parameters.IsReadOnly,
+                step: parameters.SpinStep,
+                disabled: thisParent.hasClass(disabledClass),
+                hint: i18next.t1(parameters.Tooltip),
+                showSpinButtons: parameters.SpinEnabled ? true : false,
+                showClearButton: false,
+                onKeyDown: function (args) {
+                    if (!bNeedsWrapping)
+                        return;
+
+                    if (args.event.keyCode == 13) {
+                        var element = args.component.element();
+                        var elvalue = element.find(".dx-texteditor-input").val();
+                        edit.option("value", elvalue);
+                    }
+                },
+                onContentReady: function (e) {
+                    if (bDisplayInit)
+                        return;
+                    bDisplayInit = true;
+
+                    var element;
+                    var inputContainer;
+
+                    fastdom.measure(function () {
+                        element = e.component.element();
+                        if (webKitRenderCorrection)
+                            var textContainer = element.find(".dx-texteditor-container");
+                        if (!el)
+                            el = element.find(".dx-texteditor-input");
+                        inputContainer = element.parent().parent().find(".dx-texteditor-input-container");
+                        
+                        var outerCss = { height: "100%" };
+                        setObjectBorder(outerCss, parameters, thisPage, editcontainer);
+
+                        if (webKitRenderCorrection)
+                            outerCss["overflow"] = "visible";
+                        var cssEdits = {
+                            "text-align": parameters.LabelHorizontalAlignement == 0 ? "left" : (parameters.LabelHorizontalAlignement == 1 ? "right" : (parameters.LabelHorizontalAlignement == 3 ? "justify" : "center")),
+                            "min-width": "0px",
+                            "overflow": "hidden",
+                            "padding": "0px 4px"
+                        };
+                        if (parameters.LabelVerticalAlignement != 1)
+                            cssEdits["height"] = "auto";
+                        if (parameters.ValueFontSettings) {
+                            if (parameters.ValueFontSettings.FontFamily)
+                                cssEdits["font-family"] = parameters.ValueFontSettings.FontFamily;
+                            if (parameters.ValueFontSettings.FontWeight)
+                                cssEdits["font-weight"] = fontWeightConverter(parameters.MeasFontSettings.FontWeight);
+                            if (parameters.ValueFontSettings.FontSize)
+                                cssEdits["font-size"] = parameters.ValueFontSettings.FontSize;
+                            if (parameters.ValueFontSettings.FontStyle) {
+                                var fontStyle = parameters.ValueFontSettings.FontStyle.toLowerCase();
+                                if (fontStyle != "normal")
+                                    cssEdits["font-style"] = fontStyle;
+                            }
+                        }
+                        if (parameters.Background.Color)
+                            cssEdits["background-color"] = outerCss["background-color"] = parameters.Background.Color;
+                        if (parameters.Foreground.Color)
+                            cssEdits["color"] = parameters.Foreground.Color;
+
+                        var inputContainerCss = {};
+
+                        if (parameters.LabelVerticalAlignement != 1)
+                            inputContainerCss["align-items"] = (parameters.LabelVerticalAlignement == 0 || parameters.LabelVerticalAlignement == 3) ? "baseline" : "flex-end";
+
+                        if (parameters.DisplayBorderBrush && parameters.DisplayBorderThickness > 0)
+                            inputContainerCss["border"] = parameters.DisplayBorderThickness + "px solid " + parameters.DisplayBorderBrush.Color;
+
+                        if (parameters.CornerRadius) {
+                            inputContainerCss["border-radius"] = parameters.SpinEnabled ? parameters.CornerRadius.TopLeft + "px" + " " + "0px" + " " + "0px" + " " + parameters.CornerRadius.BottomLeft + "px" : parameters.CornerRadius.TopLeft + "px" + " " + parameters.CornerRadius.TopRight + "px" + " " + parameters.CornerRadius.BottomRight + "px" + " " + parameters.CornerRadius.BottomLeft + "px";
+                            cssEdits["border-radius"] = inputContainerCss["border-radius"];
+                        }
+                        if (bNeedsWrapping && parameters.TextWrapping == 0) {
+                            cssEdits["white-space"] = "break-spaces";
+                            cssEdits["overflow-wrap"] = "normal";
+                        }
+
+                        fastdom.mutate(function () {
+                            if (webKitRenderCorrection && textContainer.length > 0)
+                                textContainer.css("overflow", "visible");
+                            element.css(outerCss);
+                            inputContainer.css(inputContainerCss);
+                            el.css(cssEdits);
+                        });
+                    });
+
+                    fastdom.measure(function () {
+                        var errorIndicatorSize = Math.max(5, Math.round(thisParent.attr("height") / 8));
+                        fastdom.mutate(function () {
+                            displayErrorIndicator = $("<div class='displayErrorIndicator' style='display:none; position:absolute; top:0px; left:0px; border-radius:50%; width: " + errorIndicatorSize + "px; height: " + errorIndicatorSize + "px; background-color:" + parameters.ForegroundError.Color + ";'>&nbsp;</div>");
+                            el.before(displayErrorIndicator);
+                            euc = $("<div class='euContainer'></div>");
+                            el.after(euc);
+                            dynamicFontElements.push(euc);
+                            var cssEuc = { "white-space": "nowrap", "align-self": "center" };
+                            if (parameters.MeasFontSettings) {
+                                if (parameters.MeasFontSettings.FontFamily)
+                                    cssEuc["font-family"] = parameters.MeasFontSettings.FontFamily;
+                                if (parameters.MeasFontSettings.FontSize)
+                                    cssEuc["font-size"] = parameters.MeasFontSettings.FontSize;
+                                if (parameters.MeasFontSettings.FontWeight)
+                                    cssEuc["font-weight"] = fontWeightConverter(parameters.MeasFontSettings.FontWeight);
+                                if (parameters.MeasFontSettings.FontStyle) {
+                                    var fontStyle = parameters.MeasFontSettings.FontStyle.toLowerCase();
+                                    if (fontStyle != "normal")
+                                        cssEuc["font-style"] = fontStyle;
+                                }
+                            }
+                            if (parameters.MeasUnitOffset) {
+                                if (parameters.MeasUnitOffset.Right)
+                                    cssEuc["margin-right"] = parameters.MeasUnitOffset.Right * measUnitOffsetFactor;
+                                if (parameters.MeasUnitOffset.Left)
+                                    cssEuc["margin-left"] = parameters.MeasUnitOffset.Left * measUnitOffsetFactor;
+                                if (parameters.MeasUnitOffset.Top) {
+                                    cssEuc["position"] = "relative";
+                                    cssEuc["top"] = parameters.MeasUnitOffset.Top * measUnitOffsetFactor;
+                                }
+                                if (parameters.MeasUnitOffset.Bottom) {
+                                    cssEuc["position"] = "relative";
+                                    cssEuc["bottom"] = parameters.MeasUnitOffset.Bottom * measUnitOffsetFactor;
+                                }
+                            }
+                            if (parameters.Foreground.Color)
+                                cssEuc["color"] = parameters.Foreground.Color;
+                            euc.css(cssEuc);
+
+                            if (parameters.MeasUnit) {
+                                fastdom.mutate(function () {
+                                    euc.text(i18next.t1(parameters.MeasUnit));
+                                });
+                                deregisterListenerActiveLanguage = scope.$on(onActiveLanguageChanged, function (e, value) {
+                                    fastdom.mutate(function () {
+                                        euc.text(i18next.t1(parameters.MeasUnit));
+                                    });
+                                    if (parameters.FontSettingList && (value in parameters.FontSettingList) !== -1) {
+                                        var fontOpts = applyFontSettingList(dynamicFontElements, parameters.FontSettingList[value]);
+                                        if (edit)
+                                            fastdom.mutate(function () {
+                                                edit.element().find(".dx-texteditor-input").css(fontOpts);
+                                            });
+                                    }
+                                });
+                            }
+                        });
+                    });
+                },
+                onValueChanged: function (e) {
+                    if (onSettingValue || thisParent.hasClass(disabledClass))
+                        return;
+                    if (!(parameters.screenId in scope.dataValues) || !(parameters.SVGReferenceId in scope.dataValues[parameters.screenId]))
+                        return;
+                    if (!scope.dataValues[parameters.screenId][parameters.SVGReferenceId].isGood)
+                        return;
+
+                    if (!increasingInterval && !decreasingInterval)
+                        edit.option("disabled", true);
+
+                    var enumstrings = edit.option("_customOptions.enumstrings");
+                    var digitalFalse = edit.option("_customOptions.digitalFalseValue");
+                    var digitalTrue = edit.option("_customOptions.digitalTrueValue");
+
+                    var newValue = e.value;
+
+                    var isDigitalOrEnum = false;
+                    
+                    if (digitalFalse && digitalTrue) {
+                        isDigitalOrEnum = true;
+                        if (newValue == digitalFalse || newValue == 0)
+                            newValue = 0;
+                        else if (newValue == digitalTrue || newValue == 1)
+                            newValue = 1;
+                        else {
+                            restorePreviousValue(e.previousValue);
+                            return;
+                        }
+                    }
+                    if (enumstrings) {
+                        isDigitalOrEnum = true;
+                        if (!isNaN(newValue)) {
+                            if (newValue < 0 || newValue >= enumstrings.length) {
+                                restorePreviousValue(e.previousValue);
+                                return;
+                            }
+                        }
+                        else {
+                            var valueIndex = enumstrings.indexOf(newValue);
+                            if (valueIndex == -1) {
+                                restorePreviousValue(e.previousValue);
+                                return;
+                            }
+                            newValue = valueIndex;
+                        }
+                    }
+
+                    var writtenValue = String(newValue);
+
+                    if (!isDigitalOrEnum) {
+                        var bOutOfRange = false;
+                        var fv = parseFloat(writtenValue.replace(groupSeparator, "").replace(decimalSeparator, invariantNumberDecimalSeparator));
+                        if (!scope.dataValues[parameters.screenId][parameters.SVGReferenceId].bIsString && !notNumeric(fv)) {
+                            writtenValue = String(fv);
+                            bOutOfRange = isValueOutOfRange(fv);
+                        }
+                        else
+                            bOutOfRange = isValueOutOfRange(writtenValue);
+                        if (bOutOfRange) {
+                            restorePreviousValue(e.previousValue);
+                            return;
+                        }
+                    }
+                    scope.corehubconnection.invoke("SetValue", parameters.SVGReferenceId, writtenValue, parameters.screenId)
+                        .then((ret) => {
+                            edit.option("disabled", thisParent.hasClass(disabledClass));
+                        })
+                        .catch(err => {
+                            console.error(err.toString());
+
+                            edit.option("disabled", thisParent.hasClass(disabledClass));
+                            edit.option("value", e.previousValue);
+                            scope.$broadcast(onError, { ex: err, value: "Error setting value : " + err.toString() + " for item : " + parameters.SVGItemId });
+                        });
+                },
+                buttons: [],
+                placeholder: i18next.t1('ConnectingToServer'),
+                _customOptions: {}
+            };
+
+            function restorePreviousValue(previousValue) {
+                if (!bExitValueChanged) {
+                    bExitValueChanged = true;
+                    edit.option({ "value": previousValue, "disabled": false });
+                }
+                bExitValueChanged = false;
+            }
+            
+            thisParent.on("mousedown touchstart", function (e) {
+                if (!topBtn || !btmBtn || thisParent.hasClass(disabledClass)) {
+                    bLastTouchOnSpins = false;
+                    return;
+                }
+
+                var touchEvent = e.type == "touchstart";
+                if (touchEvent && !$(e.target).is("input")) {
+                    //e.stopPropagation(); 
+                    e.preventDefault();
+                }
+
+                var eventPath = e.originalEvent.composedPath();
+                bTopBtnIsDown = eventPath.indexOf(topBtn[0]) !== -1;
+                bBottomBtnIsDown = eventPath.indexOf(btmBtn[0]) !== -1;
+                if (bTopBtnIsDown || bBottomBtnIsDown)
+                    bLastTouchOnSpins = true;
+                if (bTopBtnIsDown) {
+                    if (edit.option("disabled") == true)
+                        return;
+
+                    if (increasingTimeout) {
+                        clearTimeout(increasingTimeout);
+                        increasingTimeout = null;
+                    }
+
+                    addSpinStep(spinStep);
+                    increasingTimeout = setTimeout(function () {
+                        increasingInterval = setInterval(function () {
+                            if (!touchEvent) {
+                                if (document.activeElement !== topBtn[0]) {
+                                    clearInterval(increasingInterval);
+                                    increasingInterval = null;
+                                    bTopBtnIsDown = false;
+                                    return;
+                                }
+                            }
+                            addSpinStep(spinStep);
+                        }, 50);
+                    }, 500);
+                }
+                else if (bBottomBtnIsDown) {
+                    if (edit.option("disabled") == true)
+                        return;
+
+                    if (decreasingTimeout) {
+                        clearTimeout(decreasingTimeout);
+                        decreasingTimeout = null;
+                    }
+
+                    addSpinStep(-spinStep);
+                    decreasingTimeout = setTimeout(function () {
+                        decreasingInterval = setInterval(function () {
+                            if (!touchEvent) {
+                                if (document.activeElement !== btmBtn[0]) {
+                                    clearInterval(decreasingInterval);
+                                    decreasingInterval = null;
+                                    bBottomBtnIsDown = false;
+                                    return;
+                                }
+                            }
+                            addSpinStep(-spinStep);
+                        }, 50);
+                    }, 500);
+                }
+            }).on("mouseup touchend", function (e) {
+                if (bLastTouchOnSpins && e.type == "touchend" && !$(e.target).is("input")) {
+                    //e.stopPropagation(); 
+                    e.preventDefault();
+                }
+                try {
+                    if (bTopBtnIsDown) {
+                        if (increasingInterval) {
+                            clearInterval(increasingInterval);
+                            increasingInterval = null;
+                        }
+                        if (increasingTimeout) {
+                            clearTimeout(increasingTimeout);
+                            increasingTimeout = null;
+                        }
+                    }
+                    else if (bBottomBtnIsDown) {
+                        if (decreasingInterval) {
+                            clearInterval(decreasingInterval);
+                            decreasingInterval = null;
+                        }
+                        if (decreasingTimeout) {
+                            clearTimeout(decreasingTimeout);
+                            decreasingTimeout = null;
+                        }
+                    }
+                }
+                finally {
+                    bLastTouchOnSpins = false;
+                    bTopBtnIsDown = false;
+                    bBottomBtnIsDown = false;
+                }
+            });
+
+            if (!bNeedsWrapping && parameters.SpinEnabled) {
+                var spinStyle = "";
+                if (parameters.SpinButtonBackColor && parameters.SpinButtonBackColor.Color)
+                    spinStyle += "background: " + parameters.SpinButtonBackColor.Color + ";";
+                editOptions["buttons"] = [{
+                    name: "txtCustomButton1",
+                    location: parameters.SpinPosition == 0 ? "before" : "after",
+                    options: {
+                        //icon: "https://js.devexpress.com/Demos/WidgetsGallery/JSDemos/images/icons/eye.png",
+                        height: "100%",
+                        width: "100%",
+                        type: "default",
+                        onClick: function () {
+
+                        },
+                        template: function (e) {
+                            var spinContainer = $("<div class='topBtn' style='" + spinStyle + "'></div><div class='bottomBtn' style='" + spinStyle + "'></div>");
+                            return spinContainer;
+                        },
+                        onContentReady: function (e) {
+                            var element = e.component.element();
+                            element.css("background-color", "transparent");
+                            element.find(".dx-button-content").css({
+                                "line-height": "normal",
+                                "padding": "0px"
+                            });
+
+                            var containerFlexBasis = parameters.SpinDimension == 2 ? 20 : parameters.SpinDimension == 1 ? 15 : 10;
+
+                            element.parent().css({
+                                "flex-basis": containerFlexBasis + "%",
+                                "background": getThemeColors(scope).background
+                            });
+
+                            element.parent().parent().find(".dx-texteditor-input-container").css("flex-basis", (100 - containerFlexBasis) + "%");
+
+                            topBtn = element.find(".topBtn");
+                            if (buttonsMarginTop)
+                                topBtn.css("margin-top", buttonsMarginTop);
+                            topBtn.dxButton({
+                                width: "100%",
+                                height: "50%",
+                                onContentReady: function (el) {
+                                    if (bTopBtnInit)
+                                        return;
+                                    bTopBtnInit = true;
+
+                                    var elem = el.component.element();
+                                    var spinThickness = parameters.SpinDimension == 2 ? "70%" : parameters.SpinDimension == 1 ? "50%" : "30%";
+                                    fastdom.mutate(function () {
+                                        elem.html("<svg viewBox='0 0 100 200' preserveAspectRatio='none' style='vertical-align:top; width:" + spinThickness + "; height:70%;margin-top:" + (thisParent.height() / 15) + "px;'><polygon points='50,0 100,200 0,200' style='fill:" + urlReferenceReplace(parameters.SpinBackColor.Color, parameters.screenId) + "' /></svg>");
+                                    });
+                                }
+                            });
+                            btmBtn = element.find(".bottomBtn");
+                            if (buttonsMarginTop)
+                                btmBtn.css("margin-top", buttonsMarginTop);
+                            btmBtn.dxButton({
+                                width: "100%",
+                                height: "50%",
+                                onContentReady: function (e) {
+                                    if (bBottomBtnInit)
+                                        return;
+                                    bBottomBtnInit = true;
+
+                                    var elem = e.component.element();
+                                    fastdom.mutate(function () {
+                                        elem.css({
+                                            position: "relative",
+                                            top: "-25%"
+                                        });
+                                    })
+                                    var spinThickness = parameters.SpinDimension == 2 ? "70%" : parameters.SpinDimension == 1 ? "50%" : "30%";
+                                    fastdom.mutate(function () {
+                                        elem.html("<svg viewBox='0 0 100 200' preserveAspectRatio='none' style='vertical-align:top; width:" + spinThickness + "; height:70%;margin-top:" + (thisParent.height() / 15) + "px;'><polygon points='50,200 100,0 0,0' style='fill:" + urlReferenceReplace(parameters.SpinBackColor.Color, parameters.screenId) + "' /></svg>");
+                                    });
+                                }
+                            });
+                        }
+                    }
+                }];
+            }
+
+            var edit;
+            var mutateFunc = function () {
+                if (bNeedsWrapping)
+                    edit = editcontainer.dxTextArea(editOptions).dxTextArea("instance");
+                else
+                    edit = editcontainer.dxTextBox(editOptions).dxTextBox("instance");
+
+                checkEnableEditDisplay(scope, edit, thisParent, parameters.SVGReferenceId, parameters.screenId);
+
+                if (parameters.TagMinValue && parameters.TagMinValue.SVGReferenceId && parameters.OutOfRange) {
+                    deregisterListenerMin = scope.$on(onDataChanged + parameters.screenId + parameters.TagMinValue.SVGReferenceId, function (e, value) {
+                        if (scope.dataValues[parameters.screenId][parameters.TagMinValue.SVGReferenceId].isGood) {
+                            minValue = scope.dataValues[parameters.screenId][parameters.TagMinValue.SVGReferenceId].invariantValue;
+                            checkDisplayInError();
+                        }
+                    });
+                }
+
+                if (parameters.TagMaxValue && parameters.TagMaxValue.SVGReferenceId && parameters.OutOfRange) {
+                    deregisterListenerMax = scope.$on(onDataChanged + parameters.screenId + parameters.TagMaxValue.SVGReferenceId, function (e, value) {
+                        if (scope.dataValues[parameters.screenId][parameters.TagMaxValue.SVGReferenceId].isGood) {
+                            maxValue = scope.dataValues[parameters.screenId][parameters.TagMaxValue.SVGReferenceId].invariantValue;
+                            checkDisplayInError();
+                        }
+                    });
+                }
+
+                deregisterListener = scope.$on(onDataChanged + parameters.screenId + parameters.SVGReferenceId, function (e, value) {
+                    applyTagQualityStyle(webKitRenderCorrection ? thisPage : thisParent, scope, parameters.screenId, parameters.SVGReferenceId);
+                    onDisplayDataChanged();
+                });
+                applyTagQualityStyle(webKitRenderCorrection ? thisPage : thisParent, scope, parameters.screenId, parameters.SVGReferenceId);
+                if (parameters.screenId in scope.dataValues && parameters.SVGReferenceId in scope.dataValues[parameters.screenId]) {
+                    onDisplayDataChanged();
+                }
+
+                $(thisParent).bind(disabledClassEvent, function () {
+                    checkEnableEditDisplay(scope, edit, thisParent, parameters.SVGReferenceId, parameters.screenId)
+                });
+            };
+            mutateHandler.scheduleMutate(parameters.screenId, mutateFunc);
+
+            function addSpinStep(step) {
+                if (!edit.option("_customOptions.notanumber")) {
+                    var enumstrings = edit.option("_customOptions.enumstrings");
+                    var digitalFalse = edit.option("_customOptions.digitalFalseValue");
+                    var digitalTrue = edit.option("_customOptions.digitalTrueValue");
+
+                    if (digitalFalse && step < 0)
+                        edit.option("value", digitalFalse);
+                    else if (digitalTrue && step > 0)
+                        edit.option("value", digitalTrue);
+                    else if (enumstrings) {
+                        var actualIndex = enumstrings.indexOf(edit.option("value"));
+                        var newIndex = actualIndex + step;
+                        if (newIndex >= 0 && newIndex < enumstrings.length)
+                            edit.option("value", enumstrings[newIndex]);
+                    }
+                    else {
+                        var fvalue = parseFloat(edit.option("value").toString().replace(groupSeparator, "").replace(decimalSeparator, invariantNumberDecimalSeparator));
+                        if (!notNumeric(fvalue)) {
+                            if (precisionDigits > 0)
+                                fvalue = (fvalue + step).toFixed(precisionDigits);
+                            else
+                                fvalue += step;
+                            edit.option("value", addSeparators(fvalue));
+                        }
+                        else if (edit.option("value").toString().toLowerCase() === "true" && step < 0)
+                            edit.option("value", "False");
+                        else if (edit.option("value").toString().toLowerCase() === "false" && step > 0)
+                            edit.option("value", "True");
+                    }
+                }
+            }
+
+            function addSeparators(value) {
+                if (typeof value !== 'string')
+                    value = value.toString();
+                if (parameters.ShowDigitGroupingSymbol)
+                    value = value.replace(/\B(?=(\d{3})+(?!\d))/g, groupSeparator);
+                if (precisionDigits > 0)
+                    value = value.replace(/\.([0-9]+)$/, decimalSeparator + "$1");
+                return value;
+            }
+
+            function onDisplayDataChanged() {
+                onSettingValue = true;
+                try {
+                    if (scope.dataValues[parameters.screenId][parameters.SVGReferenceId].isGood) {
+                        var localValue = scope.dataValues[parameters.screenId][parameters.SVGReferenceId].value;
+                        var finalValue = scope.dataValues[parameters.screenId][parameters.SVGReferenceId].invariantValue;
+                        var finalValueLower = finalValue.toString().toLowerCase();
+                        var bIsScalar = scope.dataValues[parameters.screenId][parameters.SVGReferenceId].bIsScalar;
+                        var bIsString = scope.dataValues[parameters.screenId][parameters.SVGReferenceId].bIsString;
+
+                        var enumStrings = scope.dataValues[parameters.screenId][parameters.SVGReferenceId].enumStrings;
+                        var digitalTrueValue = scope.dataValues[parameters.screenId][parameters.SVGReferenceId].digitalTrueValue;
+                        var digitalFalseValue = scope.dataValues[parameters.screenId][parameters.SVGReferenceId].digitalFalseValue;
+                        var isDigital = digitalTrueValue && digitalFalseValue;
+                        var notanumber = false;
+
+                        if (enumStrings) {
+                            try {
+                                finalValue = localValue = scope.dataValues[parameters.screenId][parameters.SVGReferenceId].enumStrings[parseInt(finalValue, 10)];
+                            }
+                            catch {
+                                console.error("EditDisplay " + thisParent.attr("id") + ": error parsing enum value", scope.dataValues[parameters.screenId][parameters.SVGReferenceId].enumStrings, parseInt(finalValue, 10));
+                            }
+                        }
+                        else if (isDigital)
+                            finalValue = localValue = (finalValueLower === "true" ? digitalTrueValue : digitalFalseValue);
+
+                        if (!enumStrings && !isDigital) {
+                            if (bIsString)
+                                notanumber = true;
+                            else {
+                                notanumber = notNumeric(finalValue) && finalValueLower !== "true" && finalValueLower !== "false";
+                                if (precisionDigits > 0) {
+                                    var fvFactor = Math.pow(10, precisionDigits);
+                                    finalValue = (Math.round((parseFloat(finalValue) + Number.EPSILON) * fvFactor) / fvFactor).toFixed(precisionDigits);
+                                    if (!notanumber) {
+                                        if (bIsScalar)
+                                            finalValue = (finalValue / fvFactor).toString();
+                                        finalValue = addSeparators(finalValue);
+                                    }
+                                }
+                                else {
+                                    finalValue = Math.round(finalValue);
+                                    if (!notanumber)
+                                        finalValue = addSeparators(finalValue);
+                                }
+
+                                if (notanumber || finalValueLower === "true" || finalValueLower === "false")
+                                    finalValue = localValue;
+                            }
+
+                            if (notanumber)
+                                edit.option("buttons", []);
+                        }
+
+                        var editOptions = {
+                            "value": finalValue,
+                            "placeholder": "",
+                        };
+                        var editCustomOptions = {
+                            "notanumber": notanumber,
+                            "enumstrings": enumStrings,
+                            "digitalTrueValue": digitalTrueValue,
+                            "digitalFalseValue": digitalFalseValue
+                        };
+
+                        edit.option("_customOptions", editCustomOptions);
+                        edit.option(editOptions);
+                        if (enumStrings)
+                            if (!notanumber && parameters.OutOfRange)
+                                checkDisplayInError();
+                    }
+                    else {
+                        edit.option({
+                            "value": "?",
+                            "placeholder": scope.dataValues[parameters.screenId][parameters.SVGReferenceId].lastMessage
+                        });
+                    }
+                    if (parameters.UseEUnit) {
+                        if (!notNumeric(scope.dataValues[parameters.screenId][parameters.SVGReferenceId].rangeLow))
+                            minValue = scope.dataValues[parameters.screenId][parameters.SVGReferenceId].rangeLow;
+                        if (!notNumeric(scope.dataValues[parameters.screenId][parameters.SVGReferenceId].rangeHigh))
+                            maxValue = scope.dataValues[parameters.screenId][parameters.SVGReferenceId].rangeHigh;
+                        if (parameters.OutOfRange)
+                            checkDisplayInError();
+                    }
+                    if (euc && parameters.UseEUnit && !parameters.MeasUnit && scope.dataValues[parameters.screenId][parameters.SVGReferenceId].displayName) {
+                        fastdom.mutate(function () {
+                            euc.text(i18next.t1(scope.dataValues[parameters.screenId][parameters.SVGReferenceId].displayName));
+                        });
+                    }
+
+                    checkEnableEditDisplay(scope, edit, thisParent, parameters.SVGReferenceId, parameters.screenId)
+                }
+                finally {
+                    onSettingValue = false;
+                }
+            }
+
+            function checkDisplayInError() {
+                if (displayErrorIndicator && edit) {
+                    fastdom.measure(function () {
+                        var isOutOfRange = isValueOutOfRange(edit.option("value"));
+                        var isVisible = displayErrorIndicator.css('display') !== 'none';
+                        if (isOutOfRange != isVisible) {
+                            fastdom.mutate(function () {
+                                displayErrorIndicator.css("display", isOutOfRange ? "block" : "none");
+                            });
+                        }
+                    });
+                }
+            }
+
+            function isValueOutOfRange(val) {
+                var bRet = false;
+                if (parameters.screenId in scope.dataValues && parameters.SVGReferenceId in scope.dataValues[parameters.screenId]) {
+                    if (scope.dataValues[parameters.screenId][parameters.SVGReferenceId].bIsString)
+                        bRet = val.toString().length < minValue || val.toString().length > maxValue;
+                    else
+                        bRet = !notNumeric(val) && ((!notNumeric(minValue) && parseFloat(val) < parseFloat(minValue)) || (!notNumeric(maxValue) && parseFloat(val) > parseFloat(maxValue)));
+                }
+                return bRet;
+            }
+
+            function checkEnableEditDisplay(scope, edit, thisParent, SVGReferenceId, screenId) {
+                var wasDisabled = edit.option("disabled");
+                var enabled = false;
+                var bCantWrite = false;
+                if (screenId in scope.dataValues && SVGReferenceId in scope.dataValues[screenId]) {
+                    enabled = scope.dataValues[screenId][SVGReferenceId].isGood && !thisParent.hasClass(disabledClass);
+                    bCantWrite = !scope.dataValues[screenId][SVGReferenceId].isWritable || !scope.dataValues[screenId][SVGReferenceId].isUserWritable;
+                }
+                edit.option({
+                    "disabled": !enabled,
+                    "readOnly": parameters.IsReadOnly || bCantWrite
+                });
+            }
+        }
+    </script>
+</div>

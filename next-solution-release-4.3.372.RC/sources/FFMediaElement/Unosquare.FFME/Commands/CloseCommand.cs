@@ -1,0 +1,115 @@
+﻿namespace Unosquare.FFME.Commands
+{
+    using Core;
+    using System;
+    using System.Text;
+    using System.Windows.Threading;
+
+    /// <summary>
+    /// Implements the logic to close a media stream.
+    /// </summary>
+    /// <seealso cref="Unosquare.FFME.Commands.MediaCommand" />
+    internal sealed class CloseCommand : MediaCommand
+    {
+        /// <summary>
+        /// Initializes a new instance of the <see cref="CloseCommand"/> class.
+        /// </summary>
+        /// <param name="manager">The media element.</param>
+        public CloseCommand(MediaCommandManager manager)
+            : base(manager, MediaCommandType.Close)
+        {
+            // placeholder
+        }
+
+        /// <summary>
+        /// Executes this command.
+        /// </summary>
+        internal override void ExecuteInternal()
+        {
+            var m = Manager.MediaElement;
+
+            //if (m.IsDisposed || m.IsOpen == false /*|| m.IsOpening*/)
+            //{
+            //    if (!m.IsDisposed)
+            //        m.MediaState = System.Windows.Controls.MediaState.Close;
+            //    return;
+            //}
+
+            m.Logger.Log(MediaLogMessageType.Debug, $"{nameof(CloseCommand)}: Entered");
+            m.Clock.Pause();
+
+            // Let the threads know a cancellation is pending.
+            m.IsTaskCancellationPending = true;
+
+            // Signal and wait for the handlers.
+            m.DelayLock.Set();
+
+            // Wait for worker threads to finish
+            var wrokers = new[] { m.PacketReadingTask, m.FrameDecodingTask, m.BlockRenderingTask };
+            foreach (var w in wrokers)
+                w?.Join();
+
+            // Stop the delays and allow signal the locking
+            m.DelayTimer?.Stop();
+            m.DelayTimer?.Dispose();
+            m.DelayTimer = null;
+
+            // Set the threads to null
+            m.BlockRenderingTask = null;
+            m.FrameDecodingTask = null;
+            m.PacketReadingTask = null;
+
+            // Call close on all renderers and clear them
+            foreach (var renderer in m.Renderers.Values)
+            {
+                renderer.Close();
+                (renderer as IDisposable)?.Dispose();
+            }
+
+            // Remove the renderers disposing of them
+            m.Renderers.Clear();
+
+            // Reset the clock
+            m.Clock.Reset();
+
+            // Dispose the container
+            if (m.Container != null)
+            {
+                m.Container.Dispose();
+                m.Container = null;
+            }
+
+            // Dispose the Blocks for all components
+            foreach (var kvp in m.Blocks) kvp.Value.Dispose();
+            m.Blocks.Clear();
+
+            // Clear the render times
+            m.LastRenderTime.Clear();
+
+            if (m.IsDisposed)
+                return;
+
+            m.MediaState = System.Windows.Controls.MediaState.Close;
+
+            // Update notification properties
+            m.runner?.UIInvoke(DispatcherPriority.DataBind, () =>
+            {
+                m.ResetDependencyProperies();
+                m.NotifyPropertyChanges();
+            });
+
+#if DEBUG
+            if (RC.Current.InstancesByLocation.Count > 0)
+            {
+                var builder = new StringBuilder();
+                builder.AppendLine("Unmanaged references were left alive. This is an indication that there is a memory leak.");
+                foreach (var kvp in RC.Current.InstancesByLocation)
+                    builder.AppendLine($"    {kvp.Key,30}: {kvp.Value}");
+
+                m.Logger.Log(MediaLogMessageType.Error, builder.ToString());
+            }
+#endif
+            m.Logger.Log(MediaLogMessageType.Debug, $"{nameof(CloseCommand)}: Completed");
+        }
+    }
+}

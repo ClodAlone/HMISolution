@@ -1,0 +1,68 @@
+@using ServerEditorWeb.Services
+
+<div class="symbol-library-panel">
+    <div class="symbol-library-toolbar">
+        <input type="text" class="form-control form-control-sm" placeholder="Search symbols…"
+               @bind="_searchText" @bind:event="oninput" />
+    </div>
+
+    <div class="symbol-library-categories">
+        <button class="btn btn-sm @(_selectedCategory == null ? "btn-primary" : "btn-outline-secondary")"
+                @onclick="() => _selectedCategory = null">All</button>
+        @foreach (var cat in Library.GetCategories())
+        {
+            var c = cat;
+            <button class="btn btn-sm @(_selectedCategory == c ? "btn-primary" : "btn-outline-secondary")"
+                    @onclick="() => _selectedCategory = c">@c</button>
+        }
+        <button class="btn btn-sm btn-outline-info ms-auto" @onclick="Refresh" title="Reload from disk">🔄</button>
+    </div>
+
+    <div class="symbol-library-grid">
+        @foreach (var sym in GetFilteredSymbols())
+        {
+            var item = sym;
+            <div class="symbol-library-item" @onclick="() => OnSymbolSelected.InvokeAsync(item)" title="@item.Name">
+                <div class="symbol-library-preview">
+                    @((MarkupString)item.SvgContent)
+                </div>
+                <div class="symbol-library-name">@item.Name</div>
+            </div>
+        }
+
+        @if (!GetFilteredSymbols().Any())
+        {
+            <div class="text-muted small p-2">No symbols found.</div>
+        }
+    </div>
+</div>
+
+@code {
+    [Inject] private SymbolLibraryService Library { get; set; } = default!;
+
+    [Parameter] public EventCallback<SymbolLibraryItem> OnSymbolSelected { get; set; }
+
+    private string? _selectedCategory;
+    private string _searchText = "";
+
+    private IEnumerable<SymbolLibraryItem> GetFilteredSymbols()
+    {
+        var symbols = Library.GetSymbols().AsEnumerable();
+
+        if (!string.IsNullOrEmpty(_selectedCategory))
+            symbols = symbols.Where(s => s.Category == _selectedCategory);
+
+        if (!string.IsNullOrWhiteSpace(_searchText))
+            symbols = symbols.Where(s =>
+                s.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase) ||
+                s.Category.Contains(_searchText, StringComparison.OrdinalIgnoreCase));
+
+        return symbols;
+    }
+
+    private void Refresh()
+    {
+        Library.Refresh();
+        StateHasChanged();
+    }
+}

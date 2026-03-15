@@ -1,0 +1,156 @@
+﻿<UserControl x:Class="ScreenManager.ScreenTransitionViewer"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:dxlc="http://schemas.devexpress.com/winfx/2008/xaml/layoutcontrol"
+             xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+             xmlns:self="clr-namespace:ScreenManager"
+             xmlns:properties="clr-namespace:ScreenManager.Properties"
+             xmlns:GadgetLibrary="clr-namespace:GadgetLibrary;assembly=GadgetLibrary"
+             xmlns:dxwui="http://schemas.devexpress.com/winfx/2008/xaml/windowsui"
+             xmlns:dxwuii="http://schemas.devexpress.com/winfx/2008/xaml/windowsui/internal"
+             mc:Ignorable="d" 
+             d:DesignHeight="300" d:DesignWidth="300">
+
+    <UserControl.CommandBindings>
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.ShowClientStatus}" x:Name="cbShowClientStatus" 
+                    Executed="OnShowClientStatus" 
+                    CanExecute="CanShowClientStatus" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.ShowLog}" x:Name="cbShowLog" 
+                    Executed="OnShowLog" 
+                    CanExecute="CanShowLog" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.ShowCrossReference}" x:Name="cbShowCrossReference" 
+                    Executed="OnShowCrossReference" 
+                    CanExecute="CanShowCrossReference" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.ShowWatchWindow}" x:Name="cbShowWatchWindow"
+                    Executed="OnShowWatchWindow" 
+                    CanExecute="CanShowWatchWindow" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.LoginUser}" x:Name="cbLoginUser"
+                Executed="OnLoginUser" 
+                CanExecute="CanLoginUser" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.LogoutUser}" x:Name="cbLogoutUser"
+                Executed="OnLogoutUser" 
+                CanExecute="CanLogoutUser" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.ResetGadgets}" x:Name="cbResetGadegets"
+                Executed="OnResetGadgets" 
+                CanExecute="CanResetGadgets" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.Back}" x:Name="cbBack"
+                    Executed="OnBack" 
+                    CanExecute="CanBack" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.Next}" x:Name="cbNext"
+                Executed="OnNext" 
+                CanExecute="CanNext" />
+
+    </UserControl.CommandBindings>
+
+    <UserControl.Resources>
+      <ResourceDictionary>
+        <ResourceDictionary.MergedDictionaries>
+          <ResourceDictionary Source="/RuntimeLightSharedResources;component/Resources/ScreenViewer.xaml" />
+        </ResourceDictionary.MergedDictionaries>
+        <self:BoolToVisibilityConverter x:Key="BooleanToVisibility" />
+        <Style x:Key="btnUnselectedStyle" TargetType="Button">
+            <Setter Property="Width" Value="{Binding Path=UnselectedTabstripFontSize,Mode=OneWay,Source={x:Static properties:Settings.Default}}" />
+            <Setter Property="Height" Value="{Binding Path=UnselectedTabstripFontSize,Mode=OneWay,Source={x:Static properties:Settings.Default}}" />
+            <Setter Property="Opacity" Value="{Binding Path=UnselectedTabstripOpacity,Mode=OneWay,Source={x:Static properties:Settings.Default}}" />
+        </Style>
+        <Style x:Key="btnSelectedStyle" TargetType="Button">
+            <Setter Property="Width" Value="{Binding Path=SelectedTabstripFontSize,Mode=OneWay,Source={x:Static properties:Settings.Default}}" />
+            <Setter Property="Height" Value="{Binding Path=SelectedTabstripFontSize,Mode=OneWay,Source={x:Static properties:Settings.Default}}" />
+        </Style>
+        <ControlTemplate x:Key="MyPageAdorner" TargetType="dxwui:PageAdornerControl">
+            <Border Background="{TemplateBinding Background}" BorderThickness="{TemplateBinding BorderThickness}" BorderBrush="{TemplateBinding BorderBrush}" 
+                    Margin="{TemplateBinding Padding}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition />
+                    </Grid.RowDefinitions>
+                    <Grid Margin="5">
+                        <dxwuii:NavigationHeaderControl FontSize="14" VerticalAlignment="Center" x:Name="PART_NavigationHeader" Content="{TemplateBinding Header}" 
+                                                          ContentTemplate="{TemplateBinding HeaderTemplate}" ContentTemplateSelector="{TemplateBinding HeaderTemplateSelector}" 
+                                                          ContentStringFormat="{TemplateBinding HeaderStringFormat}" BackCommand="{TemplateBinding BackCommand}" 
+                                                          BackCommandParameter="{TemplateBinding BackCommandParameter}" ShowBackButton="{TemplateBinding ShowBackButton}" />
+                    </Grid>
+                    <ItemsControl VerticalContentAlignment="Center" ItemsSource="{Binding TabStripButtons, RelativeSource={RelativeSource AncestorType=UserControl}}" Visibility="{Binding TabStripVisible, Converter={StaticResource BooleanToVisibility}, RelativeSource={RelativeSource AncestorType=UserControl}}" Grid.Row="0" Grid.Column="1">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Grid.Column="1" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                    </ItemsControl>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Visibility="{Binding NavigationButtonVisible, Converter={StaticResource BooleanToVisibility}, RelativeSource={RelativeSource AncestorType=UserControl}}">
+                        <Button Margin="3" Content="{x:Static properties:Resources.BackBtnTitle}" Command="{x:Static self:UIGeneralCommands.Back}" />
+                        <Button Margin="3" Content="{x:Static properties:Resources.NextBtnTitle}" Command="{x:Static self:UIGeneralCommands.Next}" />
+                    </StackPanel>
+                    <ContentPresenter Grid.Row="1" />
+                </Grid>
+            </Border>
+        </ControlTemplate>
+
+      </ResourceDictionary>
+    </UserControl.Resources>
+
+    <Grid x:Name="gridContainer">
+        <self:DockLayoutControlEx x:Name="dockPanel" AllowItemSizing="True" ItemSpace="0">
+            <!--<Controls:TransitionControl x:Name="_transContainer" Grid.Column="0" Grid.Row="0">
+            </Controls:TransitionControl>-->
+            <Grid dxlc:DockLayoutControl.Dock="Client" Grid.Row="1" Background="{x:Null}">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition />
+                </Grid.RowDefinitions>
+                
+                <dxwui:PageAdornerControl x:Name="navigationFrameAdorner" Grid.Row="0" Header="" Visibility="Collapsed" Height="30" VerticalAlignment="Top" ShowBackButton="False" Background="Gray" Template="{StaticResource MyPageAdorner}" />
+                <self:NavigationFrameEx NavigationCacheMode="Disabled" Grid.Row="1" x:Name="navigationControl" AnimationType="SlideHorizontal"/>
+
+                <Grid x:Name="gridUser" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="10" Grid.Row="1"
+                      MouseLeftButtonUp="Border_MouseLeftButtonDown" Visibility="Collapsed">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition/>
+                        <ColumnDefinition/>
+                    </Grid.ColumnDefinitions>
+                    <Image Source="{DynamicResource SVIEWUserLogin}" Margin="10" Width="48" Height="48" Grid.Column="1"/>
+                    <TextBlock FontSize="35" x:Name="txtUser" Margin="10" />
+                </Grid>
+                <dxe:FlyoutControl
+                                x:Name="flyoutControl"
+                                FontSize="16"
+                                AllowMoveAnimation="True"
+                                FontFamily="Segoe UI Light"
+                                PlacementTarget="{Binding ElementName=gridUser}"
+                                IsOpen="False">
+                    <dxe:FlyoutControl.Settings>
+                        <dxe:FlyoutSettings Placement="Bottom" ShowIndicator="True" />
+                    </dxe:FlyoutControl.Settings>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition/>
+                            <ColumnDefinition/>
+                        </Grid.ColumnDefinitions>
+                        <Button Command="{x:Static self:UIGeneralCommands.LoginUser}" Margin="10" 
+                               x:Name="loginUser" Content="{Binding RelativeSource={RelativeSource Self}, Path=Command.Text}"/>
+                        <Button Command="{x:Static self:UIGeneralCommands.LogoutUser}" Grid.Column="1" Margin="10" 
+                               x:Name="logoutUser" Content="{Binding RelativeSource={RelativeSource Self}, Path=Command.Text}"/>
+                    </Grid>
+                </dxe:FlyoutControl>
+            </Grid>
+        </self:DockLayoutControlEx>
+        <GadgetLibrary:SnapCanvas x:Name="_SnapCanvas"
+                                    AllowDragging="True"
+                                    SnapThreshold="20"
+                                    AllowDragOutOfView="False">
+        </GadgetLibrary:SnapCanvas>
+    
+  </Grid>
+</UserControl>

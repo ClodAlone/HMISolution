@@ -1,0 +1,718 @@
+﻿<div id="FastGaugeControl" class="FastGaugeControl">
+    <img src="cl.gif" alt="" onload="onFastGaugeControlLoaded(this)" id="loadingImage" />
+</div>
+
+<script type="text/javascript">
+    function onFastGaugeControlLoaded(obj) {
+        var thisPage = $(obj).parent();
+        thisPage.localize();
+
+        var scope = thisPage.scope();
+        if (!scope)
+            return;
+
+        var paratt;
+        var parameters;
+        try {
+            paratt = thisPage.data(dataparameters);
+            parameters = JSON.parse(paratt);
+        }
+        catch {
+            return;
+        }
+
+        $(obj).remove();
+        var thisParent = thisPage.parent();
+        var thisParentPos;
+        var thisParentSize;
+        var thisParentId = thisParent.attr("id");
+        var svgContainer = thisParent.closest("#svgcontainer")[0];
+        thisParent.css("overflow", "visible");
+
+        var decimalSeparator = getDecimalSeparator(scope);
+        var customFonts = [parameters.LabelFontSettings.FontFamily, parameters.ValueFontSettings.FontFamily, parameters.EngeneeringUnitFontSettings.FontFamily];
+        if (parameters.FontSettingList)
+            $.each(parameters.FontSettingList, function (index, item) {
+                customFonts.push(item.FontFamily);
+            });
+        loadCustomFonts(customFonts);
+        var dynamicFontElements = [];
+
+        var fobjReplacerContainer;
+        var interval;
+        var deregisterListener, deregisterListenerMin, deregisterListenerMax, deregisterListenerActiveLanguage;
+
+        var defaultRangeBarThickness = 9;
+        var decimals = 0;
+        try { decimals = parameters.ValueStringFormat.match(/\.(0+)/)[1].length; } catch { }
+        var labelDecimals = 0;
+        try { labelDecimals = parameters.LabelStringFormat.match(/\.(0+)/)[1].length; } catch { }
+        
+        //var mainContainer = thisPage.find("#mainContainer");
+        //if (scope.biOS)
+        //    webkitMoveRotateTransform(thisParent, thisPage, mainContainer);
+
+        var bRangeBarVisible = parameters.RangeBarVisible && parameters.RangeBarThickness > 0;
+
+        var bTagHasEU;
+        var bTagHasDynamicLimits;
+
+        var bIsHalfGauge = parameters.MeterScaleSweepAngle == 180;
+        var markerSlopeCoefficient = -0.85; //marker SVG polygon slope factor
+        var markerTranslateTransform = "";
+
+        //var spindleStyleProp = parameters.IsFastGaugeControl ? parameters.CapType : parameters.SpindleCapPresentation;
+        //var spindleStyle;
+        //var spindleSize = { w: 0, h: 0, factor: 0 };
+        //if (scope.Styles && scope.Styles[parameters.screenId]) {
+        //    if (!parameters.IsFastGaugeControl) {
+        //        spindleSize.w = parseFloat(parameters.SpindleFactorWidth);
+        //        spindleSize.h = parseFloat(parameters.SpindleFactorHeight);
+        //        spindleSize.factor = Math.max(spindleSize.w, spindleSize.h) / gaugeSize;
+        //    }
+        //    else if (parameters.HasCap) {
+        //        spindleSize.w = parseFloat(parameters.CapRadius);
+        //        spindleSize.h = parseFloat(parameters.CapRadius);
+        //        spindleSize.factor = Math.max(spindleSize.w, spindleSize.h) / gaugeSize;
+        //    }
+        //}
+        var webKitRenderCorrection = thisPage.hasClass("webKitRenderCorrection");
+        var gaugeEU;
+        var gaugeValueDisplay;
+        var onSettingValue = false;
+
+        var gaugeStartAngle = (360 - parameters.StartAngle) % 360;
+        var gaugeEndAngle = parameters.EndAngle - parameters.StartAngle >= 360 ? ((360 - parameters.StartAngle) % 360) + 360 : (360 - parameters.EndAngle) % 360;
+        var absAngle = Math.abs(gaugeEndAngle - gaugeStartAngle) % 360;
+        if (absAngle == 0)
+            absAngle = 360;
+
+        var styleSvg = SVG(scope.Styles[parameters.screenId]);
+        var gaugeStyle;
+        var gaugeStyleNode;
+        var gaugeLabels;
+        var bTagHasDynamicLimits;
+        var rotatingElems = [];
+        var tagsBG = [];
+        var bckCircle;
+        var bgCircle;
+        var startingMin = 0, startingMax = 100;
+        var minmax = { min: startingMin, max: startingMax, step: 100 / (startingMax - startingMin) };
+        
+        //#region MutateFunc variables
+        var animationSpeed = 5;
+        var animatingBackward;
+        var currentValue = 0;
+        var finalValue = 140;
+        var myReq;
+        var svgSizeFactor;
+        var svgViewboxSize;
+        var spindle;
+        var marker;
+        var needle;
+        var valueBar;
+        var backBar;
+        var barCircleLength;
+        var barRangeLength;
+        var defaultParamValues = {
+            CapRadius: 9
+        };
+        var gaugeArcsCenter;
+        var selectorsPrefix = parameters.GaugeBaseModel;
+        var bDragging;
+        var serverWriteTimeoutDefaultMS = scope.configurationSettings.serverInvokeMinFreqOnDrag;
+        var writeTimeout;
+        var nextWriteTimeout;
+        var latestServerInvokeTime;
+        var bDragNotifyingServer;
+        var dragDetectTimeout;
+        var latestDraggedValue;
+        //#endregion
+
+        var mutateFunc = function () {
+            removeForeignObject();
+
+            fastdom.measure(function () {
+                if (parameters.MarkerIsInteractive || parameters.NeedleIsInteractive || parameters.RangeBarIsInteractive) {
+                    var container = $(fobjReplacerContainer);
+                    container.on("mousedown touchstart", function (e) {
+                        if (writeTimeout) {
+                            clearTimeout(writeTimeout);
+                            writeTimeout = null;
+                        }
+                        if (nextWriteTimeout)
+                            clearTimeout(nextWriteTimeout);
+
+                        if (container.hasClass(disabledClass))
+                            return;
+
+                        if (!gaugeArcsCenter || !parameters.bFitInWindow) {
+                            var styleRect = gaugeStyleNode[0].getBoundingClientRect();
+                            gaugeArcsCenter = {
+                                x: styleRect.x + styleRect.width / 2,
+                                y: styleRect.y + styleRect.height / 2
+                            };
+                        }
+
+                        if (!bDragging) {
+                            container.on("touchmove mousemove", onDragging);
+                            bDragging = true;
+                        }
+                    }).on("mouseup touchend", function (e) {
+                        bDragging = false;
+                        container.off("touchmove mousemove", onDragging);
+                        if (nextWriteTimeout)
+                            clearTimeout(nextWriteTimeout);
+                        if (container.hasClass(disabledClass) || !gaugeStyleNode)
+                            return;
+
+                        var point = getClickedCoords(e);
+                        var newClientValue = getNewClientValue(point);
+                        if (newClientValue != null)
+                            setGaugeValue(newClientValue);
+                    });
+                }
+            });
+
+            if (parameters.ArcScaleFill)
+                for (var i = 0; i < tagsBG.length; i++)
+                    tagsBG[i].addClass(parameters.ArcScaleFill);
+
+            rotatingElems.css("transform-origin", "center");
+
+            //#region value & EU labels
+            if (parameters.ShowValue) {
+                positionTextElement(gaugeValueDisplay, parameters.ValueOffset);
+                var displayCssOpt = {
+                    "text-align": "center",
+                    "background": "transparent",
+                    "fill": parameters.ValueForeground.Color,
+                };
+                if (parameters.ValueFontSettings.FontFamily)
+                    displayCssOpt["font-family"] = parameters.ValueFontSettings.FontFamily;
+                if (parameters.ValueFontSettings.FontSize)
+                    displayCssOpt["font-size"] = parameters.ValueFontSettings.FontSize;
+                if (parameters.ValueFontSettings.FontWeight)
+                    displayCssOpt["font-weight"] = fontWeightConverter(parameters.ValueFontSettings.FontWeight);
+                if (parameters.ValueFontSettings.FontStyle) {
+                    var valfontStyle = parameters.ValueFontSettings.FontStyle.toLowerCase();
+                    if (valfontStyle != "normal")
+                        displayCssOpt["font-style"] = valfontStyle;
+                }
+                gaugeValueDisplay.css(displayCssOpt);
+                dynamicFontElements.push(gaugeValueDisplay);
+            }
+            else
+                gaugeValueDisplay.css("display", "none");
+
+            if (parameters.ShowEngeneeringUnit) {
+                positionTextElement(gaugeEU, parameters.EngeneeringOffset);
+                var euCssOpt = {
+                    "fill": parameters.EngeneeringUnitForeground.Color,
+                };
+                if (parameters.EngeneeringUnitFontSettings.FontFamily)
+                    euCssOpt["font-family"] = parameters.EngeneeringUnitFontSettings.FontFamily;
+                if (parameters.EngeneeringUnitFontSettings.FontSize)
+                    euCssOpt["font-size"] = parameters.EngeneeringUnitFontSettings.FontSize;
+                if (parameters.EngeneeringUnitFontSettings.FontWeight)
+                    euCssOpt["font-weight"] = fontWeightConverter(parameters.EngeneeringUnitFontSettings.FontWeight);
+                if (parameters.EngeneeringUnitFontSettings.FontStyle) {
+                    var eufontStyle = parameters.EngeneeringUnitFontSettings.FontStyle.toLowerCase();
+                    if (eufontStyle != "normal")
+                        euCssOpt["font-style"] = eufontStyle;
+                }
+                gaugeEU.css(euCssOpt);
+                dynamicFontElements.push(gaugeEU);
+                if (parameters.EngeneeringUnit)
+                    gaugeEU.text(parameters.EngeneeringUnit);
+            }
+            else
+                gaugeEU.css("display", "none");
+            //#endregion
+            //#region Ticks
+            if (parameters.MajorTickMarkHeight <= 0 || parameters.MajorTickMarkWidth <= 0)
+                gaugeStyleNode.find(".majorTick").css("display", "none");
+            if (parameters.MinorTickMarkHeight <= 0 || parameters.MinorTickMarkWidth <= 0)
+                gaugeStyleNode.find(".minorTick").css("display", "none");
+            //#endregion
+            //#region Marker
+            if (parameters.MarkerVisible && parameters.MarkerFactorWidth > 0 && parameters.MarkerFactorHeight > 0) {
+                if (bIsHalfGauge)
+                    markerTranslateTransform = "translate(" + (-parameters.MarkerOffset)  + "px, 0px)";
+                else
+                    markerTranslateTransform = "translate(" + (parameters.MarkerOffset * markerSlopeCoefficient) + "px, " + parameters.MarkerOffset + "px)";
+                marker.css({
+                    "fill": parameters.MarkerFill.Color,
+                    "stroke": parameters.MarkerStroke.Color,
+                    "stroke-width": parameters.MarkerBorderThickness,
+                    "transform": markerTranslateTransform
+                });
+            }
+            else
+                marker.css("display", "none");
+            //#endregion
+            if (parameters.NeedleVisible)
+                needle.css("fill", parameters.NeedleFill.Color);
+            backBar.css("stroke", parameters.RangeBarBackground.Color);
+            var barWidth = parameters.RangeBarThickness <= defaultRangeBarThickness ? parameters.RangeBarThickness : parameters.RangeBarThickness * 2.634 - 7.931;
+            if (!isTransparent(parameters.RangeBarBackground.Color)) {
+                barWidth = Math.max(barWidth, parseFloat(backBar.css("stroke-width")));
+                backBar.show();
+            }
+            if (bRangeBarVisible)
+                valueBar.css({
+                    "stroke": parameters.RangeBarFill.Color,
+                    "stroke-width": barWidth
+                });
+            //#region Cap (Spindle)
+            if (!parameters.HasCap)
+                spindle.css("display", "none");
+            if (parameters.SpindleFill)
+                spindle.addClass(parameters.SpindleFill);
+            if (parameters.CapRadius != defaultParamValues.CapRadius)
+                spindle.attr("r", parameters.CapRadius * 2/3);
+            //#endregion
+            //#region Labels
+            var labelOptions = {
+                "fill": parameters.LabelForeground.Color,
+                "font-family": parameters.LabelFontSettings.FontFamily,
+                "font-size": parseFloat(parameters.LabelFontSettings.FontSize),
+                "font-weight": fontWeightConverter(parameters.LabelFontSettings.FontWeight),
+                "pointer-events": "none"
+            };
+            var lblfontStyle = parameters.LabelFontSettings.FontStyle.toLowerCase();
+            if (lblfontStyle != "normal")
+                labelOptions["font-style"] = lblfontStyle;
+            gaugeLabels.css(labelOptions);
+            $.each(gaugeLabels, function (index, elem) {
+                dynamicFontElements.push($(elem));
+            });
+
+            //firstLabelSlope = 1.19;
+            //firstLabelTranslate = "translate(" + ((parameters.LabelOffset + 32) * -1) + "px, " + ((parameters.LabelOffset + 32) * firstLabelSlope) + "px)";
+            //gaugeLabels.first().css({
+            //    "transform": firstLabelTranslate
+            //});
+            //#endregion
+
+            if (parameters.BackgroundRadius !== 100)
+                bckCircle.attr("r", parameters.BackgroundRadius * 1.15);
+
+            if (parameters.TagMinValue && parameters.TagMinValue.SVGReferenceId) {
+                deregisterListenerMin = scope.$on(onDataChanged + parameters.screenId + parameters.TagMinValue.SVGReferenceId, function (e, value) {
+                    if (scope.dataValues[parameters.screenId][parameters.TagMinValue.SVGReferenceId].isGood) {
+                        bTagHasDynamicLimits = true;
+                        updateGaugeScaleAndRanges();
+                    }
+                });
+            }
+
+            if (parameters.TagMinValue) {
+                if (parameters.screenId in scope.dataValues && parameters.TagMinValue.SVGReferenceId in scope.dataValues[parameters.screenId] &&
+                    scope.dataValues[parameters.screenId][parameters.TagMinValue.SVGReferenceId].isGood) {
+                    bTagHasDynamicLimits = true;
+                    updateGaugeScaleAndRanges();
+                }
+            }
+
+            if (parameters.TagMaxValue && parameters.TagMaxValue.SVGReferenceId) {
+                deregisterListenerMax = scope.$on(onDataChanged + parameters.screenId + parameters.TagMaxValue.SVGReferenceId, function (e, value) {
+                    if (scope.dataValues[parameters.screenId][parameters.TagMaxValue.SVGReferenceId].isGood) {
+                        bTagHasDynamicLimits = true;
+                        updateGaugeScaleAndRanges();
+                    }
+                });
+            }
+
+            if (parameters.TagMaxValue) {
+                if (parameters.screenId in scope.dataValues && parameters.TagMaxValue.SVGReferenceId in scope.dataValues[parameters.screenId] &&
+                    scope.dataValues[parameters.screenId][parameters.TagMaxValue.SVGReferenceId].isGood) {
+                    bTagHasDynamicLimits = true;
+                    updateGaugeScaleAndRanges();
+                }
+            }
+
+            onGaugeDataChanged();
+
+            applyTagQualityStyle(scope.biOS ? bgCircle : $(fobjReplacerContainer), scope, parameters.screenId, parameters.SVGReferenceId, true);
+            deregisterListener = scope.$on(onDataChanged + parameters.screenId + parameters.SVGReferenceId, function (e, value) {
+                applyTagQualityStyle(scope.biOS ? bgCircle : $(fobjReplacerContainer), scope, parameters.screenId, parameters.SVGReferenceId, true);
+                onGaugeDataChanged();
+            });
+        };
+
+        initialize();
+
+        function initialize() {
+            fastdom.measure(function () {
+                thisParentPos = { x: webKitRenderCorrection ? thisParent.attr("originalX") : thisParent.attr("x"), y: webKitRenderCorrection ? thisParent.attr("originalY") : thisParent.attr("y") };
+                thisParentSize = { w: thisParent.attr("width"), h: thisParent.attr("height") };
+                gaugeStyle = styleSvg.find('#' + parameters.GaugeBaseModel);
+                if (gaugeStyle.length > 0) {
+                    gaugeStyle = gaugeStyle[0]; //.clone();
+                    gaugeStyleNode = $(gaugeStyle.node);
+                }
+
+                svgViewboxSize = { w: gaugeStyle.node.viewBox.baseVal.width, h: gaugeStyle.node.viewBox.baseVal.height };
+                svgSizeFactor = { w: svgViewboxSize.w / thisParentSize.w, h: svgViewboxSize.h / thisParentSize.h };
+
+                rotatingElems = gaugeStyleNode.find(getElementSelector(".", "rotates"));
+                tagsBG = styleSvg.find("[tag='BG']");
+                bgCircle = gaugeStyleNode.find("circle[tag='BG']").first();
+                if (!bIsHalfGauge)
+                    tagsBG.css("fill", parameters.Background.Color);
+                needle = gaugeStyleNode.find(getElementSelector("#", "needle"));
+                if (!parameters.NeedleVisible)
+                    needle.css("display", "none");
+                valueBar = gaugeStyleNode.find(getElementSelector("#", "bar"));
+                if (!bRangeBarVisible)
+                    valueBar.css("display", "none");
+                backBar = gaugeStyleNode.find(getElementSelector("#", "barBack"));
+                marker = gaugeStyleNode.find(getElementSelector("#", "marker"));
+                spindle = gaugeStyleNode.find(getElementSelector("#", "spindle"));
+                gaugeValueDisplay = gaugeStyleNode.find(getElementSelector("#", "value"));
+                gaugeEU = gaugeStyleNode.find(getElementSelector("#", "eunit"));
+                gaugeLabels = gaugeStyleNode.find(getElementSelector(".", "label"));
+                bckCircle = gaugeStyleNode.find(getElementSelector("#", "bckcircle"));
+
+                if (!updateRanges() && labelDecimals > 0) {
+                    var labelsTexts = [];
+                    fastdom.measure(function () {
+                        $.each(gaugeLabels, function (index, item) {
+                            labelsTexts.push($(item).text());
+                        });
+                        formatGaugeLabels(null, labelsTexts);
+                    });
+                }
+
+                if (parameters.FontSettingList) {
+                    deregisterListenerActiveLanguage = scope.$on(onActiveLanguageChanged, function (e, value) {
+                        if ((value in parameters.FontSettingList) !== -1) {
+                            currentCulture = value;
+                            var fontOpts = applyFontSettingList(dynamicFontElements, parameters.FontSettingList[value]);
+                        }
+                    });
+                }
+            });
+            mutateHandler.scheduleMutate(parameters.screenId, mutateFunc);
+        }
+
+        function getElementSelector(selector, name) {
+            return selector + selectorsPrefix + name;
+        }
+
+        function positionTextElement(element, offsetParameter) {
+            var offsetTop = (-parseFloat(offsetParameter.Bottom) /*+ parseFloat(offsetParameter.Top)*/) * svgSizeFactor.h;
+            var offsetLeft = (parseFloat(offsetParameter.Left) - parseFloat(offsetParameter.Right)) / 2 * svgSizeFactor.w;
+            element.attr({
+                x: svgViewboxSize.w / 2 + offsetLeft,
+                y: svgViewboxSize.h + offsetTop,
+                dy: "-0.25em"
+            }).css("text-anchor", "middle");
+        }
+
+        function setGaugeValue(newInvariantValue) {
+            if (onSettingValue)
+                return;
+            if (!(parameters.screenId in scope.dataValues) || !(parameters.SVGReferenceId in scope.dataValues[parameters.screenId]))
+                return;
+            if (!scope.dataValues[parameters.screenId][parameters.SVGReferenceId].isGood)
+                return;
+
+            disableSVGControl(fobjReplacerContainer, true);
+
+            scope.corehubconnection.invoke("SetValue", parameters.SVGReferenceId, String(newInvariantValue), parameters.screenId)
+                .then((ret) => {
+                    
+                })
+                .catch(err => {
+                    console.error(err.toString());
+                    scope.$broadcast(onError, { ex: err, value: "Error setting value : " + err.toString() + " for item : " + parameters.SVGItemId });
+                })
+                .finally(err => {
+                    disableSVGControl(fobjReplacerContainer, false);
+                });
+        }
+
+        function getNewClientValue(clickedPoint) {
+            var angleCenterToClicked = Math.atan2(gaugeArcsCenter.y - clickedPoint.y, gaugeArcsCenter.x - clickedPoint.x);
+            var valuePerDegree = (minmax.max - minmax.min) / absAngle;
+
+            var clickedDxAngle = 180 - angleCenterToClicked * 180 / Math.PI;
+            if (clickedDxAngle > gaugeStartAngle)
+                clickedDxAngle = clickedDxAngle - 360;
+
+            if (absAngle == 360 || (clickedDxAngle <= gaugeStartAngle && clickedDxAngle >= gaugeEndAngle))
+                return Math.abs(clickedDxAngle - gaugeStartAngle) * valuePerDegree + minmax.min;
+            return null;
+        }
+
+        function updateValueLabel(newValue) {
+            if (parameters.ShowValue || parameters.ShowEngeneeringUnit) {
+                var finalDisplayValue = "";
+                if (parameters.ShowValue) {
+                    var newValFormatted = newValue;
+                    if (decimalSeparator != invariantNumberDecimalSeparator)
+                        newValFormatted = parseFloat(newValue.replace(decimalSeparator, invariantNumberDecimalSeparator)).toFixed(decimals).replace(invariantNumberDecimalSeparator, decimalSeparator);
+                    else
+                        newValFormatted = parseFloat(newValue).toFixed(decimals);
+                    finalDisplayValue += newValFormatted;
+                }
+                //if (parameters.ShowEngeneeringUnit && gaugeConfig.valueIndicator.type != "rangebar")
+                //    finalDisplayValue += (finalDisplayValue != "" ? " " + parameters.EngeneeringUnit : parameters.EngeneeringUnit);
+
+                gaugeValueDisplay.text(finalDisplayValue);
+            }
+        }
+
+        function getClickedCoords(e) {
+            var point = webKitRenderCorrection ? { x: e.pageX, y: e.pageY } : { x: e.clientX, y: e.clientY };
+            if (parameters.bFitInWindow) {
+                point.x += svgContainer.scrollLeft;
+                point.y += svgContainer.scrollTop;
+            }
+            return point;
+        }
+
+        function onDragging(e) {
+            e.preventDefault();
+
+            var point = getClickedCoords(e);
+            latestDraggedValue = getNewClientValue(point);
+            if (latestDraggedValue != null)
+                setGaugeClientValue(latestDraggedValue.toString(), latestDraggedValue, false);
+
+            bDragNotifyingServer = true;
+            if (dragDetectTimeout)
+                clearTimeout(dragDetectTimeout);
+            dragDetectTimeout = setTimeout(function () {
+                if (writeTimeout) {
+                    clearTimeout(writeTimeout);
+                    writeTimeout = null;
+                }
+                bDragNotifyingServer = false;
+            }, serverWriteTimeoutDefaultMS * 2);
+
+            if (!writeTimeout)
+                writeTimeout = setTimeout(notifyServerOnDragging, serverWriteTimeoutDefaultMS);
+        }
+
+        function notifyServerOnDragging() {
+            latestServerInvokeTime = Date.now();
+            scope.corehubconnection.invoke("SetValue", parameters.SVGReferenceId, String(latestDraggedValue), parameters.screenId).finally(() => {
+                if (!bDragging || !bDragNotifyingServer)
+                    return;
+
+                var nextInvokeTimeout = serverWriteTimeoutDefaultMS - (Date.now() - latestServerInvokeTime);
+                if (nextInvokeTimeout <= 0)
+                    notifyServerOnDragging();
+                else {
+                    if (nextWriteTimeout)
+                        clearTimeout(nextWriteTimeout);
+                    nextWriteTimeout = setTimeout(notifyServerOnDragging, nextInvokeTimeout);
+                }
+            });
+        }
+
+        function setGaugeClientValue(newValue, endValue, bAnimate = true) {
+            if (currentValue == endValue)
+                return;
+            if (!bAnimate) {
+                currentValue = endValue;
+                applySVGRotation(rotatingElems, endValue);
+                updateValueLabel(newValue);
+                return;
+            }
+            bAnimating = true;
+            animatingBackward = parseFloat(endValue) < parseFloat(currentValue);
+            if (myReq) {
+                cancelAnimationFrame(myReq);
+                //if (currentValue != finalValue)
+                //    applySVGRotation(rotatingElems, finalValue);
+            }
+            finalValue = endValue;
+            myReq = requestAnimationFrame(animationTick);
+            updateValueLabel(newValue);
+        }
+
+        function animationTick(now) {
+            applySVGRotation(rotatingElems, currentValue);
+            var nextValue = Math.ceil(animatingBackward ? currentValue - animationSpeed : currentValue + animationSpeed); //Math.round(((animatingBackward ? currentValue - animationSpeed : currentValue + animationSpeed) + Number.EPSILON) * 100) / 100;
+            if ((currentValue - finalValue) * (nextValue - finalValue) > 0)
+                currentValue = nextValue;
+            else
+                currentValue = finalValue;
+            if (currentValue != finalValue)
+                myReq = requestAnimationFrame(animationTick);
+            else {
+                applySVGRotation(rotatingElems, finalValue);
+                bAnimating = false;
+            }
+        }
+
+        function removeForeignObject() {
+            fobjReplacerContainer = document.createElementNS("http://www.w3.org/2000/svg", "g");
+            fobjReplacerContainer.setAttribute("id", thisParentId);
+            thisParent.after(fobjReplacerContainer);
+
+            if (parameters.Opacity)
+                gaugeStyleNode.css("opacity", parameters.Opacity);
+
+            gaugeStyleNode.appendTo(fobjReplacerContainer).attr({
+                "width": thisParentSize.w,
+                "height": thisParentSize.h
+            });
+
+            $fobjReplacerContainer = $(fobjReplacerContainer);
+
+            //$("body").prepend("<div id='fakebut' style='position:relative;z-index:999;'>CLICK</div>");
+            //$("body").find("#fakebut").click(function () {
+            //    updateClientValue("50", 50);
+            //});
+
+            if (bRangeBarVisible) {
+                fastdom.measure(() => {
+                    barCircleLength = valueBar[0].getTotalLength();
+                    barRangeLength = barCircleLength * absAngle / 360;
+                });
+            }
+
+            $fobjReplacerContainer.bind('destroyed', function () {
+                if (interval)
+                    clearInterval(interval);
+                if (deregisterListener)
+                    deregisterListener();
+                if (deregisterListenerMin)
+                    deregisterListenerMin();
+                if (deregisterListenerMax)
+                    deregisterListenerMax();
+                if (deregisterListenerActiveLanguage)
+                    deregisterListenerActiveLanguage();
+                if (writeTimeout)
+                    clearTimeout(writeTimeout);
+                if (nextWriteTimeout)
+                    clearTimeout(nextWriteTimeout);
+                if (dragDetectTimeout)
+                    clearTimeout(dragDetectTimeout);
+                if (myReq)
+                    cancelAnimationFrame(myReq);
+            });
+            var tr = safelyRemoveFobj(thisParent, $fobjReplacerContainer, scope, webKitRenderCorrection);
+            gaugeStyleNode.attr({
+                "x": thisParentPos.x - tr.x,
+                "y": thisParentPos.y - tr.y
+            });
+        }
+
+        function applySVGRotation(svgItems, value) {
+            fastdom.mutate(function () {
+                var finalAngle = Math.max(0, Math.min(absAngle, absAngle * (minmax.step * (value - minmax.min)) / 100));
+                $(svgItems).each(function (index, item) {
+                    $(item).css("transform", "rotate(" + finalAngle + "deg)" + (item == marker[0] ? " " + markerTranslateTransform : ""));
+                });
+                if (bRangeBarVisible)
+                    update_arc_perc(finalAngle / absAngle);
+            });
+        }
+
+        function update_arc_perc(inputPerc) {
+            var arclen = barCircleLength - (barRangeLength * inputPerc);
+            valueBar.attr("stroke-dashoffset", arclen);
+        }
+
+        function onGaugeDataChanged() {
+            if (bDragging)
+                return;
+
+            onSettingValue = true;
+            try {
+                var newValue = Number.NaN;
+                if (parameters.screenId in scope.dataValues && parameters.SVGReferenceId in scope.dataValues[parameters.screenId] &&
+                    scope.dataValues[parameters.screenId][parameters.SVGReferenceId].isGood) {
+                    var referenceObject = scope.dataValues[parameters.screenId][parameters.SVGReferenceId];
+                    newInvariantValue = referenceObject.invariantValue;
+                    newValue = referenceObject.value;
+                    var n = normalizeDataValue(referenceObject, false);
+                    if (n.bNormalized)
+                        newValue = newInvariantValue = n.dataValue.toString();
+                    updateClientValue(newValue, newInvariantValue);
+                }
+                else if (parameters.ShowValue && gaugeValueDisplay) {
+                    gaugeValueDisplay.text("?");
+                }
+            }
+            finally {
+                onSettingValue = false;
+            }
+        }
+
+        function updateClientValue(newValue, newInvariantValue) {
+            //gauge.option("value", newInvariantValue);
+            //gauge.option("subvalues", [newInvariantValue]);
+
+            if (!notNumeric(scope.dataValues[parameters.screenId][parameters.SVGReferenceId].rangeLow)) {
+                bTagHasEU = true;
+                updateGaugeScaleAndRanges();
+            }
+            if (!notNumeric(scope.dataValues[parameters.screenId][parameters.SVGReferenceId].rangeHigh)) {
+                bTagHasEU = true;
+                updateGaugeScaleAndRanges();
+            }
+
+            if (gaugeEU && !parameters.EngeneeringUnit && parameters.UseEUnit && scope.dataValues[parameters.screenId][parameters.SVGReferenceId].displayName) {
+                gaugeEU.text(scope.dataValues[parameters.screenId][parameters.SVGReferenceId].displayName);
+            }
+
+            setGaugeClientValue(newValue, newInvariantValue);
+        }
+
+        //#region scales
+        function updateGaugeScaleAndRanges() {
+            updateRanges();
+
+            //majorCustomTicks = devExtremeHelpers.getCustomTicks(parameters, rangesObj.min, rangesObj.max, parameters.MinorIntervalCount, parameters.MajorIntervalCount);
+            //gauge.option("animation.enabled", false);
+            //gauge.option({
+            //    "min": rangesObj.min,
+            //    "max": rangesObj.max,
+            //    "scale.startValue": rangesObj.min,
+            //    "scale.endValue": rangesObj.max,
+            //    "scale.customTicks": majorCustomTicks,
+            //    "scale.customMinorTicks": devExtremeHelpers.getCustomTicks(parameters, rangesObj.min, rangesObj.max, parameters.MinorIntervalCount, parameters.MajorIntervalCount, true, majorCustomTicks),
+            //    "rangeContainer.ranges": rangesObj.ranges
+            //});
+            //gauge.option("animation.enabled", true);
+        }
+
+        function formatGaugeLabels(labelsDistance, labelsTexts) {
+            $.each(gaugeLabels, function (index, item) {
+                var value = !labelsDistance ? labelsTexts[index] : minmax.min + (labelsDistance * index);
+                $(item).text(Intl.NumberFormat(navigator.language, {
+                    minimumFractionDigits: labelDecimals
+                }).format(value));
+            });
+        }
+
+        function updateRanges() {
+            var mm = getMinMaxControlValues(scope, parameters, bTagHasDynamicLimits, bTagHasEU);
+            var bKeepOldLimits = false;
+
+            if ((mm.min == minmax.min && mm.max == minmax.max) || isNaN(mm.min) || isNaN(mm.max))
+                bKeepOldLimits = true;
+            
+            if (!bKeepOldLimits) {
+                minmax = mm;
+                let minmaxRange = minmax.max - minmax.min;
+                minmax.step = 100 / minmaxRange;
+                //update labels
+                let labelsDistance = minmaxRange / 10;
+                fastdom.mutate(function () {
+                    formatGaugeLabels(labelsDistance);
+                });
+                return true;
+            }
+            return false;
+        }
+        //#endregion
+    }
+</script>

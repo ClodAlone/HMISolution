@@ -1,0 +1,211 @@
+#region Copyright Syncfusion Inc. 2001 - 2014
+// Copyright Syncfusion Inc. 2001 - 2014. All rights reserved.
+//
+// Use of this code is subject to the terms of our license.
+// A copy of the current license can be obtained at any time by e-mailing
+// licensing@syncfusion.com. Re-distribution in any form is strictly
+// prohibited. Any infringement will be prosecuted under applicable laws. 
+#endregion
+
+using System;
+using System.ComponentModel;
+using System.Globalization;
+
+namespace Syncfusion.Windows.Forms.Diagram
+{
+    /// <summary>
+    /// Class containing HFPositionConverter.
+    /// </summary>
+    [Syncfusion.Documentation.DocumentationExclude()]
+    public class HFPositionConverter : System.ComponentModel.TypeConverter
+    {
+        /// <summary>
+        /// Converts the given value object to the specified type, using the specified context and culture information.
+        /// </summary>
+        /// <param name="context">An <see cref="T:System.ComponentModel.ITypeDescriptorContext"/> that provides a format context.</param>
+        /// <param name="culture">A <see cref="T:System.Globalization.CultureInfo"/>. If null is passed, the current culture is assumed.</param>
+        /// <param name="value">The <see cref="T:System.Object"/> to convert.</param>
+        /// <param name="destinationType">The <see cref="T:System.Type"/> to convert the <paramref name="value"/> parameter to.</param>
+        /// <returns>
+        /// An <see cref="T:System.Object"/> that represents the converted value.
+        /// </returns>
+        /// <exception cref="T:System.ArgumentNullException">The <paramref name="destinationType"/> parameter is null. </exception>
+        /// <exception cref="T:System.NotSupportedException">The conversion cannot be performed. </exception>
+        public override object ConvertTo(ITypeDescriptorContext context, CultureInfo culture, object value, Type destinationType)
+        {
+            if (destinationType == typeof(string))
+            {
+                HFPosition position = value as HFPosition;
+                if (position != null)
+                {
+                    return ("{Width=" + position.Width.ToString() + ", Height=" + position.Height.ToString() + "}");
+                }
+            }
+            return base.ConvertTo(context, culture, value, destinationType);
+        }
+
+        /// <summary>
+        /// Returns whether this object supports properties, using the specified context.
+        /// </summary>
+        /// <param name="context">An <see cref="T:System.ComponentModel.ITypeDescriptorContext"/> that provides a format context.</param>
+        /// <returns>
+        /// true if <see cref="M:System.ComponentModel.TypeConverter.GetProperties(System.Object)"/> should be called to find the properties of this object; otherwise, false.
+        /// </returns>
+        public override bool GetPropertiesSupported(ITypeDescriptorContext context)
+        {
+            return true;
+        }
+
+        /// <summary>
+        /// Returns a collection of properties for the type of array specified by the value parameter, using the specified context and attributes.
+        /// </summary>
+        /// <param name="context">An <see cref="T:System.ComponentModel.ITypeDescriptorContext"/> that provides a format context.</param>
+        /// <param name="value">An <see cref="T:System.Object"/> that specifies the type of array for which to get properties.</param>
+        /// <param name="attributes">An array of type <see cref="T:System.Attribute"/> that is used as a filter.</param>
+        /// <returns>
+        /// A <see cref="T:System.ComponentModel.PropertyDescriptorCollection"/> with the properties that are exposed for this data type, or null if there are no properties.
+        /// </returns>
+        public override PropertyDescriptorCollection GetProperties(ITypeDescriptorContext context, object value, Attribute[] attributes)
+        {
+            System.Attribute[] attrs = new System.Attribute[]
+            {
+                new System.ComponentModel.BrowsableAttribute(true)
+            };
+            return TypeDescriptor.GetProperties(value, attrs);
+        }
+    }
+
+    /// <summary>
+    /// Class containing border style converter.
+    /// </summary>
+    [Syncfusion.Documentation.DocumentationExclude()]
+    public class HFBorderStyleConverter : System.ComponentModel.ExpandableObjectConverter
+    {
+        /// <summary>
+        /// Converts the given value object to the specified type, using the specified context and culture information.
+        /// </summary>
+        /// <param name="context">An <see cref="T:System.ComponentModel.ITypeDescriptorContext"/> that provides a format context.</param>
+        /// <param name="culture">A <see cref="T:System.Globalization.CultureInfo"/>. If null is passed, the current culture is assumed.</param>
+        /// <param name="value">The <see cref="T:System.Object"/> to convert.</param>
+        /// <param name="destinationType">The <see cref="T:System.Type"/> to convert the <paramref name="value"/> parameter to.</param>
+        /// <returns>
+        /// An <see cref="T:System.Object"/> that represents the converted value.
+        /// </returns>
+        /// <exception cref="T:System.ArgumentNullException">
+        /// The <paramref name="destinationType"/> parameter is null.
+        /// </exception>
+        /// <exception cref="T:System.NotSupportedException">
+        /// The conversion cannot be performed.
+        /// </exception>
+        public override object ConvertTo(ITypeDescriptorContext context, CultureInfo culture, object value, Type destinationType)
+        {
+            if (destinationType == typeof(string))
+            {
+                HeaderFooterBorder borderStyle = value as HeaderFooterBorder;
+                if (borderStyle != null)
+                {
+                    return ("{ ShowBorder=" + borderStyle.ShowBorder.ToString() + ", Style=" + borderStyle.Style.ToString()
+                        + ", Weight=" + borderStyle.Weight.ToString() + ", " + borderStyle.Color.ToString() + "}");
+                }
+            }
+            return base.ConvertTo(context, culture, value, destinationType);
+        }
+
+        /// <summary>
+        /// Gets a value indicating whether this object supports properties using the specified context.
+        /// </summary>
+        /// <param name="context">An <see cref="T:System.ComponentModel.ITypeDescriptorContext"/> that provides a format context.</param>
+        /// <returns>
+        /// true because <see cref="M:System.ComponentModel.TypeConverter.GetProperties(System.Object)"/> should be called to find the properties of this object. This method never returns false.
+        /// </returns>
+        public override bool GetPropertiesSupported(ITypeDescriptorContext context)
+        {
+            return true;
+        }
+
+        /// <summary>
+        /// Gets a collection of properties for the type of object specified by the value parameter.
+        /// </summary>
+        /// <param name="context">An <see cref="T:System.ComponentModel.ITypeDescriptorContext"/> that provides a format context.</param>
+        /// <param name="value">An <see cref="T:System.Object"/> that specifies the type of object to get the properties for.</param>
+        /// <param name="attributes">An array of type <see cref="T:System.Attribute"/> that will be used as a filter.</param>
+        /// <returns>
+        /// A <see cref="T:System.ComponentModel.PropertyDescriptorCollection"/> with the properties that are exposed for the component, or null if there are no properties.
+        /// </returns>
+        public override PropertyDescriptorCollection GetProperties(ITypeDescriptorContext context, object value, Attribute[] attributes)
+        {
+            System.Attribute[] attrs = new System.Attribute[]
+            {
+                new System.ComponentModel.BrowsableAttribute(true)
+            };
+            return TypeDescriptor.GetProperties(value, attrs);
+        }
+    }
+
+    /// <summary>
+    /// Class containing page border style converter.
+    /// </summary>
+    [Syncfusion.Documentation.DocumentationExclude()]
+    public class PageBorderStyleConverter : System.ComponentModel.ExpandableObjectConverter
+    {
+        /// <summary>
+        /// Converts the given value object to the specified type, using the specified context and culture information.
+        /// </summary>
+        /// <param name="context">An <see cref="T:System.ComponentModel.ITypeDescriptorContext"/> that provides a format context.</param>
+        /// <param name="culture">A <see cref="T:System.Globalization.CultureInfo"/>. If null is passed, the current culture is assumed.</param>
+        /// <param name="value">The <see cref="T:System.Object"/> to convert.</param>
+        /// <param name="destinationType">The <see cref="T:System.Type"/> to convert the <paramref name="value"/> parameter to.</param>
+        /// <returns>
+        /// An <see cref="T:System.Object"/> that represents the converted value.
+        /// </returns>
+        /// <exception cref="T:System.ArgumentNullException">
+        /// The <paramref name="destinationType"/> parameter is null.
+        /// </exception>
+        /// <exception cref="T:System.NotSupportedException">
+        /// The conversion cannot be performed.
+        /// </exception>
+        public override object ConvertTo(ITypeDescriptorContext context, CultureInfo culture, object value, Type destinationType)
+        {
+            if (destinationType == typeof(string))
+            {
+                // PageBorderStyle borderStyle = value as PageBorderStyle;
+                // if (borderStyle != null)
+                // {
+                //    return ("{ ShowBorder=" + borderStyle.ShowBorder.ToString() +  ", Style=" + borderStyle.BorderDashStyle.ToString()
+                //    +  ", BorderWidth=" + borderStyle.BorderWidth.ToString() +  ", " + borderStyle.BorderColor.ToString() + "}");
+                // }
+            }
+            return base.ConvertTo(context, culture, value, destinationType);
+        }
+
+        /// <summary>
+        /// Gets a value indicating whether this object supports properties using the specified context.
+        /// </summary>
+        /// <param name="context">An <see cref="T:System.ComponentModel.ITypeDescriptorContext"/> that provides a format context.</param>
+        /// <returns>
+        /// true because <see cref="M:System.ComponentModel.TypeConverter.GetProperties(System.Object)"/> should be called to find the properties of this object. This method never returns false.
+        /// </returns>
+        public override bool GetPropertiesSupported(ITypeDescriptorContext context)
+        {
+            return true;
+        }
+
+        /// <summary>
+        /// Gets a collection of properties for the type of object specified by the value parameter.
+        /// </summary>
+        /// <param name="context">An <see cref="T:System.ComponentModel.ITypeDescriptorContext"/> that provides a format context.</param>
+        /// <param name="value">An <see cref="T:System.Object"/> that specifies the type of object to get the properties for.</param>
+        /// <param name="attributes">An array of type <see cref="T:System.Attribute"/> that will be used as a filter.</param>
+        /// <returns>
+        /// A <see cref="T:System.ComponentModel.PropertyDescriptorCollection"/> with the properties that are exposed for the component, or null if there are no properties.
+        /// </returns>
+        public override PropertyDescriptorCollection GetProperties(ITypeDescriptorContext context, object value, Attribute[] attributes)
+        {
+            System.Attribute[] attrs = new System.Attribute[]
+            {
+                new System.ComponentModel.BrowsableAttribute(true)
+            };
+            return TypeDescriptor.GetProperties(value, attrs);
+        }
+    }
+}

@@ -1,0 +1,120 @@
+<ResourceDictionary mc:Ignorable="cs"
+                    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:cs="colorscheme_ignorable_uri"
+                    xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+                    xmlns:dxsch="http://schemas.devexpress.com/winfx/2008/xaml/scheduler"
+                    xmlns:dxschi="http://schemas.devexpress.com/winfx/2008/xaml/scheduler/internal"
+                    xmlns:dxscht="http://schemas.devexpress.com/winfx/2008/xaml/scheduler/themekeys"
+                    xmlns:dxt="http://schemas.devexpress.com/winfx/2008/xaml/core/themekeys"
+                    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <dx:BooleanToVisibilityConverter x:Key="boolToVisibilityConverter"/>
+
+    <dxschi:HorizontalPositionToMarginConverter x:Key="horizontalPositionToMarginConverter"/>
+
+    <DataTemplate x:Key="{dxscht:SchedulerViewThemeKey ResourceKey=MoreButtonCellTemplate}">
+        <StackPanel HorizontalAlignment="Right" VerticalAlignment="Bottom">
+            <Button Command="{Binding Path=Command}"
+                    CommandParameter="{Binding Path=View.Control}"
+                    Cursor="Hand"
+                    dxsch:SchedulerControl.HitTestType="MoreButton"
+                    dxschi:CommandButtonHelper.CommandParameter="{Binding Path=View.Control}"
+                    Style="{Binding Path=View.MoreButtonStyle}"
+                    Visibility="{Binding View.ShowMoreButtons, Converter={StaticResource boolToVisibilityConverter}}"/>
+        </StackPanel>
+    </DataTemplate>
+
+    <!--MonthViewWeekTemplate-->
+
+    <DataTemplate x:Key="{dxscht:MonthViewThemeKey ResourceKey=MonthViewWeekTemplate}">
+        <dx:XPFContentControl Content="{Binding CellContainer}" dxschi:SchedulerItemsControl.ElementPosition="{Binding Path=(dxschi:SchedulerItemsControl.ElementPosition), RelativeSource={RelativeSource TemplatedParent}}">
+            <ContentControl.Template>
+                <ControlTemplate TargetType="{x:Type ContentControl}">
+                    <ContentPresenter Content="{TemplateBinding Content}"
+                                      ContentTemplate="{TemplateBinding ContentTemplate}"
+                                      dxschi:SchedulerItemsControl.ElementPosition="{Binding Path=(dxschi:SchedulerItemsControl.ElementPosition), RelativeSource={RelativeSource TemplatedParent}}"/>
+                </ControlTemplate>
+            </ContentControl.Template>
+            <ContentControl.ContentTemplate>
+                <DataTemplate>
+                    <Grid>
+                        <Grid.Resources>
+                            <dxschi:AppointmentStatusDisplayTypeToVisibileConverter x:Key="StatusDisplayTypeToVisibileConverter"/>
+                        </Grid.Resources>
+                        <dxschi:SchedulerMonthHorizontalTimeCellsControl x:Name="HorizontalWeek"
+                                                                         dxschi:SchedulerItemsControl.ElementPosition="{Binding Path=(dxschi:SchedulerItemsControl.ElementPosition), RelativeSource={RelativeSource TemplatedParent}}"
+                                                                         HorizontalContentAlignment="Stretch"
+                                                                         ItemContainerStyle="{Binding View.HorizontalWeekCellStyle}"
+                                                                         ItemsSource="{Binding Cells}"
+                                                                         SnapsToDevicePixels="True"
+                                                                         VerticalContentAlignment="Stretch">
+                            <dxschi:SchedulerMonthHorizontalTimeCellsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <dxschi:HorizontalWeekPanel ApplyInnerContentPadding="True"
+                                                                CompressedIndex="{Binding CompressedIndex}"
+                                                                dxschi:SchedulerItemsControl.ElementPosition="{Binding Path=(dxschi:SchedulerItemsControl.ElementPosition), ElementName=HorizontalWeek}"
+                                                                IsCompressed="{Binding IsCompressed}"/>
+                                </ItemsPanelTemplate>
+                            </dxschi:SchedulerMonthHorizontalTimeCellsControl.ItemsPanel>
+                        </dxschi:SchedulerMonthHorizontalTimeCellsControl>
+                        <dxschi:MonthViewSelectionPresenter CellContainer="{Binding}"
+                                                            Resource="{Binding Resource}"
+                                                            SchedulerTimeCellControl="{Binding ElementName=HorizontalWeek}"
+                                                            SelectedCells="{Binding SelectedCells}"
+                                                            SelectionTemplate="{Binding View.SelectionTemplate}"/>
+                        <dxschi:DynamicHorizontalAppointmentsPanel x:Name="AppointmentsPanel"
+                                                                   AppointmentControls="{Binding AppointmentControlCollection}"
+                                                                   AutoHeight="{Binding View.AppointmentDisplayOptions.AppointmentAutoHeight}"
+                                                                   CellContainer="{Binding}"
+                                                                   CellPadding="1,0,0,0"
+                                                                   DefaultAppointmentHeight="{DynamicResource {dxscht:SchedulerControlThemeKey ResourceKey=DefaultAppointmentHeight}}"
+                                                                   dxschi:SchedulerItemsControl.ElementPosition="{Binding Path=(dxschi:SchedulerItemsControl.ElementPosition), ElementName=HorizontalWeek}"
+                                                                   IsStatusVisible="{Binding View.AppointmentDisplayOptions.StatusDisplayType, Converter={StaticResource StatusDisplayTypeToVisibileConverter}}"
+                                                                   SchedulerTimeCellControl="{Binding ElementName=HorizontalWeek}">
+                            <dxschi:DynamicHorizontalAppointmentsPanel.Margin>
+                                <Binding Converter="{StaticResource horizontalPositionToMarginConverter}"
+                                         ElementName="HorizontalWeek"
+                                         Path="(dxschi:SchedulerItemsControl.ElementPosition)">
+                                    <Binding.ConverterParameter>
+                                        <Thickness>1,0,0,0</Thickness>
+                                    </Binding.ConverterParameter>
+                                </Binding>
+                            </dxschi:DynamicHorizontalAppointmentsPanel.Margin>
+                        </dxschi:DynamicHorizontalAppointmentsPanel>
+                        <dxschi:DynamicHorizontalAppointmentsPanel AppointmentControls="{Binding DraggedAppointmentControlCollection}"
+                                                                   AppointmentStyle="{Binding View.DragDropHoverTimeCellsStyle}"
+                                                                   CellContainer="{Binding}"
+                                                                   DefaultAppointmentHeight="{DynamicResource {dxscht:SchedulerControlThemeKey ResourceKey=DefaultAppointmentHeight}}"
+                                                                   dxschi:SchedulerItemsControl.ElementPosition="{Binding Path=(dxschi:SchedulerItemsControl.ElementPosition), ElementName=HorizontalWeek}"
+                                                                   IsDraggedMode="True"
+                                                                   SchedulerTimeCellControl="{Binding ElementName=HorizontalWeek}">
+                            <dxschi:DynamicHorizontalAppointmentsPanel.Margin>
+                                <Binding Converter="{StaticResource horizontalPositionToMarginConverter}"
+                                         ElementName="HorizontalWeek"
+                                         Path="(dxschi:SchedulerItemsControl.ElementPosition)">
+                                    <Binding.ConverterParameter>
+                                        <Thickness>1,0,0,0</Thickness>
+                                    </Binding.ConverterParameter>
+                                </Binding>
+                            </dxschi:DynamicHorizontalAppointmentsPanel.Margin>
+                        </dxschi:DynamicHorizontalAppointmentsPanel>
+                        <dxschi:MoreButtonItemsControl x:Name="WeekMoreButton"
+                                                       HorizontalContentAlignment="Stretch"
+                                                       ItemsSource="{Binding ElementName=AppointmentsPanel, Path=MoreButtonInfos}"
+                                                       ItemTemplate="{DynamicResource {dxscht:SchedulerViewThemeKey ResourceKey=MoreButtonCellTemplate}}"
+                                                       VerticalContentAlignment="Stretch"
+                                                       View="{Binding View}">
+                            <dxschi:MoreButtonItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <dxschi:HorizontalWeekMoreButtonPanel2 IsItemsHost="True"/>
+                                </ItemsPanelTemplate>
+                            </dxschi:MoreButtonItemsControl.ItemsPanel>
+                        </dxschi:MoreButtonItemsControl>
+                    </Grid>
+                </DataTemplate>
+            </ContentControl.ContentTemplate>
+        </dx:XPFContentControl>
+    </DataTemplate>
+
+</ResourceDictionary>

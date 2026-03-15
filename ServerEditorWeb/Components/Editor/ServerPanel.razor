@@ -1,0 +1,1145 @@
+@using ServerEditorWeb.Services
+@using System.Runtime.InteropServices
+@using System.ServiceProcess
+@using SharedModels
+@inject IJSRuntime JS
+@implements IDisposable
+
+<div class="server-panel">
+    <h6>Server Process</h6>
+    <div class="d-flex gap-2 mb-3">
+        <button class="btn btn-sm btn-success" @onclick="StartServer" disabled="@ServerProcess.IsServerRunning">▶ Start</button>
+        <button class="btn btn-sm btn-danger" @onclick="StopServer" disabled="@(!ServerProcess.IsServerRunning)">⏹ Stop</button>
+        <span class="badge @(ServerProcess.IsServerRunning ? "bg-success" : "bg-secondary") align-self-center">
+            @(ServerProcess.IsServerRunning ? "Running" : "Stopped")
+        </span>
+        @if (ServerProcess.IsExternalProcess)
+        {
+            <span class="badge bg-info align-self-center" style="font-size: 9px;" title="This server was started outside the editor (e.g. console, service). The editor can still stop it.">⚡ external</span>
+        }
+    </div>
+
+    @if (ServerProcessService.IsWindows)
+    {
+        <h6>🪟 Windows Service</h6>
+        <div class="mb-2">
+            <span class="text-muted">Status: </span>
+            <span class="badge @WinServiceStatusBadge">@WinServiceStatusText</span>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <button class="btn btn-sm btn-outline-success" @onclick="InstallWinService"
+                    disabled="@(_isWinServiceInstalled || string.IsNullOrEmpty(NodesPath))">Install</button>
+            <button class="btn btn-sm btn-outline-danger" @onclick="UninstallWinService"
+                    disabled="@(!_isWinServiceInstalled)">Uninstall</button>
+            <button class="btn btn-sm btn-outline-primary" @onclick="StartWinService"
+                    disabled="@(!_isWinServiceInstalled || _winServiceStatus == ServiceControllerStatus.Running)">Start</button>
+            <button class="btn btn-sm btn-outline-warning" @onclick="StopWinService"
+                    disabled="@(!_isWinServiceInstalled || _winServiceStatus != ServiceControllerStatus.Running)">Stop</button>
+            <button class="btn btn-sm btn-outline-secondary" @onclick="RefreshStatus">↻ Refresh</button>
+        </div>
+    }
+    else if (ServerProcessService.IsLinux)
+    {
+        <h6>🐧 Linux systemd Service</h6>
+        <div class="mb-2">
+            <span class="text-muted">Status: </span>
+            <span class="badge @LinuxServiceStatusBadge">@_linuxServiceStatus</span>
+        </div>
+        <div class="d-flex gap-2 flex-wrap mb-2">
+            <button class="btn btn-sm btn-outline-success" @onclick="InstallLinuxService"
+                    disabled="@(_isLinuxServiceInstalled || string.IsNullOrEmpty(NodesPath))">Install</button>
+            <button class="btn btn-sm btn-outline-danger" @onclick="UninstallLinuxService"
+                    disabled="@(!_isLinuxServiceInstalled)">Uninstall</button>
+            <button class="btn btn-sm btn-outline-primary" @onclick="StartLinuxService"
+                    disabled="@(!_isLinuxServiceInstalled || _linuxServiceStatus == "active")">Start</button>
+            <button class="btn btn-sm btn-outline-warning" @onclick="StopLinuxService"
+                    disabled="@(!_isLinuxServiceInstalled || _linuxServiceStatus != "active")">Stop</button>
+            <button class="btn btn-sm btn-outline-secondary" @onclick="RefreshStatus">↻ Refresh</button>
+        </div>
+
+        @* Unit file preview / help *@
+        <div class="mt-2">
+            <button class="btn btn-sm btn-outline-info" @onclick="ToggleUnitPreview">
+                @(_showUnitPreview ? "Hide" : "Show") Unit File
+            </button>
+            <button class="btn btn-sm btn-outline-secondary" @onclick="ShowLogs" disabled="@(!_isLinuxServiceInstalled)">
+                📋 View Logs
+            </button>
+        </div>
+
+        @if (_showUnitPreview)
+        {
+            <div class="mt-2">
+                <label class="form-label small fw-bold mb-1">systemd Unit File — @($"/etc/systemd/system/{ServerProcess.SystemdServiceName}.service")</label>
+                <pre class="p-2 rounded" style="background: #1e293b; color: #e2e8f0; font-size: 11px; max-height: 200px; overflow-y: auto; white-space: pre-wrap;">@_unitFileContent</pre>
+                <div class="text-muted" style="font-size: 10px;">
+                    Manual install: <code>sudo cp unit-file /etc/systemd/system/@(ServerProcess.SystemdServiceName).service && sudo systemctl daemon-reload && sudo systemctl enable --now @(ServerProcess.SystemdServiceName)</code>
+                </div>
+            </div>
+        }
+
+        @if (!string.IsNullOrEmpty(_linuxLogs))
+        {
+            <div class="mt-2">
+                <label class="form-label small fw-bold mb-1">Recent Logs (journalctl)</label>
+                <pre class="p-2 rounded" style="background: #0f172a; color: #94a3b8; font-size: 10px; max-height: 200px; overflow-y: auto; white-space: pre-wrap;">@_linuxLogs</pre>
+            </div>
+        }
+    }
+
+    @if (!string.IsNullOrEmpty(_message))
+    {
+        <div class="mt-2 alert @(_messageSuccess ? "alert-success" : "alert-danger") alert-dismissible">
+            @_message
+            <button type="button" class="btn-close" @onclick="() => _message = string.Empty"></button>
+        </div>
+    }
+
+    <hr class="my-3" />
+
+    @* ─── RuntimeViewer Section ─────────────────────────────── *@
+    <h6>🖥️ RuntimeViewer Process</h6>
+    <div class="d-flex gap-2 mb-2 align-items-center flex-wrap">
+        <div>
+            <label class="form-label mb-0 small">Runtime</label>
+            <select class="form-select form-select-sm" style="width: 120px; font-size: 11px;"
+                    @bind="_rvMode">
+                <option value="web">🌐 Web</option>
+                <option value="desktop">🖥️ Desktop</option>
+            </select>
+        </div>
+        @if (_rvMode == "web")
+        {
+            <div>
+                <label class="form-label mb-0 small">Port</label>
+                <input type="number" class="form-control form-control-sm" style="width: 80px; font-size: 11px;"
+                       @bind="_rvPort" min="1" max="65535" />
+            </div>
+        }
+        <div class="form-check align-self-end mb-1">
+            <input type="checkbox" class="form-check-input" id="rvKiosk" @bind="_rvKiosk" />
+            <label class="form-check-label small" for="rvKiosk">Kiosk</label>
+        </div>
+        <div class="align-self-end">
+            <button class="btn btn-sm btn-success" @onclick="StartViewer" disabled="@ViewerProcess.IsViewerRunning">▶ Start</button>
+        </div>
+        <div class="align-self-end">
+            <button class="btn btn-sm btn-danger" @onclick="StopViewer" disabled="@(!ViewerProcess.IsViewerRunning)">⏹ Stop</button>
+        </div>
+        <span class="badge @(ViewerProcess.IsViewerRunning ? "bg-success" : "bg-secondary") align-self-end mb-1">
+            @(ViewerProcess.IsViewerRunning ? "Running" : "Stopped")
+        </span>
+        @if (ViewerProcess.IsExternalProcess)
+        {
+            <span class="badge bg-info align-self-end mb-1" style="font-size: 9px;" title="This viewer was started outside the editor. The editor can still stop it.">⚡ external</span>
+        }
+        @if (ViewerProcess.IsViewerRunning && _rvMode == "web")
+        {
+            <button class="btn btn-sm btn-outline-primary align-self-end" @onclick="OpenViewer">🌐 Open</button>
+        }
+    </div>
+
+    @if (ServerProcessService.IsWindows)
+    {
+        <h6>🪟 RuntimeViewer Windows Service</h6>
+        <div class="mb-2">
+            <span class="text-muted">Status: </span>
+            <span class="badge @RvWinServiceStatusBadge">@RvWinServiceStatusText</span>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <button class="btn btn-sm btn-outline-success" @onclick="InstallRvWinService"
+                    disabled="@(_isRvWinServiceInstalled || string.IsNullOrEmpty(NodesPath))">Install</button>
+            <button class="btn btn-sm btn-outline-danger" @onclick="UninstallRvWinService"
+                    disabled="@(!_isRvWinServiceInstalled)">Uninstall</button>
+            <button class="btn btn-sm btn-outline-primary" @onclick="StartRvWinService"
+                    disabled="@(!_isRvWinServiceInstalled || _rvWinServiceStatus == ServiceControllerStatus.Running)">Start</button>
+            <button class="btn btn-sm btn-outline-warning" @onclick="StopRvWinService"
+                    disabled="@(!_isRvWinServiceInstalled || _rvWinServiceStatus != ServiceControllerStatus.Running)">Stop</button>
+            <button class="btn btn-sm btn-outline-secondary" @onclick="RefreshStatus">↻ Refresh</button>
+        </div>
+    }
+    else if (ServerProcessService.IsLinux)
+    {
+        <h6>🐧 RuntimeViewer systemd Service</h6>
+        <div class="mb-2">
+            <span class="text-muted">Status: </span>
+            <span class="badge @RvLinuxServiceStatusBadge">@_rvLinuxServiceStatus</span>
+        </div>
+        <div class="d-flex gap-2 flex-wrap mb-2">
+            <button class="btn btn-sm btn-outline-success" @onclick="InstallRvLinuxService"
+                    disabled="@(_isRvLinuxServiceInstalled || string.IsNullOrEmpty(NodesPath))">Install</button>
+            <button class="btn btn-sm btn-outline-danger" @onclick="UninstallRvLinuxService"
+                    disabled="@(!_isRvLinuxServiceInstalled)">Uninstall</button>
+            <button class="btn btn-sm btn-outline-primary" @onclick="StartRvLinuxService"
+                    disabled="@(!_isRvLinuxServiceInstalled || _rvLinuxServiceStatus == "active")">Start</button>
+            <button class="btn btn-sm btn-outline-warning" @onclick="StopRvLinuxService"
+                    disabled="@(!_isRvLinuxServiceInstalled || _rvLinuxServiceStatus != "active")">Stop</button>
+            <button class="btn btn-sm btn-outline-secondary" @onclick="RefreshStatus">↻ Refresh</button>
+        </div>
+
+        <div class="mt-2">
+            <button class="btn btn-sm btn-outline-info" @onclick="ToggleRvUnitPreview">
+                @(_showRvUnitPreview ? "Hide" : "Show") Unit File
+            </button>
+            <button class="btn btn-sm btn-outline-secondary" @onclick="ShowRvLogs" disabled="@(!_isRvLinuxServiceInstalled)">
+                📋 View Logs
+            </button>
+        </div>
+
+        @if (_showRvUnitPreview)
+        {
+            <div class="mt-2">
+                <label class="form-label small fw-bold mb-1">systemd Unit File — @($"/etc/systemd/system/{ViewerProcess.SystemdServiceName}.service")</label>
+                <pre class="p-2 rounded" style="background: #1e293b; color: #e2e8f0; font-size: 11px; max-height: 200px; overflow-y: auto; white-space: pre-wrap;">@_rvUnitFileContent</pre>
+            </div>
+        }
+
+        @if (!string.IsNullOrEmpty(_rvLinuxLogs))
+        {
+            <div class="mt-2">
+                <label class="form-label small fw-bold mb-1">Recent Logs (journalctl)</label>
+                <pre class="p-2 rounded" style="background: #0f172a; color: #94a3b8; font-size: 10px; max-height: 200px; overflow-y: auto; white-space: pre-wrap;">@_rvLinuxLogs</pre>
+            </div>
+        }
+    }
+
+    @if (!string.IsNullOrEmpty(_rvMessage))
+    {
+        <div class="mt-2 alert @(_rvMessageSuccess ? "alert-success" : "alert-danger") alert-dismissible">
+            @_rvMessage
+            <button type="button" class="btn-close" @onclick="() => _rvMessage = string.Empty"></button>
+        </div>
+    }
+
+    <hr class="my-3" />
+
+    @* ─── Performance Dashboard ──────────────────────────────── *@
+    <h6>📊 Process Performance</h6>
+
+    @* Server Process Performance *@
+    @if (_serverPerf != null)
+    {
+        <div class="perf-section mb-3">
+            <div class="perf-header">🖥️ Server</div>
+            <div class="perf-grid">
+                <div class="perf-metric">
+                    <span class="perf-label">CPU</span>
+                    <div class="perf-bar-wrap">
+                        <div class="perf-bar" style="width: @Math.Min(_serverPerf.CpuPercent, 100)%; background: @CpuColor(_serverPerf.CpuPercent);"></div>
+                    </div>
+                    <span class="perf-value">@_serverPerf.CpuPercent%</span>
+                </div>
+                <div class="perf-metric">
+                    <span class="perf-label">Memory</span>
+                    <span class="perf-value">@_serverPerf.WorkingSetMB MB</span>
+                </div>
+                <div class="perf-metric">
+                    <span class="perf-label">Private</span>
+                    <span class="perf-value">@_serverPerf.PrivateMemoryMB MB</span>
+                </div>
+                <div class="perf-metric">
+                    <span class="perf-label">Threads</span>
+                    <span class="perf-value">@_serverPerf.ThreadCount</span>
+                </div>
+                <div class="perf-metric">
+                    <span class="perf-label">Handles</span>
+                    <span class="perf-value">@_serverPerf.HandleCount</span>
+                </div>
+                <div class="perf-metric">
+                    <span class="perf-label">CPU Time</span>
+                    <span class="perf-value">@FormatCpuTime(_serverPerf.TotalProcessorTime)</span>
+                </div>
+                <div class="perf-metric">
+                    <span class="perf-label">Uptime</span>
+                    <span class="perf-value">@FormatUptime(_serverPerf.Uptime)</span>
+                </div>
+            </div>
+        </div>
+    }
+    else if (ServerProcess.IsServerRunning)
+    {
+        <div class="text-muted small mb-2">⏳ Collecting server metrics…</div>
+    }
+    else
+    {
+        <div class="text-muted small mb-2">Server is stopped.</div>
+    }
+
+    @* RuntimeViewer Process Performance *@
+    @if (_viewerPerf != null)
+    {
+        <div class="perf-section mb-3">
+            <div class="perf-header">🖥️ RuntimeViewer</div>
+            <div class="perf-grid">
+                <div class="perf-metric">
+                    <span class="perf-label">CPU</span>
+                    <div class="perf-bar-wrap">
+                        <div class="perf-bar" style="width: @Math.Min(_viewerPerf.CpuPercent, 100)%; background: @CpuColor(_viewerPerf.CpuPercent);"></div>
+                    </div>
+                    <span class="perf-value">@_viewerPerf.CpuPercent%</span>
+                </div>
+                <div class="perf-metric">
+                    <span class="perf-label">Memory</span>
+                    <span class="perf-value">@_viewerPerf.WorkingSetMB MB</span>
+                </div>
+                <div class="perf-metric">
+                    <span class="perf-label">Private</span>
+                    <span class="perf-value">@_viewerPerf.PrivateMemoryMB MB</span>
+                </div>
+                <div class="perf-metric">
+                    <span class="perf-label">Threads</span>
+                    <span class="perf-value">@_viewerPerf.ThreadCount</span>
+                </div>
+                <div class="perf-metric">
+                    <span class="perf-label">Handles</span>
+                    <span class="perf-value">@_viewerPerf.HandleCount</span>
+                </div>
+                <div class="perf-metric">
+                    <span class="perf-label">CPU Time</span>
+                    <span class="perf-value">@FormatCpuTime(_viewerPerf.TotalProcessorTime)</span>
+                </div>
+                <div class="perf-metric">
+                    <span class="perf-label">Uptime</span>
+                    <span class="perf-value">@FormatUptime(_viewerPerf.Uptime)</span>
+                </div>
+            </div>
+        </div>
+    }
+    else if (ViewerProcess.IsViewerRunning)
+    {
+        <div class="text-muted small mb-2">⏳ Collecting viewer metrics…</div>
+    }
+    else
+    {
+        <div class="text-muted small mb-2">RuntimeViewer is stopped.</div>
+    }
+
+    @* ─── Subsystem Performance (from Server diagnostics endpoint) ── *@
+    @if (_serverDiag != null && _serverDiag.Subsystems.Count > 0)
+    {
+        var isLive = DiagClient.Latest != null;
+        <h6 class="mt-2">⚡ Subsystem Performance
+            <span class="text-muted" style="font-size: 9px;">
+                @(isLive ? "(live from server)" : "(from project config)")
+            </span>
+        </h6>
+
+        @if (!isLive && ServerProcess.IsServerRunning && _serverDiagError != null)
+        {
+            <div class="text-warning small mb-2" title="@_serverDiagError">
+                ⚠ Waiting for OPC UA diagnostics…
+            </div>
+        }
+
+        @foreach (var category in _serverDiag.Subsystems.GroupBy(s => s.Category).OrderBy(g => g.Key))
+        {
+            <div class="perf-subsystem-group mb-2">
+                <div class="perf-subsystem-cat">@CategoryIcon(category.Key) @category.Key</div>
+                <table class="table table-sm table-borderless mb-0" style="font-size: 10px;">
+                    <thead>
+                        <tr>
+                            <th style="width: 140px;">Name</th>
+                            <th class="text-end" style="width: 60px;">Status</th>
+                            <th class="text-end" style="width: 55px;">Cycles</th>
+                            <th class="text-end" style="width: 70px;">Avg</th>
+                            <th class="text-end" style="width: 70px;">Max</th>
+                            <th class="text-end" style="width: 70px;">Last</th>
+                            <th class="text-end" style="width: 70px;">Total</th>
+                            <th style="min-width: 80px;">Load</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var sub in category)
+                        {
+                            var loadPct = _serverDiag.Subsystems.Sum(s => s.TotalCpuMs) > 0
+                                ? sub.TotalCpuMs / _serverDiag.Subsystems.Sum(s => s.TotalCpuMs) * 100
+                                : 0;
+                            <tr class="@(sub.Status == "Error" ? "table-danger" : "")">
+                                <td class="text-truncate" style="max-width: 140px;" title="@sub.Name">@sub.Name</td>
+                                <td class="text-end">
+                                    <span class="badge @(sub.Status == "Running" ? "bg-success" : sub.Status == "Error" ? "bg-danger" : "bg-secondary")" style="font-size: 8px;">
+                                        @sub.Status
+                                    </span>
+                                </td>
+                                <td class="text-end font-monospace">@sub.CycleCount.ToString("N0")</td>
+                                <td class="text-end font-monospace">@FormatCycleTime(sub.AvgCycleMs)</td>
+                                <td class="text-end font-monospace">@FormatCycleTime(sub.MaxCycleMs)</td>
+                                <td class="text-end font-monospace">@FormatCycleTime(sub.LastCycleMs)</td>
+                                <td class="text-end font-monospace">@FormatCycleTime(sub.TotalCpuMs)</td>
+                                <td>
+                                    <div class="perf-bar-wrap" style="height: 8px;">
+                                        <div class="perf-bar" style="width: @Math.Min(loadPct, 100).ToString("F0")%; background: @CpuColor(loadPct);"></div>
+                                    </div>
+                                    <span style="font-size: 8px; font-family: monospace;">@loadPct.ToString("F1")%</span>
+                                </td>
+                            </tr>
+                            @if (!string.IsNullOrEmpty(sub.LastError))
+                            {
+                                <tr>
+                                    <td colspan="8" class="text-danger" style="font-size: 9px; padding-top: 0;">⚠ @sub.LastError</td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    }
+    else if (ServerProcess.IsServerRunning && _serverDiagError != null)
+    {
+        <div class="text-warning small mt-2" title="@_serverDiagError">
+            ⚠ Waiting for OPC UA diagnostics connection…
+        </div>
+    }
+    else if (_serverDiagError != null && !ServerProcess.IsServerRunning)
+    {
+        <div class="text-muted small mt-2" title="@_serverDiagError">
+            ℹ Start the server to see live subsystem metrics
+        </div>
+    }
+
+    @* ─── Project Subsystem Breakdown ────────────────────────── *@
+    @if (_subsystems.Count > 0)
+    {
+        <h6 class="mt-2">🔧 Project Subsystems</h6>
+        <table class="table table-sm table-borderless" style="font-size: 11px;">
+            <thead>
+                <tr><th>Subsystem</th><th class="text-end">Count</th><th>Items</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var sub in _subsystems)
+                {
+                    <tr>
+                        <td>@sub.Icon @sub.Name</td>
+                        <td class="text-end fw-bold">@sub.Count</td>
+                        <td class="text-muted" style="font-size: 10px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                            @sub.Details
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+    @* ─── License Status ─────────────────────────────────────── *@
+    @{
+        var lic = LicenseManager.Current;
+    }
+    <h6 class="mt-2">🔑 License</h6>
+    <div class="d-flex align-items-center gap-2 mb-1">
+        <span class="badge @(lic.IsValid ? "bg-success" : "bg-warning text-dark")" style="font-size: 10px;">@lic.Tier</span>
+        @if (!string.IsNullOrEmpty(lic.LicensedTo))
+        {
+            <span class="text-muted small">@lic.LicensedTo</span>
+        }
+    </div>
+    <div class="small text-muted mb-1" style="font-size: 10px;">@lic.Message</div>
+    @if (lic.License != null)
+    {
+        <table class="table table-sm table-borderless mb-1" style="font-size: 10px;">
+            <tbody>
+                <tr><td class="text-muted" style="width: 90px;">Variables</td><td>@FormatLimit(lic.License.MaxVariables)</td></tr>
+                <tr><td class="text-muted">Drivers</td><td>@FormatLimit(lic.License.MaxDrivers)</td></tr>
+                <tr><td class="text-muted">Scripts</td><td>@FormatLimit(lic.License.MaxScripts)</td></tr>
+                <tr><td class="text-muted">PLC Programs</td><td>@FormatLimit(lic.License.MaxPlcPrograms)</td></tr>
+                <tr><td class="text-muted">Screens</td><td>@FormatLimit(lic.License.MaxScreens)</td></tr>
+                <tr><td class="text-muted">Recipes</td><td>@FormatLimit(lic.License.MaxRecipes)</td></tr>
+                <tr><td class="text-muted">Data Logging</td><td>@(lic.License.AllowDataLogging ? "✅" : "❌")</td></tr>
+                <tr><td class="text-muted">AI Assistant</td><td>@(lic.License.AllowAi ? "✅" : "❌")</td></tr>
+                @if (lic.ExpiresUtc < DateTime.MaxValue && lic.ExpiresUtc > DateTime.MinValue)
+                {
+                    <tr><td class="text-muted">Expires</td><td>@lic.ExpiresUtc.ToString("yyyy-MM-dd") (@lic.DaysRemaining days)</td></tr>
+                }
+                else if (lic.IsValid)
+                {
+                    <tr><td class="text-muted">Expires</td><td>Never (perpetual)</td></tr>
+                }
+            </tbody>
+        </table>
+        <div class="text-muted" style="font-size: 9px; font-family: monospace;">
+            Machine ID: @LicenseManager.GetMachineId()
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string NodesPath { get; set; } = "";
+
+    [Inject] private ServerProcessService ServerProcess { get; set; } = default!;
+    [Inject] private RuntimeViewerProcessService ViewerProcess { get; set; } = default!;
+    [Inject] private NodeEditorService Editor { get; set; } = default!;
+    [Inject] private ServerDiagnosticsClient DiagClient { get; set; } = default!;
+
+    // Windows service state
+    private bool _isWinServiceInstalled;
+    private ServiceControllerStatus _winServiceStatus;
+
+    // Linux systemd state
+    private bool _isLinuxServiceInstalled;
+    private string _linuxServiceStatus = "unknown";
+    private bool _showUnitPreview;
+    private string _unitFileContent = "";
+    private string _linuxLogs = "";
+
+    // Shared
+    private string _message = "";
+    private bool _messageSuccess;
+    private Timer? _statusTimer;
+
+    // RuntimeViewer settings
+    private int _rvPort = 5100;
+    private bool _rvKiosk;
+    private string _rvMode = "web"; // "web" or "desktop"
+
+    // RuntimeViewer Windows service state
+    private bool _isRvWinServiceInstalled;
+    private ServiceControllerStatus _rvWinServiceStatus;
+
+    // RuntimeViewer Linux systemd state
+    private bool _isRvLinuxServiceInstalled;
+    private string _rvLinuxServiceStatus = "unknown";
+    private bool _showRvUnitPreview;
+    private string _rvUnitFileContent = "";
+    private string _rvLinuxLogs = "";
+
+    // RuntimeViewer messages
+    private string _rvMessage = "";
+    private bool _rvMessageSuccess;
+
+    // Performance tracking
+    private readonly ProcessPerformanceTracker _serverPerfTracker = new();
+    private readonly ProcessPerformanceTracker _viewerPerfTracker = new();
+    private ProcessPerformanceSnapshot? _serverPerf;
+    private ProcessPerformanceSnapshot? _viewerPerf;
+    private Timer? _perfTimer;
+
+    // Server diagnostics (subsystem-level)
+    private ServerDiagnostics? _serverDiag;
+    private string? _serverDiagError;
+    private Timer? _diagTimer2;
+
+    // Subsystem breakdown
+    private List<SubsystemInfo> _subsystems = new();
+    private record SubsystemInfo(string Icon, string Name, int Count, string Details);
+
+    private string WinServiceStatusText => _isWinServiceInstalled ? _winServiceStatus.ToString() : "Not Installed";
+    private string WinServiceStatusBadge => _isWinServiceInstalled
+        ? _winServiceStatus == ServiceControllerStatus.Running ? "bg-success" : "bg-warning"
+        : "bg-secondary";
+
+    private string LinuxServiceStatusBadge => _linuxServiceStatus switch
+    {
+        "active" => "bg-success",
+        "inactive" => "bg-secondary",
+        "failed" => "bg-danger",
+        _ => "bg-warning"
+    };
+
+    private string RvWinServiceStatusText => _isRvWinServiceInstalled ? _rvWinServiceStatus.ToString() : "Not Installed";
+    private string RvWinServiceStatusBadge => _isRvWinServiceInstalled
+        ? _rvWinServiceStatus == ServiceControllerStatus.Running ? "bg-success" : "bg-warning"
+        : "bg-secondary";
+
+    private string RvLinuxServiceStatusBadge => _rvLinuxServiceStatus switch
+    {
+        "active" => "bg-success",
+        "inactive" => "bg-secondary",
+        "failed" => "bg-danger",
+        _ => "bg-warning"
+    };
+
+    protected override void OnInitialized()
+    {
+        ServerProcess.StateChanged += OnServerStateChanged;
+        ViewerProcess.StateChanged += OnServerStateChanged;
+        _statusTimer = new Timer(_ => InvokeAsync(async () => { await RefreshStatusAsync(); StateHasChanged(); }), null, TimeSpan.Zero, TimeSpan.FromSeconds(5));
+        _perfTimer = new Timer(_ => InvokeAsync(() => { SamplePerformance(); BuildSubsystems(); StateHasChanged(); return Task.CompletedTask; }), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2));
+        _diagTimer2 = new Timer(_ => _ = PollDiagInBackground(), null, TimeSpan.FromSeconds(3), TimeSpan.FromSeconds(3));
+    }
+
+    private void OnServerStateChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void RefreshStatus()
+    {
+        _ = RefreshStatusAsync();
+    }
+
+    private async Task RefreshStatusAsync()
+    {
+        // Detect externally started processes (e.g. server started from console before editor)
+        if (!string.IsNullOrEmpty(NodesPath))
+        {
+            ServerProcess.DetectExternalProcess(NodesPath);
+            ViewerProcess.DetectExternalProcess(NodesPath);
+        }
+
+        if (ServerProcessService.IsWindows)
+        {
+            _isWinServiceInstalled = ServerProcess.IsServiceInstalled();
+            if (_isWinServiceInstalled)
+                _winServiceStatus = ServerProcess.GetServiceStatus();
+            else
+                _winServiceStatus = 0;
+
+            _isRvWinServiceInstalled = ViewerProcess.IsServiceInstalled();
+            if (_isRvWinServiceInstalled)
+                _rvWinServiceStatus = ViewerProcess.GetServiceStatus();
+            else
+                _rvWinServiceStatus = 0;
+        }
+        else if (ServerProcessService.IsLinux)
+        {
+            _isLinuxServiceInstalled = await ServerProcess.IsSystemdServiceInstalledAsync();
+            if (_isLinuxServiceInstalled)
+                _linuxServiceStatus = await ServerProcess.GetSystemdStatusAsync();
+            else
+                _linuxServiceStatus = "not installed";
+
+            _isRvLinuxServiceInstalled = await ViewerProcess.IsSystemdServiceInstalledAsync();
+            if (_isRvLinuxServiceInstalled)
+                _rvLinuxServiceStatus = await ViewerProcess.GetSystemdStatusAsync();
+            else
+                _rvLinuxServiceStatus = "not installed";
+        }
+    }
+
+    // ─── Server Process ──────────────────────────────────────
+
+    private void StartServer()
+    {
+        var (success, msg) = ServerProcess.StartServer(NodesPath);
+        _messageSuccess = success;
+        _message = msg;
+    }
+
+    private void StopServer()
+    {
+        var (success, msg) = ServerProcess.StopServer();
+        _messageSuccess = success;
+        _message = msg;
+    }
+
+    // ─── Windows Service ─────────────────────────────────────
+
+    private async Task InstallWinService()
+    {
+        var msg = await ServerProcess.InstallServiceAsync(NodesPath);
+        _messageSuccess = !msg.StartsWith("Error");
+        _message = msg;
+        await RefreshStatusAsync();
+    }
+
+    private async Task UninstallWinService()
+    {
+        var msg = await ServerProcess.UninstallServiceAsync();
+        _messageSuccess = !msg.StartsWith("Error");
+        _message = msg;
+        await RefreshStatusAsync();
+    }
+
+    private async Task StartWinService()
+    {
+        var msg = await ServerProcess.StartServiceAsync();
+        _messageSuccess = !msg.StartsWith("Error");
+        _message = msg;
+        await Task.Delay(1000);
+        await RefreshStatusAsync();
+    }
+
+    private async Task StopWinService()
+    {
+        var msg = await ServerProcess.StopServiceAsync();
+        _messageSuccess = !msg.StartsWith("Error");
+        _message = msg;
+        await Task.Delay(1000);
+        await RefreshStatusAsync();
+    }
+
+    // ─── Linux systemd ───────────────────────────────────────
+
+    private async Task InstallLinuxService()
+    {
+        var msg = await ServerProcess.InstallSystemdServiceAsync(NodesPath);
+        _messageSuccess = !msg.StartsWith("Error");
+        _message = msg;
+        await RefreshStatusAsync();
+    }
+
+    private async Task UninstallLinuxService()
+    {
+        var msg = await ServerProcess.UninstallSystemdServiceAsync();
+        _messageSuccess = !msg.StartsWith("Error");
+        _message = msg;
+        await RefreshStatusAsync();
+    }
+
+    private async Task StartLinuxService()
+    {
+        var msg = await ServerProcess.StartSystemdServiceAsync();
+        _messageSuccess = !msg.StartsWith("Error");
+        _message = msg;
+        await Task.Delay(1000);
+        await RefreshStatusAsync();
+    }
+
+    private async Task StopLinuxService()
+    {
+        var msg = await ServerProcess.StopSystemdServiceAsync();
+        _messageSuccess = !msg.StartsWith("Error");
+        _message = msg;
+        await Task.Delay(1000);
+        await RefreshStatusAsync();
+    }
+
+    private void ToggleUnitPreview()
+    {
+        _showUnitPreview = !_showUnitPreview;
+        if (_showUnitPreview && !string.IsNullOrEmpty(NodesPath))
+        {
+            _unitFileContent = ServerProcess.GenerateSystemdUnitFile(NodesPath);
+        }
+    }
+
+    private async Task ShowLogs()
+    {
+        _linuxLogs = await ServerProcess.GetSystemdLogsAsync(50);
+    }
+
+    // ─── RuntimeViewer Process ───────────────────────────────
+
+    private void StartViewer()
+    {
+        var (success, msg) = ViewerProcess.StartViewer(NodesPath, _rvPort, _rvKiosk, _rvMode);
+        _rvMessageSuccess = success;
+        _rvMessage = msg;
+    }
+
+    private async Task OpenViewer()
+    {
+        await JS.InvokeVoidAsync("open", $"http://localhost:{_rvPort}", "_blank");
+    }
+
+    private void StopViewer()
+    {
+        var (success, msg) = ViewerProcess.StopViewer();
+        _rvMessageSuccess = success;
+        _rvMessage = msg;
+    }
+
+    // ─── RuntimeViewer Windows Service ───────────────────────
+
+    private async Task InstallRvWinService()
+    {
+        var msg = await ViewerProcess.InstallServiceAsync(NodesPath, _rvPort, _rvKiosk);
+        _rvMessageSuccess = !msg.StartsWith("Error");
+        _rvMessage = msg;
+        await RefreshStatusAsync();
+    }
+
+    private async Task UninstallRvWinService()
+    {
+        var msg = await ViewerProcess.UninstallServiceAsync();
+        _rvMessageSuccess = !msg.StartsWith("Error");
+        _rvMessage = msg;
+        await RefreshStatusAsync();
+    }
+
+    private async Task StartRvWinService()
+    {
+        var msg = await ViewerProcess.StartServiceAsync();
+        _rvMessageSuccess = !msg.StartsWith("Error");
+        _rvMessage = msg;
+        await Task.Delay(1000);
+        await RefreshStatusAsync();
+    }
+
+    private async Task StopRvWinService()
+    {
+        var msg = await ViewerProcess.StopServiceAsync();
+        _rvMessageSuccess = !msg.StartsWith("Error");
+        _rvMessage = msg;
+        await Task.Delay(1000);
+        await RefreshStatusAsync();
+    }
+
+    // ─── RuntimeViewer Linux systemd ─────────────────────────
+
+    private async Task InstallRvLinuxService()
+    {
+        var msg = await ViewerProcess.InstallSystemdServiceAsync(NodesPath, _rvPort, _rvKiosk);
+        _rvMessageSuccess = !msg.StartsWith("Error");
+        _rvMessage = msg;
+        await RefreshStatusAsync();
+    }
+
+    private async Task UninstallRvLinuxService()
+    {
+        var msg = await ViewerProcess.UninstallSystemdServiceAsync();
+        _rvMessageSuccess = !msg.StartsWith("Error");
+        _rvMessage = msg;
+        await RefreshStatusAsync();
+    }
+
+    private async Task StartRvLinuxService()
+    {
+        var msg = await ViewerProcess.StartSystemdServiceAsync();
+        _rvMessageSuccess = !msg.StartsWith("Error");
+        _rvMessage = msg;
+        await Task.Delay(1000);
+        await RefreshStatusAsync();
+    }
+
+    private async Task StopRvLinuxService()
+    {
+        var msg = await ViewerProcess.StopSystemdServiceAsync();
+        _rvMessageSuccess = !msg.StartsWith("Error");
+        _rvMessage = msg;
+        await Task.Delay(1000);
+        await RefreshStatusAsync();
+    }
+
+    private void ToggleRvUnitPreview()
+    {
+        _showRvUnitPreview = !_showRvUnitPreview;
+        if (_showRvUnitPreview && !string.IsNullOrEmpty(NodesPath))
+        {
+            _rvUnitFileContent = ViewerProcess.GenerateSystemdUnitFile(NodesPath, _rvPort, _rvKiosk);
+        }
+    }
+
+    private async Task ShowRvLogs()
+    {
+        _rvLinuxLogs = await ViewerProcess.GetSystemdLogsAsync(50);
+    }
+
+    // ─── Performance ─────────────────────────────────────────
+
+    private void SamplePerformance()
+    {
+        if (ServerProcess.IsServerRunning)
+        {
+            _serverPerf = _serverPerfTracker.Sample(ServerProcess.ServerProcess);
+        }
+        else
+        {
+            _serverPerf = null;
+            _serverPerfTracker.Reset();
+        }
+
+        if (ViewerProcess.IsViewerRunning)
+        {
+            _viewerPerf = _viewerPerfTracker.Sample(ViewerProcess.ViewerProcess);
+        }
+        else
+        {
+            _viewerPerf = null;
+            _viewerPerfTracker.Reset();
+        }
+    }
+
+    private async Task PollDiagnosticsAsync()
+    {
+        // Read diagnostics from the OPC UA server's _Diagnostics.Json variable
+        var model = Editor.RootModel;
+        var endpointUrl = model?.Server?.EndpointUrl ?? "opc.tcp://localhost:14840/SimpleOpcFileServer";
+
+        await DiagClient.PollAsync(endpointUrl);
+        _serverDiag = DiagClient.Latest;
+        _serverDiagError = DiagClient.Error;
+        MergeDiagnosticsWithProject();
+    }
+
+    /// <summary>
+    /// Runs diagnostics polling off the Blazor render thread, then pushes results to UI.
+    /// </summary>
+    private async Task PollDiagInBackground()
+    {
+        await PollDiagnosticsAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    /// <summary>
+    /// Ensures all project subsystems appear in _serverDiag even if the running server
+    /// doesn't report them (e.g. server still starting, old binary without instrumentation).
+    /// When the server is stopped, clears the diagnostics so the section is hidden.
+    /// </summary>
+    private void MergeDiagnosticsWithProject()
+    {
+        var model = Editor.RootModel;
+        if (model == null) return;
+
+        // Don't show subsystem performance when the server is stopped.
+        if (!ServerProcess.IsServerRunning)
+        {
+            _serverDiag = null;
+            return;
+        }
+
+        // Build a set of entries the server reported (empty if poll failed)
+        var reported = new HashSet<string>();
+        if (_serverDiag != null)
+        {
+            foreach (var s in _serverDiag.Subsystems)
+                reported.Add($"{s.Category}:{s.Name}");
+        }
+
+        // When the server is running, always ensure a container exists so
+        // project-config subsystems appear while the endpoint connects.
+        _serverDiag ??= new SharedModels.ServerDiagnostics();
+
+        // Add missing scripts
+        foreach (var script in model.Scripts)
+        {
+            if (!reported.Contains($"Script:{script.Name}"))
+            {
+                _serverDiag.Subsystems.Add(new SharedModels.SubsystemDiagnostics
+                {
+                    Category = "Script",
+                    Name = script.Name,
+                    Enabled = script.Enabled,
+                    Status = script.Enabled ? "Running" : "Disabled"
+                });
+            }
+        }
+
+        // Add missing PLC programs
+        foreach (var plc in model.PlcPrograms)
+        {
+            if (!reported.Contains($"PlcProgram:{plc.Name}"))
+            {
+                _serverDiag.Subsystems.Add(new SharedModels.SubsystemDiagnostics
+                {
+                    Category = "PlcProgram",
+                    Name = plc.Name,
+                    Enabled = plc.Enabled,
+                    Status = plc.Enabled ? "Running" : "Disabled"
+                });
+            }
+        }
+
+        // Add missing recipes
+        foreach (var recipe in model.Recipes)
+        {
+            if (!reported.Contains($"Recipe:{recipe.Name}"))
+            {
+                _serverDiag.Subsystems.Add(new SharedModels.SubsystemDiagnostics
+                {
+                    Category = "Recipe",
+                    Name = recipe.Name,
+                    Enabled = recipe.Enabled,
+                    Status = recipe.Enabled ? "Running" : "Disabled"
+                });
+            }
+        }
+
+        // Add missing data logger
+        if (model.Database != null && !string.IsNullOrEmpty(model.Database.ConnectionString))
+        {
+            // Check both provider name and class name variants
+            var hasLogger = _serverDiag.Subsystems.Any(s => s.Category == "DataLogger");
+            if (!hasLogger)
+            {
+                _serverDiag.Subsystems.Add(new SharedModels.SubsystemDiagnostics
+                {
+                    Category = "DataLogger",
+                    Name = model.Database.Provider,
+                    Enabled = true,
+                    Status = "Running"
+                });
+            }
+        }
+
+        // If nothing was added and there are no subsystems, clear _serverDiag so the UI doesn't show an empty section
+        if (_serverDiag.Subsystems.Count == 0)
+            _serverDiag = null;
+    }
+
+    private void BuildSubsystems()
+    {
+        var model = Editor.RootModel;
+        if (model == null)
+        {
+            _subsystems = [];
+            return;
+        }
+
+        var list = new List<SubsystemInfo>();
+
+        // Variables
+        var varCount = CountVariables(model.Folder);
+        list.Add(new("🏷️", "Variables", varCount, ""));
+
+        // Driver bindings
+        var driverBindings = CollectDriverBindings(model.Folder);
+        foreach (var grp in driverBindings.GroupBy(d => d).OrderBy(g => g.Key))
+        {
+            list.Add(new("🔌", $"Driver: {grp.Key}", grp.Count(), $"{grp.Count()} variables"));
+        }
+
+        // Alarms
+        var alarmCount = CountAlarms(model.Folder);
+        if (alarmCount > 0)
+            list.Add(new("🔔", "Alarms", alarmCount, $"{alarmCount} configured"));
+
+        // Data logging
+        var logCount = CountDataLogging(model.Folder);
+        if (logCount > 0)
+            list.Add(new("📊", "Data Logging", logCount, $"{logCount} variables logged"));
+
+        // Historical database
+        if (model.Database != null && !string.IsNullOrEmpty(model.Database.ConnectionString))
+            list.Add(new("🗄️", $"Database ({model.Database.Provider})", 1, model.Database.TableName));
+
+        // Scripts
+        if (model.Scripts.Count > 0)
+            list.Add(new("⚡", "Scripts", model.Scripts.Count,
+                string.Join(", ", model.Scripts.Select(s => s.Name).Take(5))));
+
+        // PLC programs
+        if (model.PlcPrograms.Count > 0)
+            list.Add(new("⚙️", "PLC Programs", model.PlcPrograms.Count,
+                string.Join(", ", model.PlcPrograms.Select(p => p.Name).Take(5))));
+
+        // Recipes
+        if (model.Recipes.Count > 0)
+            list.Add(new("📦", "Recipes", model.Recipes.Count,
+                string.Join(", ", model.Recipes.Select(r => r.Name).Take(5))));
+
+        // Screens
+        if (model.Screens.Count > 0)
+            list.Add(new("🖼️", "Screens", model.Screens.Count,
+                string.Join(", ", model.Screens.Select(s => s.Name).Take(5))));
+
+        // Cameras
+        if (model.Cameras.Count > 0)
+            list.Add(new("📷", "Cameras", model.Cameras.Count,
+                string.Join(", ", model.Cameras.Select(c => c.CameraId).Take(5))));
+
+        // Users & groups
+        if (model.Users.Count > 0)
+            list.Add(new("👤", "Users", model.Users.Count, ""));
+        if (model.UserGroups.Count > 0)
+            list.Add(new("👥", "User Groups", model.UserGroups.Count, ""));
+
+        // Strings
+        if (model.Strings.Count > 0)
+            list.Add(new("🌐", "Localized Strings", model.Strings.Count, ""));
+
+        _subsystems = list;
+    }
+
+    private static int CountVariables(Folder folder)
+    {
+        int count = folder.Variables.Count;
+        foreach (var sub in folder.Folders)
+            count += CountVariables(sub);
+        return count;
+    }
+
+    private static int CountAlarms(Folder folder)
+    {
+        int count = folder.Variables.Count(v => v.Alarm != null);
+        foreach (var sub in folder.Folders)
+            count += CountAlarms(sub);
+        return count;
+    }
+
+    private static int CountDataLogging(Folder folder)
+    {
+        int count = folder.Variables.Count(v => v.DataLogging != null);
+        foreach (var sub in folder.Folders)
+            count += CountDataLogging(sub);
+        return count;
+    }
+
+    private static List<string> CollectDriverBindings(Folder folder)
+    {
+        var result = new List<string>();
+        foreach (var v in folder.Variables)
+        {
+            if (v.DriverConfigs != null)
+            {
+                foreach (var key in v.DriverConfigs.Keys)
+                    result.Add(key);
+            }
+        }
+        foreach (var sub in folder.Folders)
+            result.AddRange(CollectDriverBindings(sub));
+        return result;
+    }
+
+    private static string CpuColor(double pct) => pct switch
+    {
+        < 30 => "#22c55e",
+        < 60 => "#eab308",
+        < 80 => "#f97316",
+        _ => "#ef4444"
+    };
+
+    private static string CategoryIcon(string category) => category switch
+    {
+        "Driver" => "🔌",
+        "Script" => "⚡",
+        "PlcProgram" => "⚙️",
+        "Recipe" => "📦",
+        "DataLogger" => "📊",
+        "EventLogger" => "📓",
+        _ => "●"
+    };
+
+    private static string FormatUptime(TimeSpan ts)
+    {
+        if (ts.TotalDays >= 1)
+            return $"{(int)ts.TotalDays}d {ts.Hours}h {ts.Minutes}m";
+        if (ts.TotalHours >= 1)
+            return $"{ts.Hours}h {ts.Minutes}m {ts.Seconds}s";
+        return $"{ts.Minutes}m {ts.Seconds}s";
+    }
+
+    private static string FormatCpuTime(TimeSpan ts)
+    {
+        if (ts.TotalHours >= 1)
+            return $"{(int)ts.TotalHours}h {ts.Minutes}m {ts.Seconds}s";
+        if (ts.TotalMinutes >= 1)
+            return $"{(int)ts.TotalMinutes}m {ts.Seconds}s {ts.Milliseconds}ms";
+        if (ts.TotalSeconds >= 1)
+            return $"{ts.TotalSeconds:F2}s";
+        if (ts.TotalMilliseconds >= 1)
+            return $"{ts.TotalMilliseconds:F1}ms";
+        if (ts.TotalMilliseconds >= 0.001)
+            return $"{ts.TotalMicroseconds:F1}µs";
+        return "0µs";
+    }
+
+    /// <summary>
+    /// Format a subsystem cycle time given in milliseconds.
+    /// Auto-scales between µs, ms, s, min, h for readable display.
+    /// </summary>
+    private static string FormatCycleTime(double ms)
+    {
+        if (ms <= 0)
+            return "—";
+        if (ms >= 60_000)
+            return $"{ms / 60_000:F1}m";
+        if (ms >= 1000)
+            return $"{ms / 1000:F2}s";
+        if (ms >= 1)
+            return $"{ms:F2}ms";
+        if (ms >= 0.001)
+            return $"{ms * 1000:F1}µs";
+        return $"{ms * 1_000_000:F0}ns";
+    }
+
+    public void Dispose()
+    {
+        ServerProcess.StateChanged -= OnServerStateChanged;
+        ViewerProcess.StateChanged -= OnServerStateChanged;
+        _statusTimer?.Dispose();
+        _perfTimer?.Dispose();
+        _diagTimer2?.Dispose();
+    }
+
+    private static string FormatLimit(int max) => max == 0 ? "Unlimited" : max.ToString();
+}

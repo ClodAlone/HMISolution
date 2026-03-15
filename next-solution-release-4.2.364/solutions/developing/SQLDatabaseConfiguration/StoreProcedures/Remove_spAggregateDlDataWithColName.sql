@@ -1,0 +1,1 @@
+IF OBJECT_ID (N'dbo.spAggregateDlDataWithColName', N'P') IS NOT NULL DROP PROCEDURE [dbo].[spAggregateDlDataWithColName]

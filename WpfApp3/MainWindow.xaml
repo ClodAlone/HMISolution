@@ -1,0 +1,156 @@
+﻿<Window x:Class="WpfApp3.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:WpfApp3"
+        xmlns:dock="https://github.com/Dirkster99/AvalonDock"
+        xmlns:dockTheme="clr-namespace:AvalonDock.Themes;assembly=AvalonDock.Themes.VS2013"
+        xmlns:vm="clr-namespace:WpfApp3.ViewModels"
+        d:DataContext="{d:DesignInstance Type=vm:MainWindowViewModel, IsDesignTimeCreatable=True}"
+        mc:Ignorable="d"
+        Title="Visual Studio 2026" Height="600" Width="1000"
+        WindowStyle="None" ResizeMode="CanResize"
+        BorderThickness="1" BorderBrush="{DynamicResource BorderBrush}"
+        Background="{DynamicResource WindowBackgroundBrush}">
+
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="32" ResizeBorderThickness="5" GlassFrameThickness="0" CornerRadius="0" />
+    </WindowChrome.WindowChrome>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="32"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Custom Title Bar -->
+        <Grid Grid.Row="0" Background="{DynamicResource TitleBarBackgroundBrush}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/> <!-- Icon/Title -->
+                <ColumnDefinition Width="Auto"/> <!-- Menu -->
+                <ColumnDefinition Width="*"/>    <!-- Spacer -->
+                <ColumnDefinition Width="Auto"/> <!-- Window Controls -->
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="10,0,10,0">
+                <TextBlock Text="{Binding Title, RelativeSource={RelativeSource AncestorType=Window}}" 
+                           Foreground="{DynamicResource MutedTextForegroundBrush}" FontSize="12" FontFamily="Segoe UI" VerticalAlignment="Center"/>
+            </StackPanel>
+
+            <Menu Grid.Column="1" Background="Transparent" Foreground="{DynamicResource MenuForegroundBrush}" WindowChrome.IsHitTestVisibleInChrome="True" VerticalAlignment="Center">
+                <MenuItem Header="File"/>
+                <MenuItem Header="Edit"/>
+                <MenuItem Header="View">
+                     <MenuItem Header="Switch Theme" Click="SwitchTheme_Click"/>
+                </MenuItem>
+                <MenuItem Header="Window"/>
+            </Menu>
+
+            <StackPanel Grid.Column="3" Orientation="Horizontal">
+                <Button Style="{StaticResource TitleBarButtonStyle}" Click="Minimize_Click">
+                    <TextBlock Text="&#xE921;" FontFamily="Segoe MDL2 Assets" FontSize="10"/>
+                </Button>
+                <Button Style="{StaticResource TitleBarButtonStyle}" Click="MaximizeRestore_Click">
+                    <TextBlock Text="&#xE922;" FontFamily="Segoe MDL2 Assets" FontSize="10"/>
+                </Button>
+                <Button Style="{StaticResource CloseButtonStyle}" Click="Close_Click">
+                    <TextBlock Text="&#xE8BB;" FontFamily="Segoe MDL2 Assets" FontSize="10"/>
+                </Button>
+            </StackPanel>
+        </Grid>
+
+        <dock:DockingManager Grid.Row="1" x:Name="dockManager">
+            <dock:DockingManager.Theme>
+                <dockTheme:Vs2013DarkTheme/>
+            </dock:DockingManager.Theme>
+            <dock:LayoutRoot>
+                <dock:LayoutPanel Orientation="Vertical">
+                    <dock:LayoutPanel Orientation="Horizontal">
+                        <!-- Main Document Area -->
+                        <dock:LayoutDocumentPane x:Name="MainDocumentPane">
+                            <dock:LayoutDocument Title="Program.cs" ContentId="Program.cs">
+                             <Grid Background="{DynamicResource EditorBackgroundBrush}">
+                                 <TextBlock Text="// VS2026 Code Here" Foreground="{DynamicResource KeywordBrush}" FontFamily="Consolas" Margin="10"/>
+                             </Grid>
+                        </dock:LayoutDocument>
+                        <dock:LayoutDocument Title="MainWindow.xaml" ContentId="MainWindow.xaml">
+                             <Grid Background="{DynamicResource EditorBackgroundBrush}">
+                                 <TextBlock Text="&lt;Window ...&gt;" Foreground="{DynamicResource TextForegroundBrush}" FontFamily="Consolas" Margin="10"/>
+                             </Grid>
+                        </dock:LayoutDocument>
+                    </dock:LayoutDocumentPane>
+
+                    <!-- Right Side Panels -->
+                    <dock:LayoutAnchorablePane DockWidth="300" x:Name="RightPane">
+                        <dock:LayoutAnchorable Title="Solution Explorer" ContentId="SolutionExplorer">
+                            <TreeView BorderThickness="0" Background="{DynamicResource PanelBackgroundBrush}" Foreground="{DynamicResource TextForegroundBrush}">
+                                <TreeViewItem Header="Solution 'WpfApp3'" IsExpanded="True">
+                                    <TreeViewItem Header="WpfApp3" IsExpanded="True">
+                                        <TreeViewItem Header="Properties" />
+                                        <TreeViewItem Header="References" />
+                                        <TreeViewItem Header="App.xaml" />
+                                        <TreeViewItem Header="MainWindow.xaml" />
+                                    </TreeViewItem>
+                                </TreeViewItem>
+                            </TreeView>
+                        </dock:LayoutAnchorable>
+                        <dock:LayoutAnchorable Title="Properties" ContentId="Properties">
+                            <StackPanel Background="{DynamicResource PanelBackgroundBrush}">
+                                <TextBlock Text="Properties Content" Foreground="{DynamicResource TextForegroundBrush}" Margin="5"/>
+                            </StackPanel>
+                        </dock:LayoutAnchorable>
+                    </dock:LayoutAnchorablePane>
+                </dock:LayoutPanel>
+
+                <!-- Bottom Panel -->
+                <dock:LayoutAnchorablePane DockHeight="150" x:Name="BottomPane">
+                    <dock:LayoutAnchorable Title="Output" ContentId="Output">
+                        <TextBox Text="Build succeeded." Background="{DynamicResource EditorBackgroundBrush}" Foreground="{DynamicResource TextForegroundBrush}" BorderThickness="0" FontFamily="Consolas"/>
+                    </dock:LayoutAnchorable>
+                    <dock:LayoutAnchorable Title="Error List" ContentId="ErrorList">
+                        <ListView Background="{DynamicResource EditorBackgroundBrush}" Foreground="{DynamicResource TextForegroundBrush}">
+                            <ListViewItem Content="0 Errors"/>
+                            <ListViewItem Content="0 Warnings"/>
+                        </ListView>
+                    </dock:LayoutAnchorable>
+                    <dock:LayoutAnchorable Title="Background Tasks" ContentId="BackgroundTasks">
+                        <Grid Background="{DynamicResource PanelBackgroundBrush}">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            <StackPanel Orientation="Horizontal" Margin="5">
+                                <Button Content="Add Task" Command="{Binding AddTaskCommand}" Margin="0,0,5,0" Padding="5,2"/>
+                                <Button Content="Run All" Command="{Binding RunAllCommand}" Margin="0,0,5,0" Padding="5,2"/>
+                                <Button Content="Cancel All" Command="{Binding CancelAllCommand}" Padding="5,2"/>
+                            </StackPanel>
+                            <ListView Grid.Row="1" ItemsSource="{Binding Tasks}" Background="{DynamicResource EditorBackgroundBrush}" BorderThickness="0" Foreground="{DynamicResource TextForegroundBrush}">
+                                <ListView.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="0,2">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="150"/>
+                                                <ColumnDefinition Width="200"/>
+                                                <ColumnDefinition Width="80"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="{Binding Name}" VerticalAlignment="Center" Foreground="{DynamicResource TextForegroundBrush}"/>
+                                            <ProgressBar Grid.Column="1" Value="{Binding Progress}" Maximum="100" Height="10" Margin="5,0"/>
+                                            <TextBlock Grid.Column="2" Text="{Binding Status}" VerticalAlignment="Center" Foreground="{DynamicResource TextForegroundBrush}"/>
+                                            <StackPanel Grid.Column="3" Orientation="Horizontal">
+                                                <Button Content="Run" Command="{Binding StartCommand}" Margin="5,0" Padding="5,2" Style="{StaticResource {x:Static ToolBar.ButtonStyleKey}}"/>
+                                                <Button Content="Stop" Command="{Binding CancelCommand}" Padding="5,2" Style="{StaticResource {x:Static ToolBar.ButtonStyleKey}}"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListView.ItemTemplate>
+                            </ListView>
+                        </Grid>
+                    </dock:LayoutAnchorable>
+                </dock:LayoutAnchorablePane>
+            </dock:LayoutPanel>
+        </dock:LayoutRoot>
+    </dock:DockingManager>
+   </Grid>
+</Window>

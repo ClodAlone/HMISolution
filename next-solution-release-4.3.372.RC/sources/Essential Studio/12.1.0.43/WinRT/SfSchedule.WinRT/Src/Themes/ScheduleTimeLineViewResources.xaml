@@ -1,0 +1,315 @@
+﻿<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" 
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:local="using:Syncfusion.UI.Xaml.Schedule">
+
+    <local:BoolToVisibilityConverter x:Key="booltovisible"/>
+
+    <Style TargetType="local:ScheduleTimeLineView">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="local:ScheduleTimeLineView">
+                    <Grid Background="{TemplateBinding Background}" HorizontalAlignment="Left">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <Grid Background="{TemplateBinding Background}">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="55" />
+                                <RowDefinition Height="Auto" MinHeight="30" />
+                                <RowDefinition />
+                            </Grid.RowDefinitions>
+
+                            <ItemsControl x:Name="resourceheadercontainer" Grid.Row="2">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <local:UniformStackPanel Orientation="Vertical"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                            </ItemsControl>
+                        </Grid>
+
+                        <ScrollViewer x:Name="PART_HorizontalTimeSlotScrollViewer" Grid.Column="1" 
+                                      HorizontalAlignment="Left" HorizontalScrollBarVisibility="Visible" 
+                                      VerticalScrollBarVisibility="Disabled" VerticalScrollMode="Disabled" ZoomMode="Disabled"
+                                      Background="{TemplateBinding Background}" >
+                            <local:CustomGrid Background="{TemplateBinding Background}">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="55" />
+                                    <RowDefinition Height="Auto" MinHeight="30" />
+                                    <RowDefinition />
+                                </Grid.RowDefinitions>
+
+                                <local:ScheduleHorizontalTimeLineItemsControl x:Name="PART_HorizontalTimeLineItemsControl" Grid.Row="0" Height="55" HorizontalAlignment="Left" 
+                                                                              Background="White" BorderBrush="#FFA9B0B8" BorderThickness="0,0,0.5,1" 
+                                                                              ShowNonWorkingHours="{Binding ShowNonWorkingHours, RelativeSource={RelativeSource TemplatedParent}}"
+                                                                              Minimum="{Binding WorkStartHour, RelativeSource={RelativeSource TemplatedParent}}"
+                                                                              Maximum="{Binding WorkEndHour, RelativeSource={RelativeSource TemplatedParent}}"
+                                                                              TimeInterval="{Binding RelativeSource={RelativeSource Mode=TemplatedParent}, Path=TimeInterval, Mode=OneWay}" 
+                                                                              IntervalWidth="{Binding RelativeSource={RelativeSource Mode=TemplatedParent}, Path=IntervalHeight, Mode=OneWay}" 
+                                                                              TimeMode="{Binding RelativeSource={RelativeSource Mode=TemplatedParent}, Path=TimeMode, Mode=OneWay}" 
+                                                                              MinorTickStroke="{Binding MinorTickStroke, RelativeSource={RelativeSource TemplatedParent}}"
+                                                                              MajorTickStroke="{Binding MajorTickStroke, RelativeSource={RelativeSource TemplatedParent}}"
+                                                                              MinorTickLabelStroke="{Binding MinorTickLabelStroke, RelativeSource={RelativeSource TemplatedParent}}"
+                                                                              MajorTickLabelStroke="{Binding MajorTickLabelStroke, RelativeSource={RelativeSource TemplatedParent}}"
+                                                                              SelectedDates="{Binding RelativeSource={RelativeSource Mode=TemplatedParent}, Path=SelectedDates, Mode=OneWay}" 
+                                                                              MajorTickVisibility="{Binding MajorTickVisibility, RelativeSource={RelativeSource TemplatedParent}}"
+                                                                              MinorTickVisibility="{Binding RelativeSource={RelativeSource Mode=TemplatedParent}, Path=MinorTickVisibility, Mode=OneWay}" 
+                                                                              MajorTickStrokeDashArray="{Binding MajorTickStrokeDashArray, RelativeSource={RelativeSource TemplatedParent}}"
+                                                                              MinorTickStrokeDashArray="{Binding MinorTickStrokeDashArray, RelativeSource={RelativeSource TemplatedParent}}">
+                                </local:ScheduleHorizontalTimeLineItemsControl>
+
+                                <ItemsControl x:Name="PART_HorNonAccessibleTimeItemsControl" Grid.Row="0" HorizontalAlignment="Left"
+                                              Width="{Binding ElementName=PART_HorizontalTimeSlot, Path=Width}" 
+                                              ItemsSource="{Binding NonAccessibleBlockCollection, RelativeSource={RelativeSource TemplatedParent}}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <Grid/>
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <ContentPresenter HorizontalAlignment="Left" Margin="{Binding Margin}" Width="{Binding Size}">
+                                                <Border Background="{Binding Background}" Opacity="0.3"/>
+                                            </ContentPresenter>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                                <local:ScheduleHorizontalDaysHeaderViewItemsControl x:Name="PART_HorizontalDaysHeaderControl" Grid.Row="1" HorizontalAlignment="Left"
+                                                                                    BorderThickness="1" BorderBrush="LightGray" Height="30"
+                                                                                    MaxWidth="{Binding Width, ElementName=PART_HorizontalTimeSlot}"
+                                                                                    TimeInterval="{Binding RelativeSource={RelativeSource Mode=TemplatedParent}, Path=TimeInterval, Mode=OneWay}" 
+                                                                                    SelectedDates="{Binding RelativeSource={RelativeSource Mode=TemplatedParent}, Path=SelectedDates, Mode=OneWay}" 
+                                                                                    HeaderBackground="{Binding HeaderBackground, RelativeSource={RelativeSource TemplatedParent}}"
+                                                                                    CurrentDateBackground="{Binding CurrentDateBackground, RelativeSource={RelativeSource TemplatedParent}}">
+                                </local:ScheduleHorizontalDaysHeaderViewItemsControl>
+
+                                <local:ScheduleNonWorkingDayItemsControl x:Name="PART_NonWorkingDaysLayout" Grid.Row="2" HorizontalAlignment="Left"
+                                                                         Width="{Binding Width, ElementName=PART_HorizontalTimeSlot}">
+                                    <local:ScheduleNonWorkingDayItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <local:ScheduleTimeLineNonWorkingDayPanel/>
+                                        </ItemsPanelTemplate>
+                                    </local:ScheduleNonWorkingDayItemsControl.ItemsPanel>
+                                </local:ScheduleNonWorkingDayItemsControl>
+
+                                <local:ScheduleTimelineTimeSlotItemsControl x:Name="PART_HorizontalTimeSlot" Grid.Row="2" HorizontalAlignment="Left" 
+                                                                            Width="{Binding Width, ElementName=PART_HorizontalTimeLineItemsControl}"
+                                                                            VerticalAlignment="{TemplateBinding VerticalAlignment}"
+                                                                            ShowNonWorkingHours="{Binding ShowNonWorkingHours, RelativeSource={RelativeSource TemplatedParent}}"
+                                                                            Minimum="{Binding WorkStartHour, RelativeSource={RelativeSource TemplatedParent}}"
+                                                                            Maximum="{Binding WorkEndHour, RelativeSource={RelativeSource TemplatedParent}}"
+                                                                            MajorTickStroke="{Binding MajorTickStroke, RelativeSource={RelativeSource TemplatedParent}}"
+                                                                            MinorTickStroke="{Binding MinorTickStroke, RelativeSource={RelativeSource TemplatedParent}}"
+                                                                            MajorTickLabelStroke="{Binding MajorTickLabelStroke, RelativeSource={RelativeSource TemplatedParent}}"
+                                                                            MinorTickLabelStroke="{Binding MinorTickLabelStroke, RelativeSource={RelativeSource TemplatedParent}}"
+                                                                            MajorTickStrokeDashArray="{Binding MajorTickStrokeDashArray, RelativeSource={RelativeSource TemplatedParent}}"
+                                                                            MinorTickStrokeDashArray="{Binding MinorTickStrokeDashArray, RelativeSource={RelativeSource TemplatedParent}}"
+                                                                            TimeInterval="{Binding RelativeSource={RelativeSource Mode=TemplatedParent}, Path=TimeInterval, Mode=OneWay}" 
+                                                                            IntervalWidth="{Binding RelativeSource={RelativeSource Mode=TemplatedParent}, Path=IntervalHeight, Mode=OneWay}" 
+                                                                            SelectedDates="{Binding RelativeSource={RelativeSource Mode=TemplatedParent}, Path=SelectedDates, Mode=OneWay}">
+                                </local:ScheduleTimelineTimeSlotItemsControl>
+
+                                <Canvas Grid.Row="2" Width="{Binding Width, ElementName=PART_HorizontalTimeLineItemsControl}" HorizontalAlignment="Left">
+                                    <Rectangle x:Name="selectionRectangle" Fill="#BCBEC0" Visibility="{TemplateBinding RectVisibility}" 
+                                               Height="{TemplateBinding RectHeight}" Width="{TemplateBinding RectWidth}" 
+                                               Canvas.Left="{TemplateBinding RectXPosition}" Canvas.Top="{TemplateBinding RectYPosition}"/>
+                                </Canvas>
+
+                                <ItemsControl x:Name="PART_HorizontalAppointmentsLayoutHost" Grid.Row="2" HorizontalAlignment="Left" 
+                                              Width="{Binding Width, ElementName=PART_HorizontalTimeSlot}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <local:UniformStackPanel Orientation="Vertical"/>
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                </ItemsControl>
+
+                                <ItemsControl x:Name="PART_HorNonAccessibleBlocksItemsControl" Grid.Row="2" HorizontalAlignment="Left"
+                                              Width="{Binding ElementName=PART_HorizontalTimeSlot, Path=Width}" 
+                                              ItemsSource="{Binding NonAccessibleBlockCollection, RelativeSource={RelativeSource TemplatedParent}}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <Grid/>
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid Width="{Binding Size}" Margin="{Binding Margin}" VerticalAlignment="Stretch" HorizontalAlignment="Left" Background="Transparent" >
+                                                <ContentPresenter HorizontalAlignment="Left" 
+                                                              ContentTemplate="{Binding CustomTemplate}"/>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                                <Canvas Grid.Row="0">
+                                    <ContentPresenter x:Name="PART_TimeLineCurrentTimeIndicator" MinHeight="4" VerticalAlignment="Bottom"
+                                                      Width="{Binding CurrentTimeIndicatorWidth, RelativeSource={RelativeSource TemplatedParent}}"
+                                                      Visibility="{Binding CurrentTimeIndicatorVisibility,RelativeSource={RelativeSource TemplatedParent}}"  
+                                                      ContentTemplate="{Binding CurrentTimeIndicatorTemplate,RelativeSource={RelativeSource TemplatedParent}}" 
+                                                      Margin="{Binding CurrentTimeIndicatorMargin,RelativeSource={RelativeSource TemplatedParent}}">
+                                        <ContentPresenter.RenderTransform>
+                                            <RotateTransform Angle="90"/>
+                                        </ContentPresenter.RenderTransform>
+                                    </ContentPresenter>
+                                </Canvas>
+                            </local:CustomGrid>
+                        </ScrollViewer>
+
+                        <ContentPresenter x:Name="PrevApp" Grid.Column="1" HorizontalAlignment="Left" local:Clip.ToBounds="True" 
+                                          ContentTemplate="{Binding PreviousNavigationButtonTemplate, RelativeSource={RelativeSource TemplatedParent}}"
+                                          Visibility="{Binding ShowAppointmentNavigationButtons, RelativeSource={RelativeSource TemplatedParent}, Converter={StaticResource booltovisible}}">
+						</ContentPresenter>
+
+                        <ContentPresenter x:Name="NextApp" Grid.Column="1" HorizontalAlignment="Right" local:Clip.ToBounds="True" 
+                                          ContentTemplate="{Binding NextNavigationButtonTemplate, RelativeSource={RelativeSource TemplatedParent}}"
+                                          Visibility="{Binding ShowAppointmentNavigationButtons, RelativeSource={RelativeSource TemplatedParent}, Converter={StaticResource booltovisible}}">
+						</ContentPresenter>
+
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- TimeLineHeaderItemsControl -->
+    <Style TargetType="local:TimeLineViewItemHeader">
+        <Setter Property="FontSize" Value="16"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="local:TimeLineViewItemHeader">
+                    <Grid>
+                        <Border Width="75" local:Clip.ToBounds="True" Background="#FF1BA1E2" BorderBrush="white" BorderThickness="0,0,1,1">
+                            <TextBlock Foreground="White" FontSize="{TemplateBinding FontSize}"  FontWeight="Light" FontFamily="Segoe UI"  TextAlignment="Center"  HorizontalAlignment="Right" RenderTransformOrigin="0.5,0.5" VerticalAlignment="Center"  Text="{Binding DisplayName}">
+                                <TextBlock.RenderTransform>
+                                    <RotateTransform Angle="-90"  />
+                                </TextBlock.RenderTransform>
+                            </TextBlock>
+                        </Border>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- TimeLineItemsControl -->
+    <ItemsPanelTemplate x:Key="HorizontalTimeLinePanelTemplateKey">
+        <local:UniformStackPanel Orientation="Horizontal" />
+    </ItemsPanelTemplate>
+
+    <Style TargetType="local:ScheduleHorizontalTimeLineItemsControl">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="local:ScheduleHorizontalTimeLineItemsControl">
+                    <Border BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}">
+                        <Grid>
+                            <local:UniformStackPanel  Width="{Binding RelativeSource={RelativeSource Mode=TemplatedParent}, Path=Width}" x:Name="timelineitemspanel" Orientation="Horizontal"/>
+                            <local:UniformStackPanel  Width="{Binding RelativeSource={RelativeSource Mode=TemplatedParent}, Path=Width}" x:Name="timelinelabelspanel" Orientation="Horizontal"/>
+                        </Grid>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!--ScheduleHorizontalDaysHeaderViewItemsControl-->
+    <ItemsPanelTemplate x:Key="ScheduleHorizontalDaysHeaderItemsPanelKey">
+        <local:UniformStackPanel Orientation="Horizontal" />
+    </ItemsPanelTemplate>
+
+    <Style TargetType="local:ScheduleHorizontalDaysHeaderViewItemsControl">
+        <Setter Property="ItemsPanel" Value="{StaticResource ScheduleHorizontalDaysHeaderItemsPanelKey}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="local:ScheduleHorizontalDaysHeaderViewItemsControl">
+                    <Border BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}">
+                        <Grid>
+                            <ItemsPresenter/>
+                        </Grid>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!--ScheduleHorizontalDaysHeaderViewControl-->
+    <Style TargetType="local:ScheduleHorizontalDaysHeaderViewControl">
+        <Setter Property="FontSize" Value="15"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="local:ScheduleHorizontalDaysHeaderViewControl">
+                    <Border x:Name="border" Background="{TemplateBinding HeaderBrush}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}">
+                        <local:CustomTextBlock HorizontalAlignment="Left" Margin="15,5,0,5" 
+                                               Foreground="{TemplateBinding TextForeground}"
+                                               x:Name="DaysTextBlock"
+                                               VerticalAlignment="Center" 
+                                               DateTimeValue="{TemplateBinding DayText}"   
+                                               DateTimeFormat="{TemplateBinding Format}" 
+                                               FontSize="{TemplateBinding FontSize}"
+                                               FontStyle="Normal"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!--ScheduleHorizontalTimeSlotItemsControl-->
+    <ItemsPanelTemplate x:Key="ScheduleTimelineTimeSlotItemsPanelKey">
+        <local:UniformStackPanel Orientation="Horizontal" />
+    </ItemsPanelTemplate>
+
+    <Style TargetType="local:ScheduleTimelineTimeSlotItemsControl">
+        <Setter Property="ItemsPanel" Value="{StaticResource ScheduleTimelineTimeSlotItemsPanelKey}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="local:ScheduleTimelineTimeSlotItemsControl">
+                    <Border BorderBrush="{TemplateBinding MajorTickStroke}" BorderThickness="0,0,1,0">
+                        <Grid>
+                            <ItemsPresenter x:Name="PART_ItemsPresenter"/>
+                        </Grid>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!--ScheduleHorizontalTimeSlotControl-->
+    <Style TargetType="local:ScheduleHorizontalTimeSlotControl">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="local:ScheduleHorizontalTimeSlotControl">
+                    <Grid>
+                        <local:UniformStackPanel x:Name="PART_TimeSlotPanel" Orientation="Horizontal"/>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!--ScheduleHorizontalAppointmentLayoutItemsControl-->
+    <Style TargetType="local:ScheduleHorizontalAppointmentLayoutItemsControl">
+        <Setter Property="ItemsPanel">
+            <Setter.Value>
+                <ItemsPanelTemplate>
+                    <local:ScheduleHorizontalAppointmentLayoutPanel Background="Transparent" />
+                </ItemsPanelTemplate>
+            </Setter.Value>
+        </Setter>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="local:ScheduleHorizontalAppointmentLayoutItemsControl">
+                    <Border BorderBrush="Gray" BorderThickness="0,0.5,0,2">
+                        <Grid>
+                            <ItemsPresenter/>
+                        </Grid>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+</ResourceDictionary>

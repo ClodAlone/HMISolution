@@ -1,0 +1,317 @@
+@using ServerEditorWeb.Services
+@using ServerEditorWeb.Models
+
+<div class="property-grid-panel">
+    @if (_target == null)
+    {
+        <p class="text-muted p-2">Select an item in the tree to inspect its properties.</p>
+    }
+    else
+    {
+        <div class="property-grid-header">
+            <span class="property-grid-icon">@GetIcon()</span>
+            <span class="property-grid-title">@GetTitle()</span>
+            <span class="badge bg-secondary ms-auto">@_target.GetType().Name</span>
+        </div>
+
+        <div class="property-grid-body">
+            @foreach (var group in _groups)
+            {
+                var groupId = group.Category;
+                var isExpanded = _expandedGroups.Contains(groupId);
+
+                <div class="property-grid-group">
+                    <div class="property-grid-group-header" @onclick="() => ToggleGroup(groupId)">
+                        <span class="property-grid-chevron">@(isExpanded ? "▾" : "▸")</span>
+                        <span class="property-grid-group-name">@group.Category</span>
+                        <span class="property-grid-group-count">@group.Properties.Count</span>
+                    </div>
+
+                    @if (isExpanded)
+                    {
+                        @foreach (var prop in group.Properties)
+                        {
+                            <div class="property-grid-row" title="@(prop.Description ?? "")">
+                                <div class="property-grid-label">
+                                    @prop.DisplayName
+                                    @if (prop.IsNullable && prop.IsComplexType)
+                                    {
+                                        @RenderSubObjectButtons(prop)
+                                    }
+                                </div>
+                                <div class="property-grid-value">
+                                    @if (prop.IsComplexType)
+                                    {
+                                        @RenderSubObject(prop)
+                                    }
+                                    else if (prop.IsCollection)
+                                    {
+                                        <span class="text-muted small">(collection — edit in JSON)</span>
+                                    }
+                                    else
+                                    {
+                                        @RenderEditor(prop, _target)
+                                    }
+                                </div>
+                            </div>
+                        }
+                    }
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public TreeNode? Node { get; set; }
+    [Parameter] public EventCallback OnPropertyChanged { get; set; }
+
+    [Inject] private PropertyGridService Grid { get; set; } = default!;
+
+    private object? _target;
+    private List<PropertyGroup> _groups = [];
+    private HashSet<string> _expandedGroups = ["General"];
+
+    protected override void OnParametersSet()
+    {
+        _target = ResolveTarget(Node);
+        _groups = Grid.GetPropertyGroups(_target);
+
+        // Auto-expand all groups
+        foreach (var g in _groups)
+            _expandedGroups.Add(g.Category);
+    }
+
+    private static object? ResolveTarget(TreeNode? node) => node switch
+    {
+        FolderNode f => f.Folder,
+        VariableNode v => v.Variable,
+        ScriptNode s => s.Script,
+        ScreenNode sc => sc.Screen,
+        UserGroupNode ug => ug.UserGroup,
+        UserNode u => u.User,
+        ScriptGroupNode => null,
+        ScreenGroupNode => null,
+        UserGroupListNode => null,
+        _ => null
+    };
+
+    private string GetIcon() => Node?.Icon ?? "📄";
+    private string GetTitle() => Node?.Name ?? "Unknown";
+
+    private void ToggleGroup(string groupId)
+    {
+        if (!_expandedGroups.Add(groupId))
+            _expandedGroups.Remove(groupId);
+    }
+
+    private RenderFragment RenderEditor(PropertyDescriptor prop, object target) => builder =>
+    {
+        var value = Grid.GetValue(target, prop);
+        var strValue = value?.ToString() ?? "";
+        var propType = Nullable.GetUnderlyingType(prop.PropertyType) ?? prop.PropertyType;
+
+        int seq = 0;
+
+        if (propType == typeof(bool))
+        {
+            var boolVal = value is true;
+            builder.OpenElement(seq++, "input");
+            builder.AddAttribute(seq++, "type", "checkbox");
+            builder.AddAttribute(seq++, "class", "form-check-input");
+            builder.AddAttribute(seq++, "checked", boolVal);
+            builder.AddAttribute(seq++, "disabled", prop.IsReadOnly);
+            builder.AddAttribute(seq++, "onchange", Microsoft.AspNetCore.Components.EventCallback.Factory.Create<ChangeEventArgs>(this, e =>
+            {
+                Grid.SetValue(target, prop, e.Value is true);
+                NotifyChanged();
+            }));
+            builder.CloseElement();
+        }
+        else if (prop.EnumValues.Length > 0)
+        {
+            builder.OpenElement(seq++, "select");
+            builder.AddAttribute(seq++, "class", "form-select form-select-sm property-grid-input");
+            builder.AddAttribute(seq++, "disabled", prop.IsReadOnly);
+            builder.AddAttribute(seq++, "value", strValue);
+            builder.AddAttribute(seq++, "onchange", Microsoft.AspNetCore.Components.EventCallback.Factory.Create<ChangeEventArgs>(this, e =>
+            {
+                var converted = Grid.ConvertValue(e.Value?.ToString(), prop.PropertyInfo.PropertyType);
+                if (converted != null)
+                {
+                    Grid.SetValue(target, prop, converted);
+                    NotifyChanged();
+                }
+            }));
+            foreach (var ev in prop.EnumValues)
+            {
+                builder.OpenElement(seq++, "option");
+                builder.AddAttribute(seq++, "value", ev);
+                builder.AddContent(seq++, ev);
+                builder.CloseElement();
+            }
+            builder.CloseElement();
+        }
+        else if (propType == typeof(int) || propType == typeof(long) || propType == typeof(short)
+              || propType == typeof(double) || propType == typeof(float) || propType == typeof(decimal)
+              || propType == typeof(byte) || propType == typeof(ushort) || propType == typeof(uint))
+        {
+            builder.OpenElement(seq++, "input");
+            builder.AddAttribute(seq++, "type", "number");
+            builder.AddAttribute(seq++, "class", "form-control form-control-sm property-grid-input");
+            builder.AddAttribute(seq++, "value", strValue);
+            builder.AddAttribute(seq++, "disabled", prop.IsReadOnly);
+            if (propType == typeof(double) || propType == typeof(float) || propType == typeof(decimal))
+                builder.AddAttribute(seq++, "step", "any");
+            builder.AddAttribute(seq++, "onchange", Microsoft.AspNetCore.Components.EventCallback.Factory.Create<ChangeEventArgs>(this, e =>
+            {
+                var converted = Grid.ConvertValue(e.Value?.ToString(), prop.PropertyInfo.PropertyType);
+                if (converted != null)
+                {
+                    Grid.SetValue(target, prop, converted);
+                    NotifyChanged();
+                }
+            }));
+            builder.CloseElement();
+        }
+        else if (propType == typeof(TimeSpan))
+        {
+            builder.OpenElement(seq++, "input");
+            builder.AddAttribute(seq++, "type", "text");
+            builder.AddAttribute(seq++, "class", "form-control form-control-sm property-grid-input");
+            builder.AddAttribute(seq++, "placeholder", "hh:mm:ss or d.hh:mm:ss");
+            builder.AddAttribute(seq++, "value", value is TimeSpan ts ? ts.ToString() : "");
+            builder.AddAttribute(seq++, "disabled", prop.IsReadOnly);
+            builder.AddAttribute(seq++, "onchange", Microsoft.AspNetCore.Components.EventCallback.Factory.Create<ChangeEventArgs>(this, e =>
+            {
+                var input = e.Value?.ToString();
+                if (string.IsNullOrWhiteSpace(input) && prop.IsNullable)
+                {
+                    Grid.SetValue(target, prop, null);
+                    NotifyChanged();
+                }
+                else
+                {
+                    var converted = Grid.ConvertValue(input, prop.PropertyInfo.PropertyType);
+                    if (converted != null)
+                    {
+                        Grid.SetValue(target, prop, converted);
+                        NotifyChanged();
+                    }
+                }
+            }));
+            builder.CloseElement();
+        }
+        else
+        {
+            // String / object / fallback
+            builder.OpenElement(seq++, "input");
+            builder.AddAttribute(seq++, "type", "text");
+            builder.AddAttribute(seq++, "class", "form-control form-control-sm property-grid-input");
+            builder.AddAttribute(seq++, "value", strValue);
+            builder.AddAttribute(seq++, "disabled", prop.IsReadOnly);
+            builder.AddAttribute(seq++, "onchange", Microsoft.AspNetCore.Components.EventCallback.Factory.Create<ChangeEventArgs>(this, e =>
+            {
+                var converted = Grid.ConvertValue(e.Value?.ToString(), prop.PropertyInfo.PropertyType);
+                Grid.SetValue(target, prop, converted);
+                NotifyChanged();
+            }));
+            builder.CloseElement();
+        }
+    };
+
+    private RenderFragment RenderSubObject(PropertyDescriptor prop) => builder =>
+    {
+        var subObj = Grid.GetValue(_target!, prop);
+        if (subObj == null)
+        {
+            int seq = 0;
+            builder.OpenElement(seq++, "span");
+            builder.AddAttribute(seq++, "class", "text-muted small fst-italic");
+            builder.AddContent(seq++, "(null)");
+            builder.CloseElement();
+            return;
+        }
+
+        var subGroups = Grid.GetPropertyGroups(subObj);
+        int s = 0;
+
+        builder.OpenElement(s++, "div");
+        builder.AddAttribute(s++, "class", "property-grid-sub");
+
+        foreach (var subGroup in subGroups)
+        {
+            foreach (var subProp in subGroup.Properties)
+            {
+                if (subProp.IsComplexType || subProp.IsCollection) continue; // Only one level deep
+
+                builder.OpenElement(s++, "div");
+                builder.AddAttribute(s++, "class", "property-grid-row property-grid-sub-row");
+
+                builder.OpenElement(s++, "div");
+                builder.AddAttribute(s++, "class", "property-grid-label");
+                builder.AddContent(s++, subProp.DisplayName);
+                builder.CloseElement();
+
+                builder.OpenElement(s++, "div");
+                builder.AddAttribute(s++, "class", "property-grid-value");
+                builder.AddContent(s++, RenderEditor(subProp, subObj));
+                builder.CloseElement();
+
+                builder.CloseElement();
+            }
+        }
+
+        builder.CloseElement();
+    };
+
+    private void CreateSubObject(PropertyDescriptor prop)
+    {
+        if (_target == null) return;
+        var instance = Grid.CreateInstance(prop.PropertyInfo.PropertyType);
+        if (instance != null)
+        {
+            Grid.SetValue(_target, prop, instance);
+            _groups = Grid.GetPropertyGroups(_target);
+            NotifyChanged();
+        }
+    }
+
+    private void ClearSubObject(PropertyDescriptor prop)
+    {
+        if (_target == null) return;
+        Grid.SetValue(_target, prop, null);
+        _groups = Grid.GetPropertyGroups(_target);
+        NotifyChanged();
+    }
+
+    private RenderFragment RenderSubObjectButtons(PropertyDescriptor prop) => builder =>
+    {
+        var subVal = Grid.GetValue(_target!, prop);
+        int seq = 0;
+        if (subVal == null)
+        {
+            builder.OpenElement(seq++, "button");
+            builder.AddAttribute(seq++, "class", "btn btn-outline-primary btn-xs ms-1");
+            builder.AddAttribute(seq++, "title", $"Create {prop.Name}");
+            builder.AddAttribute(seq++, "onclick", Microsoft.AspNetCore.Components.EventCallback.Factory.Create(this, () => CreateSubObject(prop)));
+            builder.AddContent(seq++, "+");
+            builder.CloseElement();
+        }
+        else
+        {
+            builder.OpenElement(seq++, "button");
+            builder.AddAttribute(seq++, "class", "btn btn-outline-danger btn-xs ms-1");
+            builder.AddAttribute(seq++, "title", $"Remove {prop.Name}");
+            builder.AddAttribute(seq++, "onclick", Microsoft.AspNetCore.Components.EventCallback.Factory.Create(this, () => ClearSubObject(prop)));
+            builder.AddContent(seq++, "✕");
+            builder.CloseElement();
+        }
+    };
+
+    private void NotifyChanged()
+    {
+        OnPropertyChanged.InvokeAsync();
+        StateHasChanged();
+    }
+}

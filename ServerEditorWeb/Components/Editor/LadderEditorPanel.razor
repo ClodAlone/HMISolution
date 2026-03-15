@@ -1,0 +1,688 @@
+@using Microsoft.AspNetCore.Components
+@using Microsoft.JSInterop
+@using ServerEditorWeb.Models
+@using ServerEditorWeb.Services
+@using SharedModels
+@implements IAsyncDisposable
+
+<div class="ladder-editor-panel">
+    @if (GetPlcProgram() is not PlcProgramConfig plc)
+    {
+        <p class="text-muted p-2">Select a PLC program with Ladder Diagram (LD) language to open the graphical editor.</p>
+    }
+    else
+    {
+        @* Toolbar *@
+        <div class="ladder-toolbar">
+            <div class="d-flex gap-1 align-items-center flex-wrap">
+                <span class="small fw-bold me-2">@plc.Name</span>
+
+                <button class="btn btn-sm btn-outline-primary" @onclick="AddRung" title="Add Rung">➕ Rung</button>
+                <span class="mx-1">|</span>
+                <button class="btn btn-sm btn-outline-success" @onclick='() => AddElementToSelected("CONTACT_NO")' title="Normally Open Contact" disabled="@(_selectedRungIndex < 0)">┤├ NO</button>
+                <button class="btn btn-sm btn-outline-success" @onclick='() => AddElementToSelected("CONTACT_NC")' title="Normally Closed Contact" disabled="@(_selectedRungIndex < 0)">┤/├ NC</button>
+                <button class="btn btn-sm btn-outline-warning" @onclick='() => AddElementToSelected("COIL")' title="Output Coil" disabled="@(_selectedRungIndex < 0)">( ) Coil</button>
+                <button class="btn btn-sm btn-outline-warning" @onclick='() => AddElementToSelected("COIL_S")' title="Set Coil (Latch)" disabled="@(_selectedRungIndex < 0)">(S) Set</button>
+                <button class="btn btn-sm btn-outline-warning" @onclick='() => AddElementToSelected("COIL_R")' title="Reset Coil" disabled="@(_selectedRungIndex < 0)">(R) Reset</button>
+                <span class="mx-1">|</span>
+                <button class="btn btn-sm btn-outline-info" @onclick='() => AddElementToSelected("COMPARE")' title="Comparison Block" disabled="@(_selectedRungIndex < 0)">⟨CMP⟩</button>
+                <button class="btn btn-sm btn-outline-info" @onclick='() => AddElementToSelected("MOVE")' title="Move/Assign Block" disabled="@(_selectedRungIndex < 0)">⟨MOV⟩</button>
+                <button class="btn btn-sm btn-outline-info" @onclick='() => AddElementToSelected("ADD")' title="Add Block" disabled="@(_selectedRungIndex < 0)">⟨ADD⟩</button>
+                <button class="btn btn-sm btn-outline-info" @onclick='() => AddElementToSelected("SUB")' title="Subtract Block" disabled="@(_selectedRungIndex < 0)">⟨SUB⟩</button>
+                <button class="btn btn-sm btn-outline-info" @onclick='() => AddElementToSelected("TIMER")' title="TON Timer" disabled="@(_selectedRungIndex < 0)">⏱ Timer</button>
+                <button class="btn btn-sm btn-outline-info" @onclick='() => AddElementToSelected("COUNTER")' title="CTU Counter" disabled="@(_selectedRungIndex < 0)"># Counter</button>
+                <span class="mx-1">|</span>
+                <button class="btn btn-sm btn-outline-danger" @onclick="DeleteSelected" title="Delete Selected" disabled="@(_selectedRungIndex < 0)">🗑 Delete</button>
+            </div>
+        </div>
+
+        @* Ladder Canvas *@
+        <div class="ladder-canvas-wrap">
+            @for (int ri = 0; ri < _rungs.Count; ri++)
+            {
+                var rungIdx = ri;
+                var rung = _rungs[ri];
+                var isSelected = ri == _selectedRungIndex;
+
+                <div class="ladder-rung @(isSelected ? "ladder-rung-selected" : "")" @onclick="() => SelectRung(rungIdx)">
+                    <div class="ladder-rung-header">
+                        <span class="ladder-rung-number">@(ri + 1)</span>
+                        <input type="text" class="ladder-rung-label" value="@rung.Label"
+                               placeholder="Rung label..."
+                               @onchange="e => { rung.Label = e.Value?.ToString() ?? string.Empty; SyncToCode(); }" />
+                        <button class="ladder-rung-btn" @onclick:stopPropagation="true" @onclick="() => MoveRungUp(rungIdx)" title="Move Up" disabled="@(ri == 0)">▲</button>
+                        <button class="ladder-rung-btn" @onclick:stopPropagation="true" @onclick="() => MoveRungDown(rungIdx)" title="Move Down" disabled="@(ri == _rungs.Count - 1)">▼</button>
+                        <button class="ladder-rung-btn ladder-rung-btn-danger" @onclick:stopPropagation="true" @onclick="() => DeleteRung(rungIdx)" title="Delete Rung">✕</button>
+                    </div>
+
+                    @((MarkupString)RenderRungSvg(rung, rungIdx, isSelected))
+                </div>
+            }
+
+            @if (_rungs.Count == 0)
+            {
+                <div class="text-muted text-center p-4">
+                    <p>No rungs yet. Click <strong>➕ Rung</strong> to add a ladder rung.</p>
+                </div>
+            }
+        </div>
+
+        @* Element Properties *@
+        @if (_selectedRungIndex >= 0 && _selectedElementIndex >= 0 &&
+             _selectedRungIndex < _rungs.Count &&
+             _selectedElementIndex < _rungs[_selectedRungIndex].Elements.Count)
+        {
+            var selElem = _rungs[_selectedRungIndex].Elements[_selectedElementIndex];
+            <div class="ladder-props">
+                <h6 class="mb-2">Element Properties</h6>
+                <div class="mb-2">
+                    <label class="form-label form-label-sm">Type</label>
+                    <input type="text" class="form-control form-control-sm" value="@GetElementDisplayType(selElem.Type)" readonly />
+                </div>
+
+                @if (selElem.Type is "CONTACT_NO" or "CONTACT_NC" or "COIL" or "COIL_S" or "COIL_R")
+                {
+                    <div class="mb-2">
+                        <label class="form-label form-label-sm">Variable</label>
+                        <input type="text" class="form-control form-control-sm" value="@selElem.Operand1"
+                               @onchange="e => { selElem.Operand1 = e.Value?.ToString() ?? string.Empty; SyncToCode(); }"
+                               placeholder="e.g. Plant.Line1.Light1" />
+                    </div>
+                }
+                else if (selElem.Type == "COMPARE")
+                {
+                    <div class="mb-2">
+                        <label class="form-label form-label-sm">Operator</label>
+                        <select class="form-select form-select-sm" value="@selElem.Modifier"
+                                @onchange="e => { selElem.Modifier = e.Value?.ToString() ?? string.Empty; SyncToCode(); }">
+                            <option value="GT">Greater Than (GT)</option>
+                            <option value="GE">Greater or Equal (GE)</option>
+                            <option value="LT">Less Than (LT)</option>
+                            <option value="LE">Less or Equal (LE)</option>
+                            <option value="EQ">Equal (EQ)</option>
+                            <option value="NE">Not Equal (NE)</option>
+                        </select>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label form-label-sm">Variable</label>
+                        <input type="text" class="form-control form-control-sm" value="@selElem.Operand1"
+                               @onchange="e => { selElem.Operand1 = e.Value?.ToString() ?? string.Empty; SyncToCode(); }"
+                               placeholder="e.g. Plant.Temperature" />
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label form-label-sm">Value</label>
+                        <input type="text" class="form-control form-control-sm" value="@selElem.Operand2"
+                               @onchange="e => { selElem.Operand2 = e.Value?.ToString() ?? string.Empty; SyncToCode(); }"
+                               placeholder="e.g. 80.0" />
+                    </div>
+                }
+                else if (selElem.Type is "MOVE" or "ADD" or "SUB" or "MUL" or "DIV")
+                {
+                    <div class="mb-2">
+                        <label class="form-label form-label-sm">Source</label>
+                        <input type="text" class="form-control form-control-sm" value="@selElem.Operand1"
+                               @onchange="e => { selElem.Operand1 = e.Value?.ToString() ?? string.Empty; SyncToCode(); }"
+                               placeholder="e.g. 100 or Plant.Var" />
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label form-label-sm">Destination</label>
+                        <input type="text" class="form-control form-control-sm" value="@selElem.Operand2"
+                               @onchange="e => { selElem.Operand2 = e.Value?.ToString() ?? string.Empty; SyncToCode(); }"
+                               placeholder="e.g. Plant.Line1.Speed" />
+                    </div>
+                }
+                else if (selElem.Type is "TIMER" or "COUNTER")
+                {
+                    <div class="mb-2">
+                        <label class="form-label form-label-sm">Variable</label>
+                        <input type="text" class="form-control form-control-sm" value="@selElem.Operand1"
+                               @onchange="e => { selElem.Operand1 = e.Value?.ToString() ?? string.Empty; SyncToCode(); }"
+                               placeholder="e.g. Plant.Line1.Timer1" />
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label form-label-sm">Preset @(selElem.Type == "TIMER" ? "(ms)" : "(count)")</label>
+                        <input type="text" class="form-control form-control-sm" value="@selElem.Operand2"
+                               @onchange="e => { selElem.Operand2 = e.Value?.ToString() ?? string.Empty; SyncToCode(); }"
+                               placeholder="e.g. 5000" />
+                    </div>
+                }
+
+                <button class="btn btn-sm btn-outline-danger mt-1" @onclick="DeleteSelectedElement">🗑 Delete Element</button>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public TreeNode? Node { get; set; }
+    [Parameter] public EventCallback OnPropertyChanged { get; set; }
+
+    [Inject] private NodeEditorService Editor { get; set; } = default!;
+    [Inject] private IJSRuntime JS { get; set; } = default!;
+
+    private List<LdRungModel> _rungs = new();
+    private int _selectedRungIndex = -1;
+    private int _selectedElementIndex = -1;
+    private PlcProgramConfig? _lastPlc;
+    private DotNetObjectReference<LadderEditorPanel>? _dotNetRef;
+    private bool _jsInitialized;
+
+    private PlcProgramConfig? GetPlcProgram()
+    {
+        if (Node is PlcProgramNode pn && pn.PlcProgram.Language.Equals("LD", StringComparison.OrdinalIgnoreCase))
+            return pn.PlcProgram;
+        return null;
+    }
+
+    protected override void OnParametersSet()
+    {
+        var plc = GetPlcProgram();
+        if (plc != _lastPlc)
+        {
+            _lastPlc = plc;
+            _selectedRungIndex = -1;
+            _selectedElementIndex = -1;
+            if (plc != null)
+                ParseFromCode(plc.Code);
+            else
+                _rungs.Clear();
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_jsInitialized)
+        {
+            _dotNetRef = DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("eval", """
+                if (!window._ldElemHandler) {
+                    window._ldElemHandler = true;
+                    document.addEventListener('ld-elem-click', function(e) {
+                        if (window._ldDotNetRef) {
+                            window._ldDotNetRef.invokeMethodAsync('OnSvgElementClicked', e.detail.rung, e.detail.elem);
+                        }
+                    });
+                }
+                window._ldSetDotNetRef = function(ref) { window._ldDotNetRef = ref; };
+            """);
+            _jsInitialized = true;
+        }
+        if (_dotNetRef != null)
+        {
+            await JS.InvokeVoidAsync("_ldSetDotNetRef", _dotNetRef);
+        }
+    }
+
+    [JSInvokable]
+    public void OnSvgElementClicked(int rungIdx, int elemIdx)
+    {
+        SelectElement(rungIdx, elemIdx);
+        StateHasChanged();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_jsInitialized)
+        {
+            try { await JS.InvokeVoidAsync("eval", "window._ldDotNetRef = null;"); }
+            catch { }
+        }
+        _dotNetRef?.Dispose();
+    }
+
+    // ─── Model ──────────────────────────────────────────────
+
+    private class LdRungModel
+    {
+        public string Label { get; set; } = "";
+        public List<LdElementModel> Elements { get; set; } = new();
+    }
+
+    private class LdElementModel
+    {
+        public string Type { get; set; } = "";
+        public string Modifier { get; set; } = "";
+        public string Operand1 { get; set; } = "";
+        public string Operand2 { get; set; } = "";
+    }
+
+    // ─── SVG Rendering ──────────────────────────────────────
+
+    private string RenderRungSvg(LdRungModel rung, int rungIdx, bool isRungSelected)
+    {
+        var sb = new System.Text.StringBuilder();
+        int svgW = SvgWidth(rung);
+
+        sb.Append($"<svg class=\"ladder-svg\" viewBox=\"0 0 {svgW} 80\" preserveAspectRatio=\"xMinYMid meet\">");
+
+        // Left power rail
+        sb.Append("<line x1=\"0\" y1=\"0\" x2=\"0\" y2=\"80\" stroke=\"var(--ld-rail)\" stroke-width=\"3\" />");
+        sb.Append("<line x1=\"0\" y1=\"40\" x2=\"30\" y2=\"40\" stroke=\"var(--ld-wire)\" stroke-width=\"2\" />");
+
+        int xPos = 30;
+        for (int ei = 0; ei < rung.Elements.Count; ei++)
+        {
+            var elem = rung.Elements[ei];
+            var isElemSel = isRungSelected && ei == _selectedElementIndex;
+            var ex = xPos;
+
+            // Clickable area data attribute for JS-free click handling via Blazor onclick on parent
+            var selClass = isElemSel ? "ladder-elem-selected" : "";
+
+            sb.Append($"<g class=\"ladder-elem {selClass}\" data-rung=\"{rungIdx}\" data-elem=\"{ei}\">");
+
+            switch (elem.Type)
+            {
+                case "CONTACT_NO":
+                    sb.Append($"<rect x=\"{ex}\" y=\"15\" width=\"60\" height=\"50\" rx=\"4\" class=\"ladder-elem-bg\" />");
+                    sb.Append($"<line x1=\"{ex}\" y1=\"40\" x2=\"{ex + 15}\" y2=\"40\" stroke=\"var(--ld-wire)\" stroke-width=\"2\" />");
+                    sb.Append($"<line x1=\"{ex + 15}\" y1=\"25\" x2=\"{ex + 15}\" y2=\"55\" stroke=\"var(--ld-contact)\" stroke-width=\"2.5\" />");
+                    sb.Append($"<line x1=\"{ex + 45}\" y1=\"25\" x2=\"{ex + 45}\" y2=\"55\" stroke=\"var(--ld-contact)\" stroke-width=\"2.5\" />");
+                    sb.Append($"<line x1=\"{ex + 45}\" y1=\"40\" x2=\"{ex + 60}\" y2=\"40\" stroke=\"var(--ld-wire)\" stroke-width=\"2\" />");
+                    sb.Append($"<text x=\"{ex + 30}\" y=\"12\" class=\"ladder-text-small\" text-anchor=\"middle\">{Esc(TruncLabel(elem.Operand1))}</text>");
+                    break;
+
+                case "CONTACT_NC":
+                    sb.Append($"<rect x=\"{ex}\" y=\"15\" width=\"60\" height=\"50\" rx=\"4\" class=\"ladder-elem-bg\" />");
+                    sb.Append($"<line x1=\"{ex}\" y1=\"40\" x2=\"{ex + 15}\" y2=\"40\" stroke=\"var(--ld-wire)\" stroke-width=\"2\" />");
+                    sb.Append($"<line x1=\"{ex + 15}\" y1=\"25\" x2=\"{ex + 15}\" y2=\"55\" stroke=\"var(--ld-contact)\" stroke-width=\"2.5\" />");
+                    sb.Append($"<line x1=\"{ex + 45}\" y1=\"25\" x2=\"{ex + 45}\" y2=\"55\" stroke=\"var(--ld-contact)\" stroke-width=\"2.5\" />");
+                    sb.Append($"<line x1=\"{ex + 18}\" y1=\"55\" x2=\"{ex + 42}\" y2=\"25\" stroke=\"var(--ld-contact)\" stroke-width=\"2\" />");
+                    sb.Append($"<line x1=\"{ex + 45}\" y1=\"40\" x2=\"{ex + 60}\" y2=\"40\" stroke=\"var(--ld-wire)\" stroke-width=\"2\" />");
+                    sb.Append($"<text x=\"{ex + 30}\" y=\"12\" class=\"ladder-text-small\" text-anchor=\"middle\">{Esc(TruncLabel(elem.Operand1))}</text>");
+                    break;
+
+                case "COIL":
+                    sb.Append($"<rect x=\"{ex}\" y=\"15\" width=\"60\" height=\"50\" rx=\"4\" class=\"ladder-elem-bg ladder-elem-coil\" />");
+                    sb.Append($"<line x1=\"{ex}\" y1=\"40\" x2=\"{ex + 15}\" y2=\"40\" stroke=\"var(--ld-wire)\" stroke-width=\"2\" />");
+                    sb.Append($"<ellipse cx=\"{ex + 30}\" cy=\"40\" rx=\"14\" ry=\"14\" fill=\"none\" stroke=\"var(--ld-coil)\" stroke-width=\"2.5\" />");
+                    sb.Append($"<line x1=\"{ex + 45}\" y1=\"40\" x2=\"{ex + 60}\" y2=\"40\" stroke=\"var(--ld-wire)\" stroke-width=\"2\" />");
+                    sb.Append($"<text x=\"{ex + 30}\" y=\"12\" class=\"ladder-text-small\" text-anchor=\"middle\">{Esc(TruncLabel(elem.Operand1))}</text>");
+                    break;
+
+                case "COIL_S":
+                    sb.Append($"<rect x=\"{ex}\" y=\"15\" width=\"60\" height=\"50\" rx=\"4\" class=\"ladder-elem-bg ladder-elem-coil\" />");
+                    sb.Append($"<line x1=\"{ex}\" y1=\"40\" x2=\"{ex + 15}\" y2=\"40\" stroke=\"var(--ld-wire)\" stroke-width=\"2\" />");
+                    sb.Append($"<ellipse cx=\"{ex + 30}\" cy=\"40\" rx=\"14\" ry=\"14\" fill=\"none\" stroke=\"var(--ld-coil)\" stroke-width=\"2.5\" />");
+                    sb.Append($"<text x=\"{ex + 30}\" y=\"45\" class=\"ladder-text-block\" text-anchor=\"middle\">S</text>");
+                    sb.Append($"<line x1=\"{ex + 45}\" y1=\"40\" x2=\"{ex + 60}\" y2=\"40\" stroke=\"var(--ld-wire)\" stroke-width=\"2\" />");
+                    sb.Append($"<text x=\"{ex + 30}\" y=\"12\" class=\"ladder-text-small\" text-anchor=\"middle\">{Esc(TruncLabel(elem.Operand1))}</text>");
+                    break;
+
+                case "COIL_R":
+                    sb.Append($"<rect x=\"{ex}\" y=\"15\" width=\"60\" height=\"50\" rx=\"4\" class=\"ladder-elem-bg ladder-elem-coil\" />");
+                    sb.Append($"<line x1=\"{ex}\" y1=\"40\" x2=\"{ex + 15}\" y2=\"40\" stroke=\"var(--ld-wire)\" stroke-width=\"2\" />");
+                    sb.Append($"<ellipse cx=\"{ex + 30}\" cy=\"40\" rx=\"14\" ry=\"14\" fill=\"none\" stroke=\"var(--ld-coil)\" stroke-width=\"2.5\" />");
+                    sb.Append($"<text x=\"{ex + 30}\" y=\"45\" class=\"ladder-text-block\" text-anchor=\"middle\">R</text>");
+                    sb.Append($"<line x1=\"{ex + 45}\" y1=\"40\" x2=\"{ex + 60}\" y2=\"40\" stroke=\"var(--ld-wire)\" stroke-width=\"2\" />");
+                    sb.Append($"<text x=\"{ex + 30}\" y=\"12\" class=\"ladder-text-small\" text-anchor=\"middle\">{Esc(TruncLabel(elem.Operand1))}</text>");
+                    break;
+
+                case "COMPARE":
+                    sb.Append($"<rect x=\"{ex}\" y=\"10\" width=\"90\" height=\"60\" rx=\"4\" class=\"ladder-elem-bg ladder-elem-block\" />");
+                    sb.Append($"<line x1=\"{ex}\" y1=\"40\" x2=\"{ex + 5}\" y2=\"40\" stroke=\"var(--ld-wire)\" stroke-width=\"2\" />");
+                    sb.Append($"<text x=\"{ex + 45}\" y=\"30\" class=\"ladder-text-block\" text-anchor=\"middle\">CMP</text>");
+                    sb.Append($"<text x=\"{ex + 45}\" y=\"45\" class=\"ladder-text-op\" text-anchor=\"middle\">{Esc(elem.Modifier)}</text>");
+                    sb.Append($"<text x=\"{ex + 45}\" y=\"58\" class=\"ladder-text-tiny\" text-anchor=\"middle\">{Esc(TruncLabel(elem.Operand1, 10))} {Esc(elem.Operand2)}</text>");
+                    sb.Append($"<line x1=\"{ex + 85}\" y1=\"40\" x2=\"{ex + 90}\" y2=\"40\" stroke=\"var(--ld-wire)\" stroke-width=\"2\" />");
+                    sb.Append($"<text x=\"{ex + 45}\" y=\"8\" class=\"ladder-text-small\" text-anchor=\"middle\">{Esc(TruncLabel(elem.Operand1))}</text>");
+                    break;
+
+                case "MOVE" or "ADD" or "SUB" or "MUL" or "DIV":
+                    sb.Append($"<rect x=\"{ex}\" y=\"10\" width=\"90\" height=\"60\" rx=\"4\" class=\"ladder-elem-bg ladder-elem-block\" />");
+                    sb.Append($"<line x1=\"{ex}\" y1=\"40\" x2=\"{ex + 5}\" y2=\"40\" stroke=\"var(--ld-wire)\" stroke-width=\"2\" />");
+                    sb.Append($"<text x=\"{ex + 45}\" y=\"30\" class=\"ladder-text-block\" text-anchor=\"middle\">{Esc(elem.Type)}</text>");
+                    sb.Append($"<text x=\"{ex + 45}\" y=\"45\" class=\"ladder-text-tiny\" text-anchor=\"middle\">{Esc(TruncLabel(elem.Operand1, 8))}</text>");
+                    sb.Append($"<text x=\"{ex + 45}\" y=\"58\" class=\"ladder-text-tiny\" text-anchor=\"middle\">&#x2192; {Esc(TruncLabel(elem.Operand2, 8))}</text>");
+                    sb.Append($"<line x1=\"{ex + 85}\" y1=\"40\" x2=\"{ex + 90}\" y2=\"40\" stroke=\"var(--ld-wire)\" stroke-width=\"2\" />");
+                    break;
+
+                case "TIMER":
+                    sb.Append($"<rect x=\"{ex}\" y=\"10\" width=\"90\" height=\"60\" rx=\"4\" class=\"ladder-elem-bg ladder-elem-timer\" />");
+                    sb.Append($"<line x1=\"{ex}\" y1=\"40\" x2=\"{ex + 5}\" y2=\"40\" stroke=\"var(--ld-wire)\" stroke-width=\"2\" />");
+                    sb.Append($"<text x=\"{ex + 45}\" y=\"28\" class=\"ladder-text-block\" text-anchor=\"middle\">TON</text>");
+                    sb.Append($"<text x=\"{ex + 45}\" y=\"43\" class=\"ladder-text-tiny\" text-anchor=\"middle\">{Esc(TruncLabel(elem.Operand1, 10))}</text>");
+                    sb.Append($"<text x=\"{ex + 45}\" y=\"58\" class=\"ladder-text-tiny\" text-anchor=\"middle\">PT: {Esc(elem.Operand2)} ms</text>");
+                    sb.Append($"<line x1=\"{ex + 85}\" y1=\"40\" x2=\"{ex + 90}\" y2=\"40\" stroke=\"var(--ld-wire)\" stroke-width=\"2\" />");
+                    break;
+
+                case "COUNTER":
+                    sb.Append($"<rect x=\"{ex}\" y=\"10\" width=\"90\" height=\"60\" rx=\"4\" class=\"ladder-elem-bg ladder-elem-timer\" />");
+                    sb.Append($"<line x1=\"{ex}\" y1=\"40\" x2=\"{ex + 5}\" y2=\"40\" stroke=\"var(--ld-wire)\" stroke-width=\"2\" />");
+                    sb.Append($"<text x=\"{ex + 45}\" y=\"28\" class=\"ladder-text-block\" text-anchor=\"middle\">CTU</text>");
+                    sb.Append($"<text x=\"{ex + 45}\" y=\"43\" class=\"ladder-text-tiny\" text-anchor=\"middle\">{Esc(TruncLabel(elem.Operand1, 10))}</text>");
+                    sb.Append($"<text x=\"{ex + 45}\" y=\"58\" class=\"ladder-text-tiny\" text-anchor=\"middle\">PV: {Esc(elem.Operand2)}</text>");
+                    sb.Append($"<line x1=\"{ex + 85}\" y1=\"40\" x2=\"{ex + 90}\" y2=\"40\" stroke=\"var(--ld-wire)\" stroke-width=\"2\" />");
+                    break;
+            }
+
+            // Transparent click target covering the whole element
+            int ew = ElemWidth(elem);
+            sb.Append($"<rect x=\"{ex}\" y=\"0\" width=\"{ew}\" height=\"80\" fill=\"transparent\" onclick=\"document.dispatchEvent(new CustomEvent('ld-elem-click',{{detail:{{rung:{rungIdx},elem:{ei}}}}}))\" style=\"cursor:pointer\" />");
+
+            sb.Append("</g>");
+
+            xPos += ew + 10;
+
+            // Wire to next element
+            if (ei < rung.Elements.Count - 1)
+                sb.Append($"<line x1=\"{xPos - 10}\" y1=\"40\" x2=\"{xPos}\" y2=\"40\" stroke=\"var(--ld-wire)\" stroke-width=\"2\" />");
+        }
+
+        // Right power rail
+        var railX = Math.Max(xPos + 20, 200);
+        sb.Append($"<line x1=\"{xPos}\" y1=\"40\" x2=\"{railX}\" y2=\"40\" stroke=\"var(--ld-wire)\" stroke-width=\"2\" />");
+        sb.Append($"<line x1=\"{railX}\" y1=\"0\" x2=\"{railX}\" y2=\"80\" stroke=\"var(--ld-rail)\" stroke-width=\"3\" />");
+
+        sb.Append("</svg>");
+        return sb.ToString();
+    }
+
+    private static string Esc(string s) => System.Net.WebUtility.HtmlEncode(s ?? "");
+
+    // ─── Parse LD text code → visual model ──────────────────
+
+    private void ParseFromCode(string code)
+    {
+        _rungs.Clear();
+        if (string.IsNullOrWhiteSpace(code)) return;
+
+        var lines = code.Split('\n');
+        LdRungModel? current = null;
+
+        foreach (var rawLine in lines)
+        {
+            var line = rawLine.Trim();
+            if (string.IsNullOrEmpty(line) || line.StartsWith("//")) continue;
+            if (line.StartsWith("(*") && line.Contains("*)")) continue;
+
+            var ci = line.IndexOf("(*");
+            if (ci >= 0) line = line[..ci].Trim();
+            ci = line.IndexOf("//");
+            if (ci >= 0) line = line[..ci].Trim();
+            if (string.IsNullOrEmpty(line)) continue;
+
+            var parts = line.Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries);
+            var kw = parts[0].ToUpperInvariant();
+
+            switch (kw)
+            {
+                case "RUNG":
+                    current = new LdRungModel();
+                    if (parts.Length > 1)
+                        current.Label = string.Join(' ', parts.Skip(1)).Trim('"', '\'');
+                    break;
+                case "END_RUNG":
+                    if (current != null) _rungs.Add(current);
+                    current = null;
+                    break;
+                case "CONTACT":
+                    if (current != null && parts.Length >= 3)
+                    {
+                        var modifier = parts[1].ToUpperInvariant();
+                        current.Elements.Add(new LdElementModel
+                        {
+                            Type = modifier == "NC" ? "CONTACT_NC" : "CONTACT_NO",
+                            Operand1 = parts[2]
+                        });
+                    }
+                    break;
+                case "COIL":
+                    if (current != null && parts.Length >= 2)
+                        current.Elements.Add(new LdElementModel { Type = "COIL", Operand1 = parts[1] });
+                    break;
+                case "COIL_S":
+                    if (current != null && parts.Length >= 2)
+                        current.Elements.Add(new LdElementModel { Type = "COIL_S", Operand1 = parts[1] });
+                    break;
+                case "COIL_R":
+                    if (current != null && parts.Length >= 2)
+                        current.Elements.Add(new LdElementModel { Type = "COIL_R", Operand1 = parts[1] });
+                    break;
+                case "COMPARE":
+                    if (current != null && parts.Length >= 4)
+                        current.Elements.Add(new LdElementModel
+                        {
+                            Type = "COMPARE",
+                            Modifier = parts[1].ToUpperInvariant(),
+                            Operand1 = parts[2],
+                            Operand2 = parts[3]
+                        });
+                    break;
+                case "MOVE" or "ADD" or "SUB" or "MUL" or "DIV":
+                    if (current != null && parts.Length >= 3)
+                        current.Elements.Add(new LdElementModel { Type = kw, Operand1 = parts[1], Operand2 = parts[2] });
+                    break;
+                case "TIMER" or "COUNTER":
+                    if (current != null && parts.Length >= 3)
+                        current.Elements.Add(new LdElementModel { Type = kw, Operand1 = parts[1], Operand2 = parts[2] });
+                    break;
+            }
+        }
+    }
+
+    // ─── Sync visual model → LD text code ───────────────────
+
+    private void SyncToCode()
+    {
+        var plc = GetPlcProgram();
+        if (plc == null) return;
+
+        var sb = new System.Text.StringBuilder();
+        foreach (var rung in _rungs)
+        {
+            sb.Append("RUNG");
+            if (!string.IsNullOrWhiteSpace(rung.Label))
+                sb.Append($" \"{rung.Label}\"");
+            sb.AppendLine();
+
+            foreach (var elem in rung.Elements)
+            {
+                sb.Append("  ");
+                switch (elem.Type)
+                {
+                    case "CONTACT_NO":
+                        sb.AppendLine($"CONTACT NO {elem.Operand1}");
+                        break;
+                    case "CONTACT_NC":
+                        sb.AppendLine($"CONTACT NC {elem.Operand1}");
+                        break;
+                    case "COIL":
+                        sb.AppendLine($"COIL {elem.Operand1}");
+                        break;
+                    case "COIL_S":
+                        sb.AppendLine($"COIL_S {elem.Operand1}");
+                        break;
+                    case "COIL_R":
+                        sb.AppendLine($"COIL_R {elem.Operand1}");
+                        break;
+                    case "COMPARE":
+                        sb.AppendLine($"COMPARE {elem.Modifier} {elem.Operand1} {elem.Operand2}");
+                        break;
+                    case "MOVE" or "ADD" or "SUB" or "MUL" or "DIV":
+                        sb.AppendLine($"{elem.Type} {elem.Operand1} {elem.Operand2}");
+                        break;
+                    case "TIMER" or "COUNTER":
+                        sb.AppendLine($"{elem.Type} {elem.Operand1} {elem.Operand2}");
+                        break;
+                }
+            }
+            sb.AppendLine("END_RUNG");
+            sb.AppendLine();
+        }
+
+        plc.Code = sb.ToString();
+        OnPropertyChanged.InvokeAsync();
+    }
+
+    // ─── Actions ────────────────────────────────────────────
+
+    private void AddRung()
+    {
+        var rung = new LdRungModel { Label = "" };
+        _rungs.Add(rung);
+        _selectedRungIndex = _rungs.Count - 1;
+        _selectedElementIndex = -1;
+        SyncToCode();
+    }
+
+    private void SelectRung(int idx)
+    {
+        _selectedRungIndex = idx;
+        _selectedElementIndex = -1;
+    }
+
+    private void SelectElement(int rungIdx, int elemIdx)
+    {
+        _selectedRungIndex = rungIdx;
+        _selectedElementIndex = elemIdx;
+    }
+
+    private void AddElementToSelected(string type)
+    {
+        if (_selectedRungIndex < 0 || _selectedRungIndex >= _rungs.Count) return;
+        var rung = _rungs[_selectedRungIndex];
+        var elem = new LdElementModel { Type = type };
+
+        switch (type)
+        {
+            case "CONTACT_NO" or "CONTACT_NC":
+                elem.Operand1 = "Variable";
+                break;
+            case "COIL" or "COIL_S" or "COIL_R":
+                elem.Operand1 = "Output";
+                break;
+            case "COMPARE":
+                elem.Modifier = "GT";
+                elem.Operand1 = "Variable";
+                elem.Operand2 = "0";
+                break;
+            case "MOVE":
+                elem.Operand1 = "0";
+                elem.Operand2 = "Destination";
+                break;
+            case "ADD" or "SUB" or "MUL" or "DIV":
+                elem.Operand1 = "1";
+                elem.Operand2 = "Destination";
+                break;
+            case "TIMER":
+                elem.Operand1 = "TimerVar";
+                elem.Operand2 = "5000";
+                break;
+            case "COUNTER":
+                elem.Operand1 = "CounterVar";
+                elem.Operand2 = "10";
+                break;
+        }
+
+        // Insert contacts/comparisons before output elements
+        int insertIdx = rung.Elements.Count;
+        if (type is "CONTACT_NO" or "CONTACT_NC" or "COMPARE")
+        {
+            for (int i = 0; i < rung.Elements.Count; i++)
+            {
+                if (rung.Elements[i].Type is "COIL" or "COIL_S" or "COIL_R" or "MOVE" or "ADD" or "SUB" or "MUL" or "DIV" or "TIMER" or "COUNTER")
+                {
+                    insertIdx = i;
+                    break;
+                }
+            }
+        }
+
+        rung.Elements.Insert(insertIdx, elem);
+        _selectedElementIndex = insertIdx;
+        SyncToCode();
+    }
+
+    private void DeleteSelected()
+    {
+        if (_selectedRungIndex >= 0 && _selectedRungIndex < _rungs.Count)
+        {
+            if (_selectedElementIndex >= 0)
+                DeleteSelectedElement();
+            else
+                DeleteRung(_selectedRungIndex);
+        }
+    }
+
+    private void DeleteSelectedElement()
+    {
+        if (_selectedRungIndex >= 0 && _selectedRungIndex < _rungs.Count &&
+            _selectedElementIndex >= 0 && _selectedElementIndex < _rungs[_selectedRungIndex].Elements.Count)
+        {
+            _rungs[_selectedRungIndex].Elements.RemoveAt(_selectedElementIndex);
+            _selectedElementIndex = -1;
+            SyncToCode();
+        }
+    }
+
+    private void DeleteRung(int idx)
+    {
+        if (idx >= 0 && idx < _rungs.Count)
+        {
+            _rungs.RemoveAt(idx);
+            _selectedRungIndex = -1;
+            _selectedElementIndex = -1;
+            SyncToCode();
+        }
+    }
+
+    private void MoveRungUp(int idx)
+    {
+        if (idx > 0 && idx < _rungs.Count)
+        {
+            (_rungs[idx - 1], _rungs[idx]) = (_rungs[idx], _rungs[idx - 1]);
+            _selectedRungIndex = idx - 1;
+            SyncToCode();
+        }
+    }
+
+    private void MoveRungDown(int idx)
+    {
+        if (idx >= 0 && idx < _rungs.Count - 1)
+        {
+            (_rungs[idx], _rungs[idx + 1]) = (_rungs[idx + 1], _rungs[idx]);
+            _selectedRungIndex = idx + 1;
+            SyncToCode();
+        }
+    }
+
+    // ─── Helpers ────────────────────────────────────────────
+
+    private static int ElemWidth(LdElementModel elem) => elem.Type switch
+    {
+        "CONTACT_NO" or "CONTACT_NC" => 60,
+        "COIL" or "COIL_S" or "COIL_R" => 60,
+        _ => 90
+    };
+
+    private static int SvgWidth(LdRungModel rung)
+    {
+        if (rung.Elements.Count == 0) return 200;
+        int w = 30;
+        foreach (var e in rung.Elements)
+            w += ElemWidth(e) + 10;
+        return w + 40;
+    }
+
+    private static string TruncLabel(string s, int max = 12) =>
+        string.IsNullOrEmpty(s) ? "?" : (s.Length > max ? s[..max] + "\u2026" : s);
+
+    private static string GetElementDisplayType(string type) => type switch
+    {
+        "CONTACT_NO" => "Contact (Normally Open)",
+        "CONTACT_NC" => "Contact (Normally Closed)",
+        "COIL" => "Output Coil",
+        "COIL_S" => "Set Coil (Latch)",
+        "COIL_R" => "Reset Coil",
+        "COMPARE" => "Comparison",
+        "MOVE" => "Move / Assign",
+        "ADD" => "Add",
+        "SUB" => "Subtract",
+        "MUL" => "Multiply",
+        "DIV" => "Divide",
+        "TIMER" => "TON Timer",
+        "COUNTER" => "CTU Counter",
+        _ => type
+    };
+}

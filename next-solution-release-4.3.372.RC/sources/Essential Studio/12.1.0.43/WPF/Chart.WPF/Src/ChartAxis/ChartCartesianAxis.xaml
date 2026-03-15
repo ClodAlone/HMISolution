@@ -1,0 +1,142 @@
+﻿<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:local="clr-namespace:Syncfusion.Windows.Chart">
+
+    <local:LabelMarginConverter x:Key="labelMarginConverter"/>
+
+
+    <DataTemplate DataType="{x:Type local:ChartAxisLabel}">
+        <DataTemplate.Resources>
+            <RelativeSource Mode="FindAncestor" AncestorType="{x:Type local:ChartCartesianAxisLabelsPanel}" x:Key="axisSource"/>
+        </DataTemplate.Resources>
+        <Grid HorizontalAlignment="{Binding Axis.LabelHorizontalAlignment, RelativeSource={StaticResource axisSource}}"
+              VerticalAlignment="{Binding Axis.LabelVerticalAlignment, RelativeSource={StaticResource axisSource}}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <ContentControl Grid.Column="0" ContentTemplate="{Binding Axis.LabelsPrefix, RelativeSource={StaticResource axisSource}}"/>
+            <Border Grid.Column="1" Background="{Binding Axis.LabelBackground, RelativeSource={StaticResource axisSource}}" 
+                  BorderThickness="{Binding Axis.LabelBorderThickness, RelativeSource={StaticResource axisSource}}"
+                    Margin="{Binding Axis.Margin, RelativeSource={StaticResource axisSource}}"
+                  BorderBrush="{Binding Axis.LabelBorderBrush, RelativeSource={StaticResource axisSource}}" 
+                  CornerRadius="{Binding Axis.LabelCornerRadius, RelativeSource={StaticResource axisSource}}">
+            <TextBlock Text="{Binding Content, Mode=TwoWay}"
+                       FontSize="{Binding Axis.LabelFontSize, RelativeSource={StaticResource axisSource}}" 
+                       FontFamily="{Binding Axis.LabelFontFamily, RelativeSource={StaticResource axisSource}}"
+                       Foreground="{Binding Axis.LabelForeground, RelativeSource={StaticResource axisSource}}" 
+                       FontWeight="{Binding Axis.LabelFontWeight, RelativeSource={StaticResource axisSource}}" TextWrapping="Wrap"/>
+            </Border>
+            <ContentControl Grid.Column="2" ContentTemplate="{Binding Axis.LabelsPostfix, RelativeSource={StaticResource axisSource}}"/>
+        </Grid>
+            </DataTemplate>
+
+    <!-- Cartesian Axis Template-->
+    <DataTemplate x:Key="ChartCartesianAxisTemplateKey">
+        <DataTemplate.Resources>
+            <local:ChartAxisTypeConverter x:Key="ChartAxisPositionConverter"/>
+            <local:TitleToAlignmentConverter x:Key="TitleToAlignmentConverterKey"/>
+            <local:AxisVisibilityConverter x:Key="axisVisibilityConverter"/>
+            <local:AxisMarginConverter x:Key="axisMarginConverter"/>
+            <local:DisplayUnitConverter x:Key="DisplayUnitconverter"/>
+            <local:DisplayUnitsConverter x:Key="Displayunitconv"/>
+            <RelativeSource Mode="FindAncestor" AncestorType="{x:Type local:ChartCartesianAxisLabelsPanel}" x:Key="axisSource"/>
+        </DataTemplate.Resources>
+        <local:ChartCartesianAxisPanel ToolTip="{Binding ToolTip}" ValueType="{Binding ValueType}" Axis="{Binding}" Margin="{Binding Converter={StaticResource axisMarginConverter}}" IsEnabled="{Binding Converter={StaticResource axisVisibilityConverter}}" HeaderPosition="{Binding HeaderPosition}"  Visibility="{Binding AxisVisibility}"  Orientation="{Binding Orientation}" OpposedPosition="{Binding OpposedPosition}">
+
+            
+            <Grid x:Name="AxisTitle">
+                <Grid.HorizontalAlignment>
+                    <Binding Path="HeaderAlignment"
+                   Converter="{StaticResource TitleToAlignmentConverterKey}" 
+                   ConverterParameter="Horizontal"/>
+                </Grid.HorizontalAlignment>
+                <Grid.VerticalAlignment>
+                    <Binding Path="HeaderAlignment"
+                   Converter="{StaticResource TitleToAlignmentConverterKey}" 
+                   ConverterParameter="Vertical"/>
+                </Grid.VerticalAlignment>
+
+                <Grid.LayoutTransform>
+                    <RotateTransform>
+                        <RotateTransform.Angle>
+                            <MultiBinding Converter="{StaticResource ChartAxisPositionConverter}" ConverterParameter="Title">
+                                <Binding Path="Orientation" RelativeSource="{RelativeSource FindAncestor, AncestorType={x:Type local:ChartCartesianAxisPanel}}"/>
+                                <Binding Path="OpposedPosition" RelativeSource="{RelativeSource FindAncestor, AncestorType={x:Type local:ChartCartesianAxisPanel}}"/>
+                            </MultiBinding>
+                        </RotateTransform.Angle>
+                    </RotateTransform>
+                </Grid.LayoutTransform>
+                <ContentPresenter Content="{Binding Header}">
+                </ContentPresenter>
+            </Grid>
+            <Grid x:Name="AxisDisplayUnit" Visibility="{Binding DoubleDisplayUnitVisibility}">
+                <Grid.HorizontalAlignment>
+                    <Binding Path="DoubleDisplayUnitAlignment"
+                   Converter="{StaticResource TitleToAlignmentConverterKey}" 
+                   ConverterParameter="Horizontal"/>
+                </Grid.HorizontalAlignment>
+                <Grid.VerticalAlignment>
+                    <Binding Path="DoubleDisplayUnitAlignment"
+                   Converter="{StaticResource TitleToAlignmentConverterKey}" 
+                   ConverterParameter="Vertical"/>
+                </Grid.VerticalAlignment>
+
+                <Grid.LayoutTransform>
+                    <RotateTransform>
+                        <RotateTransform.Angle>
+                            <MultiBinding Converter="{StaticResource ChartAxisPositionConverter}" ConverterParameter="Title">
+                                <Binding Path="Orientation" RelativeSource="{RelativeSource FindAncestor, AncestorType={x:Type local:ChartCartesianAxisPanel}}"/>
+                                <Binding Path="OpposedPosition" RelativeSource="{RelativeSource FindAncestor, AncestorType={x:Type local:ChartCartesianAxisPanel}}"/>
+                            </MultiBinding>
+                        </RotateTransform.Angle>
+                    </RotateTransform>
+                </Grid.LayoutTransform>
+                <ContentPresenter Visibility="{Binding Converter={StaticResource DisplayUnitconverter}}" Content="{Binding DoubleDisplayUnit, Converter={StaticResource Displayunitconv}}"></ContentPresenter>
+            </Grid>
+
+            <Grid>
+                <ItemsControl ClipToBounds="False" IsTabStop="False"
+                    ItemsSource="{Binding VisibleLabels, Mode=OneTime}"
+                    ItemTemplate="{Binding LabelTemplate}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <local:ChartCartesianAxisLabelsPanel Axis="{Binding}"  Margin="{Binding Converter={StaticResource labelMarginConverter}}"
+                                                 Orientation="{Binding Orientation}"
+                                                 LabelRotateAngle="{Binding LabelRotateAngle}" 
+                                                 IntersectAction="{Binding IntersectAction}"
+                                                 OpposedPosition="{Binding OpposedPosition}"
+                                                 HidePartialLabel="{Binding HidePartialLabel}"
+                                                 EdgeLabelsDrawingMode="{Binding EdgeLabelsDrawingMode}"/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemContainerStyle>
+                        <Style>
+                            <Setter Property="local:ChartCartesianAxisLabelsPanel.Position" Value="{Binding Position, Mode=
+                            OneTime}"/>
+                        </Style>
+                    </ItemsControl.ItemContainerStyle>
+                </ItemsControl>
+
+                <Canvas Visibility="{Binding InteractiveCursorLabelVisibility}" >
+                    <ContentControl Canvas.Right="{Binding InteractiveCursorLabelLeftPosition}" Canvas.Top="{Binding InteractiveCursorLabelTopPosition}" Background="{Binding InteractiveCursorLabelBackground}" Foreground="{Binding InteractiveCursorLabelForeground}" Content="{Binding InteractiveCursorLabelContent}" HorizontalAlignment="Left" Visibility="{Binding InteractiveCursorLabelVisibility}" VerticalAlignment="Bottom" ContentTemplate="{Binding InteractiveCursorTemplate}"/>
+                </Canvas>
+            </Grid>
+            
+            <local:ChartCartesianAxisElement Axis="{Binding}"
+                                    LineStroke="{Binding LineStroke}"  
+                                    TickSize="{Binding TickSize}" 
+                                    Orientation="{Binding Orientation}"
+                                    Labels="{Binding VisibleLabels, Mode=OneTime}"/>
+
+            <!--<local:ChartZoomingScrollBar Orientation="{Binding Orientation}"
+																	IsInversed="{Binding IsInversed}"
+                                  ZoomFactor="{Binding ZoomFactor}"
+                                  ZoomPosition="{Binding ZoomPosition, Mode=TwoWay}"/>-->
+        </local:ChartCartesianAxisPanel>
+
+    </DataTemplate>
+
+    
+</ResourceDictionary>

@@ -1,0 +1,127 @@
+﻿<!-- Copyright © Northwoods Software Corporation, 2008-2015. All Rights Reserved. -->
+
+<UserControl x:Class="VisualTree.VisualTree"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" 
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" 
+    xmlns:go="http://schemas.nwoods.com/GoXam"
+    xmlns:local="clr-namespace:VisualTree">
+
+  <UserControl.Resources>
+    <!-- this converter gets the name of the Type of the UIElement -->
+    <local:ElementConverter x:Key="theElementConverter" />
+
+    <!-- this converter produces Visibility.Visible
+         if the UIElement has any visual children -->
+    <local:ChildrenVisibilityConverter x:Key="theChildrenVisibilityConverter" />
+    
+    <DataTemplate x:Key="ElementTemplate">
+      <!-- each node is initially "expanded" -->
+      <StackPanel Orientation="Horizontal"
+                  go:Node.FromSpot="1 0.5" go:Node.ToSpot="0 0.5"
+                  go:Part.SelectionAdorned="True" go:Node.IsTreeExpanded="True">
+        <!-- the text comes from the Type of the UIElement via the converter -->
+        <TextBlock Text="{Binding Path=Data,
+                          Converter={StaticResource theElementConverter}}"
+                   VerticalAlignment="Center" />
+        <!-- this button is used to expand/collapse the subtree starting at the node -->
+        <Button Click="Expand_Click"
+                Background="Transparent" BorderBrush="LightGray"
+                Padding="0" Margin="0" VerticalAlignment="Center"
+                Visibility="{Binding Path=Data,
+                             Converter={StaticResource theChildrenVisibilityConverter}}">
+          <Grid>
+            <!-- one of the following two shapes is Visible,
+                 controlled by the Expand_Click method -->
+            <Path x:Name="MinusShape" Data="M0 4 L8 4" Width="8" Height="8"
+                  Stroke="Black" StrokeThickness="1" Visibility="Visible" />
+            <Path x:Name="PlusShape" Data="M0 4 L8 4 M4 0 L4 8" Width="8" Height="8"
+                  Stroke="Black" StrokeThickness="1" Visibility="Collapsed" />
+          </Grid>
+        </Button>
+      </StackPanel>
+    </DataTemplate>
+
+    <DataTemplate x:Key="LinkTemplate">
+      <!-- a trivial link shape -->
+      <go:LinkShape Stroke="Black" StrokeThickness="1" />
+    </DataTemplate>
+  </UserControl.Resources>
+
+  <Grid>
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" />
+    </Grid.RowDefinitions>
+    <StackPanel Grid.Row="0" Orientation="Horizontal">
+      <StackPanel VerticalAlignment="Center" Margin="10">
+        <TextBlock Text="Example Diagram:" FontWeight="Bold" />
+      </StackPanel>
+      <Border BorderBrush="Gray" BorderThickness="2" VerticalAlignment="Center">
+        <!-- this is the example Diagram -->
+        <go:Diagram x:Name="myDiagram"
+                    Width="300" Height="200"
+                    Padding="4"
+                    HorizontalContentAlignment="Center"
+                    VerticalContentAlignment="Center">
+          <!-- define three initial parts: two nodes and one link;
+               none are bound to any data -->
+          <go:Node Id="UnboundNode1">
+            <Border go:Node.Location="0 0" go:Part.SelectionAdorned="True"
+                    BorderBrush="Blue" BorderThickness="1"
+                    Padding="2,0,2,0" CornerRadius="3" Background="White">
+              <StackPanel>
+                <Ellipse x:Name="Shape1" Fill="Blue" Width="20" Height="20" />
+                <TextBlock Text="Unbound Node1" />
+              </StackPanel>
+            </Border>
+          </go:Node>
+          <go:Link PartsModelFromNode="UnboundNode1" PartsModelToNode="UnboundNode2">
+            <go:LinkShape Stroke="Purple" StrokeThickness="2"
+                          go:Link.SelectionAdorned="True" />
+          </go:Link>
+          <go:Node Id="UnboundNode2">
+            <go:NodePanel go:Node.Location="150 0"
+                          go:Part.SelectionElementName="Shape2"
+                          go:Part.SelectionAdorned="True"
+                          go:Part.Resizable="True">
+              <go:NodeShape x:Name="Shape2" go:NodePanel.Figure="Document"
+                            Fill="LightGreen" MinWidth="20" MinHeight="20" />
+              <TextBlock Text="This is a node not bound to any data"
+                         Foreground="Blue" TextWrapping="Wrap" TextAlignment="Center" />
+            </go:NodePanel>
+          </go:Node>
+        </go:Diagram>
+      </Border>
+      <StackPanel VerticalAlignment="Center" Margin="10">
+        <TextBlock Text="Select some parts and then click this button."
+                   Width="150" TextWrapping="Wrap" TextAlignment="Center" />
+        <Button Content="Rebuild Visual Tree" Click="Refresh_Click"
+                Margin="10" />
+        <TextBlock Text="This diagram's visual tree will be reflected
+                         in the tree diagram below."
+                   Width="150" TextWrapping="Wrap" TextAlignment="Center" />
+        <TextBlock Text="Adornments are added to the last NodeLayer."
+                   Width="150" TextWrapping="Wrap" TextAlignment="Center" />
+      </StackPanel>
+    </StackPanel>
+    <!-- this is the Diagram showing the visual tree -->
+    <go:Diagram x:Name="myVisualTreeDiagram" Grid.Row="1"
+                BorderBrush="Black" BorderThickness="1"
+                Padding="10"
+                HorizontalContentAlignment="Left"
+                VerticalContentAlignment="Top"
+                NodeTemplate="{StaticResource ElementTemplate}"
+                LinkTemplate="{StaticResource LinkTemplate}">
+      <go:Diagram.Model>
+        <local:VisualTreeModel />  <!-- use a custom Model -->
+      </go:Diagram.Model>
+      <go:Diagram.Layout>
+        <!-- lay out the tree whenever a node or link changes visibility -->
+        <!-- Alignment=Start means that the parent node is positioned at the
+             same Y value as the first child -->
+        <go:TreeLayout Conditions="Standard VisibleChanged"
+          Compaction="None" Alignment="Start" NodeSpacing="1" LayerSpacing="20" />
+      </go:Diagram.Layout>
+    </go:Diagram>
+  </Grid>
+</UserControl>

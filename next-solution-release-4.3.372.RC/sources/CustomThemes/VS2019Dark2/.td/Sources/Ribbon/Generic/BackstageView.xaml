@@ -1,0 +1,135 @@
+<ResourceDictionary mc:Ignorable="cs"
+                    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:cs="colorscheme_ignorable_uri"
+                    xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+                    xmlns:dxi="http://schemas.devexpress.com/winfx/2008/xaml/core/internal"
+                    xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+                    xmlns:dxr="http://schemas.devexpress.com/winfx/2008/xaml/ribbon"
+                    xmlns:dxri="http://schemas.devexpress.com/winfx/2008/xaml/ribbon/internal"
+                    xmlns:dxrt="http://schemas.devexpress.com/winfx/2008/xaml/ribbon/themekeys"
+                    xmlns:dxt="http://schemas.devexpress.com/winfx/2008/xaml/core/themekeys"
+                    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <dx:BooleanToVisibilityConverter x:Key="boolToVisibilityConverter" Invert="False"/>
+
+    <dx:BooleanToVisibilityConverter x:Key="invertBoolToVisibilityConverter" Invert="True"/>
+
+    <ControlTemplate x:Key="{dxrt:BackstageThemeKey ResourceKey=ControlItemsTemplate}" TargetType="{x:Type dxr:BackstageViewItemsControl}">
+        <ItemsPresenter x:Name="itemsPresenter"
+                        Focusable="False"
+                        Style="{TemplateBinding ItemsPresenterStyle}"/>
+    </ControlTemplate>
+
+    <ControlTemplate x:Key="{dxrt:BackstageThemeKey ResourceKey=BackstageViewContentHostTemplate}" TargetType="{x:Type dxr:BackstageViewContentHost}">
+        <Grid>
+            <DockPanel x:Name="PART_Root"
+                       ClipToBounds="True"
+                       LastChildFill="True">
+                <DockPanel.RenderTransform>
+                    <TranslateTransform/>
+                </DockPanel.RenderTransform>
+                <Grid DockPanel.Dock="Left">
+                    <Control x:Name="PART_LeftPaneBackground" Template="{DynamicResource ResourceKey={dxrt:BackstageThemeKey ResourceKey=LeftPartBackground}}"/>
+                    <DockPanel LastChildFill="True">
+                        <dxr:RibbonCheckedBorderControl x:Name="PART_Glyph"
+                                                        DockPanel.Dock="Top"
+                                                        dxi:WindowChrome.IsHitTestVisibleInChrome="True"
+                                                        Style="{DynamicResource ResourceKey={dxrt:BackstageThemeKey ResourceKey=BackstageViewBackGlyphTemplate}}"/>
+                        <ContentControl x:Name="PART_Left"
+                                        Content="{TemplateBinding LeftContent}"
+                                        DockPanel.Dock="Bottom"
+                                        HorizontalContentAlignment="Stretch"
+                                        VerticalContentAlignment="Stretch"/>
+                    </DockPanel>
+                </Grid>
+                <DockPanel DockPanel.Dock="Right" LastChildFill="True">
+                    <Border DockPanel.Dock="Top"
+                            Height="{Binding ElementName=PART_HeaderAndButtons, Path=ActualHeight}"
+                            Visibility="{Binding ElementName=PART_HeaderAndButtons, Path=Visibility}"/>
+                    <ContentControl x:Name="PART_Right"
+                                    Content="{TemplateBinding RightContent}"
+                                    DockPanel.Dock="Bottom"
+                                    HorizontalContentAlignment="Stretch"
+                                    VerticalContentAlignment="Stretch"/>
+                </DockPanel>
+            </DockPanel>
+            <Grid x:Name="PART_HeaderAndButtons" VerticalAlignment="Top">
+                <Control x:Name="PART_HeaderAndButtonsBackground" Template="{DynamicResource ResourceKey={dxrt:BackstageThemeKey ResourceKey=HeaderAndButtonsBackground}}"/>
+                <dxri:BackstageViewHeaderPresenter x:Name="PART_HeaderPresenter"
+                                                   BackstageViewControl="{Binding RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=dxr:BackstageViewControl}}"
+                                                   Content="{Binding Path=(dxi:DXWindowsHelper.Window).Title, RelativeSource={RelativeSource Mode=Self}}"
+                                                   HorizontalAlignment="Stretch"
+                                                   LeftOffset="{Binding ElementName=PART_Left, Path=ActualWidth}"
+                                                   RightOffset="{Binding ElementName=PART_ControlBoxContainer, Path=ActualWidth}"
+                                                   Style="{DynamicResource ResourceKey={dxrt:BackstageThemeKey ResourceKey=HeaderPresenterStyle}}"
+                                                   VerticalAlignment="Top"/>
+                <dxri:RibbonControlBoxContainer x:Name="PART_ControlBoxContainer"
+                                                dxi:WindowChrome.IsHitTestVisibleInChrome="True"
+                                                HorizontalAlignment="Right"
+                                                ShowCustomItems="False"
+                                                Style="{DynamicResource ResourceKey={dxrt:BackstageThemeKey ResourceKey=ControlBoxContainerStyle}}"
+                                                VerticalAlignment="Top"/>
+            </Grid>
+            <Grid x:Name="PART_ResizeBox">
+                <Border x:Name="PART_Resize_N"/>
+            </Grid>
+        </Grid>
+        <ControlTemplate.Triggers>
+            <DataTrigger Binding="{Binding Path=EnableWindowTitleShrink, RelativeSource={RelativeSource AncestorType={x:Type dxr:BackstageViewControl}}}" Value="False">
+                <Setter Property="Visibility"
+                        TargetName="PART_HeaderAndButtons"
+                        Value="Collapsed"/>
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Path=IsFullScreen, RelativeSource={RelativeSource AncestorType={x:Type dxr:BackstageViewControl}}}" Value="False">
+                <Setter Property="Visibility"
+                        TargetName="PART_Glyph"
+                        Value="Collapsed"/>
+                <Setter Property="Visibility"
+                        TargetName="PART_HeaderAndButtons"
+                        Value="Collapsed"/>
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Path=(dxr:RibbonControl.Ribbon).IsInRibbonWindow, RelativeSource={RelativeSource Self}}" Value="False">
+                <Setter Property="Visibility"
+                        TargetName="PART_HeaderAndButtons"
+                        Value="Collapsed"/>
+            </DataTrigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+    <ControlTemplate x:Key="{dxrt:BackstageThemeKey ResourceKey=ControlTemplate}" TargetType="{x:Type dxr:BackstageViewControl}">
+        <Grid Focusable="False">
+            <Control Focusable="False" Template="{DynamicResource {dxrt:BackstageThemeKey ResourceKey=BorderTemplate}}"/>
+            <Grid Focusable="False" Margin="{TemplateBinding BorderThickness}">
+                <ContentControl Focusable="False" Style="{TemplateBinding BackgroundStyle}"/>
+                <Image Focusable="False"
+                       Source="{TemplateBinding ActualBackgroundGlyph}"
+                       Style="{TemplateBinding BackgroundGlyphStyle}"
+                       Visibility="{Binding IsBackgroundGlyphVisible, RelativeSource={RelativeSource TemplatedParent}, Converter={StaticResource boolToVisibilityConverter}}"/>
+                <dxr:BackstageViewContentHost x:Name="PART_ContentHost"
+                                              ClipToBounds="True"
+                                              Focusable="False"
+                                              HorizontalAlignment="Stretch"
+                                              Template="{DynamicResource {dxrt:BackstageThemeKey ResourceKey=BackstageViewContentHostTemplate}}"
+                                              VerticalAlignment="Stretch">
+                    <dxr:BackstageViewContentHost.LeftContent>
+                        <dxr:BackstageViewLeftPartContentControl Focusable="False"
+                                                                 MinWidth="{TemplateBinding TabPaneMinWidth}"
+                                                                 Style="{TemplateBinding TabPaneStyle}">
+                            <dxr:BackstageViewItemsControl x:Name="backstageViewItemsControl" Template="{DynamicResource ResourceKey={dxrt:BackstageThemeKey ResourceKey=ControlItemsTemplate}}"/>
+                        </dxr:BackstageViewLeftPartContentControl>
+                    </dxr:BackstageViewContentHost.LeftContent>
+                    <dxr:BackstageViewContentHost.RightContent>
+                        <dxri:BackstageControlPaneContentControl Content="{TemplateBinding ActualControlPane}"
+                                                                 dxr:RibbonControlHelper.DisableSharedSizeScope="True"
+                                                                 Focusable="False"
+                                                                 Grid.Column="1"
+                                                                 Style="{TemplateBinding ControlPaneStyle}"
+                                                                 Visibility="{Binding SelectedTab.Visibility, RelativeSource={RelativeSource Mode=TemplatedParent}}"/>
+                    </dxr:BackstageViewContentHost.RightContent>
+                </dxr:BackstageViewContentHost>
+            </Grid>
+        </Grid>
+    </ControlTemplate>
+
+</ResourceDictionary>

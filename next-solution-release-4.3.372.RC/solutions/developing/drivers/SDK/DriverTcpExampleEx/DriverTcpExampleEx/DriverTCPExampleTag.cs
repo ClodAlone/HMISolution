@@ -1,0 +1,131 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using DriverCodeBaseEx;
+using DriverBaseInterfaces;
+using DriverCodeBaseEx.Helpers;
+using Opc.Ua;
+
+namespace DriverTcpExample
+{
+    public sealed class DriverTcpExampleTag : Tag
+    {
+        #region Constructors
+
+        public DriverTcpExampleTag(TagDefinition tag, uint byteoffset, uint bitoffset)
+            : base(tag, byteoffset, bitoffset)
+        {
+
+        }
+
+        public DriverTcpExampleTag(TagDefinition tag)
+            : base(tag)
+        {
+
+        }
+
+        #endregion
+
+        #region Override Properties/Functions
+
+        public override bool BuildDynamicSettings(String dynamicSettings)
+        {
+            bool res = DriverTcpExampleDynSettings.TryParse(dynamicSettings);
+            if (TagNode.DataType.IdType == IdType.Numeric && (uint)TagNode.DataType.Identifier == Opc.Ua.DataTypes.String)
+                Size = (uint)((DriverTcpExampleDynSettings.StringLength + 1) / 2) * 2;
+
+            return res;
+        }
+
+        public override DynTagSettings DynSettings
+        {
+            get { return (DynTagSettings)DriverTcpExampleDynSettings; }
+        }
+
+        #endregion
+        #region Methods
+        /// <summary>   The read value. </summary>
+        public override bool SetTagValue(ref byte[] buffer, int index, uint elemsize = 0, uint buffertype = 0, bool forceUpdate = false)
+        {
+            if (TagNode.DataType.IdType == IdType.Numeric)
+            {
+                bool bCopy = false;
+                object val = new object();
+                uint nType = (uint)TagNode.DataType.Identifier;
+                object readValue = (forceUpdate ? null : GetValue());
+                switch (nType)
+                {
+                    case (uint)Opc.Ua.DataTypes.String:
+                        {
+                            byte[] tbuf;
+                            uint iCheckCharacter = 0;
+                            if (TagNode.ArrayDimension == 0)
+                            {
+                                for (iCheckCharacter = 0; iCheckCharacter < Size; iCheckCharacter++)
+                                {
+                                    if (buffer[(iCheckCharacter + index)] == 0x00)
+                                    {
+                                        break;
+                                    }
+                                }
+                                tbuf = new byte[iCheckCharacter];
+                                Array.Copy(buffer, index, tbuf, 0, iCheckCharacter);
+                                return base.SetTagValue(ref tbuf, 0, forceUpdate, elemsize, buffertype);
+                            }
+                            else
+                            {
+                                System.Text.UTF8Encoding enc = new System.Text.UTF8Encoding();
+                                uint nOffset = 0;
+                                string[] a = new string[TagNode.ArrayDimension];
+                                Array b = readValue as Array;
+                                bool check = (b != null && b.GetLength(0) == TagNode.ArrayDimension);
+                                bCopy = (!check);
+                                int elemlen = (int)(Size / TagNode.ArrayDimension);
+
+                                for (int i = 0; i < TagNode.ArrayDimension; i++)
+                                {
+                                    nOffset = (uint)(i * elemlen);
+                                    for (iCheckCharacter = 0; iCheckCharacter < elemlen; iCheckCharacter++)
+                                    {
+                                        if (buffer[(nOffset + iCheckCharacter + index)] == 0x00)
+                                        {
+                                            break;
+                                        }
+                                    }
+                                    tbuf = new byte[iCheckCharacter];
+                                    Array.Copy(buffer, index + nOffset, tbuf, 0, iCheckCharacter);
+                                    a[i] = enc.GetString(tbuf);
+                                    if (check && a[i] != (string)b.GetValue(i))
+                                        bCopy = true;
+                                }
+                                val = a;
+                            }
+                            if (readValue == null || bCopy)
+                            {
+                                SetValue(val);
+                                return true;
+                            }
+                        }
+                        break;
+                    default:
+                        return base.SetTagValue(ref buffer, index, forceUpdate, elemsize, buffertype);
+                }
+
+            }
+            return (false);
+        }
+
+        #endregion
+
+        #region Properties
+
+        readonly DriverTcpExampleDynTagSettings _DriverTcpExampleDynSettings = new DriverTcpExampleDynTagSettings();
+        public DriverTcpExampleDynTagSettings DriverTcpExampleDynSettings
+        {
+            get { return _DriverTcpExampleDynSettings; }
+        }
+
+        #endregion        
+
+    }
+}

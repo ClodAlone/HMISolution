@@ -1,0 +1,76 @@
+﻿<Window x:Class="KinectControls.KinectWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:arc="http://schemas.microsoft.com/expression/2010/drawing"
+        xmlns:kinectViewers="clr-namespace:Microsoft.Samples.Kinect.WpfViewers;assembly=Microsoft.Samples.Kinect.WpfViewers"
+        xmlns:kinectToolkit="clr-namespace:Microsoft.Kinect.Toolkit;assembly=Microsoft.Kinect.Toolkit"
+        xmlns:kinectControls="clr-namespace:Microsoft.Kinect.Toolkit.Controls;assembly=Microsoft.Kinect.Toolkit.Controls"
+        Closing="OnWindowClosing"
+        Cursor="None"
+        Title="KinectWindow" Height="300" Width="300" WindowState="Maximized">
+    <Window.Resources>
+
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Common/StandardStyles.xaml"></ResourceDictionary>
+            </ResourceDictionary.MergedDictionaries>
+            <SolidColorBrush x:Key="BlueBrush" Color="#FF00BCF2" />
+            <SolidColorBrush x:Key="MediumGreyBrush" Color="#ff6e6e6e"/>
+
+            <Storyboard x:Key="SpeechAnimation">
+                <DoubleAnimationUsingKeyFrames BeginTime="00:00:00" Storyboard.TargetProperty="(UIElement.Opacity)" Storyboard.TargetName="speechBar">
+                    <SplineDoubleKeyFrame KeyTime="00:00:00.1000000" Value="1" KeySpline="0,0,0.3,0.6" />
+                </DoubleAnimationUsingKeyFrames>
+                <DoubleAnimationUsingKeyFrames BeginTime="00:00:00" Storyboard.TargetProperty="(FrameworkElement.Height)" Storyboard.TargetName="speechBar">
+                    <SplineDoubleKeyFrame KeyTime="00:00:00" Value="0" />
+                    <SplineDoubleKeyFrame KeyTime="00:00:00.8000000" Value="160" />
+                    <SplineDoubleKeyFrame KeyTime="00:00:01.0000000" Value="150" />
+                    <SplineDoubleKeyFrame KeyTime="00:00:04.2000000" Value="150" />
+                    <SplineDoubleKeyFrame KeyTime="00:00:05.1000000" Value="0" />
+                </DoubleAnimationUsingKeyFrames>
+                <DoubleAnimationUsingKeyFrames BeginTime="00:00:00" Storyboard.TargetProperty="(FrameworkElement.Height)" Storyboard.TargetName="speechBar">
+                    <SplineDoubleKeyFrame KeyTime="00:00:05.5" Value="0" KeySpline="0,0,0.5,1" />
+                </DoubleAnimationUsingKeyFrames>
+            </Storyboard>
+            
+        </ResourceDictionary>
+
+    </Window.Resources>
+    
+    <Grid Background="Gray">
+        <kinectControls:KinectRegion x:Name="kinectRegion" IsCursorVisible="False"
+            KinectSensor="{Binding KinectSensorManager.KinectSensor}">
+        </kinectControls:KinectRegion>
+        <kinectToolkit:KinectSensorChooserUI Name="kinectSensorChooser" Width="300" VerticalAlignment="Top"/>
+        <Viewbox IsHitTestVisible="False">
+            <Grid Height="1080" Width="1920">
+
+                <Grid x:Name="video" Visibility="Collapsed" HorizontalAlignment="Right" VerticalAlignment="Bottom" 
+                      Opacity="0.5" Width="320" Height="240">
+                    <kinectViewers:KinectDepthViewer x:Name="DepthViewer" 
+                                   KinectSensorManager="{Binding KinectSensorManager}"/>
+                    <Canvas>
+                        <kinectViewers:KinectSkeletonViewer x:Name="SkeletonViewer"
+                                    KinectSensorManager="{Binding KinectSensorManager}"
+                                    Width="{Binding ElementName=DepthViewer, Path=ActualWidth}"
+                                    Height="{Binding ElementName=DepthViewer, Path=ActualHeight}"
+                                    ShowBones="True" ShowJoints="True" ShowCenter="True" ImageType="Depth" />
+                    </Canvas>
+                </Grid>
+
+                <TextBlock x:Name="txtSearching" FontSize="72" VerticalAlignment="Center" HorizontalAlignment="Center">Searching Kinect Device...</TextBlock>
+
+                <StackPanel x:Name="speechBar" Orientation="Vertical" Background="Black" Opacity="0.1" Height="0" VerticalAlignment="Bottom" >
+                    <Label x:Name="lableSpeech" Foreground="White" FontSize="58" HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False">
+                        <Label.Effect>
+                            <DropShadowEffect ShadowDepth="2" />
+                        </Label.Effect>
+                    </Label>
+                    <kinectViewers:KinectAudioViewer Name="kinectAudioViewer" 
+                                                     KinectSensorManager="{Binding KinectSensorManager}"
+                                                     Width="300" VerticalAlignment="Bottom" HorizontalAlignment="Center" Visibility="Collapsed"/>
+                </StackPanel>
+            </Grid>
+        </Viewbox>
+    </Grid>
+</Window>

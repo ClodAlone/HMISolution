@@ -1,0 +1,72 @@
+<html>
+<head>
+  <title></title>
+  <style type="text/css">
+    .style1 {
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 10pt;
+    }
+  </style>
+</head>
+<body class="style1">
+    <p>
+	The Virtualizing sample demonstrates one way to support many thousands of nodes and links.
+	The principal technique is the customization of the <b>PartManager</b> to only create <b>Node</b>s
+	and <b>Link</b>s when they are visible in the <b>DiagramPanel</b>, and to delete them otherwise.
+    </p>
+    <p>
+	This sample creates 9999 nodes and 9998 links.
+	The scrolling and zooming performance is a bit sluggish (worse in Silverlight than in WPF),
+	but responsiveness remains good for operations on individual nodes and links.
+    You will find it more responsive when zoomed in so that there are fewer nodes and links that are visible at one time.
+	Without virtualization just the creation of so many <b>Node</b>s and <b>Link</b>s would
+	result in a very long and unavoidable start-up time.
+    </p>
+    <p>
+	This sample requires all node data to have a location before they have been realized
+	as <b>Node</b>s in the <b>Diagram</b>.
+	Because all of the regular layouts, such as <b>TreeLayout</b> and <b>LayeredDigraphLayout</b>,
+	depend on knowing the actual size of each <b>Node</b> in order to perform a reasonable positioning of the nodes,
+	this sample requires that there not be any layout given as the <b>Diagram.Layout</b>.
+	Many of the regular layouts also route the links as part of the layout process.
+	This would also require that the actual <b>Link</b>s be present so that their <b>Route</b>s can be modified.
+    </p>
+    <p>
+    Instead of a regular <b>TreeLayout</b>, this defines a <b>VirtualizingTreeLayout</b> that operates directly
+    on the node and link data of the model rather than <b>Node</b>s and <b>Link</b>s of the <b>Diagram</b>.
+    It uses custom <b>VirtualizingTreeVertex</b> and <b>VirtualizingTreeEdge</b> classes that know about this
+    application's <b>NodeData</b> and <b>LinkData</b> data classes.
+    The layout assigns the <b>NodeData.Location</b> property rather than the <b>Node.Location</b> property
+    as standard layouts would do.
+    However, it does not support custom routing.
+    </p>
+    <p>
+    The standard <b>Diagram.Panel</b> is replaced with an instance of the custom <b>VirtualizingDiagramPanel</b> class.
+	The use of the custom <b>VirtualizingDiagramPanel</b> class requires customizing the diagram's <b>Template</b>.
+	The supplied <b>ControlTemplate</b> is exactly like the default one that you can see in the Generic.XAML
+	file in the docs subdirectory of the GoXam installation, except for the replacement of the
+	standard <b>DiagramPanel</b> with the custom <b>VirtualizingDiagramPanel</b>.
+    </p>
+    <p>
+	The standard <b>Diagram.PartManager</b> is replaced with an instance of the
+	custom <b>VirtualizingPartManager</b> class.
+    </p>
+    <p>
+	Both the <b>VirtualizingPartManager</b> and the <b>VirtualizingDiagramPanel</b> make all of their geometric
+	calculations based on the node data and the relationships provided by the model.
+	They must not depend on the actual <b>Node</b>.<b>Bounds</b>, because the whole point of virtualization
+	is to avoid creating <b>FrameworkElement</b>s such as <b>Node</b>s.
+    </p>
+    <p>
+	If you want to use the code of this sample, you will need to adapt the <b>ComputeNodeBounds</b> method
+	to return reasonably accurate values for your particular node data, as if they had been realized with
+	the actual <b>DataTemplate</b>s that your application uses.
+	Remember also that the <b>Node.Location</b> in your application might not be the point
+	at the top-left corner of the <b>Bounds</b> for that node.
+    </p>
+    <p>
+    If you want to use a different kind of layout, you will need to customize that layout in a manner similar to how
+    the <b>TreeLayout</b> was modified to support virtualization.
+    </p>
+</body>
+</html>

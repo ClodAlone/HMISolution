@@ -1,0 +1,226 @@
+@using RuntimeViewer.Shared.Services
+@implements IDisposable
+
+<div class="hda-grid-widget">
+    @* Toolbar *@
+    <div class="hda-grid-toolbar">
+        <span style="font-weight: bold; font-size: 12px;">📋 HDA Grid</span>
+        <span style="font-size: 10px; color: #888;">
+            @if (_rows.Count > 0)
+            {
+                <text>(@_rows.Count rows)</text>
+            }
+        </span>
+        <span style="flex: 1;"></span>
+
+        <select class="hda-select" @bind="_timeRangeMinutes" @bind:after="Reload">
+            <option value="5">5 min</option>
+            <option value="15">15 min</option>
+            <option value="60">1 hour</option>
+            <option value="360">6 hours</option>
+            <option value="1440">24 hours</option>
+        </select>
+
+        <button class="hda-btn" @onclick="Reload" disabled="@_loading" title="Refresh">🔄</button>
+        <button class="hda-btn" @onclick="ToggleAutoRefresh" title="@(_autoRefresh ? "Disable auto-refresh" : "Enable auto-refresh")">
+            @(_autoRefresh ? "⏸" : "▶")
+        </button>
+    </div>
+
+    @* Table *@
+    <div class="hda-grid-body">
+        @if (_loading && _rows.Count == 0)
+        {
+            <div style="text-align: center; padding: 30px; color: #888;">⏳ Loading history…</div>
+        }
+        else if (_variableNames.Count == 0)
+        {
+            <div style="text-align: center; padding: 30px; color: #888;">📭 No variables configured</div>
+        }
+        else if (_rows.Count == 0)
+        {
+            <div style="text-align: center; padding: 30px; color: #888;">📭 No historical data</div>
+        }
+        else
+        {
+            <table class="hda-grid-table">
+                <thead>
+                    <tr>
+                        <th class="hda-grid-th-time">Timestamp</th>
+                        @foreach (var name in _variableNames)
+                        {
+                            <th>@GetShortName(name)</th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in _rows)
+                    {
+                        <tr>
+                            <td class="hda-grid-time">@row.Time.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss.fff")</td>
+                            @foreach (var name in _variableNames)
+                            {
+                                var val = row.Values.GetValueOrDefault(name);
+                                <td class="hda-grid-value">@(val ?? "—")</td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+
+    @* Footer summary *@
+    @if (_rows.Count > 0)
+    {
+        <div class="hda-grid-footer">
+            @foreach (var name in _variableNames)
+            {
+                var stats = _stats.GetValueOrDefault(name);
+                if (stats != null)
+                {
+                    <span class="hda-grid-stat">
+                        <strong>@GetShortName(name)</strong>:
+                        min @Fmt(stats.Min) ·
+                        max @Fmt(stats.Max) ·
+                        avg @Fmt(stats.Avg) ·
+                        last @Fmt(stats.Last)
+                    </span>
+                }
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public List<string> VariablePaths { get; set; } = new();
+    [Parameter] public int TimeRangeMinutes { get; set; } = 60;
+    [Parameter] public int MaxPoints { get; set; } = 500;
+
+    [Inject] private HdaReaderService Hda { get; set; } = default!;
+
+    private List<string> _variableNames = new();
+    private List<GridRow> _rows = new();
+    private Dictionary<string, VarStats> _stats = new();
+    private bool _loading;
+    private bool _autoRefresh = true;
+    private int _timeRangeMinutes = 60;
+    private System.Threading.Timer? _refreshTimer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _timeRangeMinutes = TimeRangeMinutes > 0 ? TimeRangeMinutes : 60;
+        await Reload();
+        StartAutoRefresh();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (VariablePaths.Count > 0 && _rows.Count == 0)
+            await Reload();
+    }
+
+    private async Task Reload()
+    {
+        _variableNames = VariablePaths.Where(p => !string.IsNullOrWhiteSpace(p)).ToList();
+        if (_variableNames.Count == 0) return;
+
+        _loading = true;
+        StateHasChanged();
+
+        var seriesList = await Hda.ReadHistoryAsync(_variableNames, _timeRangeMinutes, MaxPoints);
+
+        // Merge all series into rows keyed by timestamp
+        var rowDict = new SortedDictionary<DateTime, Dictionary<string, string>>();
+
+        foreach (var series in seriesList)
+        {
+            foreach (var pt in series.Points)
+            {
+                if (!rowDict.TryGetValue(pt.Time, out var vals))
+                {
+                    vals = new Dictionary<string, string>();
+                    rowDict[pt.Time] = vals;
+                }
+                vals[series.VariableName] = pt.Value.HasValue
+                    ? Fmt(pt.Value.Value)
+                    : pt.StringValue ?? "";
+            }
+        }
+
+        _rows = rowDict
+            .Select(kv => new GridRow { Time = kv.Key, Values = kv.Value })
+            .OrderByDescending(r => r.Time)
+            .ToList();
+
+        // Compute stats per variable
+        _stats.Clear();
+        foreach (var series in seriesList)
+        {
+            var numericPts = series.Points.Where(p => p.Value.HasValue).Select(p => p.Value!.Value).ToList();
+            if (numericPts.Count > 0)
+            {
+                _stats[series.VariableName] = new VarStats
+                {
+                    Min = numericPts.Min(),
+                    Max = numericPts.Max(),
+                    Avg = numericPts.Average(),
+                    Last = numericPts[^1]
+                };
+            }
+        }
+
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private void StartAutoRefresh()
+    {
+        _refreshTimer?.Dispose();
+        if (_autoRefresh)
+        {
+            _refreshTimer = new System.Threading.Timer(async _ =>
+            {
+                await InvokeAsync(async () =>
+                {
+                    await Reload();
+                });
+            }, null, 10000, 10000);
+        }
+    }
+
+    private void ToggleAutoRefresh()
+    {
+        _autoRefresh = !_autoRefresh;
+        StartAutoRefresh();
+    }
+
+    private static string GetShortName(string path)
+    {
+        var idx = path.LastIndexOf('.');
+        return idx >= 0 ? path[(idx + 1)..] : path;
+    }
+
+    private static string Fmt(double v) =>
+        v.ToString("G6", System.Globalization.CultureInfo.InvariantCulture);
+
+    public void Dispose()
+    {
+        _refreshTimer?.Dispose();
+    }
+
+    private class GridRow
+    {
+        public DateTime Time { get; set; }
+        public Dictionary<string, string> Values { get; set; } = new();
+    }
+
+    private class VarStats
+    {
+        public double Min { get; set; }
+        public double Max { get; set; }
+        public double Avg { get; set; }
+        public double Last { get; set; }
+    }
+}
+

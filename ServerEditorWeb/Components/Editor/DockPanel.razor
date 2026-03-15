@@ -1,0 +1,75 @@
+@namespace ServerEditorWeb.Components.Editor
+
+<div class="dock-panel @(IsFloating ? "dock-floating" : "")"
+     style="@GetStyle()">
+
+    <div class="dock-panel-header" @onmousedown="OnHeaderMouseDown" @onmousedown:preventDefault
+         @oncontextmenu="OnHeaderContextMenu" @oncontextmenu:preventDefault>
+        <span class="dock-panel-icon">@Icon</span>
+        <span class="dock-panel-title">@Title</span>
+        <div class="dock-panel-actions">
+            @if (IsFloating)
+            {
+                <button class="dock-btn" title="Dock" @onclick="OnDockClicked" @onclick:stopPropagation>📌</button>
+            }
+            <button class="dock-btn" title="Close" @onclick="OnCloseClicked" @onclick:stopPropagation>✕</button>
+        </div>
+    </div>
+
+    <div class="dock-panel-body">
+        @ChildContent
+    </div>
+
+    @if (IsFloating)
+    {
+        <div class="dock-resize-handle" @onmousedown="OnResizeMouseDown" @onmousedown:preventDefault @onmousedown:stopPropagation></div>
+    }
+</div>
+
+@code {
+    [Parameter] public string Id { get; set; } = "";
+    [Parameter] public string Title { get; set; } = "";
+    [Parameter] public string Icon { get; set; } = "📄";
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public bool IsFloating { get; set; }
+    [Parameter] public double FloatX { get; set; } = 100;
+    [Parameter] public double FloatY { get; set; } = 100;
+    [Parameter] public double FloatWidth { get; set; } = 500;
+    [Parameter] public double FloatHeight { get; set; } = 400;
+    [Parameter] public int ZIndex { get; set; } = 100;
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback OnDock { get; set; }
+    [Parameter] public EventCallback<DockPanelDragEventArgs> OnDragStart { get; set; }
+    [Parameter] public EventCallback<DockPanelDragEventArgs> OnResizeStart { get; set; }
+    [Parameter] public EventCallback OnBringToFront { get; set; }
+    [Parameter] public EventCallback<DockPanelContextMenuEventArgs> OnContextMenu { get; set; }
+
+    private string GetStyle()
+    {
+        if (!IsFloating) return "";
+        return $"left:{FloatX}px;top:{FloatY}px;width:{FloatWidth}px;height:{FloatHeight}px;z-index:{ZIndex};";
+    }
+
+    private async Task OnCloseClicked() => await OnClose.InvokeAsync();
+    private async Task OnDockClicked() => await OnDock.InvokeAsync();
+
+    private async Task OnHeaderMouseDown(MouseEventArgs e)
+    {
+        if (IsFloating)
+        {
+            await OnBringToFront.InvokeAsync();
+            await OnDragStart.InvokeAsync(new DockPanelDragEventArgs(Id, e.ClientX, e.ClientY));
+        }
+    }
+
+    private async Task OnResizeMouseDown(MouseEventArgs e)
+    {
+        if (IsFloating)
+            await OnResizeStart.InvokeAsync(new DockPanelDragEventArgs(Id, e.ClientX, e.ClientY));
+    }
+
+    private async Task OnHeaderContextMenu(MouseEventArgs e)
+    {
+        await OnContextMenu.InvokeAsync(new DockPanelContextMenuEventArgs(Id, e.ClientX, e.ClientY));
+    }
+}

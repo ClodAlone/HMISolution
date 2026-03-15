@@ -1,0 +1,91 @@
+﻿<UserControl x:Class="ScreenManager.Popups.AliasEditor"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:dxg="http://schemas.devexpress.com/winfx/2008/xaml/grid"
+             xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"        
+             xmlns:properties="clr-namespace:ScreenManager.Properties" 
+             xmlns:converters="clr-namespace:Converters;assembly=Converters"
+             xmlns:converters2="clr-namespace:ScreenManager.Converters"
+    xmlns:appproperties="clr-namespace:WPFUtilities.Properties;assembly=WPFUtilities"
+             xmlns:local="clr-namespace:ScreenManager.Popups"
+             xmlns:dxb="http://schemas.devexpress.com/winfx/2008/xaml/bars"
+             mc:Ignorable="d" 
+             d:DesignHeight="300" d:DesignWidth="300">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+              <ResourceDictionary Source="/SharedResources;component/Resources/SharedImages.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+            <converters:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+            <converters2:AliasValueToHumanReadableConverter x:Key="AliasValueToHumanReadableConverter" />
+        </ResourceDictionary>
+    </UserControl.Resources>
+    <Grid Grid.Row="2">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        <dxg:GridControl Name="gridControl">
+            <dxb:BarManager.DXContextMenu>
+                <dxb:PopupMenu x:Name="contextMenu">
+                    <dxb:PopupMenu.Items>
+                        <dxb:BarButtonItem Command="ApplicationCommands.Copy" Content="{x:Static appproperties:ApplicationCommandsResource.Copy}"/>
+                        <dxb:BarButtonItem Command="ApplicationCommands.Cut" Content="{x:Static appproperties:ApplicationCommandsResource.Cut}"/>
+                        <dxb:BarButtonItem Command="ApplicationCommands.Paste" Content="{x:Static appproperties:ApplicationCommandsResource.Paste}"/>
+                    </dxb:PopupMenu.Items>
+                </dxb:PopupMenu>
+            </dxb:BarManager.DXContextMenu>
+            <dxg:GridControl.CommandBindings>
+                <CommandBinding Command="Copy"
+                    Executed="OnCommandCopy" 
+                    CanExecute="CanCommandCopy" />
+                <CommandBinding Command="Cut"
+                    Executed="OnCommandCut" 
+                    CanExecute="CanCommandCut" />
+                <CommandBinding Command="Paste"
+                    Executed="OnCommandPaste" 
+                    CanExecute="CanCommandPaste" />
+            </dxg:GridControl.CommandBindings>
+            <dxg:GridControl.Columns>
+                <dxg:GridColumn DisplayMemberBinding="{Binding Path=Key, Mode=TwoWay}" Header="{x:Static properties:Resources.KeyColumnHeader}"/>
+                <dxg:GridColumn Header="{x:Static properties:Resources.ValueColumnHeader}">
+                    <dxg:GridColumn.CellTemplate>
+                        <DataTemplate>
+                            <DockPanel>
+                                <ProgressBar DockPanel.Dock="Left" IsIndeterminate="True" Width="20" Height="20" Visibility="{Binding TagsListLoading, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}}" x:Name="progressBar" VerticalAlignment="Top"/>
+                                <Button x:Name="uriButton" DockPanel.Dock="Right"
+                                        Tag="{Binding Path=RowData.Row.Value, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Click="DlgButton_Click">
+                                    <Button.Content>
+                                        <Image Source="{StaticResource EditGeneralSmall}" Height="16" Width="16" />
+                                    </Button.Content>
+                                </Button>
+                                <dxe:ComboBoxEdit
+                                x:Name="uriLabel"
+                                Text="{Binding Path=Tag, Mode=OneWay, Source={x:Reference uriButton}, Converter={StaticResource AliasValueToHumanReadableConverter}, UpdateSourceTrigger=PropertyChanged}" 
+                                PopupOpening="uriLabel_PopupOpening"
+                                LostFocus="uriLabel_LostFocus" PreviewKeyDown="uriLabel_KeyDown" GotFocus="uriLabel_GotFocus"
+                                SelectedIndexChanged="uriLabel_SelectedIndexChanged"
+                                ShowSizeGrip="False" AutoComplete="True" ImmediatePopup="True" FindButtonPlacement="Popup">
+                                </dxe:ComboBoxEdit>
+                            </DockPanel>
+                        </DataTemplate>
+                    </dxg:GridColumn.CellTemplate>
+                </dxg:GridColumn>
+            </dxg:GridControl.Columns>
+            <dxg:GridControl.View>
+                <dxg:TableView Name="tableView" FocusedRowChanged="tableView_FocusedRowChanged" ShowTotalSummary="False" AutoWidth="true" ShowGroupPanel="False"/>
+            </dxg:GridControl.View>
+        </dxg:GridControl>
+
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition/>
+                <ColumnDefinition/>
+            </Grid.ColumnDefinitions>
+            <Button Content="{x:Static properties:Resources.AddButtonTitle}" Click="OnAdd" Margin="5,5,5,5" />
+            <Button IsEnabled="False" Grid.Column="1" x:Name="btnDelete" Content="{x:Static properties:Resources.DeleteButtonTitle}" Click="OnDelete" Margin="5,5,5,5"/>
+        </Grid>
+    </Grid>
+</UserControl>

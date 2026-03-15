@@ -1,0 +1,551 @@
+﻿<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:local="clr-namespace:Syncfusion.Windows.Chart.Olap"
+    xmlns:syn="http://schemas.syncfusion.com/wpf"
+    xmlns:shared="clr-namespace:Syncfusion.Windows.Shared;assembly=Syncfusion.Shared.Wpf"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+
+    <SolidColorBrush x:Key="Classic.LegendBackground"
+                   Color="#D3D3D3"/>
+    <SolidColorBrush x:Key="Classic.LegendForeground"
+                   Color="#000000"/>
+
+    <SolidColorBrush x:Key="Classic.LegendBorderBackground"
+                   Color="#6D6D6D"/>
+    <CornerRadius x:Key="Classic.LegendCornerRadius" 
+                TopLeft="10" BottomLeft="10" BottomRight="10" TopRight="10"/>
+    <SolidColorBrush x:Key="Classic.ToolBarBackground" 
+                      Color="#d3d3d3"/>
+
+    <SolidColorBrush x:Key="Classic.ExpanderSignBrush" Color="Black"/>
+    <SolidColorBrush x:Key="Classic.ExpanderBorderBrush" Color="#FF7898B5"/>
+    <LinearGradientBrush x:Key="Classic.ExpanderBackgroundBrush"
+                         EndPoint="1,1" 
+                         StartPoint="0,0">
+        <LinearGradientBrush.GradientStops>
+            <GradientStop Offset="0.2" Color="#FFFFFFFF"/>
+            <GradientStop Offset="1" Color="#FFC8C0B2"/>
+        </LinearGradientBrush.GradientStops>
+    </LinearGradientBrush>
+
+    <Pen Brush="#000000" x:Key="Classic.AxisPen" Thickness="0.2"/>
+
+    <!--Expander Style-->
+
+    <LinearGradientBrush x:Key="ButtonMouseOverBrush.Blue" EndPoint="0,1" StartPoint="0,0">
+        <LinearGradientBrush.GradientStops>
+            <GradientStop Color="#FFFFE69E" Offset="1"/>
+            <GradientStop Color="#FFFFE8A7" Offset="0.4"/>
+            <GradientStop Color="#FFFFD767" Offset="0.4"/>
+            <GradientStop Color="#FFFFFCDE"/>
+        </LinearGradientBrush.GradientStops>
+    </LinearGradientBrush>
+
+    <SolidColorBrush x:Key="TreeViewFill.Blue" Color="#FF7F9DB9"/>
+
+    <LinearGradientBrush x:Key="ToolTipBackground.Blue"
+                         StartPoint="0,0"
+                         EndPoint="0,1">
+        <LinearGradientBrush.GradientStops>
+            <GradientStop Color="#FFFFFF"
+                          Offset="0"/>
+            <GradientStop Color="#E4E5F0"
+                          Offset="1"/>
+        </LinearGradientBrush.GradientStops>
+    </LinearGradientBrush>
+
+    <Style x:Key="Classic.ExpanderStyle"
+           TargetType="{x:Type ToggleButton}">
+        <Setter Property="Focusable" Value="False"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type ToggleButton}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="12"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Height="11" x:Name="border"
+                                           BorderBrush="{StaticResource TreeViewFill.Blue}"
+                                            CornerRadius="1" 
+                                            Width="11" 
+                                            BorderThickness="1" 
+                                            SnapsToDevicePixels="True"
+                                            Background="{StaticResource ToolTipBackground.Blue}">
+                            <Path Margin="2" Data="M0,2L0,3 2,3 2,5 3,5 3,3 5,3 5,2 3,2 3,0 2,0 2,2z" 
+                                              Fill="Black" Name="ExpandPath" />
+                        </Border>
+                        <ContentPresenter Grid.Column="1"
+                                              Margin="4,0,0,0"
+                                              HorizontalAlignment="Left"
+                                              VerticalAlignment="Center"
+                                              SnapsToDevicePixels="True"
+                                              RecognizesAccessKey="True"/>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="ToggleButton.IsChecked" Value="True">
+                            <Setter Property="Path.Data" TargetName="ExpandPath" Value="M0,2L0,3 5,3 5,2z"/>
+                        </Trigger>
+                        <Trigger Property="IsMouseOver"
+                                 Value="true">
+                            <Setter Property="BorderBrush"
+                                    Value="#FF2CC8F8"
+                                    TargetName="border"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <local:PrimaryAxisLabelConvertor x:Key="labelFormatter"/>
+
+    <local:ExpanderStateConverter x:Key="expanderStateConverter"/>
+
+    <!--Annotation symbols-->
+    <!--Circle-->
+    <DataTemplate x:Key="Circle">
+        <Ellipse Width="7" Height="7" Fill="Crimson"/>
+    </DataTemplate>
+
+    <!--Rectangle-->
+    <DataTemplate x:Key="Rectangle">
+        <Rectangle Width="7" Height="7" Fill="Aqua"/>
+    </DataTemplate>
+
+    <!--Triangle-->
+    <DataTemplate x:Key="Triangle">
+        <StackPanel>
+            <Grid>
+                <Polygon Fill="GreenYellow">
+                    <Polygon.Points>
+                        <Point X="7" Y="7"/>
+                        <Point X="0" Y="0"/>
+                        <Point X="14" Y="0"/>
+                    </Polygon.Points>
+                </Polygon>
+            </Grid>
+        </StackPanel>
+    </DataTemplate>
+
+    <!--EmptySymbol-->
+    <DataTemplate x:Key="EmptySymbol">
+    </DataTemplate>
+
+    <!--OlapChart Area-->
+    <Style BasedOn="{StaticResource {x:Type syn:ChartArea}}" TargetType="{x:Type local:OlapArea}" x:Key="OlapChartAreaTemplate">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type local:OlapArea}">
+                    <ControlTemplate.Resources>
+                        <!-- Cartesian Axis Template-->
+                        <DataTemplate x:Key="ChartCartesianAxisTemplateKey">
+                            <DataTemplate.Resources>
+                                <syn:ChartAxisTypeConverter x:Key="ChartAxisPositionConverter"/>
+                                <syn:TitleToAlignmentConverter x:Key="TitleToAlignmentConverterKey"/>
+                            </DataTemplate.Resources>
+                            <syn:ChartCartesianAxisPanel Background="Transparent" OpposedPosition="{Binding OpposedPosition}" Orientation="{Binding Orientation}">
+                                <Grid Name="AxisTitle" HorizontalAlignment="{Binding HeaderAlignment, Converter={StaticResource TitleToAlignmentConverterKey}, ConverterParameter=Horizontal}" VerticalAlignment="{Binding HeaderAlignment, Converter={StaticResource TitleToAlignmentConverterKey}, ConverterParameter=Vertical}">									
+                                    <Grid.LayoutTransform>
+                                        <RotateTransform>
+                                            <RotateTransform.Angle>
+                                                <MultiBinding Converter="{StaticResource ChartAxisPositionConverter}" ConverterParameter="Title">
+                                                    <Binding Path="Orientation" RelativeSource="{RelativeSource FindAncestor, AncestorType={x:Type syn:ChartCartesianAxisPanel}}"/>
+                                                    <Binding Path="OpposedPosition" RelativeSource="{RelativeSource FindAncestor, AncestorType={x:Type syn:ChartCartesianAxisPanel}}"/>
+                                                </MultiBinding>
+                                            </RotateTransform.Angle>
+                                        </RotateTransform>
+                                    </Grid.LayoutTransform>
+                                    <ContentPresenter Content="{Binding Header}"/>
+                                </Grid>
+                                <ItemsControl ClipToBounds="False" ItemsSource="{Binding VisibleLabels}" ItemTemplate="{Binding LabelTemplate}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <syn:ChartCartesianAxisLabelsPanel
+                                                Margin="3"
+                                                Axis="{Binding}"
+                                                IntersectAction="{Binding IntersectAction}"
+                                                LabelRotateAngle="{Binding LabelRotateAngle}"
+                                                OpposedPosition="{Binding OpposedPosition}"
+                                                Orientation="{Binding Orientation}"/>
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemContainerStyle>
+                                        <Style>
+                                            <Setter Property="syn:ChartCartesianAxisLabelsPanel.Position" Value="{Binding Position}"/>
+                                        </Style>
+                                    </ItemsControl.ItemContainerStyle>
+                                </ItemsControl>
+                                <syn:ChartCartesianAxisElement
+                                    Axis="{Binding}"
+                                    Labels="{Binding VisibleLabels}"
+                                    LineStroke="{Binding LineStroke}"
+                                    Orientation="{Binding Orientation}"
+                                    TickSize="{Binding TickSize}"/>
+
+                            </syn:ChartCartesianAxisPanel>
+                        </DataTemplate>
+                        <!-- OlapAxis Template-->
+                        <DataTemplate x:Key="OlapChartAxisTemplateKey">
+                            <DataTemplate.Resources>
+                                <syn:ChartAxisTypeConverter x:Key="ChartAxisPositionConverter"/>
+                                <syn:TitleToAlignmentConverter x:Key="TitleToAlignmentConverterKey"/>
+                                <DataTemplate x:Key="olapLabelTemplate">
+                                    <!--<DataTemplate.Resources>
+                                        <local:OlapLabelBorderConverter x:Key="borderConverter"/>
+                                    </DataTemplate.Resources>-->
+                                    <Border BorderBrush="{Binding GroupLineStroke.Brush}" BorderThickness="0.1,0.1,0.1,0.2" DataContext="{Binding Axis, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type local:OlapScrollingPanel}}}" SnapsToDevicePixels="False">
+                                        <!--<Border.BorderThickness>
+                                            <MultiBinding Converter="{StaticResource borderConverter}">
+                                                <Binding RelativeSource="{RelativeSource Mode=FindAncestor, AncestorType={x:Type ContentControl}}"/>
+                                                <Binding RelativeSource="{RelativeSource Mode=FindAncestor, AncestorType={x:Type local:OlapLabelsPanel}}"/>
+                                                <Binding RelativeSource="{RelativeSource Mode=FindAncestor, AncestorType={x:Type local:OlapChart}}"/>
+                                                <Binding Path="GroupLineStroke.Thickness"/>
+                                                <Binding Path="ShowGroupLineStroke"/>
+                                            </MultiBinding>
+                                        </Border.BorderThickness>-->
+                                        <StackPanel x:Name="stackPanelLabelHolder" Orientation="Horizontal" Height="{Binding Path=ActualHeight, ElementName=textBlockLableContent}">
+                                            <StackPanel.Style>
+                                                <Style TargetType="{x:Type StackPanel}">
+                                                    <Setter Property="HorizontalAlignment" Value="Center"/>
+                                                    <Setter Property="VerticalAlignment" Value="Bottom"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Orientation}" Value="Vertical">
+                                                            <Setter Property="HorizontalAlignment" Value="Left"/>
+                                                            <Setter Property="VerticalAlignment" Value="Center"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding Orientation}" Value="Horizontal">
+                                                            <Setter Property="HorizontalAlignment" Value="Center"/>
+                                                            <Setter Property="VerticalAlignment" Value="Center"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </StackPanel.Style>
+                                            <!--Expander sign-->
+                                            <StackPanel VerticalAlignment="Center">
+                                                <StackPanel.Style>
+                                                    <Style TargetType="{x:Type StackPanel}">
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding ExpanderState, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type local:OlapLabelPresenter}}}" Value="Hidden">
+                                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </StackPanel.Style>
+                                                <ToggleButton x:Name="HeaderSite" 
+                                                                  Margin="1" 
+                                                                  MinHeight="0" 
+                                                                  MinWidth="0" 
+                                                                  Command="local:OlapScrollingPanel.ExpandElement"
+                                                                  CommandParameter="{Binding Content, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type local:OlapLabelPresenter}}}"
+                                                                  Style="{Binding Path=ExpanderStyle, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type local:OlapChart}}}" 
+                                                                  IsChecked="{Binding ExpanderState,Mode=OneWay, Converter={StaticResource expanderStateConverter}, 
+                                                                  RelativeSource={RelativeSource Mode=FindAncestor, 
+                                                                  AncestorType={x:Type local:OlapLabelPresenter}}}">
+                                                </ToggleButton>
+                                            </StackPanel>
+
+                                            <!--ClipToBounds="True" was removed from this text block for bar chart text clipping issue.-->
+                                            <TextBlock x:Name="textBlockLableContent"
+                                                Background="{Binding LabelBackground}"
+                                                Foreground="{Binding Path=LabelForeground, RelativeSource={RelativeSource FindAncestor,AncestorType={x:Type local:OlapChart}}}"
+                                                FontFamily="{Binding LabelFontFamily}"
+                                                FontSize="{Binding LabelFontSize}"
+                                            >
+                                                <TextBlock.Text>
+                                                    <MultiBinding Converter="{StaticResource labelFormatter}">
+                                                        <Binding RelativeSource="{RelativeSource Mode=FindAncestor, AncestorType={x:Type local:OlapLabelPresenter}}"/>
+                                                        <Binding RelativeSource="{RelativeSource Mode=FindAncestor, AncestorType={x:Type local:OlapChart}}"/>
+                                                    </MultiBinding>
+                                                </TextBlock.Text>
+                                                <TextBlock.LayoutTransform>
+                                                    <RotateTransform Angle="{Binding LabelRotateAngle}"/>
+                                                </TextBlock.LayoutTransform>
+                                            </TextBlock>
+
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </DataTemplate.Resources>
+                            <syn:ChartCartesianAxisPanel Background="Transparent" OpposedPosition="{Binding OpposedPosition}" Orientation="{Binding Orientation}">
+
+                                <Grid Name="AxisTitle" HorizontalAlignment="{Binding HeaderAlignment, Converter={StaticResource TitleToAlignmentConverterKey}, ConverterParameter=Horizontal}" VerticalAlignment="{Binding HeaderAlignment, Converter={StaticResource TitleToAlignmentConverterKey}, ConverterParameter=Vertical}">							
+                                    <Grid.LayoutTransform>
+                                        <RotateTransform>
+                                            <RotateTransform.Angle>
+                                                <MultiBinding Converter="{StaticResource ChartAxisPositionConverter}" ConverterParameter="Title">
+                                                    <Binding Path="Orientation" RelativeSource="{RelativeSource FindAncestor, AncestorType={x:Type syn:ChartCartesianAxisPanel}}"/>
+                                                    <Binding Path="OpposedPosition" RelativeSource="{RelativeSource FindAncestor, AncestorType={x:Type syn:ChartCartesianAxisPanel}}"/>
+                                                </MultiBinding>
+                                            </RotateTransform.Angle>
+                                        </RotateTransform>
+                                    </Grid.LayoutTransform>
+                                    <ContentPresenter Content="{Binding Header}"/>
+                                </Grid>
+                                <local:OlapScrollingPanel
+                                    Axis="{Binding}"
+                                    Orientation="{Binding Orientation}"
+                                    ZoomFactor="{Binding ZoomFactor}"
+                                    ZoomPosition="{Binding ZoomPosition}"
+                                    Visibility="{Binding Path=PrimaryAxisLabelVisibility, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type local:OlapChart}}}">
+                                    <local:OlapLabelsPanel x:Name="PART_OlapLabelsPanel" LabelsSource="{Binding Path=PivotEngine, Mode=OneWay, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type local:OlapArea}}}">
+                                        <local:OlapLabelsPanel.Resources>
+                                            <Style TargetType="{x:Type local:OlapLabelsPanel}">
+                                                <Setter Property="LabelTemplate" Value="{StaticResource olapLabelTemplate}"/>
+                                            </Style>
+                                        </local:OlapLabelsPanel.Resources>
+                                    </local:OlapLabelsPanel>
+                                </local:OlapScrollingPanel>
+                            </syn:ChartCartesianAxisPanel>
+                        </DataTemplate>
+                        <!--Chart Series Template-->
+                        <DataTemplate x:Key="ChartSeriesTemplate">
+                            <syn:ChartSeriesPresenter
+                                Series="{Binding}"
+                                TextBlock.FontFamily="{Binding AdornmentsInfo.SegmentLabelFontFamily}"
+                                TextBlock.FontSize="{Binding AdornmentsInfo.SegmentLabelFontSize}"
+                                TextBlock.FontWeight="{Binding AdornmentsInfo.SegmentLabelFontWeight}"
+                                XAxis="{Binding XAxis}"
+                                YAxis="{Binding YAxis}"/>
+                        </DataTemplate>
+
+                        <!--OlapArea Template-->
+                        <DataTemplate x:Key="ChartOlapAreaKey">
+                            <DataTemplate.Resources>
+                                <local:AxisTemplateSelector x:Key="axisTemplateSelector" 
+                                                            CartesianAxisTemplate="{StaticResource ChartCartesianAxisTemplateKey}" 
+                                                            OlapAxisTemplate="{StaticResource OlapChartAxisTemplateKey}"/>
+                            </DataTemplate.Resources>
+                            <syn:ChartPanel>
+                                <Grid Margin="{Binding AxesThickness}">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <!--Grid line inside the the chart area-->
+                                    <syn:ChartCartesianAreaGrid
+                                        Name="PART_GridElement"
+                                        Axes="{Binding Axes}"
+                                        Background="{Binding GridBackground}"
+                                        ClipToBounds="true"
+                                        FillRule="{Binding AlternatingFillMode}"
+                                        XAxis="{Binding PrimaryAxis}"
+                                        YAxis="{Binding SecondaryAxis}"/>
+
+                                    <!--Chart series container-->
+                                    <ItemsControl
+                                        Name="PART_SeriesContainer"
+                                        ClipToBounds="true"
+                                        ItemsSource="{Binding VisibleSeries}"
+                                        ItemTemplate="{StaticResource ChartSeriesTemplate}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <Grid/>
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                    </ItemsControl>
+
+                                    <!--Data points presenter (AdornmentsPresenter)-->
+                                    <syn:ChartAdornmentsPresenter
+                                        Area="{Binding}"
+                                        Axes="{Binding Axes}"
+                                        ClipToBounds="True"
+                                        VisibleSeries="{Binding VisibleSeries}" />
+                                    <syn:ChartZoomingScrollBar
+                                        x:Name="VerticalScrollBar"
+                                        Grid.Column="1"
+                                        Grid.Row="0"
+                                        IsInversed="{Binding VerticalScrollingAxis.IsInversed}"
+                                        Orientation="Vertical"
+                                        ZoomFactor="{Binding VerticalScrollingAxis.ZoomFactor}"
+                                        ZoomPosition="{Binding VerticalScrollingAxis.ZoomPosition, Mode=TwoWay}"
+                                        ZoomSwitched="{Binding ZoomSwitched}" />
+                                    <syn:ChartZoomingScrollBar
+                                        x:Name="HorizontalScrollBar"
+                                        Grid.Column="0"
+                                        Grid.Row="1"
+                                        IsInversed="{Binding HorizontalScrollingAxis.IsInversed}"
+                                        Orientation="Horizontal"
+                                        ZoomFactor="{Binding HorizontalScrollingAxis.ZoomFactor}"
+                                        ZoomPosition="{Binding HorizontalScrollingAxis.ZoomPosition, Mode=TwoWay}"
+                                        ZoomSwitched="{Binding ZoomSwitched}" />
+                                </Grid>
+                                <ItemsControl Name="PART_AxesContainer" ItemsSource="{Binding Axes}" ItemTemplateSelector="{StaticResource axisTemplateSelector}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <syn:ChartCartesianPanel AxesThickness="{Binding AxesThickness, Mode=OneWayToSource}" HorizontalScrollBarHeight="{Binding ActualHeight, ElementName=HorizontalScrollBar}" VerticalScrollBarWidth="{Binding ActualWidth, ElementName=VerticalScrollBar}"/>
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                </ItemsControl>
+                            </syn:ChartPanel>
+                        </DataTemplate>
+                    </ControlTemplate.Resources>
+                    <AdornerDecorator>
+                        <Border
+                            x:Name="PART_AreaBorder"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            ClipToBounds="true"
+                            CornerRadius="{TemplateBinding CornerRadius}"
+                            Padding="{TemplateBinding Padding}">
+                            <syn:ChartDockPanel Name="PART_CHARTDOCKPANEL" Background="Transparent">
+                                <ContentPresenter HorizontalAlignment="Center" ContentSource="Header" syn:ChartDockPanel.Dock="Top"/>
+                                <syn:ChartDockPanel.RootElement>
+                                    <syn:ChartAreaPresenter Content="{Binding Path=Content, RelativeSource={RelativeSource TemplatedParent}}" ContentTemplate="{StaticResource ChartOlapAreaKey}"/>
+                                </syn:ChartDockPanel.RootElement>
+                            </syn:ChartDockPanel>
+                        </Border>
+                    </AdornerDecorator>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <LinearGradientBrush x:Key="Office2007BlueGridBackground" EndPoint="0.508,0.001" StartPoint="0.504,0.997">
+        <GradientStop Color="White" Offset="0.961"/>
+        <GradientStop Color="#FFDEE9F6" Offset="1"/>
+        <GradientStop Color="White" Offset="0"/>
+    </LinearGradientBrush>
+    <!--OlapChart Control-->
+    <Style TargetType="{x:Type local:OlapChart}">
+        <!--Triggers -->     
+        <!--OlapChart Template-->
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type local:OlapChart}">
+                    <syn:Chart x:Name="PART_Chart">
+                        <local:OlapArea
+                            x:Name="PART_OlapArea"
+                            Margin="{TemplateBinding Padding}"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            ChartType="{TemplateBinding ChartType}" 
+                            CornerRadius="{TemplateBinding CornerRadius}"
+                            GridBackground="{Binding Path=GridBackground, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type local:OlapChart}}}"	
+                            Legend="{TemplateBinding Legend}"
+                            
+                            PrimaryAxis="{TemplateBinding PrimaryAxis}"
+                            SecondaryAxis="{TemplateBinding SecondaryAxis}"
+                            syn:ChartZoomingToolkit.ZoomCloseButtonVisibility="{TemplateBinding syn:ChartZoomingToolkit.ZoomCloseButtonVisibility}"
+                            syn:ChartZoomingToolkit.ZoomInButtonVisibility="{TemplateBinding syn:ChartZoomingToolkit.ZoomInButtonVisibility}"
+                            syn:ChartZoomingToolkit.ZoomingToolkitVisibility="{TemplateBinding syn:ChartZoomingToolkit.ZoomingToolkitVisibility}"
+                            syn:ChartZoomingToolkit.ZoomOutButtonVisibility="{TemplateBinding syn:ChartZoomingToolkit.ZoomOutButtonVisibility}"
+                            syn:ChartZoomingToolkit.ZoomResetButtonVisibility="{TemplateBinding syn:ChartZoomingToolkit.ZoomResetButtonVisibility}"
+                            Visibility="{TemplateBinding Visibility}"
+                            Style="{StaticResource OlapChartAreaTemplate}">
+                        </local:OlapArea>
+                    </syn:Chart>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Setter Property="GridLineStroke" Value="{StaticResource Classic.AxisPen}"/>
+        <Setter Property="ExpanderStyle" Value="{StaticResource Classic.ExpanderStyle}"/>
+        <!--Tooltip template series-->
+        <Setter Property="SeriesToolTipTemplate">
+            <Setter.Value>
+                <ControlTemplate>
+                    <Border
+                        Background="AliceBlue"
+                        BorderBrush="Black"
+                        BorderThickness="2"
+                        CornerRadius="5">
+                        <StackPanel Margin="3">
+                            <!--Binding to tooltip info elements-->
+                            <!--Measure Info-->
+                            <TextBlock Foreground="Black" Text="{Binding CorrespondingPoints[0].DataPoint.Item.Measure, Mode=OneTime}">
+                                <TextBlock.Style>
+                                    <Style TargetType="{x:Type TextBlock}">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding CorrespondingPoints[0].DataPoint.Item.Measure}" Value="">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                            <!--Value info-->
+                            <TextBlock Foreground="Black" Text="{Binding CorrespondingPoints[0].DataPoint.Item.Value, Mode=OneTime}">
+                                <TextBlock.Style>
+                                    <Style TargetType="{x:Type TextBlock}">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding CorrespondingPoints[0].DataPoint.Item.Value}" Value="">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                            <!--Column Dimension info-->
+                            <TextBlock Foreground="Black" Text="{Binding CorrespondingPoints[0].DataPoint.Item.Column, Mode=OneTime}">
+                                <TextBlock.Style>
+                                    <Style TargetType="{x:Type TextBlock}">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding CorrespondingPoints[0].DataPoint.Item.Column}" Value="">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                            <!--Row Dimension info-->
+                            <TextBlock Foreground="Black" Text="{Binding CorrespondingPoints[0].DataPoint.Item.Row, Mode=OneTime}">
+                                <TextBlock.Style>
+                                    <Style TargetType="{x:Type TextBlock}">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding CorrespondingPoints[0].DataPoint.Item.Row}" Value="">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </StackPanel>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!--Waiting dialog-->
+    <Style TargetType="{x:Type local:WaitingControl}">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type local:WaitingControl}">
+                    <Image
+                        Width="40"
+                        Height="40"
+                        RenderTransformOrigin="0.5, 0.5"
+                        Source="pack://application:,,,/Syncfusion.OlapChart.WPF;component/Images/waiting.gif">
+                        <Image.RenderTransform>
+                            <RotateTransform/>
+                        </Image.RenderTransform>
+                        <Image.Triggers>
+                            <EventTrigger RoutedEvent="Image.Loaded">
+                                <EventTrigger.Actions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation
+                                                Duration="0:0:1"
+                                                From="0"
+                                                RepeatBehavior="Forever"
+                                                SpeedRatio="2"
+                                                Storyboard.TargetProperty="(Image.RenderTransform).(RotateTransform.Angle)"
+                                                To="360"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </EventTrigger.Actions>
+                            </EventTrigger>
+                        </Image.Triggers>
+                    </Image>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+</ResourceDictionary>

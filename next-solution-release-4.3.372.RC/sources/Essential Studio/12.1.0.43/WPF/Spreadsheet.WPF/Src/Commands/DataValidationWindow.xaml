@@ -1,0 +1,92 @@
+﻿<Window x:Class="Syncfusion.Windows.Controls.Spreadsheet.Commands.DataValidationWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+         xmlns:local="clr-namespace:Syncfusion.Windows.Controls.Spreadsheet.Commands"
+        xmlns:syncfusion="clr-namespace:Syncfusion.Windows.Shared;assembly=Syncfusion.Shared.Wpf"
+         xmlns:resources="clr-namespace:Syncfusion.Windows.Controls.Spreadsheet.Resources"
+        x:Name="formatWindow" 
+       Width="450" Height="340"  WindowStartupLocation="CenterOwner" ResizeMode="NoResize" Title="Data Validation">    
+   
+    <Window.Resources>        
+        <local:StringToBoolConverter x:Key="StingToBoolConverter"/>
+        <local:StringToVisibilityforMinVale x:Key="MinValueConverter"/>
+        <local:StringToVisibiltyforMaxValue x:Key="MaxValueConverter"/>
+        <local:ExcelDataTypeToStringConverter x:Key="ExcelDataTypeConverter"/>
+        <local:ExcelDataValidationComparisonOperatorToStringConverter x:Key="ComparisonOperatorConverter"/>
+    </Window.Resources>
+
+    <Grid x:Name="LayoutRoot" Background="White">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="45"/>
+        </Grid.RowDefinitions>
+        <Grid.Resources>
+            <resources:ResourceWrapper x:Key="ribbonResources"/>
+        </Grid.Resources>
+        <TabControl Margin="5">
+            <TabItem Header="{Binding Source={StaticResource ribbonResources},Path=Settings}">
+                <Grid Height="225">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="30"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0" Text="{Binding Source={StaticResource ribbonResources},Path=ValidationCriteria}" Margin="3"/>
+                    <StackPanel Margin="20,5,5,5" Grid.Row="1">
+                        <TextBlock Text="{Binding Source={StaticResource ribbonResources},Path=Allow}" Margin="3"/>
+                        <ComboBox x:Name="allowCombo" Width="200" HorizontalAlignment="Left" Margin="3" ItemsSource="{Binding Path=AllowTypeList,ElementName=formatWindow,Mode=TwoWay}"
+                                  SelectedValue="{Binding Path=ValidationRange.DataValidation.AllowType,ElementName=formatWindow,Mode=OneWay,Converter={StaticResource ExcelDataTypeConverter}}"
+                                  SelectionChanged="allowComboSelectionChanged">
+                        </ComboBox>
+                        <TextBlock Text="{Binding Source={StaticResource ribbonResources},Path=Data_small}"/>
+                        <ComboBox x:Name="dataCombo" Width="200" HorizontalAlignment="Left" Margin="3" 
+                                  ItemsSource="{Binding Path=DataList, ElementName=formatWindow,Mode=TwoWay}"
+                                  SelectedValue="{Binding Path=ValidationRange.DataValidation.CompareOperator,ElementName=formatWindow,Mode=OneWay, Converter={StaticResource ComparisonOperatorConverter}}"
+                                  SelectionChanged="dataComboSelectionChanged">
+                        </ComboBox>
+                        <TextBlock x:Name="firstValueTxtBlock"  />
+                        <TextBox x:Name="firstValueTxtBox" Width="300" HorizontalAlignment="Left" Margin="3" Visibility="{Binding ElementName=allowCombo, Path=SelectedValue,Converter={StaticResource MinValueConverter}}"/>
+                        <TextBlock x:Name="secondValueTxtBlock" />
+                        <TextBox x:Name="secondValueTxtBox" Width="300" HorizontalAlignment="Left" Margin="3" Visibility="{Binding ElementName=dataCombo,Path=SelectedValue,Converter={StaticResource MaxValueConverter}}" IsEnabled="{Binding ElementName=allowCombo, Path=SelectedValue,Converter={StaticResource StingToBoolConverter}}"/>
+                    </StackPanel>
+                </Grid>
+            </TabItem>
+            <TabItem Header="{Binding Source={StaticResource ribbonResources},Path=InputMessage}">
+                <Grid Height="225">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="30"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <TextBlock Text="{Binding Source={StaticResource ribbonResources},Path=InputmessageDescription}" Margin="3" Grid.Row="0"/>
+                    <StackPanel Grid.Row="1" Margin="20,5,5,5">
+                        <TextBlock Text="{Binding Source={StaticResource ribbonResources}, Path=Title}" Margin="3"/>
+                        <TextBox x:Name="promptBoxTitleTxtBox" Width="300" HorizontalAlignment="Left" Margin="3"/>
+                        <TextBlock Text="{Binding Source={StaticResource ribbonResources},Path=Inputmessage_small}" Margin="3"/>
+                        <TextBox x:Name="promptBoxTextTxtBox" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"  VerticalAlignment="Top"
+                                 AcceptsReturn="True" Width="300" Height="112" HorizontalAlignment="Left" Margin="3"/>
+                    </StackPanel>
+                </Grid>
+            </TabItem>
+            <TabItem Header="{Binding Source={StaticResource ribbonResources},Path=ErrorAlert}">
+                <Grid Height="225">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="30"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <TextBlock Text="{Binding Source={StaticResource ribbonResources},Path=ErrorAlertDescription}" Margin="3"/>
+                    <StackPanel Grid.Row="1" Margin="20,5,5,5">
+                                <TextBlock Text="{Binding Source={StaticResource ribbonResources},Path=Title}" Margin="3"/>
+                                <TextBox x:Name="errorBoxTitleTxtBox" Width="300" Margin="3" HorizontalAlignment="Left"/>
+                                <TextBlock Text="{Binding Source={StaticResource ribbonResources},Path=ErrorMessage}" Margin="3"/>
+                                <TextBox x:Name="errorBoxTextTxtBox" Width="300" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"  VerticalAlignment="Top"
+                                         AcceptsReturn="True" HorizontalAlignment="Left" Margin="3" Height="112"/>
+                    </StackPanel>
+                </Grid>
+            </TabItem>
+        </TabControl>
+        <StackPanel Orientation="Horizontal" Grid.Row="1" HorizontalAlignment="Right">
+            <Button Content="{Binding Source={StaticResource ribbonResources},Path=ClearAll}" Height="25" Width="100" Margin="5,5,117,5" Click="OnClearAllButtonClick"/>
+            <Button Content="{Binding Source={StaticResource ribbonResources},Path=Ok}" Height="25" Width="100" Margin="5" Click="OnOkButtonClick"/>
+            <Button Content="{Binding Source={StaticResource ribbonResources},Path=Cancel}" Height="25" Width="100" Margin="5" Click="OnCancelButtonClick"/>
+        </StackPanel>
+    </Grid>
+</Window>

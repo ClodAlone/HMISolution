@@ -1,0 +1,210 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+
+	<Import Project="..\MSBuild.Tasks\MSBuild.Mercurial.Tasks" />
+	<Import Project="..\MSBuild.Tasks\MSBuild.Community.Tasks.Targets" />
+
+ 	<PropertyGroup>
+  		<BuildDebugDir>..\UFSolution\bin\Debug</BuildDebugDir>
+  		<BuildOutputDir>..\UFSolution\bin\Release\Drivers</BuildOutputDir>
+  		<BuildRetailDir>..\UFSolution\bin\Retail\Drivers</BuildRetailDir>
+		<BuildPublishDir>..\UFSolution\bin\NetCore\Drivers</BuildPublishDir>
+		<MSBuildMercurialPath>.</MSBuildMercurialPath>
+		<SolutionToCompile>Drivers.sln</SolutionToCompile>
+		<!-- Set this property to true to build without incrementing the assembly version. -->
+		<SkipIncrementAssemblyVersion Condition=" '$(SkipIncrementAssemblyVersion)' == '' " >false</SkipIncrementAssemblyVersion>
+		<SkipClean Condition=" '$(SkipClean)' == '' " >false</SkipClean>
+		<SkipHgPull Condition=" '$(SkipHgPull)' == '' " >false</SkipHgPull>
+ 	</PropertyGroup>
+
+<!--
+	<ItemGroup>
+		<ProjectToBuild Include="*.sln" />
+	</ItemGroup>
+-->
+
+	<ItemGroup>
+		<CProjectsToBuild Include=".\CodeSys\CoDeSysWrapper\CoDeSysWrapper.vcxproj" />
+	</ItemGroup>
+
+<!-- 
+	<ItemGroup>
+		<ProjectsToPublish Include=".\ModbusTCP\ModbusTCP\ModbusTCP.csproj" />
+		<ProjectsToPublish Include=".\Modbus\ModBus\ModBus.csproj" />
+		<ProjectsToPublish Include=".\ModbusTCPEx\ModbusTCPEx\ModbusTCPEx.csproj" />
+		<ProjectsToPublish Include=".\EtherNetIP\EtherNetIP\EtherNetIP.csproj" />
+		<ProjectsToPublish Include=".\OmronEthernetIP\OmronEthernetIP\OmronEthernetIP.csproj" />
+		<ProjectsToPublish Include=".\S7TCP\S7TCP\S7TCP.csproj" />
+	</ItemGroup>
+-->
+
+	<Target Name="GetHgRevision" Condition=" '$(SkipHgPull)' != 'true' ">
+		<Exec Command="hg pull --insecure" />
+		<HgUpdate LocalPath="$(MSBuildProjectDirectory)" Clean="true" Timeout="30000" />
+		<Message Text="Get latest revision from Kiln" />
+	</Target>
+
+	<Target Name="GetHgVersion">
+		<HgVersion LocalPath="$(MSBuildProjectDirectory)" Timeout="30000">
+			<Output TaskParameter="Revision" PropertyName="HgRevision" />
+			<Output TaskParameter="Changeset" PropertyName="HgChangeset" />
+		</HgVersion>
+		<Message Text="Last revision (changeset) from Kiln: $(HgRevision) ($(HgChangeset))" />
+	</Target>
+
+	<Target Name="SetVersionInfo">
+	<Attrib Files="AssemblyVersionInfo.txt" ReadOnly="false"/>
+    	<Version	
+		Condition=" '$(SkipIncrementAssemblyVersion)' == 'true' "
+		VersionFile="AssemblyVersionInfo.txt"
+	         BuildType="None"
+		RevisionType="None">
+		<Output TaskParameter="Major" PropertyName="Major" />
+		<Output TaskParameter="Minor" PropertyName="Minor" />
+		<Output TaskParameter="Build" PropertyName="Build" />
+		<Output TaskParameter="Revision" PropertyName="Revision" />
+	</Version>
+
+	<Version 
+		Condition=" '$(SkipIncrementAssemblyVersion)' != 'true' "
+		VersionFile="AssemblyVersionInfo.txt"
+		BuildType="Increment"
+		RevisionType="None">
+		<Output TaskParameter="Major" PropertyName="Major" />
+		<Output TaskParameter="Minor" PropertyName="Minor" />
+		<Output TaskParameter="Build" PropertyName="Build" />
+		<Output TaskParameter="Revision" PropertyName="Revision" />
+	</Version>
+
+	<PropertyGroup>
+		<BuildNumber>$(Major).$(Minor).$(Build).$(HgRevision)</BuildNumber>
+	</PropertyGroup>
+		<Message Importance="high" Text="Build number set to &quot;$(BuildNumber)&quot;" />
+
+	<AssemblyInfo
+                  CodeLanguage="CS"
+                  OutputFile="AssemblyVersionInfo.cs"
+                  AssemblyFileVersion="$(BuildNumber)" />
+	</Target>
+
+	<Target Name="Clean" Condition="'$(SkipClean)'!= 'true'">
+		<RemoveDir Directories="$(BuildDebugDir)" />
+		<RemoveDir Directories="$(BuildOutputDir)" />
+		<RemoveDir Directories="$(BuildRetailDir)" />
+		<RemoveDir Directories="$(BuildPublishDir)" />
+	</Target>
+
+	<Target Name="Restore">
+		<!--
+		<MSBuild Projects="$(SolutionToCompile)" Targets="Restore" StopOnFirstFailure="false" ContinueOnError="true" 
+				Properties="Configuration=Release;Platform=Any CPU" />
+		-->
+		<Exec Command="dotnet.exe restore $(SolutionToCompile)" ContinueOnError="WarnAndContinue" />
+		<Exec Command="..\Packages\nuget.exe restore $(SolutionToCompile)" ContinueOnError="WarnAndContinue" />
+	</Target>
+
+	<Target Name="AfterBuild">
+		<!-- create retail folder and move files inside -->
+		<MakeDir Directories="$(BuildRetailDir)" />
+		<Exec Command="XCOPY /S /Y $(BuildOutputDir)\*.dll $(BuildRetailDir)" ContinueOnError="WarnAndContinue" />
+		<Exec Command="XCOPY /S /Y $(BuildOutputDir)\*.config $(BuildRetailDir)" ContinueOnError="WarnAndContinue" />
+		<Exec Command="XCOPY /S /Y $(BuildOutputDir)\knx_interfaces.xml $(BuildRetailDir)" ContinueOnError="WarnAndContinue" />
+		<Exec Command="XCOPY /S /Y $(BuildOutputDir)\knx_master.xml $(BuildRetailDir)" ContinueOnError="WarnAndContinue" />
+
+		<!-- create NetCore folder and move files inside -->
+		<MakeDir Directories="$(BuildPublishDir)" />
+		<Exec Command="XCOPY /S /Y $(BuildOutputDir)\netstandard2.0\DriverCodeBase.* $(BuildPublishDir)" ContinueOnError="WarnAndContinue" />
+		<Exec Command="XCOPY /S /Y $(BuildOutputDir)\netstandard2.0\IpDriverCodeBase.* $(BuildPublishDir)" ContinueOnError="WarnAndContinue" />
+		<Exec Command="XCOPY /S /Y $(BuildOutputDir)\netstandard2.0\DriverCodeBaseEx.* $(BuildPublishDir)" ContinueOnError="WarnAndContinue" />
+		<Exec Command="XCOPY /S /Y $(BuildOutputDir)\netstandard2.0\IpDriverCodeBaseEx.* $(BuildPublishDir)" ContinueOnError="WarnAndContinue" />
+		<Exec Command="XCOPY /S /Y $(BuildOutputDir)\netstandard2.0\SerialDriverCodeBaseEx.* $(BuildPublishDir)" ContinueOnError="WarnAndContinue" />
+		<Exec Command="XCOPY /S /Y $(BuildOutputDir)\netstandard2.0\SerialDriverCodeBase.* $(BuildPublishDir)" ContinueOnError="WarnAndContinue" />
+		<Exec Command="XCOPY /S /Y $(BuildOutputDir)\netstandard2.0\DriverBaseInterfaces.* $(BuildPublishDir)" ContinueOnError="WarnAndContinue" />
+
+		<Exec Command="XCOPY /S /Y $(BuildOutputDir)\netstandard2.0\BACnet.* $(BuildPublishDir)" ContinueOnError="WarnAndContinue" />
+		<Exec Command="XCOPY /S /Y $(BuildOutputDir)\netstandard2.0\Demo.* $(BuildPublishDir)" ContinueOnError="WarnAndContinue" />
+		<Exec Command="XCOPY /S /Y $(BuildOutputDir)\netstandard2.0\DICom.* $(BuildPublishDir)" ContinueOnError="WarnAndContinue" />
+		<Exec Command="XCOPY /S /Y $(BuildOutputDir)\netstandard2.0\EIB.* $(BuildPublishDir)" ContinueOnError="WarnAndContinue" />
+		<Exec Command="XCOPY /S /Y $(BuildOutputDir)\netstandard2.0\Autofac.dll $(BuildPublishDir)" ContinueOnError="WarnAndContinue" />
+		<Exec Command="XCOPY /S /Y $(BuildOutputDir)\netstandard2.0\Knx.Bus.Common.dll $(BuildPublishDir)" ContinueOnError="WarnAndContinue" />
+		<Exec Command="XCOPY /S /Y $(BuildOutputDir)\netstandard2.0\Knx.Bus.Cryptography.dll $(BuildPublishDir)" ContinueOnError="WarnAndContinue" />
+		<Exec Command="XCOPY /S /Y $(BuildOutputDir)\netstandard2.0\Knx.Falcon.dll $(BuildPublishDir)" ContinueOnError="WarnAndContinue" />
+		<Exec Command="XCOPY /S /Y $(BuildOutputDir)\netstandard2.0\Knx.Falcon.Sdk.dll $(BuildPublishDir)" ContinueOnError="WarnAndContinue" />
+		<Exec Command="XCOPY /S /Y $(BuildOutputDir)\netstandard2.0\Knx.Falcon.UsbAccess.dll $(BuildPublishDir)" ContinueOnError="WarnAndContinue" />
+		<Exec Command="XCOPY /S /Y $(BuildOutputDir)\netstandard2.0\Knx.Falcon.UsbAccessWindows.dll $(BuildPublishDir)" ContinueOnError="WarnAndContinue" />
+		<Exec Command="XCOPY /S /Y $(BuildOutputDir)\netstandard2.0\knx_interfaces.xml $(BuildPublishDir)" ContinueOnError="WarnAndContinue" />
+		<Exec Command="XCOPY /S /Y $(BuildOutputDir)\netstandard2.0\knx_master.xml $(BuildPublishDir)" ContinueOnError="WarnAndContinue" />
+		<Exec Command="XCOPY /S /Y $(BuildOutputDir)\netstandard2.0\EtherNetIP.* $(BuildPublishDir)" ContinueOnError="WarnAndContinue" />
+		<Exec Command="XCOPY /S /Y $(BuildOutputDir)\netstandard2.0\Fatek.* $(BuildPublishDir)" ContinueOnError="WarnAndContinue" />
+		<Exec Command="XCOPY /S /Y $(BuildOutputDir)\netstandard2.0\GESRTP2.* $(BuildPublishDir)" ContinueOnError="WarnAndContinue" />
+		<Exec Command="XCOPY /S /Y $(BuildOutputDir)\netstandard2.0\IEC60870_5_104.* $(BuildPublishDir)" ContinueOnError="WarnAndContinue" />
+		<Exec Command="XCOPY /S /Y $(BuildOutputDir)\netstandard2.0\IEC61850.* $(BuildPublishDir)" ContinueOnError="WarnAndContinue" />
+		<Exec Command="XCOPY /S /Y $(BuildOutputDir)\netstandard2.0\MQTTClientInternal.* $(BuildPublishDir)" ContinueOnError="WarnAndContinue" />
+		<Exec Command="XCOPY /S /Y $(BuildOutputDir)\netstandard2.0\IoTProgeaCloud.* $(BuildPublishDir)" ContinueOnError="WarnAndContinue" />
+		<Exec Command="XCOPY /S /Y $(BuildOutputDir)\netstandard2.0\M2Mqtt.dll $(BuildPublishDir)" ContinueOnError="WarnAndContinue" />
+		<Exec Command="XCOPY /S /Y $(BuildOutputDir)\netstandard2.0\MelsecFX.* $(BuildPublishDir)" ContinueOnError="WarnAndContinue" />
+		<Exec Command="XCOPY /S /Y $(BuildOutputDir)\netstandard2.0\MelsecFXTCP.* $(BuildPublishDir)" ContinueOnError="WarnAndContinue" />
+		<Exec Command="XCOPY /S /Y $(BuildOutputDir)\netstandard2.0\MelsecQEth.* $(BuildPublishDir)" ContinueOnError="WarnAndContinue" />
+		<Exec Command="XCOPY /S /Y $(BuildOutputDir)\netstandard2.0\ModBus.* $(BuildPublishDir)" ContinueOnError="WarnAndContinue" />
+		<Exec Command="XCOPY /S /Y $(BuildOutputDir)\netstandard2.0\ModbusTCP.* $(BuildPublishDir)" ContinueOnError="WarnAndContinue" />
+		<Exec Command="XCOPY /S /Y $(BuildOutputDir)\netstandard2.0\ModbusTCPSlave.* $(BuildPublishDir)" ContinueOnError="WarnAndContinue" />
+		<Exec Command="XCOPY /S /Y $(BuildOutputDir)\netstandard2.0\MpiPcAdapter.* $(BuildPublishDir)" ContinueOnError="WarnAndContinue" />
+		<Exec Command="XCOPY /S /Y $(BuildOutputDir)\netstandard2.0\MTConnect.* $(BuildPublishDir)" ContinueOnError="WarnAndContinue" />
+		<Exec Command="XCOPY /S /Y $(BuildOutputDir)\netstandard2.0\MQTTClient.* $(BuildPublishDir)" ContinueOnError="WarnAndContinue" />
+		<Exec Command="XCOPY /S /Y $(BuildOutputDir)\netstandard2.0\NaisFp.* $(BuildPublishDir)" ContinueOnError="WarnAndContinue" />
+		<Exec Command="XCOPY /S /Y $(BuildOutputDir)\netstandard2.0\OmronEthernetIP.* $(BuildPublishDir)" ContinueOnError="WarnAndContinue" />
+		<Exec Command="XCOPY /S /Y $(BuildOutputDir)\netstandard2.0\OmronFinsEthernet.* $(BuildPublishDir)" ContinueOnError="WarnAndContinue" />
+		<Exec Command="XCOPY /S /Y $(BuildOutputDir)\netstandard2.0\OpcClientDriver.* $(BuildPublishDir)" ContinueOnError="WarnAndContinue" />
+		<Exec Command="XCOPY /S /Y $(BuildOutputDir)\netstandard2.0\ROCDriver.* $(BuildPublishDir)" ContinueOnError="WarnAndContinue" />
+		<Exec Command="XCOPY /S /Y $(BuildOutputDir)\netstandard2.0\S7TCP.* $(BuildPublishDir)" ContinueOnError="WarnAndContinue" />
+		<Exec Command="XCOPY /S /Y $(BuildOutputDir)\netstandard2.0\SaiaDataMode.* $(BuildPublishDir)" ContinueOnError="WarnAndContinue" />
+		<Exec Command="XCOPY /S /Y $(BuildOutputDir)\netstandard2.0\SNMP.* $(BuildPublishDir)" ContinueOnError="WarnAndContinue" />
+		<Exec Command="XCOPY /S /Y $(BuildOutputDir)\netstandard2.0\SQLDriver.* $(BuildPublishDir)" ContinueOnError="WarnAndContinue" />
+		<Exec Command="XCOPY /S /Y $(BuildOutputDir)\netstandard2.0\PPI.* $(BuildPublishDir)" ContinueOnError="WarnAndContinue" />
+		
+		<!-- remove target framework folders -->
+		<RemoveDir Directories="$(BuildRetailDir)\net47" ContinueOnError="WarnAndContinue" />
+		<RemoveDir Directories="$(BuildRetailDir)\net48" ContinueOnError="WarnAndContinue" />
+		<RemoveDir Directories="$(BuildRetailDir)\netcoreapp2.0" ContinueOnError="WarnAndContinue" />
+		<RemoveDir Directories="$(BuildRetailDir)\netcoreapp2.1" ContinueOnError="WarnAndContinue" />
+		<RemoveDir Directories="$(BuildRetailDir)\netstandard2.0" ContinueOnError="WarnAndContinue" />
+
+		<!-- add/remove files to delete changing 'FileToDelete.txt" file -->
+		<ReadLinesFromFile File="FilesToDelete.txt">
+			<Output TaskParameter="Lines" ItemName="FilesToDelete" />
+		</ReadLinesFromFile>
+
+		<CombinePath BasePath="$(BuildRetailDir)" Paths="@(FilesToDelete)">
+		            <Output TaskParameter="CombinedPaths" ItemName="FilesToDeleteWithPath" />
+		</CombinePath >
+		
+		<Exec Command="DEL /F /S /Q @(FilesToDeleteWithPath)" ContinueOnError="WarnAndContinue" />
+		<Exec Command="FOR /F %%a IN ('DIR /B /A-D ..\UFSolution\bin\Retail\*.*') DO DEL /F /S /Q $(BuildRetailDir)\%%a" />
+	</Target>
+
+	<Target Name="Compile">
+		<MakeDir Directories="$(OutputDirectory)" />
+		<MSBuild Projects="$(SolutionToCompile)" ContinueOnError="ErrorAndContinue"
+		     Properties="Configuration=Release;Platform=Any CPU;DebugType=none;GenerateDocumentation=false;RunCodeAnalysis=False" />
+		<CallTarget Targets="CCompile"/>
+		<!--<CallTarget Targets="Publish"/>-->
+		<CallTarget Targets="AfterBuild"/>
+	</Target>
+
+	<Target Name="CCompile">
+		<MSBuild Projects="@(CProjectsToBuild)" ContinueOnError="ErrorAndContinue"
+		     Properties="Configuration=Release;Platform=x64;DebugType=none;GenerateDocumentation=false;RunCodeAnalysis=False" />
+	</Target>
+
+<!--	
+	<Target Name="Publish">
+		<MSBuild Projects="@(ProjectsToPublish)" ContinueOnError="ErrorAndContinue" Targets="Publish" 
+			Properties="Configuration=Release;Platform=Any;TargetFramework=netstandard2.0;PublishDir=.$(BuildPublishDir);SelfContained=false;_IsPortable=true" />
+	</Target>
+-->
+ 
+	<Target Name="Build" DependsOnTargets="Clean;Restore;Compile">
+		<Message Text="Finish to build $(SolutionToCompile) version $(BuildNumber)"/>
+	</Target>
+
+</Project>

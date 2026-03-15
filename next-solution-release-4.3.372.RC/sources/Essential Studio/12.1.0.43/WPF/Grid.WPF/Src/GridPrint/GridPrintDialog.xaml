@@ -1,0 +1,438 @@
+﻿<syncfusion:ChromelessWindow x:Class="Syncfusion.Windows.Controls.Grid.GridPrintDialog"
+                             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                             xmlns:local="clr-namespace:Syncfusion.Windows.Controls.Grid"
+                             xmlns:print="clr-namespace:System.Printing;assembly=ReachFramework"
+                             xmlns:sfshared="clr-namespace:Syncfusion.Windows.Shared;assembly=Syncfusion.Shared.WPF"
+                             xmlns:syncfusion="http://schemas.syncfusion.com/wpf"
+                             xmlns:sys="clr-namespace:System;assembly=mscorlib"
+                             x:Name="Window"
+                             Title="Grid Print Dialog"
+                             Width="800"
+                             Height="600"
+                             HorizontalAlignment="Center">
+    <syncfusion:ChromelessWindow.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Themes/PrintGallery.xaml" />
+                <ResourceDictionary Source="Themes/Generic.xaml" />
+                <ResourceDictionary Source="pack://application:,,,/Syncfusion.Shared.WPF;component/SkinManager/SkinManager.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </syncfusion:ChromelessWindow.Resources>
+    <Border x:Name="LayoutBorder">
+        <Grid x:Name="LayoutRoot">
+            <Grid.Resources>
+                <Style x:Key="ButtonFocusVisual">
+                    <Setter Property="Control.Template">
+                        <Setter.Value>
+                            <ControlTemplate>
+                                <Rectangle Margin="2"
+                                           SnapsToDevicePixels="true"
+                                           Stroke="Black"
+                                           StrokeDashArray="1 2"
+                                           StrokeThickness="1" />
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
+                <LinearGradientBrush x:Key="ButtonHoverBackground" StartPoint="0.526496,0.0149254" EndPoint="0.526496,0.970149">
+                    <LinearGradientBrush.GradientStops>
+                        <GradientStop Offset="0" Color="#FFFEFEFA" />
+                        <GradientStop Offset="0.488584" Color="#FFFED948" />
+                        <GradientStop Offset="1" Color="#FFFEE47F" />
+                    </LinearGradientBrush.GradientStops>
+                </LinearGradientBrush>
+                <LinearGradientBrush x:Key="ButtonPressedBackground" StartPoint="0.526496,0.0149253" EndPoint="0.526496,0.970149">
+                    <LinearGradientBrush.GradientStops>
+                        <GradientStop Offset="0" Color="#FFF3B276" />
+                        <GradientStop Offset="0.488584" Color="#FFF47912" />
+                        <GradientStop Offset="1" Color="#FFFEAE01" />
+                    </LinearGradientBrush.GradientStops>
+                </LinearGradientBrush>
+                <SolidColorBrush x:Key="ButtonNormalBorder" Color="#FF707070" />
+                <Style x:Key="ButtonStyle1" TargetType="{x:Type Button}">
+                    <Setter Property="FocusVisualStyle" Value="{StaticResource ButtonFocusVisual}" />
+                    <Setter Property="Background" Value="Transparent" />
+                    <Setter Property="BorderBrush" Value="{StaticResource ButtonNormalBorder}" />
+                    <Setter Property="BorderThickness" Value="1" />
+                    <Setter Property="Foreground" Value="{DynamicResource {x:Static SystemColors.ControlTextBrushKey}}" />
+                    <Setter Property="HorizontalContentAlignment" Value="Center" />
+                    <Setter Property="VerticalContentAlignment" Value="Center" />
+                    <Setter Property="Padding" Value="1" />
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="{x:Type Button}">
+                                <Border x:Name="Chrome"
+                                        Background="{TemplateBinding Background}"
+                                        BorderBrush="{TemplateBinding BorderBrush}"
+                                        CornerRadius="2"
+                                        Padding="4"
+                                        SnapsToDevicePixels="true">
+                                    <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                      VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                                      Content="{TemplateBinding Content}"
+                                                      RecognizesAccessKey="True"
+                                                      SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}" />
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsEnabled" Value="false">
+                                        <Setter Property="Foreground" Value="#ADADAD" />
+                                    </Trigger>
+                                    <Trigger Property="IsMouseOver" Value="true">
+                                        <Setter Property="Background" Value="{StaticResource ButtonHoverBackground}" />
+                                    </Trigger>
+                                    <Trigger Property="IsPressed" Value="true">
+                                        <Setter Property="Background" Value="{StaticResource ButtonPressedBackground}" />
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
+
+                <ItemsPanelTemplate x:Key="ListItemTemplate">
+                    <VirtualizingStackPanel HorizontalAlignment="Center"
+                                            VerticalAlignment="Center"
+                                            IsItemsHost="True"
+                                            Orientation="Horizontal" />
+                </ItemsPanelTemplate>
+                <SolidColorBrush x:Key="ListBorder" Color="#828790" />
+                <Style x:Key="ImageListStyle" TargetType="{x:Type ListBox}">
+                    <Setter Property="Background" Value="Transparent" />
+                    <Setter Property="BorderBrush" Value="{StaticResource ListBorder}" />
+                    <Setter Property="BorderThickness" Value="1" />
+                    <Setter Property="Foreground" Value="{StaticResource {x:Static SystemColors.ControlTextBrushKey}}" />
+                    <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Auto" />
+                    <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto" />
+                    <Setter Property="ScrollViewer.CanContentScroll" Value="true" />
+                    <Setter Property="VerticalContentAlignment" Value="Center" />
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="{x:Type ListBox}">
+                                <Border x:Name="Bd"
+                                        Background="{TemplateBinding Background}"
+                                        BorderThickness="0"
+                                        Padding="1"
+                                        SnapsToDevicePixels="true">
+                                    <ScrollViewer Focusable="false" Padding="{TemplateBinding Padding}">
+                                        <ItemsPresenter SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}" />
+                                    </ScrollViewer>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsEnabled" Value="false">
+                                        <Setter TargetName="Bd" Property="Background" Value="{StaticResource {x:Static SystemColors.ControlBrushKey}}" />
+                                    </Trigger>
+                                    <Trigger Property="IsGrouping" Value="true">
+                                        <Setter Property="ScrollViewer.CanContentScroll" Value="false" />
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
+                <Style x:Key="ImageListBoxItemStyle" TargetType="{x:Type ListBoxItem}">
+                    <Setter Property="Margin" Value="5" />
+                    <Setter Property="Background" Value="Transparent" />
+                    <Setter Property="HorizontalContentAlignment" Value="{Binding Path=HorizontalContentAlignment, RelativeSource={RelativeSource AncestorType={x:Type ItemsControl}}}" />
+                    <Setter Property="VerticalContentAlignment" Value="{Binding Path=VerticalContentAlignment, RelativeSource={RelativeSource AncestorType={x:Type ItemsControl}}}" />
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="{x:Type ListBoxItem}">
+                                <Border x:Name="Bd"
+                                        Background="{TemplateBinding Background}"
+                                        BorderBrush="{TemplateBinding BorderBrush}"
+                                        BorderThickness="{TemplateBinding BorderThickness}"
+                                        Padding="{TemplateBinding Padding}"
+                                        SnapsToDevicePixels="true">
+                                    <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                      VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                                      SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}" />
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <!--
+                                        <Trigger Property="IsSelected" Value="true">
+                                        <Setter Property="Background" TargetName="Bd" Value="{DynamicResource {x:Static SystemColors.HighlightBrushKey}}"/>
+                                        <Setter Property="Foreground" Value="{DynamicResource {x:Static SystemColors.HighlightTextBrushKey}}"/>
+                                        </Trigger>
+                                        <MultiTrigger>
+                                        <MultiTrigger.Conditions>
+                                        <Condition Property="IsSelected" Value="true"/>
+                                        <Condition Property="Selector.IsSelectionActive" Value="false"/>
+                                        </MultiTrigger.Conditions>
+                                        <Setter Property="Background" TargetName="Bd" Value="{DynamicResource {x:Static SystemColors.ControlBrushKey}}"/>
+                                        <Setter Property="Foreground" Value="{DynamicResource {x:Static SystemColors.ControlTextBrushKey}}"/>
+                                        </MultiTrigger>
+                                    -->
+                                    <Trigger Property="IsEnabled" Value="false">
+                                        <Setter Property="Foreground" Value="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}" />
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
+
+                <ItemsPanelTemplate x:Key="SplitButtonItemTemplate">
+                    <StackPanel IsItemsHost="True" />
+                </ItemsPanelTemplate>
+
+                <ControlTemplate x:Key="SplitButtonControlTemplate1" TargetType="{x:Type local:GridSplitButton}">
+                    <Grid>
+                        <ToggleButton x:Name="PART_ToggleButton"
+                                      Content="{TemplateBinding Content}"
+                                      Foreground="#FFFFFFFF"
+                                      Style="{DynamicResource ToggleButtonStyle1}" />
+                        <Popup HorizontalAlignment="Center"
+                               VerticalAlignment="Center"
+                               IsOpen="{Binding Path=IsChecked,
+                                                ElementName=PART_ToggleButton,
+                                                Mode=OneWay}"
+                               Placement="Bottom"
+                               StaysOpen="True">
+                            <Grid Width="{Binding Path=Width, ElementName=PART_ToggleButton}" Height="{Binding Path=Height, ElementName=PART_ToggleButton}">
+                                <ListBox x:Name="PART_ListBox"
+                                         Width="{Binding Path=Width,
+                                                         ElementName=PART_ToggleButton}"
+                                         HorizontalAlignment="Right"
+                                         VerticalAlignment="Bottom"
+                                         IsSynchronizedWithCurrentItem="True"
+                                         ItemsPanel="{StaticResource SplitButtonItemTemplate}" />
+                            </Grid>
+                        </Popup>
+                    </Grid>
+                </ControlTemplate>
+
+                <ObjectDataProvider x:Key="PageSizesList"
+                                    MethodName="GetValues"
+                                    ObjectType="{x:Type sys:Enum}">
+                    <ObjectDataProvider.MethodParameters>
+                        <x:Type TypeName="print:PageMediaSizeName" />
+                    </ObjectDataProvider.MethodParameters>
+                </ObjectDataProvider>
+
+                <ObjectDataProvider x:Key="PageOrientationList"
+                                    MethodName="GetValues"
+                                    ObjectType="{x:Type sys:Enum}">
+                    <ObjectDataProvider.MethodParameters>
+                        <x:Type TypeName="print:PageOrientation" />
+                    </ObjectDataProvider.MethodParameters>
+                </ObjectDataProvider>
+
+                <ObjectDataProvider x:Key="PageOutputColor"
+                                    MethodName="GetValues"
+                                    ObjectType="{x:Type sys:Enum}">
+                    <ObjectDataProvider.MethodParameters>
+                        <x:Type TypeName="print:OutputColor" />
+                    </ObjectDataProvider.MethodParameters>
+                </ObjectDataProvider>
+            </Grid.Resources>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="90" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="50" />
+            </Grid.RowDefinitions>
+            <Border x:Name="bottomBorder"
+                    Grid.Row="2"
+                    Margin="5"
+                    CornerRadius="3">
+                <!--
+                    <Border.Background>
+                    <LinearGradientBrush EndPoint="0.5,1" StartPoint="0.5,0">
+                    <GradientStop Color="#FFFFFFFF" Offset="0"/>
+                    <GradientStop Color="#FFCFE4FF" Offset="1"/>
+                    </LinearGradientBrush>
+                    </Border.Background>
+                -->
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="120" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="80" />
+                    </Grid.ColumnDefinitions>
+                    <Border Grid.Column="0"
+                            Margin="4"
+                            BorderBrush="#FFCFE4FF"
+                            BorderThickness="0.5"
+                            CornerRadius="4,4,4,4">
+                        <TextBlock x:Name="txtCurrentPage"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   FontFamily="Arial"
+                                   Foreground="Black"
+                                   TextWrapping="Wrap" />
+                    </Border>
+                </Grid>
+            </Border>
+            <Border x:Name="topBorder"
+                    Margin="10,10,10,12"
+                    HorizontalAlignment="Stretch"
+                    Background="WhiteSmoke"
+                    BorderThickness="4"
+                    CornerRadius="8,8,8,8">
+                <!--
+                    <Border.BorderBrush>
+                    <LinearGradientBrush EndPoint="0.5,1" StartPoint="0.5,0">
+                    <GradientStop Color="#FFFFFFFF" Offset="0"/>
+                    <GradientStop Color="#FFCFE4FF" Offset="1"/>
+                    </LinearGradientBrush>
+                    </Border.BorderBrush>
+                -->
+                <!--
+                    <Border.Background>
+                    <LinearGradientBrush StartPoint="0.524815,0.0313379" EndPoint="0.524815,1.01551">
+                    <LinearGradientBrush.GradientStops>
+                    <GradientStop Color="#FFFFFFFF" Offset="0"/>
+                    <GradientStop Color="#FFCFE4FF" Offset="1"/>
+                    </LinearGradientBrush.GradientStops>
+                    </LinearGradientBrush>
+                    </Border.Background>
+                -->
+                <StackPanel>
+                    <ListBox Height="70"
+                             ItemContainerStyle="{StaticResource ImageListBoxItemStyle}"
+                             ItemsPanel="{StaticResource ListItemTemplate}"
+                             Style="{StaticResource ImageListStyle}">
+                        <Button Name="btnPrint"
+                                Click="btnPrint_Click"
+                                Style="{StaticResource ButtonStyle1}"
+                                ToolTip="{Binding RelativeSource={RelativeSource AncestorType={x:Type Window}},
+                                                  Path=Culture.PrintText}">
+                            <Rectangle Width="40"
+                                       Height="40"
+                                       Fill="{StaticResource Print}" />
+                        </Button>
+                        <!--
+                            <local:GridSplitButton x:Name="btnOrientation" Template="{DynamicResource SplitButtonControlTemplate1}" ItemsSource="{Binding Source={StaticResource PageOrientationList}}"  SelectedItem="{Binding RelativeSource={RelativeSource AncestorType={x:Type Window}},Path=CurrentOrientation,Mode=TwoWay}">
+                            <local:GridSplitButton.Content>
+                            <Rectangle Width="40" Height="40" Fill="{StaticResource Orientation}" />
+                            </local:GridSplitButton.Content>
+                            </local:GridSplitButton>
+                        -->
+                        <local:GridSplitButton x:Name="btnPageSizes"
+                                               ItemsSource="{Binding Source={StaticResource PageSizesList}}"
+                                               SelectedItem="{Binding RelativeSource={RelativeSource AncestorType={x:Type Window}},
+                                                                      Path=CurrentPageMediaSize,
+                                                                      Mode=TwoWay}"
+                                               Template="{DynamicResource SplitButtonControlTemplate1}"
+                                               ToolTip="{Binding RelativeSource={RelativeSource AncestorType={x:Type Window}},
+                                                                 Path=Culture.PageSizes}">
+                            <local:GridSplitButton.Content>
+                                <Rectangle Width="40"
+                                           Height="40"
+                                           Fill="{StaticResource Layout}" />
+                            </local:GridSplitButton.Content>
+                        </local:GridSplitButton>
+                        <local:GridSplitButton x:Name="btnOutputColor"
+                                               ItemsSource="{Binding Source={StaticResource PageOutputColor}}"
+                                               SelectedItem="{Binding RelativeSource={RelativeSource AncestorType={x:Type Window}},
+                                                                      Path=CurrentOutputColor,
+                                                                      Mode=TwoWay}"
+                                               Template="{DynamicResource SplitButtonControlTemplate1}"
+                                               ToolTip="{Binding RelativeSource={RelativeSource AncestorType={x:Type Window}},
+                                                                 Path=Culture.PrintOutputColor}">
+                            <local:GridSplitButton.Content>
+                                <Rectangle Width="40"
+                                           Height="40"
+                                           Fill="{StaticResource Colors}" />
+                            </local:GridSplitButton.Content>
+                        </local:GridSplitButton>
+                        <!--
+                            <Button Style="{StaticResource ButtonStyle1}" Name="btnOnePage">
+                            <Rectangle Width="40" Height="40" Fill="{StaticResource OnePage}" />
+                            </Button>
+                            <Button Style="{StaticResource ButtonStyle1}" Name="btnTwoPage">
+                            <Rectangle Width="40" Height="40" Fill="{StaticResource TwoPage}" />
+                            </Button>
+                        -->
+                        <local:GridSplitButton x:Name="btnZoom"
+                                               SelectedIndex="1"
+                                               SelectedItem="{Binding RelativeSource={RelativeSource AncestorType={x:Type Window}},
+                                                                      Path=CurrentZoomFactor,
+                                                                      Mode=TwoWay}"
+                                               Template="{DynamicResource SplitButtonControlTemplate1}"
+                                               ToolTip="{Binding RelativeSource={RelativeSource AncestorType={x:Type Window}},
+                                                                 Path=Culture.PrintZoom}">
+                            <local:GridSplitButton.Content>
+                                <Rectangle Width="40"
+                                           Height="40"
+                                           Fill="{StaticResource ZoomIn}" />
+                            </local:GridSplitButton.Content>
+                            <ListBoxItem Content="50%" />
+                            <ListBoxItem Content="100%" />
+                            <ListBoxItem Content="200%" />
+                            <ListBoxItem Content="400%" />
+                        </local:GridSplitButton>
+                        <!--
+                            <Button Style="{StaticResource ButtonStyle1}" Name="btnZoomIn">
+                            <Rectangle Width="40" Height="40" Fill="{StaticResource ZoomIn}" />
+                            </Button>
+                        -->
+                        <Button Name="btnFirst"
+                                Click="btnFirst_Click"
+                                IsEnabled="{Binding RelativeSource={RelativeSource AncestorType={x:Type Window}},
+                                                    Path=CanMoveFirst}"
+                                Style="{StaticResource ButtonStyle1}"
+                                ToolTip="{Binding RelativeSource={RelativeSource AncestorType={x:Type Window}},
+                                                  Path=Culture.First}">
+                            <Rectangle x:Name="rectFirst"
+                                       Width="40"
+                                       Height="40" />
+                        </Button>
+                        <Button Name="btnPrevious"
+                                Click="movePrev_Click"
+                                IsEnabled="{Binding RelativeSource={RelativeSource AncestorType={x:Type Window}},
+                                                    Path=CanMovePrevious}"
+                                Style="{StaticResource ButtonStyle1}"
+                                ToolTip="{Binding RelativeSource={RelativeSource AncestorType={x:Type Window}},
+                                                  Path=Culture.Previous}">
+                            <Rectangle x:Name="rectPrev"
+                                       Width="40"
+                                       Height="40" />
+                        </Button>
+                        <Button Name="btnNext"
+                                Click="moveNext_Click"
+                                IsEnabled="{Binding RelativeSource={RelativeSource AncestorType={x:Type Window}},
+                                                    Path=CanMoveNext}"
+                                Style="{StaticResource ButtonStyle1}"
+                                ToolTip="{Binding RelativeSource={RelativeSource AncestorType={x:Type Window}},
+                                                  Path=Culture.Next}">
+                            <Rectangle x:Name="rectNext"
+                                       Width="40"
+                                       Height="40" />
+                        </Button>
+                        <Button Name="btnLast"
+                                Click="btnLast_Click"
+                                IsEnabled="{Binding RelativeSource={RelativeSource AncestorType={x:Type Window}},
+                                                    Path=CanMoveLast}"
+                                Style="{StaticResource ButtonStyle1}"
+                                ToolTip="{Binding RelativeSource={RelativeSource AncestorType={x:Type Window}},
+                                                  Path=Culture.Last}">
+                            <Rectangle x:Name="rectLast"
+                                       Width="40"
+                                       Height="40" />
+                        </Button>
+                    </ListBox>
+                </StackPanel>
+            </Border>
+            <Grid Grid.Row="1" Margin="10">
+                <Border x:Name="layoutBorder" CornerRadius="5">
+                    <ScrollViewer Background="Gray"
+                                  HorizontalScrollBarVisibility="Auto"
+                                  VerticalScrollBarVisibility="Auto">
+                        <Border x:Name="layoutContentBorder"
+                                Width="{Binding RelativeSource={RelativeSource AncestorType={x:Type Window}},
+                                                Path=PrintSize.Width}"
+                                Height="{Binding RelativeSource={RelativeSource AncestorType={x:Type Window}},
+                                                 Path=PrintSize.Height}"
+                                Background="White"
+                                BorderBrush="Black"
+                                BorderThickness="0.5">
+                            <ContentControl x:Name="layoutContent" Background="Black" />
+                        </Border>
+                    </ScrollViewer>
+                </Border>
+            </Grid>
+        </Grid>
+    </Border>
+</syncfusion:ChromelessWindow>

@@ -1,0 +1,295 @@
+﻿<UserControl x:Class="Syncfusion.Windows.Reports.Viewer.ReportViewer"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"    
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:loading="clr-namespace:Syncfusion.Windows.Reports.Viewer.Utils"
+    xmlns:local="clr-namespace:Syncfusion.Windows.Report.Viewer.Utils"
+             xmlns:sdk="clr-namespace:System.Windows.Controls;assembly=System.Windows.Controls"
+             MinHeight="200" MinWidth="300" Background="White" BorderBrush="Aqua">
+    <!-- Context Menu-->
+    <UserControl.Resources>
+        <ResourceDictionary x:Key="Thems">
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Themes/generic.xaml" />
+                <ResourceDictionary Source="Utils/MultiValueComboBox/MultiValueComboBox.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+        <local:ResourceManager x:Key="ResourceManager"/>
+    </UserControl.Resources>
+    <Grid x:Name="MainGrid" Height="Auto" Margin="0,0,0,0" Background="Transparent">
+
+        <Grid.RowDefinitions>
+            <RowDefinition x:Name="toolBarGridRow" Height="28"/>
+            <RowDefinition x:Name="dsCredentialRow" Height="Auto"/>
+            <RowDefinition x:Name="parameterGridRow" Height="Auto"/>
+            <RowDefinition x:Name="viewerContentRow" Height="*" />
+            <RowDefinition x:Name="gridExceptionRow" Height="0"/>
+            <RowDefinition x:Name="loadingIndicatorRow" Height="0"/>
+        </Grid.RowDefinitions>
+
+        <!--Toolbar-->
+        <StackPanel Name="toolBar" Height="28" Orientation="Horizontal" Grid.ColumnSpan="2" Margin="0">
+            <StackPanel.Background>
+                <LinearGradientBrush EndPoint="0.5,1" StartPoint="0.5,0">
+                    <GradientStop Color="#FFFEFBF4" Offset="0.027"/>
+                    <GradientStop Color="#FFEAEEEF" Offset="0.029"/>
+                    <GradientStop Color="#FFDCE4F1" Offset="0.498"/>
+                    <GradientStop Color="#FFE6EAF3" Offset="0.966"/>
+                    <GradientStop Color="FloralWhite" Offset="0.968"/>
+                    <GradientStop Color="#FFD4DBEB" Offset="0.503"/>
+                </LinearGradientBrush>
+            </StackPanel.Background>
+
+            <!--Print-->
+            <Button Name="buttonPrint" Width="22" Height="22" ToolTipService.ToolTip="{Binding Source={StaticResource ResourceManager},Path=menuItemPrint}" IsEnabled="False" Visibility="Visible"  Margin="2,3,2,3" Background="Transparent" BorderThickness="0" Style="{StaticResource ButtonStyle}" Click="buttonPrint_Click">
+                <Image Source="{StaticResource PrintDisabled}" />
+                <!--PrintDisabled-->
+            </Button>
+
+            <ComboBox Name="exportControl" Height="22" Width="35" Background="Transparent" Style="{StaticResource exportButtonStyle}" ItemContainerStyle="{StaticResource ItemTemplate}"/>
+
+            <Rectangle HorizontalAlignment="Center"  Height="19" VerticalAlignment="Center" Width="1.6" Visibility="Collapsed">
+                <Rectangle.Fill>
+                    <LinearGradientBrush EndPoint="0.662,0.5" StartPoint="0.338,0.5">
+                        <GradientStop Color="#FFBCBCBC" Offset="0.508"/>
+                        <GradientStop Color="White" Offset="0.525"/>
+                    </LinearGradientBrush>
+                </Rectangle.Fill>
+            </Rectangle>
+
+            <!--Navigate to First-->
+            <Button Name="buttonFirst" ToolTipService.ToolTip="{Binding Source={StaticResource ResourceManager},Path=menuItemFirst}" Width="22" Height="22" Click="buttonFirst_Click" IsEnabled="False" Background="Transparent"  BorderThickness="0" Margin="2,3,2,3" Style="{StaticResource ButtonStyle}">
+                <Image Source="{StaticResource First_NavDisabled}" />
+                <!--First_NavDisabled-->
+            </Button>
+
+            <!--Navigate to Previous-->
+            <Button Name="buttonPrevious" Width="22" Height="22" ToolTipService.ToolTip="{Binding Source={StaticResource ResourceManager},Path=menuItemPrevious}" Click="buttonPrevious_Click" IsEnabled="False" Background="Transparent" BorderThickness="0" Margin="2,3,2,3" Style="{StaticResource ButtonStyle}">
+                <Image Source="{StaticResource Previous_NavDisabled}" />
+                <!--Previous_NavDisabled-->
+            </Button>
+
+            <!--Current Page-->
+            <TextBox Name="textBoxCurrentPage" Width="60" IsReadOnly="False" IsEnabled="False" BorderBrush="Gray" VerticalAlignment="Center" HorizontalAlignment="Center" Margin="2,3,2,3">
+            </TextBox>
+            <TextBlock Name="labelOf" Width="Auto" VerticalAlignment="Center" Margin="2,3,5,3">of</TextBlock>
+
+            <!--Totla number of pages-->
+            <TextBlock Name="textBoxTotalPages" Width="Auto"  xml:space="preserve" HorizontalAlignment="Center" VerticalAlignment="Center" Text="0" Margin="2,3,5,3"/>
+
+            <!--Navigate to Next-->
+            <Button Name="buttonNext" Width="22" Height="22" ToolTipService.ToolTip="{Binding Source={StaticResource ResourceManager},Path=menuItemNext}" Click="buttonNext_Click" IsEnabled="False" Background="Transparent" BorderThickness="0" Margin="2,3,2,3" Style="{StaticResource ButtonStyle}">
+                <Image Source="{StaticResource Next_NavDisabled}" />
+                <!--Next_NavDisabled-->
+            </Button>
+
+            <!--Navigate to Last-->
+            <Button Name="buttonLast" Width="22" Height="22" ToolTipService.ToolTip="{Binding Source={StaticResource ResourceManager},Path=menuItemLast}" Click="buttonLast_Click" IsEnabled="False" Background="Transparent" BorderThickness="0" Margin="2,3,2,3" Style="{StaticResource ButtonStyle}">
+                <Image Source="{StaticResource Last_NavDisabled}" />
+                <!--Last_NavDisabled-->
+            </Button>
+
+            <!--Back Parent Report-->
+            <Button Name="btnback" Width="22" Height="22" ToolTipService.ToolTip="{Binding Source={StaticResource ResourceManager},Path=toolTipBack}" IsEnabled="True" Click="Btn_back_Click" Visibility="Collapsed" Background="Transparent" BorderThickness="0" Margin="2,3,2,3" Style="{StaticResource ButtonStyle}">
+                <Image Source="{StaticResource ReportBack}" Stretch="None"/>
+            </Button>
+
+            <Line Height="19" Width="1.6" Stroke="#FFBCBCBC" StrokeThickness="1.6" X1="0" X2="0" Y1="0" Y2="19" VerticalAlignment="Center" HorizontalAlignment="Center"></Line>
+
+            <!--Zooming-->
+            <ComboBox Name="comboBoxPageZoom" Width="70" Height="22"  IsEnabled="False" Margin="2,3,2,3">
+                <ComboBoxItem Content="25%"/>
+                <ComboBoxItem Content="50%"/>
+                <ComboBoxItem Content="100%"/>
+                <ComboBoxItem Content="200%"/>
+                <ComboBoxItem Content="300%"/>
+                <ComboBoxItem Content="400%"/>
+                <ComboBoxItem Content="500%"/>
+            </ComboBox>
+
+            <!--Print Layout-->
+            <ToggleButton Style="{StaticResource ViewerToggleButtonStyle}" Name="buttonPrintLayout" Width="22" Height="22" ToolTipService.ToolTip="{Binding Source={StaticResource ResourceManager},Path=menuItemPrintLayout}" IsEnabled="False" Margin="2,3,2,3" Background="Transparent" BorderThickness="0" Visibility="Visible">
+                <Image Source="{StaticResource PrintLayoutXDisabled}" />
+                <!--PrintLayoutXDisabled-->
+            </ToggleButton>
+
+
+            <!--Print Setup-->
+            <Button Name="buttonPageSetup" Width="22" Height="22" ToolTipService.ToolTip="{Binding Source={StaticResource ResourceManager},Path=toolTipPageSetUp}" IsEnabled="True" Visibility="Visible" Margin="2,3,2,3" Background="Transparent" BorderThickness="0" Style="{StaticResource ButtonStyle}" Click="buttonPageSetup_Click">
+                <Image Source="{StaticResource PageSetup}" />
+                <!--PrintSetupDisabled-->
+            </Button>
+
+            <Line Height="22" Width="2" Stroke="#FFBCBCBC"  StrokeThickness="1.6" X1="0" X2="0" Y1="0" Y2="23"></Line>
+
+            <!--Refresh -->
+            <Button Name="buttonRefresh" Width="22" Height="22" ToolTipService.ToolTip="{Binding Source={StaticResource ResourceManager},Path=menuItemRefresh}" IsEnabled="False" Click="buttonRefresh_Click" Margin="2,3,2,3" Background="Transparent" BorderThickness="0" Style="{StaticResource ButtonStyle}">
+                <Image Source="{StaticResource RefreshDisabled}" />
+                <!--RefreshDisabled-->
+            </Button>
+
+            <!--Show/Hide Document map-->
+            <Button Name="buttonShowOrHideDocumentMap" Width="22" Height="22" ToolTipService.ToolTip="menuItemShowHide" IsEnabled="False" Visibility="Collapsed" Margin="2,3,2,3" Background="Transparent"  BorderThickness="0" Style="{StaticResource ButtonStyle}" Click="buttonDocumentMap_Click">
+                <Image Source="{StaticResource ShowHideDisabled}" Stretch="UniformToFill"/>
+                <!--ShowHideDisabled-->
+            </Button>
+
+            <!--Parameterised query-->
+            <Button Name="buttonParameters" Width="22" Height="22" ToolTipService.ToolTip="toolTipFind" IsEnabled="False" Visibility="Collapsed" Margin="2,3,2,3" Background="Transparent" BorderThickness="0"  Style="{StaticResource ButtonStyle}" Click="ButtonParameters_OnClick">
+                <Image Source="{StaticResource ParametersDisabled}" />
+                <!--ParametersDisabled-->
+            </Button>
+
+            <Line Height="22" Width="2" Stroke="#FFBCBCBC"  StrokeThickness="1.6" X1="0" X2="0" Y1="0" Y2="23"></Line>
+
+            <TextBox Name="textBoxFind" Width="70" xml:space="preserve" IsEnabled="False" BorderBrush="Gray" ToolTipService.ToolTip="toolTipFindTextBox" Margin="2,3,0,3" VerticalAlignment="Center" HorizontalAlignment="Center" Visibility="Collapsed"/>
+            
+            <!--Find-->
+            <Button Name="buttonFind" Width="22" Height="22" ToolTipService.ToolTip="toolTipFind" IsEnabled="False" Margin="1,3,2,3" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center" Background="Transparent" BorderThickness="0" Style="{StaticResource ButtonStyle}">
+                <Image Source="{StaticResource FindDisabled}" /> <!--FindDisabled-->
+            </Button>
+        </StackPanel>
+
+        <!-- DataSoruce Credential Prompt -->
+        <Grid Grid.Row="1">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" x:Name="rowDefinitionFordsCredentialBlock"/>
+            </Grid.RowDefinitions>
+            <ScrollViewer Name="scorllDSCredentialBlock" HorizontalAlignment="Stretch" VerticalScrollBarVisibility="Auto"  HorizontalScrollBarVisibility="Disabled" Visibility="Collapsed">
+                <StackPanel Name="stackPaneldsCredential" Grid.Row="0" Background="LightBlue" Width="Auto" Height="Auto">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="300*"/>
+                            <ColumnDefinition Width="100*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid Background="#efefef" x:Name="grid_DsCredentialblock" Grid.Column="0" Width="Auto">
+                            <StackPanel Width="Auto" Name="sPanel_Head">
+                            </StackPanel>
+                        </Grid>
+                        <StackPanel Grid.Column="1" Background="#efefef">
+                            <Button Content="{Binding Source={StaticResource ResourceManager},Path=btnViewReport}" HorizontalAlignment="Right" x:Name="btnViewReport1" Width="Auto" Click="btnViewReport_Click" Margin="0,5,20,5"/>
+                        </StackPanel>
+                    </Grid>
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+
+        <Grid Grid.Row="2">
+            <!--Parameter prompt panel-->
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" x:Name="rowDefinitionForParameterBlock"/>
+            </Grid.RowDefinitions>
+            <ScrollViewer x:Name="scrollViewerParamBlock" HorizontalAlignment="Stretch" VerticalScrollBarVisibility="Auto"  HorizontalScrollBarVisibility="Disabled" Visibility="Collapsed">
+                <StackPanel Name="stackPanelParameters" Grid.Row="0" Background="LightBlue" Width="Auto" Height="Auto">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="100*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <Grid Background="#efefef" x:Name="grid_ReportParameterBlock" Grid.Column="0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                            </Grid.RowDefinitions>
+                        </Grid>
+
+                        <StackPanel Grid.Column="1" Background="#efefef">
+                            <Button Content="{Binding Source={StaticResource ResourceManager},Path=btnViewReport}" HorizontalAlignment="Right" x:Name="btnViewReport" Width="Auto"  Margin="0,5,20,5" Click="Button_View_Report_Click"/>
+                        </StackPanel>
+                    </Grid>
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+        
+        <Grid Name="gridRenderingRegion" Grid.Row="3" Height="Auto" Margin="0,0,0,0" >
+           <Grid>
+              <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"></RowDefinition>
+                    <RowDefinition Height="*"></RowDefinition>
+                </Grid.RowDefinitions>
+              <Grid Name="ExceptionGrid" Grid.Row="0" Visibility="Collapsed" Background="LightBlue">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="24"></ColumnDefinition>
+                        <ColumnDefinition Width="749"></ColumnDefinition>
+                        <ColumnDefinition Width="0" />
+                    </Grid.ColumnDefinitions>
+                    <Image Source="{StaticResource error}" Height="24" Width="24" Margin="5,5,5,5" Grid.ColumnSpan="2" HorizontalAlignment="Left"></Image>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Stretch" VerticalAlignment="Center" Height="23" Margin="10,7,10,0" Width="730">
+                        <TextBlock Text="Report Viewer encountered some issues loading this report. Please click " />
+                        <HyperlinkButton Click="Hyperlink_Click">here</HyperlinkButton>
+                        <TextBlock Text=" to see details of the issues"/>
+                    </StackPanel>
+                </Grid>
+              <Grid Grid.Row="1" x:Name="renderArea">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"></ColumnDefinition>
+                        <ColumnDefinition Width="Auto"></ColumnDefinition>
+                        <ColumnDefinition Width="*"></ColumnDefinition>
+                    </Grid.ColumnDefinitions>
+                    <Grid Grid.Column="0" Height="Auto" Width="Auto" x:Name="treeItemArea" Visibility="Collapsed">
+                        <sdk:TreeView Name="DocumentMap" Height="Auto" Width="Auto" BorderThickness="0"/>
+                    </Grid>
+                    <sdk:GridSplitter Visibility="Collapsed" x:Name="viewerSpliter" Grid.Column="1" ShowsPreview="True" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Width="5" Background="#FFD4DBEB"/>
+
+                    <!--Viewer Page-->
+                    <ScrollViewer x:Name="scrollViewer" Grid.Column="2" Height="Auto" Width="Auto" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" HorizontalContentAlignment="Center" VerticalContentAlignment="Center">
+                        <ScrollViewer.Resources>
+                            <DataTemplate x:Key="ReportViewerCellTeamplate">
+                                <ContentControl Content="{Binding Path=CellBoundValue}"></ContentControl>
+                            </DataTemplate>
+                        </ScrollViewer.Resources>
+                        <Canvas Name="zoomCanvas" HorizontalAlignment="Left" VerticalAlignment="Top">
+                            <StackPanel Orientation="Vertical" Name="PageView" Height="Auto" Width="Auto" Background="White">
+                                <StackPanel.RenderTransform>
+                                    <ScaleTransform x:Name="Zoom"></ScaleTransform>
+                                </StackPanel.RenderTransform>
+                                <Border x:Name="PageViewBody" Background="Transparent" Height="Auto" Width="Auto">
+                                    <StackPanel x:Name="PageViewContainer" Background="Transparent" Height="Auto" Width="Auto">
+                                        <Border Name="PageHeaderBorder" Height="Auto" Width="Auto" Background="Transparent">
+                                            <Canvas x:Name="CanvasHeader" Visibility="Collapsed" Background="Transparent"/>
+                                        </Border>
+                                        <Border Name="PageBodyBorder" Height="Auto" Width="Auto" Background="Transparent">
+                                            <Canvas x:Name="canvasContentPage" Grid.Row="2" Background="Transparent" Width="Auto" Height="Auto"/>
+                                        </Border>
+                                        <Border Name="PageFooterBorder" Height="Auto" Width="Auto" Background="Transparent">
+                                            <Canvas x:Name="CanvasFooter" Visibility="Collapsed" Background="Transparent"/>
+                                        </Border>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                        </Canvas>
+                    </ScrollViewer>
+                </Grid>
+            </Grid>
+        </Grid>
+
+        <Grid x:Name="gridException" Grid.Row="4" Background="White" Visibility="Collapsed">
+            <StackPanel  Orientation="Vertical" HorizontalAlignment="Center">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" >
+                    <Image Name="imageException" Source="{StaticResource Exception}" Width="48" HorizontalAlignment="Center"/>
+                    <TextBlock Name="textBlockException"></TextBlock>
+                </StackPanel>
+                <ScrollViewer Name="groupBoxExpandedExceptionScroll" Grid.Row="3" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" Height="400">
+                    <Grid Name="groupBoxExpandedException" Width="420" Margin="5,0,5,0" FlowDirection="RightToLeft">
+                        <ToggleButton  Grid.Row="1" Name="toggleShowDetails" HorizontalAlignment="Right" Margin="0,0,0,0" Click="toggleShowDetails_Click" VerticalAlignment="Bottom">Show Details</ToggleButton>
+                        <UserControl Grid.Row="2" Name="ShowError" Visibility="Collapsed" Width="{Binding ElementName=groupBoxExpandedException,Path=Width}">
+                            <TextBox Name="textBlockStackTrace" TextWrapping="Wrap" FlowDirection="LeftToRight" Width="390" IsReadOnly="True" GotFocus="textBlockStackTrace_GotFocus" ></TextBox>
+                        </UserControl>
+                    </Grid>
+                </ScrollViewer>
+            </StackPanel>
+        </Grid>
+
+        <Grid x:Name="gridLoadingIndicator" Grid.Row="5" Background="White" Visibility="Collapsed">
+            <loading:LoadingIndicator></loading:LoadingIndicator>
+        </Grid>
+
+        <Border BorderThickness="1" BorderBrush="#FFD4DBEB" Grid.RowSpan="6"/>
+        
+    </Grid>
+
+</UserControl>

@@ -1,0 +1,607 @@
+@using ServerEditorWeb.Models
+@using ServerEditorWeb.Services
+@using SharedModels
+@implements IDisposable
+
+<div class="responsive-screen-editor">
+    @if (GetScreen() is not ScreenConfig screen)
+    {
+        <p class="text-muted p-2">Select a Screen node in the tree to open the responsive editor.</p>
+    }
+    else
+    {
+        @* Toolbar *@
+        <div class="screen-toolbar">
+            <div class="d-flex gap-1 align-items-center flex-wrap">
+                <span class="small fw-bold me-2">@screen.Name</span>
+
+                <button class="btn btn-sm btn-outline-primary" @onclick='() => AddWidget(screen, "rect")' title="Rectangle">▭ Rect</button>
+                <button class="btn btn-sm btn-outline-primary" @onclick='() => AddWidget(screen, "text")' title="Text Label">T Text</button>
+                <button class="btn btn-sm btn-outline-info" @onclick='() => AddWidget(screen, "gauge")' title="Gauge">🔘 Gauge</button>
+                <button class="btn btn-sm btn-outline-info" @onclick='() => AddWidget(screen, "indicator")' title="Indicator">🔴 Indicator</button>
+                <button class="btn btn-sm btn-outline-warning" @onclick='() => AddWidget(screen, "alarmlist")' title="Alarm List">🔔 Alarms</button>
+                <button class="btn btn-sm btn-outline-success" @onclick='() => AddWidget(screen, "hdachart")' title="HDA Chart">📊 HDA</button>
+                <button class="btn btn-sm btn-outline-success" @onclick='() => AddWidget(screen, "hdagrid")' title="HDA Data Grid">📋 HDA Grid</button>
+                <button class="btn btn-sm btn-outline-secondary" @onclick='() => AddWidget(screen, "eventlog")' title="Event Log Grid">📓 Events</button>
+                <button class="btn btn-sm btn-outline-info" @onclick='() => AddWidget(screen, "editbox")' title="Edit Box">✏️ EditBox</button>
+                <button class="btn btn-sm btn-outline-danger" @onclick='() => AddWidget(screen, "ipcamera")' title="IP Camera">📷 Camera</button>
+                <button class="btn btn-sm btn-outline-info" @onclick='() => AddWidget(screen, "recipe")' title="Recipe">📦 Recipe</button>
+                <button class="btn btn-sm btn-outline-secondary" @onclick='() => AddWidget(screen, "screenembed")' title="Embed other screens (tabbed if multiple)">🪟 Screen</button>
+                <button class="btn btn-sm btn-outline-info" @onclick='() => AddWidget(screen, "svg")' title="SVG Symbol (from library)">🏭 SVG</button>
+
+                <span class="mx-1">|</span>
+
+                @if (_selectedSymbol != null)
+                {
+                    <button class="btn btn-sm btn-outline-danger" @onclick="DeleteSelected" title="Delete">🗑</button>
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="MoveUp" title="Move Up" disabled="@(_selectedIndex <= 0)">▲</button>
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="MoveDown" title="Move Down"
+                            disabled="@(_selectedIndex < 0 || _selectedIndex >= screen.Symbols.Count - 1)">▼</button>
+                }
+
+                <span class="mx-1">|</span>
+
+                <label class="form-label mb-0 small">Cols:</label>
+                <input type="number" class="form-control form-control-sm" style="width: 50px;" min="1" max="24"
+                       @bind="screen.GridColumns" @bind:after="OnChanged" />
+                <label class="form-label mb-0 small">Gap:</label>
+                <input type="number" class="form-control form-control-sm" style="width: 50px;" min="0" max="32"
+                       @bind="screen.GridGap" @bind:after="OnChanged" />
+                <label class="form-label mb-0 small">BG:</label>
+                <input type="color" class="form-control form-control-sm form-control-color" style="width: 35px; height: 28px;"
+                       @bind="screen.Background" @bind:after="OnChanged" />
+
+                <span class="ms-auto small text-muted">Widgets: @screen.Symbols.Count</span>
+
+                <span class="mx-1">|</span>
+                <button class="btn btn-sm btn-outline-secondary" @onclick="() => SwitchToSvg(screen)" title="Switch to fixed SVG canvas layout">
+                    🖼️ SVG Canvas
+                </button>
+            </div>
+        </div>
+
+        @* Responsive Grid Canvas *@
+        <div class="responsive-canvas" style="background: @screen.Background; gap: @(screen.GridGap)px; grid-template-columns: repeat(@screen.GridColumns, 1fr);">
+            @foreach (var sym in screen.Symbols.OrderBy(s => s.Order))
+            {
+                var s = sym;
+                var isSelected = s == _selectedSymbol;
+                var liveValue = GetLiveValue(s);
+                <div class="responsive-widget @(isSelected ? "responsive-widget-selected" : "")"
+                     style="grid-column: span @Math.Clamp(s.ColSpan, 1, screen.GridColumns); grid-row: span @Math.Max(1, s.RowSpan); min-height: @(s.RowHeight)px; order: @s.Order;"
+                     @onclick="() => SelectWidget(s)" @onclick:stopPropagation>
+
+                    @* Widget header *@
+                    <div class="responsive-widget-header">
+                        <span class="responsive-widget-type">@GetTypeIcon(s.Type) @GetTypeLabel(s.Type)</span>
+                        @if (!string.IsNullOrEmpty(s.Label))
+                        {
+                            <span class="responsive-widget-label">@s.Label</span>
+                        }
+                        @if (!string.IsNullOrEmpty(s.VariablePath))
+                        {
+                            <span class="responsive-widget-var" title="@s.VariablePath">@s.VariablePath</span>
+                        }
+                    </div>
+
+                    @* Widget body — render SVG symbol content *@
+                    <div class="responsive-widget-body">
+                        @switch (s.Type)
+                        {
+                            case "rect":
+                                <svg viewBox="0 0 @s.Width @s.Height" class="responsive-svg" preserveAspectRatio="xMidYMid meet">
+                                    <rect width="@s.Width" height="@s.Height" fill="@s.Fill" stroke="@s.Stroke" stroke-width="@s.StrokeWidth" rx="3" />
+                                </svg>
+                                break;
+                            case "circle":
+                                var r = Math.Min(s.Width, s.Height) / 2;
+                                <svg viewBox="0 0 @s.Width @s.Height" class="responsive-svg" preserveAspectRatio="xMidYMid meet">
+                                    <circle cx="@(s.Width / 2)" cy="@(s.Height / 2)" r="@r" fill="@s.Fill" stroke="@s.Stroke" stroke-width="@s.StrokeWidth" />
+                                </svg>
+                                break;
+                            case "ellipse":
+                                <svg viewBox="0 0 @s.Width @s.Height" class="responsive-svg" preserveAspectRatio="xMidYMid meet">
+                                    <ellipse cx="@(s.Width / 2)" cy="@(s.Height / 2)" rx="@(s.Width / 2)" ry="@(s.Height / 2)" fill="@s.Fill" stroke="@s.Stroke" stroke-width="@s.StrokeWidth" />
+                                </svg>
+                                break;
+                            case "text":
+                                <div class="responsive-text" style="color: @s.Fill;">@(liveValue ?? s.Label)</div>
+                                break;
+                            case "gauge":
+                                var gaugeVal = ParseNumericValue(liveValue) ?? 0;
+                                var min = s.MinValue ?? 0;
+                                var max = s.MaxValue ?? 100;
+                                var pct = max > min ? (gaugeVal - min) / (max - min) * 100 : 0;
+                                <div class="responsive-gauge">
+                                    <div class="responsive-gauge-bar" style="width: @pct.ToString("F0")%; background: @s.Fill;"></div>
+                                    <span class="responsive-gauge-label">@gaugeVal.ToString("F1") / @max</span>
+                                </div>
+                                break;
+                            case "indicator":
+                                var indColor = EvalFillBinding(s, liveValue);
+                                <div class="responsive-indicator" style="background: @indColor;">
+                                    @(liveValue ?? s.Label)
+                                </div>
+                                break;
+                            case "svg":
+                                @if (!string.IsNullOrEmpty(s.SvgContent))
+                                {
+                                    <div class="responsive-svg-wrap">@((MarkupString)s.SvgContent)</div>
+                                }
+                                else
+                                {
+                                    <div class="responsive-placeholder">🏭 SVG Symbol (set in properties)</div>
+                                }
+                                break;
+                            case "alarmlist":
+                                <div class="responsive-placeholder">🔔 Alarm List (live at runtime)</div>
+                                break;
+                            case "hdachart":
+                                <div class="responsive-placeholder">📊 HDA Chart @(s.HdaVariablePaths.Count > 0 ? $"({s.HdaVariablePaths.Count} vars)" : "(configure in properties)")</div>
+                                break;
+                            case "hdagrid":
+                                <div class="responsive-placeholder">📋 HDA Data Grid @(s.HdaVariablePaths.Count > 0 ? $"({s.HdaVariablePaths.Count} vars)" : "(configure in properties)")</div>
+                                break;
+                            case "eventlog":
+                                <div class="responsive-placeholder">📓 Event Log (live at runtime)</div>
+                                break;
+                            case "editbox":
+                                <div class="responsive-editbox">
+                                    <span class="responsive-editbox-value">@(liveValue ?? "0")</span>
+                                </div>
+                                break;
+                            case "ipcamera":
+                                <div class="responsive-placeholder">📷 IP Camera @(s.Camera?.Url ?? "(configure in properties)")</div>
+                                break;
+                            case "recipe":
+                                <div class="responsive-placeholder">📦 Recipe @(!string.IsNullOrEmpty(s.RecipeName) ? s.RecipeName : "(configure in properties)")</div>
+                                break;
+                            case "screenembed":
+                                <div class="responsive-placeholder">🪟 @(s.EmbeddedScreens.Count > 0 ? string.Join(", ", s.EmbeddedScreens) : "(configure in properties)") @(s.EmbeddedScreens.Count > 1 ? $"({s.EmbeddedScreens.Count} tabs)" : "")</div>
+                                break;
+                            default:
+                                <div class="responsive-placeholder">@s.Type</div>
+                                break;
+                        }
+                    </div>
+                </div>
+            }
+
+            @if (screen.Symbols.Count == 0)
+            {
+                <div class="responsive-empty" style="grid-column: span @screen.GridColumns;">
+                    <p>No widgets yet. Click a button above to add widgets to the responsive layout.</p>
+                </div>
+            }
+        </div>
+
+        @* Selected widget properties *@
+        @if (_selectedSymbol != null)
+        {
+            <div class="responsive-props">
+                <h6 class="mb-2">Widget Properties</h6>
+
+                <div class="d-flex gap-1 mb-2 flex-wrap">
+                    <div>
+                        <label class="form-label mb-0 small">Type</label>
+                        <input type="text" class="form-control form-control-sm" value="@GetTypeLabel(_selectedSymbol.Type)" disabled style="width: 90px;" />
+                    </div>
+                    <div>
+                        <label class="form-label mb-0 small">Col Span</label>
+                        <input type="number" class="form-control form-control-sm" style="width: 60px;" min="1" max="@screen.GridColumns"
+                               @bind="_selectedSymbol.ColSpan" @bind:after="OnChanged" />
+                    </div>
+                    <div>
+                        <label class="form-label mb-0 small">Row Span</label>
+                        <input type="number" class="form-control form-control-sm" style="width: 60px;" min="1"
+                               @bind="_selectedSymbol.RowSpan" @bind:after="OnChanged" />
+                    </div>
+                    <div>
+                        <label class="form-label mb-0 small">Row Height</label>
+                        <input type="number" class="form-control form-control-sm" style="width: 70px;" min="30"
+                               @bind="_selectedSymbol.RowHeight" @bind:after="OnChanged" />
+                    </div>
+                    <div>
+                        <label class="form-label mb-0 small">Order</label>
+                        <input type="number" class="form-control form-control-sm" style="width: 55px;"
+                               @bind="_selectedSymbol.Order" @bind:after="OnChanged" />
+                    </div>
+                </div>
+
+                <div class="d-flex gap-1 mb-2 flex-wrap">
+                    <div>
+                        <label class="form-label mb-0 small">Label</label>
+                        <input type="text" class="form-control form-control-sm" style="width: 140px;"
+                               @bind="_selectedSymbol.Label" @bind:after="OnChanged" placeholder="Label" />
+                    </div>
+                    <div>
+                        <label class="form-label mb-0 small">Variable</label>
+                        <input type="text" class="form-control form-control-sm" style="width: 180px;"
+                               @bind="_selectedSymbol.VariablePath" @bind:after="OnChanged" placeholder="e.g. Plant.Temperature" />
+                    </div>
+                </div>
+
+                <div class="d-flex gap-1 mb-2 flex-wrap">
+                    <div>
+                        <label class="form-label mb-0 small">Fill</label>
+                        <input type="color" class="form-control form-control-sm form-control-color" style="width: 35px; height: 28px;"
+                               @bind="_selectedSymbol.Fill" @bind:after="OnChanged" />
+                    </div>
+                    <div>
+                        <label class="form-label mb-0 small">Stroke</label>
+                        <input type="color" class="form-control form-control-sm form-control-color" style="width: 35px; height: 28px;"
+                               @bind="_selectedSymbol.Stroke" @bind:after="OnChanged" />
+                    </div>
+                    @if (_selectedSymbol.Type == "gauge")
+                    {
+                        <div>
+                            <label class="form-label mb-0 small">Min</label>
+                            <input type="number" class="form-control form-control-sm" style="width: 60px;"
+                                   @bind="_selectedSymbol.MinValue" @bind:after="OnChanged" />
+                        </div>
+                        <div>
+                            <label class="form-label mb-0 small">Max</label>
+                            <input type="number" class="form-control form-control-sm" style="width: 60px;"
+                                   @bind="_selectedSymbol.MaxValue" @bind:after="OnChanged" />
+                        </div>
+                    }
+                </div>
+
+                @if (_selectedSymbol.Type is "hdachart" or "hdagrid")
+                {
+                    <div class="mb-2">
+                        <label class="form-label mb-0 small">HDA Variables (one per line)</label>
+                        <textarea class="form-control form-control-sm" rows="3" style="font-size: 11px;"
+                                  @bind="_hdaVarsText" @bind:after="OnHdaVarsChanged"></textarea>
+                    </div>
+                }
+
+                @if (_selectedSymbol.Type == "ipcamera")
+                {
+                    <div class="mb-2">
+                        <label class="form-label mb-0 small">Camera URL</label>
+                        <input type="text" class="form-control form-control-sm"
+                               value="@(_selectedSymbol.Camera?.Url ?? "")"
+                               @onchange="e => { EnsureCamera(); _selectedSymbol.Camera!.Url = e.Value?.ToString() ?? string.Empty; OnChanged(); }"
+                               placeholder="rtsp://..." />
+                    </div>
+                }
+
+                @if (_selectedSymbol.Type == "recipe")
+                {
+                    <div class="mb-2">
+                        <label class="form-label mb-0 small">Recipe Name</label>
+                        <input type="text" class="form-control form-control-sm"
+                               @bind="_selectedSymbol.RecipeName" @bind:after="OnChanged" placeholder="Recipe name" />
+                    </div>
+                }
+
+                <div class="mb-2">
+                    <label class="form-label mb-0 small">Fill Binding</label>
+                    <input type="text" class="form-control form-control-sm" style="font-size: 10px;"
+                           @bind="_selectedSymbol.FillBinding" @bind:after="OnChanged" placeholder="value > 50 ? '#ff0000' : '#00ff00'" />
+                </div>
+
+                <div class="mb-2">
+                    <label class="form-label mb-0 small">Visibility Binding</label>
+                    <input type="text" class="form-control form-control-sm" style="font-size: 10px;"
+                           @bind="_selectedSymbol.VisibilityBinding" @bind:after="OnChanged" placeholder="value == true" />
+                </div>
+
+                <div class="mb-2">
+                    <label class="form-label mb-0 small">Label Binding</label>
+                    <input type="text" class="form-control form-control-sm" style="font-size: 10px;"
+                           @bind="_selectedSymbol.LabelBinding" @bind:after="OnChanged" placeholder="value.ToString('F1') + ' °C'" />
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public TreeNode? Node { get; set; }
+    [Parameter] public EventCallback OnPropertyChanged { get; set; }
+
+    [Inject] private OpcClientService Opc { get; set; } = default!;
+    [Inject] private NodeEditorService Editor { get; set; } = default!;
+
+    private ScreenSymbol? _selectedSymbol;
+    private int _selectedIndex = -1;
+    private int _nextId = 1;
+    private string _hdaVarsText = "";
+    private TreeNode? _previousNode;
+    private System.Threading.Timer? _refreshTimer;
+
+    protected override void OnInitialized()
+    {
+        Opc.StateChanged += OnOpcChanged;
+        _refreshTimer = new System.Threading.Timer(_ => InvokeAsync(StateHasChanged), null, 1000, 1000);
+    }
+
+    private void OnOpcChanged() => InvokeAsync(StateHasChanged);
+
+    private ScreenConfig? GetScreen() => (Node as ScreenNode)?.Screen;
+
+    protected override void OnParametersSet()
+    {
+        if (Node != _previousNode)
+        {
+            _previousNode = Node;
+            _selectedSymbol = null;
+            _selectedIndex = -1;
+        }
+
+        var screen = GetScreen();
+        if (screen != null)
+        {
+            foreach (var sym in screen.Symbols)
+            {
+                if (string.IsNullOrEmpty(sym.Id))
+                    sym.Id = $"sym_{_nextId++}";
+                else if (int.TryParse(sym.Id.Replace("sym_", ""), out var n) && n >= _nextId)
+                    _nextId = n + 1;
+            }
+
+            if (_selectedSymbol != null && !screen.Symbols.Contains(_selectedSymbol))
+            {
+                _selectedSymbol = null;
+                _selectedIndex = -1;
+            }
+        }
+    }
+
+    private void SelectWidget(ScreenSymbol sym)
+    {
+        _selectedSymbol = sym;
+        var screen = GetScreen();
+        _selectedIndex = screen?.Symbols.IndexOf(sym) ?? -1;
+
+        // Sync HDA text
+        if (sym.Type is "hdachart" or "hdagrid")
+            _hdaVarsText = string.Join("\n", sym.HdaVariablePaths);
+
+        Editor.SetScreenSelection(sym, new HashSet<ScreenSymbol> { sym });
+    }
+
+    private void AddWidget(ScreenConfig screen, string type)
+    {
+        var sym = new ScreenSymbol
+        {
+            Id = $"sym_{_nextId++}",
+            Type = type,
+            Width = GetDefaultWidth(type),
+            Height = GetDefaultHeight(type),
+            Label = GetDefaultLabel(type),
+            Fill = GetDefaultFill(type),
+            ColSpan = GetDefaultColSpan(type),
+            RowSpan = 1,
+            RowHeight = GetDefaultRowHeight(type),
+            Order = screen.Symbols.Count
+        };
+
+        if (type == "gauge")
+        {
+            sym.MinValue = 0;
+            sym.MaxValue = 100;
+        }
+
+        screen.Symbols.Add(sym);
+        _selectedSymbol = sym;
+        _selectedIndex = screen.Symbols.Count - 1;
+        Editor.SetScreenSelection(sym, new HashSet<ScreenSymbol> { sym });
+        OnChanged();
+    }
+
+    private void DeleteSelected()
+    {
+        var screen = GetScreen();
+        if (screen == null || _selectedSymbol == null) return;
+        screen.Symbols.Remove(_selectedSymbol);
+        _selectedSymbol = null;
+        _selectedIndex = -1;
+        Editor.SetScreenSelection(null, new HashSet<ScreenSymbol>());
+        OnChanged();
+    }
+
+    private void MoveUp()
+    {
+        var screen = GetScreen();
+        if (screen == null || _selectedIndex <= 0) return;
+        var sym = screen.Symbols[_selectedIndex];
+        screen.Symbols.RemoveAt(_selectedIndex);
+        screen.Symbols.Insert(_selectedIndex - 1, sym);
+        _selectedIndex--;
+        // Recalculate order values
+        for (int i = 0; i < screen.Symbols.Count; i++)
+            screen.Symbols[i].Order = i;
+        OnChanged();
+    }
+
+    private void MoveDown()
+    {
+        var screen = GetScreen();
+        if (screen == null || _selectedIndex < 0 || _selectedIndex >= screen.Symbols.Count - 1) return;
+        var sym = screen.Symbols[_selectedIndex];
+        screen.Symbols.RemoveAt(_selectedIndex);
+        screen.Symbols.Insert(_selectedIndex + 1, sym);
+        _selectedIndex++;
+        for (int i = 0; i < screen.Symbols.Count; i++)
+            screen.Symbols[i].Order = i;
+        OnChanged();
+    }
+
+    private void SwitchToSvg(ScreenConfig screen)
+    {
+        screen.LayoutMode = "svg";
+        OnChanged();
+    }
+
+    private void OnChanged()
+    {
+        OnPropertyChanged.InvokeAsync();
+    }
+
+    private void OnHdaVarsChanged()
+    {
+        if (_selectedSymbol == null) return;
+        _selectedSymbol.HdaVariablePaths = _hdaVarsText
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(s => s.Trim())
+            .Where(s => s.Length > 0)
+            .ToList();
+        OnChanged();
+    }
+
+    private void EnsureCamera()
+    {
+        if (_selectedSymbol != null)
+            _selectedSymbol.Camera ??= new CameraConfig();
+    }
+
+    // ─── Live values ────────────────────────────────────────
+
+    private string? GetLiveValue(ScreenSymbol sym)
+    {
+        if (string.IsNullOrEmpty(sym.VariablePath)) return null;
+        foreach (var item in Opc.MonitoredItems)
+        {
+            if (item.DisplayName == sym.VariablePath ||
+                item.NodeIdString.EndsWith(sym.VariablePath, StringComparison.OrdinalIgnoreCase))
+                return item.Value;
+        }
+        return null;
+    }
+
+    private double? ParseNumericValue(string? val)
+    {
+        if (val == null) return null;
+        if (double.TryParse(val, System.Globalization.NumberStyles.Any,
+                System.Globalization.CultureInfo.InvariantCulture, out var d))
+            return d;
+        return null;
+    }
+
+    private string EvalFillBinding(ScreenSymbol sym, string? liveValue)
+    {
+        // Simplified: return Fill by default; full expression eval is in the runtime
+        return sym.Fill;
+    }
+
+    // ─── Default values per type ────────────────────────────
+
+    private static int GetDefaultColSpan(string type) => type switch
+    {
+        "text" or "indicator" or "editbox" => 3,
+        "gauge" => 4,
+        "rect" or "circle" or "ellipse" => 3,
+        "alarmlist" or "hdachart" or "hdagrid" or "eventlog" => 12,
+        "ipcamera" => 6,
+        "recipe" => 6,
+        "svg" => 4,
+        _ => 4
+    };
+
+    private static int GetDefaultRowHeight(string type) => type switch
+    {
+        "text" or "editbox" => 60,
+        "indicator" => 80,
+        "gauge" => 120,
+        "rect" or "circle" or "ellipse" => 100,
+        "alarmlist" or "hdachart" or "hdagrid" or "eventlog" => 280,
+        "ipcamera" => 260,
+        "recipe" => 320,
+        "svg" => 150,
+        _ => 150
+    };
+
+    private static double GetDefaultWidth(string type) => type switch
+    {
+        "text" => 120,
+        "gauge" => 80,
+        "indicator" => 30,
+        "editbox" => 160,
+        "alarmlist" or "hdachart" or "hdagrid" or "eventlog" => 500,
+        "ipcamera" => 320,
+        "recipe" => 280,
+        _ => 80
+    };
+
+    private static double GetDefaultHeight(string type) => type switch
+    {
+        "text" => 30,
+        "gauge" => 80,
+        "indicator" => 30,
+        "editbox" => 32,
+        "alarmlist" => 250,
+        "hdachart" or "hdagrid" or "eventlog" => 220,
+        "ipcamera" => 240,
+        "recipe" => 300,
+        _ => 40
+    };
+
+    private static string GetDefaultLabel(string type) => type switch
+    {
+        "text" => "Label",
+        "alarmlist" => "Alarm List",
+        "hdachart" => "HDA Chart",
+        "hdagrid" => "HDA Grid",
+        "eventlog" => "Event Log",
+        _ => ""
+    };
+
+    private static string GetDefaultFill(string type) => type switch
+    {
+        "indicator" => "#44cc44",
+        "alarmlist" => "#1a1a2e",
+        "hdachart" or "hdagrid" => "#111827",
+        "eventlog" => "#0f172a",
+        "editbox" => "#1e293b",
+        "ipcamera" => "#0a0a0a",
+        "recipe" => "#1a1a2e",
+        _ => "#4a90d9"
+    };
+
+    private static string GetTypeIcon(string type) => type switch
+    {
+        "rect" => "▭",
+        "circle" => "●",
+        "ellipse" => "⬮",
+        "text" => "T",
+        "gauge" => "🔘",
+        "indicator" => "🔴",
+        "svg" => "🏭",
+        "alarmlist" => "🔔",
+        "hdachart" => "📊",
+        "hdagrid" => "📋",
+        "eventlog" => "📓",
+        "editbox" => "✏️",
+        "ipcamera" => "📷",
+        "recipe" => "📦",
+        _ => "■"
+    };
+
+    private static string GetTypeLabel(string type) => type switch
+    {
+        "rect" => "Rectangle",
+        "circle" => "Circle",
+        "ellipse" => "Ellipse",
+        "text" => "Text",
+        "gauge" => "Gauge",
+        "indicator" => "Indicator",
+        "svg" => "SVG Symbol",
+        "alarmlist" => "Alarm List",
+        "hdachart" => "HDA Chart",
+        "hdagrid" => "HDA Grid",
+        "eventlog" => "Event Log",
+        "editbox" => "EditBox",
+        "ipcamera" => "Camera",
+        "recipe" => "Recipe",
+        _ => type
+    };
+
+    public void Dispose()
+    {
+        Opc.StateChanged -= OnOpcChanged;
+        _refreshTimer?.Dispose();
+    }
+}

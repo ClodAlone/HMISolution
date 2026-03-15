@@ -1,0 +1,176 @@
+﻿<UserControl x:Class="StringManager.StringEditorControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:self="clr-namespace:StringManager"
+             xmlns:dxg="http://schemas.devexpress.com/winfx/2008/xaml/grid"
+             xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+             xmlns:dxb="http://schemas.devexpress.com/winfx/2008/xaml/bars"
+             xmlns:appproperties="clr-namespace:WPFUtilities.Properties;assembly=WPFUtilities"
+             xmlns:properties="clr-namespace:StringManager.Properties"
+             mc:Ignorable="d" 
+             d:DesignHeight="300" d:DesignWidth="300">
+    <dxb:BarManager.DXContextMenu>
+        <dxb:PopupMenu x:Name="contextMenu">
+            <dxb:PopupMenu.Items>
+                <dxb:BarButtonItem Command="ApplicationCommands.Undo" Content="{x:Static appproperties:ApplicationCommandsResource.Undo}"/>
+                <dxb:BarButtonItem Command="ApplicationCommands.Redo" Content="{x:Static appproperties:ApplicationCommandsResource.Redo}"/>
+
+                <dxb:BarItemLinkSeparator />
+
+                <dxb:BarButtonItem Command="Cut" Content="{x:Static appproperties:ApplicationCommandsResource.Cut}"/>
+                <dxb:BarButtonItem Command="Copy" Content="{x:Static appproperties:ApplicationCommandsResource.Copy}"/>
+                <dxb:BarButtonItem Command="Paste" Content="{x:Static appproperties:ApplicationCommandsResource.Paste}"/>
+                <dxb:BarButtonItem Command="ApplicationCommands.Delete" Content="{x:Static appproperties:ApplicationCommandsResource.Delete}"/>
+
+                <dxb:BarItemLinkSeparator />
+
+                <dxb:BarButtonItem Command="{x:Static self:UIGeneralCommands.AddNewLocale}" Content="{x:Static properties:UICommandResource.AddNewLocaleText}"/>
+                <dxb:BarButtonItem Command="{x:Static self:UIGeneralCommands.AddNewLocaleText}" Content="{x:Static properties:UICommandResource.AddNewLocaleTextText}"/>
+                <dxb:BarItemLinkSeparator />
+                <dxb:BarCheckItem CloseSubMenuOnClick="False" Command="{x:Static self:UIGeneralCommands.EnableAutoTranslate}" Content="{x:Static properties:UICommandResource.EnableAutoTranslateText}" IsChecked="{Binding IsAutoTranslate, Mode=OneWay}"/>
+                <dxb:BarItemLinkSeparator />
+                <dxb:BarButtonItem Command="{x:Static self:UIGeneralCommands.TranslateColumns}" Content="{x:Static properties:UICommandResource.TranslateColumnsText}"/>
+                <dxb:BarItemLinkSeparator />
+                <dxb:BarButtonItem Command="{x:Static self:UIGeneralCommands.ImportStrings}" Content="{x:Static properties:UICommandResource.ImportStringsText}"/>
+                <dxb:BarButtonItem Command="{x:Static self:UIGeneralCommands.ExportStrings}" Content="{x:Static properties:UICommandResource.ExportStringsText}"/>
+
+                <dxb:BarButtonItem Command="{x:Static self:UIGeneralCommands.RemoveLocale}" Content="{x:Static properties:UICommandResource.RemoveLocaleText}"/>
+            </dxb:PopupMenu.Items>
+        </dxb:PopupMenu>
+    </dxb:BarManager.DXContextMenu>
+
+    <UserControl.CommandBindings>
+
+        <CommandBinding Command="ApplicationCommands.Delete" 
+                    Executed="OnRemoveItem" 
+                    CanExecute="CanRemoveItem" />
+        
+        <CommandBinding Command="ApplicationCommands.Save"
+                    Executed="OnCommandSave" 
+                    CanExecute="CanCommandSave" />
+
+        <CommandBinding Command="Cut"
+                    Executed="OnCommandCut" 
+                    CanExecute="CanCommandCut" />
+
+        <CommandBinding Command="Copy"
+                    Executed="OnCommandCopy" 
+                    CanExecute="CanCommandCopy" />
+
+        <CommandBinding Command="Paste"
+                    Executed="OnCommandPaste" 
+                    CanExecute="CanCommandPaste" />
+
+        <CommandBinding Command="ApplicationCommands.Undo"
+                    PreviewExecuted="OnCommandUndo" 
+                    CanExecute="CanCommandUndo" />
+
+        <CommandBinding Command="ApplicationCommands.Redo"
+                    PreviewExecuted="OnCommandRedo" 
+                    CanExecute="CanCommandRedo" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.AddNewLocale}" 
+                    Executed="OnAddNewLocale" 
+                    CanExecute="CanAddNewLocale" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.AddNewLocaleText}" 
+                    Executed="OnAddNewLocaleText" 
+                    CanExecute="CanAddNewLocaleText" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.EnableAutoTranslate}" 
+                    Executed="OnEnableAutoTranslate" 
+                    CanExecute="CanEnableAutoTranslate" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.TranslateColumns}" 
+                    Executed="OnTranslateColumns" 
+                    CanExecute="CanTranslateColumns" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.ImportStrings}" 
+                    Executed="OnImportStrings" 
+                    CanExecute="CanImportStrings" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.ExportStrings}" 
+                    Executed="OnExportStrings" 
+                    CanExecute="CanExportStrings" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.RemoveLocale}" 
+                    Executed="OnRemoveLocale" 
+                    CanExecute="CanRemoveLocale" />
+    </UserControl.CommandBindings>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        <dxg:GridControl Grid.Row="1" MinHeight="10" MinWidth="10" Visibility="Visible"
+                                AutoExpandAllGroups="True"
+                                PreviewKeyDown="gridDataControl_PreviewKeyDown"
+                                AutoGenerateColumns="AddNew"
+                                Name="gridDataControl" 
+                                AutoPopulateColumns="False" 
+                                CustomColumnSort="OnColumnSort"
+                                AllowDrop="True"
+                                AllowLiveDataShaping="False" 
+                                CopyingToClipboard="gridDataControl_OnCopyingToClipboard"
+                                PastingFromClipboard="gridDataControl_OnPastingFromClipboard"
+                                MouseDoubleClick="gridDataControl_MouseDoubleClick"
+                                dx:DXSerializer.SerializationID="gridDataControl" 
+                                dx:DXSerializer.StoreLayoutMode="All" 
+                                dxg:DataControlSerializationOptions.AddNewColumns="False" 
+                                dxg:DataControlSerializationOptions.RemoveOldColumns="False">
+          <dxg:GridControl.CommandBindings>
+            <CommandBinding Command="ApplicationCommands.Copy" CanExecute="CanCommandCopy" Executed="OnCommandCopy" />
+            <CommandBinding Command="ApplicationCommands.Paste" CanExecute="CanCommandPaste" Executed="OnCommandPaste" />
+          </dxg:GridControl.CommandBindings>
+          <dxg:GridControl.Columns>
+                <dxg:GridColumn SortIndex="0" SortMode="Custom" AutoFilterCriteria="Contains" AllowEditing="True" Validate="gridDataControl_OnValidate" AllowGrouping="True" DisplayMemberBinding="{Binding Path=ID, Mode=TwoWay}" FieldName="ID" Header="ID" x:Name="colID">
+                    <dxg:GridColumn.CellEditTemplate>
+                        <DataTemplate>
+                            <TextBox x:Name="PART_Editor" Text="{Binding Path=Value}" MouseDoubleClick="SelectAllText" GotKeyboardFocus="SelectAllText" PreviewMouseLeftButtonDown="SelectivelyIgnoreMouseButton" />
+                        </DataTemplate>
+                    </dxg:GridColumn.CellEditTemplate>
+                </dxg:GridColumn>
+            </dxg:GridControl.Columns>
+            <dxg:GridControl.View>
+
+                <dxg:TableView x:Name="tableView" AllowEditing="True"
+                            FadeSelectionOnLostFocus="False" 
+                            BestFitMode="VisibleRows"
+                            AllowBestFit="True" 
+                            AllowResizing="True"
+                            ShowGroupPanel="True"
+                            ShowSearchPanelMode="Always" SearchPanelFindMode="Always" 
+                            ShowSearchPanelMRUButton="True"
+                            ShowFilterPanelMode="ShowAlways" 
+                            ShowAutoFilterRow="True"
+                            NavigationStyle="Cell"
+                            HiddenEditor="gridDataControl_HiddenEditor"
+                            EditorShowMode="MouseUp"
+                            ShowingEditor="gridDataControl_ShowingEditor"
+                            MultiSelectMode="Row">
+                    <!--<dxg:TableView.RowStyle>
+                        <Style TargetType="{x:Type dxg:RowControl}">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding Path=IsSelected}" Value="True">
+                                    <Setter Property="Background" Value="LightGray" />
+                                    <Setter Property="Foreground" Value="Black" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </dxg:TableView.RowStyle>-->
+                </dxg:TableView>
+            </dxg:GridControl.View>
+        </dxg:GridControl>
+        <Grid Grid.Row="0" x:Name="progressBar" Visibility="Collapsed">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <Button Content="{x:Static self:Properties.Resources.Cancel}" Margin="2" Click="CancelClick"/>
+            <ProgressBar Grid.Column="1" IsIndeterminate="True" VerticalAlignment="Stretch" HorizontalAlignment="Stretch"/>
+        </Grid>
+    </Grid>
+</UserControl>

@@ -1,0 +1,796 @@
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:chart="using:Syncfusion.UI.Xaml.Charts"
+    xmlns:guage="using:Syncfusion.UI.Xaml.Gauges"
+    xmlns:local="using:Syncfusion.UI.Xaml.Reports"
+    xmlns:local1="using:Syncfusion.RDL.Controls" xmlns:navigation="using:Syncfusion.UI.Xaml.Controls.Navigation">
+    
+
+    <Style TargetType="local:SfReportViewer">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="local:SfReportViewer">
+                    <Border
+                        Background="White"
+                        BorderBrush="{TemplateBinding BorderBrush}"
+                        BorderThickness="{TemplateBinding BorderThickness}" HorizontalAlignment="Stretch">
+                        
+                        <Grid x:Name="MainGrid" Height="Auto" Background="Transparent">
+                            
+                            <Grid.RowDefinitions>
+                                <RowDefinition x:Name="viewerContentRow" Height="*" />
+                                <RowDefinition x:Name="loadingIndicatorRow" Height="0"/>
+                                <RowDefinition x:Name="gridExceptionRow" Height="0"/>
+                                <RowDefinition x:Name="Credblock" Height="0"/>
+                                <RowDefinition x:Name="NavigationPanel" Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+
+                            <Grid Name="gridRenderingRegion" Grid.Row="0" Height="Auto" Margin="0,0,0,0">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="*"></RowDefinition>
+                                    </Grid.RowDefinitions>                                   
+                                    <!--Viewer Page-->
+                                    <ScrollViewer x:Name="scrollViewer" Grid.Row="1" Background="#5D5D5D"
+                                                  HorizontalScrollBarVisibility="Auto"
+                                                  VerticalScrollBarVisibility="Auto" >
+                                        <ScrollViewer.Resources>
+                                            <DataTemplate x:Key="ReportViewerCellTeamplate">
+                                                <ContentControl Content="{Binding Path=CellBoundValue}"></ContentControl>
+                                            </DataTemplate>
+                                        </ScrollViewer.Resources>
+                                         <StackPanel Orientation="Vertical" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                        Name="PageView" Background="White">
+                                            <Popup x:Name="PageInfoBlock"  >
+                                                <Popup.ChildTransitions>
+                                                    <TransitionCollection>
+                                                        <PaneThemeTransition Edge="Top"/>
+                                                    </TransitionCollection>
+                                                </Popup.ChildTransitions>
+
+                                                <Border BorderBrush="Black" BorderThickness="0" Background="Gray" x:Name="RootPopupBorder1" Height="73"  HorizontalAlignment="Center" Width="70">
+                                                    <Grid>
+                                                        <TextBlock x:Name="PageNumber" Foreground="White" HorizontalAlignment="Left" Height="43" Margin="5,10,0,0" FontSize="40" TextWrapping="NoWrap"  Text="1" VerticalAlignment="Top" Width="Auto" RenderTransformOrigin="0,-0.07"/>
+                                                        <Border BorderThickness="1,0,0,0" BorderBrush="White" Margin="38,40,0,15" Height="25" HorizontalAlignment="Right">
+                                                            <TextBlock Margin="7,0,0,0" Foreground="White" x:Name="TotalPages" HorizontalAlignment="Stretch" Height="25"  FontSize="18" TextWrapping="Wrap" Text="10" VerticalAlignment="Top" Width="20"/>
+                                                        </Border>
+                                                    </Grid>
+                                                </Border>
+                                            </Popup>
+                                            <Border x:Name="PageViewBody" Background="Transparent" Height="Auto" Width="Auto">
+                                                <StackPanel Background="Transparent" Height="Auto" Width="Auto">
+                                                    <Border Name="PageHeaderBorder" Height="Auto" Width="Auto" Background="Transparent">
+                                                        <Canvas x:Name="CanvasHeader" Visibility="Collapsed" Background="Transparent"/>
+                                                    </Border>
+                                                    <Border Name="PageBodyBorder" Height="Auto" Width="Auto" Background="Transparent">
+                                                        <Canvas x:Name="canvasContentPage" Grid.Row="2" Background="Transparent" Width="Auto" Height="Auto"/>
+                                                    </Border>
+                                                    <Border Name="PageFooterBorder" Height="Auto" Width="Auto" Background="Transparent">
+                                                        <Canvas x:Name="CanvasFooter" Visibility="Collapsed" Background="Transparent"/>
+                                                    </Border>
+                                                </StackPanel>
+                                            </Border>
+                                        </StackPanel>
+                                    </ScrollViewer>
+                                    
+                                    <Popup x:Name="ParameterBlock" HorizontalAlignment="Right" HorizontalOffset="-300" IsLightDismissEnabled="True" >
+                                        <Popup.ChildTransitions>
+                                            <TransitionCollection>
+                                                <PaneThemeTransition Edge="Right" />
+                                            </TransitionCollection>
+                                        </Popup.ChildTransitions>
+                                        <Border BorderBrush="{StaticResource ApplicationForegroundThemeBrush}" BorderThickness="0" Background="#1f0068" x:Name="ParameterblockBorder" Height="600" HorizontalAlignment="Center" Width="300">
+                                            <Grid>
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="*"/>
+                                                    <RowDefinition Height="100"/>
+                                                </Grid.RowDefinitions>
+                                                <Grid Grid.Row="0" >
+                                                    <TextBlock Margin="15" Text="Parameters" Foreground="White" FontSize="25" FontFamily="Segoe UI Light"/>
+                                                </Grid>
+                                                <Grid Background="Transparent" x:Name="grid_ReportParameterBlock" Grid.Column="0" Grid.Row="1" >
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                    </Grid.ColumnDefinitions>
+
+                                                </Grid>
+                                                <Grid Grid.Row="2" Height="Auto" >
+                                                    <Button x:Name="ViewReport" Content="View Report" Background="#233f8c" Foreground="White" Margin="20,0,0,0" Width="120" BorderThickness="1" BorderBrush="White"/>
+                                                    <Button x:Name="ParameterCancel" Content="Cancel" Background="#233f8c" Foreground="White" Margin="170,0,0,0" Width="120" BorderThickness="1" BorderBrush="White"/>
+                                                </Grid>
+                                            </Grid>
+
+                                        </Border>
+                                    </Popup>
+
+                                    <Popup x:Name="DocumentMapBlock" Height="800" Width="250" HorizontalAlignment="Left" HorizontalOffset="0" VerticalAlignment="Top" VerticalOffset="0" IsLightDismissEnabled="True" >
+                                        <Popup.ChildTransitions>
+                                            <TransitionCollection>
+                                                <PaneThemeTransition Edge="Left" />
+                                            </TransitionCollection>
+                                        </Popup.ChildTransitions>
+                                        <Grid x:Name="treeItemArea" Visibility="Visible" Height="800" Background="White">
+                                            <Grid Height="800" Width="250">
+                                                <navigation:SfTreeNavigator VerticalAlignment="Top" Width="250" Height="600" Name="DocumentMapTree" BorderThickness="0" NavigationMode="Extended"/>
+                                            </Grid>
+                                        </Grid>
+                                    </Popup>
+                                </Grid>
+                            </Grid>                            
+                            
+                            <Grid x:Name="gridLoadingIndicator" Grid.Row="1">
+                                <ProgressRing IsActive="True" Height="65" Width="65"></ProgressRing>
+                            </Grid>
+
+                            <Grid x:Name="gridException" Grid.Row="2" Background="White" Visibility="Collapsed">
+                                <StackPanel  Orientation="Vertical" HorizontalAlignment="Center">
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" >
+                                        <!--<Image Name="imageException" Source="{StaticResource Exception}" Width="48" HorizontalAlignment="Center"/>-->
+                                        <TextBlock Name="textBlockException"></TextBlock>
+                                    </StackPanel>
+                                    <ScrollViewer Name="groupBoxExpandedExceptionScroll" Grid.Row="3" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" Height="400">
+                                        <Grid Name="groupBoxExpandedException" Width="420" Margin="5,0,5,0" FlowDirection="RightToLeft">
+                                            <ToggleButton  Grid.Row="1" Name="toggleShowDetails" HorizontalAlignment="Right" Margin="0,0,0,0"  VerticalAlignment="Bottom">Show Details</ToggleButton>
+                                            <UserControl Grid.Row="2" Name="ShowError" Visibility="Collapsed" Width="{Binding ElementName=groupBoxExpandedException,Path=Width}">
+                                                <TextBox Name="textBlockStackTrace" TextWrapping="Wrap" FlowDirection="LeftToRight" Width="390" IsReadOnly="True" ></TextBox>
+                                            </UserControl>
+                                        </Grid>
+                                    </ScrollViewer>
+                                </StackPanel>
+                            </Grid>
+
+                            <ContentControl x:Name="Dialog"  Visibility="Collapsed" Grid.Row="3"
+                        HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                        HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
+                                <Grid Background="#FF1F0068" HorizontalAlignment="Stretch" VerticalAlignment="Center" Height="Auto">
+                                    <ContentControl HorizontalAlignment="Center" VerticalContentAlignment="Center" Padding="20" Margin="151,0,240,10" Width="Auto">
+                                        <Grid>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                            </Grid.RowDefinitions>
+                                            <StackPanel Grid.Row="0" Margin="0,0,0,10">
+                                                <TextBlock x:Name="credDatasourceName" FontSize="22" Text="Enter the datasource credentials to acess report" Foreground="White" HorizontalAlignment="Center" Margin="0,0,0,10" RenderTransformOrigin="0.506,-1.318"/>
+                                                <Grid Height="122" Margin="0,0,23,0"  x:Name="CredFlip">
+                                                    <Grid>
+                                                        <Grid.RowDefinitions>
+                                                            <RowDefinition/>
+                                                            <RowDefinition/>
+                                                        </Grid.RowDefinitions>
+                                                        <TextBox Name="Username" BorderBrush="Black" BorderThickness="1" Height="30" Grid.Row="0" Width="300" />
+                                                        <PasswordBox Name="Password" BorderBrush="Black" BorderThickness="1" Height="30" Grid.Row="1" Width="300" />
+                                                    </Grid>
+
+                                                </Grid>
+                                            </StackPanel>
+                                            <Grid Width="300" Visibility="Collapsed" x:Name="crederror" Margin="0,160,0,0" >
+                                                <StackPanel Orientation="Horizontal">
+                                                    <Path Data="F1M-1774.05,-6263.81L-1787.51,-6277.27 -1773.22,-6291.56C-1769.23,-6295.55 -1769.24,-6302.03 -1773.21,-6306.01 -1777.19,-6309.98 -1783.67,-6309.99 -1787.66,-6305.99L-1801.95,-6291.71 -1816.79,-6306.55C-1820.79,-6310.55 -1827.26,-6310.54 -1831.24,-6306.55 -1835.22,-6302.58 -1835.23,-6296.11 -1831.24,-6292.12L-1816.39,-6277.27 -1830.4,-6263.25C-1834.4,-6259.26 -1834.38,-6252.8 -1830.4,-6248.82 -1826.42,-6244.84 -1819.96,-6244.82 -1815.96,-6248.82L-1801.95,-6262.83 -1788.49,-6249.37C-1784.5,-6245.38 -1778.03,-6245.39 -1774.06,-6249.37 -1770.07,-6253.35 -1770.06,-6259.82 -1774.05,-6263.81" Stretch="Uniform" Fill="Red" Width="20" Height="20" Margin="0,0,0,0" RenderTransformOrigin="0.5,0.5">
+                                                        <Path.RenderTransform>
+                                                            <TransformGroup>
+                                                                <TransformGroup.Children>
+                                                                    <RotateTransform Angle="0" />
+                                                                    <ScaleTransform ScaleX="1" ScaleY="1" />
+                                                                </TransformGroup.Children>
+                                                            </TransformGroup>
+                                                        </Path.RenderTransform>
+                                                    </Path>
+                                                    <TextBlock Text="Enter Valid user name and password" Foreground="Red" 
+                                   VerticalAlignment="Center" FontSize="15" Margin="5 0"/>
+
+                                                </StackPanel>
+                                            </Grid>
+                                            <Grid Width="350" Visibility="Collapsed" x:Name="credaccept" Margin="0,160,0,0" >
+                                                <StackPanel Orientation="Horizontal">
+                                                    <Path Data="F1M574.042,314.611L533.8,344.398 522.251,328.798 515.235,333.988 526.786,349.593 526.782,349.596 531.978,356.603 579.235,321.622 574.042,314.611z" Stretch="Uniform" Fill="#86ba35" Width="26" Height="26" Margin="0,0,0,0" RenderTransformOrigin="0.5,0.5">
+                                                        <Path.RenderTransform>
+                                                            <TransformGroup>
+                                                                <TransformGroup.Children>
+                                                                    <RotateTransform Angle="0" />
+                                                                    <ScaleTransform ScaleX="1" ScaleY="1" />
+                                                                </TransformGroup.Children>
+                                                            </TransformGroup>
+                                                        </Path.RenderTransform>
+                                                    </Path>
+                                                    <TextBlock Text="Provided Username and Password was valid" Foreground="#86ba35" FontWeight="Bold"
+                                   VerticalAlignment="Center" FontSize="15" Margin="5 0"/>
+
+                                                </StackPanel>
+                                            </Grid>
+
+
+                                            <StackPanel Margin="59,10,82,-24" Grid.Row="1" HorizontalAlignment="Right" Orientation="Horizontal" Grid.RowSpan="2">
+                                                <Button x:Name="CredNext" Content="Next" Margin="10,0,10,0" Width="130"/>
+                                                <Button x:Name="CredViewreport" Content="View Report" Margin="10,0,10,0" Width="130" IsEnabled="False"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </ContentControl>
+                                </Grid>
+                            </ContentControl>
+
+
+                            <Grid x:Name="NavigationPanelGrid" Grid.Row="4">
+                                <Grid Background="Black">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Grid x:Name="NavigationBar"  Grid.Column="0" HorizontalAlignment="Left" Width="450" >
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Button Style="{StaticResource FirstAppBarButtonStyle}"  VerticalAlignment="Center" Grid.Column="0" x:Name="First" IsEnabled="False"/>
+                                        <Button Style="{StaticResource PreviousAppBarButtonStyle}"  VerticalAlignment="Center" x:Name="Previous" Grid.Column="1" IsEnabled="False"/>
+                                        <Button Style="{StaticResource NextAppBarButtonStyle}"  VerticalAlignment="Center" Grid.Column="2" x:Name="Next" IsEnabled="False"/>
+                                        <Button Style="{StaticResource LastAppBarButtonStyle}"  VerticalAlignment="Center" Grid.Column="3" x:Name="Last" IsEnabled="False"/>
+                                        <Button Style="{StaticResource BackAppBarButtonStyle}"  VerticalAlignment="Center" x:Name="Back" Grid.Column="4" IsEnabled="True" Visibility="Collapsed"/>
+                                        <Button Style="{StaticResource RefreshAppBarButtonStyle}"  VerticalAlignment="Center" Grid.Column="5" x:Name="Refresh" IsEnabled="False"/>
+                                        <Button Style="{StaticResource DocumentMapAppBarButtonStyle}"  VerticalAlignment="Center" Grid.Column="6" x:Name="DocumentMap" IsEnabled="True" Visibility="Collapsed"/>
+                                    </Grid>
+                                    <Grid Grid.Column="1" HorizontalAlignment="Right" Width="300">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Button x:Name="Print" Style="{StaticResource PrintSelectionAppBarButtonStyle}"  Grid.Column="0"  VerticalAlignment="Center" Visibility="Visible" IsEnabled="False"></Button>
+                                        <Button x:Name="Parameter" Style="{StaticResource ParameterAppBarButtonStyle}" IsEnabled="False"  Grid.Column="1"  VerticalAlignment="Center" BorderThickness="0"></Button>
+                                        <Button x:Name="ExportButton" Style="{StaticResource ReportExportAppBarButtonStyle}" Grid.Column="2" VerticalAlignment="Center" BorderThickness="0" IsEnabled="False"></Button>
+                                    </Grid>
+
+                                </Grid>
+                            </Grid>
+                            
+                            <Popup VerticalAlignment="Center" IsLightDismissEnabled="False" x:Name="PreviousPopup">
+                                <Button  VerticalAlignment="Center" x:Name="PreviousPageView">
+                                    <Grid>
+                                        <Grid Name="backgroundGrid" Width="48" Height="48" Visibility="Visible">
+                                            <Rectangle Fill="Transparent"  Visibility="Visible" />
+                                        </Grid>
+                                        <Path Data="F1M646.688,13.5518L646.783,13.4593 646.965,13.639 668.383,35.0583 689.459,35.0583 665.155,10.751 657.503,3.10126 657.323,2.92023 664.876,-4.63837 689.184,-28.9417 668.109,-28.9417 646.688,-7.52637 636.15,3.01398 646.688,13.5518z" Stretch="Uniform" Fill="#FFFFFFFF" Width="26" Height="26" Margin="0,0,0,0" RenderTransformOrigin="0.5,0.5">
+                                            <Path.RenderTransform>
+                                                <TransformGroup>
+                                                    <TransformGroup.Children>
+                                                        <RotateTransform Angle="0" />
+                                                        <ScaleTransform ScaleX="1" ScaleY="1" />
+                                                    </TransformGroup.Children>
+                                                </TransformGroup>
+                                            </Path.RenderTransform>
+                                        </Path>
+                                    </Grid>
+                                </Button>
+                            </Popup>
+
+                            <Popup HorizontalAlignment="Right" HorizontalOffset="-65" VerticalAlignment="Center" x:Name="NextPopup" IsLightDismissEnabled="False">
+                                <Button x:Name="NextPageView">
+                                    <Grid>
+                                        <Grid Width="48" Height="48" Visibility="Visible">
+                                            <Rectangle Fill="Transparent" Visibility="Visible" />
+                                        </Grid>
+                                        <Path Data="F1M568.254,-7.43524L568.159,-7.34277 567.977,-7.52246 546.559,-28.9417 525.484,-28.9417 549.787,-4.63446 557.439,3.01532 557.619,3.19629 550.067,10.7549 525.758,35.0583 546.834,35.0583 568.254,13.6429 578.792,3.10254 568.254,-7.43524z" Stretch="Uniform" Fill="#FFFFFFFF" Width="26" Height="26" Margin="0,0,0,0" RenderTransformOrigin="0.5,0.5">
+                                            <Path.RenderTransform>
+                                                <TransformGroup>
+                                                    <TransformGroup.Children>
+                                                        <RotateTransform Angle="0" />
+                                                        <ScaleTransform ScaleX="1" ScaleY="1" />
+                                                    </TransformGroup.Children>
+                                                </TransformGroup>
+                                            </Path.RenderTransform>
+                                        </Path>
+                                    </Grid>
+                                </Button>
+                            </Popup>
+
+
+                            <Popup x:Name="ExportBlock" HorizontalOffset="-200" VerticalOffset="-200" HorizontalAlignment="Right" VerticalAlignment="Bottom" IsLightDismissEnabled="True" >
+                                <Popup.ChildTransitions>
+                                    <TransitionCollection>
+                                        <PaneThemeTransition Edge="Bottom" />
+                                    </TransitionCollection>
+                                </Popup.ChildTransitions>
+                                <Border BorderBrush="{StaticResource ApplicationForegroundThemeBrush}" BorderThickness="0" Background="Black"  Width="200" Height="200">
+                                    <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="*"/>
+                                            <RowDefinition Height="*"/>
+                                            <RowDefinition Height="*"/>
+                                            <RowDefinition Height="*"/>
+                                        </Grid.RowDefinitions>
+                                        <StackPanel Orientation="Horizontal" Grid.Row="1">
+                                            <Grid>
+                                                <Grid Name="word" Width="48" Height="48" Visibility="Visible">
+                                                    <Rectangle Fill="Transparent" Name="Rect" Visibility="Visible" />
+                                                </Grid>
+                                                <Path Data="M92.887985,61.333L80.000168,62 71.11129,112.44401 61.554428,62.888 49.111603,64.444008 39.554737,111.11101 32.444836,65.333008 20.667004,65.778007 32.666832,129.11101 45.554653,129.11101 55.333515,83.333008 64.22139,131.778 78.444183,131.778z M120.66602,22.888004L197.99901,22.888004C199.47202,22.888004,200.66602,24.082004,200.66602,25.555004L200.66602,168.22231C200.66602,169.69499,199.47202,170.88899,197.99901,170.88899L120.66602,170.88899 120.66602,150.83292 182.66602,150.83292 182.66602,142.61092 120.66602,142.61092 120.66602,130.66592 182.66602,130.66592 182.66602,122.44393 120.66602,122.44393 120.66602,110.49994 182.66602,110.49994 182.66602,102.27795 120.66602,102.27795 120.66602,90.332954 182.66602,90.332954 182.66602,82.110962 120.66602,82.110962 120.66602,70.16597 182.66602,70.16597 182.66602,61.943977 120.66602,61.943977 120.66602,49.999985 182.66602,49.999985 182.66602,41.777992 120.66602,41.777992z M115.333,0L115.333,194 0,173.99998 0,20.000021z" Stretch="Uniform" Fill="#FFFFFFFF" Width="26" Height="26" Margin="0,0,0,0" RenderTransformOrigin="0.5,0.5">
+                                                    <Path.RenderTransform>
+                                                        <TransformGroup>
+                                                            <TransformGroup.Children>
+                                                                <RotateTransform Angle="0" />
+                                                                <ScaleTransform ScaleX="1" ScaleY="1" />
+                                                            </TransformGroup.Children>
+                                                        </TransformGroup>
+                                                    </Path.RenderTransform>
+                                                </Path>
+                                            </Grid>
+                                            <Button x:Name="DocIO" Content="Word" Foreground="White"  Height="50" Width="150" HorizontalContentAlignment="Left" BorderThickness="0" Background="Transparent" ></Button>
+                                        </StackPanel>
+                                        <StackPanel Grid.Row="0" Orientation="Horizontal">
+                                            <Grid>
+                                                <Grid Width="48" Height="48" Visibility="Visible">
+                                                    <Rectangle Fill="Transparent"  Visibility="Visible" />
+                                                </Grid>
+                                                <Path Data="F1M-215.815,-133.688C-215.815,-133.688 -222.932,-136.153 -232.688,-135.629 -232.688,-135.629 -242.729,-141.938 -247.739,-153.753 -247.739,-153.753 -242.954,-160.664 -248.014,-171.481 -248.014,-171.481 -250.907,-177.66 -253.257,-173.376 -253.257,-173.376 -257.844,-168.494 -251.316,-153.819 -251.316,-153.819 -257.777,-133.96 -261.73,-129.735 -261.73,-129.735 -271.766,-127.714 -275.757,-118.93 -275.757,-118.93 -276.456,-113.595 -271.343,-114.341 -271.343,-114.341 -260.616,-116.922 -257.406,-127.908L-235.192,-131.652C-235.192,-131.652 -217.958,-121.442 -212.091,-127.99 -212.091,-127.99 -210.216,-130.742 -215.815,-133.688z M-270.169,-118.983C-270.169,-118.983 -272.415,-118.937 -271.689,-120.731 -271.488,-121.229 -271.419,-121.458 -271.415,-121.551 -271.681,-121.246 -271.855,-121.03 -271.855,-121.03 -271.855,-121.03 -271.402,-121.788 -271.415,-121.551 -270.341,-122.77 -267.251,-125.94 -263.026,-127.19 -263.026,-127.19 -263.801,-119.947 -270.169,-118.983z M-249.949,-169.373C-249.083,-171.631 -248.092,-167.912 -248.092,-167.912 -246.625,-163.494 -248.574,-157.724 -248.574,-157.724 -250.863,-164.997 -249.949,-169.373 -249.949,-169.373z M-255.209,-132.832C-252.151,-136.348 -249.704,-148.203 -249.704,-148.203 -246.701,-142.929 -238.249,-135.355 -238.249,-135.355L-255.209,-132.832z M-215.379,-128.988C-215.379,-128.988 -221.682,-127.701 -228.459,-133.223 -228.459,-133.223 -222.281,-133.822 -216.736,-131.533 -216.736,-131.533 -212.799,-129.31 -215.379,-128.988z" Stretch="Uniform" Fill="#FFFFFFFF" Width="26" Height="26" Margin="0,0,0,0" RenderTransformOrigin="0.5,0.5">
+                                                    <Path.RenderTransform>
+                                                        <TransformGroup>
+                                                            <TransformGroup.Children>
+                                                                <RotateTransform Angle="0" />
+                                                                <ScaleTransform ScaleX="1" ScaleY="1" />
+                                                            </TransformGroup.Children>
+                                                        </TransformGroup>
+                                                    </Path.RenderTransform>
+                                                </Path>
+                                            </Grid>
+                                            <Button x:Name="PDF" Foreground="White" Content="PDF"  Height="50" Width="150" HorizontalContentAlignment="Left" BorderThickness="0" Background="Transparent" ></Button>
+                                        </StackPanel>
+                                        <StackPanel Grid.Row="2" Orientation="Horizontal">
+                                            <Grid>
+                                                <Grid  Width="48" Height="48" Visibility="Visible">
+                                                    <Rectangle Fill="Transparent"  Visibility="Visible" />
+                                                </Grid>
+                                                <Path Data="M154.46533,137.481L154.46533,157.481 187.3549,157.481 187.3549,137.481z M154.46533,111.481L154.46533,131.481 187.3549,131.481 187.3549,111.481z M154.46533,85.481003L154.46533,105.481 187.3549,105.481 187.3549,85.481003z M67.577698,60.258995L57.577702,85.148185 49.133602,62.481582 35.577702,62.481582 49.3563,95.14814 34.023003,127.593 47.3563,127.593 57.3563,104.4811 67.3563,129.81398 82.023003,129.81398 65.133598,94.037147 80.911003,60.258995z M154.46533,59.4813L154.46533,79.4813 187.3549,79.4813 187.3549,59.4813z M154.46533,33.4813L154.46533,53.4813 187.3549,53.4813 187.3549,33.4813z M119.021,22.147997L197.68828,22.147997C199.161,22.147999,200.355,23.341999,200.355,24.814699L200.355,167.481C200.355,168.955,199.161,170.147,197.68828,170.147L119.021,170.147 119.021,157.481 148.35458,157.481 148.35458,137.481 119.021,137.481 119.021,131.481 148.35458,131.481 148.35458,111.481 119.021,111.481 119.021,105.481 148.35458,105.481 148.35458,85.481003 119.021,85.481003 119.021,79.4813 148.35458,79.4813 148.35458,59.4813 119.021,59.4813 119.021,53.4813 148.35458,53.4813 148.35458,33.4813 119.021,33.4813z M115.333,0L115.333,193.99899 0,173.99902 0,19.99996z" Stretch="Uniform" Fill="#FFFFFFFF" Width="26" Height="26" Margin="0,0,0,0" RenderTransformOrigin="0.5,0.5">
+                                                    <Path.RenderTransform>
+                                                        <TransformGroup>
+                                                            <TransformGroup.Children>
+                                                                <RotateTransform Angle="0" />
+                                                                <ScaleTransform ScaleX="1" ScaleY="1" />
+                                                            </TransformGroup.Children>
+                                                        </TransformGroup>
+                                                    </Path.RenderTransform>
+                                                </Path>
+                                            </Grid>
+                                            <Button x:Name="Excel" Foreground="White" Content="Excel" Width="150" HorizontalContentAlignment="Left" BorderThickness="0" Height="50" Background="Transparent"></Button>
+                                        </StackPanel>
+                                        <StackPanel Grid.Row="3" Orientation="Horizontal">
+                                            <Grid>
+                                                <Grid  Width="48" Height="48" Visibility="Visible">
+                                                    <Rectangle Fill="Transparent"  Visibility="Visible" />
+                                                </Grid>
+                                                <Path Data="M50.88357,42.746001L59.590027,42.746001C56.096504,48.155969 50.809469,52.413583 44.573027,54.350999 45.970737,52.90976 47.224745,51.13244 48.298852,49.111627 49.305459,47.231608 50.167464,45.037704 50.88357,42.746001z M38.065026,42.746001L48.048027,42.746001C47.439939,44.587245 46.728354,46.341187 45.930169,47.842523 43.669814,52.053521 40.84687,54.640885 37.959027,55.361001z M24.647027,42.746001L35.367027,42.746001 35.262227,55.488C32.137811,55.014012 29.063614,52.292775 26.688022,47.680886 25.906777,46.167821 25.232963,44.597558 24.647027,42.746001z M53.054509,29.353L63.962029,29.353C63.721714,33.179835,62.721659,36.806071,61.108366,40.055001L51.624027,40.055001C52.430874,36.754069,52.924301,33.140836,53.054509,29.353z M38.170128,29.353L50.361026,29.353C50.221024,33.179835,49.691115,36.79847,48.850001,40.055001L38.088027,40.055001z M32.477137,29.353L35.479026,29.353 35.390431,40.055001 23.899201,40.055001C23.759927,39.485995,23.64811,38.893491,23.532027,38.304984L30.852927,30.983315z M51.817026,15.522L61.286795,15.522C62.917055,18.915422,63.87343,22.666856,63.999027,26.663L53.091095,26.663C53.041697,22.712358,52.597707,18.959623,51.817026,15.522z M38.288123,15.522L49.039695,15.522C49.859855,18.906222,50.34363,22.670656,50.397027,26.663L38.201027,26.663z M24.1148,15.522L35.598027,15.522 35.507425,26.663 22.573027,26.663C22.690217,22.670656,23.237161,18.893221,24.1148,15.522z M45.009026,1.2940006C51.193827,3.329155,56.408026,7.3724136,59.811028,12.823001L51.112427,12.823001C50.436027,10.537905 49.616326,8.4791198 48.653526,6.5936909 47.606526,4.5545464 46.381826,2.7536612 45.009026,1.2940006z M28.387008,1.1539993C26.986008,2.5949659 25.728007,4.3719254 24.651007,6.393878 21.713005,11.898751 19.917006,19.712571 19.846004,27.959381L19.840006,27.958382C19.837006,28.406371,19.857006,28.84236,19.865005,29.28435L29.154008,29.28435 14.578003,43.862014 0,29.28435 8.972002,29.28435C8.9510021,28.811361 8.8980026,28.347372 8.9010029,27.872383 9.0060024,15.41567 17.196005,4.6269188 28.387008,1.1539993z M38.41373,0.17300034C41.294617,0.93873405 44.0772,3.5754538 46.256366,7.8294334 47.026489,9.3294687 47.70371,10.988458 48.285027,12.823001L38.316027,12.823001z M35.725027,0L35.618126,12.823001 24.911027,12.823001C25.523703,11.000172 26.220979,9.1550832 27.022376,7.6654897 29.470279,3.0950184 32.587498,0.42575836 35.725027,0z" Stretch="Uniform" Fill="#FFFFFFFF" Width="26" Height="26" Margin="0,0,0,0" RenderTransformOrigin="0.5,0.5">
+                                                    <Path.RenderTransform>
+                                                        <TransformGroup>
+                                                            <TransformGroup.Children>
+                                                                <RotateTransform Angle="0" />
+                                                                <ScaleTransform ScaleX="1" ScaleY="1" />
+                                                            </TransformGroup.Children>
+                                                        </TransformGroup>
+                                                    </Path.RenderTransform>
+                                                </Path>
+                                            </Grid>
+                                            <Button x:Name="Html" Foreground="White" Content="Html" Width="150" HorizontalContentAlignment="Left" BorderThickness="0" Height="50" Background="Transparent"></Button>
+                                        </StackPanel>
+
+                                    </Grid>
+                                </Border>
+                            </Popup>
+
+                        </Grid>
+                        
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="BasicTextStyle" TargetType="TextBlock">
+        <Setter Property="Foreground" Value="{StaticResource ApplicationForegroundThemeBrush}"/>
+        <Setter Property="FontSize" Value="{StaticResource ControlContentThemeFontSize}"/>
+        <Setter Property="FontFamily" Value="{StaticResource ContentControlThemeFontFamily}"/>
+        <Setter Property="TextTrimming" Value="WordEllipsis"/>
+        <Setter Property="TextWrapping" Value="Wrap"/>
+        <Setter Property="Typography.StylisticSet20" Value="True"/>
+        <Setter Property="Typography.DiscretionaryLigatures" Value="True"/>
+    </Style>
+
+    <Style x:Key="AppBarButtonStyle" TargetType="ButtonBase">
+        <Setter Property="Foreground" Value="White"/>
+        <Setter Property="VerticalAlignment" Value="Stretch"/>
+        <Setter Property="FontFamily" Value="Segoe UI Symbol"/>
+        <Setter Property="FontWeight" Value="Normal"/>
+        <Setter Property="FontSize" Value="20"/>
+        <Setter Property="AutomationProperties.ItemType" Value="App Bar Button"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ButtonBase">
+                    <Grid x:Name="RootGrid" Width="100" Background="Transparent">
+                        <StackPanel VerticalAlignment="Top" Margin="0,12,0,11">
+                            <Grid Width="40" Height="40" Margin="0,0,0,5" HorizontalAlignment="Center">
+                                <TextBlock x:Name="BackgroundGlyph" Text="&#xE0A8;" FontFamily="Segoe UI Symbol" FontSize="53.333" Margin="-4,-19,0,0" Foreground="Black"/>
+                                <TextBlock x:Name="OutlineGlyph" Text="&#xE0A7;" FontFamily="Segoe UI Symbol" FontSize="53.333" Margin="-4,-19,0,0"/>
+                                <ContentPresenter x:Name="Content" HorizontalAlignment="Center" Margin="-1,-1,0,0" VerticalAlignment="Center"/>
+                            </Grid>
+                            <TextBlock
+                                x:Name="TextLabel"
+                                Text="{TemplateBinding AutomationProperties.Name}"
+                                Foreground="White"
+                                Margin="0,0,2,0"
+                                FontSize="12"
+                                TextAlignment="Center"
+                                Width="88"
+                                MaxHeight="32"
+                                TextTrimming="WordEllipsis"
+                                Style="{StaticResource BasicTextStyle}"/>
+                        </StackPanel>
+                        <Rectangle
+                                x:Name="FocusVisualWhite"
+                                IsHitTestVisible="False"
+                                Stroke="Transparent"
+                                StrokeEndLineCap="Square"
+                                StrokeDashArray="1,1"
+                                Opacity="0"
+                                StrokeDashOffset="1.5"/>
+                        <Rectangle
+                                x:Name="FocusVisualBlack"
+                                IsHitTestVisible="False"
+                                Stroke="Transparent"
+                                StrokeEndLineCap="Square"
+                                StrokeDashArray="1,1"
+                                Opacity="0"
+                                StrokeDashOffset="0.5"/>
+
+                        <VisualStateManager.VisualStateGroups>
+                            <VisualStateGroup x:Name="ApplicationViewStates">
+                                <VisualState x:Name="FullScreenLandscape"/>
+                                <VisualState x:Name="Filled"/>
+                                <VisualState x:Name="FullScreenPortrait">
+                                    <Storyboard>
+                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="TextLabel" Storyboard.TargetProperty="Visibility">
+                                            <DiscreteObjectKeyFrame KeyTime="0" Value="Collapsed"/>
+                                        </ObjectAnimationUsingKeyFrames>
+                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="RootGrid" Storyboard.TargetProperty="Width">
+                                            <DiscreteObjectKeyFrame KeyTime="0" Value="60"/>
+                                        </ObjectAnimationUsingKeyFrames>
+                                    </Storyboard>
+                                </VisualState>
+                                <VisualState x:Name="Snapped">
+                                    <Storyboard>
+                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="TextLabel" Storyboard.TargetProperty="Visibility">
+                                            <DiscreteObjectKeyFrame KeyTime="0" Value="Collapsed"/>
+                                        </ObjectAnimationUsingKeyFrames>
+                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="RootGrid" Storyboard.TargetProperty="Width">
+                                            <DiscreteObjectKeyFrame KeyTime="0" Value="60"/>
+                                        </ObjectAnimationUsingKeyFrames>
+                                    </Storyboard>
+                                </VisualState>
+                            </VisualStateGroup>
+                            <VisualStateGroup x:Name="CommonStates">
+                                <VisualState x:Name="Normal"/>
+                                <VisualState x:Name="PointerOver">
+                                    <Storyboard>
+                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="BackgroundGlyph" Storyboard.TargetProperty="Foreground">
+                                            <DiscreteObjectKeyFrame KeyTime="0" Value="Black"/>
+                                        </ObjectAnimationUsingKeyFrames>
+                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="Content" Storyboard.TargetProperty="Foreground">
+                                            <DiscreteObjectKeyFrame KeyTime="0" Value="White"/>
+                                        </ObjectAnimationUsingKeyFrames>
+                                    </Storyboard>
+                                </VisualState>
+                                <VisualState x:Name="Pressed">
+                                    <Storyboard>
+                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="OutlineGlyph" Storyboard.TargetProperty="Foreground">
+                                            <DiscreteObjectKeyFrame KeyTime="0" Value="White"/>
+                                        </ObjectAnimationUsingKeyFrames>
+                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="BackgroundGlyph" Storyboard.TargetProperty="Foreground">
+                                            <DiscreteObjectKeyFrame KeyTime="0" Value="White"/>
+                                        </ObjectAnimationUsingKeyFrames>
+                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="Content" Storyboard.TargetProperty="Foreground">
+                                            <DiscreteObjectKeyFrame KeyTime="0" Value="Black"/>
+                                        </ObjectAnimationUsingKeyFrames>
+                                    </Storyboard>
+                                </VisualState>
+                                <VisualState x:Name="Disabled">
+                                    <Storyboard>
+                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="OutlineGlyph" Storyboard.TargetProperty="Foreground">
+                                            <DiscreteObjectKeyFrame KeyTime="0" Value="Gray"/>
+                                        </ObjectAnimationUsingKeyFrames>
+                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="Content" Storyboard.TargetProperty="Foreground">
+                                            <DiscreteObjectKeyFrame KeyTime="0" Value="Gray"/>
+                                        </ObjectAnimationUsingKeyFrames>
+                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="TextLabel" Storyboard.TargetProperty="Foreground">
+                                            <DiscreteObjectKeyFrame KeyTime="0" Value="Gray"/>
+                                        </ObjectAnimationUsingKeyFrames>
+                                    </Storyboard>
+                                </VisualState>
+                            </VisualStateGroup>
+                            <VisualStateGroup x:Name="FocusStates">
+                                <VisualState x:Name="Focused">
+                                    <Storyboard>
+                                        <DoubleAnimation
+                                                Storyboard.TargetName="FocusVisualWhite"
+                                                Storyboard.TargetProperty="Opacity"
+                                                To="1"
+                                                Duration="0"/>
+                                        <DoubleAnimation
+                                                Storyboard.TargetName="FocusVisualBlack"
+                                                Storyboard.TargetProperty="Opacity"
+                                                To="1"
+                                                Duration="0"/>
+                                    </Storyboard>
+                                </VisualState>
+                                <VisualState x:Name="Unfocused" />
+                                <VisualState x:Name="PointerFocused" />
+                            </VisualStateGroup>
+                            <VisualStateGroup x:Name="CheckStates">
+                                <VisualState x:Name="Checked">
+                                    <Storyboard>
+                                        <DoubleAnimation Duration="0" To="0" Storyboard.TargetName="OutlineGlyph" Storyboard.TargetProperty="Opacity"/>
+                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="BackgroundGlyph" Storyboard.TargetProperty="Foreground">
+                                            <DiscreteObjectKeyFrame KeyTime="0" Value="White"/>
+                                        </ObjectAnimationUsingKeyFrames>
+                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="BackgroundCheckedGlyph" Storyboard.TargetProperty="Visibility">
+                                            <DiscreteObjectKeyFrame KeyTime="0" Value="Visible"/>
+                                        </ObjectAnimationUsingKeyFrames>
+                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="Content" Storyboard.TargetProperty="Foreground">
+                                            <DiscreteObjectKeyFrame KeyTime="0" Value="White"/>
+                                        </ObjectAnimationUsingKeyFrames>
+                                    </Storyboard>
+                                </VisualState>
+                                <VisualState x:Name="Unchecked"/>
+                                <VisualState x:Name="Indeterminate"/>
+                            </VisualStateGroup>
+                        </VisualStateManager.VisualStateGroups>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+
+    <Style x:Key="FirstAppBarButtonStyle" TargetType="Button" BasedOn="{StaticResource AppBarButtonStyle}">
+        <Setter Property="AutomationProperties.Name" Value="First"/>
+        <Setter Property="Content" Value="M48.646063,2.3679962 L56.899002,10.620995 33.850483,33.67034 56.899002,56.718004 48.645065,64.972004 25.597429,41.923689 25.576135,41.944984 17.320995,33.691988 17.343484,33.669499 17.321003,33.647017 25.57484,25.395002 25.596553,25.416715 z M0,0 L12.692999,0 12.692999,65.333 0,65.333 z"/>
+        <Setter Property="ContentTemplate">
+            <Setter.Value>
+                <DataTemplate>
+                    <Path Width="20" Height="20" Stretch="Uniform" Fill="{Binding Path=Foreground, RelativeSource={RelativeSource Mode=TemplatedParent}}" Data="{Binding Path=Content, RelativeSource={RelativeSource Mode=TemplatedParent}}"/>
+            </DataTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+
+    <Style x:Key="ReportExportAppBarButtonStyle" TargetType="Button" BasedOn="{StaticResource AppBarButtonStyle}">
+        <Setter Property="AutomationProperties.Name" Value="Export"/>
+        <Setter Property="Content" Value="M45.963548,8.269645L62.665147,25.065546 45.963548,39.871244 45.963548,31.963644C45.963548,31.963644 17.120617,24.075571 9.909945,39.871244 9.9099454,35.922571 12.530199,16.167482 45.963548,16.167483z M0,0L41.778571,0 41.778571,4.1795139 41.778571,8.3590277 37.598714,8.3590277 37.598714,4.1795139 4.1798577,4.1795139 4.1798577,45.954649 37.598714,45.954649 37.598714,41.775137 41.778571,41.775137 41.778571,45.954649 41.778571,50.134165 37.598714,50.134165 0,50.134165 0,45.954649 0,4.1795139z" />
+        <Setter Property="ContentTemplate">
+            <Setter.Value>
+                <DataTemplate>
+                    <Path Width="20" Height="20" Stretch="Uniform" Fill="{Binding Path=Foreground, RelativeSource={RelativeSource Mode=TemplatedParent}}" Data="{Binding Path=Content, RelativeSource={RelativeSource Mode=TemplatedParent}}"/>
+                </DataTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+
+    <Style x:Key="PreviousAppBarButtonStyle" TargetType="Button" BasedOn="{StaticResource AppBarButtonStyle}">
+        <Setter Property="AutomationProperties.Name" Value="Previous"/>
+        <Setter Property="Content" Value="M31.324009,0 L39.577011,8.2529984 16.528133,31.302601 39.577,54.350008 31.323002,62.604008 8.2757243,39.555271 8.2540072,39.576988 6.5301068E-06,31.323992 0.022487581,31.301511 0,31.279021 8.252015,23.027006 8.2745055,23.049495 z" />
+        <Setter Property="ContentTemplate">
+            <Setter.Value>
+                <DataTemplate>
+                    <Path Width="20" Height="20" Stretch="Uniform" Fill="{Binding Path=Foreground, RelativeSource={RelativeSource Mode=TemplatedParent}}" Data="{Binding Path=Content, RelativeSource={RelativeSource Mode=TemplatedParent}}"/>
+                </DataTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    
+    <Style x:Key="LastAppBarButtonStyle" TargetType="Button" BasedOn="{StaticResource AppBarButtonStyle}">
+        <Setter Property="AutomationProperties.Name" Value="Last"/>
+        <Setter Property="Content" Value="M8.2530006,2.3679962 L31.302372,25.416628 31.324,25.395002 39.578026,33.647017 39.555527,33.669518 39.577999,33.691988 31.322998,41.944984 31.301655,41.923641 8.2539934,64.972004 2.6285515E-05,56.718004 23.04851,33.670235 0,10.620995 z M44.206005,0 L56.899002,0 56.899002,65.333 44.206005,65.333 z"/>
+        <Setter Property="ContentTemplate">
+            <Setter.Value>
+                <DataTemplate>
+                    <Path Width="20" Height="20" Stretch="Uniform" Fill="{Binding Path=Foreground, RelativeSource={RelativeSource Mode=TemplatedParent}}" Data="{Binding Path=Content, RelativeSource={RelativeSource Mode=TemplatedParent}}"/>
+                </DataTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    
+    <Style x:Key="NextAppBarButtonStyle" TargetType="Button" BasedOn="{StaticResource AppBarButtonStyle}">
+        <Setter Property="AutomationProperties.Name" Value="Next"/>
+        <Setter Property="Content" Value="M8.2530187,0 L31.302543,23.049499 31.325038,23.027006 39.576999,31.279021 39.554538,31.301484 39.577045,31.323992 31.323039,39.576988 31.301299,39.555248 8.2540048,62.604008 0,54.350008 23.048906,31.302601 1.119447E-05,8.2529984 z"/>
+        <Setter Property="ContentTemplate">
+            <Setter.Value>
+                <DataTemplate>
+                    <Path Width="20" Height="20" Stretch="Uniform" Fill="{Binding Path=Foreground, RelativeSource={RelativeSource Mode=TemplatedParent}}" Data="{Binding Path=Content, RelativeSource={RelativeSource Mode=TemplatedParent}}"/>
+            </DataTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="RefreshAppBarButtonStyle" TargetType="Button" BasedOn="{StaticResource AppBarButtonStyle}">
+        <Setter Property="AutomationProperties.Name" Value="Refresh"/>
+        <Setter Property="Content" Value="F1M2278.07,1272.94C2265.47,1272.94,2254.91,1281.77,2252.19,1293.55L2241.99,1293.43 2255.8,1315.74 2270.14,1293.77 2260.66,1293.66C2263.13,1286.36 2269.96,1281.07 2278.07,1281.07 2288.24,1281.07 2296.52,1289.35 2296.52,1299.52 2296.52,1309.7 2288.24,1317.98 2278.07,1317.98 2274.31,1317.98 2270.81,1316.84 2267.89,1314.9L2263.45,1321.7C2267.65,1324.48 2272.67,1326.11 2278.07,1326.11 2292.73,1326.11 2304.65,1314.18 2304.65,1299.52 2304.65,1284.87 2292.73,1272.94 2278.07,1272.94" />
+        <Setter Property="ContentTemplate">
+            <Setter.Value>
+                <DataTemplate>
+                    <Path Width="20" Height="20" Stretch="Uniform" Fill="{Binding Path=Foreground, RelativeSource={RelativeSource Mode=TemplatedParent}}" Data="{Binding Path=Content, RelativeSource={RelativeSource Mode=TemplatedParent}}"/>
+                </DataTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="BackAppBarButtonStyle" TargetType="Button" BasedOn="{StaticResource AppBarButtonStyle}">
+        <Setter Property="AutomationProperties.Name" Value="Back"/>
+        <Setter Property="Content" Value="F1M1928.8,1024.07L1920.05,1024.07 1905.62,1009.64 1901.24,1005.26 1920.1,986.403 1928.78,986.403 1928.82,986.439 1913.09,1002.17 1954.58,1002.17 1954.58,1008.35 1913.09,1008.35 1928.8,1024.07z"/>
+        <Setter Property="ContentTemplate">
+            <Setter.Value>
+                <DataTemplate>
+                    <Path Width="20" Height="20" Stretch="Uniform" Fill="{Binding Path=Foreground, RelativeSource={RelativeSource Mode=TemplatedParent}}" Data="{Binding Path=Content, RelativeSource={RelativeSource Mode=TemplatedParent}}"/>
+                </DataTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="DocumentMapAppBarButtonStyle" TargetType="Button" BasedOn="{StaticResource AppBarButtonStyle}">
+        <Setter Property="AutomationProperties.Name" Value="Doc Map"/>
+        <Setter Property="Content" Value="F1 M 0,0L 0,3.5416L 0,5.27802L 0,21.2916L 0.169373,21.2916L 1.37509,21.2916L 19.9584,21.2916L 21.3333,21.2916L 21.3333,19.9167L 21.3333,5.27802L 21.3333,3.5416L 21.3333,0L 0,0 Z M 1.37509,5.27802L 6.62778,5.27802L 6.62778,19.9167L 1.37509,19.9167L 1.37509,5.27802 Z M 19.9584,19.9167L 8.00269,19.9167L 8.00269,5.27802L 19.9584,5.27802L 19.9584,19.9167 Z " />
+        <Setter Property="ContentTemplate">
+            <Setter.Value>
+                <DataTemplate>
+                    <Path Width="20" Height="20" Stretch="Uniform" Fill="{Binding Path=Foreground, RelativeSource={RelativeSource Mode=TemplatedParent}}" Data="{Binding Path=Content, RelativeSource={RelativeSource Mode=TemplatedParent}}"/>
+                </DataTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="ViewAppBarButtonStyle" TargetType="Button" BasedOn="{StaticResource AppBarButtonStyle}">
+        <Setter Property="AutomationProperties.AutomationId" Value="YesAppBarButton"/>
+        <Setter Property="AutomationProperties.Name" Value="ViewReport"/>
+        <Setter Property="Content" Value="&#xE10B;"/>
+    </Style>
+    
+    <Style x:Key="CancelAppBarButtonStyle" TargetType="Button" BasedOn="{StaticResource AppBarButtonStyle}">
+        <Setter Property="AutomationProperties.AutomationId" Value="DeleteAppBarButton"/>
+        <Setter Property="AutomationProperties.Name" Value="Cancel"/>
+        <Setter Property="Content" Value="&#xE106;"/>
+    </Style>
+
+    <Style x:Key="ParameterAppBarButtonStyle" TargetType="ButtonBase" BasedOn="{StaticResource AppBarButtonStyle}">
+        <Setter Property="AutomationProperties.AutomationId" Value="SettingsAppBarButton"/>
+        <Setter Property="AutomationProperties.Name" Value="Parameter"/>
+        <Setter Property="Content" Value="&#xE115;"/>
+    </Style>
+    
+    <Style x:Key="PrintSelectionAppBarButtonStyle" TargetType="Button" BasedOn="{StaticResource AppBarButtonStyle}">
+        <Setter Property="AutomationProperties.Name" Value="Print"/>
+        <Setter Property="Content" Value="M13.338,28.512001L50.661999,28.512001 50.661999,52.741999 13.338,52.741999z M0,6.9750004L9.1771202,6.9750004 9.1771202,13.338428 54.944,13.338428 54.944,6.9750004 64,6.9750004 64,35.609999 54.944,35.609999 54.944,24.107311 9.1771202,24.107311 9.1771202,35.609999 0,35.609999z M13.277,0L50.723,0 50.723,9.4230003 13.277,9.4230003z" />
+        <Setter Property="ContentTemplate">
+            <Setter.Value>
+                <DataTemplate>
+                    <Path Width="20" Height="20" Stretch="Uniform" Fill="{Binding Path=Foreground, RelativeSource={RelativeSource Mode=TemplatedParent}}" Data="{Binding Path=Content, RelativeSource={RelativeSource Mode=TemplatedParent}}"/>
+                </DataTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    
+    <Style x:Key="Plus" TargetType="Button" >
+        <Setter Property="AutomationProperties.Name" Value="PlusButton"/>
+        <Setter Property="Content" Value="" />
+        <Setter Property="ContentTemplate">
+            <Setter.Value>
+                <DataTemplate>
+                    <Grid Height="15.9989929199219" Width="16.0009994506836" Margin="-18,-6,-6,-6">
+                        <Path Stretch="Fill" Data="F1 M 15.334,13.8528C 15.334,14.6705 14.6699,15.332 13.8548,15.332L 2.14505,15.332C 1.32869,15.332 0.666656,14.6705 0.666656,13.8528L 0.666656,2.14453C 0.666656,1.32678 1.32869,0.666672 2.14505,0.666672L 13.8548,0.666672C 14.6699,0.666672 15.334,1.32678 15.334,2.14453L 15.334,13.8528 Z " UseLayoutRounding="False" Margin="0.667,0.666,0.666,0.669">
+                            <Path.Fill>
+                                <LinearGradientBrush StartPoint="0.17253,0.160878" EndPoint="0.957028,0.973283">
+                                    <GradientStop Color="#FFFFFFFF" Offset="0.0377407"/>
+                                    <GradientStop Color="#FFCFDBE5" Offset="0.467988"/>
+                                    <GradientStop Color="#FFA0B8CC" Offset="1"/>
+                                </LinearGradientBrush>
+                            </Path.Fill>
+                        </Path>
+                        <Path Data="M7.4790039,5 L8.8960037,5 L8.8960037,7.6670074 L11.396011,7.6670074 L11.396011,9.0829926 L8.8960037,9.0829926 L8.8960037,11.583008 L7.4790039,11.583008 L7.4790039,9.0829926 L4.8120117,9.0829926 L4.8120117,7.6670074 L7.4790039,7.6670074 z M2.1450901,1.3333642 C1.6972517,1.3333644 1.3333549,1.697221 1.3333551,2.1445694 L1.3333551,13.853055 C1.3333549,14.301063 1.6972517,14.665569 2.1450901,14.665569 L13.85506,14.665569 C14.302968,14.665569 14.667675,14.301063 14.667675,13.853055 L14.667675,2.1445694 C14.667675,1.697221 14.302968,1.3333644 13.85506,1.3333642 z M2.1450901,0 L13.85506,0 C15.038681,-6.2639856E-08 16.000999,0.96226758 16.000999,2.1445694 L16.000999,13.853055 C16.000999,15.035975 15.038681,15.998994 13.85506,15.998994 L2.1450901,15.998994 C0.96217602,15.998994 0,15.035975 0,13.853055 L0,2.1445694 C0,0.96226758 0.96217602,-6.2639856E-08 2.1450901,0 z" Fill="#FF304860" Margin="0,0,-0.001,0.001" Stretch="Fill" UseLayoutRounding="False" />
+                    </Grid>
+                </DataTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="Minus" TargetType="Button" >
+        <Setter Property="AutomationProperties.Name" Value="MinusButton"/>
+        <Setter Property="Content" Value="" />
+        <Setter Property="ContentTemplate">
+            <Setter.Value>
+                <DataTemplate>
+                    <Grid Height="15.9989929199219" Width="16.0009994506836" Margin="-18,-6,-6,-6">
+                        <Path Stretch="Fill" Data="F1 M 15.3347,13.8528C 15.3347,14.6705 14.6705,15.332 13.8555,15.332L 2.14587,15.332C 1.32947,15.332 0.666672,14.6705 0.666672,13.8528L 0.666672,2.14453C 0.666672,1.32678 1.32947,0.666672 2.14587,0.666672L 13.8555,0.666672C 14.6705,0.666672 15.3347,1.32678 15.3347,2.14453L 15.3347,13.8528 Z " UseLayoutRounding="False" Margin="0.666,0.666,0.666,0.669">
+                            <Path.Fill>
+                                <LinearGradientBrush StartPoint="0.172566,0.160878" EndPoint="1.30189,0.160878">
+                                    <LinearGradientBrush.RelativeTransform>
+                                        <TransformGroup>
+                                            <SkewTransform CenterX="0.172566" CenterY="0.160878" AngleX="0.010557" AngleY="0"/>
+                                            <RotateTransform CenterX="0.172566" CenterY="0.160878" Angle="46.0026"/>
+                                        </TransformGroup>
+                                    </LinearGradientBrush.RelativeTransform>
+                                    <GradientStop Color="#FFFFFFFF" Offset="0.0377407"/>
+                                    <GradientStop Color="#FFCFDBE5" Offset="0.467988"/>
+                                    <GradientStop Color="#FFA0B8CC" Offset="1"/>
+                                </LinearGradientBrush>
+                            </Path.Fill>
+                        </Path>
+                        <Path Data="M5.1234131,7.4989929 L11.707973,7.4989929 L11.707973,8.9156532 L5.1234131,8.9156532 z M2.1458294,1.3333642 C1.6978481,1.3333644 1.3333149,1.697221 1.333315,2.1445694 L1.333315,13.853055 C1.3333149,14.301063 1.6978481,14.665569 2.1458294,14.665569 L13.855239,14.665569 C14.303031,14.665569 14.667724,14.301063 14.667724,13.853055 L14.667724,2.1445694 C14.667724,1.697221 14.303031,1.3333644 13.855239,1.3333642 z M2.1458294,0 L13.855239,0 C15.038816,-6.2639856E-08 16.000999,0.96226758 16.000999,2.1445694 L16.000999,13.853055 C16.000999,15.035975 15.038816,15.998994 13.855239,15.998994 L2.1458294,15.998994 C0.96223187,15.998994 0,15.035975 0,13.853055 L0,2.1445694 C0,0.96226758 0.96223187,-6.2639856E-08 2.1458294,0 z" Fill="#FF304860" Margin="0,0,-0.001,0.001" Stretch="Fill" UseLayoutRounding="False" />
+                    </Grid>
+                </DataTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    
+    <Style TargetType="local:MultiValueComboBox">
+        <Setter Property="Padding" Value="6,2,25,2"/>
+        <Setter Property="Background" Value="#FF1F3B53"/>
+        <Setter Property="HorizontalContentAlignment" Value="Left"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="TabNavigation" Value="Once"/>
+        <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Auto"/>
+        <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto"/>
+        <Setter Property="BorderBrush">
+            <Setter.Value>
+                <LinearGradientBrush EndPoint="0.5,1" StartPoint="0.5,0">
+                    <GradientStop Color="#FFA3AEB9" Offset="0"/>
+                    <GradientStop Color="#FF8399A9" Offset="0.375"/>
+                    <GradientStop Color="#FF718597" Offset="0.375"/>
+                    <GradientStop Color="#FF617584" Offset="1"/>
+                </LinearGradientBrush>
+            </Setter.Value>
+        </Setter>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="local:MultiValueComboBox">
+                    <Grid>
+                        <Grid.Resources>
+                            <Style x:Key="CheckBoxListBoxItemStyle" TargetType="ListBoxItem">
+                                <Setter Property="Foreground" Value="#FF000000" />
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="ListBoxItem">
+                                            <Grid x:Name="RootElement">
+                                                <CheckBox x:Name="PART_check" ClickMode="Press" Content="{Binding Path=DisplayField}" IsChecked="{Binding Path=IsSelected, Mode=TwoWay}" />
+                                            </Grid>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </Grid.Resources>
+
+                        <Border x:Name="ContentPresenterBorder">
+                            <Grid Background="White" x:Name="rootgrid" Height="30" Width="100" >
+                                <ContentPresenter x:Name="ContentPresenter" >
+                                    <TextBlock x:Name="DropDownToggle" FontSize="13" Text="{TemplateBinding Tag}" VerticalAlignment="Stretch">
+                                    </TextBlock>
+                                </ContentPresenter>
+                            </Grid>
+                        </Border>
+                        <!--<Rectangle x:Name="DisabledVisualElement" Fill="White" IsHitTestVisible="false" Opacity="0" RadiusY="3" RadiusX="3"/>
+                        <Rectangle x:Name="FocusVisualElement" IsHitTestVisible="false" Margin="1" Opacity="0" RadiusY="2" RadiusX="2" Stroke="#FF6DBDD1" StrokeThickness="1"/>-->
+                        <Popup x:Name="PART_DropDown" Margin="0,30,0,0" IsLightDismissEnabled="True">
+                                <!--<ScrollViewer x:Name="ScrollViewer" BorderThickness="0" Padding="1">-->
+                                <ListBox x:Name="comboListBox" SelectionMode="Multiple" ItemsSource="{TemplateBinding ItemsSource}" ItemContainerStyle="{StaticResource CheckBoxListBoxItemStyle}"  HorizontalAlignment="Stretch"/>
+                                <!--</ScrollViewer>-->
+                        </Popup>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+</ResourceDictionary>

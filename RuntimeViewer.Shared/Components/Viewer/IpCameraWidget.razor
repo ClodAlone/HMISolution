@@ -1,0 +1,165 @@
+@using RuntimeViewer.Shared.Services
+@implements IDisposable
+
+<div class="ipcamera-widget" @onclick:stopPropagation @onmousedown:stopPropagation @onmouseup:stopPropagation>
+    @if (!string.IsNullOrEmpty(_streamUrl))
+    {
+        <img src="@_streamUrl" alt="Camera: @CameraId"
+             class="ipcamera-img"
+             @onerror="OnImageError" />
+        @if (_hasError)
+        {
+            <div class="ipcamera-overlay">
+                <span>⚠️ Stream unavailable</span>
+                <button class="ipcamera-retry" @onclick="Retry">Retry</button>
+            </div>
+        }
+    }
+    else
+    {
+        <div class="ipcamera-placeholder">
+            <span>📷</span>
+            <span class="small">@(string.IsNullOrEmpty(CameraId) ? "No camera configured" : $"Camera: {CameraId}")</span>
+        </div>
+    }
+    @if (ShowOverlay)
+    {
+        <div class="ipcamera-info">
+            @if (!string.IsNullOrEmpty(_detectionLabel))
+            {
+                <span class="ipcamera-det">🎯 @_detectionLabel (@(_detectionConfidence.ToString("P0"))) — @_detectionCount obj</span>
+            }
+            else
+            {
+                <span class="ipcamera-det-none">No detections</span>
+            }
+        </div>
+    }
+</div>
+
+<style>
+    .ipcamera-widget {
+        width: 100%; height: 100%; position: relative; overflow: hidden;
+        background: #0a0a0a; border-radius: 4px; display: flex;
+        align-items: center; justify-content: center;
+    }
+    .ipcamera-img {
+        width: 100%; height: 100%; object-fit: contain;
+    }
+    .ipcamera-placeholder {
+        display: flex; flex-direction: column; align-items: center; gap: 4px;
+        color: #6b7280; font-size: 12px;
+    }
+    .ipcamera-placeholder span:first-child { font-size: 32px; }
+    .ipcamera-overlay {
+        position: absolute; inset: 0; display: flex; flex-direction: column;
+        align-items: center; justify-content: center; gap: 8px;
+        background: rgba(0,0,0,0.7); color: #fca5a5; font-size: 13px;
+    }
+    .ipcamera-retry {
+        background: #334155; color: #e2e8f0; border: 1px solid #475569;
+        border-radius: 4px; padding: 4px 12px; cursor: pointer; font-size: 11px;
+    }
+    .ipcamera-retry:hover { background: #475569; }
+    .ipcamera-info {
+        position: absolute; bottom: 0; left: 0; right: 0;
+        background: rgba(0,0,0,0.6); padding: 2px 8px;
+        font-size: 10px; color: #e2e8f0;
+    }
+    .ipcamera-det { color: #86efac; }
+    .ipcamera-det-none { color: #6b7280; }
+</style>
+
+@code {
+    [Parameter] public string CameraId { get; set; } = "";
+    [Parameter] public string ServerBaseUrl { get; set; } = "";
+    [Parameter] public bool ShowOverlay { get; set; }
+    [Parameter] public string? DetectionVariablePrefix { get; set; }
+
+    [Inject] private OpcRuntimeClient Opc { get; set; } = default!;
+    [Inject] private ProjectService Project { get; set; } = default!;
+
+    private string _streamUrl = "";
+    private bool _hasError;
+    private string _detectionLabel = "";
+    private double _detectionConfidence;
+    private int _detectionCount;
+    private System.Threading.Timer? _detectionTimer;
+
+    protected override void OnParametersSet()
+    {
+        BuildStreamUrl();
+        if (ShowOverlay && !string.IsNullOrEmpty(DetectionVariablePrefix))
+        {
+            _detectionTimer ??= new System.Threading.Timer(_ =>
+            {
+                ReadDetectionValues();
+                InvokeAsync(StateHasChanged);
+            }, null, 0, 1000);
+        }
+    }
+
+    private void BuildStreamUrl()
+    {
+        if (string.IsNullOrEmpty(CameraId))
+        {
+            _streamUrl = "";
+            return;
+        }
+
+        // Determine the server's stream base URL
+        var baseUrl = ServerBaseUrl;
+        if (string.IsNullOrEmpty(baseUrl))
+        {
+            // Derive from the OPC endpoint — assume camera HTTP is on port 8088 of same host
+            var endpoint = Project.Settings?.EndpointUrl ?? "";
+            if (!string.IsNullOrEmpty(endpoint))
+            {
+                try
+                {
+                    var uri = new Uri(endpoint);
+                    baseUrl = $"http://{uri.Host}:8088";
+                }
+                catch { }
+            }
+            if (string.IsNullOrEmpty(baseUrl))
+                baseUrl = "http://localhost:8088";
+        }
+
+        _streamUrl = $"{baseUrl.TrimEnd('/')}/camera/{Uri.EscapeDataString(CameraId)}/stream";
+        _hasError = false;
+    }
+
+    private void ReadDetectionValues()
+    {
+        if (string.IsNullOrEmpty(DetectionVariablePrefix)) return;
+        _detectionLabel = Opc.GetValue($"{DetectionVariablePrefix}.Label") ?? "";
+        var confStr = Opc.GetValue($"{DetectionVariablePrefix}.Confidence");
+        if (confStr != null && double.TryParse(confStr, System.Globalization.NumberStyles.Any,
+                System.Globalization.CultureInfo.InvariantCulture, out var c))
+            _detectionConfidence = c;
+        var countStr = Opc.GetValue($"{DetectionVariablePrefix}.Count");
+        if (countStr != null && int.TryParse(countStr, out var cnt))
+            _detectionCount = cnt;
+    }
+
+    private void OnImageError()
+    {
+        _hasError = true;
+    }
+
+    private void Retry()
+    {
+        _hasError = false;
+        // Force re-render by appending a cache buster
+        BuildStreamUrl();
+        if (!_streamUrl.Contains('?'))
+            _streamUrl += $"?t={DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}";
+    }
+
+    public void Dispose()
+    {
+        _detectionTimer?.Dispose();
+    }
+}
+

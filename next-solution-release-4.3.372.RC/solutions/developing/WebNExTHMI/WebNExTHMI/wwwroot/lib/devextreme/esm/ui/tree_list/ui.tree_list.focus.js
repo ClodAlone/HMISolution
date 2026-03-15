@@ -1,0 +1,113 @@
+/**
+ * DevExtreme (esm/ui/tree_list/ui.tree_list.focus.js)
+ * Version: 21.2.6
+ * Build date: Tue Mar 01 2022
+ *
+ * Copyright (c) 2012 - 2022 Developer Express Inc. ALL RIGHTS RESERVED
+ * Read about DevExtreme licensing here: https://js.devexpress.com/Licensing/
+ */
+import core from "./ui.tree_list.core";
+import {
+    extend
+} from "../../core/utils/extend";
+import {
+    Deferred
+} from "../../core/utils/deferred";
+import {
+    focusModule
+} from "../grid_core/ui.grid_core.focus";
+
+function findIndex(items, callback) {
+    var result = -1;
+    items.forEach((function(node, index) {
+        if (callback(node)) {
+            result = index
+        }
+    }));
+    return result
+}
+core.registerModule("focus", extend(true, {}, focusModule, {
+    extenders: {
+        controllers: {
+            data: {
+                changeRowExpand: function(key) {
+                    if (this.option("focusedRowEnabled") && this.isRowExpanded(key)) {
+                        if (this._isFocusedRowInside(key)) {
+                            this.option("focusedRowKey", key)
+                        }
+                    }
+                    return this.callBase.apply(this, arguments)
+                },
+                _isFocusedRowInside: function(parentKey) {
+                    var focusedRowKey = this.option("focusedRowKey");
+                    var rowIndex = this.getRowIndexByKey(focusedRowKey);
+                    var focusedRow = rowIndex >= 0 && this.getVisibleRows()[rowIndex];
+                    var parent = focusedRow && focusedRow.node.parent;
+                    while (parent) {
+                        if (parent.key === parentKey) {
+                            return true
+                        }
+                        parent = parent.parent
+                    }
+                    return false
+                },
+                getParentKey: function(key) {
+                    var dataSource = this._dataSource;
+                    var node = this.getNodeByKey(key);
+                    var d = new Deferred;
+                    if (node) {
+                        d.resolve(node.parent ? node.parent.key : void 0)
+                    } else {
+                        dataSource.load({
+                            filter: [dataSource.getKeyExpr(), "=", key]
+                        }).done((function(items) {
+                            var parentData = items[0];
+                            if (parentData) {
+                                d.resolve(dataSource.parentKeyOf(parentData))
+                            } else {
+                                d.reject()
+                            }
+                        })).fail(d.reject)
+                    }
+                    return d.promise()
+                },
+                expandAscendants: function(key) {
+                    var that = this;
+                    var dataSource = that._dataSource;
+                    var d = new Deferred;
+                    that.getParentKey(key).done((function(parentKey) {
+                        if (dataSource && void 0 !== parentKey && parentKey !== that.option("rootValue")) {
+                            dataSource._isNodesInitializing = true;
+                            that.expandRow(parentKey);
+                            dataSource._isNodesInitializing = false;
+                            that.expandAscendants(parentKey).done(d.resolve).fail(d.reject)
+                        } else {
+                            d.resolve()
+                        }
+                    })).fail(d.reject);
+                    return d.promise()
+                },
+                getPageIndexByKey: function(key) {
+                    var that = this;
+                    var dataSource = that._dataSource;
+                    var d = new Deferred;
+                    that.expandAscendants(key).done((function() {
+                        dataSource.load({
+                            parentIds: []
+                        }).done((function(nodes) {
+                            var offset = findIndex(nodes, (function(node) {
+                                return that.keyOf(node.data) === key
+                            }));
+                            var pageIndex = -1;
+                            if (offset >= 0) {
+                                pageIndex = Math.floor(offset / that.pageSize())
+                            }
+                            d.resolve(pageIndex)
+                        })).fail(d.reject)
+                    })).fail(d.reject);
+                    return d.promise()
+                }
+            }
+        }
+    }
+}));

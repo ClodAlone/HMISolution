@@ -1,0 +1,198 @@
+@page "/opcbrowse"
+@using OPCUAAITool
+@inject IOpcUaService OpcService
+
+<h3>OPC UA Browser</h3>
+
+<div class="mb-2">
+    <button class="btn btn-primary me-2" @onclick="ConnectAndLoad" disabled="@isBusy">Connect & Load</button>
+    <button class="btn btn-secondary" @onclick="RefreshAllValues" disabled="@isBusy || !connected">Refresh All Values</button>
+</div>
+
+@if (isBusy)
+{
+    <p><em>Working...</em></p>
+}
+
+@if (!connected)
+{
+    <p class="text-warning">Not connected to OPC UA server.</p>
+}
+
+@if (variables == null || variables.Count == 0)
+{
+    <p>No variables discovered. Click "Connect & Load" to discover variables from the configured server.</p>
+}
+else
+{
+    <table class="table table-sm table-striped">
+        <thead>
+            <tr>
+                <th>Display Name</th>
+                <th>NodeId</th>
+                <th>DataType</th>
+                <th>Value</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var v in variables)
+            {
+                var nodeId = FormatNodeId(v.NodeId);
+                <tr>
+                    <td>@v.DisplayName</td>
+                    <td style="font-family:monospace">@nodeId</td>
+                    <td>@(v.DataType?.ToString() ?? "-")</td>
+                    <td>@GetValue(v.NodeId)</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-secondary me-1" @onclick="() => RefreshValue(nodeId)" disabled="@isBusy">Refresh</button>
+                        <button class="btn btn-sm btn-outline-primary" @onclick="() => OpenEditor(nodeId)">Set</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@if (!string.IsNullOrEmpty(editingNodeId))
+{
+    <div class="card p-3">
+        <h5>Editing: @editingNodeId</h5>
+        <div class="mb-2">
+            <input class="form-control" @bind="editingValue" />
+        </div>
+        <div>
+            <button class="btn btn-sm btn-success me-2" @onclick="SaveEditing" disabled="@isBusy">Save</button>
+            <button class="btn btn-sm btn-secondary" @onclick="CancelEditing">Cancel</button>
+        </div>
+    </div>
+}
+
+@code {
+    private List<OpcVariableDto> variables = new();
+    private Dictionary<string, string?> values = new();
+    private Dictionary<string, string> editValues = new();
+    private HashSet<string> editing = new();
+    private bool isBusy = false;
+    private bool connected = false;
+
+    private string editingNodeId = string.Empty;
+    private string editingValue = string.Empty;
+
+    private string FormatNodeId(string? nodeId) => nodeId ?? string.Empty;
+
+    private async Task ConnectAndLoad()
+    {
+        try
+        {
+            isBusy = true;
+            // await OpcService.ConnectToServerAsync();
+            connected = true;
+            LoadDiscovered();
+            await RefreshAllValues();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error connecting to server: {ex.Message}");
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private void LoadDiscovered()
+    {
+        var list = OpcService.GetDiscoveredVariables();
+        variables = list?.ToList() ?? new List<OpcVariableDto>();
+        foreach (var v in variables)
+        {
+            var id = FormatNodeId(v.NodeId);
+            if (!values.ContainsKey(id)) values[id] = null;
+            if (!editValues.ContainsKey(id)) editValues[id] = string.Empty;
+        }
+    }
+
+    private string GetValue(string? nodeId)
+    {
+        if (string.IsNullOrEmpty(nodeId)) return "-";
+        var id = FormatNodeId(nodeId);
+        return values.TryGetValue(id, out var val) ? val ?? "-" : "-";
+    }
+
+    private async Task RefreshValue(string nodeId)
+    {
+        try
+        {
+            isBusy = true;
+            var val = await OpcService.GetValueAsync(nodeId);
+            values[nodeId] = val;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error reading value for {nodeId}: {ex.Message}");
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private async Task RefreshAllValues()
+    {
+        try
+        {
+            isBusy = true;
+            foreach (var v in variables)
+            {
+                try
+                {
+                    var nodeId = FormatNodeId(v.NodeId);
+                    var val = await OpcService.GetValueAsync(v.NodeId);
+                    values[nodeId] = val;
+                }
+                catch
+                {
+                    values[FormatNodeId(v.NodeId)] = "<error>";
+                }
+            }
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private void OpenEditor(string nodeId)
+    {
+        if (string.IsNullOrEmpty(nodeId)) return;
+        editingNodeId = nodeId;
+        editingValue = values.TryGetValue(nodeId, out var v) ? v ?? string.Empty : string.Empty;
+    }
+
+    private void CancelEditing()
+    {
+        editingNodeId = string.Empty;
+        editingValue = string.Empty;
+    }
+
+    private async Task SaveEditing()
+    {
+        if (string.IsNullOrEmpty(editingNodeId)) return;
+        try
+        {
+            isBusy = true;
+            await OpcService.SetValueAsync(editingNodeId, editingValue);
+            await RefreshValue(editingNodeId);
+            CancelEditing();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error setting value for {editingNodeId}: {ex.Message}");
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+}

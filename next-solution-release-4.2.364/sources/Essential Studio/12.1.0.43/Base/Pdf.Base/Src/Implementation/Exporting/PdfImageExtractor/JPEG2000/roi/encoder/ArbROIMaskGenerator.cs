@@ -1,0 +1,403 @@
+#region Copyright Syncfusion Inc. 2001 - 2014
+// Copyright Syncfusion Inc. 2001 - 2014. All rights reserved.
+// Use of this code is subject to the terms of our license.
+// A copy of the current license can be obtained at any time by e-mailing
+// licensing@syncfusion.com. Any infringement will be prosecuted under
+// applicable laws. 
+#endregion
+using Syncfusion.Pdf.JPEG2000.quantization.quantizer;
+using Syncfusion.Pdf.JPEG2000.image.input;
+using Syncfusion.Pdf.JPEG2000.wavelet;
+using Syncfusion.Pdf.JPEG2000.image;
+namespace Syncfusion.Pdf.JPEG2000.roi.encoder
+{
+    internal class ArbROIMaskGenerator : ROIMaskGenerator
+    {
+        private Quantizer src;
+        private int[][] roiMask;
+        private int[] maskLineLow;
+        private int[] maskLineHigh;
+        private int[] paddedMaskLine;
+        new private bool roiInTile;
+        public ArbROIMaskGenerator(ROI[] rois, int nrc, Quantizer src)
+            : base(rois, nrc)
+        {
+            roiMask = new int[nrc][];
+            this.src = src;
+        }
+        internal override bool getROIMask(DataBlockInt db, Subband sb, int magbits, int c)
+        {
+            int x = db.ulx;
+            int y = db.uly;
+            int w = db.w;
+            int h = db.h;
+            int tilew = sb.w;
+            int tileh = sb.h;
+            int[] maskData = (int[])db.Data;
+            int i, j, k, bi, wrap;
+            if (!tileMaskMade[c])
+            {
+                makeMask(sb, magbits, c);
+                tileMaskMade[c] = true;
+            }
+            if (!roiInTile)
+                return false;
+            int[] mask = roiMask[c];
+            i = (y + h - 1) * tilew + x + w - 1;
+            bi = w * h - 1;
+            wrap = tilew - w;
+            for (j = h; j > 0; j--)
+            {
+                for (k = w; k > 0; k--, i--, bi--)
+                {
+                    maskData[bi] = mask[i];
+                }
+                i -= wrap;
+            }
+            return true;
+        }
+        public override System.String ToString()
+        {
+            return ("Fast rectangular ROI mask generator");
+        }
+        public override void makeMask(Subband sb, int magbits, int c)
+        {
+            int[] mask;
+            ROI[] rois = this.roi_array;
+            int i, j, k, r, maxj;
+            int lrx, lry;
+            int x, y, w, h;
+            int cx, cy, rad;
+            int wrap;
+            int curScalVal;
+            int tileulx = sb.ulcx;
+            int tileuly = sb.ulcy;
+            int tilew = sb.w;
+            int tileh = sb.h;
+            int lineLen = (tilew > tileh) ? tilew : tileh;
+            if (roiMask[c] == null || (roiMask[c].Length < (tilew * tileh)))
+            {
+                roiMask[c] = new int[tilew * tileh];
+                mask = roiMask[c];
+            }
+            else
+            {
+                mask = roiMask[c];
+                for (i = tilew * tileh - 1; i >= 0; i--)
+                    mask[i] = 0;
+            }
+            if (maskLineLow == null || (maskLineLow.Length < (lineLen + 1) / 2))
+                maskLineLow = new int[(lineLen + 1) / 2];
+            if (maskLineHigh == null || (maskLineHigh.Length < (lineLen + 1) / 2))
+                maskLineHigh = new int[(lineLen + 1) / 2];
+            roiInTile = false;
+            for (r = rois.Length - 1; r >= 0; r--)
+            {
+                if (rois[r].comp == c)
+                {
+                    curScalVal = magbits;
+                    if (rois[r].arbShape)
+                    {
+                        ImgReaderPGM maskPGM = rois[r].maskPGM;
+                      
+                        x = src.ImgULX;
+                        y = src.ImgULY;
+                        lrx = x + src.ImgWidth - 1;
+                        lry = y + src.ImgHeight - 1;
+                        if ((x > tileulx + tilew) || (y > tileuly + tileh) || (lrx < tileulx) || (lry < tileuly))
+                            continue;
+                        x -= tileulx;
+                        lrx -= tileulx;
+                        y -= tileuly;
+                        lry -= tileuly;
+                        int offx = 0;
+                        int offy = 0;
+                        if (x < 0)
+                        {
+                            offx = -x;
+                            x = 0;
+                        }
+                        if (y < 0)
+                        {
+                            offy = -y;
+                            y = 0;
+                        }
+                        w = (lrx > (tilew - 1)) ? tilew - x : lrx + 1 - x;
+                        h = (lry > (tileh - 1)) ? tileh - y : lry + 1 - y;
+                        DataBlockInt srcblk = new DataBlockInt();
+                        int mDcOff = -ImgReaderPGM.DC_OFFSET;
+                        int nROIcoeff = 0;
+                        int[] src_data;
+                        srcblk.ulx = offx;
+                        srcblk.w = w;
+                        srcblk.h = 1;
+                        i = (y + h - 1) * tilew + x + w - 1;
+                        maxj = w;
+                        wrap = tilew - maxj;
+                        for (k = h; k > 0; k--)
+                        {
+                            srcblk.uly = offy + k - 1;
+                            //srcblk = (DataBlockInt)maskPGM.getInternCompData(srcblk, 0);
+                            src_data = srcblk.DataInt;
+                            for (j = maxj; j > 0; j--, i--)
+                            {
+                                if (src_data[j - 1] != mDcOff)
+                                {
+                                    mask[i] = curScalVal;
+                                    nROIcoeff++;
+                                }
+                            }
+                            i -= wrap;
+                        }
+                        if (nROIcoeff != 0)
+                        {
+                            roiInTile = true;
+                        }
+                    }
+                    else if (rois[r].rect)
+                    {
+                        x = rois[r].ulx;
+                        y = rois[r].uly;
+                        lrx = rois[r].w + x - 1;
+                        lry = rois[r].h + y - 1;
+                        if ((x > tileulx + tilew) || (y > tileuly + tileh) || (lrx < tileulx) || (lry < tileuly))
+                            continue;
+                        roiInTile = true;
+                        x -= tileulx;
+                        lrx -= tileulx;
+                        y -= tileuly;
+                        lry -= tileuly;
+                        x = (x < 0) ? 0 : x;
+                        y = (y < 0) ? 0 : y;
+                        w = (lrx > (tilew - 1)) ? tilew - x : lrx + 1 - x;
+                        h = (lry > (tileh - 1)) ? tileh - y : lry + 1 - y;
+                        i = (y + h - 1) * tilew + x + w - 1;
+                        maxj = w;
+                        wrap = tilew - maxj;
+                        for (k = h; k > 0; k--)
+                        {
+                            for (j = maxj; j > 0; j--, i--)
+                            {
+                                mask[i] = curScalVal;
+                            }
+                            i -= wrap;
+                        }
+                    }
+                    else
+                    {
+                        cx = rois[r].x - tileulx;
+                        cy = rois[r].y - tileuly;
+                        rad = rois[r].r;
+                        i = tileh * tilew - 1;
+                        for (k = tileh - 1; k >= 0; k--)
+                        {
+                            for (j = tilew - 1; j >= 0; j--, i--)
+                            {
+                                if (((j - cx) * (j - cx) + (k - cy) * (k - cy) < rad * rad))
+                                {
+                                    mask[i] = curScalVal;
+                                    roiInTile = true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            if (sb.isNode)
+            {
+                WaveletFilter vFilter = sb.VerWFilter;
+                WaveletFilter hFilter = sb.HorWFilter;
+                int lvsup = vFilter.SynLowNegSupport + vFilter.SynLowPosSupport;
+                int hvsup = vFilter.SynHighNegSupport + vFilter.SynHighPosSupport;
+                int lhsup = hFilter.SynLowNegSupport + hFilter.SynLowPosSupport;
+                int hhsup = hFilter.SynHighNegSupport + hFilter.SynHighPosSupport;
+                lvsup = (lvsup > hvsup) ? lvsup : hvsup;
+                lhsup = (lhsup > hhsup) ? lhsup : hhsup;
+                lvsup = (lvsup > lhsup) ? lvsup : lhsup;
+                paddedMaskLine = new int[lineLen + lvsup];
+                if (roiInTile)
+                    decomp(sb, tilew, tileh, c);
+            }
+        }
+        private void decomp(Subband sb, int tilew, int tileh, int c)
+        {
+            int ulx = sb.ulx;
+            int uly = sb.uly;
+            int w = sb.w;
+            int h = sb.h;
+            int scalVal, maxVal = 0;
+            int j, k, s, mi = 0, pin;
+            int hmax, lmax;
+            int lineoffs;
+            int[] mask = roiMask[c];
+            int[] low = maskLineLow;
+            int[] high = maskLineHigh;
+            int[] padLine = paddedMaskLine;
+            int highFirst = 0;
+            int lastpin;
+            if (!sb.isNode)
+                return;
+            WaveletFilter filter = sb.HorWFilter;
+            int lnSup = filter.SynLowNegSupport;
+            int hnSup = filter.SynHighNegSupport;
+            int lpSup = filter.SynLowPosSupport;
+            int hpSup = filter.SynHighPosSupport;
+            int lsup = lnSup + lpSup + 1;
+            int hsup = hnSup + hpSup + 1;
+            highFirst = sb.ulcx % 2;
+            if (sb.w % 2 == 0)
+            {
+                lmax = w / 2 - 1;
+                hmax = lmax;
+            }
+            else
+            {
+                if (highFirst == 0)
+                {
+                    lmax = (w + 1) / 2 - 1;
+                    hmax = w / 2 - 1;
+                }
+                else
+                {
+                    hmax = (w + 1) / 2 - 1;
+                    lmax = w / 2 - 1;
+                }
+            }
+            int maxnSup = (lnSup > hnSup) ? lnSup : hnSup;
+            int maxpSup = (lpSup > hpSup) ? lpSup : hpSup;
+            for (pin = maxnSup - 1; pin >= 0; pin--)
+                padLine[pin] = 0;
+            for (pin = maxnSup + w - 1 + maxpSup; pin >= w; pin--)
+                padLine[pin] = 0;
+            lineoffs = (uly + h) * tilew + ulx + w - 1;
+            for (j = h - 1; j >= 0; j--)
+            {
+                lineoffs -= tilew;
+                mi = lineoffs;
+                for (k = w, pin = w - 1 + maxnSup; k > 0; k--, mi--, pin--)
+                {
+                    padLine[pin] = mask[mi];
+                }
+                lastpin = maxnSup + highFirst + 2 * lmax + lpSup;
+                for (k = lmax; k >= 0; k--, lastpin -= 2)
+                {
+                    pin = lastpin;
+                    for (s = lsup; s > 0; s--, pin--)
+                    {
+                        scalVal = padLine[pin];
+                        if (scalVal > maxVal)
+                            maxVal = scalVal;
+                    }
+                    low[k] = maxVal;
+                    maxVal = 0;
+                }
+                lastpin = maxnSup - highFirst + 2 * hmax + 1 + hpSup;
+                for (k = hmax; k >= 0; k--, lastpin -= 2)
+                {
+                    pin = lastpin;
+                    for (s = hsup; s > 0; s--, pin--)
+                    {
+                        scalVal = padLine[pin];
+                        if (scalVal > maxVal)
+                            maxVal = scalVal;
+                    }
+                    high[k] = maxVal;
+                    maxVal = 0;
+                }
+                mi = lineoffs;
+                for (k = hmax; k >= 0; k--, mi--)
+                {
+                    mask[mi] = high[k];
+                }
+                for (k = lmax; k >= 0; k--, mi--)
+                {
+                    mask[mi] = low[k];
+                }
+            }
+            filter = sb.VerWFilter;
+            lnSup = filter.SynLowNegSupport;
+            hnSup = filter.SynHighNegSupport;
+            lpSup = filter.SynLowPosSupport;
+            hpSup = filter.SynHighPosSupport;
+            lsup = lnSup + lpSup + 1;
+            hsup = hnSup + hpSup + 1;
+            highFirst = sb.ulcy % 2;
+            if (sb.h % 2 == 0)
+            {
+                lmax = h / 2 - 1;
+                hmax = lmax;
+            }
+            else
+            {
+                if (sb.ulcy % 2 == 0)
+                {
+                    lmax = (h + 1) / 2 - 1;
+                    hmax = h / 2 - 1;
+                }
+                else
+                {
+                    hmax = (h + 1) / 2 - 1;
+                    lmax = h / 2 - 1;
+                }
+            }
+            maxnSup = (lnSup > hnSup) ? lnSup : hnSup;
+            maxpSup = (lpSup > hpSup) ? lpSup : hpSup;
+            for (pin = maxnSup - 1; pin >= 0; pin--)
+                padLine[pin] = 0;
+            for (pin = maxnSup + h - 1 + maxpSup; pin >= h; pin--)
+                padLine[pin] = 0;
+            lineoffs = (uly + h - 1) * tilew + ulx + w;
+            for (j = w - 1; j >= 0; j--)
+            {
+                lineoffs--;
+                mi = lineoffs;
+                for (k = h, pin = k - 1 + maxnSup; k > 0; k--, mi -= tilew, pin--)
+                {
+                    padLine[pin] = mask[mi];
+                }
+                lastpin = maxnSup + highFirst + 2 * lmax + lpSup;
+                for (k = lmax; k >= 0; k--, lastpin -= 2)
+                {
+                    pin = lastpin;
+                    for (s = lsup; s > 0; s--, pin--)
+                    {
+                        scalVal = padLine[pin];
+                        if (scalVal > maxVal)
+                            maxVal = scalVal;
+                    }
+                    low[k] = maxVal;
+                    maxVal = 0;
+                }
+                lastpin = maxnSup - highFirst + 2 * hmax + 1 + hpSup;
+                for (k = hmax; k >= 0; k--, lastpin -= 2)
+                {
+                    pin = lastpin;
+                    for (s = hsup; s > 0; s--, pin--)
+                    {
+                        scalVal = padLine[pin];
+                        if (scalVal > maxVal)
+                            maxVal = scalVal;
+                    }
+                    high[k] = maxVal;
+                    maxVal = 0;
+                }
+                mi = lineoffs;
+                for (k = hmax; k >= 0; k--, mi -= tilew)
+                {
+                    mask[mi] = high[k];
+                }
+                for (k = lmax; k >= 0; k--, mi -= tilew)
+                {
+                    mask[mi] = low[k];
+                }
+            }
+            if (sb.isNode)
+            {
+                decomp(sb.HH, tilew, tileh, c);
+                decomp(sb.LH, tilew, tileh, c);
+                decomp(sb.HL, tilew, tileh, c);
+                decomp(sb.LL, tilew, tileh, c);
+            }
+        }
+    }
+}

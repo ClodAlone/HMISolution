@@ -1,0 +1,520 @@
+{
+  "Database": {
+    "Provider": "Sqlite",
+    "ConnectionString": "history.db",
+    "TableName": "variable_data"
+  },
+  "Users": [],
+  "UserGroups": [],
+  "Scripts": [
+    {
+      "Name": "New Script",
+      "Code": "var val = Read(\u0022MyVar\u0022);\nWrite(\u0022MyVar\u0022, 123);",
+      "Enabled": true,
+      "IntervalMs": 1000
+    },
+    {
+      "Name": "Simulation Watcher",
+      "Code": "OnChanged(\u0022Plant.Simulation.Sine\u0022, e =>\n{\n    var sineValue = (double)e.NewValue;\n    if (sineValue > 90)\n        Write(\u0022Plant.Simulation.Counter\u0022, Read(\u0022Plant.Simulation.Counter\u0022) ?? 0);\n});\nOnChanged(\u0022Plant.Simulation.Blink\u0022, e =>\n{\n    // Log each blink transition\n    System.Console.WriteLine($\u0022Blink changed to {e.NewValue} at {e.Timestamp:HH:mm:ss.fff}\u0022);\n});",
+      "Enabled": false,
+      "IntervalMs": 0
+    },
+    {
+      "Name": "VB.NET Sample",
+      "Code": "Dim val = Read(\u0022Plant.Temperature\u0022)\nIf val IsNot Nothing Then\n    Dim temp = CDbl(val)\n    If temp > 50 Then\n        Write(\u0022Plant.Line1.Status\u0022, \u0022Overheating\u0022)\n    Else\n        Write(\u0022Plant.Line1.Status\u0022, \u0022Running\u0022)\n    End If\nEnd If",
+      "Enabled": false,
+      "IntervalMs": 5000,
+      "Language": "VB"
+    }
+  ],
+  "Folder": {
+    "Name": "Plant",
+    "Folders": [
+      {
+        "Name": "Line1",
+        "Folders": [],
+        "Variables": [
+          {
+            "Name": "Status",
+            "Type": "String",
+            "Access": "Read",
+            "Value": "Running",
+            "MaxAge": null,
+            "Alarm": null,
+            "DataLogging": null
+          },
+          {
+            "Name": "Speed",
+            "Type": "Int32",
+            "Access": "ReadWrite",
+            "Value": 100,
+            "MaxAge": null,
+            "Alarm": {
+              "HighLimit": 120,
+              "LowLimit": 50,
+              "Message": "Speed Alarm"
+            },
+            "DataLogging": null
+          },
+          {
+            "Name": "Temperature",
+            "Type": "Int16",
+            "Access": "ReadWrite",
+            "Value": 250,
+            "MaxAge": null,
+            "Alarm": null,
+            "DataLogging": null,
+            "Modbus": {
+              "IpAddress": "192.168.10.245",
+              "Port": 502,
+              "UnitId": 1,
+              "Register": 2741,
+              "RegisterType": "HoldingRegister",
+              "PollTime": 2000
+            }
+          },
+          {
+            "Name": "TankLevel",
+            "Type": "Double",
+            "Access": "ReadWrite",
+            "Value": 50.0,
+            "MaxAge": null,
+            "Alarm": null,
+            "DataLogging": null,
+            "S7": {
+              "IpAddress": "192.168.0.1",
+              "Rack": 0,
+              "Slot": 1,
+              "Address": "DB1.DBD0"
+            }
+          },
+          {
+            "Name": "Light1",
+            "Type": "Boolean",
+            "Access": "ReadWrite",
+            "Value": false,
+            "MaxAge": null,
+            "Alarm": null,
+            "DataLogging": null,
+            "Knx": {
+              "IpAddress": "192.168.1.5",
+              "Port": 3671,
+              "GroupAddress": "1/0/1",
+              "DptType": "1.001"
+            }
+          },
+          {
+            "Name": "RobotSpeed",
+            "Type": "Double",
+            "Access": "ReadWrite",
+            "Value": 0.0,
+            "MaxAge": null,
+            "Alarm": null,
+            "DataLogging": null,
+            "Mqtt": {
+              "Broker": "localhost",
+              "Port": 1883,
+              "Topic": "robot/speed",
+              "JsonPath": "value"
+            }
+          },
+          {
+            "Name": "PumpFlow",
+            "Type": "Double",
+            "Access": "ReadWrite",
+            "Value": 0.0,
+            "MaxAge": null,
+            "Alarm": null,
+            "DataLogging": null,
+            "EtherNetIP": {
+              "IpAddress": "192.168.1.10",
+              "Path": "1,0",
+              "Tag": "FlowRate",
+              "Type": "REAL"
+            }
+          },
+          {
+            "Name": "BatchId",
+            "Type": "Int32",
+            "Access": "ReadWrite",
+            "Value": 0,
+            "MaxAge": null,
+            "Alarm": null,
+            "DataLogging": null,
+            "Sql": {
+              "ConnectionString": "Server=myServerAddress;Database=myDataBase;User Id=myUsername;Password=myPassword;",
+              "Query": "SELECT TOP 1 BatchId FROM Batches ORDER BY Timestamp DESC"
+            }
+          },
+          {
+            "Name": "Weather",
+            "Type": "Double",
+            "Access": "ReadWrite",
+            "Value": 0.0,
+            "MaxAge": null,
+            "Alarm": null,
+            "DataLogging": null,
+            "Rest": {
+              "Url": "https://api.open-meteo.com/v1/forecast?latitude=52.52\u0026longitude=13.41\u0026current=temperature_2m",
+              "JsonPath": "current.temperature_2m"
+            }
+          },
+          {
+            "Name": "Kpi",
+            "Type": "Double",
+            "Access": "ReadWrite",
+            "Value": 0.0,
+            "MaxAge": null,
+            "Alarm": null,
+            "DataLogging": null,
+            "Csv": {
+              "FilePath": "kpi.csv",
+              "RowIndex": 1,
+              "ColumnIndex": 1,
+              "Key": ""
+            }
+          },
+          {
+            "Name": "ScaleWeight",
+            "Type": "Double",
+            "Access": "ReadWrite",
+            "Value": 0.0,
+            "MaxAge": null,
+            "Alarm": null,
+            "DataLogging": null,
+            "Tcp": {
+              "IpAddress": "127.0.0.1",
+              "Port": 9000,
+              "Command": "GET WEIGHT\r\n",
+              "Regex": "([0-9.]\u002B)"
+            }
+          }
+        ]
+      },
+      {
+        "Name": "Furnace",
+        "Folders": [],
+        "Variables": [
+          {
+            "Name": "FurnaceTemperature",
+            "Type": "Double",
+            "Access": "ReadWrite",
+            "Value": 0.0,
+            "MaxAge": null,
+            "Alarm": null,
+            "DataLogging": null
+          },
+          {
+            "Name": "FurnacePressure",
+            "Type": "Double",
+            "Access": "ReadWrite",
+            "Value": 0.0,
+            "MaxAge": null,
+            "Alarm": null,
+            "DataLogging": null
+          },
+          {
+            "Name": "FurnaceHumidity",
+            "Type": "Double",
+            "Access": "ReadWrite",
+            "Value": 0.0,
+            "MaxAge": null,
+            "Alarm": null,
+            "DataLogging": null
+          }
+        ]
+      },
+      {
+        "Name": "Simulation",
+        "Folders": [],
+        "Variables": [
+          {
+            "Name": "Sine",
+            "Type": "Double",
+            "Access": "Read",
+            "Value": 0.0,
+            "MaxAge": null,
+            "Alarm": null,
+            "DataLogging": {
+              "Enabled": true,
+              "Hysteresis": 5.0
+            },
+            "Simulation": {
+              "Function": "Sine",
+              "Period": 10000,
+              "Amplitude": 100,
+              "Offset": 0,
+              "Phase": 0,
+              "PollTime": 500
+            }
+          },
+          {
+            "Name": "Cosine",
+            "Type": "Double",
+            "Access": "Read",
+            "Value": 0.0,
+            "MaxAge": null,
+            "Alarm": null,
+            "DataLogging": null,
+            "Simulation": {
+              "Function": "Cosine",
+              "Period": 10000,
+              "Amplitude": 100,
+              "Offset": 0,
+              "Phase": 0,
+              "PollTime": 500
+            }
+          },
+          {
+            "Name": "Ramp",
+            "Type": "Double",
+            "Access": "Read",
+            "Value": 0.0,
+            "MaxAge": null,
+            "Alarm": null,
+            "DataLogging": null,
+            "Simulation": {
+              "Function": "Ramp",
+              "Amplitude": 100,
+              "Step": 1,
+              "PollTime": 500
+            }
+          },
+          {
+            "Name": "Triangle",
+            "Type": "Double",
+            "Access": "Read",
+            "Value": 0.0,
+            "MaxAge": null,
+            "Alarm": null,
+            "DataLogging": null,
+            "Simulation": {
+              "Function": "Triangle",
+              "Period": 10000,
+              "Amplitude": 100,
+              "Offset": 0,
+              "PollTime": 500
+            }
+          },
+          {
+            "Name": "Square",
+            "Type": "Double",
+            "Access": "Read",
+            "Value": 0.0,
+            "MaxAge": null,
+            "Alarm": null,
+            "DataLogging": null,
+            "Simulation": {
+              "Function": "Square",
+              "Period": 10000,
+              "Amplitude": 100,
+              "DutyCycle": 0.5,
+              "PollTime": 500
+            }
+          },
+          {
+            "Name": "Sawtooth",
+            "Type": "Double",
+            "Access": "Read",
+            "Value": 0.0,
+            "MaxAge": null,
+            "Alarm": null,
+            "DataLogging": null,
+            "Simulation": {
+              "Function": "Sawtooth",
+              "Period": 10000,
+              "Amplitude": 100,
+              "Offset": 0,
+              "PollTime": 500
+            }
+          },
+          {
+            "Name": "Random",
+            "Type": "Double",
+            "Access": "Read",
+            "Value": 0.0,
+            "MaxAge": null,
+            "Alarm": null,
+            "DataLogging": {
+              "Enabled": true,
+              "Hysteresis": 0
+            },
+            "Simulation": {
+              "Function": "Random",
+              "Min": 0,
+              "Max": 100,
+              "PollTime": 1000
+            }
+          },
+          {
+            "Name": "RandomInt",
+            "Type": "Int32",
+            "Access": "Read",
+            "Value": 0,
+            "MaxAge": null,
+            "Alarm": null,
+            "DataLogging": null,
+            "Simulation": {
+              "Function": "RandomInt",
+              "Min": 0,
+              "Max": 1000,
+              "PollTime": 1000
+            }
+          },
+          {
+            "Name": "Blink",
+            "Type": "Boolean",
+            "Access": "Read",
+            "Value": false,
+            "MaxAge": null,
+            "Alarm": null,
+            "DataLogging": null,
+            "Simulation": {
+              "Function": "Blink",
+              "Period": 2000,
+              "DutyCycle": 0.5,
+              "PollTime": 250
+            }
+          },
+          {
+            "Name": "Counter",
+            "Type": "Double",
+            "Access": "Read",
+            "Value": 0.0,
+            "MaxAge": null,
+            "Alarm": null,
+            "DataLogging": {
+              "Enabled": true,
+              "Hysteresis": 0
+            },
+            "Simulation": {
+              "Function": "Counter",
+              "Step": 1,
+              "PollTime": 1000
+            }
+          },
+          {
+            "Name": "Pulse",
+            "Type": "Double",
+            "Access": "Read",
+            "Value": 0.0,
+            "MaxAge": null,
+            "Alarm": null,
+            "DataLogging": null,
+            "Simulation": {
+              "Function": "Pulse",
+              "Period": 5000,
+              "DutyCycle": 0.2,
+              "PollTime": 250
+            }
+          }
+        ]
+      }
+    ],
+    "Variables": [
+      {
+        "Name": "Pressure",
+        "Type": "Double",
+        "Access": "ReadWrite",
+        "Value": 10.5,
+        "MaxAge": null,
+        "Alarm": {
+          "HighLimit": 80,
+          "LowLimit": 10,
+          "Message": "Pressure Alarm"
+        },
+        "DataLogging": {
+          "Enabled": true,
+          "Hysteresis": 0.5,
+          "MaxAge": "1.00:00:00"
+        }
+      },
+      {
+        "Name": "Temperature",
+        "Type": "Double",
+        "Access": "ReadWrite",
+        "Value": 25.3,
+        "MaxAge": null,
+        "Alarm": null,
+        "DataLogging": {
+          "Enabled": true,
+          "Hysteresis": 0.5,
+          "MaxAge": "0.12:00:00"
+        }
+      }
+    ]
+  },
+  "PlcPrograms": [
+    {
+      "Name": "Furnace Temperature Control",
+      "Code": "(* IEC 61131-3 Structured Text — Furnace Temperature Controller *)\n(* Reads the furnace temperature and regulates it toward a 450°C setpoint *)\n(* by adjusting pressure proportionally. Clamps output to safe range. *)\n\nVAR\n    setpoint : REAL := 450.0;\n    error : REAL := 0.0;\n    kp : REAL := 0.5;\n    output : REAL := 0.0;\nEND_VAR\n\nerror := setpoint - Plant.Furnace.FurnaceTemperature;\noutput := kp * error;\n\n(* Clamp pressure output between 0 and 100 *)\nIF output > 100.0 THEN\n    output := 100.0;\nELSIF output < 0.0 THEN\n    output := 0.0;\nEND_IF;\n\nPlant.Furnace.FurnacePressure := output;\n",
+      "Enabled": true,
+      "IntervalMs": 500
+    },
+    {
+      "Name": "Tank Level Monitor",
+      "Code": "(* IEC 61131-3 Structured Text — Tank Level Monitor *)\n(* Reads the sine simulation as a sensor input, scales it to *)\n(* a 0–100 range, and writes it to TankLevel. *)\n(* Also adjusts Line1 Speed based on the fill level. *)\n\nVAR\n    rawSensor : REAL := 0.0;\n    level : REAL := 0.0;\n    speedCmd : REAL := 0.0;\nEND_VAR\n\nrawSensor := Plant.Simulation.Sine;\n\n(* Scale from -100..100 to 0..100 *)\nlevel := (rawSensor + 100.0) / 2.0;\nlevel := LIMIT(0.0, level, 100.0);\n\nPlant.Line1.TankLevel := level;\n\n(* Reduce line speed when tank is nearly full *)\nIF level > 90.0 THEN\n    speedCmd := 20.0;\nELSIF level > 70.0 THEN\n    speedCmd := 60.0;\nELSE\n    speedCmd := 100.0;\nEND_IF;\n\nPlant.Line1.Speed := speedCmd;\n",
+      "Enabled": false,
+      "IntervalMs": 1000
+    },
+    {
+      "Name": "Plant Status Logic",
+      "Code": "(* IEC 61131-3 Structured Text — Plant Status Logic *)\n(* Combines Temperature and Pressure readings to decide plant status. *)\n(* Writes a status string and computes a simple health score. *)\n\nVAR\n    temp : REAL := 0.0;\n    press : REAL := 0.0;\n    score : REAL := 100.0;\nEND_VAR\n\ntemp := Plant.Temperature;\npress := Plant.Pressure;\n\n(* Start at 100 and subtract penalties *)\nscore := 100.0;\n\nIF temp > 80.0 THEN\n    score := score - 30.0;\nELSIF temp > 50.0 THEN\n    score := score - 10.0;\nEND_IF;\n\nIF press > 60.0 THEN\n    score := score - 40.0;\nELSIF press > 40.0 THEN\n    score := score - 15.0;\nEND_IF;\n\n(* Write health score back to Pressure as a demo *)\n(* In a real system this would go to a dedicated variable *)\nIF score < 0.0 THEN\n    score := 0.0;\nEND_IF;\n\nPlant.Furnace.FurnaceHumidity := score;\n",
+      "Enabled": false,
+      "IntervalMs": 2000,
+      "Language": "ST"
+    },
+    {
+      "Name": "IL Pressure Monitor",
+      "Code": "(* IEC 61131-3 Instruction List — Pressure Monitor *)\n(* Reads Plant.Pressure, compares against thresholds, *)\n(* and writes a clamped value to FurnacePressure. *)\n\nLD    Plant.Pressure\nST    _pressure\n\n(* If pressure > 80 cap it at 80 *)\nLD    _pressure\nGT    80.0\nJMPCN skip_cap\nLD    80.0\nST    _pressure\nskip_cap:\n\n(* If pressure < 5 set floor to 5 *)\nLD    _pressure\nLT    5.0\nJMPCN skip_floor\nLD    5.0\nST    _pressure\nskip_floor:\n\n(* Scale: multiply by 1.2 and write to furnace *)\nLD    _pressure\nMUL   1.2\nST    Plant.Furnace.FurnacePressure\n",
+      "Enabled": false,
+      "IntervalMs": 500,
+      "Language": "IL"
+    },
+    {
+      "Name": "IL Speed Ramp",
+      "Code": "(* IEC 61131-3 Instruction List — Speed Ramp *)\n(* Reads Line1.Speed, adds 1 each cycle until 120, then resets to 0 *)\n\nLD    Plant.Line1.Speed\nADD   1\nST    _speed\n\n(* Check if above max *)\nLD    _speed\nGT    120\nJMPCN no_reset\nLD    0\nST    _speed\nno_reset:\n\n(* Write back *)\nLD    _speed\nST    Plant.Line1.Speed\n",
+      "Enabled": false,
+      "IntervalMs": 1000,
+      "Language": "IL"
+    },
+    {
+      "Name": "LD Tank Fill Control",
+      "Code": "(* IEC 61131-3 Ladder Diagram — Tank Fill Control *)\n(* Uses contacts and coils to control tank filling logic *)\n(* Reads TankLevel and Blink, writes to Light1 and FurnaceHumidity *)\n\n(* Rung 1: If TankLevel < 30, turn on fill light *)\nRUNG \"Low Level Alarm\"\n  COMPARE LT Plant.Line1.TankLevel 30.0\n  COIL_S Plant.Line1.Light1\nEND_RUNG\n\n(* Rung 2: If TankLevel >= 80, turn off fill light *)\nRUNG \"High Level Stop\"\n  COMPARE GE Plant.Line1.TankLevel 80.0\n  COIL_R Plant.Line1.Light1\nEND_RUNG\n\n(* Rung 3: Copy Sine to FurnaceHumidity as a sensor value *)\nRUNG \"Sensor Copy\"\n  CONTACT NO Plant.Simulation.Blink\n  MOVE Plant.Simulation.Sine Plant.Furnace.FurnaceHumidity\nEND_RUNG\n",
+      "Enabled": false,
+      "IntervalMs": 500,
+      "Language": "LD"
+    },
+    {
+      "Name": "LD Motor Interlock",
+      "Code": "(* IEC 61131-3 Ladder Diagram — Motor Interlock *)\n(* Classic start/stop motor circuit with interlock *)\n(* Uses Speed > 0 as \"motor running\", Light1 as start permit *)\n\n(* Rung 1: Start permit — Temperature must be below 80 *)\nRUNG \"Start Permit\"\n  COMPARE LT Plant.Temperature 80.0\n  COIL Plant.Line1.Light1\nEND_RUNG\n\n(* Rung 2: If permitted AND pressure normal, set speed to 100 *)\nRUNG \"Motor Run\"\n  CONTACT NO Plant.Line1.Light1\n  COMPARE LT Plant.Pressure 70.0\n  MOVE 100 Plant.Line1.Speed\nEND_RUNG\n\n(* Rung 3: Emergency — if pressure too high, stop motor *)\nRUNG \"Emergency Stop\"\n  COMPARE GE Plant.Pressure 70.0\n  MOVE 0 Plant.Line1.Speed\nEND_RUNG\n",
+      "Enabled": false,
+      "IntervalMs": 1000,
+      "Language": "LD"
+    }
+  ],
+  "Recipes": [
+    {
+      "Name": "Furnace Setup",
+      "DbPath": "",
+      "Enabled": true,
+      "Variables": [
+        { "Index": 0, "VariablePath": "Plant.Furnace.FurnaceTemperature", "DisplayName": "Temperature" },
+        { "Index": 1, "VariablePath": "Plant.Furnace.FurnacePressure", "DisplayName": "Pressure" },
+        { "Index": 2, "VariablePath": "Plant.Furnace.FurnaceHumidity", "DisplayName": "Humidity" }
+      ]
+    },
+    {
+      "Name": "Line1 Production",
+      "DbPath": "",
+      "Enabled": true,
+      "Variables": [
+        { "Index": 0, "VariablePath": "Plant.Line1.Speed", "DisplayName": "Line Speed" },
+        { "Index": 1, "VariablePath": "Plant.Line1.Temperature", "DisplayName": "Temperature" },
+        { "Index": 2, "VariablePath": "Plant.Line1.TankLevel", "DisplayName": "Tank Level" },
+        { "Index": 3, "VariablePath": "Plant.Line1.PumpFlow", "DisplayName": "Pump Flow" },
+        { "Index": 4, "VariablePath": "Plant.Line1.RobotSpeed", "DisplayName": "Robot Speed" }
+      ]
+    }
+  ]
+}

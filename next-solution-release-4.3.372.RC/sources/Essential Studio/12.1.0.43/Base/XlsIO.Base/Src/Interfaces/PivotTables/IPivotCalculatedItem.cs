@@ -1,0 +1,25 @@
+#region Copyright Syncfusion Inc. 2001 - 2014
+// Copyright Syncfusion Inc. 2001 - 2014. All rights reserved.
+// Use of this code is subject to the terms of our license.
+// A copy of the current license can be obtained at any time by e-mailing
+// licensing@syncfusion.com. Any infringement will be prosecuted under
+// applicable laws. 
+#endregion
+using System;
+using System.Collections.Generic;
+using System.Text;
+
+namespace Syncfusion.XlsIO.Interfaces.PivotTables
+{
+    /// <summary>
+    /// Represents a calculated pivot field item within a Pivot field of pivot table
+    /// TODO: need to add properties.
+    /// </summary>
+    interface IPivotCalculatedItem
+    {
+        /// <summary>
+        /// Specifies the formula of the calculated item
+        /// </summary>
+        string Formula { get; }
+    }
+}

@@ -1,0 +1,356 @@
+<ResourceDictionary mc:Ignorable="cs"
+                    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:cs="colorscheme_ignorable_uri"
+                    xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+                    xmlns:dxb="http://schemas.devexpress.com/winfx/2008/xaml/bars"
+                    xmlns:dxdo="http://schemas.devexpress.com/winfx/2008/xaml/docking"
+                    xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+                    xmlns:dxr="http://schemas.devexpress.com/winfx/2008/xaml/ribbon"
+                    xmlns:dxre="http://schemas.devexpress.com/winfx/2008/xaml/richedit"
+                    xmlns:dxrei="http://schemas.devexpress.com/winfx/2008/xaml/richedit/internal"
+                    xmlns:dxret="http://schemas.devexpress.com/winfx/2008/xaml/richedit/themekeys"
+                    xmlns:dxt="http://schemas.devexpress.com/winfx/2008/xaml/core/themekeys"
+                    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <ResourceDictionary.MergedDictionaries>
+        <dxt:ResourceDictionaryEx Source="/DevExpress.Xpf.RichEdit.v20.2;component/Themes/Generic/Ruler.xaml"/>
+    </ResourceDictionary.MergedDictionaries>
+
+    <ControlTemplate x:Key="InvisibleBorderTemplate" TargetType="{x:Type ContentControl}">
+        <ContentPresenter Content="{TemplateBinding Content}"
+                          ContentTemplate="{TemplateBinding ContentTemplate}"
+                          SnapsToDevicePixels="True"
+                          UseLayoutRounding="True"/>
+    </ControlTemplate>
+
+    <ControlTemplate x:Key="{dxret:RichEditControlThemeKey ResourceKey=EmptyCommentControlTemplate}"/>
+
+    <ControlTemplate x:Key="{dxret:RichEditControlThemeKey ResourceKey=CommentControlTemplate}">
+        <dxre:RichEditCommentControl DockLayoutManager="{Binding RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type dxdo:DockLayoutManager}}, Mode=OneTime}"
+                                     dxre:InnerCommentControl.IsTemplatePart="True"
+                                     HorizontalAlignment="Stretch"
+                                     LayoutPanel="{Binding RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type dxdo:LayoutPanel}}, Mode=OneTime}"
+                                     MinWidth="350"
+                                     RichEditControl="{Binding RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type dxre:RichEditControl}}}"
+                                     VerticalAlignment="Stretch"/>
+    </ControlTemplate>
+
+    <dx:BoolToThicknessConverter x:Key="layoutGroupBoolToThicknessConverter"
+                                 ThicknessFalse="0"
+                                 ThicknessTrue="Auto"/>
+
+    <!--RichEditControl-->
+
+    <Style x:Key="{dxt:DefaultStyleThemeKey FullName=DevExpress.Xpf.RichEdit.RichEditControl}" TargetType="{x:Type dxre:RichEditControl}">
+        <Setter Property="MaxWidth" Value="3000000"/>
+        <Setter Property="MaxHeight" Value="3000000"/>
+        <Setter Property="AutoBackground" Value="{DynamicResource {dxret:RichEditControlThemeKey ResourceKey=RichEditBackgroundBrush}}"/>
+        <Setter Property="AutoForeground" Value="{DynamicResource {dxret:RichEditControlThemeKey ResourceKey=RichEditForegroundBrush}}"/>
+        <Setter Property="dx:ScrollViewerTouchBehavior.IsEnabled" Value="True"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="dxre:RichEditControl">
+                    <DockPanel>
+                        <VisualStateManager.VisualStateGroups>
+                            <VisualStateGroup x:Name="CommonStates">
+                                <VisualStateGroup.Transitions>
+                                    <!--<VisualTransition GeneratedDuration="00:00:00.1" To="SearchVisible"/>
+                                        <VisualTransition GeneratedDuration="00:00:00.1" To="SearchCollapsed"/>-->
+                                </VisualStateGroup.Transitions>
+                                <VisualState x:Name="SearchVisible">
+                                    <Storyboard x:Name="SearchVisibleStoryboard">
+                                        <DoubleAnimation Duration="00:00:00.1"
+                                                         Storyboard.TargetName="SearchPanel"
+                                                         Storyboard.TargetProperty="Opacity"
+                                                         To="1"/>
+                                        <DoubleAnimation Duration="00:00:00.1"
+                                                         From="0"
+                                                         Storyboard.TargetName="searchPanelExpander"
+                                                         Storyboard.TargetProperty="AnimationProgress"
+                                                         To="1"/>
+                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="SearchPanel" Storyboard.TargetProperty="Visibility">
+                                            <DiscreteObjectKeyFrame KeyTime="0">
+                                                <DiscreteObjectKeyFrame.Value>
+                                                    <Visibility>Visible</Visibility>
+                                                </DiscreteObjectKeyFrame.Value>
+                                            </DiscreteObjectKeyFrame>
+                                        </ObjectAnimationUsingKeyFrames>
+                                    </Storyboard>
+                                </VisualState>
+                                <VisualState x:Name="SearchCollapsed">
+                                    <Storyboard>
+                                        <DoubleAnimation Duration="00:00:00.1"
+                                                         Storyboard.TargetName="SearchPanel"
+                                                         Storyboard.TargetProperty="Opacity"
+                                                         To="0"/>
+                                        <DoubleAnimation Duration="00:00:00.1"
+                                                         Storyboard.TargetName="searchPanelExpander"
+                                                         Storyboard.TargetProperty="AnimationProgress"
+                                                         To="0"/>
+                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="SearchPanel" Storyboard.TargetProperty="Visibility">
+                                            <DiscreteObjectKeyFrame KeyTime="0">
+                                                <DiscreteObjectKeyFrame.Value>
+                                                    <Visibility>Collapsed</Visibility>
+                                                </DiscreteObjectKeyFrame.Value>
+                                            </DiscreteObjectKeyFrame>
+                                        </ObjectAnimationUsingKeyFrames>
+                                    </Storyboard>
+                                </VisualState>
+                            </VisualStateGroup>
+                            <VisualStateGroup x:Name="HorizontalRulerVisibility">
+                                <VisualState x:Name="HorizontalRulerVisible">
+                                    <Storyboard>
+                                        <ThicknessAnimation Duration="0:0:0"
+                                                            Storyboard.TargetName="Vruler"
+                                                            Storyboard.TargetProperty="Margin"
+                                                            To="0,0,0,0"/>
+                                    </Storyboard>
+                                </VisualState>
+                                <VisualState x:Name="HorizontalRulerCollapsed">
+                                    <Storyboard>
+                                        <ThicknessAnimation Duration="0:0:0"
+                                                            Storyboard.TargetName="Vruler"
+                                                            Storyboard.TargetProperty="Margin"
+                                                            To="0,0,0,0"/>
+                                    </Storyboard>
+                                </VisualState>
+                            </VisualStateGroup>
+                            <VisualStateGroup x:Name="VerticalRulerVisible">
+                                <VisualState x:Name="VerticalRulerVisiblity">
+                                    <Storyboard>
+                                        <ThicknessAnimation Duration="0:0:0"
+                                                            Storyboard.TargetName="Hruler"
+                                                            Storyboard.TargetProperty="Margin"
+                                                            To="-6,0,0,0"/>
+                                    </Storyboard>
+                                </VisualState>
+                                <VisualState x:Name="VerticalRulerCollapsed">
+                                    <Storyboard>
+                                        <ThicknessAnimation Duration="0:0:0"
+                                                            Storyboard.TargetName="Hruler"
+                                                            Storyboard.TargetProperty="Margin"
+                                                            To="0,0,0,0"/>
+                                    </Storyboard>
+                                </VisualState>
+                            </VisualStateGroup>
+                        </VisualStateManager.VisualStateGroups>
+                        <Control x:Name="PART_RibbonHost"
+                                 DockPanel.Dock="Top"
+                                 Template="{DynamicResource {dxret:RichEditControlThemeKey ResourceKey=EmptyRibbonTemplate}}"/>
+                        <ContentControl Background="{TemplateBinding Background}"
+                                        Focusable="False"
+                                        Template="{DynamicResource {dxret:RichEditControlThemeKey ResourceKey=BackgroundControlTemplate}}"
+                                        UseLayoutRounding="False">
+                            <dxdo:DockLayoutManager x:Name="PART_DockLayoutManager"
+                                                    Background="Transparent"
+                                                    ShowInvisibleItems="False"
+                                                    cs:id="DockLayoutManager_0000">
+                                <dxdo:LayoutGroup Margin="{TemplateBinding ShowBorder, Converter={StaticResource layoutGroupBoolToThicknessConverter}}" Orientation="Horizontal">
+                                    <dxdo:LayoutPanel Name="paneComments"
+                                                      Caption="Main document comments"
+                                                      MaxWidth="500"
+                                                      Visibility="Collapsed">
+                                        <Control x:Name="PART_CommentControlHost" Template="{DynamicResource {dxret:RichEditControlThemeKey ResourceKey=EmptyCommentControlTemplate}}"/>
+                                    </dxdo:LayoutPanel>
+                                    <dxdo:DocumentGroup Background="Transparent"
+                                                        ShowTabHeaders="False"
+                                                        TabbedGroupDisplayMode="ContentOnly"
+                                                        cs:id="DocumentGroup_0000">
+                                        <dxdo:DocumentPanel x:Name="paneRichEdit"
+                                                            Background="Transparent"
+                                                            cs:id="DocumentPanel_0000">
+                                            <dxrei:RichEditControlBorder Focusable="False"
+                                                                         HorizontalAlignment="Stretch"
+                                                                         HorizontalContentAlignment="Stretch"
+                                                                         InvisibleBorderTemplate="{StaticResource InvisibleBorderTemplate}"
+                                                                         ShowBorder="{TemplateBinding ShowBorder}"
+                                                                         SnapsToDevicePixels="True"
+                                                                         UseLayoutRounding="True"
+                                                                         VerticalAlignment="Stretch"
+                                                                         VerticalContentAlignment="Stretch"
+                                                                         VisibleBorderTemplate="{DynamicResource {dxret:RichEditControlThemeKey ResourceKey=BorderControlTemplate}}">
+                                                <dx:DXArranger SnapsToDevicePixels="True">
+                                                    <Grid Background="Transparent"
+                                                          SnapsToDevicePixels="True"
+                                                          UseLayoutRounding="True"
+                                                          cs:id="Grid_0000">
+                                                        <Grid.RowDefinitions>
+                                                            <RowDefinition Height="Auto"/>
+                                                            <RowDefinition Height="*"/>
+                                                        </Grid.RowDefinitions>
+                                                        <dx:DXExpander x:Name="searchPanelExpander"
+                                                                       AnimationProgress="0"
+                                                                       HorizontalExpand="FromLeftToRight">
+                                                            <dxre:RichEditSearchPanel x:Name="SearchPanel"
+                                                                                      SnapsToDevicePixels="True"
+                                                                                      UseLayoutRounding="True"
+                                                                                      Visibility="Collapsed"/>
+                                                        </dx:DXExpander>
+                                                        <ContentControl x:Name="FocusElement"
+                                                                        Focusable="False"
+                                                                        Grid.Row="1"
+                                                                        HorizontalContentAlignment="Stretch"
+                                                                        SnapsToDevicePixels="True"
+                                                                        UseLayoutRounding="True"
+                                                                        VerticalContentAlignment="Stretch">
+                                                            <Grid SnapsToDevicePixels="True" UseLayoutRounding="True">
+                                                                <Grid.RowDefinitions>
+                                                                    <RowDefinition Height="Auto"/>
+                                                                    <RowDefinition Height="*"/>
+                                                                    <RowDefinition Height="Auto"/>
+                                                                </Grid.RowDefinitions>
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="Auto"/>
+                                                                    <ColumnDefinition Width="*"/>
+                                                                    <ColumnDefinition Width="Auto"/>
+                                                                </Grid.ColumnDefinitions>
+                                                                <Border x:Name="SurfaceBorder"
+                                                                        BorderThickness="0"
+                                                                        dx:FrameworkElementHelper.IsClipped="True"
+                                                                        Grid.Column="1"
+                                                                        Grid.Row="1"
+                                                                        HorizontalAlignment="Stretch"
+                                                                        SnapsToDevicePixels="True"
+                                                                        UseLayoutRounding="True"
+                                                                        VerticalAlignment="Stretch">
+                                                                    <Grid.ColumnSpan>
+                                                                        <Binding Path="(dx:ScrollBarExtensions.ScrollBarMode)" RelativeSource="{RelativeSource TemplatedParent}">
+                                                                            <Binding.Converter>
+                                                                                <dx:EnumToObjectConverter DefaultValue="1">
+                                                                                    <dx:EnumToObjectConverter.Values>
+                                                                                        <dx:EnumObjectProvider x:Key="TouchOverlap" Value="2"/>
+                                                                                    </dx:EnumToObjectConverter.Values>
+                                                                                </dx:EnumToObjectConverter>
+                                                                            </Binding.Converter>
+                                                                        </Binding>
+                                                                    </Grid.ColumnSpan>
+                                                                    <Grid.RowSpan>
+                                                                        <Binding Path="(dx:ScrollBarExtensions.ScrollBarMode)" RelativeSource="{RelativeSource TemplatedParent}">
+                                                                            <Binding.Converter>
+                                                                                <dx:EnumToObjectConverter DefaultValue="1">
+                                                                                    <dx:EnumToObjectConverter.Values>
+                                                                                        <dx:EnumObjectProvider x:Key="TouchOverlap" Value="2"/>
+                                                                                    </dx:EnumToObjectConverter.Values>
+                                                                                </dx:EnumToObjectConverter>
+                                                                            </Binding.Converter>
+                                                                        </Binding>
+                                                                    </Grid.RowSpan>
+                                                                    <Grid HorizontalAlignment="Stretch"
+                                                                          SnapsToDevicePixels="True"
+                                                                          UseLayoutRounding="True"
+                                                                          VerticalAlignment="Stretch">
+                                                                        <Canvas x:Name="Surface"
+                                                                                AllowDrop="True"
+                                                                                Background="Transparent"
+                                                                                SnapsToDevicePixels="True"
+                                                                                UseLayoutRounding="True"
+                                                                                cs:id="Canvas_0000"/>
+                                                                        <Canvas HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                                                                            <dxrei:KeyCodeConverter x:Name="KeyCodeConverter"
+                                                                                                    Height="0"
+                                                                                                    Opacity="0"/>
+                                                                        </Canvas>
+                                                                    </Grid>
+                                                                </Border>
+                                                                <!--HorizontalRuler-->
+                                                                <Grid x:Name="Hruler"
+                                                                      Grid.ColumnSpan="3"
+                                                                      SnapsToDevicePixels="True"
+                                                                      UseLayoutRounding="True"
+                                                                      Visibility="{TemplateBinding HorizontalRulerVisibility}">
+                                                                    <dxrei:HorizontalRulerControl x:Name="HorizontalRuler"
+                                                                                                  Focusable="False"
+                                                                                                  Template="{DynamicResource {dxret:RichEditRulerThemeKey ResourceKey=HorizontalRulerControlTemplate}}"/>
+                                                                </Grid>
+                                                                <!--VerticalRuler-->
+                                                                <Grid x:Name="Vruler"
+                                                                      Grid.Row="1"
+                                                                      Grid.RowSpan="2"
+                                                                      Margin="0,0,0,0"
+                                                                      SnapsToDevicePixels="True"
+                                                                      UseLayoutRounding="True"
+                                                                      Visibility="{TemplateBinding VerticalRulerVisibility}">
+                                                                    <dxrei:VerticalRulerControl x:Name="VerticalRuler"
+                                                                                                Focusable="False"
+                                                                                                Template="{DynamicResource {dxret:RichEditRulerThemeKey ResourceKey=VerticalRulerControlTemplate}}"/>
+                                                                </Grid>
+                                                                <!--VerticalScrollBar-->
+                                                                <Grid Grid.Column="2"
+                                                                      Grid.Row="1"
+                                                                      SnapsToDevicePixels="True"
+                                                                      UseLayoutRounding="True"
+                                                                      Visibility="{TemplateBinding VerticalScrollBarVisibility}">
+                                                                    <ScrollBar x:Name="VerticalScrollBar"
+                                                                               dx:StyleManager.ApplyApplicationTheme="True"
+                                                                               Orientation="Vertical"
+                                                                               SnapsToDevicePixels="True"
+                                                                               UseLayoutRounding="True"/>
+                                                                </Grid>
+                                                                <!--HorizontalScrollBar-->
+                                                                <Grid Grid.Column="1"
+                                                                      Grid.Row="2"
+                                                                      SnapsToDevicePixels="True"
+                                                                      UseLayoutRounding="True"
+                                                                      Visibility="{TemplateBinding HorizontalScrollBarVisibility}">
+                                                                    <ScrollBar x:Name="HorizontalScrollBar"
+                                                                               dx:StyleManager.ApplyApplicationTheme="True"
+                                                                               Orientation="Horizontal"
+                                                                               SnapsToDevicePixels="True"
+                                                                               UseLayoutRounding="True"/>
+                                                                </Grid>
+                                                                <dx:CornerBox Focusable="False"
+                                                                              Grid.Column="2"
+                                                                              Grid.Row="2"
+                                                                              SnapsToDevicePixels="True"
+                                                                              UseLayoutRounding="True">
+                                                                    <dx:CornerBox.Visibility>
+                                                                        <MultiBinding>
+                                                                            <MultiBinding.Bindings>
+                                                                                <Binding Path="(dx:ScrollBarExtensions.ScrollBarMode)" RelativeSource="{RelativeSource TemplatedParent}"/>
+                                                                                <Binding Path="CornerBoxVisibility" RelativeSource="{RelativeSource TemplatedParent}"/>
+                                                                            </MultiBinding.Bindings>
+                                                                            <MultiBinding.Converter>
+                                                                                <dxrei:CornerBoxVisibilityConverter/>
+                                                                            </MultiBinding.Converter>
+                                                                        </MultiBinding>
+                                                                    </dx:CornerBox.Visibility>
+                                                                </dx:CornerBox>
+                                                            </Grid>
+                                                        </ContentControl>
+                                                    </Grid>
+                                                </dx:DXArranger>
+                                            </dxrei:RichEditControlBorder>
+                                        </dxdo:DocumentPanel>
+                                    </dxdo:DocumentGroup>
+                                </dxdo:LayoutGroup>
+                            </dxdo:DockLayoutManager>
+                        </ContentControl>
+                    </DockPanel>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="CommandBarStyle" Value="Ribbon">
+                            <Setter Property="Template"
+                                    TargetName="PART_RibbonHost"
+                                    Value="{DynamicResource {dxret:RichEditControlThemeKey ResourceKey=RibbonTemplate}}"/>
+                        </Trigger>
+                        <Trigger Property="UseBuiltInReviewingPane" Value="True">
+                            <Setter Property="Template"
+                                    TargetName="PART_CommentControlHost"
+                                    Value="{DynamicResource {dxret:RichEditControlThemeKey ResourceKey=CommentControlTemplate}}"/>
+                        </Trigger>
+                        <MultiTrigger>
+                            <MultiTrigger.Conditions>
+                                <Condition Property="ShowReviewingPane" Value="True"/>
+                                <Condition Property="UseBuiltInReviewingPane" Value="True"/>
+                            </MultiTrigger.Conditions>
+                            <Setter Property="Visibility"
+                                    TargetName="paneComments"
+                                    Value="Visible"/>
+                        </MultiTrigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+</ResourceDictionary>

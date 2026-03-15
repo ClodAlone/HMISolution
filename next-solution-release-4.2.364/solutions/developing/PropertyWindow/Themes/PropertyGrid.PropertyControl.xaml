@@ -1,0 +1,225 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:converters="clr-namespace:PropertyControl"
+                    xmlns:pe="clr-namespace:Mindscape.WpfElements.PropertyEditing;assembly=Mindscape.WpfElements"
+                    xmlns:e="clr-namespace:Mindscape.WpfElements;assembly=Mindscape.WpfElements"
+                    xmlns:local="clr-namespace:Mindscape.WpfElements;assembly=Mindscape.WpfElements"
+                    xmlns:properties="clr-namespace:PropertyControl.Properties"
+                    xmlns:pg="http://namespaces.mindscape.co.nz/wpf"
+                    xmlns:dxc="http://schemas.devexpress.com/winfx/2008/xaml/core"
+                    xmlns:wpfutilities="clr-namespace:WPFUtilities;assembly=WPFUtilities">
+    <ResourceDictionary.MergedDictionaries>
+        <ResourceDictionary Source="/WPFUtilities;component/ResourceDictionary/PropertyGrid.Generic.xaml" />
+        <ResourceDictionary Source="/SharedResources;component/Resources/SharedImages.xaml" />
+    </ResourceDictionary.MergedDictionaries>
+
+    <!-- Converters -->
+    <converters:GroupToExpandedConverter x:Key="GroupToExpandedConverter" />
+    <converters:NodeToExpandedConverter x:Key="NodeToExpandedConverter" />
+    <converters:NodeIndentConverter x:Key="NodeIndentConverter" />
+    <converters:GroupItemToMarginConverter x:Key="GroupItemToMarginConverter" />
+    <converters:DivideDoubleByTwoConverter x:Key="DivideDoubleByTwoConverter" />
+    <BooleanToVisibilityConverter x:Key="BooleanToVisibility" />
+    <pg:GridSpacingCompensationConverter x:Key="DefaultMarginToBorderMargin" Usage="Margin" />
+    <pg:GridSpacingCompensationConverter x:Key="DefaultMarginToBorderPadding" Usage="Padding" />
+
+    <Style x:Key="ExpandCollapseGroupStyle" TargetType="{x:Type GroupItem}">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type GroupItem}">
+                    <Border BorderThickness="0" CornerRadius="3" Margin="0,3,2,0" Padding="3,0,0,3">
+                        <Expander IsExpanded="{Binding RelativeSource={RelativeSource Self}, Mode=OneWay, Converter={StaticResource GroupToExpandedConverter}}">
+                            <Expander.Header>
+                                <Border BorderThickness="0" Padding="0" CornerRadius="0,3,0,0">
+                                    <TextBlock FontWeight="Bold" Text="{Binding Name}" />
+                                </Border>
+                            </Expander.Header>
+                            <ItemsPresenter />
+                        </Expander>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="ExpandCollapseAdvancedStyle" TargetType="{x:Type GroupItem}">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type GroupItem}">
+                    <Border BorderThickness="0" CornerRadius="3" Margin="20,3,2,0" Padding="3,0,0,3">
+                        <Expander IsExpanded="{Binding RelativeSource={RelativeSource Self}, Mode=OneWay, Converter={StaticResource GroupToExpandedConverter}}">
+                            <Expander.Header>
+                                <Border BorderThickness="0" Padding="0" CornerRadius="0,3,0,0">
+                                    <TextBlock FontWeight="Bold" Text="{Binding Name}" />
+                                </Border>
+                            </Expander.Header>
+                            <ItemsPresenter />
+                        </Expander>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="OnlyExpandedGroupStyle" TargetType="{x:Type GroupItem}">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type GroupItem}">
+                    <Border BorderThickness="0" CornerRadius="3" Margin="0,3,2,0" Padding="3,0,0,3">
+                        <ItemsPresenter />
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <converters:GroupStyleSelector x:Key="GroupStyleSelector" 
+        ExpanderNameGroupStyle="{StaticResource ExpandCollapseGroupStyle}"
+        ExpanderNameAdvancedStyle="{StaticResource ExpandCollapseAdvancedStyle}"
+        EmptyNameGroupStyle="{StaticResource OnlyExpandedGroupStyle}" />
+
+    <DataTemplate x:Key="{x:Static e:PropertyGrid.PropertyNameTemplateKey}">
+        <Border SnapsToDevicePixels="True" Name="Bd" KeyboardNavigation.TabNavigation="None"
+                Focusable="False" Padding="2,0,6,0" Margin="-10,0,0,0"
+                BorderThickness="18,0,1,0">
+            <DockPanel Margin="-15,0,0,0">
+                <Expander x:Name="Expander" 
+                          Margin="{Binding Converter={StaticResource NodeIndentConverter}, RelativeSource={RelativeSource AncestorType={x:Type pg:TreeListViewItem}}, Mode=OneWay}">
+                    <Expander.IsExpanded>
+                        <MultiBinding Converter="{StaticResource NodeToExpandedConverter}" Mode="OneTime">
+                            <Binding RelativeSource="{RelativeSource Self}" />
+                            <Binding RelativeSource="{RelativeSource AncestorType={x:Type pg:TreeListViewItem}}" />
+                        </MultiBinding>
+                    </Expander.IsExpanded>
+                </Expander>
+                <TextBlock Name="NameBlockaaaa" Text="{Binding Node.HumanName}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                           ToolTipService.IsEnabled="{Binding Path=(ToolTipService.IsEnabled), RelativeSource={RelativeSource AncestorType={x:Type e:PropertyGrid}}}"
+                           Tag="{Binding PropertyNameToolTipTemplate, RelativeSource={RelativeSource AncestorType={x:Type e:PropertyGrid}}}">
+                    <ToolTipService.ToolTip>
+                        <ToolTip Content="{Binding}" 
+                                 ContentTemplate="{Binding PlacementTarget.Tag, RelativeSource={RelativeSource Self}}" />
+                    </ToolTipService.ToolTip>
+                </TextBlock>
+            </DockPanel>
+        </Border>
+        <DataTemplate.Triggers>
+            <DataTrigger Binding="{Binding Path=HasItems,RelativeSource={RelativeSource AncestorType={x:Type pg:TreeListViewItem}}}" Value="False">
+                <Setter TargetName="Expander" Property="Expander.Visibility" Value="Hidden" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Path=(pg:TreeListView.ShowSubitemExpanders),RelativeSource={RelativeSource AncestorType={x:Type e:PropertyGrid}}}" Value="False">
+                <Setter TargetName="Expander" Property="Expander.Visibility" Value="Hidden" />
+                <Setter TargetName="Bd" Property="Border.BorderThickness" Value="3,0,1,0" />
+            </DataTrigger>
+        </DataTemplate.Triggers>
+    </DataTemplate>
+
+    <Style x:Key="customItemContainerStyle" TargetType="{x:Type pg:TreeListViewItem}">
+        <Setter Property="KeyboardNavigation.TabNavigation" Value="Continue" />
+    </Style>
+
+    <Style TargetType="{x:Type e:PropertyGrid}" x:Shared="False" BasedOn="{StaticResource {x:Type e:PropertyGrid}}">
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="DefaultMargin" Value="0" />
+        <Setter Property="SnapsToDevicePixels" Value="True" />
+        <Setter Property="PropertyNameTemplate" Value="{StaticResource {x:Static e:PropertyGrid.PropertyNameTemplateKey}}" />
+        <Setter Property="ToolTipService.IsEnabled" Value="False" />
+        <Setter Property="BuiltInEditorStyles">
+            <Setter.Value>
+                <pe:BuiltInEditorStyleCollection>
+                    <pe:BuiltInEditorStyle EditorKey="{x:Static local:PropertyGrid.ManyEditorKey}" Style="{StaticResource ManyEditorStyle}" />
+                </pe:BuiltInEditorStyleCollection>
+            </Setter.Value>
+        </Setter>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type e:PropertyGrid}">
+                    <Border BorderThickness="{TemplateBinding BorderThickness}">
+                        <Border.Resources>
+                            <!-- ReadOnlyDisplay DataTemplate -->
+                            <DataTemplate x:Key="{x:Static local:PropertyGrid.ReadOnlyDisplayKey}">
+                                <Border Background="Transparent" BorderThickness="1" BorderBrush="{Binding Path=BorderBrush, RelativeSource={RelativeSource AncestorType={x:Type dxc:DXBorder}}}"
+                                        MinHeight="25">
+                                    <TextBlock Margin="3,0,0,0" Text="{Binding Value}" VerticalAlignment="Center" />
+                                </Border>
+                            </DataTemplate>
+                            <!-- CollectionDisplay DataTemplate -->
+                            <DataTemplate x:Key="{x:Static local:PropertyGrid.CollectionDisplayKey}">
+                                <Border Background="Transparent" BorderThickness="1" BorderBrush="{Binding Path=BorderBrush, RelativeSource={RelativeSource AncestorType={x:Type dxc:DXBorder}}}"
+                                        MinHeight="25" Margin="{Binding Content,Converter={StaticResource GroupItemToMarginConverter},RelativeSource={RelativeSource AncestorType={x:Type GroupItem}}}">
+                                    <DockPanel>
+                                        <Border DockPanel.Dock="Right">
+                                            <Button Command="{x:Static local:PropertyGrid.CollectionAddCommand}" CommandParameter="{Binding Value}"
+                                                    ToolTip="Click to add a new item" Padding="0"
+                                                    Visibility="{Binding IsEnabled, RelativeSource={RelativeSource Self}, Converter={StaticResource BooleanToVisibility}}">
+                                                <Button.Content>
+                                                    <Image Source="{StaticResource AddNewSmall}" Width="16" Height="16" />
+                                                </Button.Content>
+                                            </Button>
+                                        </Border>
+                                        <TextBlock Text="{Binding Path=Value.Count}" IsEnabled="False" DockPanel.Dock="Left" VerticalAlignment="Center" Margin="3,0,0,0"
+                                                   Style="{Binding RelativeSource={RelativeSource AncestorType={x:Type ContentControl}}, Path=(pe:Editor.HostStyle)}" />
+                                        <TextBlock Name="ItemText" Text="{x:Static properties:Resources.PropertyGrid_MultipleItems}" IsEnabled="False" VerticalAlignment="Center" Margin="6,0,0,0"
+                                                   Style="{Binding RelativeSource={RelativeSource AncestorType={x:Type ContentControl}}, Path=(pe:Editor.HostStyle)}" />
+                                    </DockPanel>
+                                </Border>
+                                <DataTemplate.Triggers>
+                                    <DataTrigger Binding="{Binding Value.Count}" Value="1">
+                                        <Setter TargetName="ItemText" Property="Text" Value="{x:Static properties:Resources.PropertyGrid_SingleItem}" />
+                                    </DataTrigger>
+                                </DataTemplate.Triggers>
+                            </DataTemplate>
+                            <!-- CollectionElement Editor DataTemplate -->
+                            <DataTemplate x:Key="{x:Static local:PropertyGrid.CollectionElementEditorKey}">
+                                <Grid Margin="{Binding DefaultMargin, RelativeSource={RelativeSource AncestorType={x:Type local:PropertyGrid}}}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <ContentControl Content="{Binding}" Grid.Column="0" Margin="0,0,3,0"
+                                                    ContentTemplate="{Binding DecoratedTemplate, RelativeSource={RelativeSource AncestorType={x:Type pe:EditorDecorator}}}" />
+                                    <Button Grid.Column="1" Command="{x:Static local:PropertyGrid.CollectionRemoveCommand}" ToolTip="Click to remove this item"
+                                            CommandParameter="{Binding DecoratedNode, RelativeSource={RelativeSource AncestorType={x:Type pe:EditorDecorator}}}"
+                                            Visibility="{Binding IsEnabled, RelativeSource={RelativeSource Self}, Converter={StaticResource BooleanToVisibility}}" Padding="1">
+                                        <Button.Content>
+                                            <Image Source="{StaticResource RemoveMinusSmall}" Width="16" Height="16" />
+                                        </Button.Content>
+                                    </Button>
+                                </Grid>
+                            </DataTemplate>
+                        </Border.Resources>
+                        <DockPanel>
+                            <pg:TreeListView x:Name="PART_Grid" 
+                                  KeyboardNavigation.TabNavigation="Cycle"
+                                  ItemContainerStyle="{StaticResource customItemContainerStyle}"
+                                  ItemTemplate="{StaticResource PropertyGridHierarchy}" 
+                                  ItemsSource="{TemplateBinding BindingView}">
+                                <pg:TreeListView.Columns>
+                                    <GridViewColumnCollection>
+                                        <GridViewColumn CellTemplate="{Binding PropertyNameTemplate, RelativeSource={RelativeSource AncestorType={x:Type e:PropertyGrid}}}"
+                                                        Width="{Binding Path=ActualWidth, RelativeSource={RelativeSource AncestorType={x:Type e:PropertyGrid}}, Converter={StaticResource DivideDoubleByTwoConverter}}"/>
+                                        <GridViewColumn>
+                                            <GridViewColumn.CellTemplate>
+                                                <HierarchicalDataTemplate>
+                                                    <Border MinHeight="25" Margin="{Binding Content,Converter={StaticResource GroupItemToMarginConverter},RelativeSource={RelativeSource AncestorType={x:Type GroupItem}}}"
+                                                            BorderThickness="0" BorderBrush="{Binding Path=Foreground, ElementName=PART_Grid}">
+                                                        <ContentControl Content="{Binding}" HorizontalContentAlignment="Left" VerticalAlignment="Center"
+                                                                        ContentTemplateSelector="{Binding EditorSelector, RelativeSource={RelativeSource AncestorType={x:Type local:PropertyGrid}}}" />
+                                                    </Border>
+                                                </HierarchicalDataTemplate>
+                                            </GridViewColumn.CellTemplate>
+                                        </GridViewColumn>
+                                        <!--<GridViewColumn CellTemplateSelector="{Binding RelativeSource={RelativeSource AncestorType={x:Type e:PropertyGrid}}, Path=EditorSelector}" />-->
+                                    </GridViewColumnCollection>
+                                </pg:TreeListView.Columns>
+                                <pg:TreeListView.GroupStyle>
+                                    <GroupStyle ContainerStyleSelector="{StaticResource GroupStyleSelector}" />
+                                </pg:TreeListView.GroupStyle>
+                            </pg:TreeListView>
+                        </DockPanel>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+</ResourceDictionary>

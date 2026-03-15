@@ -1,0 +1,1070 @@
+﻿<UserControl
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" 
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:dxsps="http://schemas.devexpress.com/winfx/2008/xaml/spreadsheet" 
+             xmlns:dxb="http://schemas.devexpress.com/winfx/2008/xaml/bars"  
+             xmlns:dxr="http://schemas.devexpress.com/winfx/2008/xaml/ribbon" 
+             xmlns:dxo="http://schemas.devexpress.com/winfx/2008/xaml/office" 
+             xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors" 
+             xmlns:cc="http://progea.com/CommonControls"
+             xmlns:dxp="http://schemas.devexpress.com/winfx/2008/xaml/printing"
+             xmlns:utils="clr-namespace:WPFUtilities.BarItemHelper;assembly=WPFUtilities"
+             xmlns:properties="clr-namespace:SpreadSheet.Properties"
+             x:Class="SpreadSheet.SpreadSheet" 
+             mc:Ignorable="d" Height="640" Width="960">
+    
+    <UserControl.Resources>
+        <dxsps:SpreadsheetUICommand x:Key="commands"/>
+        <dxsps:SpreadsheetStringIdConverter x:Key="stringIdConverter"/>
+        <dxsps:SpreadsheetDefaultBarItemDataTemplates x:Key="defaultBarItemTemplates"/>
+        <Style x:Key="PathErrorOverlayStyle_notSpecified">
+            <Setter Property="TextBlock.Foreground" Value="White" />
+            <Setter Property="TextBlock.FontSize" Value="20" />
+            <Setter Property="TextBlock.Opacity" Value="0.7" />
+        </Style>
+        <Style x:Key="PathErrorOverlayStyle_notFound" BasedOn="{StaticResource PathErrorOverlayStyle_notSpecified}">
+            <Setter Property="TextBlock.Foreground" Value="Red" />
+        </Style>
+        <Storyboard x:Key="PathErrorOverlayFadeOutSB" Storyboard.TargetName="pathErrorOverlay">
+            <DoubleAnimation BeginTime="0:0:3" From="0.7" To="0.0" Duration="0:0:3" Storyboard.TargetProperty="(TextBlock.Opacity)"/>
+        </Storyboard>
+    </UserControl.Resources>
+    <Grid x:Name="view">
+
+        <dxb:BarManager x:Name="barManager1" ToolbarGlyphSize="Small">
+            <dxb:BarManager.Items>
+                <utils:BarButtonItemEx x:Name="biFileNew" Command="{Binding FileNew, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biFileOpen" Command="{Binding FileOpen, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biFileSave" Command="{Binding FileSave, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biFileSaveAs" Command="{Binding FileSaveAs, Mode=OneTime, Source={StaticResource commands}}"/>
+                <!--<utils:BarButtonItemEx x:Name="biFileQuickPrint" Command="{Binding FileQuickPrint, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biFilePrint" Command="{Binding FilePrint, Mode=OneTime, Source={StaticResource commands}}"/>-->
+                <utils:BarButtonItemEx x:Name="biFilePrintPreview" Command="{Binding FilePrintPreview, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biFileUndo" Command="{Binding FileUndo, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biFileRedo" Command="{Binding FileRedo, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biEditPaste" Command="{Binding EditPaste, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biEditCut" Command="{Binding EditCut, Mode=OneTime, Source={StaticResource commands}}" RibbonStyle="SmallWithText"/>
+                <utils:BarButtonItemEx x:Name="biEditCopy" Command="{Binding EditCopy, Mode=OneTime, Source={StaticResource commands}}" RibbonStyle="SmallWithText"/>
+                <utils:BarButtonItemEx x:Name="biEditPasteSpecial" Command="{Binding EditPasteSpecial, Mode=OneTime, Source={StaticResource commands}}" RibbonStyle="SmallWithText"/>
+                <dxr:BarButtonGroup x:Name="biFont">
+                    <dxb:BarEditItemLink BarItemName="biFormatFontName"/>
+                    <dxb:BarEditItemLink BarItemName="biFormatFontSize"/>
+                    <dxb:BarButtonItemLink BarItemName="biFormatIncreaseFontSize"/>
+                    <dxb:BarButtonItemLink BarItemName="biFormatDecreaseFontSize"/>
+                </dxr:BarButtonGroup>
+                <dxb:BarEditItem x:Name="biFormatFontName" Content="" Command="{Binding FormatFontName, Mode=OneTime, Source={StaticResource commands}}" EditWidth="150">
+                    <dxb:BarEditItem.EditSettings>
+                        <dxo:FontComboBoxEditSettings/>
+                    </dxb:BarEditItem.EditSettings>
+                </dxb:BarEditItem>
+                <dxb:BarEditItem x:Name="biFormatFontSize" Content="" Command="{Binding FormatFontSize, Mode=OneTime, Source={StaticResource commands}}" EditWidth="50">
+                    <dxb:BarEditItem.EditSettings>
+                        <dxo:FontSizeComboBoxEditSettings OfficeFontSizeProvider="{Binding ElementName=spreadsheetControl1}"/>
+                    </dxb:BarEditItem.EditSettings>
+                </dxb:BarEditItem>
+                <utils:BarButtonItemEx x:Name="biFormatIncreaseFontSize" Command="{Binding FormatIncreaseFontSize, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biFormatDecreaseFontSize" Command="{Binding FormatDecreaseFontSize, Mode=OneTime, Source={StaticResource commands}}"/>
+                <dxr:BarButtonGroup x:Name="biFontShape">
+                    <dxb:BarCheckItemLink BarItemName="biFormatFontBold"/>
+                    <dxb:BarCheckItemLink BarItemName="biFormatFontItalic"/>
+                    <dxb:BarCheckItemLink BarItemName="biFormatFontUnderline"/>
+                    <dxb:BarCheckItemLink BarItemName="biFormatFontStrikeout"/>
+                </dxr:BarButtonGroup>
+                <utils:BarCheckItemEx x:Name="biFormatFontBold" Command="{Binding FormatFontBold, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarCheckItemEx x:Name="biFormatFontItalic" Command="{Binding FormatFontItalic, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarCheckItemEx x:Name="biFormatFontUnderline" Command="{Binding FormatFontUnderline, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarCheckItemEx x:Name="biFormatFontStrikeout" Command="{Binding FormatFontStrikeout, Mode=OneTime, Source={StaticResource commands}}"/>
+                <dxr:BarButtonGroup x:Name="biFontColor">
+                    <dxo:BarSplitButtonColorEditItemLink BarItemName="biFormatFontColor"/>
+                    <dxo:BarSplitButtonColorEditItemLink BarItemName="biFormatFillColor"/>
+                </dxr:BarButtonGroup>
+                <dxo:BarSplitButtonColorEditItem x:Name="biFormatFontColor" Command="{Binding FormatFontColor, Mode=OneTime, Source={StaticResource commands}}">
+                    <dxo:BarSplitButtonColorEditItem.PopupControl>
+                        <dxb:PopupControlContainerInfo>
+                            <dxe:ColorEdit EditValue="{Binding EditValue, ElementName=biFormatFontColor, Mode=TwoWay}" ShowBorder="False"/>
+                        </dxb:PopupControlContainerInfo>
+                    </dxo:BarSplitButtonColorEditItem.PopupControl>
+                </dxo:BarSplitButtonColorEditItem>
+                <dxo:BarSplitButtonColorEditItem x:Name="biFormatFillColor" Command="{Binding FormatFillColor, Mode=OneTime, Source={StaticResource commands}}">
+                    <dxo:BarSplitButtonColorEditItem.PopupControl>
+                        <dxb:PopupControlContainerInfo>
+                            <dxe:ColorEdit EditValue="{Binding EditValue, ElementName=biFormatFillColor, Mode=TwoWay}" ShowBorder="False"/>
+                        </dxb:PopupControlContainerInfo>
+                    </dxo:BarSplitButtonColorEditItem.PopupControl>
+                </dxo:BarSplitButtonColorEditItem>
+                <dxr:BarButtonGroup x:Name="bi">
+                    <dxb:BarSubItemLink BarItemName="biFormatBordersCommandGroup"/>
+                </dxr:BarButtonGroup>
+                <utils:BarSubItemEx x:Name="biFormatBordersCommandGroup" Command="{Binding FormatBordersCommandGroup, Mode=OneTime, Source={StaticResource commands}}" RibbonStyle="SmallWithoutText">
+                    <dxb:BarButtonItemLink BarItemName="biFormatBottomBorder"/>
+                    <dxb:BarButtonItemLink BarItemName="biFormatTopBorder"/>
+                    <dxb:BarButtonItemLink BarItemName="biFormatLeftBorder"/>
+                    <dxb:BarButtonItemLink BarItemName="biFormatRightBorder"/>
+                    <dxb:BarButtonItemLink BarItemName="biFormatNoBorders"/>
+                    <dxb:BarButtonItemLink BarItemName="biFormatAllBorders"/>
+                    <dxb:BarButtonItemLink BarItemName="biFormatOutsideBorders"/>
+                    <dxb:BarButtonItemLink BarItemName="biFormatThickBorder"/>
+                    <dxb:BarButtonItemLink BarItemName="biFormatBottomDoubleBorder"/>
+                    <dxb:BarButtonItemLink BarItemName="biFormatBottomThickBorder"/>
+                    <dxb:BarButtonItemLink BarItemName="biFormatTopAndBottomBorder"/>
+                    <dxb:BarButtonItemLink BarItemName="biFormatTopAndThickBottomBorder"/>
+                    <dxb:BarButtonItemLink BarItemName="biFormatTopAndDoubleBottomBorder"/>
+                </utils:BarSubItemEx>
+                <utils:BarButtonItemEx x:Name="biFormatBottomBorder" Command="{Binding FormatBottomBorder, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biFormatTopBorder" Command="{Binding FormatTopBorder, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biFormatLeftBorder" Command="{Binding FormatLeftBorder, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biFormatRightBorder" Command="{Binding FormatRightBorder, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biFormatNoBorders" Command="{Binding FormatNoBorders, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biFormatAllBorders" Command="{Binding FormatAllBorders, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biFormatOutsideBorders" Command="{Binding FormatOutsideBorders, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biFormatThickBorder" Command="{Binding FormatThickBorder, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biFormatBottomDoubleBorder" Command="{Binding FormatBottomDoubleBorder, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biFormatBottomThickBorder" Command="{Binding FormatBottomThickBorder, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biFormatTopAndBottomBorder" Command="{Binding FormatTopAndBottomBorder, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biFormatTopAndThickBottomBorder" Command="{Binding FormatTopAndThickBottomBorder, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biFormatTopAndDoubleBottomBorder" Command="{Binding FormatTopAndDoubleBottomBorder, Mode=OneTime, Source={StaticResource commands}}"/>
+                <dxr:BarButtonGroup x:Name="biVerticalAlignment">
+                    <dxb:BarCheckItemLink BarItemName="biFormatAlignmentTop"/>
+                    <dxb:BarCheckItemLink BarItemName="biFormatAlignmentMiddle"/>
+                    <dxb:BarCheckItemLink BarItemName="biFormatAlignmentBottom"/>
+                </dxr:BarButtonGroup>
+                <utils:BarCheckItemEx x:Name="biFormatAlignmentTop" Command="{Binding FormatAlignmentTop, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarCheckItemEx x:Name="biFormatAlignmentMiddle" Command="{Binding FormatAlignmentMiddle, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarCheckItemEx x:Name="biFormatAlignmentBottom" Command="{Binding FormatAlignmentBottom, Mode=OneTime, Source={StaticResource commands}}"/>
+                <dxr:BarButtonGroup x:Name="biHorizontalAlignment">
+                    <dxb:BarCheckItemLink BarItemName="biFormatAlignmentLeft"/>
+                    <dxb:BarCheckItemLink BarItemName="biFormatAlignmentCenter"/>
+                    <dxb:BarCheckItemLink BarItemName="biFormatAlignmentRight"/>
+                </dxr:BarButtonGroup>
+                <utils:BarCheckItemEx x:Name="biFormatAlignmentLeft" Command="{Binding FormatAlignmentLeft, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarCheckItemEx x:Name="biFormatAlignmentCenter" Command="{Binding FormatAlignmentCenter, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarCheckItemEx x:Name="biFormatAlignmentRight" Command="{Binding FormatAlignmentRight, Mode=OneTime, Source={StaticResource commands}}"/>
+                <dxr:BarButtonGroup x:Name="biIndent">
+                    <dxb:BarButtonItemLink BarItemName="biFormatDecreaseIndent"/>
+                    <dxb:BarButtonItemLink BarItemName="biFormatIncreaseIndent"/>
+                </dxr:BarButtonGroup>
+                <utils:BarButtonItemEx x:Name="biFormatDecreaseIndent" Command="{Binding FormatDecreaseIndent, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biFormatIncreaseIndent" Command="{Binding FormatIncreaseIndent, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarCheckItemEx x:Name="biFormatWrapText" Command="{Binding FormatWrapText, Mode=OneTime, Source={StaticResource commands}}" RibbonStyle="SmallWithText"/>
+                <utils:BarSubItemEx x:Name="biEditingMergeCellsCommandGroup" Command="{Binding EditingMergeCellsCommandGroup, Mode=OneTime, Source={StaticResource commands}}" RibbonStyle="SmallWithText">
+                    <dxb:BarCheckItemLink BarItemName="biEditingMergeAndCenterCells"/>
+                    <dxb:BarButtonItemLink BarItemName="biEditingMergeCellsAcross"/>
+                    <dxb:BarButtonItemLink BarItemName="biEditingMergeCells"/>
+                    <dxb:BarButtonItemLink BarItemName="biEditingUnmergeCells"/>
+                </utils:BarSubItemEx>
+                <utils:BarCheckItemEx x:Name="biEditingMergeAndCenterCells" Command="{Binding EditingMergeAndCenterCells, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biEditingMergeCellsAcross" Command="{Binding EditingMergeCellsAcross, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biEditingMergeCells" Command="{Binding EditingMergeCells, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biEditingUnmergeCells" Command="{Binding EditingUnmergeCells, Mode=OneTime, Source={StaticResource commands}}"/>
+                <dxr:BarButtonGroup x:Name="biFormatNumbers">
+                    <dxb:BarSubItemLink BarItemName="biFormatNumberAccountingCommandGroup"/>
+                    <dxb:BarButtonItemLink BarItemName="biFormatNumberPercent"/>
+                    <dxb:BarButtonItemLink BarItemName="biFormatNumberAccounting"/>
+                </dxr:BarButtonGroup>
+                <utils:BarSubItemEx x:Name="biFormatNumberAccountingCommandGroup" Command="{Binding FormatNumberAccountingCommandGroup, Mode=OneTime, Source={StaticResource commands}}" RibbonStyle="SmallWithoutText">
+                    <dxb:BarButtonItemLink BarItemName="biFormatNumberAccountingUS"/>
+                    <dxb:BarButtonItemLink BarItemName="biFormatNumberAccountingUK"/>
+                    <dxb:BarButtonItemLink BarItemName="biFormatNumberAccountingEuro"/>
+                    <dxb:BarButtonItemLink BarItemName="biFormatNumberAccountingPRC"/>
+                    <dxb:BarButtonItemLink BarItemName="biFormatNumberAccountingSwiss"/>
+                </utils:BarSubItemEx>
+                <utils:BarButtonItemEx x:Name="biFormatNumberAccountingUS" Command="{Binding FormatNumberAccountingUS, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biFormatNumberAccountingUK" Command="{Binding FormatNumberAccountingUK, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biFormatNumberAccountingEuro" Command="{Binding FormatNumberAccountingEuro, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biFormatNumberAccountingPRC" Command="{Binding FormatNumberAccountingPRC, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biFormatNumberAccountingSwiss" Command="{Binding FormatNumberAccountingSwiss, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biFormatNumberPercent" Command="{Binding FormatNumberPercent, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biFormatNumberAccounting" Command="{Binding FormatNumberAccounting, Mode=OneTime, Source={StaticResource commands}}"/>
+                <dxr:BarButtonGroup x:Name="biFormatNumberDecimals">
+                    <dxb:BarButtonItemLink BarItemName="biFormatNumberIncreaseDecimal"/>
+                    <dxb:BarButtonItemLink BarItemName="biFormatNumberDecreaseDecimal"/>
+                </dxr:BarButtonGroup>
+                <utils:BarButtonItemEx x:Name="biFormatNumberIncreaseDecimal" Command="{Binding FormatNumberIncreaseDecimal, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biFormatNumberDecreaseDecimal" Command="{Binding FormatNumberDecreaseDecimal, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarSubItemEx x:Name="biConditionalFormattingCommandGroup" Command="{Binding ConditionalFormattingCommandGroup, Mode=OneTime, Source={StaticResource commands}}">
+                    <dxb:BarSubItemLink BarItemName="biConditionalFormattingDataBarsCommandGroup"/>
+                    <dxb:BarSubItemLink BarItemName="biConditionalFormattingColorScalesCommandGroup"/>
+                    <dxb:BarSubItemLink BarItemName="biConditionalFormattingIconSetsCommandGroup"/>
+                    <dxb:BarSubItemLink BarItemName="biConditionalFormattingRemoveCommandGroup"/>
+                </utils:BarSubItemEx>
+                <utils:BarSubItemEx x:Name="biConditionalFormattingDataBarsCommandGroup" Command="{Binding ConditionalFormattingDataBarsCommandGroup, Mode=OneTime, Source={StaticResource commands}}">
+                    <dxb:BarSubItemLink BarItemName="biConditionalFormattingDataBarsGradientFillCommandGroup"/>
+                    <dxb:BarSubItemLink BarItemName="biConditionalFormattingDataBarsSolidFillCommandGroup"/>
+                </utils:BarSubItemEx>
+                <utils:BarSubItemEx x:Name="biConditionalFormattingDataBarsGradientFillCommandGroup" Command="{Binding ConditionalFormattingDataBarsGradientFillCommandGroup, Mode=OneTime, Source={StaticResource commands}}">
+                    <dxb:BarButtonItemLink BarItemName="biConditionalFormattingDataBarGradientBlue"/>
+                    <dxb:BarButtonItemLink BarItemName="biConditionalFormattingDataBarGradientGreen"/>
+                    <dxb:BarButtonItemLink BarItemName="biConditionalFormattingDataBarGradientRed"/>
+                    <dxb:BarButtonItemLink BarItemName="biConditionalFormattingDataBarGradientOrange"/>
+                    <dxb:BarButtonItemLink BarItemName="biConditionalFormattingDataBarGradientLightBlue"/>
+                    <dxb:BarButtonItemLink BarItemName="biConditionalFormattingDataBarGradientPurple"/>
+                </utils:BarSubItemEx>
+                <utils:BarButtonItemEx x:Name="biConditionalFormattingDataBarGradientBlue" Command="{Binding ConditionalFormattingDataBarGradientBlue, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biConditionalFormattingDataBarGradientGreen" Command="{Binding ConditionalFormattingDataBarGradientGreen, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biConditionalFormattingDataBarGradientRed" Command="{Binding ConditionalFormattingDataBarGradientRed, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biConditionalFormattingDataBarGradientOrange" Command="{Binding ConditionalFormattingDataBarGradientOrange, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biConditionalFormattingDataBarGradientLightBlue" Command="{Binding ConditionalFormattingDataBarGradientLightBlue, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biConditionalFormattingDataBarGradientPurple" Command="{Binding ConditionalFormattingDataBarGradientPurple, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarSubItemEx x:Name="biConditionalFormattingDataBarsSolidFillCommandGroup" Command="{Binding ConditionalFormattingDataBarsSolidFillCommandGroup, Mode=OneTime, Source={StaticResource commands}}">
+                    <dxb:BarButtonItemLink BarItemName="biConditionalFormattingDataBarSolidBlue"/>
+                    <dxb:BarButtonItemLink BarItemName="biConditionalFormattingDataBarSolidGreen"/>
+                    <dxb:BarButtonItemLink BarItemName="biConditionalFormattingDataBarSolidRed"/>
+                    <dxb:BarButtonItemLink BarItemName="biConditionalFormattingDataBarSolidOrange"/>
+                    <dxb:BarButtonItemLink BarItemName="biConditionalFormattingDataBarSolidLightBlue"/>
+                    <dxb:BarButtonItemLink BarItemName="biConditionalFormattingDataBarSolidPurple"/>
+                </utils:BarSubItemEx>
+                <utils:BarButtonItemEx x:Name="biConditionalFormattingDataBarSolidBlue" Command="{Binding ConditionalFormattingDataBarSolidBlue, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biConditionalFormattingDataBarSolidGreen" Command="{Binding ConditionalFormattingDataBarSolidGreen, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biConditionalFormattingDataBarSolidRed" Command="{Binding ConditionalFormattingDataBarSolidRed, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biConditionalFormattingDataBarSolidOrange" Command="{Binding ConditionalFormattingDataBarSolidOrange, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biConditionalFormattingDataBarSolidLightBlue" Command="{Binding ConditionalFormattingDataBarSolidLightBlue, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biConditionalFormattingDataBarSolidPurple" Command="{Binding ConditionalFormattingDataBarSolidPurple, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarSubItemEx x:Name="biConditionalFormattingColorScalesCommandGroup" Command="{Binding ConditionalFormattingColorScalesCommandGroup, Mode=OneTime, Source={StaticResource commands}}">
+                    <dxb:BarButtonItemLink BarItemName="biConditionalFormattingColorScaleGreenYellowRed"/>
+                    <dxb:BarButtonItemLink BarItemName="biConditionalFormattingColorScaleRedYellowGreen"/>
+                    <dxb:BarButtonItemLink BarItemName="biConditionalFormattingColorScaleGreenWhiteRed"/>
+                    <dxb:BarButtonItemLink BarItemName="biConditionalFormattingColorScaleRedWhiteGreen"/>
+                    <dxb:BarButtonItemLink BarItemName="biConditionalFormattingColorScaleBlueWhiteRed"/>
+                    <dxb:BarButtonItemLink BarItemName="biConditionalFormattingColorScaleRedWhiteBlue"/>
+                    <dxb:BarButtonItemLink BarItemName="biConditionalFormattingColorScaleWhiteRed"/>
+                    <dxb:BarButtonItemLink BarItemName="biConditionalFormattingColorScaleRedWhite"/>
+                    <dxb:BarButtonItemLink BarItemName="biConditionalFormattingColorScaleGreenWhite"/>
+                    <dxb:BarButtonItemLink BarItemName="biConditionalFormattingColorScaleWhiteGreen"/>
+                    <dxb:BarButtonItemLink BarItemName="biConditionalFormattingColorScaleGreenYellow"/>
+                    <dxb:BarButtonItemLink BarItemName="biConditionalFormattingColorScaleYellowGreen"/>
+                </utils:BarSubItemEx>
+                <utils:BarButtonItemEx x:Name="biConditionalFormattingColorScaleGreenYellowRed" Command="{Binding ConditionalFormattingColorScaleGreenYellowRed, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biConditionalFormattingColorScaleRedYellowGreen" Command="{Binding ConditionalFormattingColorScaleRedYellowGreen, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biConditionalFormattingColorScaleGreenWhiteRed" Command="{Binding ConditionalFormattingColorScaleGreenWhiteRed, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biConditionalFormattingColorScaleRedWhiteGreen" Command="{Binding ConditionalFormattingColorScaleRedWhiteGreen, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biConditionalFormattingColorScaleBlueWhiteRed" Command="{Binding ConditionalFormattingColorScaleBlueWhiteRed, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biConditionalFormattingColorScaleRedWhiteBlue" Command="{Binding ConditionalFormattingColorScaleRedWhiteBlue, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biConditionalFormattingColorScaleWhiteRed" Command="{Binding ConditionalFormattingColorScaleWhiteRed, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biConditionalFormattingColorScaleRedWhite" Command="{Binding ConditionalFormattingColorScaleRedWhite, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biConditionalFormattingColorScaleGreenWhite" Command="{Binding ConditionalFormattingColorScaleGreenWhite, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biConditionalFormattingColorScaleWhiteGreen" Command="{Binding ConditionalFormattingColorScaleWhiteGreen, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biConditionalFormattingColorScaleGreenYellow" Command="{Binding ConditionalFormattingColorScaleGreenYellow, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biConditionalFormattingColorScaleYellowGreen" Command="{Binding ConditionalFormattingColorScaleYellowGreen, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarSubItemEx x:Name="biConditionalFormattingIconSetsCommandGroup" Command="{Binding ConditionalFormattingIconSetsCommandGroup, Mode=OneTime, Source={StaticResource commands}}">
+                    <dxb:BarSubItemLink BarItemName="biConditionalFormattingIconSetsDirectionalCommandGroup"/>
+                    <dxb:BarSubItemLink BarItemName="biConditionalFormattingIconSetsShapesCommandGroup"/>
+                    <dxb:BarSubItemLink BarItemName="biConditionalFormattingIconSetsIndicatorsCommandGroup"/>
+                    <dxb:BarSubItemLink BarItemName="biConditionalFormattingIconSetsRatingsCommandGroup"/>
+                </utils:BarSubItemEx>
+                <utils:BarSubItemEx x:Name="biConditionalFormattingIconSetsDirectionalCommandGroup" Command="{Binding ConditionalFormattingIconSetsDirectionalCommandGroup, Mode=OneTime, Source={StaticResource commands}}">
+                    <dxb:BarButtonItemLink BarItemName="biConditionalFormattingIconSetArrows3Colored"/>
+                    <dxb:BarButtonItemLink BarItemName="biConditionalFormattingIconSetArrows3Grayed"/>
+                    <dxb:BarButtonItemLink BarItemName="biConditionalFormattingIconSetArrows4Colored"/>
+                    <dxb:BarButtonItemLink BarItemName="biConditionalFormattingIconSetArrows4Grayed"/>
+                    <dxb:BarButtonItemLink BarItemName="biConditionalFormattingIconSetArrows5Colored"/>
+                    <dxb:BarButtonItemLink BarItemName="biConditionalFormattingIconSetArrows5Grayed"/>
+                    <dxb:BarButtonItemLink BarItemName="biConditionalFormattingIconSetTriangles3"/>
+                </utils:BarSubItemEx>
+                <utils:BarButtonItemEx x:Name="biConditionalFormattingIconSetArrows3Colored" Command="{Binding ConditionalFormattingIconSetArrows3Colored, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biConditionalFormattingIconSetArrows3Grayed" Command="{Binding ConditionalFormattingIconSetArrows3Grayed, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biConditionalFormattingIconSetArrows4Colored" Command="{Binding ConditionalFormattingIconSetArrows4Colored, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biConditionalFormattingIconSetArrows4Grayed" Command="{Binding ConditionalFormattingIconSetArrows4Grayed, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biConditionalFormattingIconSetArrows5Colored" Command="{Binding ConditionalFormattingIconSetArrows5Colored, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biConditionalFormattingIconSetArrows5Grayed" Command="{Binding ConditionalFormattingIconSetArrows5Grayed, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biConditionalFormattingIconSetTriangles3" Command="{Binding ConditionalFormattingIconSetTriangles3, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarSubItemEx x:Name="biConditionalFormattingIconSetsShapesCommandGroup" Command="{Binding ConditionalFormattingIconSetsShapesCommandGroup, Mode=OneTime, Source={StaticResource commands}}">
+                    <dxb:BarButtonItemLink BarItemName="biConditionalFormattingIconSetTrafficLights3"/>
+                    <dxb:BarButtonItemLink BarItemName="biConditionalFormattingIconSetTrafficLights3Rimmed"/>
+                    <dxb:BarButtonItemLink BarItemName="biConditionalFormattingIconSetTrafficLights4"/>
+                    <dxb:BarButtonItemLink BarItemName="biConditionalFormattingIconSetSigns3"/>
+                    <dxb:BarButtonItemLink BarItemName="biConditionalFormattingIconSetRedToBlack"/>
+                </utils:BarSubItemEx>
+                <utils:BarButtonItemEx x:Name="biConditionalFormattingIconSetTrafficLights3" Command="{Binding ConditionalFormattingIconSetTrafficLights3, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biConditionalFormattingIconSetTrafficLights3Rimmed" Command="{Binding ConditionalFormattingIconSetTrafficLights3Rimmed, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biConditionalFormattingIconSetTrafficLights4" Command="{Binding ConditionalFormattingIconSetTrafficLights4, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biConditionalFormattingIconSetSigns3" Command="{Binding ConditionalFormattingIconSetSigns3, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biConditionalFormattingIconSetRedToBlack" Command="{Binding ConditionalFormattingIconSetRedToBlack, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarSubItemEx x:Name="biConditionalFormattingIconSetsIndicatorsCommandGroup" Command="{Binding ConditionalFormattingIconSetsIndicatorsCommandGroup, Mode=OneTime, Source={StaticResource commands}}">
+                    <dxb:BarButtonItemLink BarItemName="biConditionalFormattingIconSetSymbols3Circled"/>
+                    <dxb:BarButtonItemLink BarItemName="biConditionalFormattingIconSetSymbols3"/>
+                    <dxb:BarButtonItemLink BarItemName="biConditionalFormattingIconSetFlags3"/>
+                </utils:BarSubItemEx>
+                <utils:BarButtonItemEx x:Name="biConditionalFormattingIconSetSymbols3Circled" Command="{Binding ConditionalFormattingIconSetSymbols3Circled, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biConditionalFormattingIconSetSymbols3" Command="{Binding ConditionalFormattingIconSetSymbols3, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biConditionalFormattingIconSetFlags3" Command="{Binding ConditionalFormattingIconSetFlags3, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarSubItemEx x:Name="biConditionalFormattingIconSetsRatingsCommandGroup" Command="{Binding ConditionalFormattingIconSetsRatingsCommandGroup, Mode=OneTime, Source={StaticResource commands}}">
+                    <dxb:BarButtonItemLink BarItemName="biConditionalFormattingIconSetStars3"/>
+                    <dxb:BarButtonItemLink BarItemName="biConditionalFormattingIconSetRatings4"/>
+                    <dxb:BarButtonItemLink BarItemName="biConditionalFormattingIconSetRatings5"/>
+                    <dxb:BarButtonItemLink BarItemName="biConditionalFormattingIconSetQuarters5"/>
+                    <dxb:BarButtonItemLink BarItemName="biConditionalFormattingIconSetBoxes5"/>
+                </utils:BarSubItemEx>
+                <utils:BarButtonItemEx x:Name="biConditionalFormattingIconSetStars3" Command="{Binding ConditionalFormattingIconSetStars3, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biConditionalFormattingIconSetRatings4" Command="{Binding ConditionalFormattingIconSetRatings4, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biConditionalFormattingIconSetRatings5" Command="{Binding ConditionalFormattingIconSetRatings5, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biConditionalFormattingIconSetQuarters5" Command="{Binding ConditionalFormattingIconSetQuarters5, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biConditionalFormattingIconSetBoxes5" Command="{Binding ConditionalFormattingIconSetBoxes5, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarSubItemEx x:Name="biConditionalFormattingRemoveCommandGroup" Command="{Binding ConditionalFormattingRemoveCommandGroup, Mode=OneTime, Source={StaticResource commands}}">
+                    <dxb:BarButtonItemLink BarItemName="biConditionalFormattingRemoveFromSheet"/>
+                    <dxb:BarButtonItemLink BarItemName="biConditionalFormattingRemove"/>
+                </utils:BarSubItemEx>
+                <utils:BarButtonItemEx x:Name="biConditionalFormattingRemoveFromSheet" Command="{Binding ConditionalFormattingRemoveFromSheet, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biConditionalFormattingRemove" Command="{Binding ConditionalFormattingRemove, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarSubItemEx x:Name="biInsertCellsCommandGroup" Command="{Binding InsertCellsCommandGroup, Mode=OneTime, Source={StaticResource commands}}">
+                    <dxb:BarButtonItemLink BarItemName="biInsertSheetRows"/>
+                    <dxb:BarButtonItemLink BarItemName="biInsertSheetColumns"/>
+                    <dxb:BarButtonItemLink BarItemName="biInsertSheet"/>
+                </utils:BarSubItemEx>
+                <utils:BarButtonItemEx x:Name="biInsertSheetRows" Command="{Binding InsertSheetRows, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biInsertSheetColumns" Command="{Binding InsertSheetColumns, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biInsertSheet" Command="{Binding InsertSheet, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarSubItemEx x:Name="biRemoveCellsCommandGroup" Command="{Binding RemoveCellsCommandGroup, Mode=OneTime, Source={StaticResource commands}}">
+                    <dxb:BarButtonItemLink BarItemName="biRemoveSheetRows"/>
+                    <dxb:BarButtonItemLink BarItemName="biRemoveSheetColumns"/>
+                    <dxb:BarButtonItemLink BarItemName="biRemoveSheet"/>
+                </utils:BarSubItemEx>
+                <utils:BarButtonItemEx x:Name="biRemoveSheetRows" Command="{Binding RemoveSheetRows, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biRemoveSheetColumns" Command="{Binding RemoveSheetColumns, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biRemoveSheet" Command="{Binding RemoveSheet, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarSubItemEx x:Name="biFormatCommandGroup" Command="{Binding FormatCommandGroup, Mode=OneTime, Source={StaticResource commands}}">
+                    <dxb:BarButtonItemLink BarItemName="biFormatAutoFitRowHeight"/>
+                    <dxb:BarButtonItemLink BarItemName="biFormatAutoFitColumnWidth"/>
+                    <dxb:BarSubItemLink BarItemName="biFormatHideAndUnhideCommandGroup"/>
+                    <dxb:BarButtonItemLink BarItemName="biRenameSheet"/>
+                </utils:BarSubItemEx>
+                <utils:BarButtonItemEx x:Name="biFormatAutoFitRowHeight" Command="{Binding FormatAutoFitRowHeight, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biFormatAutoFitColumnWidth" Command="{Binding FormatAutoFitColumnWidth, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarSubItemEx x:Name="biFormatHideAndUnhideCommandGroup" Command="{Binding FormatHideAndUnhideCommandGroup, Mode=OneTime, Source={StaticResource commands}}">
+                    <dxb:BarButtonItemLink BarItemName="biFormatHideRows"/>
+                    <dxb:BarButtonItemLink BarItemName="biFormatHideColumns"/>
+                    <dxb:BarButtonItemLink BarItemName="biFormatHideSheet"/>
+                    <dxb:BarButtonItemLink BarItemName="biFormatUnhideRows"/>
+                    <dxb:BarButtonItemLink BarItemName="biFormatUnhideColumns"/>
+                    <dxb:BarButtonItemLink BarItemName="biFormatUnhideSheet"/>
+                </utils:BarSubItemEx>
+                <utils:BarButtonItemEx x:Name="biFormatHideRows" Command="{Binding FormatHideRows, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biFormatHideColumns" Command="{Binding FormatHideColumns, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biFormatHideSheet" Command="{Binding FormatHideSheet, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biFormatUnhideRows" Command="{Binding FormatUnhideRows, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biFormatUnhideColumns" Command="{Binding FormatUnhideColumns, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biFormatUnhideSheet" Command="{Binding FormatUnhideSheet, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biRenameSheet" Command="{Binding RenameSheet, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarSubItemEx x:Name="biEditingAutoSumCommandGroup" Command="{Binding EditingAutoSumCommandGroup, Mode=OneTime, Source={StaticResource commands}}" RibbonStyle="SmallWithText">
+                    <dxb:BarButtonItemLink BarItemName="biFunctionsInsertSum"/>
+                    <dxb:BarButtonItemLink BarItemName="biFunctionsInsertAverage"/>
+                    <dxb:BarButtonItemLink BarItemName="biFunctionsInsertCountNumbers"/>
+                    <dxb:BarButtonItemLink BarItemName="biFunctionsInsertMax"/>
+                    <dxb:BarButtonItemLink BarItemName="biFunctionsInsertMin"/>
+                </utils:BarSubItemEx>
+                <utils:BarButtonItemEx x:Name="biFunctionsInsertSum" Command="{Binding FunctionsInsertSum, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biFunctionsInsertAverage" Command="{Binding FunctionsInsertAverage, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biFunctionsInsertCountNumbers" Command="{Binding FunctionsInsertCountNumbers, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biFunctionsInsertMax" Command="{Binding FunctionsInsertMax, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biFunctionsInsertMin" Command="{Binding FunctionsInsertMin, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarSubItemEx x:Name="biEditingFillCommandGroup" Command="{Binding EditingFillCommandGroup, Mode=OneTime, Source={StaticResource commands}}" RibbonStyle="SmallWithText">
+                    <dxb:BarButtonItemLink BarItemName="biEditingFillDown"/>
+                    <dxb:BarButtonItemLink BarItemName="biEditingFillRight"/>
+                    <dxb:BarButtonItemLink BarItemName="biEditingFillUp"/>
+                    <dxb:BarButtonItemLink BarItemName="biEditingFillLeft"/>
+                </utils:BarSubItemEx>
+                <utils:BarButtonItemEx x:Name="biEditingFillDown" Command="{Binding EditingFillDown, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biEditingFillRight" Command="{Binding EditingFillRight, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biEditingFillUp" Command="{Binding EditingFillUp, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biEditingFillLeft" Command="{Binding EditingFillLeft, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarSubItemEx x:Name="biFormatClearCommandGroup" Command="{Binding FormatClearCommandGroup, Mode=OneTime, Source={StaticResource commands}}" RibbonStyle="SmallWithText">
+                    <dxb:BarButtonItemLink BarItemName="biFormatClearAll"/>
+                    <dxb:BarButtonItemLink BarItemName="biFormatClearFormats"/>
+                    <dxb:BarButtonItemLink BarItemName="biFormatClearContents"/>
+                    <dxb:BarButtonItemLink BarItemName="biFormatClearComments"/>
+                    <dxb:BarButtonItemLink BarItemName="biFormatClearHyperlinks"/>
+                    <dxb:BarButtonItemLink BarItemName="biFormatRemoveHyperlinks"/>
+                </utils:BarSubItemEx>
+                <utils:BarButtonItemEx x:Name="biFormatClearAll" Command="{Binding FormatClearAll, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biFormatClearFormats" Command="{Binding FormatClearFormats, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biFormatClearContents" Command="{Binding FormatClearContents, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biFormatClearComments" Command="{Binding FormatClearComments, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biFormatClearHyperlinks" Command="{Binding FormatClearHyperlinks, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biFormatRemoveHyperlinks" Command="{Binding FormatRemoveHyperlinks, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biInsertPicture" Command="{Binding InsertPicture, Mode=OneTime, Source={StaticResource commands}}"/>
+                <dxb:BarSplitButtonItem x:Name="biInsertChartColumnCommandGroup" ActAsDropDown="True" Command="{Binding InsertChartColumnCommandGroup, Mode=OneTime, Source={StaticResource commands}}">
+                    <dxb:BarSplitButtonItem.PopupControl>
+                        <dxr:GalleryDropDownPopupMenu>
+                            <dxr:GalleryDropDownPopupMenu.Gallery>
+                                <dxb:Gallery ColCount="4" ItemDescriptionHorizontalAlignment="Left" IsItemCaptionVisible="False" IsItemDescriptionVisible="False">
+                                    <dxb:GalleryItemGroup x:Name="grpInsertChartColumn2DCommandGroup" Caption="{Binding ConverterParameter=MenuCmd_InsertChartColumn2DCommandGroup, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}" IsCaptionVisible="True">
+                                        <utils:GalleryItemEx x:Name="biInsertChartColumnClustered2D" Command="{Binding InsertChartColumnClustered2D, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biInsertChartColumnStacked2D" Command="{Binding InsertChartColumnStacked2D, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biInsertChartColumnPercentStacked2D" Command="{Binding InsertChartColumnPercentStacked2D, Mode=OneTime, Source={StaticResource commands}}"/>
+                                    </dxb:GalleryItemGroup>
+                                    <dxb:GalleryItemGroup x:Name="grpInsertChartColumn3DCommandGroup" Caption="{Binding ConverterParameter=MenuCmd_InsertChartColumn3DCommandGroup, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}" IsCaptionVisible="True">
+                                        <utils:GalleryItemEx x:Name="biInsertChartColumnClustered3D" Command="{Binding InsertChartColumnClustered3D, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biInsertChartColumnStacked3D" Command="{Binding InsertChartColumnStacked3D, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biInsertChartColumnPercentStacked3D" Command="{Binding InsertChartColumnPercentStacked3D, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biInsertChartColumn3D" Command="{Binding InsertChartColumn3D, Mode=OneTime, Source={StaticResource commands}}"/>
+                                    </dxb:GalleryItemGroup>
+                                    <dxb:GalleryItemGroup x:Name="grpInsertChartCylinderCommandGroup" Caption="{Binding ConverterParameter=MenuCmd_InsertChartCylinderCommandGroup, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}" IsCaptionVisible="True">
+                                        <utils:GalleryItemEx x:Name="biInsertChartCylinderClustered" Command="{Binding InsertChartCylinderClustered, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biInsertChartCylinderStacked" Command="{Binding InsertChartCylinderStacked, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biInsertChartCylinderPercentStacked" Command="{Binding InsertChartCylinderPercentStacked, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biInsertChartCylinder" Command="{Binding InsertChartCylinder, Mode=OneTime, Source={StaticResource commands}}"/>
+                                    </dxb:GalleryItemGroup>
+                                    <dxb:GalleryItemGroup x:Name="grpInsertChartConeCommandGroup" Caption="{Binding ConverterParameter=MenuCmd_InsertChartConeCommandGroup, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}" IsCaptionVisible="True">
+                                        <utils:GalleryItemEx x:Name="biInsertChartConeClustered" Command="{Binding InsertChartConeClustered, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biInsertChartConeStacked" Command="{Binding InsertChartConeStacked, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biInsertChartConePercentStacked" Command="{Binding InsertChartConePercentStacked, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biInsertChartCone" Command="{Binding InsertChartCone, Mode=OneTime, Source={StaticResource commands}}"/>
+                                    </dxb:GalleryItemGroup>
+                                    <dxb:GalleryItemGroup x:Name="grpInsertChartPyramidCommandGroup" Caption="{Binding ConverterParameter=MenuCmd_InsertChartPyramidCommandGroup, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}" IsCaptionVisible="True">
+                                        <utils:GalleryItemEx x:Name="biInsertChartPyramidClustered" Command="{Binding InsertChartPyramidClustered, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biInsertChartPyramidStacked" Command="{Binding InsertChartPyramidStacked, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biInsertChartPyramidPercentStacked" Command="{Binding InsertChartPyramidPercentStacked, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biInsertChartPyramid" Command="{Binding InsertChartPyramid, Mode=OneTime, Source={StaticResource commands}}"/>
+                                    </dxb:GalleryItemGroup>
+                                </dxb:Gallery>
+                            </dxr:GalleryDropDownPopupMenu.Gallery>
+                        </dxr:GalleryDropDownPopupMenu>
+                    </dxb:BarSplitButtonItem.PopupControl>
+                </dxb:BarSplitButtonItem>
+                <dxb:BarSplitButtonItem x:Name="biInsertChartLineCommandGroup" ActAsDropDown="True" Command="{Binding InsertChartLineCommandGroup, Mode=OneTime, Source={StaticResource commands}}">
+                    <dxb:BarSplitButtonItem.PopupControl>
+                        <dxr:GalleryDropDownPopupMenu>
+                            <dxr:GalleryDropDownPopupMenu.Gallery>
+                                <dxb:Gallery ColCount="4" ItemDescriptionHorizontalAlignment="Left" IsItemCaptionVisible="False" IsItemDescriptionVisible="False">
+                                    <dxb:GalleryItemGroup x:Name="grpInsertChartLine2DCommandGroup" Caption="{Binding ConverterParameter=MenuCmd_InsertChartLine2DCommandGroup, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}" IsCaptionVisible="True">
+                                        <utils:GalleryItemEx x:Name="biInsertChartLine" Command="{Binding InsertChartLine, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biInsertChartStackedLine" Command="{Binding InsertChartStackedLine, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biInsertChartPercentStackedLine" Command="{Binding InsertChartPercentStackedLine, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biInsertChartLineWithMarkers" Command="{Binding InsertChartLineWithMarkers, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biInsertChartStackedLineWithMarkers" Command="{Binding InsertChartStackedLineWithMarkers, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biInsertChartPercentStackedLineWithMarkers" Command="{Binding InsertChartPercentStackedLineWithMarkers, Mode=OneTime, Source={StaticResource commands}}"/>
+                                    </dxb:GalleryItemGroup>
+                                    <dxb:GalleryItemGroup x:Name="grpInsertChartLine3DCommandGroup" Caption="{Binding ConverterParameter=MenuCmd_InsertChartLine3DCommandGroup, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}" IsCaptionVisible="True">
+                                        <utils:GalleryItemEx x:Name="biInsertChartLine3D" Command="{Binding InsertChartLine3D, Mode=OneTime, Source={StaticResource commands}}"/>
+                                    </dxb:GalleryItemGroup>
+                                </dxb:Gallery>
+                            </dxr:GalleryDropDownPopupMenu.Gallery>
+                        </dxr:GalleryDropDownPopupMenu>
+                    </dxb:BarSplitButtonItem.PopupControl>
+                </dxb:BarSplitButtonItem>
+                <dxb:BarSplitButtonItem x:Name="biInsertChartPieCommandGroup" ActAsDropDown="True" Command="{Binding InsertChartPieCommandGroup, Mode=OneTime, Source={StaticResource commands}}">
+                    <dxb:BarSplitButtonItem.PopupControl>
+                        <dxr:GalleryDropDownPopupMenu>
+                            <dxr:GalleryDropDownPopupMenu.Gallery>
+                                <dxb:Gallery ColCount="2" ItemDescriptionHorizontalAlignment="Left" IsItemCaptionVisible="False" IsItemDescriptionVisible="False">
+                                    <dxb:GalleryItemGroup x:Name="grpInsertChartPie2DCommandGroup" Caption="{Binding ConverterParameter=MenuCmd_InsertChartPie2DCommandGroup, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}" IsCaptionVisible="True">
+                                        <utils:GalleryItemEx x:Name="biInsertChartPie2D" Command="{Binding InsertChartPie2D, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biInsertChartPieExploded2D" Command="{Binding InsertChartPieExploded2D, Mode=OneTime, Source={StaticResource commands}}"/>
+                                    </dxb:GalleryItemGroup>
+                                    <dxb:GalleryItemGroup x:Name="grpInsertChartPie3DCommandGroup" Caption="{Binding ConverterParameter=MenuCmd_InsertChartPie3DCommandGroup, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}" IsCaptionVisible="True">
+                                        <utils:GalleryItemEx x:Name="biInsertChartPie3D" Command="{Binding InsertChartPie3D, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biInsertChartPieExploded3D" Command="{Binding InsertChartPieExploded3D, Mode=OneTime, Source={StaticResource commands}}"/>
+                                    </dxb:GalleryItemGroup>
+                                    <dxb:GalleryItemGroup x:Name="grpInsertChartDoughnut2DCommandGroup" Caption="{Binding ConverterParameter=MenuCmd_InsertChartDoughnut2DCommandGroup, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}" IsCaptionVisible="True">
+                                        <utils:GalleryItemEx x:Name="biInsertChartDoughnut2D" Command="{Binding InsertChartDoughnut2D, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biInsertChartPieExploded2D1" Command="{Binding InsertChartPieExploded2D, Mode=OneTime, Source={StaticResource commands}}"/>
+                                    </dxb:GalleryItemGroup>
+                                </dxb:Gallery>
+                            </dxr:GalleryDropDownPopupMenu.Gallery>
+                        </dxr:GalleryDropDownPopupMenu>
+                    </dxb:BarSplitButtonItem.PopupControl>
+                </dxb:BarSplitButtonItem>
+                <dxb:BarSplitButtonItem x:Name="biInsertChartBarCommandGroup" ActAsDropDown="True" Command="{Binding InsertChartBarCommandGroup, Mode=OneTime, Source={StaticResource commands}}">
+                    <dxb:BarSplitButtonItem.PopupControl>
+                        <dxr:GalleryDropDownPopupMenu>
+                            <dxr:GalleryDropDownPopupMenu.Gallery>
+                                <dxb:Gallery ColCount="3" ItemDescriptionHorizontalAlignment="Left" IsItemCaptionVisible="False" IsItemDescriptionVisible="False">
+                                    <dxb:GalleryItemGroup x:Name="grpInsertChartBar2DCommandGroup" Caption="{Binding ConverterParameter=MenuCmd_InsertChartBar2DCommandGroup, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}" IsCaptionVisible="True">
+                                        <utils:GalleryItemEx x:Name="biInsertChartBarClustered2D" Command="{Binding InsertChartBarClustered2D, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biInsertChartBarStacked2D" Command="{Binding InsertChartBarStacked2D, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biInsertChartBarPercentStacked2D" Command="{Binding InsertChartBarPercentStacked2D, Mode=OneTime, Source={StaticResource commands}}"/>
+                                    </dxb:GalleryItemGroup>
+                                    <dxb:GalleryItemGroup x:Name="grpInsertChartBar3DCommandGroup" Caption="{Binding ConverterParameter=MenuCmd_InsertChartBar3DCommandGroup, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}" IsCaptionVisible="True">
+                                        <utils:GalleryItemEx x:Name="biInsertChartBarClustered3D" Command="{Binding InsertChartBarClustered3D, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biInsertChartBarStacked3D" Command="{Binding InsertChartBarStacked3D, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biInsertChartBarPercentStacked3D" Command="{Binding InsertChartBarPercentStacked3D, Mode=OneTime, Source={StaticResource commands}}"/>
+                                    </dxb:GalleryItemGroup>
+                                    <dxb:GalleryItemGroup x:Name="grpInsertChartHorizontalCylinderCommandGroup" Caption="{Binding ConverterParameter=MenuCmd_InsertChartHorizontalCylinderCommandGroup, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}" IsCaptionVisible="True">
+                                        <utils:GalleryItemEx x:Name="biInsertChartHorizontalCylinderClustered" Command="{Binding InsertChartHorizontalCylinderClustered, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biInsertChartHorizontalCylinderStacked" Command="{Binding InsertChartHorizontalCylinderStacked, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biInsertChartHorizontalCylinderPercentStacked" Command="{Binding InsertChartHorizontalCylinderPercentStacked, Mode=OneTime, Source={StaticResource commands}}"/>
+                                    </dxb:GalleryItemGroup>
+                                    <dxb:GalleryItemGroup x:Name="grpInsertChartHorizontalConeCommandGroup" Caption="{Binding ConverterParameter=MenuCmd_InsertChartHorizontalConeCommandGroup, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}" IsCaptionVisible="True">
+                                        <utils:GalleryItemEx x:Name="biInsertChartHorizontalConeClustered" Command="{Binding InsertChartHorizontalConeClustered, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biInsertChartHorizontalConeStacked" Command="{Binding InsertChartHorizontalConeStacked, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biInsertChartHorizontalConePercentStacked" Command="{Binding InsertChartHorizontalConePercentStacked, Mode=OneTime, Source={StaticResource commands}}"/>
+                                    </dxb:GalleryItemGroup>
+                                    <dxb:GalleryItemGroup x:Name="grpInsertChartHorizontalPyramidCommandGroup" Caption="{Binding ConverterParameter=MenuCmd_InsertChartHorizontalPyramidCommandGroup, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}" IsCaptionVisible="True">
+                                        <utils:GalleryItemEx x:Name="biInsertChartHorizontalPyramidClustered" Command="{Binding InsertChartHorizontalPyramidClustered, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biInsertChartHorizontalPyramidStacked" Command="{Binding InsertChartHorizontalPyramidStacked, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biInsertChartHorizontalPyramidPercentStacked" Command="{Binding InsertChartHorizontalPyramidPercentStacked, Mode=OneTime, Source={StaticResource commands}}"/>
+                                    </dxb:GalleryItemGroup>
+                                </dxb:Gallery>
+                            </dxr:GalleryDropDownPopupMenu.Gallery>
+                        </dxr:GalleryDropDownPopupMenu>
+                    </dxb:BarSplitButtonItem.PopupControl>
+                </dxb:BarSplitButtonItem>
+                <dxb:BarSplitButtonItem x:Name="biInsertChartAreaCommandGroup" ActAsDropDown="True" Command="{Binding InsertChartAreaCommandGroup, Mode=OneTime, Source={StaticResource commands}}">
+                    <dxb:BarSplitButtonItem.PopupControl>
+                        <dxr:GalleryDropDownPopupMenu>
+                            <dxr:GalleryDropDownPopupMenu.Gallery>
+                                <dxb:Gallery ColCount="3" ItemDescriptionHorizontalAlignment="Left" IsItemCaptionVisible="False" IsItemDescriptionVisible="False">
+                                    <dxb:GalleryItemGroup x:Name="grpInsertChartArea2DCommandGroup" Caption="{Binding ConverterParameter=MenuCmd_InsertChartArea2DCommandGroup, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}" IsCaptionVisible="True">
+                                        <utils:GalleryItemEx x:Name="biInsertChartArea" Command="{Binding InsertChartArea, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biInsertChartStackedArea" Command="{Binding InsertChartStackedArea, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biInsertChartPercentStackedArea" Command="{Binding InsertChartPercentStackedArea, Mode=OneTime, Source={StaticResource commands}}"/>
+                                    </dxb:GalleryItemGroup>
+                                    <dxb:GalleryItemGroup x:Name="grpInsertChartArea3DCommandGroup" Caption="{Binding ConverterParameter=MenuCmd_InsertChartArea3DCommandGroup, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}" IsCaptionVisible="True">
+                                        <utils:GalleryItemEx x:Name="biInsertChartArea3D" Command="{Binding InsertChartArea3D, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biInsertChartStackedArea3D" Command="{Binding InsertChartStackedArea3D, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biInsertChartPercentStackedArea3D" Command="{Binding InsertChartPercentStackedArea3D, Mode=OneTime, Source={StaticResource commands}}"/>
+                                    </dxb:GalleryItemGroup>
+                                </dxb:Gallery>
+                            </dxr:GalleryDropDownPopupMenu.Gallery>
+                        </dxr:GalleryDropDownPopupMenu>
+                    </dxb:BarSplitButtonItem.PopupControl>
+                </dxb:BarSplitButtonItem>
+                <dxb:BarSplitButtonItem x:Name="biInsertChartScatterCommandGroup" ActAsDropDown="True" Command="{Binding InsertChartScatterCommandGroup, Mode=OneTime, Source={StaticResource commands}}">
+                    <dxb:BarSplitButtonItem.PopupControl>
+                        <dxr:GalleryDropDownPopupMenu>
+                            <dxr:GalleryDropDownPopupMenu.Gallery>
+                                <dxb:Gallery ColCount="2" ItemDescriptionHorizontalAlignment="Left" IsItemCaptionVisible="False" IsItemDescriptionVisible="False">
+                                    <dxb:GalleryItemGroup x:Name="grpInsertChartScatterCommandGroup" Caption="{Binding ConverterParameter=MenuCmd_InsertChartScatterCommandGroup, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}" IsCaptionVisible="True">
+                                        <utils:GalleryItemEx x:Name="biInsertChartScatterMarkers" Command="{Binding InsertChartScatterMarkers, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biInsertChartScatterSmoothLinesAndMarkers" Command="{Binding InsertChartScatterSmoothLinesAndMarkers, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biInsertChartScatterSmoothLines" Command="{Binding InsertChartScatterSmoothLines, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biInsertChartScatterLinesAndMarkers" Command="{Binding InsertChartScatterLinesAndMarkers, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biInsertChartScatterLines" Command="{Binding InsertChartScatterLines, Mode=OneTime, Source={StaticResource commands}}"/>
+                                    </dxb:GalleryItemGroup>
+                                    <dxb:GalleryItemGroup x:Name="grpInsertChartBubbleCommandGroup" Caption="{Binding ConverterParameter=MenuCmd_InsertChartBubbleCommandGroup, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}" IsCaptionVisible="True">
+                                        <utils:GalleryItemEx x:Name="biInsertChartBubble" Command="{Binding InsertChartBubble, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biInsertChartBubble3D" Command="{Binding InsertChartBubble3D, Mode=OneTime, Source={StaticResource commands}}"/>
+                                    </dxb:GalleryItemGroup>
+                                </dxb:Gallery>
+                            </dxr:GalleryDropDownPopupMenu.Gallery>
+                        </dxr:GalleryDropDownPopupMenu>
+                    </dxb:BarSplitButtonItem.PopupControl>
+                </dxb:BarSplitButtonItem>
+                <dxb:BarSplitButtonItem x:Name="biInsertChartOtherCommandGroup" ActAsDropDown="True" Command="{Binding InsertChartOtherCommandGroup, Mode=OneTime, Source={StaticResource commands}}">
+                    <dxb:BarSplitButtonItem.PopupControl>
+                        <dxr:GalleryDropDownPopupMenu>
+                            <dxr:GalleryDropDownPopupMenu.Gallery>
+                                <dxb:Gallery ColCount="3" ItemDescriptionHorizontalAlignment="Left" IsItemCaptionVisible="False" IsItemDescriptionVisible="False">
+                                    <dxb:GalleryItemGroup x:Name="grpInsertChartStockCommandGroup" Caption="{Binding ConverterParameter=MenuCmd_InsertChartStockCommandGroup, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}" IsCaptionVisible="True">
+                                        <utils:GalleryItemEx x:Name="biInsertChartStockHighLowClose" Command="{Binding InsertChartStockHighLowClose, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biInsertChartStockOpenHighLowClose" Command="{Binding InsertChartStockOpenHighLowClose, Mode=OneTime, Source={StaticResource commands}}"/>
+                                    </dxb:GalleryItemGroup>
+                                    <dxb:GalleryItemGroup x:Name="grpInsertChartRadarCommandGroup" Caption="{Binding ConverterParameter=MenuCmd_InsertChartRadarCommandGroup, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}" IsCaptionVisible="True">
+                                        <utils:GalleryItemEx x:Name="biInsertChartRadar" Command="{Binding InsertChartRadar, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biInsertChartRadarWithMarkers" Command="{Binding InsertChartRadarWithMarkers, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biInsertChartRadarFilled" Command="{Binding InsertChartRadarFilled, Mode=OneTime, Source={StaticResource commands}}"/>
+                                    </dxb:GalleryItemGroup>
+                                </dxb:Gallery>
+                            </dxr:GalleryDropDownPopupMenu.Gallery>
+                        </dxr:GalleryDropDownPopupMenu>
+                    </dxb:BarSplitButtonItem.PopupControl>
+                </dxb:BarSplitButtonItem>
+                <utils:BarButtonItemEx x:Name="biInsertHyperlink" Command="{Binding InsertHyperlink, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarSubItemEx x:Name="biPageSetupMarginsCommandGroup" Command="{Binding PageSetupMarginsCommandGroup, Mode=OneTime, Source={StaticResource commands}}">
+                    <dxb:BarCheckItemLink BarItemName="biPageSetupMarginsNormal"/>
+                    <dxb:BarCheckItemLink BarItemName="biPageSetupMarginsWide"/>
+                    <dxb:BarCheckItemLink BarItemName="biPageSetupMarginsNarrow"/>
+                </utils:BarSubItemEx>
+                <utils:BarCheckItemEx x:Name="biPageSetupMarginsNormal" ContentTemplate="{Binding MarginBarItemContentTemplate, Mode=OneTime, Source={StaticResource defaultBarItemTemplates}}" Command="{Binding PageSetupMarginsNormal, Mode=OneTime, Source={StaticResource commands}}" GlyphSize="Large"/>
+                <utils:BarCheckItemEx x:Name="biPageSetupMarginsWide" ContentTemplate="{Binding MarginBarItemContentTemplate, Mode=OneTime, Source={StaticResource defaultBarItemTemplates}}" Command="{Binding PageSetupMarginsWide, Mode=OneTime, Source={StaticResource commands}}" GlyphSize="Large"/>
+                <utils:BarCheckItemEx x:Name="biPageSetupMarginsNarrow" ContentTemplate="{Binding MarginBarItemContentTemplate, Mode=OneTime, Source={StaticResource defaultBarItemTemplates}}" Command="{Binding PageSetupMarginsNarrow, Mode=OneTime, Source={StaticResource commands}}" GlyphSize="Large"/>
+                <utils:BarSubItemEx x:Name="biPageSetupOrientationCommandGroup" Command="{Binding PageSetupOrientationCommandGroup, Mode=OneTime, Source={StaticResource commands}}">
+                    <dxb:BarCheckItemLink BarItemName="biPageSetupOrientationPortrait"/>
+                    <dxb:BarCheckItemLink BarItemName="biPageSetupOrientationLandscape"/>
+                </utils:BarSubItemEx>
+                <utils:BarCheckItemEx x:Name="biPageSetupOrientationPortrait" Command="{Binding PageSetupOrientationPortrait, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarCheckItemEx x:Name="biPageSetupOrientationLandscape" Command="{Binding PageSetupOrientationLandscape, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarSubItemEx x:Name="biPageSetupPaperKindCommandGroup" Command="{Binding PageSetupPaperKindCommandGroup, Mode=OneTime, Source={StaticResource commands}}">
+                    <dxo:PaperKindBarListItemLink BarItemName="biPageLayoutSizeList"/>
+                </utils:BarSubItemEx>
+                <dxsps:PaperKindBarListItem x:Name="biPageLayoutSizeList" SpreadsheetControl="{Binding ElementName=spreadsheetControl1}"/>
+                <utils:BarSubItemEx x:Name="biPageLayoutArrangeBringForwardCommandGroup" Command="{Binding ArrangeBringForwardCommandGroup, Mode=OneTime, Source={StaticResource commands}}">
+                    <dxb:BarButtonItemLink BarItemName="biArrangeBringForward"/>
+                    <dxb:BarButtonItemLink BarItemName="biArrangeBringToFront"/>
+                </utils:BarSubItemEx>
+                <utils:BarButtonItemEx x:Name="biArrangeBringForward" Command="{Binding ArrangeBringForward, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biArrangeBringToFront" Command="{Binding ArrangeBringToFront, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarSubItemEx x:Name="biPageLayoutArrangeSendBackwardCommandGroup" Command="{Binding ArrangeSendBackwardCommandGroup, Mode=OneTime, Source={StaticResource commands}}">
+                    <dxb:BarButtonItemLink BarItemName="biArrangeSendBackward"/>
+                    <dxb:BarButtonItemLink BarItemName="biArrangeSendToBack"/>
+                </utils:BarSubItemEx>
+                <utils:BarButtonItemEx x:Name="biArrangeSendBackward" Command="{Binding ArrangeSendBackward, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biArrangeSendToBack" Command="{Binding ArrangeSendToBack, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarSubItemEx x:Name="biFunctionsAutoSumCommandGroup" Command="{Binding FunctionsAutoSumCommandGroup, Mode=OneTime, Source={StaticResource commands}}">
+                    <dxb:BarButtonItemLink BarItemName="biFunctionsInsertSum"/>
+                    <dxb:BarButtonItemLink BarItemName="biFunctionsInsertAverage"/>
+                    <dxb:BarButtonItemLink BarItemName="biFunctionsInsertCountNumbers"/>
+                    <dxb:BarButtonItemLink BarItemName="biFunctionsInsertMax"/>
+                    <dxb:BarButtonItemLink BarItemName="biFunctionsInsertMin"/>
+                </utils:BarSubItemEx>
+                <dxsps:InsertFinancialFunctionsBarSubItem x:Name="biFunctionsFinancialCommandGroup" Command="{Binding FunctionsFinancialCommandGroup, Mode=OneTime, Source={StaticResource commands}}" SpreadsheetControl="{Binding ElementName=spreadsheetControl1}"/>
+                <dxsps:InsertLogicalFunctionsBarSubItem x:Name="biFunctionsLogicalCommandGroup" Command="{Binding FunctionsLogicalCommandGroup, Mode=OneTime, Source={StaticResource commands}}" SpreadsheetControl="{Binding ElementName=spreadsheetControl1}"/>
+                <dxsps:InsertTextFunctionsBarSubItem x:Name="biFunctionsTextCommandGroup" Command="{Binding FunctionsTextCommandGroup, Mode=OneTime, Source={StaticResource commands}}" SpreadsheetControl="{Binding ElementName=spreadsheetControl1}"/>
+                <dxsps:InsertDateAndTimeFunctionsBarSubItem x:Name="biFunctionsDateAndTimeCommandGroup" Command="{Binding FunctionsDateAndTimeCommandGroup, Mode=OneTime, Source={StaticResource commands}}" SpreadsheetControl="{Binding ElementName=spreadsheetControl1}"/>
+                <dxsps:InsertLookupAndReferenceFunctionsBarSubItem x:Name="biFunctionsLookupAndReferenceCommandGroup" Command="{Binding FunctionsLookupAndReferenceCommandGroup, Mode=OneTime, Source={StaticResource commands}}" SpreadsheetControl="{Binding ElementName=spreadsheetControl1}"/>
+                <dxsps:InsertMathAndTrigonometryFunctionsBarSubItem x:Name="biFunctionsMathAndTrigonometryCommandGroup" Command="{Binding FunctionsMathAndTrigonometryCommandGroup, Mode=OneTime, Source={StaticResource commands}}" SpreadsheetControl="{Binding ElementName=spreadsheetControl1}"/>
+                <dxsps:InsertStatisticalFunctionsBarSubItem x:Name="biFunctionsStatisticalCommandGroup" Command="{Binding FunctionsStatisticalCommandGroup, Mode=OneTime, Source={StaticResource commands}}" SpreadsheetControl="{Binding ElementName=spreadsheetControl1}"/>
+                <dxsps:InsertEngineeringFunctionsBarSubItem x:Name="biFunctionsEngineeringCommandGroup" Command="{Binding FunctionsEngineeringCommandGroup, Mode=OneTime, Source={StaticResource commands}}" SpreadsheetControl="{Binding ElementName=spreadsheetControl1}"/>
+                <dxsps:InsertCubeFunctionsBarSubItem x:Name="biFunctionsCubeCommandGroup" Command="{Binding FunctionsCubeCommandGroup, Mode=OneTime, Source={StaticResource commands}}" SpreadsheetControl="{Binding ElementName=spreadsheetControl1}"/>
+                <dxsps:InsertInformationFunctionsBarSubItem x:Name="biFunctionsInformationCommandGroup" Command="{Binding FunctionsInformationCommandGroup, Mode=OneTime, Source={StaticResource commands}}" SpreadsheetControl="{Binding ElementName=spreadsheetControl1}"/>
+                <dxsps:InsertCompatibilityFunctionsBarSubItem x:Name="biFunctionsCompatibilityCommandGroup" Command="{Binding FunctionsCompatibilityCommandGroup, Mode=OneTime, Source={StaticResource commands}}" SpreadsheetControl="{Binding ElementName=spreadsheetControl1}"/>
+                <utils:BarCheckItemEx x:Name="biViewShowFormulas" Command="{Binding ViewShowFormulas, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biDataSortAscending" Command="{Binding DataSortAscending, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biDataSortDescending" Command="{Binding DataSortDescending, Mode=OneTime, Source={StaticResource commands}}"/>
+                <dxb:BarStaticItem x:Name="biViewShowGridlines" ContentTemplate="{Binding CheckEditTemplate, Mode=OneTime, Source={StaticResource defaultBarItemTemplates}}" Command="{Binding ViewShowGridlines, Mode=OneTime, Source={StaticResource commands}}"/>
+                <dxb:BarStaticItem x:Name="biViewShowHeadings" ContentTemplate="{Binding CheckEditTemplate, Mode=OneTime, Source={StaticResource defaultBarItemTemplates}}" Command="{Binding ViewShowHeadings, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biViewZoomOut" Command="{Binding ViewZoomOut, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biViewZoomIn" Command="{Binding ViewZoomIn, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biViewZoom100Percent" Command="{Binding ViewZoom100Percent, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarSubItemEx x:Name="biViewFreezePanesCommandGroup" Command="{Binding ViewFreezePanesCommandGroup, Mode=OneTime, Source={StaticResource commands}}">
+                    <dxb:BarButtonItemLink BarItemName="biViewFreezePanes"/>
+                    <dxb:BarButtonItemLink BarItemName="biViewUnfreezePanes"/>
+                    <dxb:BarButtonItemLink BarItemName="biViewFreezeTopRow"/>
+                    <dxb:BarButtonItemLink BarItemName="biViewFreezeFirstColumn"/>
+                </utils:BarSubItemEx>
+                <utils:BarButtonItemEx x:Name="biViewFreezePanes" Command="{Binding ViewFreezePanes, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biViewUnfreezePanes" Command="{Binding ViewUnfreezePanes, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biViewFreezeTopRow" Command="{Binding ViewFreezeTopRow, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biViewFreezeFirstColumn" Command="{Binding ViewFreezeFirstColumn, Mode=OneTime, Source={StaticResource commands}}"/>
+                <utils:BarButtonItemEx x:Name="biChartSwitchRowColumn" Command="{Binding ChartSwitchRowColumn, Mode=OneTime, Source={StaticResource commands}}"/>
+                <dxr:RibbonGalleryBarItem x:Name="biGalleryChartLayout">
+                    <dxr:RibbonGalleryBarItem.Gallery>
+                        <dxb:Gallery ColCount="6" GroupTemplate="{Binding ChartLayoutGalleryGroupTemplate, Mode=OneTime, Source={StaticResource defaultBarItemTemplates}}" GroupsSource="{Binding ChartLayoutGalleryGroups, ElementName=spreadsheetControl1}" IsItemGlyphVisible="True" IsGroupCaptionVisible="False" IsItemDescriptionVisible="False" MinColCount="3"/>
+                    </dxr:RibbonGalleryBarItem.Gallery>
+                </dxr:RibbonGalleryBarItem>
+                <dxb:BarSplitButtonItem x:Name="biChartTitleCommandGroup" ActAsDropDown="True" Command="{Binding ChartTitleCommandGroup, Mode=OneTime, Source={StaticResource commands}}">
+                    <dxb:BarSplitButtonItem.PopupControl>
+                        <dxr:GalleryDropDownPopupMenu>
+                            <dxr:GalleryDropDownPopupMenu.Gallery>
+                                <dxb:Gallery ColCount="1" ItemDescriptionHorizontalAlignment="Left">
+                                    <dxb:GalleryItemGroup x:Name="grpChartTitleCommandGroup" Caption="{Binding ConverterParameter=MenuCmd_ChartTitleCommandGroup, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}" IsCaptionVisible="False">
+                                        <utils:GalleryItemEx x:Name="biChartTitleNone" Command="{Binding ChartTitleNone, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biChartTitleCenteredOverlay" Command="{Binding ChartTitleCenteredOverlay, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biChartTitleAbove" Command="{Binding ChartTitleAbove, Mode=OneTime, Source={StaticResource commands}}"/>
+                                    </dxb:GalleryItemGroup>
+                                </dxb:Gallery>
+                            </dxr:GalleryDropDownPopupMenu.Gallery>
+                        </dxr:GalleryDropDownPopupMenu>
+                    </dxb:BarSplitButtonItem.PopupControl>
+                </dxb:BarSplitButtonItem>
+                <utils:BarSubItemEx x:Name="biChartAxisTitlesCommandGroup" Command="{Binding ChartAxisTitlesCommandGroup, Mode=OneTime, Source={StaticResource commands}}">
+                    <dxb:BarSplitButtonItemLink BarItemName="biChartPrimaryHorizontalAxisTitleCommandGroup"/>
+                    <dxb:BarSplitButtonItemLink BarItemName="biChartPrimaryVerticalAxisTitleCommandGroup"/>
+                </utils:BarSubItemEx>
+                <dxb:BarSplitButtonItem x:Name="biChartPrimaryHorizontalAxisTitleCommandGroup" ActAsDropDown="True" Command="{Binding ChartPrimaryHorizontalAxisTitleCommandGroup, Mode=OneTime, Source={StaticResource commands}}">
+                    <dxb:BarSplitButtonItem.PopupControl>
+                        <dxr:GalleryDropDownPopupMenu>
+                            <dxr:GalleryDropDownPopupMenu.Gallery>
+                                <dxb:Gallery ColCount="1" ItemDescriptionHorizontalAlignment="Left">
+                                    <dxb:GalleryItemGroup x:Name="grpChartPrimaryHorizontalAxisTitleCommandGroup" Caption="{Binding ConverterParameter=MenuCmd_ChartPrimaryHorizontalAxisTitleCommandGroup, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}" IsCaptionVisible="False">
+                                        <utils:GalleryItemEx x:Name="biChartPrimaryHorizontalAxisTitleNone" Command="{Binding ChartPrimaryHorizontalAxisTitleNone, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biChartPrimaryHorizontalAxisTitleBelow" Command="{Binding ChartPrimaryHorizontalAxisTitleBelow, Mode=OneTime, Source={StaticResource commands}}"/>
+                                    </dxb:GalleryItemGroup>
+                                </dxb:Gallery>
+                            </dxr:GalleryDropDownPopupMenu.Gallery>
+                        </dxr:GalleryDropDownPopupMenu>
+                    </dxb:BarSplitButtonItem.PopupControl>
+                </dxb:BarSplitButtonItem>
+                <dxb:BarSplitButtonItem x:Name="biChartPrimaryVerticalAxisTitleCommandGroup" ActAsDropDown="True" Command="{Binding ChartPrimaryVerticalAxisTitleCommandGroup, Mode=OneTime, Source={StaticResource commands}}">
+                    <dxb:BarSplitButtonItem.PopupControl>
+                        <dxr:GalleryDropDownPopupMenu>
+                            <dxr:GalleryDropDownPopupMenu.Gallery>
+                                <dxb:Gallery ColCount="1" ItemDescriptionHorizontalAlignment="Left">
+                                    <dxb:GalleryItemGroup x:Name="grpChartPrimaryVerticalAxisTitleCommandGroup" Caption="{Binding ConverterParameter=MenuCmd_ChartPrimaryVerticalAxisTitleCommandGroup, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}" IsCaptionVisible="False">
+                                        <utils:GalleryItemEx x:Name="biChartPrimaryVerticalAxisTitleNone" Command="{Binding ChartPrimaryVerticalAxisTitleNone, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biChartPrimaryVerticalAxisTitleRotated" Command="{Binding ChartPrimaryVerticalAxisTitleRotated, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biChartPrimaryVerticalAxisTitleVertical" Command="{Binding ChartPrimaryVerticalAxisTitleVertical, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biChartPrimaryVerticalAxisTitleHorizontal" Command="{Binding ChartPrimaryVerticalAxisTitleHorizontal, Mode=OneTime, Source={StaticResource commands}}"/>
+                                    </dxb:GalleryItemGroup>
+                                </dxb:Gallery>
+                            </dxr:GalleryDropDownPopupMenu.Gallery>
+                        </dxr:GalleryDropDownPopupMenu>
+                    </dxb:BarSplitButtonItem.PopupControl>
+                </dxb:BarSplitButtonItem>
+                <dxb:BarSplitButtonItem x:Name="biChartLegendCommandGroup" ActAsDropDown="True" Command="{Binding ChartLegendCommandGroup, Mode=OneTime, Source={StaticResource commands}}">
+                    <dxb:BarSplitButtonItem.PopupControl>
+                        <dxr:GalleryDropDownPopupMenu>
+                            <dxr:GalleryDropDownPopupMenu.Gallery>
+                                <dxb:Gallery ColCount="1" ItemDescriptionHorizontalAlignment="Left">
+                                    <dxb:GalleryItemGroup x:Name="grpChartLegendCommandGroup" Caption="{Binding ConverterParameter=MenuCmd_ChartLegendCommandGroup, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}" IsCaptionVisible="False">
+                                        <utils:GalleryItemEx x:Name="biChartLegendNone" Command="{Binding ChartLegendNone, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biChartLegendAtRight" Command="{Binding ChartLegendAtRight, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biChartLegendAtTop" Command="{Binding ChartLegendAtTop, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biChartLegendAtLeft" Command="{Binding ChartLegendAtLeft, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biChartLegendAtBottom" Command="{Binding ChartLegendAtBottom, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biChartLegendOverlayAtRight" Command="{Binding ChartLegendOverlayAtRight, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biChartLegendOverlayAtLeft" Command="{Binding ChartLegendOverlayAtLeft, Mode=OneTime, Source={StaticResource commands}}"/>
+                                    </dxb:GalleryItemGroup>
+                                </dxb:Gallery>
+                            </dxr:GalleryDropDownPopupMenu.Gallery>
+                        </dxr:GalleryDropDownPopupMenu>
+                    </dxb:BarSplitButtonItem.PopupControl>
+                </dxb:BarSplitButtonItem>
+                <dxb:BarSplitButtonItem x:Name="biChartDataLabelsCommandGroup" ActAsDropDown="True" Command="{Binding ChartDataLabelsCommandGroup, Mode=OneTime, Source={StaticResource commands}}">
+                    <dxb:BarSplitButtonItem.PopupControl>
+                        <dxr:GalleryDropDownPopupMenu>
+                            <dxr:GalleryDropDownPopupMenu.Gallery>
+                                <dxb:Gallery ColCount="1" ItemDescriptionHorizontalAlignment="Left">
+                                    <dxb:GalleryItemGroup x:Name="grpChartDataLabelsCommandGroup" Caption="{Binding ConverterParameter=MenuCmd_ChartDataLabelsCommandGroup, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}" IsCaptionVisible="False">
+                                        <utils:GalleryItemEx x:Name="biChartDataLabelsNone" Command="{Binding ChartDataLabelsNone, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biChartDataLabelsDefault" Command="{Binding ChartDataLabelsDefault, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biChartDataLabelsCenter" Command="{Binding ChartDataLabelsCenter, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biChartDataLabelsInsideEnd" Command="{Binding ChartDataLabelsInsideEnd, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biChartDataLabelsInsideBase" Command="{Binding ChartDataLabelsInsideBase, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biChartDataLabelsOutsideEnd" Command="{Binding ChartDataLabelsOutsideEnd, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biChartDataLabelsBestFit" Command="{Binding ChartDataLabelsBestFit, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biChartDataLabelsLeft" Command="{Binding ChartDataLabelsLeft, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biChartDataLabelsRight" Command="{Binding ChartDataLabelsRight, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biChartDataLabelsAbove" Command="{Binding ChartDataLabelsAbove, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biChartDataLabelsBelow" Command="{Binding ChartDataLabelsBelow, Mode=OneTime, Source={StaticResource commands}}"/>
+                                    </dxb:GalleryItemGroup>
+                                </dxb:Gallery>
+                            </dxr:GalleryDropDownPopupMenu.Gallery>
+                        </dxr:GalleryDropDownPopupMenu>
+                    </dxb:BarSplitButtonItem.PopupControl>
+                </dxb:BarSplitButtonItem>
+                <utils:BarSubItemEx x:Name="biChartAxesCommandGroup" Command="{Binding ChartAxesCommandGroup, Mode=OneTime, Source={StaticResource commands}}">
+                    <dxb:BarSplitButtonItemLink BarItemName="biChartPrimaryHorizontalAxisCommandGroup"/>
+                    <dxb:BarSplitButtonItemLink BarItemName="biChartPrimaryVerticalAxisCommandGroup"/>
+                </utils:BarSubItemEx>
+                <dxb:BarSplitButtonItem x:Name="biChartPrimaryHorizontalAxisCommandGroup" ActAsDropDown="True" Command="{Binding ChartPrimaryHorizontalAxisCommandGroup, Mode=OneTime, Source={StaticResource commands}}">
+                    <dxb:BarSplitButtonItem.PopupControl>
+                        <dxr:GalleryDropDownPopupMenu>
+                            <dxr:GalleryDropDownPopupMenu.Gallery>
+                                <dxb:Gallery ColCount="1" ItemDescriptionHorizontalAlignment="Left">
+                                    <dxb:GalleryItemGroup x:Name="grpChartPrimaryHorizontalAxisCommandGroup" Caption="{Binding ConverterParameter=MenuCmd_ChartPrimaryHorizontalAxisCommandGroup, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}" IsCaptionVisible="False">
+                                        <utils:GalleryItemEx x:Name="biChartHidePrimaryHorizontalAxis" Command="{Binding ChartHidePrimaryHorizontalAxis, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biChartPrimaryHorizontalAxisLeftToRight" Command="{Binding ChartPrimaryHorizontalAxisLeftToRight, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biChartPrimaryHorizontalAxisRightToLeft" Command="{Binding ChartPrimaryHorizontalAxisRightToLeft, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biChartPrimaryHorizontalAxisHideLabels" Command="{Binding ChartPrimaryHorizontalAxisHideLabels, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biChartPrimaryHorizontalAxisDefault" Command="{Binding ChartPrimaryHorizontalAxisDefault, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biChartPrimaryHorizontalAxisScaleLogarithm" Command="{Binding ChartPrimaryHorizontalAxisScaleLogarithm, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biChartPrimaryHorizontalAxisScaleThousands" Command="{Binding ChartPrimaryHorizontalAxisScaleThousands, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biChartPrimaryHorizontalAxisScaleMillions" Command="{Binding ChartPrimaryHorizontalAxisScaleMillions, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biChartPrimaryHorizontalAxisScaleBillions" Command="{Binding ChartPrimaryHorizontalAxisScaleBillions, Mode=OneTime, Source={StaticResource commands}}"/>
+                                    </dxb:GalleryItemGroup>
+                                </dxb:Gallery>
+                            </dxr:GalleryDropDownPopupMenu.Gallery>
+                        </dxr:GalleryDropDownPopupMenu>
+                    </dxb:BarSplitButtonItem.PopupControl>
+                </dxb:BarSplitButtonItem>
+                <dxb:BarSplitButtonItem x:Name="biChartPrimaryVerticalAxisCommandGroup" ActAsDropDown="True" Command="{Binding ChartPrimaryVerticalAxisCommandGroup, Mode=OneTime, Source={StaticResource commands}}">
+                    <dxb:BarSplitButtonItem.PopupControl>
+                        <dxr:GalleryDropDownPopupMenu>
+                            <dxr:GalleryDropDownPopupMenu.Gallery>
+                                <dxb:Gallery ColCount="1" ItemDescriptionHorizontalAlignment="Left">
+                                    <dxb:GalleryItemGroup x:Name="grpChartPrimaryVerticalAxisCommandGroup" Caption="{Binding ConverterParameter=MenuCmd_ChartPrimaryVerticalAxisCommandGroup, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}" IsCaptionVisible="False">
+                                        <utils:GalleryItemEx x:Name="biChartHidePrimaryVerticalAxis" Command="{Binding ChartHidePrimaryVerticalAxis, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biChartPrimaryVerticalAxisLeftToRight" Command="{Binding ChartPrimaryVerticalAxisLeftToRight, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biChartPrimaryVerticalAxisRightToLeft" Command="{Binding ChartPrimaryVerticalAxisRightToLeft, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biChartPrimaryVerticalAxisHideLabels" Command="{Binding ChartPrimaryVerticalAxisHideLabels, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biChartPrimaryVerticalAxisDefault" Command="{Binding ChartPrimaryVerticalAxisDefault, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biChartPrimaryVerticalAxisScaleLogarithm" Command="{Binding ChartPrimaryVerticalAxisScaleLogarithm, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biChartPrimaryVerticalAxisScaleThousands" Command="{Binding ChartPrimaryVerticalAxisScaleThousands, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biChartPrimaryVerticalAxisScaleMillions" Command="{Binding ChartPrimaryVerticalAxisScaleMillions, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biChartPrimaryVerticalAxisScaleBillions" Command="{Binding ChartPrimaryVerticalAxisScaleBillions, Mode=OneTime, Source={StaticResource commands}}"/>
+                                    </dxb:GalleryItemGroup>
+                                </dxb:Gallery>
+                            </dxr:GalleryDropDownPopupMenu.Gallery>
+                        </dxr:GalleryDropDownPopupMenu>
+                    </dxb:BarSplitButtonItem.PopupControl>
+                </dxb:BarSplitButtonItem>
+                <utils:BarSubItemEx x:Name="biChartGridlinesCommandGroup" Command="{Binding ChartGridlinesCommandGroup, Mode=OneTime, Source={StaticResource commands}}">
+                    <dxb:BarSplitButtonItemLink BarItemName="biChartPrimaryHorizontalGridlinesCommandGroup"/>
+                    <dxb:BarSplitButtonItemLink BarItemName="biChartPrimaryVerticalGridlinesCommandGroup"/>
+                </utils:BarSubItemEx>
+                <dxb:BarSplitButtonItem x:Name="biChartPrimaryHorizontalGridlinesCommandGroup" ActAsDropDown="True" Command="{Binding ChartPrimaryHorizontalGridlinesCommandGroup, Mode=OneTime, Source={StaticResource commands}}">
+                    <dxb:BarSplitButtonItem.PopupControl>
+                        <dxr:GalleryDropDownPopupMenu>
+                            <dxr:GalleryDropDownPopupMenu.Gallery>
+                                <dxb:Gallery ColCount="1" ItemDescriptionHorizontalAlignment="Left">
+                                    <dxb:GalleryItemGroup x:Name="grpChartPrimaryHorizontalGridlinesCommandGroup" Caption="{Binding ConverterParameter=MenuCmd_ChartPrimaryHorizontalGridlinesCommandGroup, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}" IsCaptionVisible="False">
+                                        <utils:GalleryItemEx x:Name="biChartPrimaryHorizontalGridlinesNone" Command="{Binding ChartPrimaryHorizontalGridlinesNone, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biChartPrimaryHorizontalGridlinesMajor" Command="{Binding ChartPrimaryHorizontalGridlinesMajor, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biChartPrimaryHorizontalGridlinesMinor" Command="{Binding ChartPrimaryHorizontalGridlinesMinor, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biChartPrimaryHorizontalGridlinesMajorAndMinor" Command="{Binding ChartPrimaryHorizontalGridlinesMajorAndMinor, Mode=OneTime, Source={StaticResource commands}}"/>
+                                    </dxb:GalleryItemGroup>
+                                </dxb:Gallery>
+                            </dxr:GalleryDropDownPopupMenu.Gallery>
+                        </dxr:GalleryDropDownPopupMenu>
+                    </dxb:BarSplitButtonItem.PopupControl>
+                </dxb:BarSplitButtonItem>
+                <dxb:BarSplitButtonItem x:Name="biChartPrimaryVerticalGridlinesCommandGroup" ActAsDropDown="True" Command="{Binding ChartPrimaryVerticalGridlinesCommandGroup, Mode=OneTime, Source={StaticResource commands}}">
+                    <dxb:BarSplitButtonItem.PopupControl>
+                        <dxr:GalleryDropDownPopupMenu>
+                            <dxr:GalleryDropDownPopupMenu.Gallery>
+                                <dxb:Gallery ColCount="1" ItemDescriptionHorizontalAlignment="Left">
+                                    <dxb:GalleryItemGroup x:Name="grpChartPrimaryVerticalGridlinesCommandGroup" Caption="{Binding ConverterParameter=MenuCmd_ChartPrimaryVerticalGridlinesCommandGroup, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}" IsCaptionVisible="False">
+                                        <utils:GalleryItemEx x:Name="biChartPrimaryVerticalGridlinesNone" Command="{Binding ChartPrimaryVerticalGridlinesNone, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biChartPrimaryVerticalGridlinesMajor" Command="{Binding ChartPrimaryVerticalGridlinesMajor, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biChartPrimaryVerticalGridlinesMinor" Command="{Binding ChartPrimaryVerticalGridlinesMinor, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biChartPrimaryVerticalGridlinesMajorAndMinor" Command="{Binding ChartPrimaryVerticalGridlinesMajorAndMinor, Mode=OneTime, Source={StaticResource commands}}"/>
+                                    </dxb:GalleryItemGroup>
+                                </dxb:Gallery>
+                            </dxr:GalleryDropDownPopupMenu.Gallery>
+                        </dxr:GalleryDropDownPopupMenu>
+                    </dxb:BarSplitButtonItem.PopupControl>
+                </dxb:BarSplitButtonItem>
+                <dxb:BarSplitButtonItem x:Name="biChartLinesCommandGroup" ActAsDropDown="True" Command="{Binding ChartLinesCommandGroup, Mode=OneTime, Source={StaticResource commands}}">
+                    <dxb:BarSplitButtonItem.PopupControl>
+                        <dxr:GalleryDropDownPopupMenu>
+                            <dxr:GalleryDropDownPopupMenu.Gallery>
+                                <dxb:Gallery ColCount="1" ItemDescriptionHorizontalAlignment="Left">
+                                    <dxb:GalleryItemGroup x:Name="grpChartLinesCommandGroup" Caption="{Binding ConverterParameter=MenuCmd_ChartLinesCommandGroup, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}" IsCaptionVisible="False">
+                                        <utils:GalleryItemEx x:Name="biChartLinesNone" Command="{Binding ChartLinesNone, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biChartShowDropLines" Command="{Binding ChartShowDropLines, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biChartShowHighLowLines" Command="{Binding ChartShowHighLowLines, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biChartShowDropLinesAndHighLowLines" Command="{Binding ChartShowDropLinesAndHighLowLines, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biChartShowSeriesLines" Command="{Binding ChartShowSeriesLines, Mode=OneTime, Source={StaticResource commands}}"/>
+                                    </dxb:GalleryItemGroup>
+                                </dxb:Gallery>
+                            </dxr:GalleryDropDownPopupMenu.Gallery>
+                        </dxr:GalleryDropDownPopupMenu>
+                    </dxb:BarSplitButtonItem.PopupControl>
+                </dxb:BarSplitButtonItem>
+                <dxb:BarSplitButtonItem x:Name="biChartUpDownBarsCommandGroup" ActAsDropDown="True" Command="{Binding ChartUpDownBarsCommandGroup, Mode=OneTime, Source={StaticResource commands}}">
+                    <dxb:BarSplitButtonItem.PopupControl>
+                        <dxr:GalleryDropDownPopupMenu>
+                            <dxr:GalleryDropDownPopupMenu.Gallery>
+                                <dxb:Gallery ColCount="1" ItemDescriptionHorizontalAlignment="Left">
+                                    <dxb:GalleryItemGroup x:Name="grpChartUpDownBarsCommandGroup" Caption="{Binding ConverterParameter=MenuCmd_ChartUpDownBarsCommandGroup, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}" IsCaptionVisible="False">
+                                        <utils:GalleryItemEx x:Name="biChartHideUpDownBars" Command="{Binding ChartHideUpDownBars, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biChartShowUpDownBars" Command="{Binding ChartShowUpDownBars, Mode=OneTime, Source={StaticResource commands}}"/>
+                                    </dxb:GalleryItemGroup>
+                                </dxb:Gallery>
+                            </dxr:GalleryDropDownPopupMenu.Gallery>
+                        </dxr:GalleryDropDownPopupMenu>
+                    </dxb:BarSplitButtonItem.PopupControl>
+                </dxb:BarSplitButtonItem>
+                <dxb:BarSplitButtonItem x:Name="biChartErrorBarsCommandGroup" ActAsDropDown="True" Command="{Binding ChartErrorBarsCommandGroup, Mode=OneTime, Source={StaticResource commands}}">
+                    <dxb:BarSplitButtonItem.PopupControl>
+                        <dxr:GalleryDropDownPopupMenu>
+                            <dxr:GalleryDropDownPopupMenu.Gallery>
+                                <dxb:Gallery ColCount="1" ItemDescriptionHorizontalAlignment="Left">
+                                    <dxb:GalleryItemGroup x:Name="grpChartErrorBarsCommandGroup" Caption="{Binding ConverterParameter=MenuCmd_ChartErrorBarsCommandGroup, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}" IsCaptionVisible="False">
+                                        <utils:GalleryItemEx x:Name="biChartErrorBarsNone" Command="{Binding ChartErrorBarsNone, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biChartErrorBarsPercentage" Command="{Binding ChartErrorBarsPercentage, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biChartErrorBarsStandardError" Command="{Binding ChartErrorBarsStandardError, Mode=OneTime, Source={StaticResource commands}}"/>
+                                        <utils:GalleryItemEx x:Name="biChartErrorBarsStandardDeviation" Command="{Binding ChartErrorBarsStandardDeviation, Mode=OneTime, Source={StaticResource commands}}"/>
+                                    </dxb:GalleryItemGroup>
+                                </dxb:Gallery>
+                            </dxr:GalleryDropDownPopupMenu.Gallery>
+                        </dxr:GalleryDropDownPopupMenu>
+                    </dxb:BarSplitButtonItem.PopupControl>
+                </dxb:BarSplitButtonItem>
+                <utils:BarSubItemEx x:Name="biChartToolsFormatArrangeBringForwardCommandGroup" Command="{Binding ArrangeBringForwardCommandGroup, Mode=OneTime, Source={StaticResource commands}}">
+                    <dxb:BarButtonItemLink BarItemName="biArrangeBringForward"/>
+                    <dxb:BarButtonItemLink BarItemName="biArrangeBringToFront"/>
+                </utils:BarSubItemEx>
+                <utils:BarSubItemEx x:Name="biChartToolsFormatArrangeSendBackwardCommandGroup" Command="{Binding ArrangeSendBackwardCommandGroup, Mode=OneTime, Source={StaticResource commands}}">
+                    <dxb:BarButtonItemLink BarItemName="biArrangeSendBackward"/>
+                    <dxb:BarButtonItemLink BarItemName="biArrangeSendToBack"/>
+                </utils:BarSubItemEx>
+                <utils:BarSubItemEx x:Name="biPictureToolsFormatArrangeBringForwardCommandGroup" Command="{Binding ArrangeBringForwardCommandGroup, Mode=OneTime, Source={StaticResource commands}}">
+                    <dxb:BarButtonItemLink BarItemName="biArrangeBringForward"/>
+                    <dxb:BarButtonItemLink BarItemName="biArrangeBringToFront"/>
+                </utils:BarSubItemEx>
+                <utils:BarSubItemEx x:Name="biPictureToolsFormatArrangeSendBackwardCommandGroup" Command="{Binding ArrangeSendBackwardCommandGroup, Mode=OneTime, Source={StaticResource commands}}">
+                    <dxb:BarButtonItemLink BarItemName="biArrangeSendBackward"/>
+                    <dxb:BarButtonItemLink BarItemName="biArrangeSendToBack"/>
+                </utils:BarSubItemEx>
+                <utils:BarSubItemEx x:Name="biDrawingToolsFormatArrangeBringForwardCommandGroup" Command="{Binding ArrangeBringForwardCommandGroup, Mode=OneTime, Source={StaticResource commands}}">
+                    <dxb:BarButtonItemLink BarItemName="biArrangeBringForward"/>
+                    <dxb:BarButtonItemLink BarItemName="biArrangeBringToFront"/>
+                </utils:BarSubItemEx>
+                <utils:BarSubItemEx x:Name="biDrawingToolsFormatArrangeSendBackwardCommandGroup" Command="{Binding ArrangeSendBackwardCommandGroup, Mode=OneTime, Source={StaticResource commands}}">
+                    <dxb:BarButtonItemLink BarItemName="biArrangeSendBackward"/>
+                    <dxb:BarButtonItemLink BarItemName="biArrangeSendToBack"/>
+                </utils:BarSubItemEx>
+            </dxb:BarManager.Items>
+            <DockPanel>
+                <dxr:RibbonControl x:Name="ribbonControl1" DockPanel.Dock="Top" Visibility="Collapsed">
+                    <dxr:RibbonDefaultPageCategory>
+                        <dxr:RibbonPage x:Name="pageFile" Caption="{Binding ConverterParameter=Caption_PageFile, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}">
+                            <dxr:RibbonPageGroup x:Name="grpFileCommon" Caption="{Binding ConverterParameter=Caption_GroupCommon, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}" ShowCaptionButton="False">
+                                <dxb:BarButtonItemLink BarItemName="biFileNew"/>
+                                <dxb:BarButtonItemLink BarItemName="biFileOpen"/>
+                                <dxb:BarButtonItemLink BarItemName="biFileSave"/>
+                                <dxb:BarButtonItemLink BarItemName="biFileSaveAs"/>
+                                <!--<dxb:BarButtonItemLink BarItemName="biFileQuickPrint"/>
+                                <dxb:BarButtonItemLink BarItemName="biFilePrint"/>-->
+                                <dxb:BarButtonItemLink BarItemName="biFilePrintPreview"/>
+                                <dxb:BarButtonItemLink BarItemName="biFileUndo"/>
+                                <dxb:BarButtonItemLink BarItemName="biFileRedo"/>
+                            </dxr:RibbonPageGroup>
+                        </dxr:RibbonPage>
+                        <dxr:RibbonPage x:Name="pageHome" Caption="{Binding ConverterParameter=Caption_PageHome, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}">
+                            <dxr:RibbonPageGroup x:Name="grpHomeClipboard" Caption="{Binding ConverterParameter=Caption_GroupClipboard, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}" ShowCaptionButton="False">
+                                <dxb:BarButtonItemLink BarItemName="biEditPaste"/>
+                                <dxb:BarButtonItemLink BarItemName="biEditCut"/>
+                                <dxb:BarButtonItemLink BarItemName="biEditCopy"/>
+                                <dxb:BarButtonItemLink BarItemName="biEditPasteSpecial"/>
+                            </dxr:RibbonPageGroup>
+                            <dxr:RibbonPageGroup x:Name="grpHomeFont" Caption="{Binding ConverterParameter=Caption_GroupFont, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}">
+                                <dxr:BarButtonGroupLink BarItemName="biFont"/>
+                                <dxr:BarButtonGroupLink BarItemName="biFontShape"/>
+                                <dxr:BarButtonGroupLink BarItemName="biFontColor"/>
+                                <dxr:BarButtonGroupLink BarItemName="bi"/>
+                            </dxr:RibbonPageGroup>
+                            <dxr:RibbonPageGroup x:Name="grpHomeAlignment" Caption="{Binding ConverterParameter=Caption_GroupAlignment, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}">
+                                <dxr:BarButtonGroupLink BarItemName="biVerticalAlignment"/>
+                                <dxr:BarButtonGroupLink BarItemName="biHorizontalAlignment"/>
+                                <dxr:BarButtonGroupLink BarItemName="biIndent"/>
+                                <dxb:BarCheckItemLink BarItemName="biFormatWrapText"/>
+                                <dxb:BarSubItemLink BarItemName="biEditingMergeCellsCommandGroup"/>
+                            </dxr:RibbonPageGroup>
+                            <dxr:RibbonPageGroup x:Name="grpHomeNumber" Caption="{Binding ConverterParameter=Caption_GroupNumber, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}" ShowCaptionButton="False">
+                                <dxr:BarButtonGroupLink BarItemName="biFormatNumbers"/>
+                                <dxr:BarButtonGroupLink BarItemName="biFormatNumberDecimals"/>
+                            </dxr:RibbonPageGroup>
+                            <dxr:RibbonPageGroup x:Name="grpHomeStyles" Caption="{Binding ConverterParameter=Caption_GroupStyles, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}" ShowCaptionButton="False">
+                                <dxb:BarSubItemLink BarItemName="biConditionalFormattingCommandGroup"/>
+                            </dxr:RibbonPageGroup>
+                            <dxr:RibbonPageGroup x:Name="grpHomeCells" Caption="{Binding ConverterParameter=Caption_GroupCells, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}" ShowCaptionButton="False">
+                                <dxb:BarSubItemLink BarItemName="biInsertCellsCommandGroup"/>
+                                <dxb:BarSubItemLink BarItemName="biRemoveCellsCommandGroup"/>
+                                <dxb:BarSubItemLink BarItemName="biFormatCommandGroup"/>
+                            </dxr:RibbonPageGroup>
+                            <dxr:RibbonPageGroup x:Name="grpHomeEditing" Caption="{Binding ConverterParameter=Caption_GroupEditing, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}" ShowCaptionButton="False">
+                                <dxb:BarSubItemLink BarItemName="biEditingAutoSumCommandGroup"/>
+                                <dxb:BarSubItemLink BarItemName="biEditingFillCommandGroup"/>
+                                <dxb:BarSubItemLink BarItemName="biFormatClearCommandGroup"/>
+                            </dxr:RibbonPageGroup>
+                        </dxr:RibbonPage>
+                        <dxr:RibbonPage x:Name="pageInsert" Caption="{Binding ConverterParameter=Caption_PageInsert, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}">
+                            <dxr:RibbonPageGroup x:Name="grpInsertIllustrations" Caption="{Binding ConverterParameter=Caption_GroupIllustrations, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}" ShowCaptionButton="False">
+                                <dxb:BarButtonItemLink BarItemName="biInsertPicture"/>
+                            </dxr:RibbonPageGroup>
+                            <dxr:RibbonPageGroup x:Name="grpInsertCharts" Caption="{Binding ConverterParameter=Caption_GroupCharts, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}" ShowCaptionButton="False">
+                                <dxb:BarSplitButtonItemLink BarItemName="biInsertChartColumnCommandGroup"/>
+                                <dxb:BarSplitButtonItemLink BarItemName="biInsertChartLineCommandGroup"/>
+                                <dxb:BarSplitButtonItemLink BarItemName="biInsertChartPieCommandGroup"/>
+                                <dxb:BarSplitButtonItemLink BarItemName="biInsertChartBarCommandGroup"/>
+                                <dxb:BarSplitButtonItemLink BarItemName="biInsertChartAreaCommandGroup"/>
+                                <dxb:BarSplitButtonItemLink BarItemName="biInsertChartScatterCommandGroup"/>
+                                <dxb:BarSplitButtonItemLink BarItemName="biInsertChartOtherCommandGroup"/>
+                            </dxr:RibbonPageGroup>
+                            <dxr:RibbonPageGroup x:Name="grpInsertLinks" Caption="{Binding ConverterParameter=Caption_GroupLinks, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}" ShowCaptionButton="False">
+                                <dxb:BarButtonItemLink BarItemName="biInsertHyperlink"/>
+                            </dxr:RibbonPageGroup>
+                        </dxr:RibbonPage>
+                        <dxr:RibbonPage x:Name="pagePageLayout" Caption="{Binding ConverterParameter=Caption_PagePageLayout, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}">
+                            <dxr:RibbonPageGroup x:Name="grpPageLayoutPageSetup" Caption="{Binding ConverterParameter=Caption_GroupPageSetup, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}" ShowCaptionButton="False">
+                                <dxb:BarSubItemLink BarItemName="biPageSetupMarginsCommandGroup"/>
+                                <dxb:BarSubItemLink BarItemName="biPageSetupOrientationCommandGroup"/>
+                                <dxb:BarSubItemLink BarItemName="biPageSetupPaperKindCommandGroup"/>
+                            </dxr:RibbonPageGroup>
+                            <dxr:RibbonPageGroup x:Name="grpPageLayoutArrange" Caption="{Binding ConverterParameter=Caption_GroupArrange, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}" ShowCaptionButton="False">
+                                <dxb:BarSubItemLink BarItemName="biPageLayoutArrangeBringForwardCommandGroup"/>
+                                <dxb:BarSubItemLink BarItemName="biPageLayoutArrangeSendBackwardCommandGroup"/>
+                            </dxr:RibbonPageGroup>
+                        </dxr:RibbonPage>
+                        <dxr:RibbonPage x:Name="pageFormulas" Caption="{Binding ConverterParameter=Caption_PageFormulas, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}">
+                            <dxr:RibbonPageGroup x:Name="grpFormulasFunctionLibrary" Caption="{Binding ConverterParameter=Caption_GroupFunctionLibrary, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}" ShowCaptionButton="False">
+                                <dxb:BarSubItemLink BarItemName="biFunctionsAutoSumCommandGroup"/>
+                                <dxb:BarSubItemLink BarItemName="biFunctionsFinancialCommandGroup"/>
+                                <dxb:BarSubItemLink BarItemName="biFunctionsLogicalCommandGroup"/>
+                                <dxb:BarSubItemLink BarItemName="biFunctionsTextCommandGroup"/>
+                                <dxb:BarSubItemLink BarItemName="biFunctionsDateAndTimeCommandGroup"/>
+                                <dxb:BarSubItemLink BarItemName="biFunctionsLookupAndReferenceCommandGroup"/>
+                                <dxb:BarSubItemLink BarItemName="biFunctionsMathAndTrigonometryCommandGroup"/>
+                                <dxb:BarSubItemLink BarItemName="biFunctionsStatisticalCommandGroup"/>
+                                <dxb:BarSubItemLink BarItemName="biFunctionsEngineeringCommandGroup"/>
+                                <dxb:BarSubItemLink BarItemName="biFunctionsCubeCommandGroup"/>
+                                <dxb:BarSubItemLink BarItemName="biFunctionsInformationCommandGroup"/>
+                                <dxb:BarSubItemLink BarItemName="biFunctionsCompatibilityCommandGroup"/>
+                            </dxr:RibbonPageGroup>
+                            <dxr:RibbonPageGroup x:Name="grpFormulasFormulaAuditing" Caption="{Binding ConverterParameter=Caption_GroupFormulaAuditing, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}" ShowCaptionButton="False">
+                                <dxb:BarCheckItemLink BarItemName="biViewShowFormulas"/>
+                            </dxr:RibbonPageGroup>
+                        </dxr:RibbonPage>
+                        <dxr:RibbonPage x:Name="pageData" Caption="{Binding ConverterParameter=Caption_PageData, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}">
+                            <dxr:RibbonPageGroup x:Name="grpDataSortFilter" Caption="{Binding ConverterParameter=Caption_GroupSortAndFilter, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}" ShowCaptionButton="False">
+                                <dxb:BarButtonItemLink BarItemName="biDataSortAscending"/>
+                                <dxb:BarButtonItemLink BarItemName="biDataSortDescending"/>
+                            </dxr:RibbonPageGroup>
+                        </dxr:RibbonPage>
+                        <dxr:RibbonPage x:Name="pageView" Caption="{Binding ConverterParameter=Caption_PageView, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}">
+                            <dxr:RibbonPageGroup x:Name="grpViewShow" Caption="{Binding ConverterParameter=Caption_GroupShow, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}" ShowCaptionButton="False">
+                                <dxb:BarStaticItemLink BarItemName="biViewShowGridlines"/>
+                                <dxb:BarStaticItemLink BarItemName="biViewShowHeadings"/>
+                            </dxr:RibbonPageGroup>
+                            <dxr:RibbonPageGroup x:Name="grpViewZoom" Caption="{Binding ConverterParameter=Caption_GroupZoom, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}" ShowCaptionButton="False">
+                                <dxb:BarButtonItemLink BarItemName="biViewZoomOut"/>
+                                <dxb:BarButtonItemLink BarItemName="biViewZoomIn"/>
+                                <dxb:BarButtonItemLink BarItemName="biViewZoom100Percent"/>
+                            </dxr:RibbonPageGroup>
+                            <dxr:RibbonPageGroup x:Name="grpViewWindow" Caption="{Binding ConverterParameter=Caption_GroupWindow, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}" ShowCaptionButton="False">
+                                <dxb:BarSubItemLink BarItemName="biViewFreezePanesCommandGroup"/>
+                            </dxr:RibbonPageGroup>
+                        </dxr:RibbonPage>
+                    </dxr:RibbonDefaultPageCategory>
+                    <dxr:RibbonPageCategory x:Name="catChartTools" Caption="{Binding ConverterParameter=Caption_PageCategoryChartTools, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}" dxo:AttachedCommand.Command="{Binding ToolsChartCommandGroup, Mode=OneTime, Source={StaticResource commands}}">
+                        <dxr:RibbonPage x:Name="pageChartToolsDesign" Caption="{Binding ConverterParameter=Caption_PageChartsDesign, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}">
+                            <dxr:RibbonPageGroup x:Name="grpChartToolsDesignData" Caption="{Binding ConverterParameter=Caption_GroupChartsDesignData, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}" ShowCaptionButton="False">
+                                <dxb:BarButtonItemLink BarItemName="biChartSwitchRowColumn"/>
+                            </dxr:RibbonPageGroup>
+                            <dxr:RibbonPageGroup x:Name="grpChartToolsDesignChartLayouts" Caption="{Binding ConverterParameter=Caption_GroupChartsDesignLayouts, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}" ShowCaptionButton="False">
+                                <dxr:RibbonGalleryBarItemLink BarItemName="biGalleryChartLayout"/>
+                            </dxr:RibbonPageGroup>
+                        </dxr:RibbonPage>
+                        <dxr:RibbonPage x:Name="pageChartToolsLayout" Caption="{Binding ConverterParameter=Caption_PageChartsLayout, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}">
+                            <dxr:RibbonPageGroup x:Name="grpChartToolsLayoutLabels" Caption="{Binding ConverterParameter=Caption_GroupChartsLayoutLabels, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}" ShowCaptionButton="False">
+                                <dxb:BarSplitButtonItemLink BarItemName="biChartTitleCommandGroup"/>
+                                <dxb:BarSubItemLink BarItemName="biChartAxisTitlesCommandGroup"/>
+                                <dxb:BarSplitButtonItemLink BarItemName="biChartLegendCommandGroup"/>
+                                <dxb:BarSplitButtonItemLink BarItemName="biChartDataLabelsCommandGroup"/>
+                            </dxr:RibbonPageGroup>
+                            <dxr:RibbonPageGroup x:Name="grpChartToolsLayoutAxes" Caption="{Binding ConverterParameter=Caption_GroupChartsLayoutAxes, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}" ShowCaptionButton="False">
+                                <dxb:BarSubItemLink BarItemName="biChartAxesCommandGroup"/>
+                                <dxb:BarSubItemLink BarItemName="biChartGridlinesCommandGroup"/>
+                            </dxr:RibbonPageGroup>
+                            <dxr:RibbonPageGroup x:Name="grpChartToolsLayoutAnalysis" Caption="{Binding ConverterParameter=Caption_GroupChartsLayoutAnalysis, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}" ShowCaptionButton="False">
+                                <dxb:BarSplitButtonItemLink BarItemName="biChartLinesCommandGroup"/>
+                                <dxb:BarSplitButtonItemLink BarItemName="biChartUpDownBarsCommandGroup"/>
+                                <dxb:BarSplitButtonItemLink BarItemName="biChartErrorBarsCommandGroup"/>
+                            </dxr:RibbonPageGroup>
+                        </dxr:RibbonPage>
+                        <dxr:RibbonPage x:Name="pageChartToolsFormat" Caption="{Binding ConverterParameter=Caption_PageFormat, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}">
+                            <dxr:RibbonPageGroup x:Name="grpChartToolsFormatArrange" Caption="{Binding ConverterParameter=Caption_GroupArrange, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}" ShowCaptionButton="False">
+                                <dxb:BarSubItemLink BarItemName="biChartToolsFormatArrangeBringForwardCommandGroup"/>
+                                <dxb:BarSubItemLink BarItemName="biChartToolsFormatArrangeSendBackwardCommandGroup"/>
+                            </dxr:RibbonPageGroup>
+                        </dxr:RibbonPage>
+                    </dxr:RibbonPageCategory>
+                    <dxr:RibbonPageCategory x:Name="catPictureTools" Caption="{Binding ConverterParameter=Caption_PageCategoryPictureTools, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}" dxo:AttachedCommand.Command="{Binding ToolsPictureCommandGroup, Mode=OneTime, Source={StaticResource commands}}">
+                        <dxr:RibbonPage x:Name="pagePictureToolsFormat" Caption="{Binding ConverterParameter=Caption_PageFormat, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}">
+                            <dxr:RibbonPageGroup x:Name="grpPictureToolsFormatArrange" Caption="{Binding ConverterParameter=Caption_GroupArrange, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}" ShowCaptionButton="False">
+                                <dxb:BarSubItemLink BarItemName="biPictureToolsFormatArrangeBringForwardCommandGroup"/>
+                                <dxb:BarSubItemLink BarItemName="biPictureToolsFormatArrangeSendBackwardCommandGroup"/>
+                            </dxr:RibbonPageGroup>
+                        </dxr:RibbonPage>
+                    </dxr:RibbonPageCategory>
+                    <dxr:RibbonPageCategory x:Name="catDrawingTools" Caption="{Binding ConverterParameter=Caption_PageCategoryDrawingTools, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}" dxo:AttachedCommand.Command="{Binding ToolsDrawingCommandGroup, Mode=OneTime, Source={StaticResource commands}}">
+                        <dxr:RibbonPage x:Name="pageDrawingToolsFormat" Caption="{Binding ConverterParameter=Caption_PageFormat, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}">
+                            <dxr:RibbonPageGroup x:Name="grpDrawingToolsFormatArrange" Caption="{Binding ConverterParameter=Caption_GroupArrange, Converter={StaticResource stringIdConverter}, Mode=OneTime, Source={StaticResource stringIdConverter}}" ShowCaptionButton="False">
+                                <dxb:BarSubItemLink BarItemName="biDrawingToolsFormatArrangeBringForwardCommandGroup"/>
+                                <dxb:BarSubItemLink BarItemName="biDrawingToolsFormatArrangeSendBackwardCommandGroup"/>
+                            </dxr:RibbonPageGroup>
+                        </dxr:RibbonPage>
+                    </dxr:RibbonPageCategory>
+                </dxr:RibbonControl>
+
+                <Border x:Name="BackgroundBorder" Background="{DynamicResource DarkGray}">
+                <dxsps:SpreadsheetControl x:Name="spreadsheetControl1" BarManager="{Binding ElementName=barManager1, Mode=OneTime}" HorizontalScrollbarVisibility="Visible" VerticalScrollbarVisibility="Visible" 
+                                          Background="Transparent" Ribbon="{Binding ElementName=ribbonControl1, Mode=OneTime}" CellEndEdit="spreadsheetControl1_CellEndEdit"/>
+                </Border>
+                <!--<dxsps:SpreadsheetControl x:Name="spreadsheetControl1" Ribbon="{Binding ElementName=ribbonControl1, Mode=OneTime}" 
+                                          CellEndEdit="spreadsheetControl1_CellEndEdit"/>-->
+
+            </DockPanel>
+        
+        </dxb:BarManager>
+        
+        <cc:CircularProgressBar Background="Black" x:Name="busyControl" Opacity="0.3" Visibility="Collapsed" Grid.RowSpan="10"/>
+        <!--<TextBlock x:Name="busyContent" Text="{x:Static properties:Resources.WaitText}" VerticalAlignment="Center" Grid.RowSpan="10"
+                   HorizontalAlignment="Center" Visibility="Collapsed"/>-->
+        <TextBlock x:Name="pathErrorOverlay" Style="{StaticResource PathErrorOverlayStyle_notSpecified}" Visibility="Collapsed" Text="{x:Static properties:Resources.FilePathNotSpecified}" VerticalAlignment="Center" Grid.RowSpan="10" HorizontalAlignment="Center"/>
+    </Grid>
+</UserControl>

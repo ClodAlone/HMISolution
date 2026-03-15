@@ -1,0 +1,82 @@
+﻿<!-- Copyright © Northwoods Software Corporation, 2008-2015. All Rights Reserved. -->
+
+<UserControl x:Class="LocalView.LocalView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:go="http://schemas.nwoods.com/GoXam"
+    xmlns:local="clr-namespace:LocalView">
+
+  <FrameworkElement.Resources>
+    <DataTemplate x:Key="NodeTemplate">
+      <Border BorderBrush="Gray" BorderThickness="1" CornerRadius="5"
+              Background="{Binding Path=Data.Color}"
+              go:Part.SelectionAdorned="True"
+              go:Node.LocationSpot="Center"
+              go:Part.Text="{Binding Path=Data.Key}">
+        <TextBlock Text="{Binding Path=Data.Key}" />
+      </Border>
+    </DataTemplate>
+
+    <DataTemplate x:Key="LinkTemplate">
+      <go:LinkShape Stroke="Black" StrokeThickness="1"
+            go:Part.Selectable="False" />
+    </DataTemplate>
+  </FrameworkElement.Resources>
+
+  <Grid>
+    <Grid.RowDefinitions>
+      <RowDefinition Height="*" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="2*" />
+    </Grid.RowDefinitions>
+
+    <!-- this shows the whole tree;
+         selecting a node will show the details in myLocalView -->
+    <go:Diagram x:Name="myWholeView" Grid.Row="0"
+                IsReadOnly="True"
+                Stretch="Uniform"
+                HorizontalContentAlignment="Center"
+                VerticalContentAlignment="Center"
+                NodeTemplate="{StaticResource NodeTemplate}"
+                LinkTemplate="{StaticResource LinkTemplate}"
+                MaximumSelectionCount="1"
+                SelectionChanged="myDiagram_SelectionChanged">
+      <go:Diagram.Layout>
+        <go:TreeLayout Angle="90" Sorting="Ascending" />
+      </go:Diagram.Layout>
+      <!-- this is used behind the selected node so that
+           it can be located easily despite the small scale -->
+      <go:Node Id="Highlight">
+        <Ellipse Width="500" Height="500"
+                 go:Part.LayerName="Background"
+                 go:Part.InDiagramBounds="False"
+                 go:Part.LayoutId="None"
+                 go:Part.Selectable="False"
+                 go:Node.LocationSpot="Center">
+          <Shape.Fill>
+            <RadialGradientBrush>
+              <GradientStop Offset="0.0" Color="Yellow" />
+              <GradientStop Offset="1.0" Color="Transparent" />
+            </RadialGradientBrush>
+          </Shape.Fill>
+        </Ellipse>
+      </go:Node>
+    </go:Diagram>
+
+    <GridSplitter Grid.Row="1" Height="5"
+                HorizontalAlignment="Stretch" VerticalAlignment="Center"/>
+
+    <!-- this just holds the selected data/node and its adjacent nodes and links -->
+    <go:Diagram x:Name="myLocalView" Grid.Row="2" Padding="10"
+                HorizontalContentAlignment="Center"
+                VerticalContentAlignment="Center"
+                NodeTemplate="{StaticResource NodeTemplate}"
+                LinkTemplate="{StaticResource LinkTemplate}"
+                MaximumSelectionCount="1"
+                SelectionChanged="myDiagram_SelectionChanged">
+      <go:Diagram.Layout>
+        <go:TreeLayout Angle="90" Sorting="Ascending" />
+      </go:Diagram.Layout>
+    </go:Diagram>
+  </Grid>
+</UserControl>

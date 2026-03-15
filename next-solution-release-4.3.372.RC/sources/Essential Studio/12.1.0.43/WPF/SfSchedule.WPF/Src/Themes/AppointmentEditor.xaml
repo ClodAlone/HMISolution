@@ -1,0 +1,454 @@
+﻿<Window x:Class="Syncfusion.UI.Xaml.Schedule.AppointmentEditor"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Height="465" Width="600" WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
+        WindowStyle="None" BorderThickness="1" BorderBrush="LightGray"
+        xmlns:input="http://schemas.syncfusion.com/wpf" input:SkinStorage.VisualStyle="Metro"
+        xmlns:local="clr-namespace:Syncfusion.UI.Xaml.Schedule">
+
+    <Window.Resources>
+        <local:BoolToVisibilityConverter x:Key="BooltoVis"/>
+        <local:BoolToBoolConverter x:Key="BooltoBool"/>
+        <local:ResourceWrapper x:Key="ResourceWrapper"/>
+    </Window.Resources>
+
+    <Grid>
+        <StackPanel>
+            <Border Background="Gray" Width="600" Height="30" x:Name="TitleBar" MouseDown="TitleBar_MouseDown">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="3*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="{Binding Source={StaticResource ResourceWrapper}, Path=AppointmentEdit}" FontSize="17" VerticalAlignment="Center" Foreground="White" Margin="10,0,0,0" FontFamily="Segoe UI" FontWeight="Normal"/>
+                    <Border x:Name="CloseBorder" Background="Gray" Opacity="0.6" MouseEnter="Close_MouseEnter" MouseLeave="Close_MouseLeave"
+                            MouseDown="Close_MouseDown" Height="20" Width="20" Margin="5" Grid.Column="1"  HorizontalAlignment="Right" VerticalAlignment="Top">
+                        <Grid>
+                            <Line Stroke="White"  X1="0" X2="10" Y1="5" Y2="15" StrokeThickness="2.5"/>
+                            <Line Stroke="White"  X1="0" X2="10" Y1="15" Y2="5" StrokeThickness="2.5"/>
+                        </Grid>
+                    </Border>
+                </Grid>
+            </Border>
+            <Grid Margin="10,5,10,0" Visibility="{Binding IsRecurrenceTypeEnabled,Mode=TwoWay, Converter={StaticResource BooltoVis}}">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="35"/>
+                    <RowDefinition Height="4"/>
+                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="110"/>
+                    <ColumnDefinition Width="110"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="2" HorizontalAlignment="Right" Orientation="Horizontal"
+                            Visibility="{Binding IsRecurrenceTypeEnabled,Mode=TwoWay, Converter={StaticResource BooltoVis}}">
+                    <CheckBox x:Name="readOnly" Width="90" FontFamily="Segoe UI" FontWeight="Normal" VerticalAlignment="Center" Margin="5,0,0,0"
+                              Content="{Binding Source={StaticResource ResourceWrapper}, Path=ReadOnly}" 
+                              IsChecked="{Binding EditedAppointment.ReadOnly,  Mode=OneWay}" Visibility="Collapsed"
+                              IsEnabled="{Binding EditedAppointment.ReadOnly, Converter={StaticResource BooltoBool}}"/>
+                    <Button x:Name="EditRec" Width="110" Height="25" Click="EditRec_Click" BorderBrush="#D0D0D0" Background="#E7E7E7" FontFamily="Segoe UI" FontWeight="Normal" Margin="0,0,0,2" 
+                            Content="{Binding Source={StaticResource ResourceWrapper}, Path=EditRecurrence}" 
+                            Visibility="{Binding IsRecurrenceTypeEnabled,Mode=TwoWay, Converter={StaticResource BooltoVis}}" 
+                            IsEnabled="{Binding EditedAppointment.ReadOnly, Converter={StaticResource BooltoBool}}"/>
+                </StackPanel>
+                <Grid Grid.Row="0" Grid.ColumnSpan="2" Grid.Column="0"
+                      Visibility="{Binding IsRecurrenceTypeEnabled,Mode=TwoWay, Converter={StaticResource BooltoVis}}">
+                    <TextBlock x:Name="RecurrenceEnabled" Margin="0,5,0,2" Text="{Binding Source={StaticResource ResourceWrapper}, Path= RecurrenceEnabled }" Height="25" Foreground="DarkGreen" FontFamily="Segoe UI" FontWeight="Normal"
+                               Visibility="{Binding EditedAppointment.IsRecursive,  Converter={StaticResource BooltoVis}, Mode=OneWay}"/>
+                    <TextBlock x:Name="ErrorMsg" Background="White" Text="{Binding Source={StaticResource ResourceWrapper}, Path= ErrorMessage }" Height="25" Foreground="Red" FontFamily="Segoe UI" FontWeight="Normal" 
+                               Visibility="Collapsed" Margin="0,5,0,2"/>
+                </Grid>
+                <Border Grid.Row="1" Grid.ColumnSpan="3" Grid.Column="0" BorderThickness="0,.5,0,0" HorizontalAlignment="Stretch" BorderBrush="Gray" Opacity="0.5" Margin="0,3,0,0"
+                        Visibility="{Binding IsRecurrenceTypeEnabled,Mode=TwoWay, Converter={StaticResource BooltoVis}}"/>
+            </Grid>
+            <StackPanel x:Name="AppProp" Visibility="Visible">
+                <Grid Margin="10 5" Height="36">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="110"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="{Binding Source={StaticResource ResourceWrapper}, Path=Subject}" Height="20" VerticalAlignment="Center" Margin="0,12,0,10" FontFamily="Segoe UI" FontWeight="Normal" />
+                    <TextBox x:Name="Subject" Grid.Column="1" Height="25" HorizontalAlignment="Stretch" VerticalAlignment="Center" FontFamily="Segoe UI" FontWeight="Normal" VerticalContentAlignment="Center"
+                             Text="{Binding EditedAppointment.Subject, Mode=OneWay}" IsEnabled="{Binding EditedAppointment.ReadOnly, Converter={StaticResource BooltoBool}}"/>
+                </Grid>
+                <Grid Margin="10 5" Height="61" >
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="110"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="{Binding Source={StaticResource ResourceWrapper}, Path= Notes }" Height="20" VerticalAlignment="Center"  Grid.ColumnSpan="2" Margin="0,0,0,40" FontFamily="Segoe UI" FontWeight="Normal" />
+                    <TextBox x:Name="Notes" Grid.Column="1" Height="60" ScrollViewer.VerticalScrollBarVisibility="Auto" TextWrapping="Wrap" HorizontalAlignment="Stretch" FontFamily="Segoe UI" FontWeight="Normal" VerticalAlignment="Center"   
+                             Text="{Binding EditedAppointment.Notes, Mode=OneWay}" IsEnabled="{Binding EditedAppointment.ReadOnly, Converter={StaticResource BooltoBool}}"/>
+                </Grid>
+                <Grid Margin="10 5" Height="36">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="110"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="{Binding Source={StaticResource ResourceWrapper}, Path= Location }" Height="20" VerticalAlignment="Center" Margin="0,12,0,10" FontFamily="Segoe UI" FontWeight="Normal" />
+                    <TextBox x:Name="Location" Grid.Column="1" Height="25" HorizontalAlignment="Stretch" VerticalAlignment="Center" FontFamily="Segoe UI" FontWeight="Normal" VerticalContentAlignment="Center"
+                             Text="{Binding EditedAppointment.Location, Mode=OneWay}" IsEnabled="{Binding EditedAppointment.ReadOnly, Converter={StaticResource BooltoBool}}"/>
+                </Grid>
+                <Grid Margin="10 5" Height="28">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="110"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="{Binding Source={StaticResource ResourceWrapper}, Path= Start }" FontSize="12" Height="20" VerticalAlignment="Center" FontFamily="Segoe UI" FontWeight="Normal"/>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal">
+                        <DatePicker x:Name="Startdate" BorderThickness=".5" BorderBrush="DarkGray" Height="25" Width="130" FontFamily="Segoe UI" FontWeight="Normal" HorizontalAlignment="Left" VerticalAlignment="Center"
+                                    SelectedDate="{Binding start,  Mode=TwoWay}" IsEnabled="{Binding EditedAppointment.ReadOnly, Converter={StaticResource BooltoBool}}"/>
+                        <input:DateTimeEdit x:Name="Starttime" BorderThickness=".5" BorderBrush="DarkGray" Width="80" Height="25"
+                    	                    HorizontalAlignment="Left" Margin="10,0,0,0" IsVisibleRepeatButton ="True" IsButtonPopUpEnabled="False"
+                    	                    FontFamily="Segoe UI" FontWeight="Normal" Pattern="ShortTime" IsEnabled="{Binding IsChecked, ElementName=allDay, Mode=TwoWay,Converter={StaticResource BooltoBool}}"
+                                            DateTime="{Binding start1, Mode=TwoWay}" ReadOnly="{Binding EditedAppointment.ReadOnly}"/>
+                        <ComboBox x:Name="Starttimezone" Height="25" Width="238" FontFamily="Segoe UI" DisplayMemberPath="TimeZoneValue" 
+                                  Margin="10,0,0,0" FontWeight="Normal" Background="White" HorizontalAlignment="Left" VerticalAlignment="Center"
+                                  IsEnabled="{Binding IsChecked, ElementName=allDay, Mode=TwoWay,Converter={StaticResource BooltoBool}}"
+                                  SelectedItem="{Binding StartTimeZone, Mode=TwoWay}" Visibility="Hidden"/>
+
+                    </StackPanel>
+                </Grid>
+                <Grid Margin="10 5" Height="28">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="110"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="{Binding Source={StaticResource ResourceWrapper}, Path=End}" Height="20" VerticalAlignment="Center"  FontFamily="Segoe UI" FontWeight="Normal" />
+                    <StackPanel Grid.Column="1" Orientation="Horizontal">
+                        <DatePicker x:Name="Enddate" BorderThickness=".5" BorderBrush="DarkGray" Height="25" FontFamily="Segoe UI" FontWeight="Normal" Width="130" HorizontalAlignment="Left" VerticalAlignment="Center" 
+                                    SelectedDate="{Binding end, Mode=TwoWay}" IsEnabled="{Binding EditedAppointment.ReadOnly, Converter={StaticResource BooltoBool}}"/>
+                        <input:DateTimeEdit x:Name="Endtime" BorderThickness=".5" BorderBrush="DarkGray" Height="25" Width="80" ReadOnly="{Binding EditedAppointment.ReadOnly}"
+                                            HorizontalAlignment="Left" VerticalAlignment="Center" Margin="10,0,0,0" IsVisibleRepeatButton ="True" IsButtonPopUpEnabled="False"
+                                            FontFamily="Segoe UI" FontWeight="Normal" Pattern="ShortTime" DateTime="{Binding end1, Mode=TwoWay}"
+                                            IsEnabled="{Binding IsChecked, ElementName=allDay, Mode=TwoWay,Converter={StaticResource BooltoBool}}"/>
+                        <ComboBox x:Name="Endtimezone" Height="25" Width="238" FontFamily="Segoe UI" DisplayMemberPath="TimeZoneValue" Margin="10,0,0,0" FontWeight="Normal" Background="White"  HorizontalAlignment="Left" VerticalAlignment="Center"
+                                  IsEnabled="{Binding IsChecked, ElementName=allDay, Mode=TwoWay,Converter={StaticResource BooltoBool}}"
+                                  SelectedItem="{Binding EndTimeZone, Mode=TwoWay}" Visibility="Hidden"/>
+                    </StackPanel>
+                </Grid>
+                <Grid Margin="10 5" Height="20">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="110"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <CheckBox x:Name="allDay" Content="{Binding Source={StaticResource ResourceWrapper}, Path=AllDay}" Grid.Column="1"  HorizontalAlignment="Stretch" FontFamily="Segoe UI" FontWeight="Normal" VerticalAlignment="Bottom" 
+                              IsChecked="{Binding AllDay,  Mode=TwoWay}" IsEnabled="{Binding EditedAppointment.ReadOnly, Converter={StaticResource BooltoBool}}"/>
+                </Grid>
+                <Grid Margin="10 5" Height="23">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="110"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="{Binding Source={StaticResource ResourceWrapper}, Path= Reminder }" Height="20" VerticalAlignment="Center" FontFamily="Segoe UI" FontWeight="Normal"  />
+                    <ComboBox x:Name="Reminder" Grid.Column="1" Height="20" Width="130" FontFamily="Segoe UI" FontWeight="Normal" Background="White" HorizontalAlignment="Left" VerticalAlignment="Center"
+                              DisplayMemberPath="DisplayMember" SelectedValuePath="ActualValue"
+                              IsEnabled="{Binding EditedAppointment.ReadOnly, Converter={StaticResource BooltoBool}}">
+                    </ComboBox>
+                </Grid>
+                <Grid Margin="10 5" Height="23">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="110"/>
+                        <ColumnDefinition Width="11*"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="{Binding Source={StaticResource ResourceWrapper}, Path= Status }" Height="20" VerticalAlignment="Center" Margin="0,0,0,1" FontFamily="Segoe UI" FontWeight="Normal"  />
+                    <ComboBox x:Name="Status" Grid.Column="1" Height="20" Width="130" FontFamily="Segoe UI" FontWeight="Normal" Background="White"  HorizontalAlignment="Left" VerticalAlignment="Center" Margin="0,0,0,1"
+                              DisplayMemberPath="DisplayMember" SelectedValuePath="ActualValue"
+                              IsEnabled="{Binding EditedAppointment.ReadOnly, Converter={StaticResource BooltoBool}}"/>
+                </Grid>
+                <Grid Margin="10" Height="40">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="110"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" FlowDirection="RightToLeft">
+                        <Button x:Name="Cancel" BorderBrush="#D0D0D0" Background="#E7E7E7" Click="Cancel_Click" IsCancel="True" FontFamily="Segoe UI" FontWeight="Normal" Margin="0 0 5 0" Height="25" Width="100" Content="{Binding Source={StaticResource ResourceWrapper}, Path= Cancel }"/>
+                        <Button x:Name="Delete" BorderBrush="#D0D0D0" Background="#E7E7E7" Click="Delete_Click" IsDefault="True" FontFamily="Segoe UI" FontWeight="Normal"  Margin="5 0" Height="25" Width="100" Content="{Binding Source={StaticResource ResourceWrapper}, Path= Delete }"
+                                IsEnabled="{Binding EditedAppointment.ReadOnly, Converter={StaticResource BooltoBool}}"></Button>
+                        <Button x:Name="Save" BorderBrush="#D0D0D0" Background="#E7E7E7" Click="Save_Click" IsDefault="True" FontFamily="Segoe UI" FontWeight="Normal"  Margin="5 0" Height="25" Width="100" Content="{Binding Source={StaticResource ResourceWrapper}, Path= Save }"
+                                IsEnabled="{Binding EditedAppointment.ReadOnly, Converter={StaticResource BooltoBool}}"></Button>
+                    </StackPanel>
+                </Grid>
+            </StackPanel>
+            <StackPanel x:Name="RecApp" Visibility="Collapsed">
+                <StackPanel Margin="10 15 10 0">
+                    <TextBlock Text="{Binding Source={StaticResource ResourceWrapper}, Path= RecurrencePattern}" HorizontalAlignment="Left" FontSize="14" FontWeight="SemiBold" Foreground="Black"/>
+                    <Grid Width="560" Height="130" HorizontalAlignment="Left">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="200"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Margin="25 5,0,5" VerticalAlignment="Center">
+                            <RadioButton x:Name="RecurrenceOptionDaily" GroupName="RecOption" Content="{Binding Daily, Source={StaticResource ResourceWrapper}}" FontSize="12" 
+                                         IsChecked="{Binding RecurrenceDaily, Mode=TwoWay}" Margin="0 6"/>
+                            <RadioButton x:Name="RecurrenceOptionWeekly" GroupName="RecOption" Content="{Binding Weekly, Source={StaticResource ResourceWrapper}}"   
+                                         FontSize="12" IsChecked="{Binding RecurrenceWeekly, Mode=TwoWay}" Margin="0 6"/>
+                            <RadioButton x:Name="RecurrenceOptionMonthly" GroupName="RecOption" Content="{Binding Monthly, Source={StaticResource ResourceWrapper}}" FontSize="12"
+                                         IsChecked="{Binding RecurrenceMonthly, Mode=TwoWay}" Margin="0 6"/>
+                            <RadioButton x:Name="RecurrenceOptionYearly" GroupName="RecOption" Content="{Binding Yearly, Source={StaticResource ResourceWrapper}}" FontSize="12"
+                                         IsChecked="{Binding RecurrenceYearly, Mode=TwoWay}" Margin="0 6 0 0"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Left" >
+                            <StackPanel x:Name="DailyStackPanel" Orientation="Vertical" VerticalAlignment="Center"
+                                        Visibility="{Binding IsChecked, Converter={StaticResource BooltoVis}, ElementName=RecurrenceOptionDaily, Mode=TwoWay}">
+                                <StackPanel Orientation="Horizontal" Height="40">
+                                    <RadioButton x:Name="EveryXDays" GroupName="RecSubDaily" Content="{Binding Every, Source={StaticResource ResourceWrapper}}" VerticalAlignment="Center"
+                                                 FontSize="12" IsChecked="{Binding EditedAppointment.RecurrenceProperites.IsDailyEveryNDays, Mode=OneWay}"/>
+                                    <input:UpDown MinValue="1" Height="30" x:Name="EveryDayGap" Width="50" VerticalAlignment="Center" Margin="10 0"
+                                                  MaxValue="1000" Value="{Binding EditedAppointment.RecurrenceProperites.RangeRecurrenceCount, Mode=OneWay}"
+                                                  IsScrollingOnCircle="True" Step="1" NumberDecimalDigits="0"/>
+                                    <TextBlock Text="{Binding Days, Source={StaticResource ResourceWrapper}}" Foreground="Black"
+                                               Width="auto" FontSize="12" VerticalAlignment="Center"/>
+                                </StackPanel>
+                                <RadioButton x:Name="EveryWeekDay" Margin="0 10" GroupName="RecSubDaily" Content="{Binding EveryWeekDays, Source={StaticResource ResourceWrapper}}"    
+                                             FontSize="12" IsChecked="{Binding IsChecked, Converter={StaticResource BooltoBool}, ElementName=EveryXDays, Mode=TwoWay}" VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <StackPanel x:Name="WeeklyStackPanel" Orientation="Vertical" VerticalAlignment="Center"
+                                        Visibility="{Binding IsChecked, Converter={StaticResource BooltoVis}, ElementName=RecurrenceOptionWeekly, Mode=TwoWay}">
+                                <StackPanel Orientation="Horizontal" Height="40">
+                                    <TextBlock Text="{Binding RecurEvery, Source={StaticResource ResourceWrapper}}" FontSize="12" VerticalAlignment="Center" Foreground="Black"/>
+                                    <input:UpDown MinValue="1" Height="30" x:Name="EveryWeekGap" Width="50" VerticalAlignment="Center" Margin="10 0"
+                                                  MaxValue="1000" Value="{Binding EditedAppointment.RecurrenceProperites.WeeklyEveryNWeeks, Mode=OneWay}"
+                                                  IsScrollingOnCircle="True" Step="1" NumberDecimalDigits="0"/>
+                                    <TextBlock Text="{Binding Weekson, Source={StaticResource ResourceWrapper}}" Foreground="Black"
+                                               Width="auto" FontSize="12" VerticalAlignment="Center"/>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Height="40">
+                                    <CheckBox x:Name="sunday" Content="{Binding Sunday, Source={StaticResource ResourceWrapper}}" FontSize="12" Width="80" IsChecked="{Binding EditedAppointment.RecurrenceProperites.IsWeeklySunday, Mode=OneWay}" VerticalAlignment="Center"/>
+                                    <CheckBox x:Name="monday" Content="{Binding Monday, Source={StaticResource ResourceWrapper}}" FontSize="12" Width="80" IsChecked="{Binding EditedAppointment.RecurrenceProperites.IsWeeklyMonday, Mode=OneWay}" VerticalAlignment="Center"/>
+                                    <CheckBox x:Name="tuesday" Content="{Binding Tuesday, Source={StaticResource ResourceWrapper}}" FontSize="12" Width="80" IsChecked="{Binding EditedAppointment.RecurrenceProperites.IsWeeklyTuesday, Mode=OneWay}" VerticalAlignment="Center"/>
+                                    <CheckBox x:Name="wednesday" Content="{Binding Wednesday, Source={StaticResource ResourceWrapper}}" FontSize="12" Width="85" IsChecked="{Binding EditedAppointment.RecurrenceProperites.IsWeeklyWednesday, Mode=OneWay}" VerticalAlignment="Center"/>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Height="40">
+                                    <CheckBox x:Name="thursday" Content="{Binding Thursday, Source={StaticResource ResourceWrapper}}" FontSize="12" Width="80" IsChecked="{Binding EditedAppointment.RecurrenceProperites.IsWeeklyThursday, Mode=OneWay}" VerticalAlignment="Center"/>
+                                    <CheckBox x:Name="friday" Content="{Binding Friday, Source={StaticResource ResourceWrapper}}" FontSize="12" Width="80"  IsChecked="{Binding EditedAppointment.RecurrenceProperites.IsWeeklyFriday, Mode=OneWay}" VerticalAlignment="Center"/>
+                                    <CheckBox x:Name="saturday" Content="{Binding Saturday, Source={StaticResource ResourceWrapper}}" Width="80" FontSize="12" IsChecked="{Binding EditedAppointment.RecurrenceProperites.IsWeeklySaturday, Mode=OneWay}" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </StackPanel>
+                            <StackPanel x:Name="MonthlyStackPanel" VerticalAlignment="Center"
+                                        Visibility="{Binding IsChecked, Converter={StaticResource BooltoVis}, ElementName=RecurrenceOptionMonthly, Mode=TwoWay}" >
+                                <StackPanel Orientation="Horizontal" Height="40">
+                                    <TextBlock Text="{Binding RecurEvery, Source={StaticResource ResourceWrapper}}" FontSize="12" Foreground="Black" VerticalAlignment="Center"/>
+                                    <input:UpDown MinValue="1" Height="30" x:Name="EveryMonthGap" Width="50" Margin="10 0"
+                                                  MaxValue="1000" Value="{Binding EditedAppointment.RecurrenceProperites.MonthlyEveryNMonths, Mode=OneWay}"
+                                                  IsScrollingOnCircle="True" Step="1" NumberDecimalDigits="0"/>
+                                    <TextBlock Text="{Binding Monthson, Source={StaticResource ResourceWrapper}}" Foreground="Black"
+                                               Width="auto" FontSize="12" VerticalAlignment="Center"/>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Height="40">
+                                    <RadioButton x:Name="EveryXMonths" GroupName="RecSubMontly" Content="{Binding Day, Source={StaticResource ResourceWrapper}}" FontSize="12" 
+                                                 Checked="EveryMonths_Checked"
+                                                 IsChecked="{Binding EditedAppointment.RecurrenceProperites.IsMonthlySpecific, Mode=OneWay}" VerticalAlignment="Center"/>
+                                    <ComboBox x:Name="EveryMonthDay" BorderThickness="1" Background ="White" Height="25" Width="40" FontSize="12" Margin="10,0,0,5"
+                                              SelectedIndex="{Binding EditedAppointment.RecurrenceProperites.MonthlySpecificMonthDay, Mode=OneWay}">
+                                        <ComboBoxItem Content="1" />
+                                        <ComboBoxItem Content="2" />
+                                        <ComboBoxItem Content="3" />
+                                        <ComboBoxItem Content="4" />
+                                        <ComboBoxItem Content="5" />
+                                        <ComboBoxItem Content="6" />
+                                        <ComboBoxItem Content="7" />
+                                        <ComboBoxItem Content="8" />
+                                        <ComboBoxItem Content="9" />
+                                        <ComboBoxItem Content="10" />
+                                        <ComboBoxItem Content="11" />
+                                        <ComboBoxItem Content="12" />
+                                        <ComboBoxItem Content="13" />
+                                        <ComboBoxItem Content="14" />
+                                        <ComboBoxItem Content="15" />
+                                        <ComboBoxItem Content="16" />
+                                        <ComboBoxItem Content="17" />
+                                        <ComboBoxItem Content="18" />
+                                        <ComboBoxItem Content="19" />
+                                        <ComboBoxItem Content="20" />
+                                        <ComboBoxItem Content="21" />
+                                        <ComboBoxItem Content="22" />
+                                        <ComboBoxItem Content="23" />
+                                        <ComboBoxItem Content="24" />
+                                        <ComboBoxItem Content="25" />
+                                        <ComboBoxItem Content="26" />
+                                        <ComboBoxItem Content="27" />
+                                        <ComboBoxItem Content="28" />
+                                        <ComboBoxItem Content="29" />
+                                        <ComboBoxItem Content="30" />
+                                        <ComboBoxItem Content="31" />
+                                    </ComboBox>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Height="40">
+                                    <RadioButton x:Name="EveryMonth" GroupName="RecSubMontly" Content="{Binding The, Source={StaticResource ResourceWrapper}}" FontSize="12"
+                                                 Checked="EveryMonths_Checked"
+                                                 IsChecked="{Binding IsChecked, Converter={StaticResource BooltoBool}, ElementName=EveryXMonths, Mode=TwoWay}" VerticalAlignment="Center"/>
+                                    <ComboBox x:Name="Howmanyth" BorderThickness="1" Background ="White" Height="25" Width="75" FontSize="12" Margin="10,0,0,0" 
+                                              SelectedIndex="{Binding EditedAppointment.RecurrenceProperites.MonthlyNthWeek, Mode=OneWay}">
+                                        <ComboBoxItem Content="{Binding First, Source={StaticResource ResourceWrapper}}"   />
+                                        <ComboBoxItem Content="{Binding Second, Source={StaticResource ResourceWrapper}}"   />
+                                        <ComboBoxItem Content="{Binding Third, Source={StaticResource ResourceWrapper}}"   />
+                                        <ComboBoxItem Content="{Binding Fourth, Source={StaticResource ResourceWrapper}}"   />
+                                    </ComboBox>
+                                    <ComboBox x:Name="Weekday" BorderThickness="1" Background ="White" Height="25" Width="100" FontSize="12" Margin="10,0,0,0" 
+                                              SelectedIndex="{Binding EditedAppointment.RecurrenceProperites.MonthlyWeekDay, Mode=OneWay}">
+                                        <ComboBoxItem Content="{Binding Sunday, Source={StaticResource ResourceWrapper}}"  />
+                                        <ComboBoxItem Content="{Binding Monday, Source={StaticResource ResourceWrapper}}"  />
+                                        <ComboBoxItem Content="{Binding Tuesday, Source={StaticResource ResourceWrapper}}"  />
+                                        <ComboBoxItem Content="{Binding Wednesday, Source={StaticResource ResourceWrapper}}"  />
+                                        <ComboBoxItem Content="{Binding Thursday, Source={StaticResource ResourceWrapper}}"  />
+                                        <ComboBoxItem Content="{Binding Friday, Source={StaticResource ResourceWrapper}}"/>
+                                        <ComboBoxItem Content="{Binding Saturday, Source={StaticResource ResourceWrapper}}"/>
+                                    </ComboBox>
+                                </StackPanel>
+                            </StackPanel>
+                            <StackPanel x:Name="YearlyStackPanel" VerticalAlignment="Center"
+                                        Visibility="{Binding IsChecked, Converter={StaticResource BooltoVis}, ElementName=RecurrenceOptionYearly, Mode=TwoWay}">
+                                <StackPanel Orientation="Horizontal" Height="40">
+                                    <TextBlock Text="{Binding RecurEvery, Source={StaticResource ResourceWrapper}}" VerticalAlignment="Center" FontSize="12" Foreground="Black"/>
+                                    <input:UpDown MinValue="1" Height="30" x:Name="EveryYearGap" Width="50" Margin="10 0"
+                                                  MaxValue="1000" Value="{Binding EditedAppointment.RecurrenceProperites.YearlyEveryNYears, Mode=OneWay}"
+                                                  IsScrollingOnCircle="True" Step="1" NumberDecimalDigits="0"/>
+                                    <TextBlock Text="{Binding Yearson, Source={StaticResource ResourceWrapper}}" Foreground="Black"
+                                               Width="auto" FontSize="12" VerticalAlignment="Center"/>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Height="40">
+                                    <RadioButton x:Name="SpecificDate" GroupName="RecSubYearly" Content="{Binding On, Source={StaticResource ResourceWrapper}}" FontSize="12" 
+                                                 Checked="EveryYear_Checked"
+                                                 IsChecked="{Binding EditedAppointment.RecurrenceProperites.IsYearlySpecific, Mode=OneWay}" VerticalAlignment="Center"/>
+                                    <ComboBox x:Name="YrSpMonth" BorderThickness="1" Background="White"  Height="25" Width="110" FontSize="12" Margin="15,0,0,0" 
+                    						SelectedIndex="{Binding EditedAppointment.RecurrenceProperites.YearlySpecificMonth, Mode=OneWay}">
+                                        <ComboBoxItem Content="{Binding January, Source={StaticResource ResourceWrapper}}"  />
+                                        <ComboBoxItem Content="{Binding February, Source={StaticResource ResourceWrapper}}"  />
+                                        <ComboBoxItem Content="{Binding March, Source={StaticResource ResourceWrapper}}" />
+                                        <ComboBoxItem Content="{Binding April, Source={StaticResource ResourceWrapper}}" />
+                                        <ComboBoxItem Content="{Binding May, Source={StaticResource ResourceWrapper}}" />
+                                        <ComboBoxItem Content="{Binding June, Source={StaticResource ResourceWrapper}}" />
+                                        <ComboBoxItem Content="{Binding July, Source={StaticResource ResourceWrapper}}" />
+                                        <ComboBoxItem Content="{Binding August, Source={StaticResource ResourceWrapper}}" />
+                                        <ComboBoxItem Content="{Binding September, Source={StaticResource ResourceWrapper}}" />
+                                        <ComboBoxItem Content="{Binding October, Source={StaticResource ResourceWrapper}}" />
+                                        <ComboBoxItem Content="{Binding November, Source={StaticResource ResourceWrapper}}" />
+                                        <ComboBoxItem Content="{Binding December, Source={StaticResource ResourceWrapper}}" />
+                                    </ComboBox>
+                                    <ComboBox x:Name="YrSpDate" BorderThickness="1" Background ="White" Height="25" Width="auto" FontSize="12" Margin="10,0,0,0" 
+                    						SelectedIndex="{Binding EditedAppointment.RecurrenceProperites.YearlySpecificMonthDay, Mode=OneWay}">
+                                        <ComboBoxItem Content="1" />
+                                        <ComboBoxItem Content="2" />
+                                        <ComboBoxItem Content="3" />
+                                        <ComboBoxItem Content="4" />
+                                        <ComboBoxItem Content="5" />
+                                        <ComboBoxItem Content="6" />
+                                        <ComboBoxItem Content="7" />
+                                        <ComboBoxItem Content="8" />
+                                        <ComboBoxItem Content="9" />
+                                        <ComboBoxItem Content="10" />
+                                        <ComboBoxItem Content="11" />
+                                        <ComboBoxItem Content="12" />
+                                        <ComboBoxItem Content="13" />
+                                        <ComboBoxItem Content="14" />
+                                        <ComboBoxItem Content="15" />
+                                        <ComboBoxItem Content="16" />
+                                        <ComboBoxItem Content="17" />
+                                        <ComboBoxItem Content="18" />
+                                        <ComboBoxItem Content="19" />
+                                        <ComboBoxItem Content="20" />
+                                        <ComboBoxItem Content="21" />
+                                        <ComboBoxItem Content="22" />
+                                        <ComboBoxItem Content="23" />
+                                        <ComboBoxItem Content="24" />
+                                        <ComboBoxItem Content="25" />
+                                        <ComboBoxItem Content="26" />
+                                        <ComboBoxItem Content="27" />
+                                        <ComboBoxItem Content="28" />
+                                        <ComboBoxItem Content="29" />
+                                        <ComboBoxItem Content="30" />
+                                        <ComboBoxItem Content="31" />
+                                    </ComboBox>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Height="40">
+                                    <RadioButton x:Name="EveryYear" GroupName="RecSubYearly" Content="{Binding The, Source={StaticResource ResourceWrapper}}"  FontSize="12" VerticalAlignment="Center"
+                                                 Checked="EveryYear_Checked"
+                                                 IsChecked="{Binding IsChecked, Converter={StaticResource BooltoBool}, ElementName=SpecificDate, Mode=TwoWay}"/>
+                                    <ComboBox x:Name="YrHowmanyth" BorderThickness="1" Background ="White" Height="25" Width="70" FontSize="12" Margin="10,0,0,0" 
+                    						SelectedIndex="{Binding EditedAppointment.RecurrenceProperites.YearlyNthWeek, Mode=OneWay}">
+                                        <ComboBoxItem Content="{Binding First, Source={StaticResource ResourceWrapper}}"   />
+                                        <ComboBoxItem Content="{Binding Second, Source={StaticResource ResourceWrapper}}"   />
+                                        <ComboBoxItem Content="{Binding Third, Source={StaticResource ResourceWrapper}}"   />
+                                        <ComboBoxItem Content="{Binding Fourth, Source={StaticResource ResourceWrapper}}"   />
+                                    </ComboBox>
+                                    <ComboBox x:Name="YrWeekday" BorderThickness="1" Background ="White" Height="25" Width="105" FontSize="12" Margin="10,0,0,0" 
+                                              SelectedIndex="{Binding EditedAppointment.RecurrenceProperites.YearlyWeekDay, Mode=OneWay}">
+                                        <ComboBoxItem Content="{Binding Sunday, Source={StaticResource ResourceWrapper}}"  />
+                                        <ComboBoxItem Content="{Binding Monday, Source={StaticResource ResourceWrapper}}"  />
+                                        <ComboBoxItem Content="{Binding Tuesday, Source={StaticResource ResourceWrapper}}"  />
+                                        <ComboBoxItem Content="{Binding Wednesday, Source={StaticResource ResourceWrapper}}"  />
+                                        <ComboBoxItem Content="{Binding Thursday, Source={StaticResource ResourceWrapper}}"  />
+                                        <ComboBoxItem Content="{Binding Friday, Source={StaticResource ResourceWrapper}}"/>
+                                        <ComboBoxItem Content="{Binding Saturday, Source={StaticResource ResourceWrapper}}"/>
+                                    </ComboBox>
+                                    <TextBlock Text="{Binding Of, Source={StaticResource ResourceWrapper}}" Height="20" Width="auto" Foreground="Black" Margin="5,0,5,0" FontSize="12" VerticalAlignment="Center"/>
+                                    <ComboBox x:Name="YrMonth" Background ="White" BorderThickness="1" Height="25" Width="100" FontSize="12" 
+                                              SelectedIndex="{Binding EditedAppointment.RecurrenceProperites.YearlyGenericMonth, Mode=OneWay}">
+                                        <ComboBoxItem Content="{Binding January, Source={StaticResource ResourceWrapper}}"  />
+                                        <ComboBoxItem Content="{Binding February, Source={StaticResource ResourceWrapper}}"  />
+                                        <ComboBoxItem Content="{Binding March, Source={StaticResource ResourceWrapper}}" />
+                                        <ComboBoxItem Content="{Binding April, Source={StaticResource ResourceWrapper}}" />
+                                        <ComboBoxItem Content="{Binding May, Source={StaticResource ResourceWrapper}}" />
+                                        <ComboBoxItem Content="{Binding June, Source={StaticResource ResourceWrapper}}" />
+                                        <ComboBoxItem Content="{Binding July, Source={StaticResource ResourceWrapper}}" />
+                                        <ComboBoxItem Content="{Binding August, Source={StaticResource ResourceWrapper}}" />
+                                        <ComboBoxItem Content="{Binding September, Source={StaticResource ResourceWrapper}}" />
+                                        <ComboBoxItem Content="{Binding October, Source={StaticResource ResourceWrapper}}" />
+                                        <ComboBoxItem Content="{Binding November, Source={StaticResource ResourceWrapper}}" />
+                                        <ComboBoxItem Content="{Binding December, Source={StaticResource ResourceWrapper}}" />
+                                    </ComboBox>
+                                </StackPanel>
+                            </StackPanel>
+                        </StackPanel>
+                    </Grid>
+                </StackPanel>
+                <StackPanel Margin="10 15">
+                    <TextBlock Text="{Binding Source={StaticResource ResourceWrapper}, Path= RangeOfRecurrence}" HorizontalAlignment="Left" FontSize="14" FontWeight="SemiBold" Foreground="Black"/>
+                    <Grid Width="545" Height="140" Margin="0 5 10 15" HorizontalAlignment="Left">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="200"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Height="40">
+                            <TextBlock Text="{Binding Source={StaticResource ResourceWrapper}, Path= StartDate }" Width="60" Foreground="Black" FontSize="12" Height="20" FontFamily="Segoe UI" VerticalAlignment="Center"/>
+                            <DatePicker x:Name="RangeStartdate" BorderThickness=".5" BorderBrush="DarkGray" Height="26" FontSize="12" Width="110" FontFamily="Segoe UI" FontWeight="Normal" HorizontalAlignment="Left" VerticalAlignment="Center"
+                                        SelectedDate="{Binding EditedAppointment.RecurrenceProperites.RangeStartDate,  Mode=OneWay}" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Orientation="Vertical" VerticalAlignment="Center" HorizontalAlignment="Center">
+                            <StackPanel Orientation="Horizontal" Height="40">
+                                <RadioButton x:Name="EndAfter" Width="80" GroupName="Range" Content="{Binding Source={StaticResource ResourceWrapper}, Path= EndAfter }"  FontSize="12" VerticalAlignment="Center"
+                                             IsChecked="{Binding EditedAppointment.RecurrenceProperites.IsRangeRecurrenceCount, Mode=OneWay}" 
+                                             Foreground="{Binding AppointmentEditorForeground, RelativeSource={RelativeSource TemplatedParent}}" 
+                                             Checked="EndDay_Checked"/>
+                                <input:UpDown MinValue="1" Height="30" x:Name="EndAfterCount" Width="50"
+                                              MaxValue="1000" Value="{Binding EditedAppointment.RecurrenceProperites.RangeRecurrenceCount, Mode=OneWay}"
+                                              IsScrollingOnCircle="True" Step="1" NumberDecimalDigits="0"/>
+                                <TextBlock Margin="5 0" Text="{Binding Source={StaticResource ResourceWrapper}, Path= Recurrence }"
+                                           Foreground="{Binding AppointmentEditorForeground, RelativeSource={RelativeSource TemplatedParent}}" 
+                                           Height="20" Width="auto" FontSize="12" VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Height="40" >
+                                <RadioButton x:Name="EndBy" GroupName="Range" Content="{Binding Source={StaticResource ResourceWrapper}, Path= EndBy }" FontSize="12"
+                                             Checked="EndDay_Checked" Width="80" VerticalAlignment="Center"
+                                             IsChecked="{Binding EditedAppointment.RecurrenceProperites.IsRangeEndDate, Mode=OneWay}"
+                                             Foreground="{Binding AppointmentEditorForeground, RelativeSource={RelativeSource TemplatedParent}}"/>
+                                <DatePicker x:Name="RangeEnddate" BorderThickness=".5" BorderBrush="DarkGray"
+                                            Height="25" Width="120" FontFamily="Segoe UI" FontWeight="Normal" HorizontalAlignment="Left" VerticalAlignment="Center"
+                                            SelectedDate="{Binding EditedAppointment.RecurrenceProperites.RangeEndDate, Mode=OneWay}" />
+                            </StackPanel>
+                            <RadioButton x:Name="NoEndDate" Margin="0 10" GroupName="Range" Content="{Binding Source={StaticResource ResourceWrapper}, Path= NoEndDate }" FontSize="12"
+                                         Checked="EndDay_Checked"
+                                         IsChecked="{Binding EditedAppointment.RecurrenceProperites.IsRangeNoEndDate, Mode=OneWay}" VerticalAlignment="Center" VerticalContentAlignment="Center"/>
+                        </StackPanel>
+                    </Grid>
+                </StackPanel>
+                <StackPanel Margin="10 5 18 5" HorizontalAlignment="Right" Orientation="Horizontal">
+                    <Button x:Name="SaveRec" Width="70" Margin="10 5 0 5" Background="#E7E7E7" BorderBrush="#D0D0D0" Content="{Binding Source={StaticResource ResourceWrapper}, Path=OK}" Height="25" Click="SaveRec_Click" FontFamily="Segoe UI" FontWeight="Normal" VerticalContentAlignment="Center"/>
+                    <Button x:Name="RecCancel" Width="70" Margin="10 5 0 5" Background="#E7E7E7" BorderBrush="#D0D0D0" Content="{Binding Source={StaticResource ResourceWrapper}, Path=Cancel}" Height="25" Click="RecCancel_Click" FontFamily="Segoe UI" FontWeight="Normal" VerticalContentAlignment="Center"/>
+                    <Button x:Name="CancelRec" Width="120" Margin="10 5 0 5" Background="#E7E7E7" BorderBrush="#D0D0D0" Content="{Binding Source={StaticResource ResourceWrapper}, Path=RemoveRecurrence}" Height="25" Click="CancelRec_Click" FontFamily="Segoe UI" FontWeight="Normal" VerticalContentAlignment="Center" IsEnabled="{Binding IsRecursive}"/>
+                </StackPanel>
+            </StackPanel>
+        </StackPanel>
+    </Grid>
+</Window>

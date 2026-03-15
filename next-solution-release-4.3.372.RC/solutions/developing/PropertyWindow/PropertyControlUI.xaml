@@ -1,0 +1,268 @@
+﻿<UserControl x:Class="PropertyControl.PropertyControlUI"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:sys="clr-namespace:System;assembly=mscorlib"
+    xmlns:local="clr-namespace:PropertyControl"      
+    xmlns:properties="clr-namespace:PropertyControl.Properties"
+    xmlns:ms="http://namespaces.mindscape.co.nz/wpf"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:dxb="http://schemas.devexpress.com/winfx/2008/xaml/bars"
+             xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+             mc:Ignorable="d" d:DesignHeight="300" d:DesignWidth="300"
+    x:Name="PropertyControl" PreviewKeyDown="PropertyControl_PreviewKeyDown">
+    <UserControl.Resources>
+        <ResourceDictionary>
+
+            <!-- region Making the grid styles available -->
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/WPFUtilities;component/ResourceDictionary/PropertyGrid.Generic.xaml" />
+                <ResourceDictionary Source="Themes/PropertyGrid.PropertyControl.xaml" />
+                <ResourceDictionary Source="/SharedResources;component/Resources/PropertyControl.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <LinearGradientBrush x:Key="AlloyIcon" EndPoint="0,0" StartPoint="0,1">
+                <GradientStop Color="#FF333333" Offset="0.10" />
+                <GradientStop Color="#66333333" Offset="0.80" />
+            </LinearGradientBrush>
+
+            <LinearGradientBrush x:Key="GreenIcon" EndPoint="0,0" StartPoint="0,1">
+                <GradientStop Color="#FF5f8927" Offset="0" />
+                <GradientStop Color="#665f8927" Offset="1" />
+            </LinearGradientBrush>
+
+            <LinearGradientBrush x:Key="BlueIcon" EndPoint="0,0" StartPoint="0,1">
+                <GradientStop Color="#FFDFEBFB" Offset="0.10" />
+                <GradientStop Color="#66DFEBFB" Offset="0.80" />
+            </LinearGradientBrush>
+
+            <ms:RowToDescriptionConverter x:Key="RowToDescription" />
+            <local:DivideDoubleByTwoConverter x:Key="DivideDoubleByTwoConverter" />
+
+            <!--<DataTemplate x:Key="BrushEditor" DataType="Brush">
+                <DockPanel>
+                    <Button Tag="{Binding Value, Mode=TwoWay}" Click="EditBrush_Click" DockPanel.Dock="Right">...</Button>
+                    <TextBlock Text="{Binding Value}" />
+                </DockPanel>
+            </DataTemplate>-->
+
+            <!--<DataTemplate x:Key="ColorEditor" DataType="Color">
+                <DockPanel>
+                    <Button Tag="{Binding Value, Mode=TwoWay}" Click="EditColor_Click" DockPanel.Dock="Right">...</Button>
+                    <TextBlock Text="{Binding Value}" />
+                </DockPanel>
+            </DataTemplate>-->
+
+            <local:BoolToVisibilityHideConverter x:Key="BoolToVisibilityHideConverter"/>
+            <local:EnumToFilterTypeConverter x:Key="EnumToFilterTypeConverter"/>
+            <local:PopupControlTitleConverter x:Key="PopupControlTitleConverter"/>
+            <local:PopupControlHelpConverter x:Key="PopupControlHelpConverter"/>
+
+            <!--
+            <ObjectDataProvider x:Key="PropertyFilterEnum" MethodName="GetValues" ObjectType="{x:Type sys:Enum}" >
+                <ObjectDataProvider.MethodParameters>
+                    <x:Type TypeName="local:PropertyFilterEnum" />
+                </ObjectDataProvider.MethodParameters>
+            </ObjectDataProvider>
+            -->
+
+        </ResourceDictionary>
+
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="5" x:Name="rowSplitter"/>
+            <RowDefinition Height="Auto" x:Name="rowContent"/>
+        </Grid.RowDefinitions>
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <StackPanel Orientation="Horizontal" x:Name="stackTitle">
+                <TextBlock x:Name="txtTitle" FontWeight="Bold" Text="{Binding Path=Title, Mode=OneWay, ElementName=PropertyControl}" />
+                <TextBlock FontWeight="Bold" Text=" (" 
+                            Visibility="{Binding Path=IsMultipleSelection, Mode=OneWay, 
+                            Converter={StaticResource BoolToVisibilityHideConverter}, 
+                            ElementName=PropertyControl, UpdateSourceTrigger=PropertyChanged}" />
+                <TextBlock FontWeight="Bold" Text="{x:Static properties:Resources.MultipleSelection}" 
+                            Visibility="{Binding Path=IsMultipleSelection, Mode=OneWay, 
+                            Converter={StaticResource BoolToVisibilityHideConverter}, 
+                            ElementName=PropertyControl, UpdateSourceTrigger=PropertyChanged}" />
+                <TextBlock FontWeight="Bold" Text=")" 
+                            Visibility="{Binding Path=IsMultipleSelection, Mode=OneWay, 
+                            Converter={StaticResource BoolToVisibilityHideConverter}, 
+                            ElementName=PropertyControl, UpdateSourceTrigger=PropertyChanged}" />
+            </StackPanel>            
+
+            <!--Toolbar-->
+            <dxb:BarContainerControl x:Name="toolbarGroupingFiltering" Grid.Row="1" ContainerType="Top">
+                <!--<dxb:BarContainerControl.Resources>
+                    <DataTemplate x:Key="BarItemDefaultGlyphTemplate">
+                        --><!--<Border BorderThickness="1" BorderBrush="Black" Background="LightYellow">--><!--
+                        <Image Source="{Binding Path=Link.Item.Glyph, RelativeSource={RelativeSource Mode=FindAncestor,AncestorType=dxb:LightweightBarItemLinkControl}}" Margin="5"/>
+                        --><!--</Border>--><!--
+                    </DataTemplate>
+                </dxb:BarContainerControl.Resources>-->
+                <dxb:ToolBarControl x:Name="toolbarSettings" IsMultiLine="False" ShowDragWidget="False" AllowCustomizationMenu="False" AllowQuickCustomization="False">
+                    <dxb:BarButtonItem x:Name="btnOK" IsEnabled="False" Glyph="{StaticResource PCOkButton}" GlyphSize="Small" CustomGlyphSize="20,20"
+                        ToolTipService.ShowOnDisabled="True" ToolTip="{x:Static properties:Resources.TooltipToolbarButtonOk}" />
+                    <dxb:BarButtonItem x:Name="btnCancel" IsEnabled="False" Glyph="{StaticResource PCCancelButton}" GlyphSize="Small" CustomGlyphSize="14,14"
+                        ToolTipService.ShowOnDisabled="True" ToolTip="{x:Static properties:Resources.TooltipToolbarButtonCancel}" />
+                    <dxb:BarItemSeparator x:Name="separator" />
+                    <dxb:BarCheckItem IsVisible="False" GlyphSize="Small" CustomGlyphSize="14,14" IsChecked="{Binding IsPropertySetFriendMode, Mode=TwoWay, ElementName=PropertyControl}" Glyph="{StaticResource PCFriends}"
+                              x:Name="btnFriend" ToolTipService.ShowOnDisabled="True" ToolTip="{x:Static properties:Resources.TooltipToolbarButtonFriend}" />
+                    <dxb:BarCheckItem GlyphSize="Small" CustomGlyphSize="14,14" IsChecked="{Binding IsPropertySetEasyMode, Mode=TwoWay, ElementName=PropertyControl}" Glyph="{StaticResource PCEasyMode}"
+                              x:Name="btnEasyMode" ToolTipService.ShowOnDisabled="True" ToolTip="{x:Static properties:Resources.TooltipToolbarButtonEasyMode}" />
+                    <dxb:BarItemSeparator />
+                    <dxb:BarCheckItem GlyphSize="Small" CustomGlyphSize="14,14" IsChecked="{Binding IsPropertySetFilter, Mode=TwoWay, ElementName=PropertyControl}" Glyph="{StaticResource PCOnlySet}"
+                              x:Name="btnSetFilter" ToolTipService.ShowOnDisabled="True" ToolTip="{x:Static properties:Resources.TooltipToolbarButtonOnlySet}" />
+                    <dxb:BarItemSeparator />
+                    <dxb:BarButtonItem x:Name="btnExpandCollapseAll" Glyph="{StaticResource PCExpandCollapse}" GlyphSize="Small" CustomGlyphSize="14,14"
+                        IsEnabled="{Binding IsExpandCollapseEnabled, Mode=OneWay, ElementName=PropertyControl}"
+                        ItemClick="btnExpandCollapseAll_Click" ToolTipService.ShowOnDisabled="True" ToolTip="{x:Static properties:Resources.TooltipToolbarButtonExpandCollapse}" />
+                </dxb:ToolBarControl>
+
+                <dxb:ToolBarControl IsMultiLine="False" ShowDragWidget="False" AllowCustomizationMenu="False" AllowQuickCustomization="False" >
+                    <dxb:BarCheckItem Glyph="{StaticResource PCSortByGroup}" GlyphSize="Small" CustomGlyphSize="14,14" ToolTip="{x:Static properties:Resources.TooltipToolbarButtonGroupByCategory}" 
+                            IsChecked="{Binding PropertyFilterState, Mode=TwoWay, ElementName=PropertyControl, 
+                                        Converter={StaticResource EnumToFilterTypeConverter}, ConverterParameter='GroupByCategory'}" >
+                    </dxb:BarCheckItem>
+                    <dxb:BarCheckItem Glyph="{StaticResource PCSortByType}" GlyphSize="Small" CustomGlyphSize="14,14" ToolTip="{x:Static properties:Resources.TooltipToolbarButtonGroupByType}" 
+                            IsChecked="{Binding PropertyFilterState, Mode=TwoWay, ElementName=PropertyControl, 
+                                        Converter={StaticResource EnumToFilterTypeConverter}, ConverterParameter='GroupByType'}" >
+                    </dxb:BarCheckItem>
+                    <dxb:BarCheckItem Glyph="{StaticResource PCSortAlphabetically}" GlyphSize="Small" CustomGlyphSize="14,14" ToolTip="{x:Static properties:Resources.TooltipToolbarButtonSortAlphabetically}" 
+                            IsChecked="{Binding PropertyFilterState, Mode=TwoWay, ElementName=PropertyControl, 
+                                        Converter={StaticResource EnumToFilterTypeConverter}, ConverterParameter='SortAlphabetically'}" >
+                    </dxb:BarCheckItem>
+                    <dxb:BarCheckItem Glyph="{StaticResource PCSortByPriority}" GlyphSize="Small" CustomGlyphSize="14,14" ToolTip="{x:Static properties:Resources.TooltipToolbarButtonSortByPriority}" 
+                            IsChecked="{Binding PropertyFilterState, Mode=TwoWay, ElementName=PropertyControl, 
+                                        Converter={StaticResource EnumToFilterTypeConverter}, ConverterParameter='SortByPriority'}" >
+                    </dxb:BarCheckItem>
+                    <dxb:BarItemSeparator />
+                  <dxb:BarEditItem x:Name="textSearchFilter" EditValueChanged="SearchFilter_OnTextChanged" Content="{x:Static properties:Resources.TootlipToolbarTextSearch}">
+                      <dxb:BarEditItem.ContentTemplate>
+                        <DataTemplate>
+                          <!--<dxe:ButtonEdit MinWidth="100" AllowNullInput="True" NullText="{x:Static properties:Resources.NullTextToolbarTextSearch}" ShowNullText="True" NullValueButtonPlacement="EditBox" AllowDefaultButton="False"/>-->
+                          <dxe:ComboBoxEdit MinWidth="100" AllowNullInput="True" NullText="{x:Static properties:Resources.NullTextToolbarTextSearch}"
+                                            ShowNullText="True" NullValueButtonPlacement="EditBox" AllowDefaultButton="True"
+                                            AutoComplete="False" IncrementalFiltering="False"
+                                            ClearSelectionOnBackspace="True" ImmediatePopup="True"
+                                            EditValuePostMode="Delayed"
+                                            EditValueChanged="filter_EditValueChanged"
+                                            ItemsSource="{Binding Path=DataContext, RelativeSource={RelativeSource AncestorType={x:Type dxb:IBarEditItemLinkControl}}, Mode=OneWay}"/>
+                        </DataTemplate>
+                      </dxb:BarEditItem.ContentTemplate>
+                    </dxb:BarEditItem>
+                </dxb:ToolBarControl>
+
+                <dxb:ToolBarControl IsMultiLine="False" ShowDragWidget="False" AllowCustomizationMenu="False" AllowQuickCustomization="False" 
+                                    Visibility="{Binding Path=IsConfigModeEnabled, Mode=OneWay, Converter={StaticResource BoolToVisibilityHideConverter}, ElementName=PropertyControl, UpdateSourceTrigger=PropertyChanged}" >
+                    <dxb:BarCheckItem Glyph="{StaticResource PCShowAllButton}" GlyphSize="Small" CustomGlyphSize="14,14" ToolTip="{x:Static properties:Resources.TooltipToolbarButtonShowAllProperties}" 
+                                  IsChecked="{Binding IsShowAllSet, Mode=TwoWay, ElementName=PropertyControl}" >
+                    </dxb:BarCheckItem>
+                    <dxb:BarCheckItem Glyph="{StaticResource PCHideButton}" GlyphSize="Small" CustomGlyphSize="14,14" ToolTip="{x:Static properties:Resources.TooltipToolbarButtonHideProperties}" 
+                                  IsChecked="{Binding IsPropertyHide, Mode=TwoWay, ElementName=PropertyControl}" 
+                                  IsEnabled="{Binding IsPropertyShowHideEnabled, Mode=OneWay, ElementName=PropertyControl}" >
+                    </dxb:BarCheckItem>
+                    <dxb:BarCheckItem Glyph="{StaticResource PCShowInEasyModeButton}" GlyphSize="Small" CustomGlyphSize="14,14" ToolTip="{x:Static properties:Resources.TooltipToolbarButtonShowEasyProperties}" 
+                                  IsChecked="{Binding IsPropertyShowInEasyMode, Mode=TwoWay, ElementName=PropertyControl}" 
+                                  IsEnabled="{Binding IsPropertyShowHideEnabled, Mode=OneWay, ElementName=PropertyControl}" >
+                    </dxb:BarCheckItem>
+                    <dxb:BarCheckItem Glyph="{StaticResource PCAdvancedGroup}" GlyphSize="Small" CustomGlyphSize="14,14" ToolTip="{x:Static properties:Resources.TooltipToolbarButtonAdvancedProperties}" 
+                                  IsChecked="{Binding IsAdvancedProperty, Mode=TwoWay, ElementName=PropertyControl}" 
+                                  IsEnabled="{Binding IsPropertyShowHideEnabled, Mode=OneWay, ElementName=PropertyControl}" >
+                    </dxb:BarCheckItem>
+                    <dxb:BarButtonItem Glyph="{StaticResource PCOnlyWritable}" GlyphSize="Small" CustomGlyphSize="14,14" ToolTip="{x:Static properties:Resources.TooltipToolbarButtonOpenLocalizationWindow}" ItemClick="LocalizePropertyBtn_Click">
+                    </dxb:BarButtonItem>
+                    <dxb:BarItemSeparator />
+                    <dxb:BarButtonItem Glyph="{StaticResource PCSave}" GlyphSize="Small" CustomGlyphSize="14,14" ToolTip="{x:Static properties:Resources.TooltipToolbarButtonBuildLocalizationXmlFile}" ItemClick="CreateResourceBtn_Click">
+                    </dxb:BarButtonItem>
+
+                </dxb:ToolBarControl>
+            </dxb:BarContainerControl>
+
+            <TextBlock Grid.Row="2" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0, 10, 0, 0"
+                       Visibility="{Binding Path=IsPropertyGridVisible, Mode=OneWay, ConverterParameter=True,
+                                    Converter={StaticResource BoolToVisibilityHideConverter},
+                                    ElementName=PropertyControl, UpdateSourceTrigger=PropertyChanged}"
+                       Text="{x:Static properties:Resources.PropertyGrid_SearchNoMatch}" />
+
+            <ms:PropertyGrid x:Name="propertyGrid" Grid.Row="2" TreeViewItem.Expanded="OnPropertyGridNodeExpanded" 
+                             Expander.Expanded="OnPropertyGridGroupExpanded" Expander.Collapsed="OnPropertyGridGroupCollapsed"
+                             Visibility="{Binding Path=IsPropertyGridVisible, Mode=OneWay, 
+                                            Converter={StaticResource BoolToVisibilityHideConverter}, 
+                                            ElementName=PropertyControl, UpdateSourceTrigger=PropertyChanged}"
+                             IsToolBarVisible="False"
+                             IsExpandedStatePersistent="True"
+                             AllowModifyCollections="False" >
+                <ms:PropertyGrid.Resources>
+                    <Style TargetType="{x:Type TextBox}">
+                        <Setter Property="FontFamily" Value="{Binding FontFamily, RelativeSource={RelativeSource AncestorType=UserControl, Mode=FindAncestor}}"/>
+                        <Setter Property="FontSize" Value="{Binding FontSize, RelativeSource={RelativeSource AncestorType=UserControl, Mode=FindAncestor}}"/>
+                    </Style>
+                    <Style TargetType="{x:Type ToggleButton}">
+                        <Setter Property="FontFamily" Value="{Binding FontFamily, RelativeSource={RelativeSource AncestorType=UserControl, Mode=FindAncestor}}"/>
+                        <Setter Property="FontSize" Value="{Binding FontSize, RelativeSource={RelativeSource AncestorType=UserControl, Mode=FindAncestor}}"/>
+                    </Style>
+                    <Style TargetType="{x:Type TextBlock}">
+                        <Setter Property="FontFamily" Value="{Binding FontFamily, RelativeSource={RelativeSource AncestorType=UserControl, Mode=FindAncestor}}"/>
+                        <Setter Property="FontSize" Value="{Binding FontSize, RelativeSource={RelativeSource AncestorType=UserControl, Mode=FindAncestor}}"/>
+                    </Style>
+                </ms:PropertyGrid.Resources>
+                <ms:PropertyGrid.Editors>
+                    <!--<ms:TypeEditor EditedType="Brush" EditorTemplate="{StaticResource BrushEditor}" TemplateBindingMode="WrappedValue" />
+                    <ms:TypeEditor EditedType="Color" EditorTemplate="{StaticResource ColorEditor}" TemplateBindingMode="WrappedValue" />-->
+                    <ms:TypeEditor EditedType="{x:Type sys:Boolean}" EditorTemplate="{StaticResource {x:Static ms:PropertyGrid.CheckBoxEditorKey}}" />
+                    <ms:TypeEditor EditedType="{x:Type TypeName=sys:Nullable`1[[System.Boolean]]}" EditorTemplate="{StaticResource {x:Static ms:PropertyGrid.CheckBoxEditorKey}}" />
+                    <ms:TypeEditor EditedType="{x:Type sys:Enum}" EditorTemplate="{StaticResource {x:Static ms:PropertyGrid.ListSelectNoTextEntryEditorKey}}" />
+                    <!--<ms:TypeEditor EditedType="{x:Type sys:Double}" EditorTemplate="{StaticResource {x:Static ms:PropertyGrid.DoubleEditorKey}}" />
+                    <ms:TypeEditor EditedType="{x:Type sys:Decimal}" EditorTemplate="{StaticResource {x:Static ms:PropertyGrid.DoubleEditorKey}}" />
+                    <ms:TypeEditor EditedType="{x:Type sys:Single}" EditorTemplate="{StaticResource {x:Static ms:PropertyGrid.DoubleEditorKey}}" />
+                    <ms:TypeEditor EditedType="{x:Type sys:Int16}" EditorTemplate="{StaticResource {x:Static ms:PropertyGrid.IntegerEditorKey}}" />
+                    <ms:TypeEditor EditedType="{x:Type sys:Int32}" EditorTemplate="{StaticResource {x:Static ms:PropertyGrid.IntegerEditorKey}}" />
+                    <ms:TypeEditor EditedType="{x:Type sys:Int64}" EditorTemplate="{StaticResource {x:Static ms:PropertyGrid.IntegerEditorKey}}" />
+                    <ms:TypeEditor EditedType="{x:Type sys:Byte}" EditorTemplate="{StaticResource {x:Static ms:PropertyGrid.IntegerEditorKey}}" />
+                    <ms:TypeEditor EditedType="{x:Type sys:SByte}" EditorTemplate="{StaticResource {x:Static ms:PropertyGrid.IntegerEditorKey}}" />
+                    <ms:TypeEditor EditedType="{x:Type sys:UInt16}" EditorTemplate="{StaticResource {x:Static ms:PropertyGrid.IntegerEditorKey}}" />
+                    <ms:TypeEditor EditedType="{x:Type sys:UInt32}" EditorTemplate="{StaticResource {x:Static ms:PropertyGrid.IntegerEditorKey}}" />
+                    <ms:TypeEditor EditedType="{x:Type sys:UInt64}" EditorTemplate="{StaticResource {x:Static ms:PropertyGrid.IntegerEditorKey}}" />-->
+                </ms:PropertyGrid.Editors>
+
+            </ms:PropertyGrid>
+            <TextBlock Grid.Row="3" x:Name="txtShortDesc" Text="{Binding SelectedGridItem.Node.HumanName, ElementName=propertyGrid, Converter={StaticResource PopupControlTitleConverter}}" FontWeight="Bold" />
+            <!--<StackPanel Grid.Row="4" >-->
+            <TextBlock Grid.Row="4" x:Name="txtLongDesc" 
+                    Text="{Binding SelectedGridItem, ElementName=propertyGrid, Converter={StaticResource PopupControlHelpConverter}}" 
+                    TextWrapping="Wrap" />
+                <!--<Image Source="Images\DinamicHelp}" Margin="5,0,0,0" MouseDown="ContextualHelp_Clicked">
+                    <Image.ToolTip>
+                        <ToolTip Content="{Binding Node.Property.Description}" />
+                    </Image.ToolTip>
+                </Image>-->
+             <!--</StackPanel>-->
+            <StackPanel Grid.Row="5" Orientation="Horizontal" 
+                        Visibility="{Binding Path=IsConfigModeEnabled, Mode=OneWay, 
+                                    Converter={StaticResource BoolToVisibilityHideConverter}, 
+                                    ElementName=PropertyControl, UpdateSourceTrigger=PropertyChanged}">
+                <TextBlock Text="{Binding SelectedGridItem.Node.Name, ElementName=propertyGrid}" />
+                <TextBlock Text=" - " />
+                <TextBlock Text="{Binding Path=SelectedPropertyTypeOwner, 
+                                    Mode=OneWay, ElementName=PropertyControl, 
+                                    UpdateSourceTrigger=PropertyChanged}" TextWrapping="Wrap" />
+            </StackPanel>
+        </Grid>
+
+        <GridSplitter Grid.Row="1" HorizontalAlignment="Stretch"/>
+        <ScrollViewer Grid.Row="2" Visibility="Collapsed" x:Name="contentControl">
+        </ScrollViewer>
+    </Grid>
+</UserControl>

@@ -1,0 +1,181 @@
+﻿<!-- Copyright © Northwoods Software Corporation, 2008-2015. All Rights Reserved. -->
+
+<UserControl x:Class="DynamicPorts.DynamicPorts"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:go="http://schemas.nwoods.com/GoXam"
+    xmlns:local="clr-namespace:DynamicPorts">
+  <UserControl.Resources>
+    <go:NullBooleanConverter x:Key="theNullBooleanConverter" />
+
+    <Style x:Key="InertListBoxStyle" TargetType="local:InertListBox">
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate>
+            <ItemsPresenter />
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+      <Setter Property="ItemContainerStyle">
+        <Setter.Value>
+          <Style TargetType="ListBoxItem">
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="BorderThickness" Value="0" />
+          </Style>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <ItemsPanelTemplate x:Key="HorizontalItemsPanel">
+      <StackPanel Orientation="Horizontal" />
+    </ItemsPanelTemplate>
+    <ItemsPanelTemplate x:Key="VerticalItemsPanel">
+      <StackPanel Orientation="Vertical" />
+    </ItemsPanelTemplate>
+
+    <DataTemplate x:Key="NodeTemplate">
+      <Grid go:Part.SelectionAdorned="True" go:Part.SelectionElementName="myShape"
+            go:Node.Location="{Binding Path=Data.Location, Mode=TwoWay}">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+          <RowDefinition Height="Auto" />
+          <RowDefinition Height="Auto" />
+          <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <Rectangle Grid.Column="1" Grid.Row="1" x:Name="myShape"
+                   Fill="LightGray" Stroke="Black" StrokeThickness="1"
+                   HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                   MinWidth="50" MinHeight="50" />
+        <TextBlock Grid.Column="1" Grid.Row="1"
+                   Text="{Binding Path=Data.Text, Mode=TwoWay}"
+                   TextWrapping="Wrap" go:Part.TextEditable="True"
+                   MaxWidth="150" Margin="4"
+                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+
+        <local:InertListBox Grid.Column="0" Grid.Row="1"
+                 Style="{StaticResource InertListBoxStyle}"
+                 ItemsPanel="{StaticResource VerticalItemsPanel}"
+                 ItemsSource="{Binding Path=Data.LeftSockets}">
+          <ListBox.ItemTemplate>
+            <DataTemplate>
+              <Rectangle Fill="{Binding Color}" Width="8" Height="8" Margin="0 1 0 1"
+                         go:Node.PortId="{Binding Name}" Tag="Left"
+                         go:Node.LinkableTo="True" go:Node.ToSpot="MiddleLeft">
+                <ToolTipService.ToolTip>
+                  <TextBlock Text="{Binding Name}" />
+                </ToolTipService.ToolTip>
+              </Rectangle>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </local:InertListBox>
+
+        <local:InertListBox Grid.Column="2" Grid.Row="1"
+                 Style="{StaticResource InertListBoxStyle}"
+                 ItemsPanel="{StaticResource VerticalItemsPanel}"
+                 ItemsSource="{Binding Path=Data.RightSockets}">
+          <ListBox.ItemTemplate>
+            <DataTemplate>
+              <Rectangle Fill="{Binding Color}" Width="8" Height="8" Margin="0 1 0 1"
+                         go:Node.PortId="{Binding Name}" Tag="Right"
+                         go:Node.LinkableFrom="True" go:Node.FromSpot="MiddleRight">
+                <ToolTipService.ToolTip>
+                  <TextBlock Text="{Binding Name}" />
+                </ToolTipService.ToolTip>
+              </Rectangle>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </local:InertListBox>
+
+        <local:InertListBox Grid.Column="1" Grid.Row="0"
+                 Style="{StaticResource InertListBoxStyle}"
+                 ItemsPanel="{StaticResource HorizontalItemsPanel}"
+                 ItemsSource="{Binding Path=Data.TopSockets}">
+          <ListBox.ItemTemplate>
+            <DataTemplate>
+              <Rectangle Fill="{Binding Color}" Width="8" Height="8" Margin="1 0 1 0"
+                         go:Node.PortId="{Binding Name}" Tag="Top"
+                         go:Node.LinkableTo="True" go:Node.ToSpot="MiddleTop">
+                <ToolTipService.ToolTip>
+                  <TextBlock Text="{Binding Name}" />
+                </ToolTipService.ToolTip>
+              </Rectangle>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </local:InertListBox>
+
+        <local:InertListBox Grid.Column="1" Grid.Row="2"
+                 Style="{StaticResource InertListBoxStyle}"
+                 ItemsPanel="{StaticResource HorizontalItemsPanel}"
+                 ItemsSource="{Binding Path=Data.BottomSockets}">
+          <ListBox.ItemTemplate>
+            <DataTemplate>
+              <Rectangle Fill="{Binding Color}" Width="8" Height="8" Margin="1 0 1 0"
+                         go:Node.PortId="{Binding Name}" Tag="Bottom"
+                         go:Node.LinkableFrom="True" go:Node.FromSpot="MiddleBottom">
+                <ToolTipService.ToolTip>
+                  <TextBlock Text="{Binding Name}" />
+                </ToolTipService.ToolTip>
+              </Rectangle>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </local:InertListBox>
+      </Grid>
+    </DataTemplate>
+    
+    <DataTemplate x:Key="LinkTemplate">
+      <go:LinkPanel go:Part.SelectionElementName="Path" go:Part.SelectionAdorned="True"
+                    go:Part.Reshapable="True" >
+        <go:Link.Route>
+          <local:CustomRoute Routing="Orthogonal" Corner="4"
+                             RelinkableFrom="True" RelinkableTo="True" />
+        </go:Link.Route>
+        <go:LinkShape x:Name="Path" Stroke="Black" StrokeThickness="1" />
+        <go:LinkShape Stroke="Transparent" StrokeThickness="3" />
+      </go:LinkPanel>
+    </DataTemplate>
+  </UserControl.Resources>
+
+  <Grid>
+    <Grid.RowDefinitions>
+      <RowDefinition Height="*" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
+    <go:Diagram Grid.Row="0" x:Name="myDiagram" Padding="10"
+                HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"
+                NodeTemplate="{StaticResource NodeTemplate}"
+                LinkTemplate="{StaticResource LinkTemplate}">
+      <go:Diagram.ClickCreatingTool>
+        <go:ClickCreatingTool DoubleClick="True">
+          <go:ClickCreatingTool.PrototypeData>
+            <local:Unit Key="Unit" Text="Unit" />
+          </go:ClickCreatingTool.PrototypeData>
+        </go:ClickCreatingTool>
+      </go:Diagram.ClickCreatingTool>
+    </go:Diagram>
+    <StackPanel Grid.Row="0" Orientation="Horizontal"
+                HorizontalAlignment="Right" VerticalAlignment="Top">
+      <Button Content="Save" Click="Save_Click" />
+      <Button Content="Load" Click="Load_Click" x:Name="LoadButton" IsEnabled="False" />
+    </StackPanel>
+    <StackPanel Grid.Row="1" Orientation="Horizontal">
+      <TextBlock Text="Add a port to a side of the selected node: " VerticalAlignment="Center" />
+      <Button Content="Left" Click="Button_Add" Tag="Left"
+              IsEnabled="{Binding ElementName=myDiagram, Path=SelectedNode, Converter={StaticResource theNullBooleanConverter}}" />
+      <Button Content="Right" Click="Button_Add" Tag="Right"
+              IsEnabled="{Binding ElementName=myDiagram, Path=SelectedNode, Converter={StaticResource theNullBooleanConverter}}" />
+      <Button Content="Top" Click="Button_Add" Tag="Top"
+              IsEnabled="{Binding ElementName=myDiagram, Path=SelectedNode, Converter={StaticResource theNullBooleanConverter}}" />
+      <Button Content="Bottom" Click="Button_Add" Tag="Bottom"
+              IsEnabled="{Binding ElementName=myDiagram, Path=SelectedNode, Converter={StaticResource theNullBooleanConverter}}" />
+    </StackPanel>
+    <TextBlock Grid.Row="2" Text="Context click a port to remove it" />
+    <TextBlock Grid.Row="3" Text="Double click in background to create a new node" />
+  </Grid>
+</UserControl>

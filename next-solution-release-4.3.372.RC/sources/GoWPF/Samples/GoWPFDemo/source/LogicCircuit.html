@@ -1,0 +1,147 @@
+﻿<html>
+<head>
+  <title></title>
+  <style type="text/css">
+    .style1 {
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 10pt;
+    }
+  </style>
+</head>
+<body class="style1">
+<p>
+This sample allows the user to create models of circuits using gates 
+and wires. It also automatically simulates its operation by displaying  
+values: green for true and red for false.&nbsp; It continually updates itself with a <strong>
+DispatcherTimer</strong> that calls an <strong>UpdateValues</strong> method so 
+that the values throughout the circuit remain correct when changing the wiring 
+or when changing the Input values by double-clicking on Input nodes.</p>
+	<p>
+To support the creation and editing of circuit diagrams, we create a 
+<strong>GraphLinksModel </strong>in code, set its<strong> Modifiable </strong>property to 
+	true, set the<strong> NodesSource</strong> and<strong> LinksSource </strong>properties 
+	to empty collections, and set <strong>HasUndoManager</strong> to true.</p><pre><font face="Courier New">  var diagramModel = new GraphLinksModel&lt;MyGateData, String, String, MyWireData&gt;();
+  diagramModel.Modifiable = true;
+  diagramModel.NodeKeyPath = &quot;Key&quot;;
+  diagramModel.NodeCategoryPath = &quot;GateType&quot;;
+  diagramModel.NodesSource = new ObservableCollection&lt;MyGateData&gt;();
+  diagramModel.LinksSource = new ObservableCollection&lt;MyWireData&gt;();
+  diagramModel.HasUndoManager = true;
+  myDiagram.Model = diagramModel;</pre>
+	<p>
+	To support multiple <strong>DataTemplate</strong>s for <strong>Node</strong>s, 
+	we add a <strong>GateType</strong> property to our <strong>MyGateData</strong> 
+	class to choose the data template to use for rendering that node data.&nbsp; 
+	The model needs to know how to choose the template, so we also have to set 
+	the <strong>NodeCategoryPath </strong>to the name of that property.</p>
+	<pre>public class MyGateData : GraphLinksModelNodeData&lt;String&gt; {
+  // the type of gate that this node represents
+  public String GateType { get; set; }
+
+  // the shape of the node figure is bound to this property
+  public NodeFigure Figure { get; set; }
+
+  // the current value of this gate;
+  // the node color is bound to its Data&#39;s Value property and must update with it
+  public Boolean Value {
+    get { return _Value; }
+    set {
+      Boolean old = _Value;
+      if (old != value) {
+        _Value = value;
+        RaisePropertyChanged(&quot;Value&quot;, old, value);
+      }
+    }
+  }
+  private Boolean _Value;
+}</pre>
+	<p>Although there are potentially many different kinds of gates, we can 
+	simplify their implementation by using only four categories:</p>
+	<ul>
+		<li>&quot;Input&quot; gates only have an output port; double-clicking on them 
+		toggles their boolean value</li>
+		<li>&quot;Output&quot; gates only have an input port</li>
+		<li>&quot;OneInOneOut&quot; gates have one input port and one output port</li>
+		<li>&quot;TwoInOneOut&quot; gates have two input ports and one output port</li>
+	</ul>
+	<p>The corresponding four <strong>DataTemplate</strong>s are inserted into a
+	<strong>DataTemplateDictionary</strong> (for WPF in XAML, for Silverlight in 
+	code).</p>
+	<p>The current value of each Input or Output gate or wire is shown by its 
+	color.&nbsp; This is achieved by data-binding its brush to the <strong>Value</strong> 
+	property of the data:</p>
+	<pre>   &lt;go:BooleanBrushConverter x:Key=&quot;theValueConverter&quot; FalseBrush=&quot;Red&quot; TrueBrush=&quot;Green&quot; /&gt;
+
+  ...
+     &lt;go:NodeShape Fill=&quot;{Binding Path=Data.Value, Converter={StaticResource theValueConverter}}&quot; ...&gt;</pre>
+	<p>Note how ports are implemented using <strong>Rectangle</strong>s.&nbsp; 
+	For example, consider the typical output port:</p>
+	<pre> &lt;Rectangle go:SpotPanel.Spot=&quot;MiddleRight&quot; Width=&quot;8&quot; Height=&quot;8&quot; Fill=&quot;Black&quot;
+           go:Node.PortId=&quot;OneOutOf&quot; go:Node.LinkableSelfNode=&quot;True&quot;
+           go:Node.LinkableFrom=&quot;True&quot; go:Node.FromSpot=&quot;MiddleRight&quot; Cursor=&quot;Hand&quot; /&gt;</pre>
+	<p>The <strong>go:SpotPanel.Spot</strong> attached property tells the
+	<strong>SpotPanel</strong> where to position the <strong>Rectangle</strong>.&nbsp; 
+	The <strong>go:Node.PortId</strong> attached property both declares that 
+	this <strong>Rectangle</strong> acts as a port and gives it a name if you 
+	want to find it again by calling <strong>Node.FindPort</strong>.&nbsp; The 
+	two <strong>go:Node.Linkable...</strong> attached properties restrict the 
+	interactive linking abilities of the user.&nbsp; The <strong>goNode.FromSpot</strong> 
+	attached property declares that links coming out of this port connect at a 
+	particular spot on the <strong>Rectangle</strong>&#39;s bounds.&nbsp; Of course 
+	you could use other elements instead of <strong>Rectangle</strong>s if you 
+	want them to appear differently.</p>
+	<p>To support drag-and-drop from the palette of gates shown on the left, we 
+	also have to set <strong>Diagram.AllowDrop</strong> to true.</p>
+	<pre><font face="Courier New">  &lt;go:Diagram x:Name=myDiagram AllowDrop="True" ...&gt;</pre>
+	<p>
+	The <strong>Palette</strong> control extends the<strong> Diagram </strong>control, so it inherits much the same behavior. However, by default 
+	it has
+a <strong>GridLayout</strong>, which results in the <strong>Node</strong>s in a <strong>Palette</strong> arranged in a 
+grid, filling each row from left to right in the available space.</p>
+<p>
+To create a <strong>Palette</strong>, simply declare it in XAML as you would a 
+<strong>Diagram</strong>, so that it's placed wherever in the window you want it. Since the default behavior of a 
+<strong>Palette</strong> allows
+one to drag nodes out of it, we needn't set any attributes to enable our desired behavior. The implementation is as shown:
+</p><pre><font face="Courier New">    &lt;go:Palette x:Key="myPalette" ...&gt;</pre>
+<p>
+In code, we create a model for our <strong>Palette</strong> exactly as we would for a 
+<strong>Diagram</strong>.&nbsp; Since we want our palette to include <strong>Node</strong>s, but not 
+<strong>Link</strong>s, we
+set our model's <strong>LinksSource</strong> property to an empty collection:
+</p>
+	<pre><font face="Courier New">    var paletteModel = new GraphLinksModel&lt;MyGateData, String, String, MyWireData&gt;();
+    paletteModel.NodeKeyPath = "Key";
+    paletteModel.NodeCategoryPath = &quot;GateType&quot;;
+    paletteModel.NodesSource = new List&lt;MyGateData&gt;() {
+      new MyGateData() { Figure = NodeFigure.Circle, GateType = &quot;Input&quot;, Key = &quot;Input&quot;},
+      new MyGateData() { Figure = NodeFigure.Rectangle, GateType = &quot;Output&quot;, Key = &quot;Output&quot;, Value=true},
+      new MyGateData() { Figure = NodeFigure.AndGate, GateType = &quot;TwoInOneOut&quot;, Key = &quot;And&quot;},
+      new MyGateData() { Figure = NodeFigure.OrGate, GateType = &quot;TwoInOneOut&quot;, Key = &quot;Or&quot;},
+      new MyGateData() { Figure = NodeFigure.XorGate, GateType = &quot;TwoInOneOut&quot;, Key = &quot;Xor&quot;},
+      new MyGateData() { Figure = NodeFigure.Inverter, GateType = &quot;OneInOneOut&quot;, Key = &quot;Not&quot;},
+      new MyGateData() { Figure = NodeFigure.NandGate, GateType = &quot;TwoInOneOut&quot;, Key = &quot;Nand&quot;},
+      new MyGateData() { Figure = NodeFigure.NorGate, GateType = &quot;TwoInOneOut&quot;, Key = &quot;Nor&quot;},
+      new MyGateData() { Figure = NodeFigure.XnorGate, GateType = &quot;TwoInOneOut&quot;, Key = &quot;Xnor&quot;},
+    };
+    paletteModel.LinksSource = new List&lt;MyWireData&gt;();
+    myPalette.Model = paletteModel;
+</pre>
+	<p>
+Another feature this sample makes use of is the <strong>UndoManager</strong>. The undo manager enables 
+	the user to use the standard undo and redo commands (Ctrl-Z and Ctrl-Y) to revert to an earlier or later state of your 
+	diagram.&nbsp; The <strong>DiagramModel</strong> supports<strong> </strong>
+	all of the standard operations, such as adding a new node either by 
+	drag-and-drop or by copying, drawing a new link or reconnecting an existing 
+	link, or deleting a node or a link.</p>
+	<p>
+	However, models do not know about the position of nodes.&nbsp; If you want 
+	to support undo/redo for the interactive movement (dragging) of nodes, you 
+	need to add the following binding to your <strong>Node</strong>&#39;s <strong>
+	DataTemplate</strong>&#39;s root visual element:</p>
+	<pre><font face="Courier New">      go:Node.Location="{Binding Path=Data.Location, Mode=TwoWay}"</pre>
+<p>
+This assumes that you have used a Node data type with a Location property, which 
+all of the predefined node data classes do have.</p>
+	</body>
+</html>

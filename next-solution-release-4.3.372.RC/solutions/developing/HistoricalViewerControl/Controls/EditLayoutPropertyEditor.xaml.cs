@@ -1,0 +1,157 @@
+﻿using System;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
+using UFInterfaces;
+using Utilities;
+using Utilities.WPF;
+using DocumentManager.ComponentService;
+using UIMsgBoxAlertService.ComponentService;
+using System.Linq;
+
+namespace HistoricalViewerControl.Controls
+{
+    /// <summary>
+    /// Interaction logic for EditLayoutPropertyEditor.xaml
+    /// </summary>
+    public partial class EditLayoutPropertyEditor : UserControl
+    {
+        #region Dependency Properties
+        #region Document
+        public static readonly DependencyProperty DocumentProperty = DependencyProperty.Register("Document", typeof(IDocument), typeof(EditLayoutPropertyEditor), new UIPropertyMetadata(null));
+        public IDocument Document
+        {
+            // IMPORTANT: To maintain parity between setting a property in XAML and procedural code, do not touch the getter and setter inside this dependency property!
+            get
+            {
+                return (IDocument)GetValue(DocumentProperty);
+            }
+            set
+            {
+                SetValue(DocumentProperty, value);
+            }
+        }
+        #endregion
+        #endregion
+
+        #region Constructors
+        public EditLayoutPropertyEditor()
+        {
+            InitializeComponent();
+        }
+        #endregion
+
+        #region Properties
+        IWorkspace workspace;
+        IWorkspace Workspace
+        {
+            get
+            {
+                if (workspace == null && Document != null)
+                    workspace = Document.GetService(typeof(IWorkspace)) as IWorkspace;
+                return workspace;
+            }
+        }
+
+        IUIMsgBoxAlertService uiInterface;
+        IUIMsgBoxAlertService UIInterface
+        {
+            get
+            {
+                if (uiInterface == null && Document != null)
+                    uiInterface = Document.GetService(typeof(IUIMsgBoxAlertService)) as IUIMsgBoxAlertService;
+                return uiInterface;
+            }
+        }
+        #endregion
+
+        #region Methods
+        object GetContextObject()
+        {
+            var contextObject = Workspace.ContextObject;
+            if (contextObject == null && Workspace.ContextObjects != null && Workspace.ContextObjects.Count > 0)
+                contextObject = Workspace.ContextObjects[0];
+            if (contextObject is IEntityReference)
+                contextObject = (contextObject as IEntityReference).ContainedObject;
+            return contextObject;
+        }
+        #endregion
+
+        #region Commands
+        private void EditLayout_Click(object sender, RoutedEventArgs e)
+        {
+            e.Handled = true;
+            if (Workspace != null)
+            {
+                var contextObject = GetContextObject();
+                if (contextObject is HistoricalViewer)
+                {
+                    var obj = contextObject as HistoricalViewer;
+                    //ScrollViewer view = new ScrollViewer() { HorizontalScrollBarVisibility = ScrollBarVisibility.Visible, VerticalScrollBarVisibility = ScrollBarVisibility.Visible };
+                    using (var control = new HistoricalViewer()
+                    {
+                        Width = obj.Width,
+                        Height = obj.Height,
+                        Editable = obj.Editable
+                    })
+                    { 
+                        control.toolbarSettings.IsEnabled = false;
+                        control.startTime.IsEnabled = false;
+                        control.endTime.IsEnabled = false;
+                        control.commands.IsEnabled = false;
+
+                        control.bSmartSettingsEditing = true;
+
+                        if (!Keyboard.IsKeyDown(Key.LeftCtrl) && !Keyboard.IsKeyDown(Key.RightCtrl))
+                        {
+                            control.GridLayout = obj.GridLayout;
+                            control.HistoricalName = obj.HistoricalName;
+                        }
+
+                        //view.Content = control;
+                        var Dialog = new GeneralDialogContent(control)
+                        {
+                            Owner = this.FindParent<Window>(),
+                            Title = Properties.Resources.EditLayoutPopupTitle,
+                            HelpLink = "HistoricalViewerEditLayout"
+                        };
+
+                        control.options.IsEnabled = false;
+
+                        Dialog.Closing += (o, ea) =>
+                        {
+                            if ((o as GeneralDialogContent).DialogResult == true)
+                            {
+                                control.SaveDesignGridLayout();
+                                obj.GridLayout = control.GridLayout;
+                                StorageHelper.StorageHelper.ReplaceDefaultSettings<GridLayout.MemorySettings>(obj.Document, obj.Name, "Name", GridLayout.GridLayoutHelper.DesignSettingName);
+                            }
+                        };
+
+                        Dialog.ShowDialog();
+                    }
+                }
+            }
+        }
+
+        private void ResetLayout_Click(object sender, RoutedEventArgs e)
+        {
+            e.Handled = true;
+            if (Workspace != null)
+            {
+                var contextObject = GetContextObject();
+                if (contextObject is HistoricalViewer)
+                {
+                    if (UIInterface == null ||
+                        UIInterface.ShowYesNo(Properties.Resources.ResetLayoutAskConfirm, CustomDialogIcons.Question) == CustomDialogResults.Yes)
+                    {
+                        var obj = contextObject as HistoricalViewer;
+                        obj.ResetGridLayout();
+                        StorageHelper.StorageHelper.ReplaceDefaultSettings<GridLayout.MemorySettings>(obj.Document, obj.Name, "Name", GridLayout.GridLayoutHelper.DesignSettingName);
+                    }
+                }
+            }
+        }
+        #endregion
+    }
+}

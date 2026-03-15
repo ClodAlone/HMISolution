@@ -1,0 +1,80 @@
+﻿@page
+@model IndexModel
+@{
+    ViewData["Title"] = "Home page";
+}
+
+<div class="d-flex flex-column h-100">
+    <!-- Tabs -->
+    <ul class="nav nav-tabs" id="serverTabs" role="tablist">
+    @for (int i = 0; i < Model.Servers.Count; i++)
+    {
+        var server = Model.Servers[i];
+        var idx = i + 1;
+        var active = i == 0 ? "active" : "";
+        var ariaSel = i == 0 ? "true" : "false";
+        <li class="nav-item" role="presentation">
+            <button class="nav-link @active" id="server@(idx)-tab" data-bs-toggle="tab" data-bs-target="#server@(idx)" type="button" role="tab" aria-controls="server@(idx)" aria-selected="@ariaSel">@server.Name</button>
+        </li>
+    }
+    </ul>
+
+    <!-- Panes -->
+    <div class="tab-content flex-fill" style="overflow: hidden;">
+    @for (int i = 0; i < Model.Servers.Count; i++)
+    {
+        var server = Model.Servers[i];
+        var idx = i + 1;
+        var showActive = i == 0 ? "show active" : "";
+        <div class="tab-pane fade @showActive" id="server@(idx)" role="tabpanel" aria-labelledby="server@(idx)-tab">
+            <iframe id="frame-server@(idx)" class="server-frame w-100" src="@server.Url" loading="lazy"></iframe>
+        </div>
+    }
+    </div>
+</div>
+
+<style>
+    /* Make iframes fill remaining area inside layout */
+    .server-frame {
+        flex: 1 1 0;
+        height: 100%;
+        min-height: 0; /* allow flex children to shrink */
+        border: 0;
+    }
+
+    /* Remove default margins so layout is edge-to-edge */
+    .nav-tabs {
+        margin: 0;
+        border-bottom: 1px solid #dee2e6;
+    }
+
+    /* Ensure panes expand to fill the tab-content area */
+    .tab-content {
+        display: flex;
+        flex-direction: column;
+        flex: 1 1 0;
+        min-height: 0;
+    }
+
+    .tab-pane {
+        display: flex;
+        flex-direction: column;
+        flex: 1 1 0;
+        min-height: 0;
+        overflow: hidden;
+    }
+</style>
+
+@section Scripts {
+    <script>
+        // When switching tabs, optionally reload the iframe to ensure fresh content.
+        const tabEl = document.getElementById('serverTabs');
+        tabEl?.addEventListener('shown.bs.tab', function (e) {
+            const targetSelector = e.target.getAttribute('data-bs-target');
+            if (!targetSelector) return;
+            const iframe = document.querySelector(targetSelector + ' iframe');
+            // Uncomment the next line if you want iframe to reload each time its tab is shown
+            // iframe && (iframe.src = iframe.src);
+        });
+    </script>
+}

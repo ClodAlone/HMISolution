@@ -1,0 +1,621 @@
+﻿@page "/"
+@page "/screen/{ScreenName}"
+@using SharedModels
+@using RuntimeViewer.Shared.Services
+@using RuntimeViewer.Shared.Components.Viewer
+@implements IDisposable
+
+<PageTitle>@(_currentScreen?.Name ?? "Runtime Viewer")</PageTitle>
+
+@if (_loginRequired && !Auth.IsAuthenticated)
+{
+    @* -- Login Modal (required — blocks everything) -- *@
+    <div class="rv-login-overlay">
+        <div class="rv-login-card">
+            <div class="rv-login-header">
+                <span>🔐</span>
+                <span>Runtime Viewer Login</span>
+            </div>
+            <div class="rv-login-body">
+                @if (!string.IsNullOrEmpty(_loginError))
+                {
+                    <div class="rv-login-error">@_loginError</div>
+                }
+                <div class="rv-login-field">
+                    <label>Username</label>
+                    <input type="text" @bind="_loginUsername" @onkeydown="OnLoginKeyDown"
+                           placeholder="Enter username" autofocus />
+                </div>
+                <div class="rv-login-field">
+                    <label>Password</label>
+                    <input type="password" @bind="_loginPassword" @onkeydown="OnLoginKeyDown"
+                           placeholder="Enter password" />
+                </div>
+                <button class="rv-login-btn" @onclick="DoLogin" disabled="@_loginBusy">
+                    @if (_loginBusy)
+                    {
+                        <span>Signing in…</span>
+                    }
+                    else
+                    {
+                        <span>Sign In</span>
+                    }
+                </button>
+            </div>
+            <div class="rv-login-footer">Runtime Viewer</div>
+        </div>
+    </div>
+}
+else if (Auth.MustChangePassword)
+{
+    @* -- Force Change Password Modal -- *@
+    <div class="rv-login-overlay">
+        <div class="rv-login-card">
+            <div class="rv-login-header">
+                <span>🔑</span>
+                <span>Change Password</span>
+            </div>
+            <div class="rv-login-body">
+                <div style="font-size: 12px; color: #aaa; margin-bottom: 8px;">
+                    You must change your password before continuing.
+                </div>
+                <div style="font-size: 10px; color: #888; margin-bottom: 12px; font-style: italic;">
+                    @(SharedModels.PasswordValidator.GetRequirementsText(Project.Model?.Server?.RequireStrongPassword ?? false))
+                </div>
+                @if (!string.IsNullOrEmpty(_changePwError))
+                {
+                    <div class="rv-login-error">@_changePwError</div>
+                }
+                @if (!string.IsNullOrEmpty(_changePwSuccess))
+                {
+                    <div style="background: #155724; color: #d4edda; padding: 6px 10px; border-radius: 4px; font-size: 12px; margin-bottom: 8px;">@_changePwSuccess</div>
+                }
+                <div class="rv-login-field">
+                    <label>Current Password</label>
+                    <input type="password" @bind="_changePwCurrent" placeholder="Current password" />
+                </div>
+                <div class="rv-login-field">
+                    <label>New Password</label>
+                    <input type="password" @bind="_changePwNew" placeholder="New password" />
+                </div>
+                <div class="rv-login-field">
+                    <label>Confirm New Password</label>
+                    <input type="password" @bind="_changePwConfirm" @onkeydown="OnChangePwKeyDown"
+                           placeholder="Confirm new password" />
+                </div>
+                <button class="rv-login-btn" @onclick="DoChangePassword">Change Password</button>
+            </div>
+        </div>
+    </div>
+}
+else
+{
+
+<div class="rv-app @(Project.IsKiosk ? "rv-kiosk" : "")">
+    @if (!Project.IsKiosk)
+    {
+        @* -- Top bar -- *@
+        <div class="rv-topbar">
+            <span class="rv-title">Runtime Viewer</span>
+
+            @if (Project.Screens.Count > 1)
+            {
+                <div class="rv-screen-tabs">
+                    @foreach (var scr in Project.Screens)
+                    {
+                        var s = scr;
+                        <button class="rv-tab @(s == _currentScreen ? "active" : "")"
+                                @onclick="() => DoNavigateScreen(s.Name)">
+                            @s.Name
+                        </button>
+                    }
+                </div>
+            }
+
+            <div class="rv-status">
+                @if (Opc.IsConnected)
+                {
+                    <span class="rv-badge rv-badge-ok">Connected</span>
+                }
+                else if (_connecting)
+                {
+                    <span class="rv-badge rv-badge-warn">Connecting...</span>
+                }
+                else
+                {
+                    <span class="rv-badge rv-badge-err">Disconnected</span>
+                    <button class="rv-btn" @onclick="Connect">Reconnect</button>
+                }
+                @if (!string.IsNullOrEmpty(Opc.ErrorMessage))
+                {
+                    <span class="rv-error" title="@Opc.ErrorMessage">Warning</span>
+                }
+                <span class="rv-file" title="@Project.ConfigPath">@Path.GetFileName(Project.ConfigPath)</span>
+
+                @if (_loginRequired)
+                {
+                    <span class="rv-badge" style="background:#555;color:#ccc;" title="@Auth.Group">@Auth.Username</span>
+                    <button class="rv-btn" style="background:#dc3545;" @onclick="DoLogout">Logout</button>
+                }
+            </div>
+        </div>
+    }
+    else if (_loginRequired)
+    {
+        @* Kiosk mode: small floating logout button *@
+        <div class="rv-kiosk-logout">
+            <span class="small" style="color:#aaa;">@Auth.Username</span>
+            <button class="rv-btn" style="background:#dc3545;font-size:10px;" @onclick="DoLogout">Logout</button>
+        </div>
+    }
+
+    @* -- Canvas -- *@
+    <div class="rv-viewport">
+        @if (_currentScreen != null)
+        {
+            <ScreenRenderer Screen="_currentScreen" IsKiosk="Project.IsKiosk" OnRequestLogin="ShowAccessLoginPrompt" />
+        }
+        else if (Project.Screens.Count == 0)
+        {
+            <div class="rv-empty">
+                <h3>No screens found</h3>
+                <p>The loaded configuration has no screens defined.</p>
+                @if (string.IsNullOrEmpty(Project.ConfigPath))
+                {
+                    <p class="rv-hint">Pass a JSON config path as a command-line argument:<br />
+                        <code>dotnet run -- path/to/nodes.json</code></p>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+@* -- Kiosk fullscreen prompt -- *@
+@if (Project.IsKiosk && !_isFullscreen)
+{
+    <div class="rv-kiosk-prompt" @onclick="EnterFullscreen">
+        <div class="rv-kiosk-prompt-box">
+            <div class="rv-kiosk-prompt-icon">&#x26F6;</div>
+            <div class="rv-kiosk-prompt-text">Click anywhere to enter fullscreen</div>
+            <div class="rv-kiosk-prompt-hint">Press Escape to exit fullscreen later</div>
+        </div>
+    </div>
+}
+
+@* -- Popup overlay -- *@
+@if (_popupScreen != null)
+{
+    <div class="rv-popup-backdrop" @onclick="ClosePopup"></div>
+    <div class="rv-popup">
+        <div class="rv-popup-header">
+            <span>@_popupScreen.Name</span>
+            <button class="rv-popup-close" @onclick="ClosePopup">✕</button>
+        </div>
+        <div class="rv-popup-body">
+            <ScreenRenderer Screen="_popupScreen" OnRequestLogin="ShowAccessLoginPrompt" />
+        </div>
+    </div>
+}
+
+@* -- Modal overlay -- *@
+@if (_modalScreen != null)
+{
+    <div class="rv-modal-backdrop"></div>
+    <div class="rv-modal">
+        <div class="rv-modal-header">
+            <span>@_modalScreen.Name</span>
+            <button class="rv-popup-close" @onclick="CloseModal">✕</button>
+        </div>
+        <div class="rv-modal-body">
+            <ScreenRenderer Screen="_modalScreen" OnRequestLogin="ShowAccessLoginPrompt" />
+        </div>
+    </div>
+}
+
+@* -- Access login prompt (shown when clicking a locked symbol) -- *@
+@if (_showAccessLogin)
+{
+    <div class="rv-login-overlay rv-login-overlay-access" @onclick="DismissAccessLogin">
+        <div class="rv-login-card" @onclick:stopPropagation>
+            <div class="rv-login-header">
+                <span>🔒</span>
+                <span>Authentication Required</span>
+            </div>
+            <div class="rv-login-body">
+                <div class="rv-login-hint">This action requires write access. Please sign in.</div>
+                @if (!string.IsNullOrEmpty(_loginError))
+                {
+                    <div class="rv-login-error">@_loginError</div>
+                }
+                <div class="rv-login-field">
+                    <label>Username</label>
+                    <input type="text" @bind="_loginUsername" @onkeydown="OnLoginKeyDown"
+                           placeholder="Enter username" autofocus />
+                </div>
+                <div class="rv-login-field">
+                    <label>Password</label>
+                    <input type="password" @bind="_loginPassword" @onkeydown="OnLoginKeyDown"
+                           placeholder="Enter password" />
+                </div>
+                <button class="rv-login-btn" @onclick="DoAccessLogin" disabled="@_loginBusy">
+                    @if (_loginBusy)
+                    {
+                        <span>Signing in…</span>
+                    }
+                    else
+                    {
+                        <span>Sign In</span>
+                    }
+                </button>
+                <button class="rv-login-btn-cancel" @onclick="DismissAccessLogin">Cancel</button>
+            </div>
+        </div>
+    </div>
+}
+
+} @* end else (authenticated) *@
+
+@code {
+    [Parameter] public string? ScreenName { get; set; }
+
+    [Inject] private ProjectService Project { get; set; } = default!;
+    [Inject] private OpcRuntimeClient Opc { get; set; } = default!;
+    [Inject] private CommandService Commands { get; set; } = default!;
+    [Inject] private NavigationManager Nav { get; set; } = default!;
+    [Inject] private IJSRuntime JS { get; set; } = default!;
+    [Inject] private RuntimeAuthService Auth { get; set; } = default!;
+    [Inject] private LocalizationService Localization { get; set; } = default!;
+
+    private ScreenConfig? _currentScreen;
+    private ScreenConfig? _popupScreen;
+    private ScreenConfig? _modalScreen;
+    private bool _connecting;
+    private bool _isFullscreen;
+    private IJSObjectReference? _kioskModule;
+
+    // Login state
+    private bool _loginRequired;
+    private bool _showAccessLogin;
+    private string _loginUsername = "";
+    private string _loginPassword = "";
+    private string _loginError = "";
+    private bool _loginBusy;
+
+    // Change password state
+    private string _changePwCurrent = "";
+    private string _changePwNew = "";
+    private string _changePwConfirm = "";
+    private string _changePwError = "";
+    private string _changePwSuccess = "";
+
+    // Idle auto-logoff
+    private DateTime _lastActivity = DateTime.UtcNow;
+    private System.Threading.Timer? _idleTimer;
+    private DotNetObjectReference<Home>? _idleRef;
+
+    protected override void OnInitialized()
+    {
+        _loginRequired = RuntimeAuthService.IsLoginRequired(Project.Model);
+        Commands.NavigateScreen += DoNavigateScreen;
+        Commands.OpenScreenPopup += DoOpenPopup;
+        Commands.OpenScreenModal += DoOpenModal;
+        Commands.RequestLogin += OnCommandLogin;
+        Commands.RequestLogout += OnCommandLogout;
+        Commands.ChangeLanguage += OnChangeLanguage;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && Project.IsKiosk)
+        {
+            _kioskModule = await JS.InvokeAsync<IJSObjectReference>("import", "./kiosk.js");
+            _isFullscreen = await _kioskModule.InvokeAsync<bool>("isFullscreen");
+            StateHasChanged();
+        }
+
+        if (firstRender && _loginRequired)
+        {
+            // Register idle activity tracking via JS interop
+            _idleRef = DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("eval", """
+                window.__rvSetupIdle = function(dotNetRef) {
+                    window.__rvIdleRef = dotNetRef;
+                    var handler = function() { dotNetRef.invokeMethodAsync('OnUserActivity'); };
+                    document.addEventListener('mousemove', handler);
+                    document.addEventListener('keydown', handler);
+                    document.addEventListener('click', handler);
+                    document.addEventListener('touchstart', handler);
+                };
+            """);
+            await JS.InvokeVoidAsync("__rvSetupIdle", _idleRef);
+
+            // Start idle check timer (every 5 seconds)
+            _idleTimer = new System.Threading.Timer(CheckIdleTimeout, null, 5000, 5000);
+        }
+    }
+
+    [JSInvokable]
+    public void OnUserActivity()
+    {
+        _lastActivity = DateTime.UtcNow;
+    }
+
+    private void CheckIdleTimeout(object? state)
+    {
+        if (!Auth.IsAuthenticated || Auth.AutoLogOffSeconds <= 0) return;
+
+        var idleSeconds = (DateTime.UtcNow - _lastActivity).TotalSeconds;
+        if (idleSeconds >= Auth.AutoLogOffSeconds)
+        {
+            InvokeAsync(() =>
+            {
+                DoLogout();
+                _loginError = "You have been logged out due to inactivity.";
+                StateHasChanged();
+            });
+        }
+    }
+
+    private async Task EnterFullscreen()
+    {
+        if (_kioskModule != null)
+        {
+            await _kioskModule.InvokeVoidAsync("enterFullscreen");
+            _isFullscreen = true;
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!string.IsNullOrEmpty(ScreenName))
+        {
+            _currentScreen = Project.Screens.FirstOrDefault(s =>
+                s.Name.Equals(ScreenName, StringComparison.OrdinalIgnoreCase));
+        }
+
+        _currentScreen ??= Project.StartupScreen;
+
+        if (!Opc.IsConnected && !_connecting && !string.IsNullOrEmpty(Project.Settings.EndpointUrl))
+        {
+            await Connect();
+        }
+    }
+
+    private async Task Connect()
+    {
+        _connecting = true;
+        StateHasChanged();
+
+        await Opc.ConnectAsync(Project.Settings.EndpointUrl);
+
+        _connecting = false;
+
+        if (Opc.IsConnected && _currentScreen != null)
+        {
+            var paths = _currentScreen.Symbols
+                .Where(s => !string.IsNullOrEmpty(s.VariablePath))
+                .Select(s => s.VariablePath!)
+                .Distinct();
+            Opc.MonitorVariables(paths);
+        }
+
+        StateHasChanged();
+    }
+
+    private void DoNavigateScreen(string name)
+    {
+        InvokeAsync(() =>
+        {
+            Nav.NavigateTo($"/screen/{Uri.EscapeDataString(name)}");
+            StateHasChanged();
+        });
+    }
+
+    private void DoOpenPopup(string name)
+    {
+        InvokeAsync(() =>
+        {
+            _popupScreen = Project.Screens.FirstOrDefault(s =>
+                s.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+            StateHasChanged();
+        });
+    }
+
+    private void DoOpenModal(string name)
+    {
+        InvokeAsync(() =>
+        {
+            _modalScreen = Project.Screens.FirstOrDefault(s =>
+                s.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+            StateHasChanged();
+        });
+    }
+
+    private void ClosePopup() { _popupScreen = null; }
+    private void CloseModal() { _modalScreen = null; }
+
+    // ─── Login / Logout ──────────────────────────────────────
+
+    private async Task OnLoginKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            await DoLogin();
+    }
+
+    private async Task DoLogin()
+    {
+        _loginError = "";
+        _loginBusy = true;
+        StateHasChanged();
+
+        await Task.Delay(100); // UI feedback
+
+        var model = Project.Model;
+        if (model == null)
+        {
+            _loginError = "No project loaded.";
+            _loginBusy = false;
+            return;
+        }
+
+        var (success, message) = Auth.Login(_loginUsername, _loginPassword, model.Users, model.UserGroups);
+        _loginBusy = false;
+
+        if (success)
+        {
+            _loginError = "";
+            _loginUsername = "";
+            _loginPassword = "";
+            _lastActivity = DateTime.UtcNow;
+        }
+        else
+        {
+            _loginError = message;
+        }
+    }
+
+    private void DoLogout()
+    {
+        Auth.Logout();
+        _popupScreen = null;
+        _modalScreen = null;
+        _loginUsername = "";
+        _loginPassword = "";
+        _loginError = "";
+    }
+
+    private void ShowAccessLoginPrompt()
+    {
+        _loginError = "";
+        _loginUsername = "";
+        _loginPassword = "";
+        _showAccessLogin = true;
+    }
+
+    private async Task DoAccessLogin()
+    {
+        _loginError = "";
+        _loginBusy = true;
+        StateHasChanged();
+
+        await Task.Delay(100);
+
+        var model = Project.Model;
+        if (model == null)
+        {
+            _loginError = "No project loaded.";
+            _loginBusy = false;
+            return;
+        }
+
+        var (success, message) = Auth.Login(_loginUsername, _loginPassword, model.Users, model.UserGroups);
+        _loginBusy = false;
+
+        if (success)
+        {
+            _showAccessLogin = false;
+            _loginError = "";
+            _loginUsername = "";
+            _loginPassword = "";
+        }
+        else
+        {
+            _loginError = message;
+        }
+    }
+
+    private void DismissAccessLogin()
+    {
+        _showAccessLogin = false;
+        _loginError = "";
+        _loginUsername = "";
+        _loginPassword = "";
+    }
+
+    private void OnCommandLogin()
+    {
+        InvokeAsync(() =>
+        {
+            ShowAccessLoginPrompt();
+            StateHasChanged();
+        });
+    }
+
+    private void OnCommandLogout()
+    {
+        InvokeAsync(() =>
+        {
+            DoLogout();
+            StateHasChanged();
+        });
+    }
+
+    private void OnChangeLanguage(string lang)
+    {
+        Localization.SetLanguage(lang);
+        InvokeAsync(StateHasChanged);
+    }
+
+    // ─── Change Password ─────────────────────────────────────
+
+    private async Task OnChangePwKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            await DoChangePassword();
+    }
+
+    private Task DoChangePassword()
+    {
+        _changePwError = "";
+        _changePwSuccess = "";
+
+        var requireStrong = Project.Model?.Server?.RequireStrongPassword ?? false;
+        var (success, message) = Auth.ChangePassword(_changePwCurrent, _changePwNew, _changePwConfirm, requireStrong);
+        if (success)
+        {
+            _changePwSuccess = message;
+            _changePwCurrent = "";
+            _changePwNew = "";
+            _changePwConfirm = "";
+            // Persist the password change to the nodes.json file
+            SaveProjectQuietly();
+        }
+        else
+        {
+            _changePwError = message;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private void SaveProjectQuietly()
+    {
+        try
+        {
+            var model = Project.Model;
+            if (model != null && !string.IsNullOrEmpty(Project.ConfigPath))
+            {
+                var options = new System.Text.Json.JsonSerializerOptions { WriteIndented = true };
+                var json = System.Text.Json.JsonSerializer.Serialize(model, options);
+                File.WriteAllText(Project.ConfigPath, json);
+            }
+        }
+        catch { /* best effort */ }
+    }
+
+    public async void Dispose()
+    {
+        Commands.NavigateScreen -= DoNavigateScreen;
+        Commands.OpenScreenPopup -= DoOpenPopup;
+        Commands.OpenScreenModal -= DoOpenModal;
+        Commands.RequestLogin -= OnCommandLogin;
+        Commands.RequestLogout -= OnCommandLogout;
+        Commands.ChangeLanguage -= OnChangeLanguage;
+        _idleTimer?.Dispose();
+        _idleRef?.Dispose();
+        if (_kioskModule != null)
+        {
+            try { await _kioskModule.DisposeAsync(); } catch { }
+        }
+    }
+}

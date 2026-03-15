@@ -1,0 +1,1174 @@
+﻿<div id="EditDisplay" class="EditDisplay" style="height: 100%;">
+    <img src="cl.gif" alt="" onload="onEditDisplayLoaded(this)" id="loadingImage" />
+
+    <script>
+
+        function onEditDisplayLoaded(obj) {
+            var thisPage = $(obj).parent();
+            thisPage.localize();
+
+            var scope = thisPage.scope();
+            if (!scope)
+                return;
+            var paratt = thisPage.data(dataparameters);
+            if (!paratt)
+                return;
+
+            $(obj).remove();
+            var thisParent = thisPage.parent();
+            var thisParentId = thisParent.attr("id");
+            var fobjReplacerContainer;
+            var $fobjReplacerContainer;
+            var textRectNode;
+            var outerTextRectNode;
+            var textNode;
+            var textNodeStartingCoords;
+            var textBox;
+            var initialOuterPos;
+            var clipPath;
+            var rectBox;
+            var innerDisplayWidth;
+            var titleNode;
+            var thisParentPos;
+            var thisParentSize;
+            var currentDisplayValue;
+            var bHoveringArrow;
+            var editingFobj;
+            var inputField;
+            var textAlignment;
+            var bEditingModeInitialized;
+            var bEditingMode;
+            var bInit;
+            var horizontalMargin = 4;
+            var bDataTypeFetched;
+            var unalignedTextNodeY;
+            var clipPathHeight;
+            var displayValueDataType = {
+                notanumber: false,
+                bIsInteger: false,
+                bIsString: false
+            }
+
+            setOpacity(scope, thisParent, thisPage);
+
+            var interval;
+            var deregisterListener;
+            var deregisterListenerMin;
+            var deregisterListenerMax;
+            var deregisterListenerActiveLanguage;
+            
+            var parameters = JSON.parse(paratt);
+            var webKitRenderCorrection = thisPage.hasClass("webKitRenderCorrection");
+            
+            var customFonts = [parameters.ValueFontSettings.FontFamily, parameters.MeasFontSettings.FontFamily, parameters.FontFamily];
+            if (parameters.FontSettingList)
+                $.each(parameters.FontSettingList, function (index, item) {
+                    customFonts.push(item.FontFamily);
+                });
+            loadCustomFonts(customFonts);
+            var dynamicFontElements = [];
+
+            var minValue = new MyDecimal(parameters.MinValue);
+            var maxValue = new MyDecimal(parameters.MaxValue);
+
+            var borderRadius = 0;
+            if (parameters.CornerRadius)
+                borderRadius = Math.max(parameters.CornerRadius.TopLeft, parameters.CornerRadius.BottomLeft, parameters.CornerRadius.TopRight, parameters.CornerRadius.BottomRight);
+
+            var tooltip = undefinedOrNull(parameters.ToolTip) ? "" : parameters.ToolTip;
+            var spinContainerSize;
+            var onSettingValue;
+            var formatString = parameters.FormatString;
+            var precisionDigits = formatString ? 0 : parseInt(parameters.PrecisionDigits, 10);
+            var spinStep = new MyDecimal(parameters.SpinStep) || 1;
+            var bExitValueChanged;
+            var topBtn;
+            var btmBtn;
+            var spinArrowUp;
+            var spinArrowDown;
+            var euc;
+            var eucBox;
+            var bHasNewLine = parameters.MeasUnit.indexOf("\n") != -1;
+            var bEunitAligned;
+            var decimalSeparator = getDecimalSeparator(scope);
+            var groupSeparator = getGroupSeparator(scope);
+
+            var increasingInterval;
+            var increasingTimeout;
+            var decreasingInterval;
+            var decreasingTimeout;
+            var spinClearingTimeout;
+            var bTopBtnIsDown = false;
+            var bBottomBtnIsDown = false;
+            var bLastTouchOnSpins = false;
+            var displayErrorIndicator;
+            var measUnitOffsetFactor = 0.55;
+            var eucLeftMargin = 8;
+            var qualityElem;
+
+            var webKitKeyboardTimeout;
+            var webKitKeyboardTimeoutMS = 300;
+
+            if (parameters.SpinEnabled) {
+                var innerDisplayHeight = thisParent.height();
+                if (parameters.BorderThickness) {
+                    if (parameters.BorderThickness.Top > 0 || parameters.BorderThickness.Bottom > 0) {
+                        innerDisplayHeight -= parameters.BorderThickness.Top + parameters.BorderThickness.Bottom;
+                    }
+                }
+                if (innerDisplayHeight < 42)
+                    buttonsMarginTop = innerDisplayHeight - 42;
+            }
+
+            var bNeedsWrapping = parameters.TextWrapping != 1;
+
+            function restorePreviousValue(previousValue) {
+                if (!bExitValueChanged) {
+                    bExitValueChanged = true;
+                    if (!$fobjReplacerContainer.hasClass(disabledClass))
+                        $fobjReplacerContainer.removeClass("disableStyle");
+                    setClientDisplayValue(previousValue);
+                }
+                bExitValueChanged = false;
+            }
+
+            var mutateFunc = function () {
+                removeForeignObject();
+                registerSpinLogic();
+
+                configureDisplayParameters();
+                textBox = textNode[0].getBBox();
+                $fobjReplacerContainer.on("mouseup touchend", ".textRectNode, text", function () {
+                    if (bEditingMode)
+                        return;
+
+                    if (!scope.biOS) {
+                        try {
+                            if (checkEnabledEditable().editable) {
+                                if (!bEditingModeInitialized)
+                                    initializeDisplayEditingMode();
+                                else {
+                                    fastdom.mutate(function () {
+                                        enableEditingMode();
+                                    });
+                                }
+                            }
+                        }
+                        catch (exc) { }
+                    }
+                });
+
+                if (parameters.TagMinValue && parameters.TagMinValue.SVGReferenceId && parameters.OutOfRange) {
+                    deregisterListenerMin = scope.$on(onDataChanged + parameters.screenId + parameters.TagMinValue.SVGReferenceId, function (e, value) {
+                        if (scope.dataValues[parameters.screenId][parameters.TagMinValue.SVGReferenceId].isGood) {
+                            minValue = new MyDecimal(scope.dataValues[parameters.screenId][parameters.TagMinValue.SVGReferenceId].invariantValue);
+                            checkDisplayInError();
+                        }
+                    });
+                }
+
+                if (parameters.TagMaxValue && parameters.TagMaxValue.SVGReferenceId && parameters.OutOfRange) {
+                    deregisterListenerMax = scope.$on(onDataChanged + parameters.screenId + parameters.TagMaxValue.SVGReferenceId, function (e, value) {
+                        if (scope.dataValues[parameters.screenId][parameters.TagMaxValue.SVGReferenceId].isGood) {
+                            maxValue = new MyDecimal(scope.dataValues[parameters.screenId][parameters.TagMaxValue.SVGReferenceId].invariantValue);
+                            checkDisplayInError();
+                        }
+                    });
+                }
+
+                deregisterListener = scope.$on(onDataChanged + parameters.screenId + parameters.SVGReferenceId, function (e, value) {
+                    applyTagQualityStyle(qualityElem, scope, parameters.screenId, parameters.SVGReferenceId, true);
+                    onDisplayDataChanged();
+                });
+                applyTagQualityStyle(qualityElem, scope, parameters.screenId, parameters.SVGReferenceId, true);
+                if (parameters.screenId in scope.dataValues && parameters.SVGReferenceId in scope.dataValues[parameters.screenId]) {
+                    onDisplayDataChanged();
+                }
+
+                deregisterListenerActiveLanguage = scope.$on(onActiveLanguageChanged, function (e, value) {
+                    if (euc && parameters.MeasUnit) {
+                        var newEucText = i18next.t1(parameters.MeasUnit);
+                        fastdom.measure(function () {
+                            if (newEucText != euc[0].textContent) {
+                                fastdom.mutate(function () {
+                                    euc[0].textContent = newEucText;
+                                    if (relocateEucBox()) {
+                                        handleTextWrapping();
+                                        handleTextAlignment();
+                                        realignEucBox();
+                                    }
+                                });
+                            }
+                        });
+                    }
+                    if (parameters.FontSettingList && (value in parameters.FontSettingList) !== -1) {
+                        var fontOpts = applyFontSettingList(dynamicFontElements, parameters.FontSettingList[value]);
+                        fastdom.mutate(function () {
+                            if (textNode)
+                                textNode.css(fontOpts);
+                            if (inputField)
+                                inputField.css(fontOpts);
+                        });
+                    }
+                    if (tooltip != "" && titleNode) {
+                        titleNode[0].textContent = i18next.t1(parameters.ToolTip);
+                    }
+                });
+
+                if (scope.biOS && !parameters.IsReadOnly)
+                    initializeDisplayEditingMode();
+
+                bInit = true;
+            };
+            fastdom.measure(() => {
+                thisParentPos = { x: webKitRenderCorrection ? 0 : thisParent.attr("x"), y: webKitRenderCorrection ? 0 : thisParent.attr("y") };
+                thisParentSize = { w: thisParent.attr("width"), h: thisParent.attr("height") };
+                mutateHandler.scheduleMutate(parameters.screenId, mutateFunc);
+            });
+
+            function initializeDisplayEditingMode() {
+                if (bEditingModeInitialized)
+                    return;
+                bEditingModeInitialized = true;
+
+                var fobjId = thisParentId + parameters.screenId + "_fobj";
+                var tspans = textNode.find("tspan");
+                fastdom.mutate(function () {
+                    var fobjHeight = tspans.length > 0 ? tspans[0].getBBox().height : textBox.height;
+                    editingFobj = $(document.createElementNS('http://www.w3.org/2000/svg', 'foreignObject'));
+                    editingFobj.attr({
+                        id: fobjId,
+                        x: parseFloat(textRectNode.attr("x")) + parameters.DisplayBorderThickness + horizontalMargin,
+                        y: parseFloat(textRectNode.attr("y")) + textRectNode.attr("height") / 2 - fobjHeight / 2 - (parameters.LabelVerticalAlignement == 2 ? parameters.DisplayBorderThickness : 0),
+                        width: innerDisplayWidth,
+                        height: fobjHeight,
+                        overflow: "visible"
+                    });
+                    inputField = $("<input type='text'/>");
+                    var cssOpts = {
+                        "background": "transparent",
+                        "width": "100%",
+                        "height": "100%",
+                        "margin": "0px",
+                        "padding": "0px",
+                        "border": "none",
+                        "text-align": textAlignment,
+                        "display": "none",
+                        "outline": "none"
+                    };
+                    inputField.attr("style", textNode.attr("style")).appendTo(editingFobj);
+                    textNode.before(editingFobj);
+                    if (!scope.biOS) {
+                        enableEditingMode();
+                    }
+                    else
+                        cssOpts["color"] = "transparent";
+                    inputField.css(cssOpts).show().val(getTextContent()).on("keyup", function (e) {
+                        if (e.key === "Escape")
+                            inputField.val(currentDisplayValue).blur();                        
+                        if (e.key === "Enter")
+                            inputField.blur();
+                    });
+                    if (scope.biOS) {
+                        if (webKitRenderCorrection) {
+                            textNode.on("mousedown touchstart", function (e) {
+                                if (e.type == "touchstart") {
+                                    if (webKitKeyboardTimeout)
+                                        clearTimeout(webKitKeyboardTimeout);
+                                    webKitKeyboardTimeout = setTimeout(function () { //iOS virtual keyboard issue on mobile in particular cases because of webkit's' bug with foreignObjects
+                                        webKitKeyboardTimeout = null;
+                                    }, webKitKeyboardTimeoutMS);
+                                    inputField.focus();
+                                }
+                                else
+                                    setTimeout(function () { inputField.focus(); }, 0);
+                            });
+                        }
+                        inputField.focus(function () {
+                            if (!checkEnabledEditable().editable)
+                                return;
+
+                            textNode.hide();
+                            inputField.css("color", getSolidColor(parameters.Foreground));
+                            bEditingMode = true;
+                        });
+                    }
+                    inputField.blur(function (e) {
+                        if (!bEditingMode)
+                            return;
+
+                        if (webKitRenderCorrection && webKitKeyboardTimeout) {
+                            e.preventDefault();
+                            inputField.focus();
+                            return;
+                        }
+                        
+                        if (scope.biOS)
+                            inputField.css("color", "transparent");
+
+                        fastdom.mutate(function () {
+                            textNode[0].textContent = inputField[0].value == "" || undefinedOrNull(inputField[0].value) ? " " : inputField[0].value;
+                            if (bInit) {
+                                textBox = textNode[0].getBBox();
+                                onTextChanged();
+                            }
+                        });
+
+                        var bCanWrite = writeValueToServer(inputField[0].value);
+                        setClientDisplayValue(inputField[0].value);
+                        if (bCanWrite)
+                            inputField.val(textNode[0].textContent);
+                        if (!scope.biOS)
+                            editingFobj.hide();
+                        textNode.show();
+                        bEditingMode = false;
+                    });
+                    bEditingMode = true;
+                });
+            }
+
+            function enableEditingMode() {
+                if (bEditingMode)
+                    return;
+                
+                textNode.hide();
+                editingFobj.show();
+                inputField.focus();
+                bEditingMode = true;
+                setTimeout(function () {
+                    if (document.activeElement !== inputField[0]) {
+                        fastdom.mutate(function () {
+                            textNode.hide();
+                            editingFobj.show();
+                            inputField.focus();
+                            bEditingMode = true;
+                        });
+                    }
+                }, 0);
+            }
+
+            function registerSpinLogic() {
+                if (!parameters.SpinEnabled || parameters.IsReadOnly)
+                    return;
+
+                $fobjReplacerContainer.on("mousedown touchstart", function (e) {
+                    if (!topBtn || !btmBtn || $fobjReplacerContainer.hasClass(disabledClass)) {
+                        bLastTouchOnSpins = false;
+                        return;
+                    }
+
+                    var touchEvent = e.type == "touchstart";
+                    if (touchEvent && !$(e.target).is("input")) {
+                        //e.stopPropagation(); 
+                        e.preventDefault();
+                    }
+
+                    var eventPath = e.originalEvent.composedPath();
+                    bTopBtnIsDown = eventPath.indexOf(topBtn[0]) !== -1 || eventPath.indexOf(spinArrowUp[0]) !== -1;
+                    bBottomBtnIsDown = eventPath.indexOf(btmBtn[0]) !== -1 || eventPath.indexOf(spinArrowDown[0]) !== -1;
+                    if (bTopBtnIsDown || bBottomBtnIsDown)
+                        bLastTouchOnSpins = true;
+                    if (bTopBtnIsDown) {
+                        if ($fobjReplacerContainer.hasClass("disableStyle"))
+                            return;
+
+                        if (increasingTimeout) {
+                            clearTimeout(increasingTimeout);
+                            increasingTimeout = null;
+                        }
+
+                        addSpinStep(spinStep);
+                        increasingTimeout = setTimeout(function () {
+                            topBtn.on("mouseout", onSpinMouseOut);
+                            increasingInterval = setInterval(function () {
+                                addSpinStep(spinStep);
+                            }, 50);
+                        }, 500);
+                    }
+                    else if (bBottomBtnIsDown) {
+                        if ($fobjReplacerContainer.hasClass("disableStyle"))
+                            return;
+
+                        if (decreasingTimeout) {
+                            clearTimeout(decreasingTimeout);
+                            decreasingTimeout = null;
+                        }
+
+                        addSpinStep(spinStep.mul(-1));
+                        decreasingTimeout = setTimeout(function () {
+                            btmBtn.on("mouseout", onSpinMouseOut);
+                            decreasingInterval = setInterval(function () {
+                                addSpinStep(spinStep.mul(-1));
+                            }, 50);
+                        }, 500);
+                    }
+                }).on("mouseup touchend", function (e) {
+                    if (bLastTouchOnSpins && e.type == "touchend" && !$(e.target).is("input")) {
+                        //e.stopPropagation(); 
+                        e.preventDefault();
+                    }
+                    try {
+                        //if (bTopBtnIsDown) {
+                        if (increasingInterval) {
+                                clearInterval(increasingInterval);
+                                increasingInterval = null;
+                            }
+                            if (increasingTimeout) {
+                                clearTimeout(increasingTimeout);
+                                increasingTimeout = null;
+                            }
+                        //}
+                        //else if (bBottomBtnIsDown) {
+                            if (decreasingInterval) {
+                                clearInterval(decreasingInterval);
+                                decreasingInterval = null;
+                            }
+                            if (decreasingTimeout) {
+                                clearTimeout(decreasingTimeout);
+                                decreasingTimeout = null;
+                            }
+                        //}
+                    }
+                    finally {
+                        bLastTouchOnSpins = false;
+                        bTopBtnIsDown = false;
+                        bBottomBtnIsDown = false;
+                    }
+                }).on("mouseout", function (e) {
+                    if (e.target == topBtn[0] || e.target == spinArrowUp[0] || e.target == btmBtn[0] || e.target == spinArrowDown[0])
+                        return;
+
+                    if (increasingTimeout) {
+                        clearTimeout(increasingTimeout);
+                        increasingTimeout = null;
+                    }
+                    if (decreasingTimeout) {
+                        clearTimeout(decreasingTimeout);
+                        decreasingTimeout = null;
+                    }
+                });
+            }
+
+            function onSpinMouseOut() {
+                if (spinClearingTimeout)
+                    clearTimeout(spinClearingTimeout);
+                spinClearingTimeout = setTimeout(function () {
+                    if (!bHoveringArrow) {
+                        topBtn.off("mouseout", onSpinMouseOut);
+                        btmBtn.off("mouseout", onSpinMouseOut);
+                        clearSpinIntervals();
+                    }
+                }, 10);
+            }
+
+            function getTextContent() {
+                if (!textNode)
+                    return "";
+                let tspans = textNode.find("tspan");
+                let finalText = "";
+                tspans.each(function (i, el) {
+                    finalText += el.textContent + (el.classList.contains("spaceOnEnd") ? " " : "");
+                });
+                return tspans.length > 0 ? finalText : textNode[0].textContent;
+            }
+
+            function configureDisplayParameters() {
+                var textOptions = {"white-space": "pre"};
+                if (parameters.Background && parameters.Background.Color)
+                    textRectNode.attr("fill", urlReferenceReplace(parameters.Background.Color, parameters.screenId));
+                displayErrorIndicator.attr("fill", urlReferenceReplace(parameters.ForegroundError.Color, parameters.screenId));
+                if (parameters.BorderThickness.Top > 0 || parameters.BorderThickness.Right > 0 || parameters.BorderThickness.Bottom > 0 || parameters.BorderThickness.Left > 0) {
+                    outerTextRectNode.attr("fill", urlReferenceReplace(parameters.BorderBrush.Color, parameters.screenId));
+                    qualityElem = outerTextRectNode;
+                }
+                if (parameters.DisplayBorderThickness > 0) {
+                    textRectNode.attr({
+                        "stroke": urlReferenceReplace(parameters.DisplayBorderBrush.Color, parameters.screenId),
+                        "stroke-width": parameters.DisplayBorderThickness + (borderRadius > 0 ? 0 : parameters.DisplayBorderThickness)
+                    });
+                    if (borderRadius == 0) {
+                        var innerRectClipPathID = thisParentId + parameters.screenId + "_clipPath";
+                        var innerRectClipPath = $(SVG("<clipPath id='" + innerRectClipPathID + "'><rect x='" + rectBox.x + "' y='" + rectBox.y + "' width='" + rectBox.width + "' height='" + rectBox.height + "' /></clipPath>").node);
+                        innerRectClipPath.appendTo(fobjReplacerContainer);
+                        textRectNode.attr("clip-path", "url(#" + innerRectClipPathID + ")");
+                    }
+                    else {
+                        textRectNode.attr({
+                            "width": parseFloat(textRectNode.attr("width")) - parameters.DisplayBorderThickness,
+                            "height": parseFloat(textRectNode.attr("height")) - parameters.DisplayBorderThickness,
+                            "x": parseFloat(textRectNode.attr("x")) + parameters.BorderThickness.Left / 2 + parameters.DisplayBorderThickness / 2,
+                            "y": parseFloat(textRectNode.attr("y")) + parameters.DisplayBorderThickness / 2
+                        });
+                        outerTextRectNode.attr({
+                            "fill": "transparent"
+                        });
+                        let outerBorderClipPathID = thisParentId + parameters.screenId + "_outerBorderClipPath";
+                        let innerRectClipPath = $(SVG("<clipPath id='" + outerBorderClipPathID + "'><rect x='" + initialOuterPos.x + "' y='" + initialOuterPos.y + "' width='" + thisParentSize.w + "' height='" + thisParentSize.h + "' /></clipPath>").node);
+                        innerRectClipPath.appendTo(fobjReplacerContainer);
+
+                        let leftBorder = $(SVG("<line stroke='" + urlReferenceReplace(parameters.BorderBrush.Color) + "' x1='" + initialOuterPos.x + "' y1='" + initialOuterPos.y + "' x2='" + initialOuterPos.x + "' y2='" + (initialOuterPos.y + thisParentSize.h) + "' stroke-width='" + (parameters.BorderThickness.Left * 2) + "' clip-path='url(#" + outerBorderClipPathID + ")'></line>").node);
+                        leftBorder.appendTo(fobjReplacerContainer);
+                        let topBorder = $(SVG("<line stroke='" + urlReferenceReplace(parameters.BorderBrush.Color) + "' x1='" + initialOuterPos.x + "' y1='" + initialOuterPos.y + "' x2='" + (initialOuterPos.x + thisParentSize.w) + "' y2='" + initialOuterPos.y + "' stroke-width='" + (parameters.BorderThickness.Top * 2) + "' clip-path='url(#" + outerBorderClipPathID + ")'></line>").node);
+                        topBorder.appendTo(fobjReplacerContainer);
+                        let rightBorder = $(SVG("<line stroke='" + urlReferenceReplace(parameters.BorderBrush.Color) + "' x1='" + (initialOuterPos.x + thisParentSize.w) + "' y1='" + initialOuterPos.y + "' x2='" + (initialOuterPos.x + thisParentSize.w) + "' y2='" + (initialOuterPos.y + thisParentSize.h) + "' stroke-width='" + (parameters.BorderThickness.Right * 2) + "' clip-path='url(#" + outerBorderClipPathID + ")'></line>").node);
+                        rightBorder.appendTo(fobjReplacerContainer);
+                        let bottomBorder = $(SVG("<line stroke='" + urlReferenceReplace(parameters.BorderBrush.Color) + "' x1='" + initialOuterPos.x + "' y1='" + (initialOuterPos.y + thisParentSize.h) + "' x2='" + (initialOuterPos.x + thisParentSize.w) + "' y2='" + (initialOuterPos.y + thisParentSize.h) + "' stroke-width='" + (parameters.BorderThickness.Bottom * 2) + "' clip-path='url(#" + outerBorderClipPathID + ")'></line>").node);
+                        bottomBorder.appendTo(fobjReplacerContainer);
+                    }
+                }
+                if (parameters.Foreground)
+                    textOptions["fill"] = textOptions["color"] = getSolidColor(parameters.Foreground);
+                if (parameters.ValueFontSettings) {
+                    if (parameters.ValueFontSettings.FontFamily)
+                        textOptions["font-family"] = parameters.ValueFontSettings.FontFamily;
+                    if (parameters.ValueFontSettings.FontWeight)
+                        textOptions["font-weight"] = fontWeightConverter(parameters.MeasFontSettings.FontWeight);
+                    if (parameters.ValueFontSettings.FontSize)
+                        textOptions["font-size"] = parameters.ValueFontSettings.FontSize;
+                    if (parameters.ValueFontSettings.FontStyle) {
+                        var fontStyle = parameters.ValueFontSettings.FontStyle.toLowerCase();
+                        if (fontStyle != "normal")
+                            textOptions["font-style"] = fontStyle;
+                    }
+                }
+
+                if (!$.isEmptyObject(textOptions))
+                    textNode.css(textOptions);
+
+                textBox = textNode[0].getBBox();
+                onTextChanged();
+            }
+
+            function onTextChanged() {
+                handleTextWrapping();
+                handleTextAlignment();
+            }
+
+            function handleTextWrapping() {
+                if (bNeedsWrapping)
+                    textNode = autoWrapSVGTextToWidth(textNode[0], innerDisplayWidth - horizontalMargin * 2, textAlignment == "justify");
+                var clipPathID = thisParentId + parameters.screenId + "_WrappingClipPath";
+                clipPathHeight = rectBox.height - parameters.DisplayBorderThickness * 2;
+                clipPath = configureTextClipPath(clipPath, clipPathID, { x: textBox.x, y: parseFloat(outerTextRectNode.attr("y")) + parameters.BorderThickness.Top + parameters.DisplayBorderThickness, width: innerDisplayWidth, height: clipPathHeight }, textNode, fobjReplacerContainer, true);
+            }
+
+            function handleTextAlignment() {
+                var tspans = textNode.find("tspan");
+                textAlignment = parameters.LabelHorizontalAlignement == 0 ? "left" : (parameters.LabelHorizontalAlignement == 1 ? "right" : (parameters.LabelHorizontalAlignement == 3 ? "justify" : "center"));
+                if (!bNeedsWrapping && textBox.width > innerDisplayWidth) {
+                    textNode.css("text-anchor", "start");
+                    textNode.attr("x", textNodeStartingCoords.x + horizontalMargin);
+                }
+                else {
+                    if (textAlignment == "left") {
+                        textNode.attr("x", textNodeStartingCoords.x + horizontalMargin);
+                    }
+                    if (textAlignment == "center") {
+                        textNode.css("text-anchor", "middle");
+                        textNode.attr("x", parseFloat(textNodeStartingCoords.x) + (rectBox.width - parameters.DisplayBorderThickness * 2 - eucBox.width) / 2);
+                    }
+                    if (textAlignment == "right") {
+                        textNode.css("text-anchor", "end");
+                        textNode.attr("x", parseFloat(textNodeStartingCoords.x) + rectBox.width - parameters.DisplayBorderThickness - parameters.BorderThickness.Right - parameters.BorderThickness.Left - eucBox.width - horizontalMargin);
+                    }
+                }
+
+                if (unalignedTextNodeY == undefined)
+                    unalignedTextNodeY = textNode.attr("y");
+                //Value label valignment
+                textBox = checkVAlignment(textNode, textBox, tspans, rectBox, parameters.LabelVerticalAlignement, bHasNewLine);
+                let forcedTopVAlign = tspans.length > 0 && clipPathHeight < textBox.height;
+                if (forcedTopVAlign) {
+                    textNode.attr("y", unalignedTextNodeY);
+                    tspans.first().attr("y", unalignedTextNodeY);
+                    textBox = textNode[0].getBBox();
+                }
+
+                if (!bEunitAligned) {
+                    bEunitAligned = true;
+                    realignEucBox();
+                }
+            }
+
+            function clearSpinIntervals() {
+                clearInterval(increasingInterval);
+                increasingInterval = null;
+                bTopBtnIsDown = false;
+                clearInterval(decreasingInterval);
+                decreasingInterval = null;
+                bBottomBtnIsDown = false;
+            }
+
+            function getDisplayCustomOptions() {
+                var ret = {};
+                if (!textNode)
+                    return ret;
+
+                let customOptions = textNode.data("_customOptions");
+                if (customOptions) {
+                    ret.enumstrings = customOptions.enumstrings;
+                    ret.digitalFalse = customOptions.digitalFalseValue;
+                    ret.digitalTrue = customOptions.digitalTrueValue;
+                }
+                return ret;
+            }
+
+            function addSpinStep(step) {
+                let options = getDisplayCustomOptions();
+                if (!displayValueDataType.notanumber) {
+                    if (options.digitalFalse && step.lt(0))
+                        writeValueToServer(options.digitalFalse);
+                    else if (options.digitalTrue && step.gt(0))
+                        writeValueToServer(options.digitalTrue);
+                    else if (options.enumstrings) {
+                        var actualIndex = options.enumstrings.indexOf(currentDisplayValue);
+                        var newIndex = new MyDecimal(actualIndex).add(step);
+                        if (newIndex.gte(0) && newIndex.lt(options.enumstrings.length))
+                            writeValueToServer(options.enumstrings[newIndex]);
+                    }
+                    else {
+                        let fvalue;
+                        if (!formatString)
+                            fvalue = new MyDecimal(getTextContent().toString().replace(groupSeparator, "").replace(decimalSeparator, invariantNumberDecimalSeparator));
+                        else
+                            fvalue = $.format.number(getTextContent().toString(), formatString);
+                        if (!notNumeric(fvalue)) {
+                            if (precisionDigits > 0)
+                                fvalue = new MyDecimal(fvalue.add(step).toFixed(precisionDigits));
+                            else
+                                fvalue = new MyDecimal(fvalue).add(step);
+                            if (fvalue.lte(maxValue) && fvalue.gte(minValue)) {
+                                setClientDisplayValue(formatDisplayValue(fvalue));
+                                writeValueToServer(fvalue, undefined, true);
+                            }
+                            else {
+                                clearSpinIntervals();
+                                return;
+                            }
+                        }
+                        else if (currentDisplayValue.toString().toLowerCase() === "true" && step.lt(0))
+                            writeValueToServer("False");
+                        else if (currentDisplayValue.toString().toLowerCase() === "false" && step.gt(0))
+                            writeValueToServer("True");
+                    }
+                }
+            }
+
+            function addSeparators(value) {
+                if (typeof value !== 'string')
+                    value = value.toString();
+                if (parameters.ShowDigitGroupingSymbol)
+                    value = value.replace(/\B(?=(\d{3})+(?!\d))/g, groupSeparator);
+                if (precisionDigits > 0)
+                    value = value.replace(/\.([0-9]+)$/, decimalSeparator + "$1");
+                return value;
+            }
+
+            function formatDisplayValue(finalValue) {
+                if (precisionDigits > 0) {
+                    var fvFactor = Math.pow(10, precisionDigits);
+                    finalValue = new MyDecimal(finalValue).add(Number.EPSILON).mul(fvFactor).div(fvFactor);
+                    if (!displayValueDataType.notanumber && displayValueDataType.bIsInteger)
+                        finalValue = finalValue.div(fvFactor);
+                    finalValue = finalValue.toFixed(precisionDigits);
+                    if (!displayValueDataType.notanumber)
+                        finalValue = addSeparators(finalValue);
+                }
+                else {
+                    if (!formatString) {
+                        if (!notNumeric(finalValue))
+                            finalValue = new MyDecimal(finalValue).round();
+                        if (!displayValueDataType.notanumber)
+                            finalValue = addSeparators(finalValue);
+                    }
+                    else if (!notNumeric(finalValue))
+                        finalValue = $.format.number(new MyDecimal(finalValue), formatString);
+                }
+                return finalValue;
+            }
+
+            function onDisplayDataChanged() {
+                onSettingValue = true;
+                try {
+                    if (scope.dataValues[parameters.screenId][parameters.SVGReferenceId].isGood) {
+                        var localValue = scope.dataValues[parameters.screenId][parameters.SVGReferenceId].value;
+                        var finalValue = scope.dataValues[parameters.screenId][parameters.SVGReferenceId].invariantValue;
+                        var finalValueLower = finalValue.toString().toLowerCase();
+                        if (!bDataTypeFetched) {
+                            displayValueDataType = {
+                                bIsInteger: scope.dataValues[parameters.screenId][parameters.SVGReferenceId].bIsInteger,
+                                bIsString: scope.dataValues[parameters.screenId][parameters.SVGReferenceId].bIsString,
+                                notanumber: false
+                            };
+                            bDataTypeFetched = true;
+                        }
+                        
+                        var enumStrings = scope.dataValues[parameters.screenId][parameters.SVGReferenceId].enumStrings;
+                        var digitalTrueValue = scope.dataValues[parameters.screenId][parameters.SVGReferenceId].digitalTrueValue;
+                        var digitalFalseValue = scope.dataValues[parameters.screenId][parameters.SVGReferenceId].digitalFalseValue;
+                        var isDigital = digitalTrueValue && digitalFalseValue;
+
+                        if (enumStrings) {
+                            try {
+                                finalValue = localValue = scope.dataValues[parameters.screenId][parameters.SVGReferenceId].enumStrings[parseInt(finalValue, 10)];
+                            }
+                            catch {
+                                console.error("EditDisplay " + thisParentId + ": error parsing enum value", scope.dataValues[parameters.screenId][parameters.SVGReferenceId].enumStrings, parseInt(finalValue, 10));
+                            }
+                        }
+                        else if (isDigital)
+                            finalValue = localValue = (finalValueLower === "true" ? digitalTrueValue : digitalFalseValue);
+
+                        if (!enumStrings && !isDigital) {
+                            if (displayValueDataType.bIsString)
+                                displayValueDataType.notanumber = true;
+                            else {
+                                displayValueDataType.notanumber = notNumeric(finalValue) && finalValueLower !== "true" && finalValueLower !== "false";
+                                finalValue = formatDisplayValue(finalValue);
+
+                                if (displayValueDataType.notanumber || finalValueLower === "true" || finalValueLower === "false")
+                                    finalValue = localValue;
+                            }
+                        }
+
+                        textNode.data("_customOptions", {
+                            "enumstrings": enumStrings,
+                            "digitalTrueValue": digitalTrueValue,
+                            "digitalFalseValue": digitalFalseValue
+                        });
+                        setClientDisplayValue(finalValue, i18next.t1(tooltip));
+                        if (enumStrings)
+                            if (!displayValueDataType.notanumber && parameters.OutOfRange)
+                                checkDisplayInError();
+                    }
+                    else {
+                        setClientDisplayValue("?", scope.dataValues[parameters.screenId][parameters.SVGReferenceId].lastMessage);
+                    }
+                    if (parameters.UseEUnit) {
+                        if (!notNumeric(scope.dataValues[parameters.screenId][parameters.SVGReferenceId].rangeLow))
+                            minValue = new MyDecimal(scope.dataValues[parameters.screenId][parameters.SVGReferenceId].rangeLow);
+                        if (!notNumeric(scope.dataValues[parameters.screenId][parameters.SVGReferenceId].rangeHigh))
+                            maxValue = new MyDecimal(scope.dataValues[parameters.screenId][parameters.SVGReferenceId].rangeHigh);
+                        if (parameters.OutOfRange)
+                            checkDisplayInError();
+                    }
+                    if (euc && parameters.UseEUnit && !parameters.MeasUnit && scope.dataValues[parameters.screenId][parameters.SVGReferenceId].displayName) {
+                        fastdom.mutate(function () {
+                            euc[0].textContent = i18next.t1(scope.dataValues[parameters.screenId][parameters.SVGReferenceId].displayName);
+                            if (relocateEucBox()) {
+                                handleTextAlignment();
+                                realignEucBox();
+                            }
+                        });
+                    }
+                }
+                finally {
+                    checkEnableEditDisplay();
+                    onSettingValue = false;
+                }
+            }
+
+            function setClientDisplayValue(value, newTooltip) {
+                let bTextChanged;
+                if (currentDisplayValue != value)
+                    bTextChanged = true;
+                currentDisplayValue = value;
+                if (inputField)
+                    inputField.val(value);
+                var emptyValue = value == "" || undefinedOrNull(value);
+                fastdom.mutate(function () {
+                    textNode[0].textContent = emptyValue ? " " : value;
+                    if (newTooltip !== undefined && newTooltip != titleNode[0].textContent)
+                        titleNode[0].textContent = newTooltip;
+
+                    if (bInit) {
+                        if (bTextChanged)
+                            textBox = textNode[0].getBBox();
+                        onTextChanged();
+                    }
+                });
+            }
+
+            function writeValueToServer(newValue, previousValue, bInvariant) {
+                if (onSettingValue || $fobjReplacerContainer.hasClass(disabledClass))
+                    return false;
+                if (!(parameters.screenId in scope.dataValues) || !(parameters.SVGReferenceId in scope.dataValues[parameters.screenId]))
+                    return false;
+                if (!scope.dataValues[parameters.screenId][parameters.SVGReferenceId].isGood)
+                    return false;
+                if (previousValue === undefined)
+                    previousValue = currentDisplayValue;
+
+                if (!increasingInterval && !decreasingInterval)
+                    $fobjReplacerContainer.addClass("disableStyle");
+
+                let options = getDisplayCustomOptions();
+                let isDigitalOrEnum = false;
+
+                if (options.digitalFalse && options.digitalTrue) {
+                    isDigitalOrEnum = true;
+                    if (newValue == options.digitalFalse || newValue == 0)
+                        newValue = 0;
+                    else if (newValue == options.digitalTrue || newValue == 1)
+                        newValue = 1;
+                    else {
+                        restorePreviousValue(previousValue);
+                        return false;
+                    }
+                }
+                if (options.enumstrings) {
+                    isDigitalOrEnum = true;
+                    if (!isNaN(newValue)) {
+                        var bOffRange = Decimal.isDecimal(newValue) ? newValue.lt(0) || newValue.gt(options.enumstrings.length) : newValue < 0 || newValue > options.enumstrings.length;
+                        if (bOffRange) {
+                            restorePreviousValue(previousValue);
+                            return false;
+                        }
+                    }
+                    else {
+                        let valueIndex = options.enumstrings.indexOf(newValue);
+                        if (valueIndex == -1) {
+                            restorePreviousValue(previousValue);
+                            return false;
+                        }
+                        newValue = valueIndex;
+                    }
+                }
+
+                let writtenValue = String(newValue);
+
+                if (!isDigitalOrEnum) {
+                    let fv = newValue;
+                    if (!bInvariant)
+                        if (!formatString)
+                            fv = new MyDecimal(writtenValue.replace(groupSeparator, "").replace(decimalSeparator, invariantNumberDecimalSeparator));
+                        else
+                            fv = $.format.number(writtenValue, formatString);
+
+                    let bInvalid = false;
+                    if (!scope.dataValues[parameters.screenId][parameters.SVGReferenceId].bIsString && !notNumeric(fv)) {
+                        writtenValue = String(fv);
+                        bInvalid = isValueOutOfRange(fv);
+                    }
+                    else {
+                        if (scope.dataValues[parameters.screenId][parameters.SVGReferenceId].bIsNumeric && notNumeric(fv))
+                            bInvalid = true;
+                        else
+                            bInvalid = isValueOutOfRange(writtenValue);
+                    }
+                    if (bInvalid) {
+                        restorePreviousValue(previousValue);
+                        return false;
+                    }
+                }
+
+                scope.corehubconnection.invoke("SetValue", parameters.SVGReferenceId, writtenValue, parameters.screenId, false)
+                    .then((ret) => {
+                        if (!$fobjReplacerContainer.hasClass(disabledClass))
+                            $fobjReplacerContainer.removeClass("disableStyle");
+                    })
+                    .catch(err => {
+                        console.error(err.toString());
+                        if (!$fobjReplacerContainer.hasClass(disabledClass))
+                            $fobjReplacerContainer.removeClass("disableStyle");
+                        setClientDisplayValue(previousValue);
+                        scope.$broadcast(onError, { ex: err, value: "Error setting value : " + err.toString() + " for item : " + parameters.SVGItemId });
+                    });
+                return true;
+            }
+
+            function checkDisplayInError() {
+                if (displayErrorIndicator) {
+                    fastdom.measure(function () {
+                        var isOutOfRange = isValueOutOfRange(currentDisplayValue);
+                        var isVisible = displayErrorIndicator.css('display') !== 'none';
+                        if (isOutOfRange != isVisible) {
+                            fastdom.mutate(function () {
+                                displayErrorIndicator.css("display", isOutOfRange ? "block" : "none");
+                            });
+                        }
+                    });
+                }
+            }
+
+            function isValueOutOfRange(val) {
+                var bRet = false;
+                if (displayValueDataType.bIsString)
+                    bRet = minValue.gt(val.toString().length) || maxValue.lt(val.toString().length);
+                else
+                    bRet = !notNumeric(val) && ((!notNumeric(minValue) && new MyDecimal(val).lt(new MyDecimal(minValue))) || (!notNumeric(maxValue) && new MyDecimal(val).gt(new MyDecimal(maxValue))));
+                return bRet;
+            }
+
+            function removeForeignObject() {
+                fobjReplacerContainer = document.createElementNS("http://www.w3.org/2000/svg", "g");
+                fobjReplacerContainer.setAttribute("id", thisParentId);
+                fobjReplacerContainer.classList.add("fobjReplacer");
+                fobjReplacerContainer.classList.add("EditDisplay");
+                thisParent.after(fobjReplacerContainer);
+
+                textRectNode = $(SVG("<rect rx='" + borderRadius + "' class='textRectNode' fill='none'></rect>").node);
+                qualityElem = textRectNode;
+                outerTextRectNode = $(SVG("<rect fill='none'></rect>").node);
+                textNode = $(SVG("<text dy='1em' style='user-select: none;'>?</text>").node);
+                titleNode = $(SVG("<title>" + i18next.t1('ConnectingToServer') + "</title>").node);
+
+                let textNodes = outerTextRectNode.add(textRectNode).add(textNode).add(titleNode);
+
+                if (parameters.Opacity)
+                    textNodes.css("opacity", parameters.Opacity);
+
+                textNodes.appendTo(fobjReplacerContainer);
+                outerTextRectNode.attr({
+                    "width": thisParentSize.w,
+                    "height": thisParentSize.h
+                });
+
+                spinContainerSize = { w: 0, h: 0 };
+                if (parameters.SpinEnabled) {
+                    let rectBgWidth = thisParentSize.w - parameters.BorderThickness.Left - parameters.BorderThickness.Right - parameters.DisplayBorderThickness * 2;
+                    spinContainerSize = {
+                        w: parameters.SpinDimension == 2 ? rectBgWidth * 0.2 : parameters.SpinDimension == 1 ? rectBgWidth * 0.15 : rectBgWidth * 0.1,
+                        h: thisParentSize.h - parameters.BorderThickness.Top - parameters.BorderThickness.Bottom
+                    };
+                }
+
+                let textRectNodeWidth = thisParentSize.w - parameters.BorderThickness.Left - parameters.BorderThickness.Right - spinContainerSize.w;
+                if (borderRadius > 0)
+                    textRectNodeWidth -= parameters.DisplayBorderThickness / 2;
+                textRectNode.attr({
+                    "width": textRectNodeWidth,
+                    "height": thisParentSize.h - parameters.BorderThickness.Top - parameters.BorderThickness.Bottom
+                });
+
+                $fobjReplacerContainer = $(fobjReplacerContainer);
+
+                $fobjReplacerContainer.bind('destroyed', function () {
+                    if (interval)
+                        clearInterval(interval);
+                    if (deregisterListener)
+                        deregisterListener();
+                    if (deregisterListenerMin)
+                        deregisterListenerMin();
+                    if (deregisterListenerMax)
+                        deregisterListenerMax();
+                    if (increasingInterval)
+                        clearInterval(increasingInterval);
+                    if (decreasingInterval)
+                        clearInterval(decreasingInterval);
+                    if (increasingTimeout)
+                        clearTimeout(increasingTimeout);
+                    if (decreasingTimeout)
+                        clearTimeout(decreasingTimeout);
+                    if (spinClearingTimeout)
+                        clearTimeout(spinClearingTimeout);
+                    if (deregisterListenerActiveLanguage)
+                        deregisterListenerActiveLanguage();
+                });
+
+                let tr = safelyRemoveFobj(thisParent, $fobjReplacerContainer, scope, webKitRenderCorrection);
+
+                $fobjReplacerContainer.bind(disabledClassEvent, function () {
+                    checkEnableEditDisplay();
+                });
+
+                initialOuterPos = { x: thisParentPos.x - tr.x, y: thisParentPos.y - tr.y };
+                let textRectAttrs = {
+                    "x": initialOuterPos.x + parameters.BorderThickness.Left,
+                    "y": initialOuterPos.y + parameters.BorderThickness.Top
+                };
+                textNodeStartingCoords = {
+                    "x": initialOuterPos.x + parameters.BorderThickness.Left + parameters.DisplayBorderThickness,
+                    "y": initialOuterPos.y + parameters.BorderThickness.Top + parameters.DisplayBorderThickness
+                };
+                let textAttrs = {
+                    "x": textNodeStartingCoords.x,
+                    "y": textNodeStartingCoords.y
+                };
+                let outerRectAttrs = {
+                    "x": initialOuterPos.x,
+                    "y": initialOuterPos.y
+                };
+                textRectNode.attr(textRectAttrs);
+                textNode.attr(textAttrs);
+                outerTextRectNode.attr(outerRectAttrs);
+
+                let errorIndicatorRadius = Math.max(2.5, Math.round(thisParent.attr("height") / 8)) / 2;
+                displayErrorIndicator = $(SVG("<circle cx='" + (initialOuterPos.x + parameters.BorderThickness.Left + errorIndicatorRadius) + "' cy='" + (initialOuterPos.y + parameters.BorderThickness.Top + errorIndicatorRadius) + "' style='display:none;' r='" + errorIndicatorRadius + "'></circle>").node);
+                displayErrorIndicator.appendTo(fobjReplacerContainer);
+
+                if (parameters.SpinEnabled) {
+                    let spinContainerCoords = {
+                        x: initialOuterPos.x + parseFloat(thisParentSize.w) - parameters.BorderThickness.Right - spinContainerSize.w,
+                        y: initialOuterPos.y + parameters.BorderThickness.Top
+                    };
+                    var displayBg = urlReferenceReplace(parameters.Background.Color, parameters.screenId);
+                    var spinBackground = urlReferenceReplace(parameters.SpinButtonBackColor.Color, parameters.screenId);
+                    let spinContainerUp = $(SVG("<rect style='cursor: pointer;' class='spinContainerUp' stroke='" + displayBg + "' stroke-width='1' fill='" + spinBackground + "' width='" + spinContainerSize.w + "' height='" + (spinContainerSize.h / 2) + "' x='" + spinContainerCoords.x + "' y='" + spinContainerCoords.y + "'></rect>").node);
+                    let spinContainerDown = $(SVG("<rect style='cursor: pointer;' class='spinContainerDown' stroke='" + displayBg + "' stroke-width='1' fill='" + spinBackground + "' width='" + spinContainerSize.w + "' height='" + (spinContainerSize.h / 2) + "' x='" + spinContainerCoords.x + "' y='" + (spinContainerCoords.y + spinContainerSize.h / 2) + "'></rect>").node);
+
+                    var spinThickness = parameters.SpinDimension == 2 ? spinContainerSize.w * 0.6 : parameters.SpinDimension == 1 ? spinContainerSize.w * 0.5 : spinContainerSize.w * 0.3;
+                    let spinArrowUpSvg = $(SVG("<svg style='cursor: pointer;' width='" + spinThickness + "' height='" + (spinContainerSize.h * 0.3) + "' x='" + (spinContainerCoords.x + ((spinContainerSize.w - spinThickness) / 2)) + "' y='" + (spinContainerCoords.y + (spinContainerSize.h * 0.1)) + "' viewBox='0 0 100 200' preserveAspectRatio='none'><polygon points='50,0 100,200 0,200' style='fill:" + urlReferenceReplace(parameters.SpinBackColor.Color, parameters.screenId) + "' /></svg>").node);
+                    let spinArrowDownSvg = $(SVG("<svg style='cursor: pointer;' width='" + spinThickness + "' height='" + (spinContainerSize.h * 0.3) + "' x='" + (spinContainerCoords.x + ((spinContainerSize.w - spinThickness) / 2)) + "' y='" + (spinContainerCoords.y + (spinContainerSize.h * 0.6)) + "' viewBox='0 0 100 200' preserveAspectRatio='none'><polygon points='0,0 100,0 50,200' style='fill:" + urlReferenceReplace(parameters.SpinBackColor.Color, parameters.screenId) + "' /></svg>").node);
+                    spinArrowUp = spinArrowUpSvg.find("polygon");
+                    spinArrowDown = spinArrowDownSvg.find("polygon");
+                    spinArrowUp.on("mouseover", function () {
+                        bHoveringArrow = true;
+                    }).on("mouseout", function () {
+                        bHoveringArrow = false;
+                    });
+                    spinArrowDown.on("mouseover", function () {
+                        bHoveringArrow = true;
+                    }).on("mouseout", function () {
+                        bHoveringArrow = false;
+                    });
+
+                    topBtn = spinContainerUp;
+                    btmBtn = spinContainerDown;
+                    spinContainerUp.appendTo(fobjReplacerContainer);
+                    spinContainerDown.appendTo(fobjReplacerContainer);
+                    spinArrowUpSvg.appendTo(fobjReplacerContainer);
+                    spinArrowDownSvg.appendTo(fobjReplacerContainer);
+                }
+
+                euc = $(SVG("<text dy='1em' class='editDisplayEUC' style='user-select: none;'></text>").node);
+                dynamicFontElements.push(euc);
+                if (parameters.MeasUnit)
+                    euc[0].textContent = i18next.t1(parameters.MeasUnit);
+
+                cssEuc = {};
+                if (parameters.MeasFontSettings) {
+                    if (parameters.MeasFontSettings.FontFamily)
+                        cssEuc["font-family"] = parameters.MeasFontSettings.FontFamily;
+                    if (parameters.MeasFontSettings.FontSize)
+                        cssEuc["font-size"] = parameters.MeasFontSettings.FontSize;
+                    if (parameters.MeasFontSettings.FontWeight)
+                        cssEuc["font-weight"] = fontWeightConverter(parameters.MeasFontSettings.FontWeight);
+                    if (parameters.MeasFontSettings.FontStyle) {
+                        var fontStyle = parameters.MeasFontSettings.FontStyle.toLowerCase();
+                        if (fontStyle != "normal")
+                            cssEuc["font-style"] = fontStyle;
+                    }
+                }
+                if (parameters.Foreground.Color)
+                    cssEuc["fill"] = getSolidColor(parameters.Foreground);
+                euc.css(cssEuc);
+
+                euc.appendTo(fobjReplacerContainer);
+                relocateEucBox();
+
+                rectBox = textRectNode[0].getBBox();
+                updateInnerDisplayWidth();
+            }
+
+            function updateInnerDisplayWidth() {
+                if (!rectBox)
+                    return;
+
+                innerDisplayWidth = rectBox.width - parameters.DisplayBorderThickness * 2 - eucBox.width - (eucBox.width > 0 ? eucLeftMargin : 0);
+                if (editingFobj)
+                    editingFobj.attr("width", innerDisplayWidth);
+            }
+
+            function relocateEucBox() {
+                let bRet = false;
+                let newEucBox = euc[0].getBBox();
+                var getEucX = function () {
+                    return initialOuterPos.x + parseFloat(thisParentSize.w) - parameters.BorderThickness.Right - spinContainerSize.w - eucBox.width - parameters.DisplayBorderThickness;
+                };
+                if (!eucBox || newEucBox.width != eucBox.width || newEucBox.height != eucBox.height) {
+                    eucBox = newEucBox;
+                    euc.attr({
+                        x: getEucX(),
+                        y: initialOuterPos.y + parameters.BorderThickness.Top + parameters.DisplayBorderThickness
+                    });
+                    if (parameters.MeasUnit) {
+                        if (bHasNewLine) {
+                            euc = autoWrapSVGTextToWidth(euc[0], null, false);
+                            eucBox = euc[0].getBBox();
+                            var eucTspans = euc.find("tspan");
+                            euc.attr("x", getEucX());
+                            eucTspans.attr("x", getEucX());
+                        }
+                    }
+                    updateInnerDisplayWidth();
+                    bRet = true;
+                }
+                return bRet;
+            }
+
+            function realignEucBox() {
+                let eucY = parseFloat(euc.attr("y"));
+                let eucX = parseFloat(euc.attr("x"));
+                if (parameters.LabelVerticalAlignement != 0) {
+                    if (parameters.LabelVerticalAlignement == 2) //bottom
+                        eucY = rectBox.y + rectBox.height - eucBox.height;
+                    else
+                        eucY = rectBox.y + rectBox.height / 2 - eucBox.height / 2;
+                }
+                let leftOffset = 0;
+                let topOffset = 0;
+                if (parameters.MeasUnitOffset) {
+                    if (parameters.MeasUnitOffset.Right)
+                        leftOffset -= parameters.MeasUnitOffset.Right * measUnitOffsetFactor;
+                    if (parameters.MeasUnitOffset.Left)
+                        leftOffset += parameters.MeasUnitOffset.Left * measUnitOffsetFactor;
+                    if (parameters.MeasUnitOffset.Top)
+                        topOffset += parameters.MeasUnitOffset.Top * measUnitOffsetFactor;
+                    if (parameters.MeasUnitOffset.Bottom)
+                        topOffset -= parameters.MeasUnitOffset.Bottom * measUnitOffsetFactor;
+                }
+
+                var eucNewCoords = { x: eucX + leftOffset, y: eucY + topOffset };
+                euc.attr(eucNewCoords);
+                if (bHasNewLine) {
+                    var eucTspans = euc.find("tspan");
+                    eucTspans.attr("x", eucNewCoords.x)
+                    eucTspans.first().attr("y", eucNewCoords.y);
+                }
+            }
+
+            function checkEnabledEditable() {
+                let enabled = false;
+                let editable = false;
+                try {
+                    enabled = scope.dataValues[parameters.screenId][parameters.SVGReferenceId].isGood && !$fobjReplacerContainer.hasClass(disabledClass);
+                    editable = !parameters.IsReadOnly && scope.dataValues[parameters.screenId][parameters.SVGReferenceId].isWritable && scope.dataValues[parameters.screenId][parameters.SVGReferenceId].isUserWritable;
+                }
+                catch { }
+                return {
+                    enabled: enabled,
+                    editable: editable
+                };
+            }
+
+            function checkEnableEditDisplay() {
+                let displayStatus = checkEnabledEditable();
+                if (displayStatus.enabled)
+                    $fobjReplacerContainer.removeClass("disableStyle");
+                else
+                    $fobjReplacerContainer.addClass("disableStyle");
+                if (displayStatus.enabled && displayStatus.editable) {
+                    if (topBtn) {
+                        spinArrowDown.removeClass("disablePointer");
+                        topBtn.removeClass("disablePointer");
+                    }
+                    if (btmBtn) {
+                        spinArrowDown.removeClass("disablePointer");
+                        btmBtn.removeClass("disablePointer");
+                    }
+                }
+                else {
+                    if (topBtn) {
+                        spinArrowUp.addClass("disablePointer");
+                        topBtn.addClass("disablePointer");
+                    }
+                    if (btmBtn) {
+                        spinArrowDown.addClass("disablePointer");
+                        btmBtn.addClass("disablePointer");
+                    }
+                }
+            }
+        }
+    </script>
+</div>

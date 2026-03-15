@@ -1,0 +1,73 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>SimpleOpcFileServer</RootNamespace>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
+    <DockerfileContext>..\WpfApp3</DockerfileContext>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Azure.Identity" Version="1.18.0" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Scripting" Version="4.12.0" />
+    <PackageReference Include="Microsoft.CodeAnalysis.VisualBasic" Version="4.12.0" />
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="6.1.4" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="9.0.0" />
+    <PackageReference Include="Microsoft.Identity.Client" Version="4.80.0" />
+    <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.0.0" />
+    <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.22.0" />
+    <PackageReference Include="Npgsql" Version="8.0.3" />
+    <PackageReference Include="OPCFoundation.NetStandard.Opc.Ua" Version="1.5.378.106" />
+    <PackageReference Include="Serilog" Version="4.3.1" />
+    <PackageReference Include="Serilog.Extensions.Hosting" Version="8.0.0" />
+    <PackageReference Include="Serilog.Settings.Configuration" Version="8.0.2" />
+    <PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
+    <PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="9.0.0" />
+    <PackageReference Include="Serilog.Extensions.Logging" Version="8.0.0" />
+    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.7" />
+    <PackageReference Include="SixLabors.ImageSharp.Drawing" Version="2.1.5" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="nodes.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="kpi.csv">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="appsettings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SharedModels\SharedModels.csproj" />
+    <ProjectReference Include="..\Drivers\Drivers.Abstractions\Drivers.Abstractions.csproj" />
+  </ItemGroup>
+
+  <!-- Copy driver outputs to the drivers/ subfolder after build -->
+  <Target Name="CopyDrivers" AfterTargets="Build">
+    <ItemGroup>
+      <DriverOutputFiles Include="..\Drivers\Drivers.Csv\bin\$(Configuration)\$(TargetFramework)\*.dll" />
+      <DriverOutputFiles Include="..\Drivers\Drivers.Modbus\bin\$(Configuration)\$(TargetFramework)\*.dll" />
+      <DriverOutputFiles Include="..\Drivers\Drivers.S7\bin\$(Configuration)\$(TargetFramework)\*.dll" />
+      <DriverOutputFiles Include="..\Drivers\Drivers.Mqtt\bin\$(Configuration)\$(TargetFramework)\*.dll" />
+      <DriverOutputFiles Include="..\Drivers\Drivers.EtherNetIP\bin\$(Configuration)\$(TargetFramework)\*.dll" />
+      <DriverOutputFiles Include="..\Drivers\Drivers.Sql\bin\$(Configuration)\$(TargetFramework)\*.dll" />
+      <DriverOutputFiles Include="..\Drivers\Drivers.OpcUaClient\bin\$(Configuration)\$(TargetFramework)\*.dll" />
+      <DriverOutputFiles Include="..\Drivers\Drivers.Rest\bin\$(Configuration)\$(TargetFramework)\*.dll" />
+      <DriverOutputFiles Include="..\Drivers\Drivers.Tcp\bin\$(Configuration)\$(TargetFramework)\*.dll" />
+      <DriverOutputFiles Include="..\Drivers\Drivers.Knx\bin\$(Configuration)\$(TargetFramework)\*.dll" />
+    </ItemGroup>
+    <MakeDir Directories="$(OutputPath)drivers" />
+    <Copy SourceFiles="@(DriverOutputFiles)" DestinationFolder="$(OutputPath)drivers" SkipUnchangedFiles="true" ContinueOnError="true" />
+  </Target>
+
+</Project>

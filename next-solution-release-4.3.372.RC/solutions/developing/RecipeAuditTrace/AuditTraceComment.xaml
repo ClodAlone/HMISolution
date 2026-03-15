@@ -1,0 +1,70 @@
+<UserControl x:Class="RecipeAuditTrace.AuditTraceComment"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:local="clr-namespace:RecipeAuditTrace"
+             xmlns:coverters="clr-namespace:RecipeAuditTrace.Converters"
+             xmlns:properties="clr-namespace:RecipeAuditTrace.Properties"
+             mc:Ignorable="d" 
+             Height="250" d:DesignWidth="520">
+
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/RuntimeLightSharedResources;component/Resources/SharedImages.xaml" />
+                <ResourceDictionary Source="/RuntimeLightSharedResources;component/Resources/DataError.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+            <coverters:RecipeCommandToStringConverter x:Key="RecipeCommandToStringConverter" />
+        </ResourceDictionary>
+    </UserControl.Resources>
+    
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="5" />
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition MinHeight="100" />
+        </Grid.RowDefinitions>
+        <TextBlock Margin="5" x:Name="txtRecipeName"
+                   Text="{x:Static properties:Resources.AuditTraceComment_RecipeName}" VerticalAlignment="Center" />
+        <TextBlock Grid.Column="2" Margin="5" 
+                   Text="{Binding RecipeName}" VerticalAlignment="Center" />
+
+        <TextBlock Grid.Row="1" Margin="5" x:Name="txtRecipeIndex"
+                   Text="{x:Static properties:Resources.AuditTraceComment_RecipeIndex}" VerticalAlignment="Center" />
+        <TextBlock Grid.Row="1" Grid.Column="2" Margin="5" 
+                   Text="{Binding RecipeIndex}" VerticalAlignment="Center" />
+
+        <TextBlock Grid.Row="2" Margin="5" x:Name="txtRecipeCommand"
+                   Text="{x:Static properties:Resources.AuditTraceComment_RecipeCommand}" VerticalAlignment="Center" />
+        <TextBlock Grid.Row="2" Grid.Column="2" Margin="5" VerticalAlignment="Center">
+            <TextBlock.Text>
+                <MultiBinding Converter="{StaticResource RecipeCommandToStringConverter}">
+                    <Binding Path="RecipeCommand" Mode="OneWay" />
+                    <Binding Path="CurrentStringIds" Mode="OneWay" />
+                </MultiBinding>
+            </TextBlock.Text>
+        </TextBlock>
+
+        <TextBlock Grid.Row="3" Margin="5" x:Name="txtUserComment"
+                   Text="{x:Static properties:Resources.AuditTraceComment_UserComment}" VerticalAlignment="Top" />
+        <DockPanel Grid.Row="3" Grid.Column="2" Margin="5">
+            <Button DockPanel.Dock="Right" Click="EditAuditComment_Click">
+                <Button.Content>
+                    <Image Source="{StaticResource EditGeneralSmall}" Height="16" Width="16" />
+                </Button.Content>
+            </Button>
+            <TextBox x:Name="txtAuditComment" Validation.ErrorTemplate="{x:Null}"
+                     Text="{Binding AuditComment, ValidatesOnDataErrors=True, UpdateSourceTrigger=PropertyChanged}" />
+        </DockPanel>
+        <ContentPresenter Grid.Row="3" Grid.Column="3"
+            Content="{Binding ElementName=txtAuditComment, Path=(Validation.Errors).CurrentItem}"/>
+    </Grid>
+</UserControl>

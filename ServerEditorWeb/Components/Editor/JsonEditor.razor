@@ -1,0 +1,45 @@
+@using ServerEditorWeb.Services
+
+<div class="json-editor-panel">
+    <div class="d-flex gap-2 mb-2">
+        <button class="btn btn-sm btn-outline-secondary" @onclick="Refresh">⟳ Refresh from Tree</button>
+        <button class="btn btn-sm btn-outline-primary" @onclick="Apply">✔ Apply to Tree</button>
+    </div>
+    <CodeEditor @bind-Value="JsonText" @bind-Value:after="OnJsonChanged" Language="json" Height="calc(100vh - 260px)" />
+    @if (!string.IsNullOrEmpty(_message))
+    {
+        <div class="mt-2 alert @(_success ? "alert-success" : "alert-danger")">@_message</div>
+    }
+</div>
+
+@code {
+    [Parameter] public string JsonText { get; set; } = "";
+    [Parameter] public EventCallback<string> JsonTextChanged { get; set; }
+    [Parameter] public EventCallback OnRefresh { get; set; }
+    [Parameter] public EventCallback<(bool success, string message)> OnApply { get; set; }
+
+    private string _message = "";
+    private bool _success;
+
+    private async Task OnJsonChanged()
+    {
+        await JsonTextChanged.InvokeAsync(JsonText);
+    }
+
+    private async Task Refresh()
+    {
+        _message = "";
+        await OnRefresh.InvokeAsync();
+    }
+
+    private async Task Apply()
+    {
+        await OnApply.InvokeAsync();
+    }
+
+    public void ShowMessage(bool success, string message)
+    {
+        _success = success;
+        _message = message;
+    }
+}

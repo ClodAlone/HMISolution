@@ -1,0 +1,856 @@
+﻿<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+					xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+					xmlns:des="clr-namespace:Syncfusion.Windows.Tools.Controls"
+                    xmlns:utilsOuter="clr-namespace:Syncfusion.Windows.Shared;assembly=Syncfusion.Shared.WPF">
+
+    <ResourceDictionary.MergedDictionaries>
+        <ResourceDictionary Source="/Syncfusion.Tools.WPF;component/Controls/TreeViewAdv/Themes/Brushes.xaml"/>
+    </ResourceDictionary.MergedDictionaries>
+
+
+    <!-- Template for TreeViewAdv -->
+    <ControlTemplate x:Key="Blend_TreeViewAdvTemplateKey" TargetType="{x:Type des:TreeViewAdv}">
+        <Border Name="PART_Border"
+                BorderBrush="{TemplateBinding BorderBrush}" 
+				BorderThickness="{TemplateBinding Border.BorderThickness}"
+                CornerRadius="{TemplateBinding Border.CornerRadius}"
+                Margin="{TemplateBinding Border.BorderThickness}"
+                Padding="{TemplateBinding Border.Padding}"
+                TextElement.Foreground="{TemplateBinding Foreground}"
+                Background="{TemplateBinding Background}">
+            <ScrollViewer Name="PART_ScrollViwer" 
+						  Focusable="False"
+						  Background="{TemplateBinding Background}" 
+						  HorizontalScrollBarVisibility="{TemplateBinding ScrollViewer.HorizontalScrollBarVisibility}" 
+						  VerticalScrollBarVisibility="{TemplateBinding ScrollViewer.VerticalScrollBarVisibility}" 
+						  Padding="{TemplateBinding Control.Padding}" 
+						  CanContentScroll="True">
+                <ItemsPresenter Name="PART_ItemPresenter" VerticalAlignment="Top"/>
+            </ScrollViewer>
+        </Border>
+        <ControlTemplate.Triggers>
+            <Trigger Property="MultiColumnEnable" Value="False">
+                <Setter Property="ItemsPanel">
+                    <Setter.Value>
+                        <ItemsPanelTemplate>
+                            <des:TreeViewAdvVirtualizingPanel IsShowLine="False" />
+                        </ItemsPanelTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Trigger>
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="ItemsControl.HasItems" Value="False"/>
+                    <Condition Property="FrameworkElement.Width" Value="NaN"/>
+                </MultiTrigger.Conditions>
+                <Setter Property="FrameworkElement.MinWidth" Value="120"/>
+            </MultiTrigger>
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="ItemsControl.HasItems" Value="False"/>
+                    <Condition Property="FrameworkElement.Height" Value="NaN"/>
+                </MultiTrigger.Conditions>
+                <Setter Property="FrameworkElement.MinHeight" Value="95"/>
+            </MultiTrigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+    <!-- Template for Multicolumn TreeViewAdv -->
+    <ControlTemplate x:Key="Blend_Multicolumn_TreeViewAdvTemplateKey" TargetType="{x:Type des:TreeViewAdv}">
+        <Border Name="PART_Border"
+                BorderBrush="{TemplateBinding BorderBrush}" 
+				BorderThickness="{TemplateBinding Border.BorderThickness}"
+                CornerRadius="{TemplateBinding Border.CornerRadius}"
+                Margin="{TemplateBinding Border.BorderThickness}"
+                Padding="{TemplateBinding Border.Padding}"
+                Background="{TemplateBinding Background}">
+            <ScrollViewer Name="PART_ScrollViwer" 
+						  Focusable="False"
+						  Background="{TemplateBinding Background}" 
+						  HorizontalScrollBarVisibility="{TemplateBinding ScrollViewer.HorizontalScrollBarVisibility}" 
+						  VerticalScrollBarVisibility="{TemplateBinding ScrollViewer.VerticalScrollBarVisibility}" 
+						  Padding="{TemplateBinding Control.Padding}" 
+						  CanContentScroll="True">
+                <ScrollViewer.Style>
+                    <Style TargetType="ScrollViewer">
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="ScrollViewer">
+                                    <Grid Background="{TemplateBinding Panel.Background}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="*" />
+                                            <RowDefinition Height="Auto" />
+                                        </Grid.RowDefinitions>
+                                        <ScrollViewer VerticalScrollBarVisibility="Disabled" 
+                                                      HorizontalScrollBarVisibility="Hidden">
+                                            <des:TreeViewHeaderRowPresenter Name="PART_HeaderRowPresenter"
+                                                                            Grid.Row="0" 
+                                                                            Grid.ColumnSpan="2"
+                                                                            Columns="{Binding Path=Columns, UpdateSourceTrigger=PropertyChanged, RelativeSource={RelativeSource AncestorType={x:Type des:TreeViewAdv}}}"/>
+                                        </ScrollViewer>
+                                        <ScrollContentPresenter Name="PART_ScrollContentPresenter" 
+                                                                Grid.Row="1"
+                                                                Grid.Column="0"
+                                                                Margin="{TemplateBinding Control.Padding}" 
+                                                                Content="{TemplateBinding ContentControl.Content}" 
+                                                                ContentTemplate="{TemplateBinding ContentControl.ContentTemplate}" 
+                                                                CanContentScroll="True"
+                                                                SnapsToDevicePixels="{TemplateBinding UIElement.SnapsToDevicePixels}" 
+                                                                KeyboardNavigation.DirectionalNavigation="Local"/>
+                                        <ScrollBar Name="PART_VerticalScrollBar"
+                                                   Grid.Column="1" 
+                                                   Grid.Row="0" 
+                                                   Grid.RowSpan="2"
+                                                   Minimum="0" 
+                                                   Maximum="{TemplateBinding ScrollableHeight}" 
+                                                   ViewportSize="{TemplateBinding ViewportHeight}" 
+                                                   Value="{TemplateBinding VerticalOffset}" 
+                                                   Visibility="{TemplateBinding ComputedVerticalScrollBarVisibility}" 
+                                                   Cursor="Arrow" 
+                                                   AutomationProperties.AutomationId="VerticalScrollBar"/>
+                                        <ScrollBar Name="PART_HorizontalScrollBar"
+                                                   Grid.Column="0" 
+                                                   Grid.Row="2" 
+                                                   Orientation="Horizontal"  
+                                                   Minimum="0" 
+                                                   Maximum="{TemplateBinding ScrollableWidth}" 
+                                                   ViewportSize="{TemplateBinding ViewportWidth}" 
+                                                   Value="{TemplateBinding HorizontalOffset}" 
+                                                   Visibility="{TemplateBinding ComputedHorizontalScrollBarVisibility}" 
+                                                   Cursor="Arrow" 
+                                                   AutomationProperties.AutomationId="HorizontalScrollBar"/>
+                                    </Grid>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </ScrollViewer.Style>
+                <ItemsPresenter Name="PART_ItemPresenter" VerticalAlignment="Top"/>
+            </ScrollViewer>
+        </Border>
+        <ControlTemplate.Triggers>
+            <Trigger Property="MultiColumnEnable" Value="True">
+                <Setter Property="ItemsPanel">
+                    <Setter.Value>
+                        <ItemsPanelTemplate>
+                            <des:TreeViewAdvVirtualizingPanel IsShowLine="False" />
+                        </ItemsPanelTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Trigger>
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="ItemsControl.HasItems" Value="False"/>
+                    <Condition Property="FrameworkElement.Width" Value="NaN"/>
+                </MultiTrigger.Conditions>
+                <Setter Property="FrameworkElement.MinWidth" Value="120"/>
+            </MultiTrigger>
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="ItemsControl.HasItems" Value="False"/>
+                    <Condition Property="FrameworkElement.Height" Value="NaN"/>
+                </MultiTrigger.Conditions>
+                <Setter Property="FrameworkElement.MinHeight" Value="95"/>
+            </MultiTrigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+    
+    <!-- Template for TreeViewColumnHeader -->
+    <ControlTemplate x:Key="Blend_TreeViewColumnHeaderTemplateKey" TargetType="{x:Type des:TreeViewColumnHeader}">
+        <Grid Background="{StaticResource Blend_TreeViewColumnHeader_BorderBrush}" SnapsToDevicePixels="True"
+              TextElement.Foreground="{Binding Path=Foreground, RelativeSource={RelativeSource AncestorType={x:Type des:TreeViewAdv}}}">
+            <Border BorderThickness="0" 
+                    CornerRadius="2"
+                    Padding="{TemplateBinding Control.Padding}" 
+                    Background="{StaticResource Blend_TreeViewColumnHeader_BackgroundBrush}"
+                    Margin="1">
+                <Border Name="PART_PressBorder" 
+                        Margin="1,0,1,0" 
+                        BorderThickness="1">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition />
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <ContentPresenter Name="HeaderContent" 
+                                  RecognizesAccessKey="True"  
+                                  Content="{TemplateBinding ContentControl.Content}" 
+                                  ContentTemplate="{TemplateBinding ContentControl.ContentTemplate}" 
+                                  Margin="0,0,0,1" 
+                                  HorizontalAlignment="{TemplateBinding Control.HorizontalContentAlignment}" 
+                                  VerticalAlignment="{TemplateBinding Control.VerticalContentAlignment}" 
+                                  SnapsToDevicePixels="{TemplateBinding UIElement.SnapsToDevicePixels}" 
+                                 />
+                        <Path x:Name="arrow" Style="{Binding Path=SortingDirectionArrowStyle, RelativeSource={RelativeSource AncestorType={x:Type des:TreeViewAdv}}}" Visibility="Collapsed" Grid.Column="1" />
+                    </Grid>
+                </Border>
+            </Border>
+
+            <Canvas>
+                <Thumb Name="PART_HeaderGripper">
+                    <Thumb.Style>
+                        <Style TargetType="Thumb">
+                            <Setter Property="Canvas.Right" Value="-9"/>
+                            <Setter Property="FrameworkElement.Width" Value="18"/>
+                            <Setter Property="FrameworkElement.Height">
+                                <Setter.Value>
+                                    <Binding Path="ActualHeight" RelativeSource="{RelativeSource Mode=TemplatedParent}" />
+                                </Setter.Value>
+                            </Setter>
+                            <Setter Property="Control.Padding" Value="0,3,0,4"/>
+                            <Setter Property="Panel.Background" Value="#FFC7C5B2"/>
+                            <Setter Property="Control.Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="Thumb">
+                                        <Border Padding="{TemplateBinding Control.Padding}" Background="#00FFFFFF">
+                                            <DockPanel HorizontalAlignment="Center">
+                                                <Rectangle Fill="{StaticResource Blend_TreeViewColumnHeader_ThumbBrush}" Width="0" />
+                                            </DockPanel>
+                                        </Border>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </Thumb.Style>
+                </Thumb>
+            </Canvas>
+            <Border BorderThickness="1,1,1,1" Name="HeaderPressBorder" />
+        </Grid>
+        <ControlTemplate.Triggers>
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="IsPressedHeader" Value="True"/>
+                    <Condition Property="des:TreeViewHeaderRowPresenter.AllowsColumnReorder" Value="True"/>
+                </MultiTrigger.Conditions>
+                <Setter Property="BorderBrush" TargetName="PART_PressBorder" Value="{StaticResource Blend_TreeViewColumnHeaderPressedBorder}"/>
+                <Setter Property="Background" TargetName="PART_PressBorder" Value="{StaticResource Blend_TreeViewColumnHeaderPressedBackground}"/>
+            </MultiTrigger>
+            <Trigger Property="FrameworkElement.Height" Value="NaN">
+                <Setter Property="FrameworkElement.MinHeight" Value="20"/>
+            </Trigger>
+            <Trigger Property="UIElement.IsEnabled" Value="False">
+                <Setter Property="TextElement.Foreground">
+                    <Setter.Value>
+                        <DynamicResource ResourceKey="{x:Static SystemColors.GrayTextBrushKey}" />
+                    </Setter.Value>
+                </Setter>
+            </Trigger>
+            <Trigger Property="SortDirection" Value="Ascending">
+                <Setter TargetName="arrow" Property="Visibility" Value="Visible"/>
+                <Setter TargetName="arrow" Property="Data" Value="M 5,10 L 15,10 L 10,5 L 5,10"></Setter>
+            </Trigger>
+            <Trigger Property="SortDirection" Value="None">
+                <Setter TargetName="arrow" Property="Visibility" Value="Collapsed"/>
+            </Trigger>
+            <Trigger Property="SortDirection" Value="Descending">
+                <Setter TargetName="arrow" Property="Visibility" Value="Visible"/>
+                <Setter TargetName="arrow" Property="Data" Value="M 5,5 L 10,10 L 15,5 L 5,5"></Setter>
+            </Trigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+    <!-- Template for edited item -->
+    <DataTemplate x:Key="Blend_EditedItemTemplate" DataType="{x:Type des:TreeViewItemAdv}">
+        <TextBox Name="TreeViewItemAdvText"
+                 KeyboardNavigation.IsTabStop="True"
+                 />
+    </DataTemplate>
+
+    <!-- Template for TreeViewItemAdv -->
+    <ControlTemplate x:Key="Blend_TreeViewItemAdvTemplateKey" TargetType="des:TreeViewItemAdv">
+        <Grid Focusable="False" Background="Transparent"
+			  TextElement.Foreground="{Binding Path=Foreground, RelativeSource={RelativeSource AncestorType={x:Type des:TreeViewAdv}}}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <Grid Grid.Row="0" Grid.RowSpan="2" Name="VertLineGrid" Visibility="Hidden">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"></RowDefinition>
+                    <RowDefinition Height="*"></RowDefinition>
+                </Grid.RowDefinitions>
+                <des:TreeRootLine Width="{Binding Path=LineStrokeThickness, RelativeSource={RelativeSource AncestorType={x:Type des:TreeViewAdv}}}"
+                                  Margin="0,0,0,0" 
+                                  Panel.ZIndex="0" 
+                                  Focusable="False" IsVerticalLine="True"
+                                  Name="PART_VerticalLinePartOne" Grid.Row="0" SnapsToDevicePixels="True"
+                                  LineBrush="{Binding Path=LineBrush, RelativeSource={RelativeSource AncestorType={x:Type des:TreeViewAdv}}}" 
+                                  LineStrokeThickness="{Binding Path=LineStrokeThickness, RelativeSource={RelativeSource AncestorType={x:Type des:TreeViewAdv}}}" 
+                                  Visibility="Visible"
+                                  />
+                <des:TreeRootLine Width="{Binding Path=LineStrokeThickness, RelativeSource={RelativeSource AncestorType={x:Type des:TreeViewAdv}}}"
+                                  Margin="0,0,0,0" 
+                                  Panel.ZIndex="0" 
+                                  Focusable="False"
+                                  IsVerticalLine="True"
+                                  Name="PART_VerticalLinePartTwo" Grid.Row="1" SnapsToDevicePixels="True"
+                                  LineBrush="{Binding Path=LineBrush, RelativeSource={RelativeSource AncestorType={x:Type des:TreeViewAdv}}}" 
+                                  LineStrokeThickness="{Binding Path=LineStrokeThickness, RelativeSource={RelativeSource AncestorType={x:Type des:TreeViewAdv}}}" 
+                                  Visibility="Visible"
+                                  />
+            </Grid>
+
+            <Grid Name="HorLineGrid">
+                <des:TreeRootLine Height="{Binding Path=LineStrokeThickness, RelativeSource={RelativeSource AncestorType={x:Type des:TreeViewAdv}}}"
+                              Width="13"
+                              Panel.ZIndex="0" 
+                              Margin="9,0,-3,0"  
+                              Focusable="False"
+                              HorizontalAlignment="Right"  
+                              IsVerticalLine="False"
+                              Name="PART_HorizontalLine" Grid.Row="0" SnapsToDevicePixels="True"
+                              LineBrush="{Binding Path=LineBrush, RelativeSource={RelativeSource AncestorType={x:Type des:TreeViewAdv}}}" 
+                              
+                              LineStrokeThickness="{Binding Path=LineStrokeThickness, RelativeSource={RelativeSource AncestorType={x:Type des:TreeViewAdv}}}" 
+                             
+                                  />
+            </Grid>
+            <des:SelectRectangle Name="PART_SelectRectangle"
+                                 Grid.Column="0"
+                                 Grid.Row="0"
+                                 TargetItem="{Binding RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type des:TreeViewItemAdv}}}"
+                                 Fill="{StaticResource Blend_TreeViewAdv_ItemBackgroundBrush}"
+                                 SnapsToDevicePixels="True"
+                                 Margin="0,0,0,1"/>
+
+            <Expander Name="PART_Expander"
+                      Height="13"
+                      Margin="5,0,0,0"
+					  Grid.Column="0"
+					  Grid.Row="0"
+					  HorizontalAlignment="Center"
+					  Focusable="False"
+					  IsExpanded="{Binding Path=IsExpanded, RelativeSource={RelativeSource TemplatedParent}}"
+					  Style="{TemplateBinding des:TreeViewAdv.ExpanderStyle}"/>
+
+            <Grid Grid.Column="1" Grid.Row="0" Panel.ZIndex="10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Name="PART_CompleteHeader" Orientation="Horizontal">
+                    <StackPanel Name="PART_ImagePanel" Margin="5,0,0,0" Orientation="Horizontal">
+                        <Image Name="ExpanderImage" 
+						   Focusable="False"
+						   Source="{TemplateBinding CollapsedImageSource}"
+						   Stretch="{TemplateBinding ImageStretch}"
+						   Width="{TemplateBinding ImageWidth}"
+						   Height="{TemplateBinding ImageHeight}"
+						   />
+
+                        <Image Name="LeftImage" 
+						   Focusable="False"
+						   Margin="2,0,0,0"
+						   Source="{TemplateBinding LeftImageSource}"
+						   Stretch="{TemplateBinding ImageStretch}"
+						   Width="{TemplateBinding ImageWidth}"
+						   Height="{TemplateBinding ImageHeight}"
+						   />
+                    </StackPanel>
+
+                    <StackPanel Name="PART_ItemContent"  
+                            VerticalAlignment="Center" 
+                            Focusable="True" 
+                            KeyboardNavigation.TabNavigation="Cycle"
+                            Margin="3,0,0,0">
+                        <Border Name="Bd"
+                            ToolTip="{TemplateBinding des:TreeViewItemAdv.Header}"
+                            ToolTipService.IsEnabled="False"
+                            ToolTipService.Placement="Center"
+                            ToolTipService.HorizontalOffset="4"
+                            ToolTipService.VerticalOffset="2"
+                            BorderBrush="{TemplateBinding Border.BorderBrush}"
+                            BorderThickness="{Binding Path=BorderThickness, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type des:TreeViewItemAdv}}}"
+                            Background="{TemplateBinding Panel.Background}"
+                            TextElement.Foreground="{TemplateBinding Foreground}"
+                            Padding="{TemplateBinding Control.Padding}">
+                            <Grid>
+                                <ContentPresenter Name="PART_Header"
+										  Visibility="Visible" 
+										  HorizontalAlignment="{TemplateBinding Control.HorizontalContentAlignment}"
+										  VerticalAlignment="Center"
+										  ContentSource="Header"
+										  Content="{TemplateBinding des:TreeViewItemAdv.Header}"
+										  ContentTemplate="{TemplateBinding des:TreeViewItemAdv.HeaderTemplate}"
+										  ContentTemplateSelector="{TemplateBinding des:TreeViewItemAdv.HeaderTemplateSelector}">
+                                </ContentPresenter>
+                                <ContentPresenter Name="PART_EditHeader"
+									  Visibility="Collapsed"
+									  HorizontalAlignment="{TemplateBinding Control.HorizontalContentAlignment}"
+									  VerticalAlignment="Center"
+									  ContentSource="Header"
+									  Content="{TemplateBinding des:TreeViewItemAdv.Header}"
+									  ContentTemplate="{Binding Path=(des:TreeViewItemAdv.ParentItemsControl).(des:TreeViewAdv.EditedItemTemplate), RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type des:TreeViewItemAdv}}}"
+                                      ContentTemplateSelector="{Binding Path=(des:TreeViewItemAdv.ParentItemsControl).(des:TreeViewAdv.EditedItemTemplateSelector), RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type des:TreeViewItemAdv}}}"/>
+                            </Grid>
+                        </Border>
+                    </StackPanel>
+
+                    <Image Name="RightImage" 
+                       Focusable="False"
+					   Margin="3,0,3,0"
+					   Source="{TemplateBinding RightImageSource}"
+                       Stretch="{TemplateBinding ImageStretch}"
+                       Width="{TemplateBinding ImageWidth}"
+                       Height="{TemplateBinding ImageHeight}" />
+                </StackPanel>
+            </Grid>
+
+            <Grid Grid.Column="1" Grid.Row="1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <ItemsPresenter Name="PART_ItemsHost" Visibility="Collapsed" />
+            </Grid>
+        </Grid>
+        <ControlTemplate.Triggers>
+            <Trigger Property="MultiColumnEnable" Value="False">
+                <Setter Property="ItemsPanel">
+                    <Setter.Value>
+                        <ItemsPanelTemplate>
+                            <des:TreeViewAdvVirtualizingPanel IsShowLine="{Binding Path=ShowRootLines, RelativeSource={RelativeSource AncestorType={x:Type des:TreeViewAdv}}}"/>
+                        </ItemsPanelTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Trigger>
+            <Trigger Property="des:TreeViewItemAdv.IsShowToolTip" Value="True">
+                <Setter Property="ToolTipService.IsEnabled" TargetName="Bd" Value="True"/>
+            </Trigger>
+            <Trigger Property="des:TreeViewItemAdv.LeftImageSource" Value="{x:Null}">
+                <Setter TargetName="LeftImage" Property="Visibility" Value="Collapsed"/>
+            </Trigger>
+            <Trigger Property="des:TreeViewItemAdv.RightImageSource" Value="{x:Null}">
+                <Setter TargetName="RightImage" Property="Visibility" Value="Collapsed"/>
+            </Trigger>
+            <Trigger Property="des:TreeViewItemAdv.IsExpanded" Value="True">
+                <Setter TargetName="ExpanderImage" Property="Source" Value="{Binding Path=ExpandedImageSource, RelativeSource={RelativeSource TemplatedParent}}"/>
+                <Setter TargetName="PART_ItemsHost" Property="Visibility"  Value="Visible" />
+            </Trigger>
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="des:TreeViewItemAdv.IsExpanded" Value="True"/>
+                    <Condition Property="des:TreeViewItemAdv.ExpandedImageSource" Value="{x:Null}"/>
+                </MultiTrigger.Conditions>
+                <Setter TargetName="ExpanderImage" Property="Visibility" Value="Collapsed"/>
+                <Setter TargetName="LeftImage" Property="Margin" Value="0"/>
+            </MultiTrigger>
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="des:TreeViewItemAdv.IsExpanded" Value="False"/>
+                    <Condition Property="des:TreeViewItemAdv.CollapsedImageSource" Value="{x:Null}"/>
+                </MultiTrigger.Conditions>
+                <Setter TargetName="ExpanderImage" Property="Visibility" Value="Collapsed" />
+                <Setter TargetName="LeftImage" Property="Margin" Value="0"/>
+            </MultiTrigger>
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="des:TreeViewItemAdv.IsExpanded" Value="True"/>
+                    <Condition Property="des:TreeViewItemAdv.ExpandedImageSource" Value="{x:Null}"/>
+                    <Condition Property="des:TreeViewItemAdv.LeftImageSource" Value="{x:Null}"/>
+                </MultiTrigger.Conditions>
+                <Setter TargetName="PART_ImagePanel" Property="Visibility" Value="Collapsed" />
+            </MultiTrigger>
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="des:TreeViewItemAdv.IsExpanded" Value="False"/>
+                    <Condition Property="des:TreeViewItemAdv.CollapsedImageSource" Value="{x:Null}"/>
+                    <Condition Property="des:TreeViewItemAdv.LeftImageSource" Value="{x:Null}"/>
+                </MultiTrigger.Conditions>
+                <Setter TargetName="PART_ImagePanel" Property="Visibility" Value="Collapsed" />
+            </MultiTrigger>
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="des:TreeViewItemAdv.IsEditable" Value="True"/>
+                    <Condition Property="des:TreeViewItemAdv.IsInEditMode" Value="True"/>
+                </MultiTrigger.Conditions>
+                <Setter Property="Visibility" TargetName="PART_Header" Value="Collapsed"/>
+                <Setter Property="Visibility" TargetName="PART_EditHeader" Value="Visible"/>
+            </MultiTrigger>
+            <Trigger Property="des:TreeViewAdv.ShowRootLines" Value="False">
+                <Setter Property="Visibility" TargetName="HorLineGrid" Value="Hidden"/>
+                <Setter Property="Visibility" TargetName="VertLineGrid" Value="Hidden"/>
+            </Trigger>
+            <Trigger Property="des:TreeViewItemAdv.HasItems" Value="False">
+                <Setter Property="Visibility" TargetName="PART_Expander" Value="Hidden" />
+            </Trigger>
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="HeaderedContentControl.HasHeader" Value="False"/>
+                    <Condition Property="FrameworkElement.Width" Value="NaN"/>
+                </MultiTrigger.Conditions>
+                <Setter Property="FrameworkElement.MinWidth" TargetName="PART_Header" Value="75"/>
+            </MultiTrigger>
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="HeaderedContentControl.HasHeader" Value="False"/>
+                    <Condition Property="FrameworkElement.Height" Value="NaN"/>
+                </MultiTrigger.Conditions>
+                <Setter Property="FrameworkElement.MinHeight" TargetName="PART_Header" Value="19"/>
+            </MultiTrigger>
+            <Trigger Property="IsMouseOver" SourceName="Bd" Value="True">
+                <Setter Property="TextElement.Foreground" TargetName="Bd" Value="{Binding Path=MouseOverForeground, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type des:TreeViewAdv}}}"/>
+                <Setter Property="Fill" TargetName="PART_SelectRectangle" Value="{Binding Path=MouseOverBackground, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type des:TreeViewAdv}}}" />
+            </Trigger>
+            <Trigger Property="des:TreeViewItemAdv.IsSelected" Value="True">
+                <Setter Property="TextElement.Foreground" TargetName="Bd" Value="{Binding Path=SelectedForeground, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type des:TreeViewAdv}}}"/>
+                <Setter Property="Fill" TargetName="PART_SelectRectangle" Value="{Binding Path=SelectedBackground, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type des:TreeViewAdv}}}" />
+            </Trigger>
+            <Trigger Property="des:TreeViewItemAdv.IsSelectedFalse" Value="True">
+                <Setter Property="TextElement.Foreground" TargetName="Bd" Value="{Binding Path=SelectedForeground, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type des:TreeViewAdv}}}"/>
+                <Setter Property="Fill" TargetName="PART_SelectRectangle" Value="{Binding Path=SelectedBackground, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type des:TreeViewAdv}}}" />
+            </Trigger>
+            <Trigger Property="des:TreeViewItemAdv.IsDragOver" Value="True">
+                <Setter Property="TextElement.Foreground" TargetName="Bd" Value="Black"/>
+                <Setter Property="Fill" TargetName="PART_SelectRectangle" Value="{StaticResource Blend_TreeViewAdv_SelectedBrush}"/>
+            </Trigger>
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="des:TreeViewItemAdv.IsSelected" Value="True"/>
+                    <Condition Property="des:TreeViewItemAdv.IsSelectionActive" Value="False"/>
+                </MultiTrigger.Conditions>
+                <Setter Property="TextElement.Foreground" TargetName="Bd" Value="{DynamicResource {x:Static SystemColors.ControlTextBrushKey}}"/>
+                <Setter Property="Fill" TargetName="PART_SelectRectangle" Value="{Binding Path=SelectionUnfocussedBackcolor, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type des:TreeViewAdv}}}"/>
+            </MultiTrigger>
+            <Trigger Property="des:TreeViewItemAdv.IsDraging" Value="True">
+                <Setter Property="TextElement.Foreground" TargetName="Bd" Value="{Binding Path=FakeItemForeground, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type des:TreeViewAdv}}}"/>
+            </Trigger>
+            <Trigger Property="UIElement.IsEnabled" Value="False">
+                <Setter Property="TextElement.Foreground" TargetName="Bd" Value="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}"/>
+                <Setter Property="Opacity" TargetName="RightImage" Value="0.7"/>
+                <Setter Property="Opacity" TargetName="LeftImage" Value="0.7"/>
+            </Trigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+    <!-- Template for Multicolumn TreeViewItemAdv -->
+    <ControlTemplate x:Key="Blend_Multicolumn_TreeViewItemAdvTemplateKey" TargetType="{x:Type des:TreeViewItemAdv}">
+        <Grid Focusable="False" Background="Transparent"
+			  TextElement.Foreground="{Binding Path=Foreground, RelativeSource={RelativeSource AncestorType={x:Type des:TreeViewAdv}}}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <Grid Grid.Row="0" Grid.RowSpan="2" Name="VertLineGrid" Visibility="Hidden">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"></RowDefinition>
+                    <RowDefinition Height="*"></RowDefinition>
+                </Grid.RowDefinitions>
+
+                <Rectangle Width="{Binding Path=LineStrokeThickness, RelativeSource={RelativeSource AncestorType={x:Type des:TreeViewAdv}}}"
+                           Name="PART_VerticalLinePartOne" Grid.Row="0" SnapsToDevicePixels="True"
+                           Margin="0,0,0,0" Panel.ZIndex="0" Focusable="False"
+                           Stroke="{Binding Path=LineBrush, RelativeSource={RelativeSource AncestorType={x:Type des:TreeViewAdv}}}" 
+                           Fill="{Binding Path=LineBrush, RelativeSource={RelativeSource AncestorType={x:Type des:TreeViewAdv}}}" 
+                           StrokeThickness="{Binding Path=LineStrokeThickness, RelativeSource={RelativeSource AncestorType={x:Type des:TreeViewAdv}}}" 
+                           StrokeDashArray="{Binding Path=LineStrokeDashArray, RelativeSource={RelativeSource AncestorType={x:Type des:TreeViewAdv}}}" 
+                           StrokeDashOffset="{Binding Path=LineStrokeDashOffset, RelativeSource={RelativeSource AncestorType={x:Type des:TreeViewAdv}}}"
+                           Visibility="Visible">
+                </Rectangle>
+                <Rectangle Width="{Binding Path=LineStrokeThickness, RelativeSource={RelativeSource AncestorType={x:Type des:TreeViewAdv}}}"
+                           Name="PART_VerticalLinePartTwo"  SnapsToDevicePixels="True" Focusable="False" Grid.Row="1"
+                           Margin="0,0,0,0" Panel.ZIndex="0" 
+                           Fill="{Binding Path=LineBrush, RelativeSource={RelativeSource AncestorType={x:Type des:TreeViewAdv}}}"
+                           HorizontalAlignment="Center"  
+                           Stroke="{Binding Path=LineBrush, RelativeSource={RelativeSource AncestorType={x:Type des:TreeViewAdv}}}"
+                           StrokeThickness="{Binding Path=LineStrokeThickness, RelativeSource={RelativeSource AncestorType={x:Type des:TreeViewAdv}}}" 
+                           StrokeDashArray="{Binding Path=LineStrokeDashArray, RelativeSource={RelativeSource AncestorType={x:Type des:TreeViewAdv}}}" 
+                           StrokeDashOffset="{Binding Path=LineStrokeDashOffset, RelativeSource={RelativeSource AncestorType={x:Type des:TreeViewAdv}}}"
+                           Visibility="Visible">
+
+                </Rectangle>
+            </Grid>
+            <Rectangle Grid.Row="0"  Height="{Binding Path=LineStrokeThickness, RelativeSource={RelativeSource AncestorType={x:Type des:TreeViewAdv}}}" 
+                           Name="PART_HorizontalLine" Width="13" SnapsToDevicePixels="True" Focusable="False"
+                           Margin="9,0,-3,0"  Panel.ZIndex="0" 
+                           HorizontalAlignment="Right"  
+                           Fill="{Binding Path=LineBrush, RelativeSource={RelativeSource AncestorType={x:Type des:TreeViewAdv}}}"
+                           Stroke="{Binding Path=LineBrush, RelativeSource={RelativeSource AncestorType={x:Type des:TreeViewAdv}}}"
+                           StrokeThickness="{Binding Path=LineStrokeThickness, RelativeSource={RelativeSource AncestorType={x:Type des:TreeViewAdv}}}" 
+                           StrokeDashArray="{Binding Path=LineStrokeDashArray, RelativeSource={RelativeSource AncestorType={x:Type des:TreeViewAdv}}}" 
+                           StrokeDashOffset="{Binding Path=LineStrokeDashOffset, RelativeSource={RelativeSource AncestorType={x:Type des:TreeViewAdv}}}"
+                           Visibility="Hidden">
+
+            </Rectangle>
+
+            <des:SelectRectangle Name="PART_SelectRectangle"
+                                 Grid.Column="0"
+                                 Grid.Row="0"
+                                 TargetItem="{Binding RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type des:TreeViewItemAdv}}}"
+                                 Fill="{StaticResource Blend_TreeViewAdv_ItemBackgroundBrush}"
+                                 SnapsToDevicePixels="True"
+                                 Margin="0,0,0,1"/>
+            <Expander Name="PART_Expander"
+					  Grid.Column="0" Panel.ZIndex="100"
+					  Grid.Row="0"
+                      Margin="2,0,0,0"
+					  HorizontalAlignment="Center"
+					  Focusable="False"
+					  IsExpanded="{Binding Path=IsExpanded, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type des:TreeViewItemAdv}}}"
+					  Style="{TemplateBinding des:TreeViewAdv.ExpanderStyle}"/>
+
+            <Grid Grid.Column="1" Grid.Row="0" Panel.ZIndex="10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Name="PART_CompleteHeader" Orientation="Horizontal">
+                    <StackPanel Name="PART_ImagePanel" Margin="5,0,1,0" Orientation="Horizontal">
+                        <Image Name="ExpanderImage" 
+						   Focusable="False"
+						   Source="{TemplateBinding CollapsedImageSource}"
+						   Stretch="{TemplateBinding ImageStretch}"
+						   Width="{TemplateBinding ImageWidth}"
+						   Height="{TemplateBinding ImageHeight}"
+						   />
+
+                        <Image Name="LeftImage" 
+						   Focusable="False"
+						   Margin="2,0,0,0"
+						   Source="{TemplateBinding LeftImageSource}"
+						   Stretch="{TemplateBinding ImageStretch}"
+						   Width="{TemplateBinding ImageWidth}"
+						   Height="{TemplateBinding ImageHeight}"
+						   />
+                    </StackPanel>
+
+                    <Border Name="Bd"
+                        ToolTip="{TemplateBinding des:TreeViewItemAdv.Header}"
+                        ToolTipService.IsEnabled="False"
+                        ToolTipService.Placement="Center"
+                        ToolTipService.HorizontalOffset="4"
+                        ToolTipService.VerticalOffset="2"
+                        TextElement.Foreground="{TemplateBinding Foreground}"
+                        BorderBrush="{Binding Path=BorderBrush, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type des:TreeViewItemAdv}}}"
+                        BorderThickness="{Binding Path=BorderThickness, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type des:TreeViewItemAdv}}}"
+                        Background="{Binding Path=Background, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type des:TreeViewItemAdv}}}"
+                        Padding="{Binding Path=Padding, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type des:TreeViewItemAdv}}}"
+                        MinHeight="19">
+                        <StackPanel VerticalAlignment="Center" 
+                                Focusable="True" 
+                                KeyboardNavigation.TabNavigation="Cycle"
+                                Margin="1,0,0,0">
+                            <ContentPresenter Name="PART_Header"
+                                          ContentTemplate="{Binding Path=HeaderTemplate, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type des:TreeViewItemAdv}}}"
+                                          ContentTemplateSelector="{Binding Path=HeaderTemplateSelector, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type des:TreeViewItemAdv}}}">
+                                <ContentPresenter.Content>
+                                    <des:TreeViewRowPresenter Name="PART_RowPresenter"
+                                                          Content="{TemplateBinding des:TreeViewItemAdv.Header}"
+                                                          Columns="{Binding Path=WrappedColumns, RelativeSource={RelativeSource AncestorType={x:Type des:TreeViewAdv}}}">
+                                    </des:TreeViewRowPresenter>
+                                </ContentPresenter.Content>
+                            </ContentPresenter>
+                            <ContentPresenter Name="PART_EditHeader"
+                                          Visibility="Collapsed"
+                                          HorizontalAlignment="{TemplateBinding Control.HorizontalContentAlignment}"
+                                          VerticalAlignment="Center"
+                                          ContentSource="Header"
+                                          Content="{Binding Path=Header, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type des:TreeViewItemAdv}}}"
+                                          ContentTemplate="{Binding Path=(des:TreeViewItemAdv.ParentItemsControl).(des:TreeViewAdv.EditedItemTemplate), RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type des:TreeViewItemAdv}}}"
+                                          ContentTemplateSelector="{Binding Path=(des:TreeViewItemAdv.ParentItemsControl).(des:TreeViewAdv.EditedItemTemplateSelector), RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type des:TreeViewItemAdv}}}"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Grid>
+
+            <Grid Grid.Column="1" Grid.Row="1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <ItemsPresenter Name="PART_ItemsHost" Visibility="Collapsed" />
+            </Grid>
+        </Grid>
+        <ControlTemplate.Triggers>
+            <Trigger Property="MultiColumnEnable" Value="True">
+                <Setter Property="ItemsPanel">
+                    <Setter.Value>
+                        <ItemsPanelTemplate>
+                            <des:TreeViewAdvVirtualizingPanel IsShowLine="False"/>
+                        </ItemsPanelTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Trigger>
+            <Trigger Property="des:TreeViewItemAdv.LeftImageSource" Value="{x:Null}">
+                <Setter TargetName="LeftImage" Property="Visibility" Value="Collapsed"/>
+            </Trigger>
+            <Trigger Property="des:TreeViewItemAdv.IsExpanded" Value="True">
+                <Setter TargetName="ExpanderImage" Property="Source" Value="{Binding Path=ExpandedImageSource, RelativeSource={RelativeSource TemplatedParent}}"/>
+                <Setter TargetName="PART_ItemsHost" Property="Visibility"  Value="Visible" />
+            </Trigger>
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="des:TreeViewItemAdv.IsExpanded" Value="True"/>
+                    <Condition Property="des:TreeViewItemAdv.ExpandedImageSource" Value="{x:Null}"/>
+                </MultiTrigger.Conditions>
+                <Setter TargetName="ExpanderImage" Property="Visibility" Value="Collapsed"/>
+                <Setter TargetName="LeftImage" Property="Margin" Value="0"/>
+            </MultiTrigger>
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="des:TreeViewItemAdv.IsExpanded" Value="False"/>
+                    <Condition Property="des:TreeViewItemAdv.CollapsedImageSource" Value="{x:Null}"/>
+                </MultiTrigger.Conditions>
+                <Setter TargetName="ExpanderImage" Property="Visibility" Value="Collapsed" />
+                <Setter TargetName="LeftImage" Property="Margin" Value="0"/>
+            </MultiTrigger>
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="des:TreeViewItemAdv.IsExpanded" Value="True"/>
+                    <Condition Property="des:TreeViewItemAdv.ExpandedImageSource" Value="{x:Null}"/>
+                    <Condition Property="des:TreeViewItemAdv.LeftImageSource" Value="{x:Null}"/>
+                </MultiTrigger.Conditions>
+                <Setter TargetName="PART_ImagePanel" Property="Visibility" Value="Collapsed" />
+            </MultiTrigger>
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="des:TreeViewItemAdv.IsExpanded" Value="False"/>
+                    <Condition Property="des:TreeViewItemAdv.CollapsedImageSource" Value="{x:Null}"/>
+                    <Condition Property="des:TreeViewItemAdv.LeftImageSource" Value="{x:Null}"/>
+                </MultiTrigger.Conditions>
+                <Setter TargetName="PART_ImagePanel" Property="Visibility" Value="Collapsed" />
+            </MultiTrigger>
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="des:TreeViewItemAdv.IsEditable" Value="True"/>
+                    <Condition Property="des:TreeViewItemAdv.IsInEditMode" Value="True"/>
+                </MultiTrigger.Conditions>
+                <Setter Property="Visibility" TargetName="PART_Header" Value="Collapsed"/>
+                <Setter Property="Visibility" TargetName="PART_EditHeader" Value="Visible"/>
+            </MultiTrigger>
+            <Trigger Property="des:TreeViewItemAdv.IsShowToolTip" Value="True">
+                <Setter Property="ToolTipService.IsEnabled" TargetName="Bd" Value="True"/>
+            </Trigger>
+            <Trigger Property="des:TreeViewAdv.ShowRootLines" Value="False">
+                <Setter Property="Visibility" TargetName="PART_HorizontalLine" Value="Hidden"/>
+                <Setter Property="Visibility" TargetName="VertLineGrid" Value="Hidden"/>
+            </Trigger>
+            <Trigger Property="des:TreeViewItemAdv.HasItems" Value="False">
+                <Setter Property="Visibility" TargetName="PART_Expander" Value="Hidden" />
+            </Trigger>
+
+            <Trigger Property="IsMouseOver" SourceName="Bd" Value="True">
+                <Setter Property="TextElement.Foreground" TargetName="Bd" Value="{Binding Path=MouseOverForeground, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type des:TreeViewAdv}}}"/>
+                <Setter Property="Fill" TargetName="PART_SelectRectangle" Value="{Binding Path=MouseOverBackground, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type des:TreeViewAdv}}}" />
+            </Trigger>
+            <Trigger Property="des:TreeViewItemAdv.IsSelected" Value="True">
+                <Setter Property="TextElement.Foreground" TargetName="Bd" Value="{Binding Path=SelectedForeground, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type des:TreeViewAdv}}}"/>
+                <Setter Property="Fill" TargetName="PART_SelectRectangle" Value="{Binding Path=SelectedBackground, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type des:TreeViewAdv}}}" />
+            </Trigger>
+            <Trigger Property="des:TreeViewItemAdv.IsSelectedFalse" Value="True">
+                <Setter Property="TextElement.Foreground" TargetName="Bd" Value="{Binding Path=SelectedForeground, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type des:TreeViewAdv}}}"/>
+                <Setter Property="Fill" TargetName="PART_SelectRectangle" Value="{Binding Path=SelectedBackground, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type des:TreeViewAdv}}}" />
+            </Trigger>
+            <Trigger Property="des:TreeViewItemAdv.IsDragOver" Value="True">
+                <Setter Property="TextElement.Foreground" TargetName="Bd" Value="Black"/>
+                <Setter Property="Fill" TargetName="PART_SelectRectangle" Value="{StaticResource Blend_TreeViewAdv_SelectedBrush}"/>
+            </Trigger>
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="des:TreeViewItemAdv.IsSelected" Value="True"/>
+                    <Condition Property="des:TreeViewItemAdv.IsSelectionActive" Value="False"/>
+                </MultiTrigger.Conditions>
+                <Setter Property="TextElement.Foreground" TargetName="Bd" Value="{DynamicResource {x:Static SystemColors.ControlTextBrushKey}}"/>
+                <Setter Property="Fill" TargetName="PART_SelectRectangle" Value="{Binding Path=SelectionUnfocussedBackcolor, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type des:TreeViewAdv}}}"/>
+            </MultiTrigger>
+            <Trigger Property="des:TreeViewItemAdv.IsDraging" Value="True">
+                <Setter Property="TextElement.Foreground" TargetName="Bd" Value="{Binding Path=SelectedForeground, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type des:TreeViewAdv}}}"/>
+            </Trigger>
+            <Trigger Property="UIElement.IsEnabled" Value="False">
+                <Setter Property="TextElement.Foreground" TargetName="Bd" Value="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}"/>
+            </Trigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+    <!-- Template for Expander -->
+    <ControlTemplate x:Key="Blend_ExpanderTemplateKey" TargetType="{x:Type Expander}">
+        <ToggleButton Name="Expander"
+					  ClickMode="Press"
+					  IsChecked="{Binding Path=IsExpanded, RelativeSource={RelativeSource TemplatedParent}}">
+            <ToggleButton.Style>
+                <Style TargetType="ToggleButton">
+                    <Setter Property="FrameworkElement.Focusable" Value="False"/>
+                    <Setter Property="FrameworkElement.Width" Value="12"/>
+                    <Setter Property="FrameworkElement.Height" Value="12"/>
+                    <Setter Property="Control.Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="ToggleButton">
+                                <Border Height="12" Width="12" CornerRadius="6"
+                                        Background="{StaticResource Blend_TreeViewAdv_ExpanderBorderBrush}">
+                                    <Path Name="ExpandPath"
+                                          Margin="1,0,0,0"
+                                          Width="5"
+                                          Height="6"
+                                          Fill="{StaticResource Blend_TreeViewAdv_ExpanderBackgroundBrush}"
+                                          VerticalAlignment="Center"
+                                          HorizontalAlignment="Center"
+                                          Data="M0,0L0,6 5,3.5 5,2.5z"/>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="ToggleButton.IsChecked" Value="True">
+                                        <Setter Property="Path.Data" TargetName="ExpandPath" Value="M0,0L6,0 3.5,5 2.5,5z"/>
+                                        <Setter Property="Width" TargetName="ExpandPath" Value="6"/>
+                                        <Setter Property="Height" TargetName="ExpandPath" Value="5"/>
+                                        <Setter Property="Margin" TargetName="ExpandPath" Value="0,1,0,0"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
+            </ToggleButton.Style>
+        </ToggleButton>
+    </ControlTemplate>
+
+    <!-- Template for DragMarker -->
+    <ControlTemplate x:Key="Blend_DragMarkerTemplateKey" TargetType="{x:Type utilsOuter:TemplatedAdornerInternalControl}">
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <Rectangle Grid.Column="0" 
+                   Height="2" 
+                   Fill="{StaticResource Blend_TreeViewAdv_DragMarkerBackground}"/>
+        </Grid>
+    </ControlTemplate>
+
+    <!-- Template for ColumnHeaderDragMarker -->
+    <ControlTemplate x:Key="Blend_ColumnHeaderDragMarkerTemplateKey" 
+                     TargetType="{x:Type utilsOuter:TemplatedAdornerInternalControl}">
+        <Grid>
+            <Rectangle Grid.Column="0" 
+                       Width="2"
+                       Fill="{StaticResource Blend_TreeViewColumnHeaderDargMarkerBackground}"/>
+        </Grid>
+    </ControlTemplate>
+
+    <!-- Template for ColumnHeader Marker -->
+    <ControlTemplate x:Key="Blend_ColumnHeaderMarkerTemplateKey"
+                     TargetType="{x:Type utilsOuter:TemplatedAdornerInternalControl}">
+        <Grid>
+            <Border Grid.Column="0"
+                    BorderThickness="1"
+                    Background="{StaticResource Blend_TreeViewColumnHeaderHeaderMarkerBackground}"
+                    BorderBrush="{StaticResource Blend_TreeViewColumnHeaderHeaderMarkerBorder}">
+                <TextBlock HorizontalAlignment="Center"
+                           Text="{Binding Path=(utilsOuter:TemplatedAdornerInternalControl.AdornedElement).(des:TreeViewColumnHeader.Column).(des:TreeViewColumn.Header), RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type utilsOuter:TemplatedAdornerInternalControl}}}"/>
+            </Border>
+        </Grid>
+    </ControlTemplate>
+    
+</ResourceDictionary>

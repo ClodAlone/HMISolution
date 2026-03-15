@@ -1,0 +1,173 @@
+﻿<#@ template debug="true" hostspecific="true" language="C#" #>
+<#@ output extension=".cs" #>
+<#@ import namespace="System.IO" #>
+<#@ assembly name="System.Core" #>
+<#@ import namespace="System.Linq" #>
+<#@ assembly name="System.Xml" #>
+<#@ import namespace="System.Xml" #>
+<#
+	var doc = new System.Xml.XmlDocument();
+	string filePath = this.Host.TemplateFile;
+	filePath = filePath.Substring(0, filePath.LastIndexOf("\\")) + "\\DependencyProperties.xml";
+	doc.Load(filePath);
+	string nameSP = "Syncfusion.UI.Xaml.Diagram";
+#>
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Windows;
+#if WINRT
+using System.Threading.Tasks;
+using Windows.UI;
+using Windows.UI.Xaml;
+using Windows.Foundation;
+using Windows.UI.Xaml.Media; 
+#endif
+#if !WINRT
+using System.Windows.Media; 
+#endif
+using Syncfusion.UI.Xaml.Diagram.Utility;
+using Syncfusion.UI.Xaml.Diagram.Layout;
+using Syncfusion.UI.Xaml.Diagram.Controls;
+using System.ComponentModel;
+using System.Windows.Input;
+using Syncfusion.UI.Xaml.Diagram.Controller;
+namespace <#=nameSP#>
+{
+<#
+	foreach (XmlElement clas in doc.SelectNodes("//Class"))
+            {
+				string ClassName = clas.Attributes["Name"].Value;
+				string VMName = GetString(clas, "VMName");
+				string Access = GetString(clas, "Access", "public");
+				string Gen = "";
+				if(clas.Attributes["Gen"] != null)
+                {
+					Gen = "<" + clas.Attributes["Gen"].Value +">";
+                }
+				bool ignore = GetBool(clas, "IgnoreConstants", false);
+				if(!ignore)
+                {
+if(VMName!="")
+{
+#>
+	<#=Access#> partial class <#=VMName#><#=Gen#>
+	{
+<#
+}
+else
+{
+#>
+	<#=Access#> partial class <#=ClassName#>ViewModel<#=Gen#>
+	{
+<#
+}
+	foreach (XmlElement prop in clas.SelectNodes("Property"))
+    {
+		string propertyName = prop.Attributes["Name"].Value;
+		string propertyType = prop.Attributes["Type"].Value;
+		string propertyValue = prop.Attributes["DefaultValue"].Value;
+		bool Explicit = GetBool(prop, "Explicit", false);
+		string InterfaceType = GetString(prop, "InterfaceName") + "<"+GetString(prop, "InterfaceGen")+">.";
+		string conditionalCompilation=GetString(prop,"ConditionalCompilationSymbol");
+		bool Symbol=GetBool(prop,"ConditionalCompilation",false);
+		bool Get = GetBool(prop, "CanGet", true);
+		bool Set = GetBool(prop, "CanSet", true);
+		string PropGen = "";
+		if(prop.Attributes["Gen"] != null)
+        {
+			PropGen = "<" + prop.Attributes["Gen"].Value +">";
+        }
+		bool CanBind = GetBool(prop, "CanBind", true);
+		bool GenType = GetBool(prop, "GenType", false);
+		bool Internal = GetBool(prop, "Internal", false);
+		bool VM = GetBool(prop, "VM", true);
+		if(CanBind && Set && !Internal && VM)
+        {
+#>		
+        <#
+		if(conditionalCompilation!=string.Empty)
+		{		
+		#>
+     #if <#=conditionalCompilation#>		
+		<#
+		}
+		#>		
+        <#=propertyType#><#=PropGen#> _m<#=propertyName#> = <#=propertyValue#>;
+		public <#=propertyType#><#=PropGen#> <#=propertyName#>
+        {
+            get
+            {
+				return _m<#=propertyName#>;
+			}
+            set
+            {
+<#if(GenType)
+  {
+#>
+				if(_m<#=propertyName#> == null || !_m<#=propertyName#>.Equals(value))
+<#}else{#>
+				if(_m<#=propertyName#> != value)
+<#}#>
+				{
+					_m<#=propertyName#> = value;
+					OnPropertyChanged(<#=ClassName#>Constants.<#=propertyName#>);
+				}
+            }
+        }
+		<#
+	if(conditionalCompilation!=string.Empty)
+	{
+	#>
+	#endif
+	<#
+     }
+    #>
+<#
+        }
+    }
+#>
+    
+
+        //protected virtual void OnPropertyChanged(string name)
+        //{
+        //    if (PropertyChanged != null)
+        //    {
+        //        PropertyChanged.Invoke(this, new PropertyChangedEventArgs(name));
+        //    }
+        //}
+        
+        //public event PropertyChangedEventHandler PropertyChanged;
+	}
+<#
+                }
+            }
+#>
+}
+<#+
+			public string GetString(XmlElement element, string property, string nullValue = "")
+            {
+				if( element.Attributes[property] != null)
+					{
+						return element.Attributes[property].Value;
+                    }
+					else
+                    {
+						return nullValue;
+                    }
+            }
+
+			public bool GetBool(XmlElement element, string property, bool retu)
+            {
+				if( element.Attributes[property] != null)
+					{
+						string ret = element.Attributes[property].Value;
+						return bool.Parse(ret);
+					}
+					else
+                    {
+						return retu;
+                    }
+            }
+#>

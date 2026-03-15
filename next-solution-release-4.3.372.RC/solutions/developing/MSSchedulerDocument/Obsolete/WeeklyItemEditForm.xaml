@@ -1,0 +1,135 @@
+<UserControl x:Class="MSSchedulerSettings.Controls.WeeklyItemEditForm"
+            xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+            xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+            xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+            xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+            xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+            xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+            xmlns:dxga="clr-namespace:DevExpress.Xpf.Editors;assembly=DevExpress.Xpf.Core.v21.2"
+            xmlns:dxec="clr-namespace:DevExpress.Xpf.Editors.Controls;assembly=DevExpress.Xpf.Core.v21.2"
+            xmlns:dxsch="http://schemas.devexpress.com/winfx/2008/xaml/scheduler"
+            xmlns:dxschint="http://schemas.devexpress.com/winfx/2008/xaml/scheduler/internal" 
+            xmlns:properties="clr-namespace:MSSchedulerSettings.Properties"
+            xmlns:sys="clr-namespace:System;assembly=mscorlib"             
+            mc:Ignorable="d"
+            x:Name="AptForm" MinWidth="400">
+
+    <UserControl.Resources>
+        <dxschint:TimeSpanToDateTimeConverter x:Key="timeSpanToDateTimeConverter" />
+        <dxschint:InvertedBoolConverter x:Key="invertedBoolConverter" />
+        <dxschint:ColorToBrushConverter x:Key="colorToBrushConverter" />
+        <DataTemplate x:Key="RecTypeTemplate">
+            <TextBlock Text="{Binding Description}" VerticalAlignment="Center" Margin="0,0,4,0" />
+        </DataTemplate>
+    </UserControl.Resources>
+    
+    <Grid Grid.Row="1">
+        
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="32*" />
+            <ColumnDefinition Width="49*" />
+        </Grid.ColumnDefinitions>
+
+        <Grid Grid.Row="1" Grid.ColumnSpan="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <!--<TextBlock Margin="0,5" Text="{x:Static properties:Resources.WeeklyItemEditFormSubject}" TextAlignment="Left"  Grid.Row="0"/>
+            <TextBox Margin="0,5" x:Name="subjectTxt" Text="{Binding Controller.Subject, Mode=TwoWay}" Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="13"/>-->
+
+
+            <TextBlock Margin="0,5" Grid.Row="1" TextAlignment="Left" Text="{x:Static properties:Resources.WeeklyItemEditFormStartTime}" x:Name="weeklyItemEditFormStartTime" />
+            <ComboBox Margin="0,5" Name="cmbStartDay" Grid.Row="1" Grid.Column="1" SelectionChanged="OnDaySelectionChanged">
+            </ComboBox>
+
+            <dxe:ButtonEdit Margin="0,5" x:Name="edtStartTime" MinWidth="80" MaskType="DateTime" DisplayFormatString="{Binding TimeEditMask}" VerticalAlignment="Center"
+                            Mask="{Binding TimeEditMask}" Grid.Row="1" Grid.Column="2"
+                            Validate="OnEdtStartTimeValidate"
+                            EditValue="{Binding Controller.DisplayStartTime, Mode=TwoWay, Converter={StaticResource timeSpanToDateTimeConverter}}" 
+                            IsEnabled="{Binding ElementName=chkAllDay, Path=IsChecked, Converter={StaticResource invertedBoolConverter}}"
+                            AllowDefaultButton="False"
+                            >
+                <dxe:SpinButtonInfo SpinDownClick="edtStartTime_SpinDownClick" SpinUpClick="edtStartTime_SpinUpClick" />
+            </dxe:ButtonEdit>
+            <CheckBox Margin="5,5" x:Name="chkAllDay" IsChecked="{Binding Controller.AllDay, Mode=TwoWay}" Grid.Row="1" Content="{x:Static properties:Resources.WeeklyItemAllDayEvent}" Grid.Column="3" />
+
+
+            <TextBlock Margin="0,5" Grid.Row="2" TextAlignment="Left" Text="{x:Static properties:Resources.WeeklyItemEditFormEndTime}" x:Name="weeklyItemEditFormEndTime" />
+
+            <ComboBox Margin="0,5" Name="cmbEndDay" Grid.Row="2" Grid.Column="1" SelectionChanged="OnDaySelectionChanged">
+            </ComboBox>
+
+            <dxe:ButtonEdit Margin="0,5" Name="edtEndTime" MinWidth="80" MaskType="DateTime" DisplayFormatString="{Binding TimeEditMask}" VerticalAlignment="Center"
+                            Mask="{Binding TimeEditMask}" Grid.Column="2"
+                            Grid.Row="2" Validate="OnEdtEndTimeValidate"
+                            EditValue="{Binding Controller.DisplayEndTime, Mode=TwoWay, Converter={StaticResource timeSpanToDateTimeConverter}}"
+                            IsEnabled="{Binding ElementName=chkAllDay, Path=IsChecked, Converter={StaticResource invertedBoolConverter}}"
+                            AllowDefaultButton="False"
+                            >
+                <dxe:SpinButtonInfo SpinDownClick="edtEndTime_SpinDownClick" SpinUpClick="edtEndTime_SpinUpClick" />
+            </dxe:ButtonEdit>
+
+
+            <!--<CheckBox Margin="5,5" x:Name="repeatEveryDay" IsChecked="{Binding Controller.IsRecurrentAppointment, Mode=TwoWay}" Grid.Row="2" Content="{x:Static properties:Resources.WeeklyItemRepeatEveryDay}" Grid.Column="3"/>-->
+
+            <!--<TextBlock Margin="0,5" Grid.Column="0" Grid.Row="4" TextAlignment="Left" Text="{x:Static properties:Resources.WeeklyItemEditFormLabelColor}"/>
+            <ComboBox Margin="0,5" Name="cmbLabel" SelectedItem="{Binding Controller.Label, Mode=TwoWay}" Grid.Row="4" Grid.Column="1">
+                <ComboBox.ItemTemplate>
+                    <DataTemplate>
+                        <StackPanel Orientation="Horizontal">
+                            <Rectangle Width="30" Fill="{Binding Brush, Mode=OneWay}"/>
+                            <TextBlock Margin="2,0" Text="{Binding DisplayName, Mode=OneWay}"/>
+                        </StackPanel>
+                    </DataTemplate>
+                </ComboBox.ItemTemplate>
+            </ComboBox>
+            <TextBlock Margin="0,5" Grid.Column="2" Grid.Row="4" TextAlignment="Left" Text="{x:Static properties:Resources.WeeklyItemEditFormSubjectColor}"/>
+            <ComboBox Margin="0,5" Name="cmbSubject" SelectedItem="{Binding Controller.Status, Mode=TwoWay}" Grid.Row="4" Grid.Column="3">
+                <ComboBox.ItemTemplate>
+                    <DataTemplate>
+                        <StackPanel Orientation="Horizontal">
+                            <Rectangle Width="30" Fill="{Binding Brush, Mode=OneWay}"/>
+                            <TextBlock Margin="2,0" Text="{Binding DisplayName, Mode=OneWay}"/>
+                        </StackPanel>
+                    </DataTemplate>
+                </ComboBox.ItemTemplate>
+            </ComboBox>-->
+
+            <!--<TextBlock Margin="0,5" Grid.Row="6" TextAlignment="Left" Text="{x:Static properties:Resources.WeeklyItemEditFormDescription}"/>
+            <TextBox Margin="0,5" MinHeight="100" x:Name="descriptionTxt" Text="{Binding Controller.Description, Mode=TwoWay}" Grid.RowSpan="2" Grid.Row="5" Grid.Column="1" Grid.ColumnSpan="13"/>-->
+            <CheckBox Grid.Row="7" Margin="5,5" x:Name="chkRecurrence" IsChecked="{Binding RecurrenceVisualController.EnableRecurrence, Mode=TwoWay}" Content="{x:Static properties:Resources.WeeklyItemApplyRecurrence}" Grid.Column="0" />
+            <dxsch:DailyRecurrenceControl x:Name="dailyController" Grid.ColumnSpan="10" Grid.Column="1" Grid.Row="7" Margin="5,0"
+            RecurrenceInfo="{Binding RecurrenceVisualController.RecurrenceInfo}"
+            IsEnabled="{Binding RecurrenceVisualController.EnableRecurrence}" />
+
+            <Grid Grid.Column="0" Grid.ColumnSpan="10" Grid.Row="8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="14*" />
+                    <ColumnDefinition Width="17*" />
+                    <ColumnDefinition Width="85" />
+                    <ColumnDefinition Width="17*" />
+                    <ColumnDefinition Width="5*" />
+                </Grid.ColumnDefinitions>
+                <Button Margin="5,5" Grid.Column="1" Grid.Row="8" Content="{x:Static properties:Resources.WeeklyItemEditFormOk}" x:Name="okBtn" Click="OnOKButtonClick" MinWidth="75" />
+                <Button Margin="5,5" Grid.Column="2" Grid.Row="8" Content="{x:Static properties:Resources.WeeklyItemEditFormCancel}" x:Name="cancelBtn" Click="OnCancelButtonClick" MinWidth="75" />
+                <Button Margin="5,5" Grid.Column="3" Grid.Row="8" Content="{x:Static properties:Resources.WeeklyItemEditFormDelete}" x:Name="deleteBtn" Click="OnDeleteButtonClick" MinWidth="75" />
+            </Grid>
+        </Grid>
+    </Grid>
+</UserControl>

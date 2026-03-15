@@ -1,0 +1,85 @@
+@using ServerEditorWeb.Models
+@using ServerEditorWeb.Services
+@inject IJSRuntime JS
+@inject ClipboardService Clipboard
+
+@if (Visible)
+{
+    <div class="dock-context-backdrop" @onclick="Close"></div>
+    <div class="dock-context-menu" style="left: @(X)px; top: @(Y)px;">
+        @if (Node is FolderNode or VariableGroupNode)
+        {
+            <div class="dock-context-item" @onclick="AddFolder">📁 Add Folder</div>
+            <div class="dock-context-item" @onclick="AddVariable">🏷️ Add Variable</div>
+        }
+        @if (Node is ScriptGroupNode)
+        {
+            <div class="dock-context-item" @onclick="AddScript">⚡ Add Script</div>
+        }
+        @if (Node is PlcGroupNode)
+        {
+            <div class="dock-context-item" @onclick="AddPlcProgram">⚙️ Add PLC Program</div>
+        }
+        @if (Node is RecipeGroupNode)
+        {
+            <div class="dock-context-item" @onclick="AddRecipe">📦 Add Recipe</div>
+        }
+        @if (Node is ScreenGroupNode)
+        {
+            <div class="dock-context-item" @onclick="AddScreen">🖼️ Add Screen</div>
+        }
+        @if (Node is UserGroupListNode)
+        {
+            <div class="dock-context-item" @onclick="AddUserGroup">🛡️ Add User Group</div>
+        }
+        @if (Node is UserGroupNode)
+        {
+            <div class="dock-context-item" @onclick="AddUser">👤 Add User</div>
+        }
+        <div class="dock-context-separator"></div>
+        @if (Node is VariableNode or FolderNode { Parent: not null } or ScriptNode or PlcProgramNode or RecipeNode or ScreenNode or UserNode or UserGroupNode)
+        {
+            <div class="dock-context-item" @onclick="Copy">📋 Copy</div>
+        }
+        @if (Clipboard.CanPasteInto(Node))
+        {
+            <div class="dock-context-item" @onclick="Paste">📌 Paste @(!string.IsNullOrEmpty(Clipboard.Label) ? $"({Clipboard.Label})" : "")</div>
+        }
+        <div class="dock-context-separator"></div>
+        <div class="dock-context-item dock-context-danger" @onclick="Delete">🗑 Delete</div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public double X { get; set; }
+    [Parameter] public double Y { get; set; }
+    [Parameter] public TreeNode? Node { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback<TreeNode> OnAddFolder { get; set; }
+    [Parameter] public EventCallback<TreeNode> OnAddVariable { get; set; }
+    [Parameter] public EventCallback<TreeNode> OnAddScript { get; set; }
+    [Parameter] public EventCallback<TreeNode> OnAddPlcProgram { get; set; }
+    [Parameter] public EventCallback<TreeNode> OnAddRecipe { get; set; }
+    [Parameter] public EventCallback<TreeNode> OnAddScreen { get; set; }
+    [Parameter] public EventCallback<TreeNode> OnAddUserGroup { get; set; }
+    [Parameter] public EventCallback<TreeNode> OnAddUser { get; set; }
+    [Parameter] public EventCallback<TreeNode> OnRename { get; set; }
+    [Parameter] public EventCallback<TreeNode> OnDelete { get; set; }
+    [Parameter] public EventCallback<TreeNode> OnCopy { get; set; }
+    [Parameter] public EventCallback<TreeNode> OnPaste { get; set; }
+
+    private void Close() => OnClose.InvokeAsync();
+    private void AddFolder() { OnAddFolder.InvokeAsync(Node!); Close(); }
+    private void AddVariable() { OnAddVariable.InvokeAsync(Node!); Close(); }
+    private void AddScript() { OnAddScript.InvokeAsync(Node!); Close(); }
+    private void AddPlcProgram() { OnAddPlcProgram.InvokeAsync(Node!); Close(); }
+    private void AddRecipe() { OnAddRecipe.InvokeAsync(Node!); Close(); }
+    private void AddScreen() { OnAddScreen.InvokeAsync(Node!); Close(); }
+    private void AddUserGroup() { OnAddUserGroup.InvokeAsync(Node!); Close(); }
+    private void AddUser() { OnAddUser.InvokeAsync(Node!); Close(); }
+    private void Rename() { OnRename.InvokeAsync(Node!); Close(); }
+    private void Delete() { OnDelete.InvokeAsync(Node!); Close(); }
+    private void Copy() { OnCopy.InvokeAsync(Node!); Close(); }
+    private void Paste() { OnPaste.InvokeAsync(Node!); Close(); }
+}

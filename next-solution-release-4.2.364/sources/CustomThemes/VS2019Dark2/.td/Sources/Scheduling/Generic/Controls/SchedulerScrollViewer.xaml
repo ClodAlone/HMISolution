@@ -1,0 +1,173 @@
+<ResourceDictionary mc:Ignorable="cs"
+                    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:cs="colorscheme_ignorable_uri"
+                    xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+                    xmlns:dxsch="http://schemas.devexpress.com/winfx/2008/xaml/scheduling"
+                    xmlns:dxscht="http://schemas.devexpress.com/winfx/2008/xaml/scheduling/themekeys"
+                    xmlns:dxschv="http://schemas.devexpress.com/winfx/2008/xaml/scheduling/visual"
+                    xmlns:dxt="http://schemas.devexpress.com/winfx/2008/xaml/core/themekeys"
+                    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <ResourceDictionary.MergedDictionaries>
+        <dxt:ResourceDictionaryEx Source="{dx:SchedulingResource UICore.xaml, ShortPaths=True}"/>
+        <dxt:ResourceDictionaryEx Source="{dx:SchedulingResource UIPreset.xaml, ShortPaths=True}"/>
+    </ResourceDictionary.MergedDictionaries>
+
+    <Style x:Key="{dxscht:SchedulerControlThemeKey ResourceKey=ScrollingCornerStyle}" TargetType="Border">
+        <Setter Property="Background" Value="{StaticResource Scheduler.Corner.Background}"/>
+    </Style>
+
+    <ControlTemplate x:Key="SchedulerScrollViewer.DefaultTemplate" TargetType="dxschv:SchedulerScrollViewer">
+        <Grid x:Name="Grid" Background="{TemplateBinding Background}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+            <ScrollContentPresenter x:Name="PART_ScrollContentPresenter"
+                                    CanContentScroll="{TemplateBinding CanContentScroll}"
+                                    CanHorizontallyScroll="False"
+                                    CanVerticallyScroll="False"
+                                    Content="{TemplateBinding Content}"
+                                    ContentTemplate="{TemplateBinding ContentTemplate}"
+                                    Grid.Column="0"
+                                    Grid.Row="0"
+                                    Margin="{TemplateBinding Padding}"/>
+            <DockPanel x:Name="PART_VerticalScrollBarArea"
+                       Grid.Column="1"
+                       Grid.Row="0"
+                       Visibility="{TemplateBinding ComputedVerticalScrollBarVisibility}">
+                <ContentPresenter Content="{TemplateBinding VerticalScrollBarControlBox}"
+                                  ContentTemplate="{TemplateBinding VerticalScrollBarControlBoxTemplate}"
+                                  DockPanel.Dock="Bottom"
+                                  Visibility="{TemplateBinding VerticalScrollBarControlBoxVisibility}"/>
+                <dxschv:SchedulerScrollBar x:Name="PART_VerticalScrollBar"
+                                           AutomationProperties.AutomationId="VerticalScrollBar"
+                                           Cursor="Arrow"
+                                           Maximum="{TemplateBinding ScrollableHeight}"
+                                           Minimum="0"
+                                           Orientation="Vertical"
+                                           ToolTipService.IsEnabled="False"
+                                           Value="{Binding VerticalOffset, Mode=OneWay, RelativeSource={RelativeSource TemplatedParent}}"
+                                           ViewportSize="{TemplateBinding ViewportHeight}">
+                    <dxschv:SchedulerScrollBar.ToolTip>
+                        <ToolTip HorizontalOffset="-6"
+                                 Placement="Left"
+                                 StaysOpen="True"
+                                 VerticalOffset="24">
+                            <dx:SuperTipControl PatchDataContext="True" Width="140">
+                                <dx:SuperTipControl.SuperTip>
+                                    <dx:SuperTip>
+                                        <dx:SuperTipHeaderItem Content="{Binding VisualData.ScrollTipInfo.IntervalStart, Converter={dxsch:DateTimeToScrollTipStringConverter}, ConverterParameter='MMM, yyyy'}"/>
+                                        <dx:SuperTipItem Content="{Binding VisualData.ScrollTipInfo.Interval, Converter={dxsch:DateTimeRangeToScrollTipStringConverter}, ConverterParameter=d}"/>
+                                    </dx:SuperTip>
+                                </dx:SuperTipControl.SuperTip>
+                            </dx:SuperTipControl>
+                        </ToolTip>
+                    </dxschv:SchedulerScrollBar.ToolTip>
+                </dxschv:SchedulerScrollBar>
+            </DockPanel>
+            <DockPanel x:Name="PART_HorizontalScrollBarArea"
+                       Grid.Column="0"
+                       Grid.Row="1"
+                       Panel.ZIndex="1"
+                       Visibility="{TemplateBinding ComputedHorizontalScrollBarVisibility}">
+                <ContentPresenter Content="{TemplateBinding HorizontalScrollBarControlBox}"
+                                  ContentTemplate="{TemplateBinding HorizontalScrollBarControlBoxTemplate}"
+                                  DockPanel.Dock="Right"
+                                  Visibility="{TemplateBinding HorizontalScrollBarControlBoxVisibility}"/>
+                <dxschv:SchedulerScrollBar x:Name="PART_HorizontalScrollBar"
+                                           AutomationProperties.AutomationId="HorizontalScrollBar"
+                                           Cursor="Arrow"
+                                           Maximum="{TemplateBinding ScrollableWidth}"
+                                           Minimum="0"
+                                           Orientation="Horizontal"
+                                           Value="{Binding HorizontalOffset, Mode=OneWay, RelativeSource={RelativeSource TemplatedParent}}"
+                                           ViewportSize="{TemplateBinding ViewportWidth}"/>
+            </DockPanel>
+            <Border x:Name="corner"
+                    Grid.Column="1"
+                    Grid.Row="1"
+                    Style="{TemplateBinding CornerBoxStyle}"/>
+        </Grid>
+        <ControlTemplate.Triggers>
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="ComputedVerticalScrollBarVisibility" Value="Collapsed"/>
+                    <Condition Property="ComputedHorizontalScrollBarVisibility" Value="Collapsed"/>
+                </MultiTrigger.Conditions>
+                <Setter Property="Visibility"
+                        TargetName="corner"
+                        Value="Collapsed"/>
+            </MultiTrigger>
+            <Trigger Property="HorizontalScrollBarControlBoxVisibility" Value="Visible">
+                <Setter Property="Visibility"
+                        TargetName="corner"
+                        Value="Collapsed"/>
+                <Setter Property="Grid.ColumnSpan"
+                        TargetName="PART_HorizontalScrollBarArea"
+                        Value="2"/>
+            </Trigger>
+            <Trigger Property="VerticalScrollBarControlBoxVisibility" Value="Visible">
+                <Setter Property="Visibility"
+                        TargetName="corner"
+                        Value="Collapsed"/>
+                <Setter Property="Grid.RowSpan"
+                        TargetName="PART_VerticalScrollBarArea"
+                        Value="2"/>
+            </Trigger>
+            <Trigger Property="dx:ScrollBarExtensions.ScrollBarMode" Value="TouchOverlap">
+                <Setter Property="Visibility"
+                        TargetName="corner"
+                        Value="Collapsed"/>
+                <Setter Property="AutoHide"
+                        TargetName="PART_HorizontalScrollBar"
+                        Value="True"/>
+                <Setter Property="AutoHide"
+                        TargetName="PART_VerticalScrollBar"
+                        Value="True"/>
+                <Setter Property="Grid.ColumnSpan"
+                        TargetName="PART_ScrollContentPresenter"
+                        Value="2"/>
+                <Setter Property="Grid.RowSpan"
+                        TargetName="PART_ScrollContentPresenter"
+                        Value="2"/>
+                <Setter Property="Grid.RowSpan"
+                        TargetName="PART_VerticalScrollBarArea"
+                        Value="2"/>
+                <Setter Property="Grid.ColumnSpan"
+                        TargetName="PART_HorizontalScrollBarArea"
+                        Value="2"/>
+            </Trigger>
+            <Trigger Property="HorizontalScrollBarControlBoxVisibility" Value="Visible">
+                <Setter Property="Grid.RowSpan"
+                        TargetName="PART_VerticalScrollBarArea"
+                        Value="1"/>
+            </Trigger>
+            <Trigger Property="VerticalScrollBarControlBoxVisibility" Value="Visible">
+                <Setter Property="Grid.ColumnSpan"
+                        TargetName="PART_HorizontalScrollBarArea"
+                        Value="1"/>
+            </Trigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+    <Style x:Key="SchedulerScrollViewer.DefaultStyle" TargetType="dxschv:SchedulerScrollViewer">
+        <!--T742802: check before change scroll behavior -->
+        <Setter Property="dx:ScrollBarExtensions.AllowShiftKeyMode" Value="True"/>
+        <Setter Property="dx:ScrollBarExtensions.AllowMouseScrolling" Value="True"/>
+        <Setter Property="dx:ScrollBarExtensions.ScrollBehavior" Value="{dxschv:SchedulerScrollViewerScrollBehavior}"/>
+        <Setter Property="dx:ScrollViewerTouchBehavior.IsEnabled" Value="True"/>
+        <Setter Property="Template" Value="{StaticResource SchedulerScrollViewer.DefaultTemplate}"/>
+        <Setter Property="CornerBoxStyle" Value="{DynamicResource {dxscht:SchedulerControlThemeKey ResourceKey=ScrollingCornerStyle}}"/>
+        <Setter Property="CanContentScroll" Value="True"/>
+        <Setter Property="VerticalScrollBarVisibility" Value="Auto"/>
+        <Setter Property="HorizontalScrollBarVisibility" Value="Auto"/>
+        <Setter Property="PanningMode" Value="Both"/>
+    </Style>
+
+</ResourceDictionary>

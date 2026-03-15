@@ -1,0 +1,51 @@
+﻿<UserControl x:Class="UFRecipeEditor.PropertyDataTemplate.ConnectionSourcePropertyEditor"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:converters="clr-namespace:CommonControls.Converters;assembly=CommonControls"
+             mc:Ignorable="d" 
+             d:DesignHeight="25" d:DesignWidth="200">
+
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+              <ResourceDictionary Source="/SharedResources;component/Resources/SharedImages.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+            <converters:ConnectionStringConverter x:Key="ConnectionStringConverter" />
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <DockPanel>
+        <Grid DockPanel.Dock="Right">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition />
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <DockPanel>
+                <Button DockPanel.Dock="Right" Tag="{Binding Value.ReadableConnectionString, Mode=TwoWay}" Click="DlgButton_Clear">
+                    <Button.Content>
+                        <Image Source="{StaticResource CancelSmall}" Height="16" Width="16" />
+                    </Button.Content>
+                </Button>
+                <Button DockPanel.Dock="Right" Tag="{Binding Value, Mode=TwoWay}" Click="DlgButton_Click">
+                    <Button.Content>
+                        <Image Source="{StaticResource EditGeneralSmall}" Height="16" Width="16" />
+                    </Button.Content>
+                </Button>
+                <TextBox x:Name="textEditConnection" IsReadOnly="False" Validation.ErrorTemplate="{x:Null}">
+                    <TextBox.Text>
+                        <MultiBinding Converter="{StaticResource ConnectionStringConverter}" 
+                                  ValidatesOnDataErrors="True" UpdateSourceTrigger="PropertyChanged">
+                            <Binding Path="Value.ReadableConnectionString" Mode="TwoWay" />
+                            <Binding Path="Value.RecipeDocument" Mode="OneWay" />
+                        </MultiBinding>
+                    </TextBox.Text>
+                </TextBox>
+            </DockPanel>
+            <ContentPresenter Grid.Column="1" 
+            Content="{Binding ElementName=textEditConnection, Path=(Validation.Errors).CurrentItem}"/>
+        </Grid>
+    </DockPanel>
+</UserControl>

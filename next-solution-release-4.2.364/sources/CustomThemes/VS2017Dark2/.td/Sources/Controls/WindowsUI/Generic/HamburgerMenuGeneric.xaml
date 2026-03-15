@@ -1,0 +1,1821 @@
+<ResourceDictionary mc:Ignorable="cs"
+                    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:cs="colorscheme_ignorable_uri"
+                    xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+                    xmlns:dxb="http://schemas.devexpress.com/winfx/2008/xaml/bars"
+                    xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+                    xmlns:dxt="http://schemas.devexpress.com/winfx/2008/xaml/core/themekeys"
+                    xmlns:dxwui="http://schemas.devexpress.com/winfx/2008/xaml/windowsui"
+                    xmlns:dxwuii="http://schemas.devexpress.com/winfx/2008/xaml/windowsui/internal"
+                    xmlns:dxwuit="http://schemas.devexpress.com/winfx/2008/xaml/windowsui/themekeys"
+                    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <dxwui:HamburgerMenuStringIdConverter x:Key="HamburgerMenuStringIdConverter"/>
+
+    <dxwuii:DoubleToGridLengthConverter x:Key="DoubleToGridLengthConverter"/>
+
+    <!--#region SplitView template-->
+
+    <ControlTemplate x:Key="{dxwuit:HamburgerMenuElementsThemeKey ResourceKey=SplitViewTemplate}" TargetType="{x:Type dxwuii:SplitView}">
+        <Grid Background="{TemplateBinding Background}" KeyboardNavigation.TabNavigation="Local">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition x:Name="LeftColumn" Width="{Binding ActualOpenPaneWidth, RelativeSource={RelativeSource Mode=TemplatedParent}, Converter={StaticResource DoubleToGridLengthConverter}}"/>
+                <ColumnDefinition x:Name="RightColumn" Width="*"/>
+            </Grid.ColumnDefinitions>
+            <Grid x:Name="PART_ContentRoot" Grid.ColumnSpan="2">
+                <Border x:Name="PART_Content"
+                        HorizontalAlignment="Stretch"
+                        KeyboardNavigation.TabIndex="1"
+                        KeyboardNavigation.TabNavigation="Local"
+                        VerticalAlignment="Stretch"/>
+                <Rectangle x:Name="LightDismissLayer"
+                           Fill="Transparent"
+                           Visibility="Collapsed"
+                           cs:id="Rectangle_0000"/>
+            </Grid>
+            <Grid x:Name="PART_PaneRoot"
+                  Background="{TemplateBinding PaneBackground}"
+                  dx:WpfSvgPalette.Palette="{TemplateBinding PaneSvgPalette}"
+                  Grid.ColumnSpan="2"
+                  HorizontalAlignment="Left"
+                  Width="{Binding TemplateSettings.OpenPaneWidth, RelativeSource={RelativeSource Mode=TemplatedParent}}">
+                <Grid.Clip>
+                    <RectangleGeometry x:Name="PaneClipRectangle">
+                        <RectangleGeometry.Transform>
+                            <TranslateTransform x:Name="PaneClipRectangleTransform"/>
+                        </RectangleGeometry.Transform>
+                    </RectangleGeometry>
+                </Grid.Clip>
+                <Grid.RenderTransform>
+                    <TranslateTransform x:Name="PaneTransform"/>
+                </Grid.RenderTransform>
+                <Border x:Name="PART_Pane"
+                        HorizontalAlignment="Stretch"
+                        KeyboardNavigation.TabIndex="0"
+                        KeyboardNavigation.TabNavigation="Local"
+                        VerticalAlignment="Stretch"/>
+            </Grid>
+        </Grid>
+        <ControlTemplate.Triggers>
+            <Trigger Property="ActualState" Value="Closed">
+                <Setter Property="Visibility"
+                        TargetName="PART_PaneRoot"
+                        Value="Collapsed"/>
+            </Trigger>
+            <Trigger Property="ActualState" Value="ClosedCompactLeft">
+                <Setter Property="Width"
+                        TargetName="LeftColumn"
+                        Value="{Binding TemplateSettings.CompactPaneGridLength, RelativeSource={RelativeSource Mode=TemplatedParent}}"/>
+                <Setter Property="Grid.Column"
+                        TargetName="PART_ContentRoot"
+                        Value="1"/>
+                <Setter Property="Grid.ColumnSpan"
+                        TargetName="PART_ContentRoot"
+                        Value="1"/>
+            </Trigger>
+            <Trigger Property="ActualState" Value="ClosedCompactRight">
+                <Setter Property="Width"
+                        TargetName="LeftColumn"
+                        Value="*"/>
+                <Setter Property="Width"
+                        TargetName="RightColumn"
+                        Value="{Binding TemplateSettings.CompactPaneGridLength, RelativeSource={RelativeSource Mode=TemplatedParent}}"/>
+                <Setter Property="Grid.ColumnSpan"
+                        TargetName="PART_ContentRoot"
+                        Value="1"/>
+                <Setter Property="Grid.ColumnSpan"
+                        TargetName="PART_PaneRoot"
+                        Value="2"/>
+                <Setter Property="HorizontalAlignment"
+                        TargetName="PART_PaneRoot"
+                        Value="Right"/>
+            </Trigger>
+            <Trigger Property="ActualState" Value="OpenOverlayLeft">
+                <Setter Property="Visibility"
+                        TargetName="LightDismissLayer"
+                        Value="Visible"/>
+            </Trigger>
+            <Trigger Property="ActualState" Value="OpenOverlayRight">
+                <Setter Property="Visibility"
+                        TargetName="LightDismissLayer"
+                        Value="Visible"/>
+                <Setter Property="HorizontalAlignment"
+                        TargetName="PART_PaneRoot"
+                        Value="Right"/>
+            </Trigger>
+            <Trigger Property="ActualState" Value="OpenCompactOverlayLeft">
+                <Setter Property="Visibility"
+                        TargetName="LightDismissLayer"
+                        Value="Visible"/>
+                <Setter Property="Width"
+                        TargetName="LeftColumn"
+                        Value="{Binding TemplateSettings.CompactPaneGridLength, RelativeSource={RelativeSource Mode=TemplatedParent}}"/>
+                <Setter Property="Grid.Column"
+                        TargetName="PART_ContentRoot"
+                        Value="1"/>
+                <Setter Property="Grid.ColumnSpan"
+                        TargetName="PART_ContentRoot"
+                        Value="1"/>
+            </Trigger>
+            <Trigger Property="ActualState" Value="OpenCompactOverlayRight">
+                <Setter Property="Visibility"
+                        TargetName="LightDismissLayer"
+                        Value="Visible"/>
+                <Setter Property="Width"
+                        TargetName="LeftColumn"
+                        Value="*"/>
+                <Setter Property="Width"
+                        TargetName="RightColumn"
+                        Value="{Binding TemplateSettings.CompactPaneGridLength, RelativeSource={RelativeSource Mode=TemplatedParent}}"/>
+                <Setter Property="Grid.ColumnSpan"
+                        TargetName="PART_ContentRoot"
+                        Value="1"/>
+                <Setter Property="Grid.ColumnSpan"
+                        TargetName="PART_PaneRoot"
+                        Value="2"/>
+                <Setter Property="HorizontalAlignment"
+                        TargetName="PART_PaneRoot"
+                        Value="Right"/>
+            </Trigger>
+            <Trigger Property="ActualState" Value="OpenInlineLeft">
+                <Setter Property="Grid.Column"
+                        TargetName="PART_ContentRoot"
+                        Value="1"/>
+                <Setter Property="Grid.ColumnSpan"
+                        TargetName="PART_ContentRoot"
+                        Value="1"/>
+                <Setter Property="Grid.ColumnSpan"
+                        TargetName="PART_PaneRoot"
+                        Value="1"/>
+            </Trigger>
+            <Trigger Property="ActualState" Value="OpenInlineRight">
+                <Setter Property="Width"
+                        TargetName="LeftColumn"
+                        Value="*"/>
+                <Setter Property="Width"
+                        TargetName="RightColumn"
+                        Value="{Binding TemplateSettings.OpenPaneGridLength, RelativeSource={RelativeSource Mode=TemplatedParent}}"/>
+                <Setter Property="Grid.ColumnSpan"
+                        TargetName="PART_ContentRoot"
+                        Value="1"/>
+                <Setter Property="Grid.Column"
+                        TargetName="PART_PaneRoot"
+                        Value="1"/>
+                <Setter Property="Grid.ColumnSpan"
+                        TargetName="PART_PaneRoot"
+                        Value="1"/>
+            </Trigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+    <!--#endregion-->
+
+    <!--#region Hamburger templates-->
+
+    <ControlTemplate x:Key="{dxwuit:HamburgerMenuElementsThemeKey ResourceKey=MenuTemplate}" TargetType="{x:Type dxwui:HamburgerMenu}">
+        <Grid x:Name="PART_RootGrid" Background="{TemplateBinding Background}">
+            <dxwuii:SplitView x:Name="PART_SplitView"
+                              AnimationSettings="{Binding AnimationSettings, RelativeSource={RelativeSource Mode=TemplatedParent}}"
+                              CompactPaneWidth="{TemplateBinding CompactWidth}"
+                              OpenPaneWidth="{TemplateBinding OpenPaneWidth}"
+                              PaneBackground="{TemplateBinding PaneBackground}"
+                              TabIndex="1">
+                <dxwuii:SplitView.Pane>
+                    <Grid KeyboardNavigation.TabIndex="1" MinWidth="{TemplateBinding OpenPaneMinWidth}">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="{Binding CompactWidth, RelativeSource={RelativeSource Mode=TemplatedParent}, Converter={dxwuii:DoubleToGridLengthConverter}}"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Border x:Name="PART_MenuHeader"
+                                dx:WpfSvgPalette.Palette="{DynamicResource {dxwuit:HamburgerMenuSvgPaletteThemeKeyExtension ResourceKey=SvgPaletteInMenu}}"
+                                Grid.Column="1"
+                                Height="{TemplateBinding HeaderHeight}"
+                                Padding="{TemplateBinding HeaderPadding}">
+                            <ContentPresenter Content="{TemplateBinding Header}"
+                                              ContentTemplate="{TemplateBinding HeaderTemplate}"
+                                              ContentTemplateSelector="{TemplateBinding HeaderTemplateSelector}"
+                                              TextBlock.FontSize="{TemplateBinding HeaderFontSize}"
+                                              TextBlock.Foreground="{TemplateBinding HeaderForeground}"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                        <ScrollViewer dx:ScrollBarExtensions.ScrollBarMode="TouchOverlap"
+                                      Grid.ColumnSpan="2"
+                                      Grid.Row="1">
+                            <dxwuii:HamburgerMenuItemsPanel x:Name="PART_TopItemsPanel"
+                                                            CompactItemWidth="{TemplateBinding CompactWidth}"
+                                                            IsCompact="{TemplateBinding IsCompact}"
+                                                            ItemsSource="{Binding TopItems, RelativeSource={RelativeSource Mode=TemplatedParent}, Mode=OneTime}"
+                                                            MediateBorderCommand="{Binding ToggleViewStateCommand, RelativeSource={RelativeSource Mode=TemplatedParent}, Mode=OneTime}"
+                                                            ShowSpecialElements="{TemplateBinding ShowMenuOnEmptySpaceBarClick}"/>
+                        </ScrollViewer>
+                        <dxwuii:HamburgerMenuItemsPanel x:Name="PART_BottomItemsPanel"
+                                                        CompactItemWidth="{TemplateBinding CompactWidth}"
+                                                        Grid.ColumnSpan="2"
+                                                        Grid.Row="2"
+                                                        IsCompact="{TemplateBinding IsCompact}"
+                                                        ItemsSource="{Binding BottomItems, RelativeSource={RelativeSource Mode=TemplatedParent}, Mode=OneTime}"/>
+                        <dxwuii:HamburgerMenuBottomBarItemsPanel x:Name="PART_BottomBarItemsPanel"
+                                                                 Background="{TemplateBinding BottomBarBackground}"
+                                                                 CompactItemWidth="{TemplateBinding CompactWidth}"
+                                                                 Grid.ColumnSpan="2"
+                                                                 Grid.Row="3"
+                                                                 HorizontalAlignment="Stretch"
+                                                                 IsCompact="{TemplateBinding IsCompact}"
+                                                                 ItemsSource="{Binding BottomBarItems, RelativeSource={RelativeSource Mode=TemplatedParent}, Mode=OneTime}"
+                                                                 ShowSpecialElements="True"
+                                                                 VerticalAlignment="Bottom"/>
+                    </Grid>
+                </dxwuii:SplitView.Pane>
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition/>
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="{Binding CompactWidth, RelativeSource={RelativeSource Mode=TemplatedParent}, Converter={dxwuii:DoubleToGridLengthConverter}}"/>
+                        <ColumnDefinition/>
+                    </Grid.ColumnDefinitions>
+                    <Rectangle x:Name="PART_HorizontalHeaderBackground"
+                               Fill="{TemplateBinding HorizontalHeaderBackground}"
+                               Grid.ColumnSpan="2"
+                               Visibility="Collapsed"/>
+                    <Border x:Name="PART_HorizontalHeader"
+                            Grid.Column="1"
+                            Height="{TemplateBinding HeaderHeight}"
+                            Padding="{TemplateBinding HeaderPadding}"
+                            Visibility="Collapsed">
+                        <ContentPresenter Content="{TemplateBinding Header}"
+                                          ContentTemplate="{TemplateBinding HeaderTemplate}"
+                                          ContentTemplateSelector="{TemplateBinding HeaderTemplateSelector}"
+                                          TextBlock.FontSize="{TemplateBinding HeaderFontSize}"
+                                          TextBlock.Foreground="{TemplateBinding HeaderForeground}"
+                                          VerticalAlignment="Center"/>
+                    </Border>
+                    <ContentPresenter x:Name="PART_HamburgerContent"
+                                      Content="{TemplateBinding Content}"
+                                      ContentStringFormat="{TemplateBinding ContentStringFormat}"
+                                      ContentTemplate="{TemplateBinding ContentTemplate}"
+                                      ContentTemplateSelector="{TemplateBinding ContentTemplateSelector}"
+                                      Grid.ColumnSpan="2"
+                                      Grid.Row="1"
+                                      HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                      VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                </Grid>
+            </dxwuii:SplitView>
+            <dxwui:HamburgerMenuToggleStateButton x:Name="PART_ToggleStateButton"
+                                                  Command="{Binding ToggleViewStateCommand, RelativeSource={RelativeSource Mode=TemplatedParent}, Mode=OneTime}"
+                                                  Height="{TemplateBinding HeaderHeight}"
+                                                  HorizontalAlignment="Left"
+                                                  TabIndex="0"
+                                                  VerticalAlignment="Top"
+                                                  Width="{TemplateBinding CompactWidth}"/>
+        </Grid>
+        <ControlTemplate.Triggers>
+            <Trigger Property="ViewState" Value="Closed">
+                <Setter Property="DisplayMode"
+                        TargetName="PART_SplitView"
+                        Value="Overlay"/>
+                <Setter Property="IsPaneOpen"
+                        TargetName="PART_SplitView"
+                        Value="False"/>
+                <Setter Property="IsInFlyout"
+                        TargetName="PART_ToggleStateButton"
+                        Value="True"/>
+            </Trigger>
+            <Trigger Property="ViewState" Value="Opened">
+                <Setter Property="DisplayMode"
+                        TargetName="PART_SplitView"
+                        Value="Overlay"/>
+                <Setter Property="IsPaneOpen"
+                        TargetName="PART_SplitView"
+                        Value="True"/>
+                <Setter Property="KeyboardNavigation.TabNavigation"
+                        TargetName="PART_HamburgerContent"
+                        Value="None"/>
+                <Setter Property="KeyboardNavigation.ControlTabNavigation"
+                        TargetName="PART_HamburgerContent"
+                        Value="None"/>
+                <Setter Property="KeyboardNavigation.DirectionalNavigation"
+                        TargetName="PART_HamburgerContent"
+                        Value="None"/>
+                <Setter Property="KeyboardNavigation.TabNavigation"
+                        TargetName="PART_HorizontalHeader"
+                        Value="None"/>
+                <Setter Property="KeyboardNavigation.ControlTabNavigation"
+                        TargetName="PART_HorizontalHeader"
+                        Value="None"/>
+                <Setter Property="KeyboardNavigation.DirectionalNavigation"
+                        TargetName="PART_HorizontalHeader"
+                        Value="None"/>
+                <Setter Property="KeyboardNavigation.TabNavigation"
+                        TargetName="PART_RootGrid"
+                        Value="Cycle"/>
+                <Setter Property="KeyboardNavigation.ControlTabNavigation"
+                        TargetName="PART_RootGrid"
+                        Value="Cycle"/>
+                <Setter Property="KeyboardNavigation.DirectionalNavigation"
+                        TargetName="PART_RootGrid"
+                        Value="Cycle"/>
+            </Trigger>
+            <Trigger Property="ViewState" Value="CompactOverlay">
+                <Setter Property="DisplayMode"
+                        TargetName="PART_SplitView"
+                        Value="CompactOverlay"/>
+                <Setter Property="IsPaneOpen"
+                        TargetName="PART_SplitView"
+                        Value="False"/>
+            </Trigger>
+            <Trigger Property="ViewState" Value="Overlay">
+                <Setter Property="DisplayMode"
+                        TargetName="PART_SplitView"
+                        Value="CompactOverlay"/>
+                <Setter Property="IsPaneOpen"
+                        TargetName="PART_SplitView"
+                        Value="True"/>
+                <Setter Property="KeyboardNavigation.TabNavigation"
+                        TargetName="PART_HamburgerContent"
+                        Value="None"/>
+                <Setter Property="KeyboardNavigation.ControlTabNavigation"
+                        TargetName="PART_HamburgerContent"
+                        Value="None"/>
+                <Setter Property="KeyboardNavigation.DirectionalNavigation"
+                        TargetName="PART_HamburgerContent"
+                        Value="None"/>
+                <Setter Property="KeyboardNavigation.TabNavigation"
+                        TargetName="PART_HorizontalHeader"
+                        Value="None"/>
+                <Setter Property="KeyboardNavigation.ControlTabNavigation"
+                        TargetName="PART_HorizontalHeader"
+                        Value="None"/>
+                <Setter Property="KeyboardNavigation.DirectionalNavigation"
+                        TargetName="PART_HorizontalHeader"
+                        Value="None"/>
+                <Setter Property="KeyboardNavigation.TabNavigation"
+                        TargetName="PART_RootGrid"
+                        Value="Cycle"/>
+                <Setter Property="KeyboardNavigation.ControlTabNavigation"
+                        TargetName="PART_RootGrid"
+                        Value="Cycle"/>
+                <Setter Property="KeyboardNavigation.DirectionalNavigation"
+                        TargetName="PART_RootGrid"
+                        Value="Cycle"/>
+            </Trigger>
+            <Trigger Property="ViewState" Value="CompactInline">
+                <Setter Property="DisplayMode"
+                        TargetName="PART_SplitView"
+                        Value="CompactInline"/>
+                <Setter Property="IsPaneOpen"
+                        TargetName="PART_SplitView"
+                        Value="False"/>
+            </Trigger>
+            <Trigger Property="ViewState" Value="Inline">
+                <Setter Property="DisplayMode"
+                        TargetName="PART_SplitView"
+                        Value="CompactInline"/>
+                <Setter Property="IsPaneOpen"
+                        TargetName="PART_SplitView"
+                        Value="True"/>
+            </Trigger>
+            <Trigger Property="ActualIsMenuVisible" Value="False">
+                <Setter Property="Visibility"
+                        TargetName="PART_ToggleStateButton"
+                        Value="Collapsed"/>
+            </Trigger>
+            <Trigger Property="ActualIsHorizontalHeaderVisible" Value="True">
+                <Setter Property="Visibility"
+                        TargetName="PART_HorizontalHeader"
+                        Value="Visible"/>
+                <Setter Property="Visibility"
+                        TargetName="PART_HorizontalHeaderBackground"
+                        Value="Visible"/>
+                <Setter Property="Visibility"
+                        TargetName="PART_MenuHeader"
+                        Value="Hidden"/>
+            </Trigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+    <ControlTemplate x:Key="{dxwuit:HamburgerMenuElementsThemeKey ResourceKey=NavigationButtonTemplate}" TargetType="{x:Type dxwui:HamburgerMenuNavigationButton}">
+        <Grid x:Name="root">
+            <Border x:Name="border"
+                    Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}"
+                    Padding="{TemplateBinding Padding}"
+                    SnapsToDevicePixels="True"/>
+            <Border BorderThickness="{TemplateBinding BorderThickness}">
+                <DockPanel>
+                    <Border x:Name="PART_SelectionIndicator"
+                            Background="{TemplateBinding SelectionIndicatorBrush}"
+                            DockPanel.Dock="Left"
+                            MinWidth="{DynamicResource ResourceKey={dxwuit:HamburgerMenuElementsThemeKey ResourceKey=ItemSelectionIndicatorThickness}}"
+                            Visibility="Collapsed"/>
+                    <Grid Margin="{TemplateBinding Padding}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="{Binding Path=(dxwui:HamburgerMenu.TemplateSettings).CompactWidth, RelativeSource={RelativeSource Mode=Self}, Converter={dxwuii:DoubleToGridLengthConverter}}"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Image x:Name="PART_IconContainer"
+                               dxb:ImageColorizer.Color="{TemplateBinding ActualGlyphColor}"
+                               dxb:ImageColorizer.IsEnabled="{TemplateBinding AllowGlyphTheming}"
+                               Height="{TemplateBinding GlyphHeight}"
+                               HorizontalAlignment="Center"
+                               Source="{TemplateBinding Glyph}"
+                               Stretch="{TemplateBinding GlyphStretch}"
+                               VerticalAlignment="Center"
+                               Width="{TemplateBinding GlyphWidth}"/>
+                        <ContentPresenter x:Name="PART_IconTemplateContainer"
+                                          ContentTemplate="{TemplateBinding GlyphTemplate}"
+                                          Height="{TemplateBinding GlyphHeight}"
+                                          HorizontalAlignment="Stretch"
+                                          VerticalAlignment="Stretch"
+                                          Visibility="Collapsed"
+                                          Width="{TemplateBinding GlyphWidth}"/>
+                        <ContentPresenter x:Name="contentPresenter"
+                                          Content="{TemplateBinding Content}"
+                                          ContentStringFormat="{TemplateBinding ContentStringFormat}"
+                                          ContentTemplate="{TemplateBinding ContentTemplate}"
+                                          Focusable="False"
+                                          Grid.Column="1"
+                                          HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                          Margin="{DynamicResource ResourceKey={dxwuit:HamburgerMenuElementsThemeKey ResourceKey=NavigationItemContentPadding}}"
+                                          RecognizesAccessKey="True"
+                                          SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}"
+                                          VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                        <ContentPresenter x:Name="PART_RightContent"
+                                          Content="{TemplateBinding RightContent}"
+                                          ContentTemplate="{TemplateBinding RightContentTemplate}"
+                                          Focusable="False"
+                                          Grid.Column="2"
+                                          HorizontalAlignment="Right"
+                                          Margin="{TemplateBinding RightContentMargin}"
+                                          SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}"
+                                          TextBlock.Foreground="{TemplateBinding RightForeground}"
+                                          VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                          Visibility="Collapsed"/>
+                    </Grid>
+                </DockPanel>
+            </Border>
+        </Grid>
+        <ControlTemplate.Triggers>
+            <Trigger Property="IsRightContentVisible" Value="True">
+                <Setter Property="Visibility"
+                        TargetName="PART_RightContent"
+                        Value="Visible"/>
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Opacity"
+                        TargetName="root"
+                        Value="0.3"/>
+            </Trigger>
+            <DataTrigger Binding="{Binding GlyphTemplate, RelativeSource={RelativeSource Self}, Converter={dxmvvm:ObjectToBooleanConverter}}" Value="True">
+                <Setter Property="Visibility"
+                        TargetName="PART_IconTemplateContainer"
+                        Value="Visible"/>
+                <Setter Property="Visibility"
+                        TargetName="PART_IconContainer"
+                        Value="Collapsed"/>
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Path=(dxwui:HamburgerMenu.TemplateSettings).ShowRevealHighlightEffect, RelativeSource={RelativeSource Self}}" Value="True">
+                <Setter Property="dxwui:RevealHighlightOptions.Mode"
+                        TargetName="border"
+                        Value="BackgroundAndBorder"/>
+            </DataTrigger>
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="IsSelected" Value="True"/>
+                    <Condition Property="ShowSelectionIndicator" Value="True"/>
+                </MultiTrigger.Conditions>
+                <Setter Property="Visibility"
+                        TargetName="PART_SelectionIndicator"
+                        Value="Visible"/>
+            </MultiTrigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+    <ControlTemplate x:Key="{dxwuit:HamburgerMenuElementsThemeKey ResourceKey=SubMenuPreviewNavigationButtonTemplate}" TargetType="{x:Type dxwui:HamburgerSubMenuPreviewNavigationButton}">
+        <Grid x:Name="root">
+            <Border x:Name="border"
+                    Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}"
+                    Padding="{TemplateBinding Padding}"
+                    SnapsToDevicePixels="True"/>
+            <Border BorderThickness="{TemplateBinding BorderThickness}">
+                <DockPanel>
+                    <Border x:Name="PART_SelectionIndicator"
+                            Background="{TemplateBinding SelectionIndicatorBrush}"
+                            DockPanel.Dock="Left"
+                            MinWidth="{DynamicResource ResourceKey={dxwuit:HamburgerMenuElementsThemeKey ResourceKey=ItemSelectionIndicatorThickness}}"
+                            Visibility="Collapsed"/>
+                    <Grid Margin="{TemplateBinding Padding}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="{Binding Path=(dxwui:HamburgerMenu.TemplateSettings).CompactWidth, RelativeSource={RelativeSource Mode=Self}, Converter={dxwuii:DoubleToGridLengthConverter}}"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <ContentPresenter x:Name="contentPresenter"
+                                          Content="{TemplateBinding Content}"
+                                          ContentStringFormat="{TemplateBinding ContentStringFormat}"
+                                          ContentTemplate="{TemplateBinding ContentTemplate}"
+                                          Focusable="False"
+                                          Grid.Column="1"
+                                          HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                          Margin="{DynamicResource ResourceKey={dxwuit:HamburgerMenuElementsThemeKey ResourceKey=NavigationItemContentPadding}}"
+                                          RecognizesAccessKey="True"
+                                          SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}"
+                                          VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                        <ContentPresenter x:Name="PART_RightContent"
+                                          Content="{TemplateBinding RightContent}"
+                                          ContentTemplate="{TemplateBinding RightContentTemplate}"
+                                          Focusable="False"
+                                          Grid.Column="2"
+                                          HorizontalAlignment="Right"
+                                          Margin="{TemplateBinding RightContentMargin}"
+                                          SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}"
+                                          TextBlock.Foreground="{TemplateBinding RightForeground}"
+                                          VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                          Visibility="Collapsed"/>
+                    </Grid>
+                </DockPanel>
+            </Border>
+        </Grid>
+        <ControlTemplate.Triggers>
+            <Trigger Property="IsRightContentVisible" Value="True">
+                <Setter Property="Visibility"
+                        TargetName="PART_RightContent"
+                        Value="Visible"/>
+            </Trigger>
+            <Trigger Property="IsSelected" Value="True">
+                <Setter Property="TextBlock.FontWeight"
+                        TargetName="contentPresenter"
+                        Value="Bold"/>
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Opacity"
+                        TargetName="root"
+                        Value="0.3"/>
+            </Trigger>
+            <DataTrigger Binding="{Binding Path=(dxwui:HamburgerMenu.TemplateSettings).ShowRevealHighlightEffect, RelativeSource={RelativeSource Self}}" Value="True">
+                <Setter Property="dxwui:RevealHighlightOptions.Mode"
+                        TargetName="border"
+                        Value="BackgroundAndBorder"/>
+            </DataTrigger>
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="IsSelected" Value="True"/>
+                    <Condition Property="ShowSelectionIndicator" Value="True"/>
+                </MultiTrigger.Conditions>
+                <Setter Property="Visibility"
+                        TargetName="PART_SelectionIndicator"
+                        Value="Visible"/>
+            </MultiTrigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+    <ControlTemplate x:Key="{dxwuit:HamburgerMenuElementsThemeKey ResourceKey=SubMenuTemplate}" TargetType="{x:Type dxwui:HamburgerSubMenu}">
+        <Border x:Name="border"
+                Background="{TemplateBinding Background}"
+                BorderBrush="{TemplateBinding BorderBrush}"
+                BorderThickness="{TemplateBinding BorderThickness}"
+                Padding="{TemplateBinding Padding}"
+                SnapsToDevicePixels="True">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <dxwuii:HamburgerSubMenuButton x:Name="PART_Button"
+                                               AllowGlyphTheming="{TemplateBinding AllowGlyphTheming}"
+                                               Content="{TemplateBinding Content}"
+                                               ContentStringFormat="{TemplateBinding ContentStringFormat}"
+                                               ContentTemplate="{TemplateBinding ContentTemplate}"
+                                               ContentTemplateSelector="{TemplateBinding ContentTemplateSelector}"
+                                               Glyph="{TemplateBinding Glyph}"
+                                               GlyphColor="{TemplateBinding GlyphColor}"
+                                               GlyphHeight="{TemplateBinding GlyphHeight}"
+                                               GlyphStretch="{TemplateBinding GlyphStretch}"
+                                               GlyphTemplate="{TemplateBinding GlyphTemplate}"
+                                               GlyphWidth="{TemplateBinding GlyphWidth}"
+                                               IsSelected="{Binding IsOpen, ElementName=PART_SubMenuFlyout}"
+                                               SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}"/>
+                <dxwuii:HamburgerSubMenuPanel x:Name="PART_PreviewPanel"
+                                              Grid.Row="1"
+                                              ItemsSource="{Binding PreviewItems, RelativeSource={RelativeSource Mode=TemplatedParent}, Mode=OneTime}"/>
+                <dxwuii:HamburgerSubMenuMoreButton x:Name="PART_MoreButton"
+                                                   Grid.Column="1"
+                                                   Grid.Row="2"
+                                                   IsOwnerSubMenuOpened="{Binding IsOpen, ElementName=PART_SubMenuFlyout}"
+                                                   IsSelected="{TemplateBinding IsMoreButtonSelected}"
+                                                   Visibility="Collapsed"/>
+                <dxwuii:HamburgerSubMenuFlyoutControl x:Name="PART_SubMenuFlyout"
+                                                      AlwaysOnTop="True"
+                                                      Background="Transparent"
+                                                      BorderBrush="Transparent"
+                                                      BorderThickness="0"
+                                                      Padding="0"
+                                                      VerticalAlignment="Stretch"
+                                                      cs:id="HamburgerSubMenuFlyoutControl_0001">
+                    <dxwuii:HamburgerSubMenuPane x:Name="PART_FlyoutPane"
+                                                 BackCommand="{Binding HideFlyoutCommand, RelativeSource={RelativeSource Mode=TemplatedParent}, Mode=OneTime}"
+                                                 Header="{TemplateBinding FlyoutHeader}"
+                                                 HeaderFontSize="{TemplateBinding FlyoutHeaderFontSize}"
+                                                 HeaderHeight="{TemplateBinding ActualFlyoutHeaderHeight}"
+                                                 HeaderPadding="{TemplateBinding FlyoutHeaderPadding}"
+                                                 HeaderTemplate="{TemplateBinding FlyoutHeaderTemplate}"
+                                                 HorizontalAlignment="Left"
+                                                 IsBackButtonVisible="{TemplateBinding IsFlyoutBackButtonVisible}"
+                                                 ItemsSource="{Binding Items, RelativeSource={RelativeSource Mode=TemplatedParent}, Mode=OneTime}"
+                                                 MinWidth="{TemplateBinding ActualFlyoutPaneMinWidth}"
+                                                 ScrollViewer.CanContentScroll="{TemplateBinding ScrollViewer.CanContentScroll}"
+                                                 ScrollViewer.HorizontalScrollBarVisibility="{TemplateBinding ScrollViewer.HorizontalScrollBarVisibility}"
+                                                 ScrollViewer.IsDeferredScrollingEnabled="{TemplateBinding ScrollViewer.IsDeferredScrollingEnabled}"
+                                                 ScrollViewer.PanningDeceleration="{TemplateBinding ScrollViewer.PanningDeceleration}"
+                                                 ScrollViewer.PanningMode="{TemplateBinding ScrollViewer.PanningMode}"
+                                                 ScrollViewer.PanningRatio="{TemplateBinding ScrollViewer.PanningRatio}"
+                                                 ScrollViewer.VerticalScrollBarVisibility="{TemplateBinding ScrollViewer.VerticalScrollBarVisibility}"
+                                                 Width="{TemplateBinding FlyoutPaneWidth}"/>
+                </dxwuii:HamburgerSubMenuFlyoutControl>
+            </Grid>
+        </Border>
+        <ControlTemplate.Triggers>
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Opacity"
+                        TargetName="border"
+                        Value="0.3"/>
+            </Trigger>
+            <Trigger Property="IsMoreButtonVisible" Value="True">
+                <Setter Property="Visibility"
+                        TargetName="PART_MoreButton"
+                        Value="Visible"/>
+            </Trigger>
+            <DataTrigger Binding="{Binding Path=(dxwui:HamburgerMenu.TemplateSettings).IsCompact, RelativeSource={RelativeSource Mode=Self}}" Value="True">
+                <Setter Property="Visibility"
+                        TargetName="PART_MoreButton"
+                        Value="Collapsed"/>
+                <Setter Property="Visibility"
+                        TargetName="PART_PreviewPanel"
+                        Value="Collapsed"/>
+            </DataTrigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+    <ControlTemplate x:Key="{dxwuit:HamburgerMenuElementsThemeKey ResourceKey=SubMenuButtonTemplate}" TargetType="{x:Type dxwuii:HamburgerSubMenuButton}">
+        <Grid x:Name="root">
+            <Border x:Name="border"
+                    Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}"
+                    Padding="{TemplateBinding Padding}"
+                    SnapsToDevicePixels="True"/>
+            <Border BorderThickness="{TemplateBinding BorderThickness}" Padding="{TemplateBinding Padding}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="{Binding Path=(dxwui:HamburgerMenu.TemplateSettings).CompactWidth, RelativeSource={RelativeSource Mode=Self}, Converter={dxwuii:DoubleToGridLengthConverter}}"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Image x:Name="PART_IconContainer"
+                           dxb:ImageColorizer.Color="{TemplateBinding ActualGlyphColor}"
+                           dxb:ImageColorizer.IsEnabled="{TemplateBinding AllowGlyphTheming}"
+                           Height="{TemplateBinding GlyphHeight}"
+                           HorizontalAlignment="Center"
+                           Source="{TemplateBinding Glyph}"
+                           Stretch="{TemplateBinding GlyphStretch}"
+                           VerticalAlignment="Center"
+                           Width="{TemplateBinding GlyphWidth}"/>
+                    <ContentPresenter x:Name="PART_IconTemplateContainer"
+                                      ContentTemplate="{TemplateBinding GlyphTemplate}"
+                                      Height="{TemplateBinding GlyphHeight}"
+                                      HorizontalAlignment="Stretch"
+                                      VerticalAlignment="Stretch"
+                                      Visibility="Collapsed"
+                                      Width="{TemplateBinding GlyphWidth}"/>
+                    <ContentPresenter x:Name="contentPresenter"
+                                      Content="{TemplateBinding Content}"
+                                      ContentStringFormat="{TemplateBinding ContentStringFormat}"
+                                      ContentTemplate="{TemplateBinding ContentTemplate}"
+                                      Focusable="False"
+                                      Grid.Column="1"
+                                      HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                      Margin="{DynamicResource ResourceKey={dxwuit:HamburgerMenuElementsThemeKey ResourceKey=NavigationItemContentPadding}}"
+                                      RecognizesAccessKey="True"
+                                      SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}"
+                                      VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                </Grid>
+            </Border>
+        </Grid>
+        <ControlTemplate.Triggers>
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Opacity"
+                        TargetName="root"
+                        Value="0.3"/>
+            </Trigger>
+            <DataTrigger Binding="{Binding GlyphTemplate, RelativeSource={RelativeSource Self}, Converter={dxmvvm:ObjectToBooleanConverter}}" Value="True">
+                <Setter Property="Visibility"
+                        TargetName="PART_IconTemplateContainer"
+                        Value="Visible"/>
+                <Setter Property="Visibility"
+                        TargetName="PART_IconContainer"
+                        Value="Collapsed"/>
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Path=(dxwui:HamburgerMenu.TemplateSettings).ShowRevealHighlightEffect, RelativeSource={RelativeSource Self}}" Value="True">
+                <Setter Property="dxwui:RevealHighlightOptions.Mode"
+                        TargetName="border"
+                        Value="BackgroundAndBorder"/>
+            </DataTrigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+    <ControlTemplate x:Key="{dxwuit:HamburgerMenuElementsThemeKey ResourceKey=SubMenuPaneTemplate}" TargetType="{x:Type dxwuii:HamburgerSubMenuPane}">
+        <Border Background="{TemplateBinding Background}"
+                BorderBrush="{TemplateBinding BorderBrush}"
+                BorderThickness="{TemplateBinding BorderThickness}"
+                Padding="{TemplateBinding Padding}">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition/>
+                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition/>
+                </Grid.ColumnDefinitions>
+                <dxwuii:HamburgerSubMenuPaneBackButton x:Name="PART_BackButton"
+                                                       Command="{TemplateBinding BackCommand}"
+                                                       KeyboardNavigation.DirectionalNavigation="Local"/>
+                <Border x:Name="PART_PaneHeader"
+                        Grid.Column="1"
+                        Height="{TemplateBinding HeaderHeight}"
+                        Padding="{TemplateBinding HeaderPadding}">
+                    <ContentPresenter Content="{TemplateBinding Header}"
+                                      ContentTemplate="{TemplateBinding HeaderTemplate}"
+                                      TextBlock.FontSize="{TemplateBinding HeaderFontSize}"
+                                      VerticalAlignment="Center"/>
+                </Border>
+                <ScrollViewer dx:ScrollBarExtensions.ScrollBarMode="TouchOverlap"
+                              Grid.ColumnSpan="2"
+                              Grid.Row="1">
+                    <dxwuii:HamburgerSubMenuPanel x:Name="PART_Panel"
+                                                  HorizontalAlignment="Stretch"
+                                                  ItemsSource="{TemplateBinding ItemsSource}"
+                                                  KeyboardNavigation.ControlTabNavigation="Once"
+                                                  KeyboardNavigation.DirectionalNavigation="Cycle"
+                                                  KeyboardNavigation.TabNavigation="Once"
+                                                  VerticalAlignment="Top"/>
+                </ScrollViewer>
+            </Grid>
+        </Border>
+        <ControlTemplate.Triggers>
+            <Trigger Property="IsBackButtonVisible" Value="False">
+                <Setter Property="Visibility"
+                        TargetName="PART_BackButton"
+                        Value="Collapsed"/>
+            </Trigger>
+            <Trigger Property="IsBackButtonVisible" Value="True">
+                <Setter Property="Padding"
+                        TargetName="PART_PaneHeader"
+                        Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuElementsThemeKey ResourceKey=HeaderWithIconPadding}}"/>
+            </Trigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+    <ControlTemplate x:Key="{dxwuit:HamburgerMenuElementsThemeKey ResourceKey=SubMenuMoreButtonTemplate}" TargetType="{x:Type dxwuii:HamburgerSubMenuMoreButton}">
+        <Grid x:Name="root">
+            <Border x:Name="border"
+                    Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}"
+                    Padding="{TemplateBinding Padding}"
+                    SnapsToDevicePixels="True"/>
+            <Border BorderThickness="{TemplateBinding BorderThickness}" Padding="{TemplateBinding Padding}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="{Binding Path=(dxwui:HamburgerMenu.TemplateSettings).CompactWidth, RelativeSource={RelativeSource Mode=Self}, Converter={dxwuii:DoubleToGridLengthConverter}}"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <ContentPresenter x:Name="contentPresenter"
+                                      Content="{TemplateBinding Content}"
+                                      ContentStringFormat="{TemplateBinding ContentStringFormat}"
+                                      ContentTemplate="{TemplateBinding ContentTemplate}"
+                                      Focusable="False"
+                                      Grid.Column="1"
+                                      HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                      Margin="{DynamicResource ResourceKey={dxwuit:HamburgerMenuElementsThemeKey ResourceKey=NavigationItemContentPadding}}"
+                                      RecognizesAccessKey="True"
+                                      SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}"
+                                      VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                </Grid>
+            </Border>
+        </Grid>
+        <ControlTemplate.Triggers>
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Opacity"
+                        TargetName="root"
+                        Value="0.3"/>
+            </Trigger>
+            <DataTrigger Binding="{Binding Path=(dxwui:HamburgerMenu.TemplateSettings).ShowRevealHighlightEffect, RelativeSource={RelativeSource Self}}" Value="True">
+                <Setter Property="dxwui:RevealHighlightOptions.Mode"
+                        TargetName="border"
+                        Value="BackgroundAndBorder"/>
+            </DataTrigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+    <ControlTemplate x:Key="{dxwuit:HamburgerMenuElementsThemeKey ResourceKey=SubMenuNavigationButtonTemplate}" TargetType="{x:Type dxwui:HamburgerSubMenuNavigationButton}">
+        <Grid x:Name="root">
+            <Border x:Name="border"
+                    Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}"
+                    Padding="{TemplateBinding Padding}"
+                    SnapsToDevicePixels="True"/>
+            <Border BorderThickness="{TemplateBinding BorderThickness}">
+                <DockPanel>
+                    <Border x:Name="PART_SelectionIndicator"
+                            Background="{TemplateBinding SelectionIndicatorBrush}"
+                            DockPanel.Dock="Left"
+                            MinWidth="{DynamicResource ResourceKey={dxwuit:HamburgerMenuElementsThemeKey ResourceKey=FlyoutItemSelectionIndicatorThickness}}"
+                            Visibility="Collapsed"/>
+                    <Grid Margin="{TemplateBinding Padding}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <ContentPresenter x:Name="contentPresenter"
+                                          Content="{TemplateBinding Content}"
+                                          ContentStringFormat="{TemplateBinding ContentStringFormat}"
+                                          ContentTemplate="{TemplateBinding ContentTemplate}"
+                                          Focusable="False"
+                                          Grid.Column="1"
+                                          HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                          RecognizesAccessKey="True"
+                                          SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}"
+                                          VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                        <ContentPresenter x:Name="PART_Mark"
+                                          ContentStringFormat="{TemplateBinding ContentStringFormat}"
+                                          ContentTemplate="{TemplateBinding PreviewMarkTemplate}"
+                                          Focusable="False"
+                                          Grid.Column="2"
+                                          HorizontalAlignment="Left"
+                                          Margin="4,0"
+                                          RecognizesAccessKey="True"
+                                          SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}"
+                                          VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                          Visibility="Collapsed"/>
+                        <ContentPresenter x:Name="PART_RightContent"
+                                          Content="{TemplateBinding RightContent}"
+                                          ContentTemplate="{TemplateBinding RightContentTemplate}"
+                                          Focusable="False"
+                                          Grid.Column="3"
+                                          HorizontalAlignment="Right"
+                                          Margin="{TemplateBinding RightContentMargin}"
+                                          SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}"
+                                          TextBlock.Foreground="{TemplateBinding RightForeground}"
+                                          VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                          Visibility="Collapsed"/>
+                    </Grid>
+                </DockPanel>
+            </Border>
+        </Grid>
+        <ControlTemplate.Triggers>
+            <Trigger Property="IsRightContentVisible" Value="True">
+                <Setter Property="Visibility"
+                        TargetName="PART_RightContent"
+                        Value="Visible"/>
+            </Trigger>
+            <Trigger Property="IsSelected" Value="True">
+                <Setter Property="TextBlock.FontWeight"
+                        TargetName="contentPresenter"
+                        Value="Bold"/>
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Opacity"
+                        TargetName="root"
+                        Value="0.3"/>
+            </Trigger>
+            <Trigger Property="IsPreviewMarkVisible" Value="True">
+                <Setter Property="Visibility"
+                        TargetName="PART_Mark"
+                        Value="Visible"/>
+            </Trigger>
+            <DataTrigger Binding="{Binding Path=(dxwui:HamburgerMenu.TemplateSettings).ShowRevealHighlightEffect, RelativeSource={RelativeSource Self}}" Value="True">
+                <Setter Property="dxwui:RevealHighlightOptions.Mode"
+                        TargetName="border"
+                        Value="BackgroundAndBorder"/>
+            </DataTrigger>
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="IsSelected" Value="True"/>
+                    <Condition Property="ShowSelectionIndicator" Value="True"/>
+                </MultiTrigger.Conditions>
+                <Setter Property="Visibility"
+                        TargetName="PART_SelectionIndicator"
+                        Value="Visible"/>
+            </MultiTrigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+    <ControlTemplate x:Key="{dxwuit:HamburgerMenuElementsThemeKey ResourceKey=HyperLinkButtonTemplate}" TargetType="{x:Type dxwui:HamburgerMenuHyperlinkButton}">
+        <Grid x:Name="root">
+            <Border x:Name="border"
+                    Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}"
+                    Padding="{TemplateBinding Padding}"
+                    SnapsToDevicePixels="True"/>
+            <Border BorderThickness="{TemplateBinding BorderThickness}" Padding="{TemplateBinding Padding}">
+                <Grid>
+                    <ContentPresenter x:Name="contentPresenter"
+                                      Content="{TemplateBinding Content}"
+                                      ContentStringFormat="{TemplateBinding ContentStringFormat}"
+                                      ContentTemplate="{TemplateBinding ContentTemplate}"
+                                      Focusable="False"
+                                      HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                      RecognizesAccessKey="True"
+                                      SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}"
+                                      VerticalAlignment="{TemplateBinding VerticalContentAlignment}">
+                        <ContentPresenter.Resources>
+                            <Style x:Key="{dxt:DefaultStyleThemeKey FullName=TextBlock}" TargetType="{x:Type TextBlock}">
+                                <Setter Property="TextDecorations" Value="Underline"/>
+                            </Style>
+                        </ContentPresenter.Resources>
+                    </ContentPresenter>
+                </Grid>
+            </Border>
+        </Grid>
+        <ControlTemplate.Triggers>
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Opacity"
+                        TargetName="root"
+                        Value="0.3"/>
+            </Trigger>
+            <DataTrigger Binding="{Binding Path=(dxwui:HamburgerMenu.TemplateSettings).ShowRevealHighlightEffect, RelativeSource={RelativeSource Self}}" Value="True">
+                <Setter Property="dxwui:RevealHighlightOptions.Mode"
+                        TargetName="border"
+                        Value="BackgroundAndBorder"/>
+            </DataTrigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+    <ControlTemplate x:Key="{dxwuit:HamburgerMenuElementsThemeKey ResourceKey=BottomBarNavigationButtonTemplate}" TargetType="{x:Type dxwui:HamburgerMenuBottomBarNavigationButton}">
+        <Grid x:Name="root">
+            <Border x:Name="border"
+                    Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}"
+                    Padding="{TemplateBinding Padding}"
+                    Width="{Binding Path=(dxwui:HamburgerMenu.TemplateSettings).CompactWidth, RelativeSource={RelativeSource Mode=Self}}"/>
+            <Border BorderThickness="{TemplateBinding BorderThickness}" Padding="{TemplateBinding Padding}">
+                <Grid>
+                    <ContentPresenter x:Name="contentPresenter" Visibility="Collapsed"/>
+                    <Image x:Name="PART_IconContainer"
+                           dxb:ImageColorizer.Color="{TemplateBinding ActualGlyphColor}"
+                           dxb:ImageColorizer.IsEnabled="{TemplateBinding AllowGlyphTheming}"
+                           Height="{TemplateBinding GlyphHeight}"
+                           HorizontalAlignment="Center"
+                           Source="{TemplateBinding Glyph}"
+                           Stretch="{TemplateBinding GlyphStretch}"
+                           VerticalAlignment="Center"
+                           Width="{TemplateBinding GlyphWidth}"/>
+                    <ContentPresenter x:Name="PART_IconTemplateContainer"
+                                      ContentTemplate="{TemplateBinding GlyphTemplate}"
+                                      Height="{TemplateBinding GlyphHeight}"
+                                      HorizontalAlignment="Stretch"
+                                      VerticalAlignment="Stretch"
+                                      Visibility="Collapsed"
+                                      Width="{TemplateBinding GlyphWidth}"/>
+                </Grid>
+            </Border>
+        </Grid>
+        <ControlTemplate.Triggers>
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Opacity"
+                        TargetName="root"
+                        Value="0.3"/>
+            </Trigger>
+            <DataTrigger Binding="{Binding GlyphTemplate, RelativeSource={RelativeSource Self}, Converter={dxmvvm:ObjectToBooleanConverter}}" Value="True">
+                <Setter Property="Visibility"
+                        TargetName="PART_IconTemplateContainer"
+                        Value="Visible"/>
+                <Setter Property="Visibility"
+                        TargetName="PART_IconContainer"
+                        Value="Collapsed"/>
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Path=(dxwui:HamburgerMenu.TemplateSettings).ShowRevealHighlightEffect, RelativeSource={RelativeSource Self}}" Value="True">
+                <Setter Property="dxwui:RevealHighlightOptions.Mode"
+                        TargetName="border"
+                        Value="BackgroundAndBorder"/>
+            </DataTrigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+    <ControlTemplate x:Key="{dxwuit:HamburgerMenuElementsThemeKey ResourceKey=BottomBarRadioButtonTemplate}" TargetType="{x:Type dxwui:HamburgerMenuBottomBarRadioButton}">
+        <Grid x:Name="root">
+            <Border x:Name="border"
+                    Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}"
+                    Padding="{TemplateBinding Padding}"
+                    Width="{Binding Path=(dxwui:HamburgerMenu.TemplateSettings).CompactWidth, RelativeSource={RelativeSource Mode=Self}}"/>
+            <Border BorderThickness="{TemplateBinding BorderThickness}" Padding="{TemplateBinding Padding}">
+                <Grid>
+                    <ContentPresenter x:Name="contentPresenter" Visibility="Collapsed"/>
+                    <Image x:Name="PART_IconContainer"
+                           dxb:ImageColorizer.Color="{TemplateBinding ActualGlyphColor}"
+                           dxb:ImageColorizer.IsEnabled="{TemplateBinding AllowGlyphTheming}"
+                           Height="{TemplateBinding GlyphHeight}"
+                           HorizontalAlignment="Center"
+                           Source="{TemplateBinding Glyph}"
+                           Stretch="{TemplateBinding GlyphStretch}"
+                           VerticalAlignment="Center"
+                           Width="{TemplateBinding GlyphWidth}"/>
+                    <ContentPresenter x:Name="PART_IconTemplateContainer"
+                                      ContentTemplate="{TemplateBinding GlyphTemplate}"
+                                      Height="{TemplateBinding GlyphHeight}"
+                                      HorizontalAlignment="Stretch"
+                                      VerticalAlignment="Stretch"
+                                      Visibility="Collapsed"
+                                      Width="{TemplateBinding GlyphWidth}"/>
+                </Grid>
+            </Border>
+        </Grid>
+        <ControlTemplate.Triggers>
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Opacity"
+                        TargetName="root"
+                        Value="0.3"/>
+            </Trigger>
+            <DataTrigger Binding="{Binding GlyphTemplate, RelativeSource={RelativeSource Self}, Converter={dxmvvm:ObjectToBooleanConverter}}" Value="True">
+                <Setter Property="Visibility"
+                        TargetName="PART_IconTemplateContainer"
+                        Value="Visible"/>
+                <Setter Property="Visibility"
+                        TargetName="PART_IconContainer"
+                        Value="Collapsed"/>
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Path=(dxwui:HamburgerMenu.TemplateSettings).ShowRevealHighlightEffect, RelativeSource={RelativeSource Self}}" Value="True">
+                <Setter Property="dxwui:RevealHighlightOptions.Mode"
+                        TargetName="border"
+                        Value="BackgroundAndBorder"/>
+            </DataTrigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+    <ControlTemplate x:Key="{dxwuit:HamburgerMenuElementsThemeKey ResourceKey=BottomBarCheckBoxTemplate}" TargetType="{x:Type dxwui:HamburgerMenuBottomBarCheckBox}">
+        <Grid x:Name="root">
+            <Border x:Name="border"
+                    Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}"
+                    Padding="{TemplateBinding Padding}"
+                    Width="{Binding Path=(dxwui:HamburgerMenu.TemplateSettings).CompactWidth, RelativeSource={RelativeSource Mode=Self}}"/>
+            <Border BorderThickness="{TemplateBinding BorderThickness}" Padding="{TemplateBinding Padding}">
+                <Grid>
+                    <ContentPresenter x:Name="contentPresenter" Visibility="Collapsed"/>
+                    <Image x:Name="PART_IconContainer"
+                           dxb:ImageColorizer.Color="{TemplateBinding ActualGlyphColor}"
+                           dxb:ImageColorizer.IsEnabled="{TemplateBinding AllowGlyphTheming}"
+                           Height="{TemplateBinding GlyphHeight}"
+                           HorizontalAlignment="Center"
+                           Source="{TemplateBinding Glyph}"
+                           Stretch="{TemplateBinding GlyphStretch}"
+                           VerticalAlignment="Center"
+                           Width="{TemplateBinding GlyphWidth}"/>
+                    <ContentPresenter x:Name="PART_IconTemplateContainer"
+                                      ContentTemplate="{TemplateBinding GlyphTemplate}"
+                                      Height="{TemplateBinding GlyphHeight}"
+                                      HorizontalAlignment="Stretch"
+                                      VerticalAlignment="Stretch"
+                                      Visibility="Collapsed"
+                                      Width="{TemplateBinding GlyphWidth}"/>
+                </Grid>
+            </Border>
+        </Grid>
+        <ControlTemplate.Triggers>
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Opacity"
+                        TargetName="root"
+                        Value="0.3"/>
+            </Trigger>
+            <DataTrigger Binding="{Binding GlyphTemplate, RelativeSource={RelativeSource Self}, Converter={dxmvvm:ObjectToBooleanConverter}}" Value="True">
+                <Setter Property="Visibility"
+                        TargetName="PART_IconTemplateContainer"
+                        Value="Visible"/>
+                <Setter Property="Visibility"
+                        TargetName="PART_IconContainer"
+                        Value="Collapsed"/>
+            </DataTrigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+    <ControlTemplate x:Key="{dxwuit:HamburgerMenuElementsThemeKey ResourceKey=EmptySpaceBarTemplate}" TargetType="{x:Type dxwuii:HamburgerMenuEmptySpaceBar}">
+        <Border x:Name="border"
+                Background="{TemplateBinding Background}"
+                BorderBrush="{TemplateBinding BorderBrush}"
+                BorderThickness="{TemplateBinding BorderThickness}"
+                SnapsToDevicePixels="True">
+            <ContentPresenter x:Name="contentPresenter" Visibility="Collapsed"/>
+        </Border>
+        <ControlTemplate.Triggers>
+            <DataTrigger Binding="{Binding Path=(dxwui:HamburgerMenu.TemplateSettings).ShowRevealHighlightEffect, RelativeSource={RelativeSource Self}}" Value="True">
+                <Setter Property="dxwui:RevealHighlightOptions.Mode"
+                        TargetName="border"
+                        Value="BackgroundAndBorder"/>
+            </DataTrigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+    <ControlTemplate x:Key="{dxwuit:HamburgerMenuElementsThemeKey ResourceKey=BottomBarSeparatorTemplate}" TargetType="{x:Type dxwuii:HamburgerMenuBottomBarSeparator}">
+        <Rectangle Fill="{TemplateBinding Background}"
+                   Height="1"
+                   HorizontalAlignment="Stretch"
+                   SnapsToDevicePixels="True"/>
+    </ControlTemplate>
+
+    <ControlTemplate x:Key="{dxwuit:HamburgerMenuElementsThemeKey ResourceKey=ItemSeparatorTemplate}" TargetType="{x:Type dxwui:HamburgerMenuItemSeparator}">
+        <Border Name="border" Padding="{TemplateBinding Padding}">
+            <Rectangle Fill="{TemplateBinding Background}"
+                       Height="1"
+                       HorizontalAlignment="Stretch"
+                       SnapsToDevicePixels="True"/>
+        </Border>
+        <ControlTemplate.Triggers>
+            <DataTrigger Binding="{Binding Path=(dxwui:HamburgerMenu.TemplateSettings).IsCompact, RelativeSource={RelativeSource Mode=Self}}" Value="True">
+                <Setter Property="Width"
+                        TargetName="border"
+                        Value="{Binding Path=(dxwui:HamburgerMenu.TemplateSettings).CompactWidth, RelativeSource={RelativeSource Mode=Self}}"/>
+                <Setter Property="HorizontalAlignment"
+                        TargetName="border"
+                        Value="Left"/>
+            </DataTrigger>
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Opacity"
+                        TargetName="border"
+                        Value="0.3"/>
+            </Trigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+    <!--#endregion-->
+
+    <Style x:Key="{dxt:DefaultStyleThemeKey FullName=DevExpress.Xpf.WindowsUI.HamburgerMenuToggleStateButton}" TargetType="{x:Type dxwui:HamburgerMenuToggleStateButton}">
+        <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ToggleStateButtonInlineBackgroundBrush}}"/>
+        <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ToggleStateButtonInlineForegroundBrush}}"/>
+        <Setter Property="Padding" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuElementsThemeKey ResourceKey=ToggleStateButtonPadding}}"/>
+        <Setter Property="Template" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuElementsThemeKey ResourceKey=MenuToggleStateButtonTemplate}}"/>
+        <Setter Property="dx:WpfSvgPalette.Palette" Value="{DynamicResource {dxwuit:HamburgerMenuSvgPaletteThemeKeyExtension ResourceKey=SvgPaletteInMenu}}"/>
+        <Setter Property="HorizontalContentAlignment" Value="Center"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Style.Triggers>
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="IsMouseOver" Value="True"/>
+                    <Condition Property="IsInFlyout" Value="False"/>
+                </MultiTrigger.Conditions>
+                <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ToggleStateButtonInlineHoverBackgroundBrush}}"/>
+                <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ToggleStateButtonInlineHoverForegroundBrush}}"/>
+            </MultiTrigger>
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="IsPressed" Value="True"/>
+                    <Condition Property="IsInFlyout" Value="False"/>
+                </MultiTrigger.Conditions>
+                <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ToggleStateButtonInlinePressedBackgroundBrush}}"/>
+                <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ToggleStateButtonInlinePressedForegroundBrush}}"/>
+            </MultiTrigger>
+            <Trigger Property="IsInFlyout" Value="True">
+                <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ToggleStateButtonFlyoutBackgroundBrush}}"/>
+                <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ToggleStateButtonFlyoutForegroundBrush}}"/>
+            </Trigger>
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="IsMouseOver" Value="True"/>
+                    <Condition Property="IsInFlyout" Value="True"/>
+                </MultiTrigger.Conditions>
+                <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ToggleStateButtonFlyoutHoverBackgroundBrush}}"/>
+                <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ToggleStateButtonFlyoutHoverForegroundBrush}}"/>
+            </MultiTrigger>
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="IsPressed" Value="True"/>
+                    <Condition Property="IsInFlyout" Value="True"/>
+                </MultiTrigger.Conditions>
+                <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ToggleStateButtonFlyoutPressedBackgroundBrush}}"/>
+                <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ToggleStateButtonFlyoutPressedForegroundBrush}}"/>
+            </MultiTrigger>
+            <DataTrigger Binding="{Binding Path=(dxwui:HamburgerMenu.TemplateSettings).ShowRevealHighlightEffect, RelativeSource={RelativeSource Self}}" Value="True">
+                <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ToggleStateButtonInlineBackgroundBrush}}"/>
+                <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ToggleStateButtonInlineForegroundBrush}}"/>
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style x:Key="{dxt:DefaultStyleThemeKey FullName=DevExpress.Xpf.WindowsUI.HamburgerMenuNavigationButton}" TargetType="{x:Type dxwui:HamburgerMenuNavigationButton}">
+        <Setter Property="MinHeight" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuElementsThemeKey ResourceKey=DefaultItemHeight}}"/>
+        <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemBackgroundBrush}}"/>
+        <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemForegroundBrush}}"/>
+        <Setter Property="RightForeground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemRightForegroundBrush}}"/>
+        <Setter Property="Padding" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuElementsThemeKey ResourceKey=NavigationItemPadding}}"/>
+        <Setter Property="Template" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuElementsThemeKey ResourceKey=NavigationButtonTemplate}}"/>
+        <Setter Property="HorizontalContentAlignment" Value="Left"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Setter Property="SelectionIndicatorBrush" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemSelectionIndicatorBackgroundBrush}}"/>
+        <Style.Triggers>
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="IsMouseOver" Value="True"/>
+                    <Condition Property="IsSelected" Value="False"/>
+                </MultiTrigger.Conditions>
+                <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemHoverBackgroundBrush}}"/>
+                <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemHoverForegroundBrush}}"/>
+                <Setter Property="RightForeground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemHoverRightForegroundBrush}}"/>
+            </MultiTrigger>
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="IsPressed" Value="True"/>
+                    <Condition Property="IsSelected" Value="False"/>
+                </MultiTrigger.Conditions>
+                <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemPressedBackgroundBrush}}"/>
+                <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemPressedForegroundBrush}}"/>
+                <Setter Property="RightForeground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemPressedRightForegroundBrush}}"/>
+            </MultiTrigger>
+            <Trigger Property="IsSelected" Value="True">
+                <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemSelectedBackgroundBrush}}"/>
+                <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemSelectedForegroundBrush}}"/>
+                <Setter Property="RightForeground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemSelectedRightForegroundBrush}}"/>
+            </Trigger>
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="IsMouseOver" Value="True"/>
+                    <Condition Property="IsSelected" Value="True"/>
+                </MultiTrigger.Conditions>
+                <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemSelectedHoverBackgroundBrush}}"/>
+                <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemSelectedHoverForegroundBrush}}"/>
+                <Setter Property="RightForeground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemSelectedHoverRightForegroundBrush}}"/>
+            </MultiTrigger>
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="IsPressed" Value="True"/>
+                    <Condition Property="IsSelected" Value="True"/>
+                </MultiTrigger.Conditions>
+                <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemSelectedPressedBackgroundBrush}}"/>
+                <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemSelectedPressedForegroundBrush}}"/>
+                <Setter Property="RightForeground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemSelectedPressedRightForegroundBrush}}"/>
+            </MultiTrigger>
+            <DataTrigger Binding="{Binding Path=(dxwui:HamburgerMenu.TemplateSettings).ShowRevealHighlightEffect, RelativeSource={RelativeSource Self}}" Value="True">
+                <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemBackgroundBrush}}"/>
+                <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemForegroundBrush}}"/>
+                <Setter Property="RightForeground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemRightForegroundBrush}}"/>
+            </DataTrigger>
+            <Trigger Property="dxwuii:HamburgerMenuExtensions.MenuItemState" Value="Hidden">
+                <Setter Property="Visibility" Value="Hidden"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style x:Key="{dxt:DefaultStyleThemeKey FullName=DevExpress.Xpf.WindowsUI.HamburgerSubMenuPreviewNavigationButton}" TargetType="{x:Type dxwui:HamburgerSubMenuPreviewNavigationButton}">
+        <Setter Property="MinHeight" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuElementsThemeKey ResourceKey=DefaultItemHeight}}"/>
+        <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemBackgroundBrush}}"/>
+        <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemForegroundBrush}}"/>
+        <Setter Property="RightForeground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemRightForegroundBrush}}"/>
+        <Setter Property="Padding" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuElementsThemeKey ResourceKey=NavigationItemPadding}}"/>
+        <Setter Property="Template" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuElementsThemeKey ResourceKey=SubMenuPreviewNavigationButtonTemplate}}"/>
+        <Setter Property="HorizontalContentAlignment" Value="Left"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Setter Property="SelectionIndicatorBrush" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemSelectionIndicatorBackgroundBrush}}"/>
+        <Style.Triggers>
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="IsMouseOver" Value="True"/>
+                    <Condition Property="IsSelected" Value="False"/>
+                </MultiTrigger.Conditions>
+                <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemHoverBackgroundBrush}}"/>
+                <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemHoverForegroundBrush}}"/>
+                <Setter Property="RightForeground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemHoverRightForegroundBrush}}"/>
+            </MultiTrigger>
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="IsPressed" Value="True"/>
+                    <Condition Property="IsSelected" Value="False"/>
+                </MultiTrigger.Conditions>
+                <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemPressedBackgroundBrush}}"/>
+                <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemPressedForegroundBrush}}"/>
+                <Setter Property="RightForeground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemPressedRightForegroundBrush}}"/>
+            </MultiTrigger>
+            <Trigger Property="IsSelected" Value="True">
+                <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemSelectedBackgroundBrush}}"/>
+                <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemSelectedForegroundBrush}}"/>
+                <Setter Property="RightForeground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemSelectedRightForegroundBrush}}"/>
+            </Trigger>
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="IsMouseOver" Value="True"/>
+                    <Condition Property="IsSelected" Value="True"/>
+                </MultiTrigger.Conditions>
+                <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemSelectedHoverBackgroundBrush}}"/>
+                <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemSelectedHoverForegroundBrush}}"/>
+                <Setter Property="RightForeground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemSelectedHoverRightForegroundBrush}}"/>
+            </MultiTrigger>
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="IsPressed" Value="True"/>
+                    <Condition Property="IsSelected" Value="True"/>
+                </MultiTrigger.Conditions>
+                <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemSelectedPressedBackgroundBrush}}"/>
+                <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemSelectedPressedForegroundBrush}}"/>
+                <Setter Property="RightForeground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemSelectedPressedRightForegroundBrush}}"/>
+            </MultiTrigger>
+            <DataTrigger Binding="{Binding Path=(dxwui:HamburgerMenu.TemplateSettings).ShowRevealHighlightEffect, RelativeSource={RelativeSource Self}}" Value="True">
+                <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemBackgroundBrush}}"/>
+                <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemForegroundBrush}}"/>
+                <Setter Property="RightForeground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemRightForegroundBrush}}"/>
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style x:Key="{dxt:DefaultStyleThemeKey FullName=DevExpress.Xpf.WindowsUI.HamburgerSubMenuNavigationButton}" TargetType="{x:Type dxwui:HamburgerSubMenuNavigationButton}">
+        <Setter Property="MinHeight" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuElementsThemeKey ResourceKey=DefaultItemHeight}}"/>
+        <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=FlyoutItemBackgroundBrush}}"/>
+        <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=FlyoutItemForegroundBrush}}"/>
+        <Setter Property="RightForeground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=FlyoutItemRightForegroundBrush}}"/>
+        <Setter Property="Padding" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuElementsThemeKey ResourceKey=SubMenuFlyoutItemPadding}}"/>
+        <Setter Property="Template" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuElementsThemeKey ResourceKey=SubMenuNavigationButtonTemplate}}"/>
+        <Setter Property="HorizontalContentAlignment" Value="Left"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Setter Property="PreviewMarkTemplate">
+            <Setter.Value>
+                <DataTemplate>
+                    <TextBlock FontFamily="Segoe MDL2 Assets" Text=""/>
+                </DataTemplate>
+            </Setter.Value>
+        </Setter>
+        <Setter Property="SelectionIndicatorBrush" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=FlyoutItemSelectionIndicatorBackgroundBrush}}"/>
+        <Style.Triggers>
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="IsMouseOver" Value="True"/>
+                    <Condition Property="IsSelected" Value="False"/>
+                </MultiTrigger.Conditions>
+                <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=FlyoutItemHoverBackgroundBrush}}"/>
+                <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=FlyoutItemHoverForegroundBrush}}"/>
+                <Setter Property="RightForeground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=FlyoutItemHoverRightForegroundBrush}}"/>
+            </MultiTrigger>
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="IsPressed" Value="True"/>
+                    <Condition Property="IsSelected" Value="False"/>
+                </MultiTrigger.Conditions>
+                <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=FlyoutItemPressedBackgroundBrush}}"/>
+                <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=FlyoutItemPressedForegroundBrush}}"/>
+                <Setter Property="RightForeground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=FlyoutItemPressedRightForegroundBrush}}"/>
+            </MultiTrigger>
+            <Trigger Property="IsSelected" Value="True">
+                <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=FlyoutItemSelectedBackgroundBrush}}"/>
+                <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=FlyoutItemSelectedForegroundBrush}}"/>
+                <Setter Property="RightForeground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=FlyoutItemSelectedRightForegroundBrush}}"/>
+            </Trigger>
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="IsMouseOver" Value="True"/>
+                    <Condition Property="IsSelected" Value="True"/>
+                </MultiTrigger.Conditions>
+                <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=FlyoutItemSelectedHoverBackgroundBrush}}"/>
+                <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=FlyoutItemSelectedHoverForegroundBrush}}"/>
+                <Setter Property="RightForeground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=FlyoutItemSelectedHoverRightForegroundBrush}}"/>
+            </MultiTrigger>
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="IsPressed" Value="True"/>
+                    <Condition Property="IsSelected" Value="True"/>
+                </MultiTrigger.Conditions>
+                <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=FlyoutItemSelectedPressedBackgroundBrush}}"/>
+                <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=FlyoutItemSelectedPressedForegroundBrush}}"/>
+                <Setter Property="RightForeground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=FlyoutItemSelectedPressedRightForegroundBrush}}"/>
+            </MultiTrigger>
+            <DataTrigger Binding="{Binding Path=(dxwui:HamburgerMenu.TemplateSettings).ShowRevealHighlightEffect, RelativeSource={RelativeSource Self}}" Value="True">
+                <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=FlyoutItemBackgroundBrush}}"/>
+                <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=FlyoutItemForegroundBrush}}"/>
+                <Setter Property="RightForeground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=FlyoutItemRightForegroundBrush}}"/>
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style x:Key="{dxt:DefaultStyleThemeKey FullName=DevExpress.Xpf.WindowsUI.Internal.HamburgerSubMenuButton}" TargetType="{x:Type dxwuii:HamburgerSubMenuButton}">
+        <Setter Property="MinHeight" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuElementsThemeKey ResourceKey=DefaultItemHeight}}"/>
+        <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemBackgroundBrush}}"/>
+        <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemForegroundBrush}}"/>
+        <Setter Property="Padding" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuElementsThemeKey ResourceKey=NavigationItemPadding}}"/>
+        <Setter Property="Template" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuElementsThemeKey ResourceKey=SubMenuButtonTemplate}}"/>
+        <Setter Property="HorizontalContentAlignment" Value="Left"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Style.Triggers>
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="IsMouseOver" Value="True"/>
+                    <Condition Property="IsSelected" Value="False"/>
+                </MultiTrigger.Conditions>
+                <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemHoverBackgroundBrush}}"/>
+                <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemHoverForegroundBrush}}"/>
+            </MultiTrigger>
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="IsPressed" Value="True"/>
+                    <Condition Property="IsSelected" Value="False"/>
+                </MultiTrigger.Conditions>
+                <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemPressedBackgroundBrush}}"/>
+                <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemPressedForegroundBrush}}"/>
+            </MultiTrigger>
+            <Trigger Property="IsSelected" Value="True">
+                <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemSelectedBackgroundBrush}}"/>
+                <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemSelectedForegroundBrush}}"/>
+            </Trigger>
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="IsMouseOver" Value="True"/>
+                    <Condition Property="IsSelected" Value="True"/>
+                </MultiTrigger.Conditions>
+                <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemSelectedHoverBackgroundBrush}}"/>
+                <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemSelectedHoverForegroundBrush}}"/>
+            </MultiTrigger>
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="IsPressed" Value="True"/>
+                    <Condition Property="IsSelected" Value="True"/>
+                </MultiTrigger.Conditions>
+                <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemSelectedPressedBackgroundBrush}}"/>
+                <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemSelectedPressedForegroundBrush}}"/>
+            </MultiTrigger>
+            <DataTrigger Binding="{Binding Path=(dxwui:HamburgerMenu.TemplateSettings).ShowRevealHighlightEffect, RelativeSource={RelativeSource Self}}" Value="True">
+                <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemBackgroundBrush}}"/>
+                <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemForegroundBrush}}"/>
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style x:Key="{dxt:DefaultStyleThemeKey FullName=DevExpress.Xpf.WindowsUI.Internal.HamburgerSubMenuMoreButton}" TargetType="{x:Type dxwuii:HamburgerSubMenuMoreButton}">
+        <Setter Property="MinHeight" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuElementsThemeKey ResourceKey=DefaultItemHeight}}"/>
+        <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemBackgroundBrush}}"/>
+        <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemForegroundBrush}}"/>
+        <Setter Property="Padding" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuElementsThemeKey ResourceKey=NavigationItemPadding}}"/>
+        <Setter Property="Content" Value="{Binding ConverterParameter=SubMenuMoreButtonText, Converter={StaticResource HamburgerMenuStringIdConverter}, RelativeSource={RelativeSource Self}}"/>
+        <Setter Property="Template" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuElementsThemeKey ResourceKey=SubMenuMoreButtonTemplate}}"/>
+        <Setter Property="HorizontalContentAlignment" Value="Left"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Style.Triggers>
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="IsMouseOver" Value="True"/>
+                    <Condition Property="IsSelected" Value="False"/>
+                </MultiTrigger.Conditions>
+                <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemHoverBackgroundBrush}}"/>
+                <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemHoverForegroundBrush}}"/>
+            </MultiTrigger>
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="IsPressed" Value="True"/>
+                    <Condition Property="IsSelected" Value="False"/>
+                </MultiTrigger.Conditions>
+                <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemPressedBackgroundBrush}}"/>
+                <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemPressedForegroundBrush}}"/>
+            </MultiTrigger>
+            <Trigger Property="IsSelected" Value="True">
+                <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemSelectedBackgroundBrush}}"/>
+                <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemSelectedForegroundBrush}}"/>
+            </Trigger>
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="IsMouseOver" Value="True"/>
+                    <Condition Property="IsSelected" Value="True"/>
+                </MultiTrigger.Conditions>
+                <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemSelectedHoverBackgroundBrush}}"/>
+                <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemSelectedHoverForegroundBrush}}"/>
+            </MultiTrigger>
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="IsPressed" Value="True"/>
+                    <Condition Property="IsSelected" Value="True"/>
+                </MultiTrigger.Conditions>
+                <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemSelectedPressedBackgroundBrush}}"/>
+                <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemSelectedPressedForegroundBrush}}"/>
+            </MultiTrigger>
+            <DataTrigger Binding="{Binding Path=(dxwui:HamburgerMenu.TemplateSettings).ShowRevealHighlightEffect, RelativeSource={RelativeSource Self}}" Value="True">
+                <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemBackgroundBrush}}"/>
+                <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemForegroundBrush}}"/>
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style x:Key="{dxt:DefaultStyleThemeKey FullName=DevExpress.Xpf.WindowsUI.Internal.HamburgerSubMenuPane}" TargetType="{x:Type dxwuii:HamburgerSubMenuPane}">
+        <Setter Property="IsTabStop" Value="False"/>
+        <Setter Property="KeyboardNavigation.TabNavigation" Value="Cycle"/>
+        <Setter Property="KeyboardNavigation.ControlTabNavigation" Value="Cycle"/>
+        <Setter Property="KeyboardNavigation.DirectionalNavigation" Value="Cycle"/>
+        <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=SubMenuPaneBackgroundBrush}}"/>
+        <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=SubMenuPaneForegroundBrush}}"/>
+        <Setter Property="Template" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuElementsThemeKey ResourceKey=SubMenuPaneTemplate}}"/>
+        <Setter Property="dx:WpfSvgPalette.Palette" Value="{DynamicResource {dxwuit:HamburgerMenuSvgPaletteThemeKeyExtension ResourceKey=SvgPaletteInSubMenu}}"/>
+    </Style>
+
+    <Style x:Key="{dxt:DefaultStyleThemeKey FullName=DevExpress.Xpf.WindowsUI.HamburgerMenuHyperlinkButton}" TargetType="{x:Type dxwui:HamburgerMenuHyperlinkButton}">
+        <Setter Property="Background" Value="{x:Null}"/>
+        <Setter Property="MinHeight" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuElementsThemeKey ResourceKey=DefaultItemHeight}}"/>
+        <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=HyperlinkForegroundBrush}}"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Padding" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuElementsThemeKey ResourceKey=HyperlinkItemPadding}}"/>
+        <Setter Property="Template" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuElementsThemeKey ResourceKey=HyperLinkButtonTemplate}}"/>
+        <Setter Property="HorizontalContentAlignment" Value="Left"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=HyperlinkHoverForegroundBrush}}"/>
+            </Trigger>
+            <Trigger Property="IsPressed" Value="True">
+                <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=HyperlinkPressedForegroundBrush}}"/>
+            </Trigger>
+            <Trigger Property="dxwuii:HamburgerMenuExtensions.MenuItemState" Value="Hidden">
+                <Setter Property="Visibility" Value="Hidden"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style x:Key="{dxt:DefaultStyleThemeKey FullName=DevExpress.Xpf.WindowsUI.Internal.HamburgerMenuEmptySpaceBar}" TargetType="{x:Type dxwuii:HamburgerMenuEmptySpaceBar}">
+        <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemBackgroundBrush}}"/>
+        <Setter Property="Template" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuElementsThemeKey ResourceKey=EmptySpaceBarTemplate}}"/>
+        <Setter Property="AutomationProperties.AutomationId" Value="Expand"/>
+        <Setter Property="AutomationProperties.Name" Value="Expand"/>
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemHoverBackgroundBrush}}"/>
+            </Trigger>
+            <Trigger Property="IsPressed" Value="True">
+                <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemPressedBackgroundBrush}}"/>
+            </Trigger>
+            <Trigger Property="dxwuii:HamburgerMenuExtensions.MenuItemState" Value="Hidden">
+                <Setter Property="Visibility" Value="Hidden"/>
+            </Trigger>
+            <DataTrigger Binding="{Binding Path=(dxwui:HamburgerMenu.TemplateSettings).ShowRevealHighlightEffect, RelativeSource={RelativeSource Self}}" Value="True">
+                <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemBackgroundBrush}}"/>
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style x:Key="{dxt:DefaultStyleThemeKey FullName=DevExpress.Xpf.WindowsUI.Internal.HamburgerSubMenuPaneBackButton}" TargetType="{x:Type dxwuii:HamburgerSubMenuPaneBackButton}">
+        <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=FlyoutBackButtonBackgroundBrush}}"/>
+        <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=FlyoutBackButtonForegroundBrush}}"/>
+        <Setter Property="Content" Value=""/>
+        <Setter Property="FontFamily" Value="Segoe MDL2 Assets"/>
+        <Setter Property="Padding" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuElementsThemeKey ResourceKey=FlyoutBackButtonPadding}}"/>
+        <Setter Property="Template" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuElementsThemeKey ResourceKey=SubMenuPaneBackButtonTemplate}}"/>
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=FlyoutBackButtonHoverBackgroundBrush}}"/>
+                <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=FlyoutBackButtonHoverForegroundBrush}}"/>
+            </Trigger>
+            <Trigger Property="IsPressed" Value="True">
+                <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=FlyoutBackButtonPressedBackgroundBrush}}"/>
+                <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=FlyoutBackButtonPressedForegroundBrush}}"/>
+            </Trigger>
+            <DataTrigger Binding="{Binding Path=(dxwui:HamburgerMenu.TemplateSettings).ShowRevealHighlightEffect, RelativeSource={RelativeSource Self}}" Value="True">
+                <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=FlyoutBackButtonBackgroundBrush}}"/>
+                <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=FlyoutBackButtonForegroundBrush}}"/>
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style x:Key="{dxt:DefaultStyleThemeKey FullName=DevExpress.Xpf.WindowsUI.HamburgerMenuBottomBarNavigationButton}" TargetType="{x:Type dxwui:HamburgerMenuBottomBarNavigationButton}">
+        <Setter Property="MinHeight" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuElementsThemeKey ResourceKey=DefaultItemHeight}}"/>
+        <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemBackgroundBrush}}"/>
+        <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemForegroundBrush}}"/>
+        <Setter Property="Padding" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuElementsThemeKey ResourceKey=BottomBarItemPadding}}"/>
+        <Setter Property="Template" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuElementsThemeKey ResourceKey=BottomBarNavigationButtonTemplate}}"/>
+        <Setter Property="HorizontalAlignment" Value="Left"/>
+        <Setter Property="HorizontalContentAlignment" Value="Center"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemHoverBackgroundBrush}}"/>
+                <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemHoverForegroundBrush}}"/>
+            </Trigger>
+            <Trigger Property="IsPressed" Value="True">
+                <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemPressedBackgroundBrush}}"/>
+                <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemPressedForegroundBrush}}"/>
+            </Trigger>
+            <Trigger Property="dxwuii:HamburgerMenuExtensions.MenuItemState" Value="Hidden">
+                <Setter Property="Visibility" Value="Hidden"/>
+            </Trigger>
+            <DataTrigger Binding="{Binding Path=(dxwui:HamburgerMenu.TemplateSettings).ShowRevealHighlightEffect, RelativeSource={RelativeSource Self}}" Value="True">
+                <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemBackgroundBrush}}"/>
+                <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemForegroundBrush}}"/>
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style x:Key="HamburgerMenuBottomBarToggleButtonStyleBase" TargetType="{x:Type ToggleButton}">
+        <Setter Property="MinHeight" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuElementsThemeKey ResourceKey=DefaultItemHeight}}"/>
+        <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemBackgroundBrush}}"/>
+        <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemForegroundBrush}}"/>
+        <Setter Property="Padding" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuElementsThemeKey ResourceKey=BottomBarItemPadding}}"/>
+        <Setter Property="HorizontalAlignment" Value="Left"/>
+        <Setter Property="HorizontalContentAlignment" Value="Center"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Style.Triggers>
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="IsMouseOver" Value="True"/>
+                    <Condition Property="IsChecked" Value="False"/>
+                </MultiTrigger.Conditions>
+                <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemHoverBackgroundBrush}}"/>
+                <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemHoverForegroundBrush}}"/>
+            </MultiTrigger>
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="IsPressed" Value="True"/>
+                    <Condition Property="IsChecked" Value="False"/>
+                </MultiTrigger.Conditions>
+                <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemPressedBackgroundBrush}}"/>
+                <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemPressedForegroundBrush}}"/>
+            </MultiTrigger>
+            <Trigger Property="IsChecked" Value="True">
+                <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemSelectedBackgroundBrush}}"/>
+                <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemSelectedForegroundBrush}}"/>
+            </Trigger>
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="IsMouseOver" Value="True"/>
+                    <Condition Property="IsChecked" Value="True"/>
+                </MultiTrigger.Conditions>
+                <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemSelectedHoverBackgroundBrush}}"/>
+                <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemSelectedHoverForegroundBrush}}"/>
+            </MultiTrigger>
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="IsPressed" Value="True"/>
+                    <Condition Property="IsChecked" Value="True"/>
+                </MultiTrigger.Conditions>
+                <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemSelectedPressedBackgroundBrush}}"/>
+                <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemSelectedPressedForegroundBrush}}"/>
+            </MultiTrigger>
+            <Trigger Property="IsChecked" Value="{x:Null}">
+                <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemIndeterminateBackgroundBrush}}"/>
+                <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemIndeterminateForegroundBrush}}"/>
+            </Trigger>
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="IsMouseOver" Value="True"/>
+                    <Condition Property="IsChecked" Value="{x:Null}"/>
+                </MultiTrigger.Conditions>
+                <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemIndeterminateHoverBackgroundBrush}}"/>
+                <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemIndeterminateHoverForegroundBrush}}"/>
+            </MultiTrigger>
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="IsPressed" Value="True"/>
+                    <Condition Property="IsChecked" Value="{x:Null}"/>
+                </MultiTrigger.Conditions>
+                <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemIndeterminatePressedBackgroundBrush}}"/>
+                <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemIndeterminatePressedForegroundBrush}}"/>
+            </MultiTrigger>
+            <Trigger Property="dxwuii:HamburgerMenuExtensions.MenuItemState" Value="Hidden">
+                <Setter Property="Visibility" Value="Hidden"/>
+            </Trigger>
+            <MultiDataTrigger>
+                <MultiDataTrigger.Conditions>
+                    <Condition Binding="{Binding Path=(dxwui:HamburgerMenu.TemplateSettings).ShowRevealHighlightEffect, RelativeSource={RelativeSource Self}}" Value="True"/>
+                    <Condition Binding="{Binding IsChecked, RelativeSource={RelativeSource Self}}" Value="False"/>
+                </MultiDataTrigger.Conditions>
+                <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemBackgroundBrush}}"/>
+                <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemForegroundBrush}}"/>
+            </MultiDataTrigger>
+            <MultiDataTrigger>
+                <MultiDataTrigger.Conditions>
+                    <Condition Binding="{Binding Path=(dxwui:HamburgerMenu.TemplateSettings).ShowRevealHighlightEffect, RelativeSource={RelativeSource Self}}" Value="True"/>
+                    <Condition Binding="{Binding IsChecked, RelativeSource={RelativeSource Self}}" Value="True"/>
+                </MultiDataTrigger.Conditions>
+                <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemSelectedBackgroundBrush}}"/>
+                <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemSelectedForegroundBrush}}"/>
+            </MultiDataTrigger>
+            <MultiDataTrigger>
+                <MultiDataTrigger.Conditions>
+                    <Condition Binding="{Binding Path=(dxwui:HamburgerMenu.TemplateSettings).ShowRevealHighlightEffect, RelativeSource={RelativeSource Self}}" Value="True"/>
+                    <Condition Binding="{Binding IsChecked, RelativeSource={RelativeSource Self}}" Value="{x:Null}"/>
+                </MultiDataTrigger.Conditions>
+                <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemIndeterminateBackgroundBrush}}"/>
+                <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemIndeterminateForegroundBrush}}"/>
+            </MultiDataTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style x:Key="{dxt:DefaultStyleThemeKey FullName=DevExpress.Xpf.WindowsUI.HamburgerMenuBottomBarRadioButton}"
+           BasedOn="{StaticResource HamburgerMenuBottomBarToggleButtonStyleBase}"
+           TargetType="{x:Type dxwui:HamburgerMenuBottomBarRadioButton}">
+        <Setter Property="Template" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuElementsThemeKey ResourceKey=BottomBarRadioButtonTemplate}}"/>
+    </Style>
+
+    <Style x:Key="{dxt:DefaultStyleThemeKey FullName=DevExpress.Xpf.WindowsUI.HamburgerMenuBottomBarCheckBox}"
+           BasedOn="{StaticResource HamburgerMenuBottomBarToggleButtonStyleBase}"
+           TargetType="{x:Type dxwui:HamburgerMenuBottomBarCheckBox}">
+        <Setter Property="Template" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuElementsThemeKey ResourceKey=BottomBarCheckBoxTemplate}}"/>
+    </Style>
+
+    <Style x:Key="{dxt:DefaultStyleThemeKey FullName=DevExpress.Xpf.WindowsUI.HamburgerSubMenu}" TargetType="{x:Type dxwui:HamburgerSubMenu}">
+        <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemBackgroundBrush}}"/>
+        <Setter Property="Foreground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemForegroundBrush}}"/>
+        <Setter Property="IsTabStop" Value="False"/>
+        <Setter Property="Padding" Value="0"/>
+        <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto"/>
+        <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled"/>
+        <Setter Property="FlyoutHeaderPadding" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuElementsThemeKey ResourceKey=HeaderPadding}}"/>
+        <Setter Property="FlyoutHeaderFontSize" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuElementsThemeKey ResourceKey=HeaderFontSize}}"/>
+        <Setter Property="Template" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuElementsThemeKey ResourceKey=SubMenuTemplate}}"/>
+        <Style.Triggers>
+            <Trigger Property="dxwuii:HamburgerMenuExtensions.MenuItemState" Value="Hidden">
+                <Setter Property="Visibility" Value="Hidden"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <DataTemplate x:Key="SubMenuThemeSelectorButton">
+        <dxwui:HamburgerSubMenuNavigationButton Content="{Binding Theme.FullName}"
+                                                IsSelected="{Binding IsSelected}"
+                                                RightContent="{Binding Theme.SvgGlyph}"
+                                                ShowInPreview="{Binding ShowInPreview}">
+            <dxwui:HamburgerSubMenuNavigationButton.RightContentTemplate>
+                <DataTemplate>
+                    <dx:DXImage Height="20"
+                                Source="{Binding Converter={dx:SvgUriToImageSourceConverter SvgWidth=20, SvgHeight=20}}"
+                                Stretch="Uniform"
+                                Width="20"/>
+                </DataTemplate>
+            </dxwui:HamburgerSubMenuNavigationButton.RightContentTemplate>
+        </dxwui:HamburgerSubMenuNavigationButton>
+    </DataTemplate>
+
+    <Style x:Key="{dxwuit:HamburgerMenuElementsThemeKey ResourceKey=SubMenuThemeSelectorStyle}" TargetType="{x:Type dxwui:HamburgerSubMenu}">
+        <Setter Property="ItemTemplate" Value="{StaticResource SubMenuThemeSelectorButton}"/>
+    </Style>
+
+    <Style x:Key="{dxt:DefaultStyleThemeKey FullName=DevExpress.Xpf.WindowsUI.Internal.HamburgerMenuBottomBarSeparator}" TargetType="{x:Type dxwuii:HamburgerMenuBottomBarSeparator}">
+        <Setter Property="IsTabStop" Value="False"/>
+        <Setter Property="Focusable" Value="False"/>
+        <Setter Property="Template" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuElementsThemeKey ResourceKey=BottomBarSeparatorTemplate}}"/>
+        <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=BottomBarSeparatorBrush}}"/>
+        <Style.Triggers>
+            <Trigger Property="dxwuii:HamburgerMenuExtensions.MenuItemState" Value="Hidden">
+                <Setter Property="Visibility" Value="Hidden"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style x:Key="{dxt:DefaultStyleThemeKey FullName=DevExpress.Xpf.WindowsUI.HamburgerMenuItemSeparator}" TargetType="{x:Type dxwui:HamburgerMenuItemSeparator}">
+        <Setter Property="IsTabStop" Value="False"/>
+        <Setter Property="Focusable" Value="False"/>
+        <Setter Property="Padding" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuElementsThemeKey ResourceKey=ItemSeparatorPadding}}"/>
+        <Setter Property="Template" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuElementsThemeKey ResourceKey=ItemSeparatorTemplate}}"/>
+        <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=ItemSeparatorBrush}}"/>
+        <Style.Triggers>
+            <Trigger Property="dxwuii:HamburgerMenuExtensions.MenuItemState" Value="Hidden">
+                <Setter Property="Visibility" Value="Hidden"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style x:Key="{dxt:DefaultStyleThemeKey FullName=DevExpress.Xpf.WindowsUI.Internal.SplitView}" TargetType="{x:Type dxwuii:SplitView}">
+        <Setter Property="IsTabStop" Value="False"/>
+        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+        <Setter Property="VerticalContentAlignment" Value="Stretch"/>
+        <Setter Property="OpenPaneWidth" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuElementsThemeKey ResourceKey=SplitViewOpenPaneWidth}}"/>
+        <Setter Property="CompactPaneWidth" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuElementsThemeKey ResourceKey=SplitViewCompactPaneWidth}}"/>
+        <Setter Property="Template" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuElementsThemeKey ResourceKey=SplitViewTemplate}}"/>
+        <Setter Property="PaneSvgPalette" Value="{DynamicResource {dxwuit:HamburgerMenuSvgPaletteThemeKeyExtension ResourceKey=SvgPaletteInMenu}}"/>
+    </Style>
+
+    <Style x:Key="{dxt:DefaultStyleThemeKey FullName=DevExpress.Xpf.WindowsUI.HamburgerMenu}" TargetType="{x:Type dxwui:HamburgerMenu}">
+        <Setter Property="IsTabStop" Value="False"/>
+        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+        <Setter Property="VerticalContentAlignment" Value="Stretch"/>
+        <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto"/>
+        <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled"/>
+        <Setter Property="CompactWidth" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuElementsThemeKey ResourceKey=DefaultCompactWidth}}"/>
+        <Setter Property="HeaderHeight" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuElementsThemeKey ResourceKey=DefaultHeaderHeight}}"/>
+        <Setter Property="HeaderPadding" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuElementsThemeKey ResourceKey=HeaderWithIconPadding}}"/>
+        <Setter Property="HeaderFontSize" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuElementsThemeKey ResourceKey=HeaderFontSize}}"/>
+        <Setter Property="PaneBackground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=PaneBackgroundBrush}}"/>
+        <Setter Property="BottomBarBackground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=BottomBarBackgroundBrush}}"/>
+        <Setter Property="HeaderForeground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=HeaderForegroundBrush}}"/>
+        <Setter Property="HorizontalHeaderBackground" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=HorizontalHeaderBackgroundBrush}}"/>
+        <Setter Property="Background" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuBrushesThemeKey ResourceKey=BackgroundBrush}}"/>
+        <Setter Property="Template" Value="{DynamicResource ResourceKey={dxwuit:HamburgerMenuElementsThemeKey ResourceKey=MenuTemplate}}"/>
+    </Style>
+
+</ResourceDictionary>

@@ -1,0 +1,65 @@
+﻿<html>
+<head>
+  <title></title>
+  <style type="text/css">
+    .style1 {
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 10pt;
+    }
+  </style>
+</head>
+<body class="style1">
+<p>
+This diagram models the relationships between the descendants of Japan's Emperor Kōmei.
+For simply showing descendants, a <strong>TreeModel</strong> would suffice. However, in making this diagram, one must deal with marriage between descendants as well.&nbsp; 
+Therefore we use the more general <strong>GraphLinksModel</strong> instead.</p>
+	<p>
+	Furthermore, we want to display parent-child relationships differently from 
+	husband-wife relationships.&nbsp; Although it might be possible to get the 
+	desired effect by using a lot of data-binding, it is simpler and more 
+	efficient to use two separate templates for rendering link data, instead of 
+	just one.&nbsp; This is accomplished by using a<strong> DataTemplateDictionary</strong>.</p>
+	<pre>
+&lt;UserControl.Resources &gt;
+  &lt;!-- Other Templates/Converters/etc. -->
+  &lt;go:DataTemplateDictionary x:Key="myLinkTemplateDictionary" &gt;
+    &lt;DataTemplate x:Key="Child" ...&gt; 
+    &lt;DataTemplate x:Key="Marriage" ...&gt;
+  &lt;/go:DataTemplateDictionary&gt;
+&lt;/UserControl.Resources &gt;
+</pre>
+	<p>
+	When defining the diagram, instead of setting its<strong> LinkTemplate
+	</strong>attribute, we set its<strong> LinkTemplateDictionary </strong>
+	attribute to this <strong>DataTemplateDictionary</strong>:
+</p><pre>
+&lt;go:Diagram LinkTemplateDictionary="{StaticResource myLinkTemplateDictionary}" ...&gt;
+</pre><p>
+To allow the model's data to select the desired template from the <strong>DataTemplateDictionary</strong>, one must set the 
+	model&#39;s<strong> LinkCategoryPath</strong> to the name of a property of the data type. 
+In this case, we created a new class for link data with a property called<strong> 
+	Category</strong>.&nbsp; So:</p><pre>
+   ...
+  var model = new GraphLinksModel&lt;PersonNode, String, String, PersonLinkData&gt;();
+  model.LinkCategoryPath = "<b>Category</b>";
+  ...
+
+public class PersonLinkData : GraphLinksModelLinkData&lt;String, String&gt; {
+  public String <b>Category</b> { get; set; }
+}
+</pre>
+	<p>
+In the <strong>DataTemplateDictionary</strong>, we declared two templates: 
+	&quot;Child&quot; and &quot;Marriage&quot;.<strong> PersonLinkData.Category</strong> must have 
+	one of those two strings as its value.&nbsp; (It would also be possible to 
+	get this effect without adding a <strong>Category</strong> property to your 
+	link data by overriding the <strong>GraphLinksModel.FindCategoryForLink</strong> 
+	method to return either of those two strings, in which case <strong>
+	LinkCategoryPath</strong> should not be set.)</p>
+	<p>
+	<strong>TreeLayout</strong> (and some other layouts) normally set the
+	<strong>FromSpot</strong> and <strong>ToSpot</strong> of the links that they 
+	route.&nbsp; However in this example we turn that off so that the two link 
+	templates can specify their own values differently from each other.</p>
+	</body>
+</html>

@@ -1,0 +1,387 @@
+<ResourceDictionary mc:Ignorable="cs"
+                    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:cs="colorscheme_ignorable_uri"
+                    xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+                    xmlns:dxb="http://schemas.devexpress.com/winfx/2008/xaml/bars"
+                    xmlns:dxet="http://schemas.devexpress.com/winfx/2008/xaml/editors/themekeys"
+                    xmlns:dxg="http://schemas.devexpress.com/winfx/2008/xaml/grid"
+                    xmlns:dxgi="http://schemas.devexpress.com/winfx/2008/xaml/grid/internal"
+                    xmlns:dxgt="http://schemas.devexpress.com/winfx/2008/xaml/grid/themekeys"
+                    xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+                    xmlns:dxt="http://schemas.devexpress.com/winfx/2008/xaml/core/themekeys"
+                    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                    xmlns:sys="clr-namespace:System;assembly=mscorlib"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <dx:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
+
+    <Style x:Key="{dxgt:CardTemplatesThemeKey ResourceKey=SearchPanelContentTemplate}" TargetType="{x:Type ContentControl}">
+        <Setter Property="dx:FocusHelper2.Focusable" Value="False"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate>
+                    <Grid x:Name="grid" Background="{DynamicResource {dxgt:TableViewThemeKey ResourceKey=SearchPanelBackground}}">
+                        <dxg:GridSearchControl x:Name="PART_SearchControl"
+                                               HorizontalAlignment="{Binding Path=(dxg:GridControl.CurrentView).ActualSearchPanelHorizontalAlignment, RelativeSource={RelativeSource TemplatedParent}}"
+                                               Margin="{DynamicResource {dxgt:TableViewThemeKey ResourceKey=SearchPanelWithoutGroupedPanelMargin}}"
+                                               View="{Binding Path=(dxg:GridControl.CurrentView), RelativeSource={RelativeSource TemplatedParent}}">
+                            <dxg:GridSearchControl.Visibility>
+                                <Binding Path="View.ActualShowSearchPanel" RelativeSource="{RelativeSource Self}">
+                                    <Binding.Converter>
+                                        <dxmvvm:BooleanToVisibilityConverter/>
+                                    </Binding.Converter>
+                                </Binding>
+                            </dxg:GridSearchControl.Visibility>
+                        </dxg:GridSearchControl>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="GroupPanelShown"
+                                 SourceName="PART_SearchControl"
+                                 Value="True">
+                            <Setter Property="Margin"
+                                    TargetName="PART_SearchControl"
+                                    Value="{DynamicResource {dxgt:TableViewThemeKey ResourceKey=SearchPanelWithGroupedPanelMargin}}"/>
+                        </Trigger>
+                        <DataTrigger Binding="{Binding Path=(dxg:GridControl.CurrentView).ActualSearchPanelPosition, RelativeSource={RelativeSource TemplatedParent}}" Value="Default">
+                            <Setter Property="VerticalAlignment" Value="Top"/>
+                            <Setter Property="Margin"
+                                    TargetName="PART_SearchControl"
+                                    Value="{DynamicResource {dxgt:CardViewThemeKey ResourceKey=HeadersButtonMargin}}"/>
+                            <Setter Property="AllowAnimation"
+                                    TargetName="PART_SearchControl"
+                                    Value="true"/>
+                            <Setter Property="SearchTextBoxMinWidth"
+                                    TargetName="PART_SearchControl"
+                                    Value="{DynamicResource {dxgt:TableViewThemeKey ResourceKey=SearchPanelWidth}}"/>
+                            <Setter Property="Margin" TargetName="grid">
+                                <Setter.Value>
+                                    <Binding Path="(dxg:GridControl.CurrentView).ShowSearchPanelMode" RelativeSource="{RelativeSource TemplatedParent}">
+                                        <Binding.Converter>
+                                            <dxmvvm:ObjectToObjectConverter DefaultSource="Default" DefaultTarget="0">
+                                                <dxmvvm:MapItem Source="Always" Target="0,0,4,0"/>
+                                                <dxmvvm:MapItem Source="HotKey" Target="0"/>
+                                                <dxmvvm:MapItem Source="Never" Target="0"/>
+                                            </dxmvvm:ObjectToObjectConverter>
+                                        </Binding.Converter>
+                                    </Binding>
+                                </Setter.Value>
+                            </Setter>
+                        </DataTrigger>
+                        <Trigger Property="dx:ThemeManager.IsTouchlineTheme" Value="True">
+                            <Setter Property="SearchTextBoxMinWidth"
+                                    TargetName="PART_SearchControl"
+                                    Value="{DynamicResource {dxgt:TableViewThemeKey ResourceKey=SearchPanelWidthTouch}}"/>
+                        </Trigger>
+                        <Trigger Property="dx:ThemeManager.IsTouchEnabled" Value="True">
+                            <Setter Property="SearchTextBoxMinWidth"
+                                    TargetName="PART_SearchControl"
+                                    Value="{DynamicResource {dxgt:TableViewThemeKey ResourceKey=SearchPanelWidthTouch}}"/>
+                        </Trigger>
+                        <DataTrigger Binding="{Binding Path=(dxg:GridControl.CurrentView).ActualSearchPanelPosition, RelativeSource={RelativeSource TemplatedParent}}" Value="OverGroupPanel">
+                            <Setter Property="SearchTextBoxMinWidth"
+                                    TargetName="PART_SearchControl"
+                                    Value="{DynamicResource {dxgt:TableViewThemeKey ResourceKey=SearchPanelTextBoxMinWidth}}"/>
+                        </DataTrigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <DataTemplate x:Key="{dxgt:CardTemplatesThemeKey ResourceKey=CardHeaderTemplate}">
+        <TextBlock Text="{Binding Path=Value}"/>
+    </DataTemplate>
+
+    <ControlTemplate x:Key="{dxgt:CardTemplatesThemeKey ResourceKey=CellContentPresenterTemplate}" TargetType="{x:Type dxg:CellContentPresenter}">
+        <Border x:Name="ContentBorder"
+                Background="{TemplateBinding Background}"
+                BorderBrush="{TemplateBinding BorderBrush}"
+                BorderThickness="{TemplateBinding BorderThickness}"
+                CornerRadius="{TemplateBinding Border.CornerRadius}"
+                Padding="{TemplateBinding Padding}">
+            <dxg:CellEditor x:Name="PART_CellEditor"
+                            ClipToBounds="{DynamicResource {dxgt:CardViewThemeKey ResourceKey=ClipCellEditor}}"
+                            Margin="{DynamicResource {dxgt:CardViewThemeKey ResourceKey=CellEditorMargin}}"/>
+        </Border>
+    </ControlTemplate>
+
+    <DataTemplate x:Key="{dxgt:CardTemplatesThemeKey ResourceKey=CardRowTemplate}">
+        <Grid x:Name="grid" dxg:GridColumn.NavigationIndex="{Binding Path=DataContext.Column.ActualVisibleIndex, RelativeSource={RelativeSource TemplatedParent}}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition SharedSizeGroup="cardRowDescription"/>
+                <ColumnDefinition Width="6"/>
+                <ColumnDefinition/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Style="{DynamicResource {dxgt:CardTemplatesThemeKey ResourceKey=CardRowHeaderTextStyle}}">
+                <TextBlock.Text>
+                    <Binding Path="Column.HeaderCaption">
+                        <Binding.Converter>
+                            <dx:FormatStringConverter FormatString="{}{0}:"/>
+                        </Binding.Converter>
+                    </Binding>
+                </TextBlock.Text>
+                <dxg:GridViewHitInfoBase.HitTestAcceptor>
+                    <dxgi:FieldCaptionCardViewHitTestAcceptor/>
+                </dxg:GridViewHitInfoBase.HitTestAcceptor>
+            </TextBlock>
+            <dxg:CardCellContentPresenter x:Name="cell"
+                                          CellStyle="{Binding Path=DataContext.Column.ActualCellStyle, RelativeSource={RelativeSource TemplatedParent}}"
+                                          Column="{Binding Path=DataContext.Column, RelativeSource={RelativeSource TemplatedParent}}"
+                                          Grid.Column="2"/>
+        </Grid>
+    </DataTemplate>
+
+    <DataTemplate x:Key="{dxgt:CardTemplatesThemeKey ResourceKey=CardTemplate}">
+        <dxg:CardItemsControl x:Name="cardItemsControl" ItemsSource="{Binding Path=CellData}">
+            <dxg:CardItemsControl.ItemTemplate>
+                <DataTemplate>
+                    <dx:DataContentPresenter ContentTemplateSelector="{Binding Path=(dxg:GridControl.ActiveView).ActualCardRowTemplateSelector, RelativeSource={RelativeSource TemplatedParent}}"/>
+                </DataTemplate>
+            </dxg:CardItemsControl.ItemTemplate>
+            <dxg:CardItemsControl.ItemsPanel>
+                <ControlTemplate>
+                    <dx:StackVisibleIndexPanel ArrangeAccordingToVisibleIndex="True" Orientation="Vertical"/>
+                </ControlTemplate>
+            </dxg:CardItemsControl.ItemsPanel>
+        </dxg:CardItemsControl>
+    </DataTemplate>
+
+    <DataTemplate x:Key="{dxgt:CardViewThemeKey ResourceKey=HeaderTemplate}">
+        <ContentPresenter Content="{Binding}"
+                          Margin="3"
+                          TextBlock.FontSize="14"
+                          UseLayoutRounding="True"
+                          VerticalAlignment="Center"/>
+    </DataTemplate>
+
+    <ControlTemplate x:Key="{dxgt:CardViewThemeKey ResourceKey=TopPanel}">
+        <Grid x:Name="TopGrid">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <Border x:Name="headerContent"
+                    Background="{DynamicResource {dxgt:CardViewThemeKey ResourceKey=GroupPanelBackground}}"
+                    Grid.ColumnSpan="3"
+                    Grid.Row="0">
+                <ContentControl Content="{Binding Path=(dxg:GridControl.CurrentView).Header, RelativeSource={RelativeSource TemplatedParent}}"
+                                ContentTemplate="{DynamicResource {dxgt:CardViewThemeKey ResourceKey=HeaderTemplate}}"
+                                HorizontalAlignment="{Binding Path=(dxg:GridControl.CurrentView).HeaderHorizontalAlignment, RelativeSource={RelativeSource TemplatedParent}}"
+                                Margin="{DynamicResource {dxgt:TableViewThemeKey ResourceKey=HeaderMargin}}"/>
+                <Border.Visibility>
+                    <Binding Path="(dxg:GridControl.CurrentView).Header" RelativeSource="{RelativeSource TemplatedParent}">
+                        <Binding.Converter>
+                            <dx:ObjectToVisibilityConverter HandleList="False"/>
+                        </Binding.Converter>
+                    </Binding>
+                </Border.Visibility>
+            </Border>
+            <Border x:Name="borderSearchPanel"
+                    Background="{DynamicResource {dxgt:CardViewThemeKey ResourceKey=GroupPanelBackground}}"
+                    Grid.Column="1"
+                    Grid.ColumnSpan="3"
+                    Grid.Row="1">
+                <Grid ClipToBounds="True">
+                    <ContentControl x:Name="part_SearchControlContainer"
+                                    dxg:GridControl.CurrentView="{Binding Path=(dxg:GridControl.CurrentView), RelativeSource={RelativeSource TemplatedParent}}"
+                                    Margin="0,0,-4,0"
+                                    Style="{DynamicResource {dxgt:CardTemplatesThemeKey ResourceKey=SearchPanelContentTemplate}}"
+                                    Visibility="{Binding Path=(dxg:GridControl.CurrentView).ActualShowSearchPanel, RelativeSource={RelativeSource TemplatedParent}, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <dxg:GridViewHitInfoBase.HitTestAcceptor>
+                            <dxgi:GridSearchPanelHitTestAcceptor/>
+                        </dxg:GridViewHitInfoBase.HitTestAcceptor>
+                    </ContentControl>
+                    <Button x:Name="searchPanelShowButton"
+                            Command="{Binding Path=(dxg:GridControl.CurrentView).Commands.ShowSearchPanel, RelativeSource={RelativeSource TemplatedParent}}"
+                            CommandParameter="True"
+                            Grid.Column="2"
+                            Grid.Row="2"
+                            Margin="{DynamicResource {dxgt:CardViewThemeKey ResourceKey=HeadersButtonMargin}}"
+                            Style="{DynamicResource {dxet:SearchControlThemeKey ResourceKey=ShowButtonStyle}}"
+                            VerticalAlignment="Top">
+                        <Button.Content>
+                            <Path Data="F1 M 4,1.90735e-006C 6.20914,1.90735e-006 8,1.79086 8,4C 8,4.84917 7.73539,5.63653 7.28414,6.28414L 10,9L 9,10L 6.28414,7.28414C 5.63653,7.7354 4.84917,8 4,8C 1.79086,8 0,6.20914 0,4C 0,1.79086 1.79086,1.90735e-006 4,1.90735e-006 Z M 4,1C 2.34315,1 1,2.34315 1,4C 1,5.65686 2.34315,7 4,7C 5.65685,7 7,5.65686 7,4C 7,2.34315 5.65685,1 4,1 Z "
+                                  Fill="{Binding Path=(TextElement.Foreground), RelativeSource={RelativeSource Self}}"
+                                  Height="14"
+                                  HorizontalAlignment="Center"
+                                  Stretch="Fill"
+                                  VerticalAlignment="Center"
+                                  Width="14"/>
+                        </Button.Content>
+                        <Button.Visibility>
+                            <MultiBinding>
+                                <MultiBinding.Bindings>
+                                    <Binding Path="(dxg:DataControlBase.CurrentView).ActualShowSearchPanel" RelativeSource="{RelativeSource TemplatedParent}"/>
+                                    <Binding Path="(dxg:DataControlBase.CurrentView).ActualSearchPanelPosition" RelativeSource="{RelativeSource TemplatedParent}"/>
+                                    <Binding Path="(dxg:DataControlBase.CurrentView).ShowSearchPanelMode" RelativeSource="{RelativeSource TemplatedParent}"/>
+                                </MultiBinding.Bindings>
+                                <MultiBinding.Converter>
+                                    <dxg:SearchPanelShowButtonVisibilityConverter/>
+                                </MultiBinding.Converter>
+                            </MultiBinding>
+                        </Button.Visibility>
+                        <dxg:GridViewHitInfoBase.HitTestAcceptor>
+                            <dxgi:SearchPanelShowButtonHitTestAcceptor/>
+                        </dxg:GridViewHitInfoBase.HitTestAcceptor>
+                    </Button>
+                </Grid>
+            </Border>
+            <Border x:Name="PART_GroupPanel"
+                    Background="{DynamicResource {dxgt:CardViewThemeKey ResourceKey=GroupPanelBackground}}"
+                    dxg:GridControl.CurrentView="{Binding Path=(dxg:GridControl.CurrentView), RelativeSource={RelativeSource TemplatedParent}}"
+                    Grid.ColumnSpan="3"
+                    Grid.Row="2">
+                <dxg:GridControl.CurrentViewChangedListener>
+                    <dxg:GroupPanelInitializer/>
+                </dxg:GridControl.CurrentViewChangedListener>
+                <dxg:GridViewHitInfoBase.HitTestAcceptor>
+                    <dxgi:GroupPanelTableViewHitTestAcceptor/>
+                </dxg:GridViewHitInfoBase.HitTestAcceptor>
+                <Grid x:Name="grid" Margin="8">
+                    <TextBlock x:Name="GroupPanelDragText" Style="{DynamicResource {dxgt:TableViewThemeKey ResourceKey=GroupPanelDragTextStyle}}">
+                        <TextBlock.Text>
+                            <Binding ConverterParameter="GridGroupPanelText"
+                                     Path="(dxg:GridControl.CurrentView).LocalizationDescriptor"
+                                     RelativeSource="{RelativeSource TemplatedParent}">
+                                <Binding.Converter>
+                                    <dxg:DynamicLocalizationStringValueConvertor/>
+                                </Binding.Converter>
+                            </Binding>
+                        </TextBlock.Text>
+                    </TextBlock>
+                    <dxg:ColumnItemsControl x:Name="groupPanelItemsControl"
+                                            dxb:BarManager.DXContextMenu="{Binding Path=(dxg:GridControl.ActiveView).GridMenu, RelativeSource={RelativeSource TemplatedParent}}"
+                                            dxg:GridPopupMenu.GridMenuType="GroupPanel"
+                                            ItemsSource="{Binding Path=(dxg:GridControl.CurrentView).GroupedColumns, RelativeSource={RelativeSource TemplatedParent}}"
+                                            Style="{DynamicResource {dxgt:GroupRowThemeKey IsVisibleInBlend=True, ResourceKey=GroupItemsControlStyle}}"/>
+                </Grid>
+            </Border>
+        </Grid>
+        <ControlTemplate.Triggers>
+            <DataTrigger Binding="{Binding Path=(dxg:GridControl.CurrentView).HeaderPosition, RelativeSource={RelativeSource Self}}" Value="SearchPanel">
+                <Setter Property="Grid.Row"
+                        TargetName="borderSearchPanel"
+                        Value="0"/>
+                <Setter Property="Grid.Column"
+                        TargetName="borderSearchPanel"
+                        Value="1"/>
+                <Setter Property="Grid.ColumnSpan"
+                        TargetName="borderSearchPanel"
+                        Value="2"/>
+                <Setter Property="Grid.ColumnSpan"
+                        TargetName="headerContent"
+                        Value="1"/>
+                <Setter Property="Grid.Column"
+                        TargetName="headerContent"
+                        Value="0"/>
+                <Setter Property="Grid.Row"
+                        TargetName="headerContent"
+                        Value="0"/>
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Path=(dxg:GridControl.CurrentView).ShowGroupPanel, RelativeSource={RelativeSource TemplatedParent}}" Value="false">
+                <Setter Property="Visibility"
+                        TargetName="PART_GroupPanel"
+                        Value="Collapsed"/>
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Path=(dxg:GridControl.CurrentView).DataControl.IsGrouped, RelativeSource={RelativeSource TemplatedParent}}" Value="true">
+                <Setter Property="Visibility"
+                        TargetName="GroupPanelDragText"
+                        Value="Collapsed"/>
+            </DataTrigger>
+            <Trigger Property="dx:ThemeManager.IsTouchlineTheme" Value="False">
+                <Setter Property="MaxWidth"
+                        TargetName="part_SearchControlContainer"
+                        Value="{DynamicResource {dxgt:TableViewThemeKey ResourceKey=SearchPanelWidth}}"/>
+            </Trigger>
+            <Trigger Property="dx:ThemeManager.IsTouchEnabled" Value="False">
+                <Setter Property="MaxWidth"
+                        TargetName="part_SearchControlContainer"
+                        Value="{DynamicResource {dxgt:TableViewThemeKey ResourceKey=SearchPanelWidth}}"/>
+            </Trigger>
+            <Trigger Property="dx:ThemeManager.IsTouchlineTheme" Value="True">
+                <Setter Property="Margin"
+                        TargetName="grid"
+                        Value="8,10,8,10"/>
+                <Setter Property="Margin"
+                        TargetName="GroupPanelDragText"
+                        Value="0,10,0,14"/>
+                <Setter Property="MaxWidth"
+                        TargetName="part_SearchControlContainer"
+                        Value="{DynamicResource {dxgt:TableViewThemeKey ResourceKey=SearchPanelWidthTouch}}"/>
+            </Trigger>
+            <Trigger Property="dx:ThemeManager.IsTouchEnabled" Value="True">
+                <Setter Property="Margin"
+                        TargetName="grid"
+                        Value="14"/>
+                <Setter Property="MaxWidth"
+                        TargetName="part_SearchControlContainer"
+                        Value="{DynamicResource {dxgt:TableViewThemeKey ResourceKey=SearchPanelWidthTouch}}"/>
+            </Trigger>
+            <DataTrigger Binding="{Binding Path=(dxg:GridControl.CurrentView).ActualSearchPanelPosition, RelativeSource={RelativeSource Self}}" Value="OverGroupPanel">
+                <Setter Property="Width"
+                        TargetName="part_SearchControlContainer"
+                        Value="NaN"/>
+                <Setter Property="MaxWidth"
+                        TargetName="part_SearchControlContainer"
+                        Value="Infinity"/>
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Path=(dxg:DataControlBase.CurrentView).ActualSearchPanelPosition, RelativeSource={RelativeSource TemplatedParent}}" Value="Default">
+                <Setter Property="Grid.ColumnSpan"
+                        TargetName="headerContent"
+                        Value="3"/>
+                <Setter Property="Grid.Column"
+                        TargetName="headerContent"
+                        Value="0"/>
+                <Setter Property="Grid.Row"
+                        TargetName="headerContent"
+                        Value="0"/>
+                <Setter Property="Grid.Row"
+                        TargetName="borderSearchPanel"
+                        Value="2"/>
+                <Setter Property="Grid.Column"
+                        TargetName="borderSearchPanel"
+                        Value="2"/>
+                <Setter Property="Grid.ColumnSpan"
+                        TargetName="borderSearchPanel"
+                        Value="1"/>
+                <Setter Property="Grid.ColumnSpan"
+                        TargetName="PART_GroupPanel"
+                        Value="2"/>
+                <Setter Property="Grid.Column"
+                        TargetName="PART_GroupPanel"
+                        Value="0"/>
+                <Setter Property="Grid.Row"
+                        TargetName="PART_GroupPanel"
+                        Value="2"/>
+                <Setter Property="Background"
+                        TargetName="borderSearchPanel"
+                        Value="{DynamicResource {dxgt:CardViewThemeKey ResourceKey=GroupPanelBackground}}"/>
+                <Setter Property="Width" TargetName="part_SearchControlContainer">
+                    <Setter.Value>
+                        <MultiBinding>
+                            <MultiBinding.Bindings>
+                                <Binding ElementName="TopGrid" Path="ActualWidth"/>
+                                <Binding Path="MaxWidth" RelativeSource="{RelativeSource Self}"/>
+                            </MultiBinding.Bindings>
+                            <MultiBinding.Converter>
+                                <dxg:SearchPanelWidthConverter Delta="10"/>
+                            </MultiBinding.Converter>
+                        </MultiBinding>
+                    </Setter.Value>
+                </Setter>
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Path=(dxg:GridControl.CurrentView).HeaderPosition, RelativeSource={RelativeSource Self}}" Value="CompactPanel">
+                <Setter Property="Visibility"
+                        TargetName="headerContent"
+                        Value="Collapsed"/>
+            </DataTrigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+</ResourceDictionary>

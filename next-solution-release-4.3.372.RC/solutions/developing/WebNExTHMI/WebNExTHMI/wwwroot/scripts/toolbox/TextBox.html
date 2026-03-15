@@ -1,0 +1,194 @@
+﻿<div id="TextBox" class="TextBox">
+    <img src="cl.gif" alt="" onload="onTextBoxLoaded(this)" id="loadingImage" />
+
+    <script>
+        function onTextBoxLoaded(obj) {
+
+            var thisPage = $(obj).parent();
+            thisPage.localize();
+
+            var scope = thisPage.scope();
+            if (!scope)
+                return;
+            var paratt = thisPage.data(dataparameters);
+            if (!paratt)
+                return;
+
+            var thisParent = thisPage.parent();
+            var thisParentId = thisParent.attr("id");
+            $(obj).remove();
+
+            setOpacity(scope, thisParent, thisPage);
+            var thisParentPos;
+            var thisParentSize;
+
+            var deregisterListeners = [];
+            var parameters = JSON.parse(paratt);
+            if (parameters.FontFamily)
+                loadCustomFonts([parameters.FontFamily]);
+
+            var webKitRenderCorrection = thisPage.hasClass("webKitRenderCorrection");
+
+            var textNode;
+            var titleNode;
+            var textNodeStartingCoords;
+            var textRectNode;
+            var textBox;
+            var rectBox;
+            var textAlignmentProp = undefinedOrNull(parameters.WebHMITextAlignment) ? parameters.HorizontalContentAlignment : parameters.WebHMITextAlignment;
+            var textAlignment = textAlignmentProp == 0 ? "left" : textAlignmentProp == 2 ? "right" : textAlignmentProp == 3 ? "justify" : "center";
+            var bNeedsWrapping = parameters.TextWrapping != 1 || parameters.Text.indexOf("\n") !== -1;
+            var clipPath;
+            var fobjReplacerContainer;
+
+            var mutateFunc = function () {
+                removeForeignObject();
+
+                var qualityElem = $(fobjReplacerContainer);
+                if (scope.biOS && qualityElem.is("svg")) {
+                    qualityElem = qualityElem.children().first();
+                }
+                if (parameters.SVGReferenceId) {
+                    applyTagQualityStyle(qualityElem, scope, parameters.screenId, parameters.SVGReferenceId, true);
+                    var onDataChangedListener = scope.$on(onDataChanged + parameters.screenId + parameters.SVGReferenceId, function (e, value) {
+                        applyTagQualityStyle(qualityElem, scope, parameters.screenId, parameters.SVGReferenceId, true);
+                    });
+                    deregisterListeners.push(onDataChangedListener);
+                }
+                configureTextParameters();
+                textBox = textNode[0].getBBox();
+                rectBox = textRectNode[0].getBBox();
+                onTextChanged();
+            };
+
+            function onTextChanged() {
+                handleTextWrapping();
+                handleTextAlignment();
+            }
+
+            function handleTextAlignment() {
+                var tspans = textNode.find("tspan");
+                //Horizontal alignment
+                if (textAlignment != "left") {
+                    if (textAlignment == "center") {
+                        textNode.css("text-anchor", "middle");
+                        if (tspans.length > 0)
+                            tspans.each(function (i, el) {
+                                var $el = $(el);
+                                $el.attr("x", parseFloat($el.attr("x")) + rectBox.width / 2);
+                            });
+                        else
+                            textNode.attr("x", parseFloat(textNodeStartingCoords.x) + rectBox.width / 2);
+                    }
+                    if (textAlignment == "right") {
+                        textNode.css("text-anchor", "end");
+                        if (tspans.length > 0)
+                            tspans.each(function (i, el) {
+                                var $el = $(el);
+                                $el.attr("x", parseFloat($el.attr("x")) + rectBox.width);
+                            });
+                        else
+                            textNode.attr("x", parseFloat(textNodeStartingCoords.x) + rectBox.width);
+                    }
+                }
+
+                //Vertical alignment
+                if (parameters.VerticalContentAlignment != 0 && parameters.VerticalContentAlignment != 3)
+                    textBox = checkVAlignment(textNode, textBox, tspans, rectBox, parameters.VerticalContentAlignment, true, 0, clipPath);
+            }
+
+            function handleTextWrapping() {
+                if (bNeedsWrapping) {
+                    textNode = autoWrapSVGTextToWidth(textNode[0], rectBox.width, textAlignment == "justify");
+                    textBox = textNode[0].getBBox();
+                }
+                
+                var clipPathID = thisParentId + parameters.screenId + "_clipPath";
+                var clipPathHeight = textBox.height;
+                var textBoxExceedingRectBy = (textBox.height - (textBox.y + textBox.height - (rectBox.y + rectBox.height)));
+                if (textBoxExceedingRectBy > 0)
+                    clipPathHeight = textBoxExceedingRectBy;
+
+                clipPath = configureTextClipPath(clipPath, clipPathID, { x: textBox.x, y: textBox.y, width: rectBox.width, height: clipPathHeight }, textNode, fobjReplacerContainer);
+            }
+
+            function configureTextParameters() {
+                var inputOptions = {};
+                if (parameters.Foreground)
+                    inputOptions["fill"] = getSolidColor(parameters.Foreground);
+                if (parameters.FontFamily)
+                    inputOptions["font-family"] = parameters.FontFamily;
+                if (parameters.FontSize)
+                    inputOptions["font-size"] = parameters.FontSize;
+                if (parameters.FontWeight)
+                    inputOptions["font-weight"] = fontWeightConverter(parameters.FontWeight);
+                var fontStyle = parameters.FontStyle.toLowerCase();
+                if (fontStyle != "normal")
+                    inputOptions["font-style"] = fontStyle;
+                if (!$.isEmptyObject(inputOptions))
+                    textNode.css(inputOptions);
+                var borderCss = {};
+                setObjectBorder(borderCss, parameters, null, null, parameters.screenId);
+                if (!$.isEmptyObject(borderCss))
+                    textRectNode.css(borderCss);
+
+                if (parameters.Background && parameters.Background.Color)
+                    textRectNode.attr("fill", urlReferenceReplace(parameters.Background.Color, parameters.screenId));
+            }
+
+            function removeForeignObject() {
+                fobjReplacerContainer = document.createElementNS("http://www.w3.org/2000/svg", "g");
+                fobjReplacerContainer.setAttribute("id", thisParentId);
+                fobjReplacerContainer.classList.add("fobjReplacer");
+                fobjReplacerContainer.classList.add("TextBox");
+                thisParent.after(fobjReplacerContainer);
+
+                textRectNode = $(SVG("<rect width='100%' height='100%' fill='none'></rect>").node);
+                textNode = $(SVG("<text dy='1em'>" + i18next.t1(parameters.Text) + "</text>").node);
+                titleNode = $(SVG("<title>" + i18next.t1(parameters.ToolTip) + "</title>").node);
+                var textNodes = textRectNode.add(textNode).add(titleNode);
+
+                if (parameters.Opacity)
+                    textNodes.css("opacity", parameters.Opacity);
+
+                textNodes.appendTo(fobjReplacerContainer);
+                textRectNode.attr({
+                    "width": thisParentSize.w,
+                    "height": thisParentSize.h
+                });
+
+                $fobjReplacerContainer = $(fobjReplacerContainer);
+
+                $fobjReplacerContainer.bind('destroyed', function () {
+                    deregisterListeners.forEach(function (item, index, array) {
+                        item();
+                    });
+                });
+
+                var tr = safelyRemoveFobj(thisParent, $fobjReplacerContainer, scope, webKitRenderCorrection);
+                textNodeStartingCoords = {
+                    "x": thisParentPos.x - tr.x,
+                    "y": thisParentPos.y - tr.y
+                };
+                textNodes.attr(textNodeStartingCoords);
+            }
+
+            var deregisterListenerActiveLanguage = scope.$on(onActiveLanguageChanged, function (e, value) {
+                let translatedText = i18next.t1(parameters.Text);
+                if (textNode && textNode[0].textContent !== translatedText) {
+                    textNode[0].textContent = translatedText;
+                    onTextChanged();
+                }
+                if (titleNode && titleNode.length > 0)
+                    titleNode[0].textContent = i18next.t1(parameters.ToolTip);
+            });
+            deregisterListeners.push(deregisterListenerActiveLanguage);
+
+            fastdom.measure(() => {
+                thisParentPos = { x: webKitRenderCorrection ? 0 : thisParent.attr("x"), y: webKitRenderCorrection ? 0 : thisParent.attr("y") };
+                thisParentSize = { w: thisParent.attr("width"), h: thisParent.attr("height") };
+                mutateHandler.scheduleMutate(parameters.screenId, mutateFunc);
+            });
+        }
+    </script>
+</div>

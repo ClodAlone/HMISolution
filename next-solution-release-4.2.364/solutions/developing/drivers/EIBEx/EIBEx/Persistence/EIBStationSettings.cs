@@ -1,0 +1,38 @@
+﻿using DriverCodeBaseEx;
+using DevExpress.Xpo;
+
+namespace EIB
+{
+    [MapInheritance(MapInheritanceType.ParentTable)]
+    public class EIBStationSettings : StationSettings
+    {
+        #region Constructors
+
+        public EIBStationSettings(Session session)
+            : base(session)
+        {
+            // This constructor is used when an object is loaded from a persistent storage.
+            // Do not place any code here.
+        }
+        protected EIBStationSettings()
+        {
+            // This constructor is used when an object is loaded from a persistent storage.
+            // Do not place any code here.
+        }
+        
+        #endregion
+
+        public void CopyProperties(EIBStationSettings st)
+        {
+            base.CopyProperties(st);
+        }
+
+        public void DefaultSettings()
+        {
+            base.DefaultSettings();
+        }
+
+        #region IDataErrorInfo Members
+        #endregion
+    }
+}

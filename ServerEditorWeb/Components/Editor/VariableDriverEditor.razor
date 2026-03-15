@@ -1,0 +1,819 @@
+@using SharedModels
+@using ServerEditorWeb.Models
+@using System.Text.Json
+
+@* ─── Driver Configurations ───────────────────────────── *@
+<div class="mb-2">
+    <label class="form-label fw-bold small">🔌 Driver Bindings</label>
+
+    @foreach (var driverKey in _configuredDrivers)
+    {
+        var key = driverKey;
+        <div class="card vde-card mb-2">
+            <div class="card-header vde-card-header d-flex justify-content-between align-items-center py-1 px-2">
+                <span class="small fw-bold" style="color: var(--accent-color);">@DriverIcon(key) @key</span>
+                <button class="btn btn-sm btn-outline-danger py-0 px-1" style="font-size: 9px;"
+                        @onclick="() => RemoveDriver(key)" title="Remove driver binding">✕</button>
+            </div>
+            <div class="card-body vde-card-body p-2">
+                @RenderDriverFields(key)
+            </div>
+        </div>
+    }
+
+    @* Add driver dropdown *@
+    <div class="d-flex gap-1 mb-2">
+        <select class="form-select form-select-sm" style="font-size: 11px; width: auto;" @bind="_selectedDriverToAdd">
+            <option value="">+ Add driver…</option>
+            @foreach (var d in _availableDrivers.Where(d => !_configuredDrivers.Contains(d)))
+            {
+                <option value="@d">@DriverIcon(d) @d</option>
+            }
+        </select>
+        <button class="btn btn-sm btn-outline-success" style="font-size: 10px;" disabled="@string.IsNullOrEmpty(_selectedDriverToAdd)"
+                @onclick="AddSelectedDriver">Add</button>
+    </div>
+</div>
+
+@* ─── Alarm Configuration ───────────────────────────── *@
+<div class="mb-2">
+    <div class="d-flex justify-content-between align-items-center mb-1">
+        <label class="form-label fw-bold small mb-0">🔔 Alarm</label>
+        @if (Variable.Alarm == null)
+        {
+            <button class="btn btn-sm btn-outline-warning py-0 px-1" style="font-size: 10px;"
+                    @onclick="EnableAlarm">Enable</button>
+        }
+        else
+        {
+            <button class="btn btn-sm btn-outline-secondary py-0 px-1" style="font-size: 10px;"
+                    @onclick="DisableAlarm">Remove</button>
+        }
+    </div>
+
+    @if (Variable.Alarm != null)
+    {
+        <div class="card vde-card p-2 mb-1" style="border-color: var(--warning-color);">
+            @* Trigger type selector *@
+            <div class="mb-2">
+                <label class="form-label mb-0 small" title="Choose how the alarm is triggered: by numeric limit thresholds or by a condition expression.">
+                    Trigger Type <span class="vde-hint">ⓘ</span>
+                </label>
+                <select class="form-select form-select-sm" @bind="Variable.Alarm.TriggerType" @bind:after="OnAlarmChanged">
+                    <option value="@AlarmTriggerType.Limit">📊 Limit (High/Low thresholds)</option>
+                    <option value="@AlarmTriggerType.Condition">⚡ Condition (expression)</option>
+                </select>
+            </div>
+
+            @if (Variable.Alarm.TriggerType == AlarmTriggerType.Limit)
+            {
+                @* ── Limit mode ── *@
+                <div class="row g-1 mb-1">
+                    <div class="col-6">
+                        <label class="form-label mb-0 small" title="Critical upper threshold (optional). Triggers severity 900 alarm when value exceeds this limit.">
+                            High-High Limit <span class="vde-hint">ⓘ</span>
+                        </label>
+                        <input type="number" class="form-control form-control-sm" step="any"
+                               value="@Variable.Alarm.HighHighLimit" @onchange="(e) => { Variable.Alarm.HighHighLimit = ParseNullableDouble(e.Value); OnAlarmChanged(); }"
+                               placeholder="(optional)" />
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label mb-0 small" title="Upper threshold. Triggers severity 700 alarm when value exceeds this limit.">
+                            High Limit <span class="vde-hint">ⓘ</span>
+                        </label>
+                        <input type="number" class="form-control form-control-sm" step="any"
+                               @bind="Variable.Alarm.HighLimit" @bind:after="OnAlarmChanged" />
+                    </div>
+                </div>
+                <div class="row g-1 mb-1">
+                    <div class="col-6">
+                        <label class="form-label mb-0 small" title="Lower threshold. Triggers severity 500 alarm when value falls below this limit.">
+                            Low Limit <span class="vde-hint">ⓘ</span>
+                        </label>
+                        <input type="number" class="form-control form-control-sm" step="any"
+                               @bind="Variable.Alarm.LowLimit" @bind:after="OnAlarmChanged" />
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label mb-0 small" title="Critical lower threshold (optional). Triggers severity 900 alarm when value falls below this limit.">
+                            Low-Low Limit <span class="vde-hint">ⓘ</span>
+                        </label>
+                        <input type="number" class="form-control form-control-sm" step="any"
+                               value="@Variable.Alarm.LowLowLimit" @onchange="(e) => { Variable.Alarm.LowLowLimit = ParseNullableDouble(e.Value); OnAlarmChanged(); }"
+                               placeholder="(optional)" />
+                    </div>
+                </div>
+            }
+            else
+            {
+                @* ── Condition mode ── *@
+                <div class="row g-1 mb-1">
+                    <div class="col-5">
+                        <label class="form-label mb-0 small" title="Comparison operator. The alarm activates when: value {operator} {compare value}. 'True'/'False' treat the value as boolean. 'Changed' triggers on any value change.">
+                            Operator <span class="vde-hint">ⓘ</span>
+                        </label>
+                        <select class="form-select form-select-sm" @bind="Variable.Alarm.Operator" @bind:after="OnAlarmChanged">
+                            <option value="==">== (equals)</option>
+                            <option value="!=">!= (not equals)</option>
+                            <option value=">">&gt; (greater than)</option>
+                            <option value=">=">&gt;= (greater or equal)</option>
+                            <option value="<">&lt; (less than)</option>
+                            <option value="<=">&lt;= (less or equal)</option>
+                            <option value="True">True (boolean true)</option>
+                            <option value="False">False (boolean false)</option>
+                        </select>
+                    </div>
+                    <div class="col-4">
+                        @{
+                            bool hideCompareValue = Variable.Alarm.Operator is "True" or "False";
+                        }
+                        <label class="form-label mb-0 small" title="The value to compare against. For numeric variables use a number, for strings use text. Ignored for True/False operators.">
+                            Compare Value <span class="vde-hint">ⓘ</span>
+                        </label>
+                        <input type="text" class="form-control form-control-sm"
+                               @bind="Variable.Alarm.CompareValue" @bind:after="OnAlarmChanged"
+                               placeholder="@(hideCompareValue ? "(n/a)" : "e.g. 0, true, OFF")"
+                               disabled="@hideCompareValue" />
+                    </div>
+                    <div class="col-3">
+                        <label class="form-label mb-0 small" title="OPC UA alarm severity (1–1000). 1=low, 500=medium, 900=critical.">
+                            Severity <span class="vde-hint">ⓘ</span>
+                        </label>
+                        <input type="number" class="form-control form-control-sm" min="1" max="1000"
+                               @bind="Variable.Alarm.ConditionSeverity" @bind:after="OnAlarmChanged" />
+                    </div>
+                </div>
+                <div class="vde-desc mb-1">
+                    Alarm triggers when: <code>value @Variable.Alarm.Operator @(hideCompareValue ? "" : Variable.Alarm.CompareValue)</code>
+                </div>
+            }
+
+            @* ── Common: Hysteresis & Message ── *@
+            <div class="row g-1 mb-1">
+                <div class="col-4">
+                    <label class="form-label mb-0 small" title="Deadband value to prevent alarm flickering. For Limit alarms: the value must return past the threshold by this amount before the alarm clears. For Condition alarms with numeric operators: same deadband applies. Set to 0 to disable.">
+                        Hysteresis <span class="vde-hint">ⓘ</span>
+                    </label>
+                    <input type="number" class="form-control form-control-sm" step="any" min="0"
+                           @bind="Variable.Alarm.Hysteresis" @bind:after="OnAlarmChanged"
+                           placeholder="0" />
+                </div>
+                <div class="col-8">
+                    <label class="form-label mb-0 small" title="Human-readable message text included in alarm events. Leave empty for auto-generated messages.">
+                        Message <span class="vde-hint">ⓘ</span>
+                    </label>
+                    <input type="text" class="form-control form-control-sm"
+                           @bind="Variable.Alarm.Message" @bind:after="OnAlarmChanged"
+                           placeholder="Alarm message text (optional)" />
+                </div>
+            </div>
+            @if (Variable.Alarm.Hysteresis > 0)
+            {
+                <div class="vde-desc mb-1">
+                    @if (Variable.Alarm.TriggerType == AlarmTriggerType.Limit)
+                    {
+                        <text>Alarm clears when value returns within limits by @Variable.Alarm.Hysteresis (e.g. High: activates at @Variable.Alarm.HighLimit, clears at @((Variable.Alarm.HighLimit - Variable.Alarm.Hysteresis).ToString("G6")))</text>
+                    }
+                    else
+                    {
+                        <text>Deadband of @Variable.Alarm.Hysteresis applied to numeric condition deactivation</text>
+                    }
+                </div>
+            }
+        </div>
+    }
+</div>
+
+<style>
+    /* Theme-aware card styling */
+    .vde-card {
+        border-color: var(--border-color);
+    }
+    .vde-card-header {
+        background: var(--bg-tertiary);
+        border-bottom-color: var(--border-color);
+    }
+    .vde-card-body {
+        background: var(--bg-secondary);
+    }
+    /* Info hint icon */
+    .vde-hint {
+        color: var(--text-muted);
+        font-size: 9px;
+        cursor: help;
+    }
+    /* Description text below fields */
+    .vde-desc {
+        font-size: 9px;
+        color: var(--text-muted);
+        margin-top: 1px;
+        line-height: 1.2;
+    }
+</style>
+
+@code {
+    [Parameter] public Variable Variable { get; set; } = default!;
+    [Parameter] public VariableNode VariableNode { get; set; } = default!;
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private static readonly string[] _availableDrivers =
+        ["Modbus", "S7", "OpcUaClient", "Mqtt", "Rest", "Csv", "Tcp", "Sql", "EtherNetIP", "Knx", "Simulation"];
+
+    private List<string> _configuredDrivers = new();
+    private Dictionary<string, object> _configCache = new();
+    private string _selectedDriverToAdd = "";
+
+    protected override void OnParametersSet()
+    {
+        RefreshFromJson();
+    }
+
+    private void RefreshFromJson()
+    {
+        _configuredDrivers.Clear();
+        _configCache.Clear();
+        if (Variable.DriverConfigs == null) return;
+        foreach (var kvp in Variable.DriverConfigs)
+            _configuredDrivers.Add(kvp.Key);
+    }
+
+    private T GetConfig<T>(string driverKey) where T : new()
+    {
+        var cacheKey = driverKey + typeof(T).Name;
+        if (_configCache.TryGetValue(cacheKey, out var cached))
+            return (T)cached;
+
+        T result = new();
+        if (Variable.DriverConfigs != null && Variable.DriverConfigs.TryGetValue(driverKey, out var elem))
+        {
+            try { result = JsonSerializer.Deserialize<T>(elem.GetRawText(), _jsonOpts) ?? new T(); }
+            catch { }
+        }
+        _configCache[cacheKey] = result;
+        return result;
+    }
+
+    private void SetConfig<T>(string driverKey, T config)
+    {
+        _configCache[driverKey + typeof(T).Name] = config!;
+        Variable.DriverConfigs ??= new();
+        var json = JsonSerializer.Serialize(config);
+        Variable.DriverConfigs[driverKey] = JsonSerializer.Deserialize<JsonElement>(json);
+        SyncJsonEditor();
+        OnChanged.InvokeAsync();
+    }
+
+    private void SyncJsonEditor()
+    {
+        VariableNode.DriverSettingsJson = Variable.DriverConfigs is { Count: > 0 }
+            ? JsonSerializer.Serialize(Variable.DriverConfigs, _jsonWriteOpts)
+            : "{}";
+    }
+
+    private void AddSelectedDriver()
+    {
+        if (string.IsNullOrEmpty(_selectedDriverToAdd) || _configuredDrivers.Contains(_selectedDriverToAdd)) return;
+        Variable.DriverConfigs ??= new();
+        Variable.DriverConfigs[_selectedDriverToAdd] = JsonSerializer.Deserialize<JsonElement>("{}");
+        _configuredDrivers.Add(_selectedDriverToAdd);
+        _selectedDriverToAdd = "";
+        SyncJsonEditor();
+        OnChanged.InvokeAsync();
+    }
+
+    private void RemoveDriver(string key)
+    {
+        Variable.DriverConfigs?.Remove(key);
+        _configuredDrivers.Remove(key);
+        _configCache.Remove(key);
+        SyncJsonEditor();
+        OnChanged.InvokeAsync();
+    }
+
+    private void EnableAlarm() { Variable.Alarm = new AlarmConfig(); SyncJsonEditor(); OnChanged.InvokeAsync(); }
+    private void DisableAlarm() { Variable.Alarm = null; SyncJsonEditor(); OnChanged.InvokeAsync(); }
+    private void OnAlarmChanged() { SyncJsonEditor(); OnChanged.InvokeAsync(); }
+
+    // Helpers for onchange handlers that assign string fields
+    private void SetString<T>(string driverKey, T config, Action<T, string> setter, ChangeEventArgs e)
+    {
+        setter(config, e.Value?.ToString() ?? string.Empty);
+        SetConfig(driverKey, config);
+    }
+    private void SetInt<T>(string driverKey, T config, Action<T, int> setter, ChangeEventArgs e, int fallback = 0)
+    {
+        setter(config, int.TryParse(e.Value?.ToString(), out var v) ? v : fallback);
+        SetConfig(driverKey, config);
+    }
+    private void SetDouble<T>(string driverKey, T config, Action<T, double> setter, ChangeEventArgs e, double fallback = 0)
+    {
+        setter(config, double.TryParse(e.Value?.ToString(), out var v) ? v : fallback);
+        SetConfig(driverKey, config);
+    }
+    private void SetNullableString<T>(string driverKey, T config, Action<T, string?> setter, ChangeEventArgs e)
+    {
+        var s = e.Value?.ToString();
+        setter(config, string.IsNullOrEmpty(s) ? null : s);
+        SetConfig(driverKey, config);
+    }
+
+    private static readonly JsonSerializerOptions _jsonOpts = new() { PropertyNameCaseInsensitive = true };
+    private static readonly JsonSerializerOptions _jsonWriteOpts = new() { WriteIndented = true };
+
+    private static double? ParseNullableDouble(object? value)
+    {
+        var s = value?.ToString();
+        if (string.IsNullOrWhiteSpace(s)) return null;
+        return double.TryParse(s, out var v) ? v : null;
+    }
+
+    private static string DriverIcon(string key) => key switch
+    {
+        "Modbus" => "🔧", "S7" => "🏭", "OpcUaClient" => "🔗", "Mqtt" => "📡",
+        "Rest" => "🌐", "Csv" => "📄", "Tcp" => "🔌", "Sql" => "🗄️",
+        "EtherNetIP" => "⚙️", "Knx" => "🏠", "Simulation" => "📈", _ => "❓"
+    };
+
+    // ─── Driver-specific render fragments ────────────────────
+
+    private RenderFragment RenderDriverFields(string key) => key switch
+    {
+        "Modbus" => RenderModbus(key),
+        "S7" => RenderS7(key),
+        "OpcUaClient" => RenderOpcUaClient(key),
+        "Mqtt" => RenderMqtt(key),
+        "Rest" => RenderRest(key),
+        "Csv" => RenderCsv(key),
+        "Tcp" => RenderTcp(key),
+        "Sql" => RenderSql(key),
+        "EtherNetIP" => RenderEtherNetIP(key),
+        "Knx" => RenderKnx(key),
+        "Simulation" => RenderSimulation(key),
+        _ => RenderUnknown(key)
+    };
+
+    private RenderFragment RenderModbus(string key) => __builder =>
+    {
+        var c = GetConfig<ModbusFields>(key);
+        <div class="row g-1 mb-1">
+            <div class="col-6">
+                <label class="form-label mb-0 small" title="IP address of the Modbus TCP device">IP Address <span class="vde-hint">ⓘ</span></label>
+                <input type="text" class="form-control form-control-sm" value="@c.IpAddress"
+                       @onchange="(e) => SetString(key, c, (x,v) => x.IpAddress = v, e)" placeholder="192.168.1.10" />
+            </div>
+            <div class="col-3">
+                <label class="form-label mb-0 small" title="TCP port number (default 502)">Port <span class="vde-hint">ⓘ</span></label>
+                <input type="number" class="form-control form-control-sm" value="@c.Port"
+                       @onchange="(e) => SetInt(key, c, (x,v) => x.Port = v, e, 502)" />
+            </div>
+            <div class="col-3">
+                <label class="form-label mb-0 small" title="Modbus slave/unit identifier (1–247)">Unit ID <span class="vde-hint">ⓘ</span></label>
+                <input type="number" class="form-control form-control-sm" value="@c.UnitId"
+                       @onchange="(e) => SetInt(key, c, (x,v) => x.UnitId = (byte)v, e)" />
+            </div>
+        </div>
+        <div class="row g-1 mb-1">
+            <div class="col-4">
+                <label class="form-label mb-0 small" title="Modbus register address (0-based)">Register <span class="vde-hint">ⓘ</span></label>
+                <input type="number" class="form-control form-control-sm" value="@c.Register"
+                       @onchange="(e) => SetInt(key, c, (x,v) => x.Register = (ushort)v, e)" />
+            </div>
+            <div class="col-4">
+                <label class="form-label mb-0 small" title="Type of Modbus register to read/write">Register Type <span class="vde-hint">ⓘ</span></label>
+                <select class="form-select form-select-sm" value="@c.RegisterType"
+                        @onchange="(e) => SetNullableString(key, c, (x,v) => x.RegisterType = v, e)">
+                    <option value="">(default)</option>
+                    <option value="HoldingRegister">Holding Register</option>
+                    <option value="InputRegister">Input Register</option>
+                    <option value="Coil">Coil</option>
+                    <option value="DiscreteInput">Discrete Input</option>
+                </select>
+            </div>
+            <div class="col-4">
+                <label class="form-label mb-0 small" title="Polling interval in milliseconds">Poll (ms) <span class="vde-hint">ⓘ</span></label>
+                <input type="number" class="form-control form-control-sm" value="@c.PollTime"
+                       @onchange="(e) => SetInt(key, c, (x,v) => x.PollTime = v, e, 1000)" />
+            </div>
+        </div>
+    };
+
+    private RenderFragment RenderS7(string key) => __builder =>
+    {
+        var c = GetConfig<S7Fields>(key);
+        <div class="row g-1 mb-1">
+            <div class="col-6">
+                <label class="form-label mb-0 small" title="IP address of the Siemens S7 PLC">IP Address <span class="vde-hint">ⓘ</span></label>
+                <input type="text" class="form-control form-control-sm" value="@c.IpAddress"
+                       @onchange="(e) => SetString(key, c, (x,v) => x.IpAddress = v, e)" placeholder="192.168.1.1" />
+            </div>
+            <div class="col-3">
+                <label class="form-label mb-0 small" title="PLC rack number (usually 0)">Rack <span class="vde-hint">ⓘ</span></label>
+                <input type="number" class="form-control form-control-sm" value="@c.Rack"
+                       @onchange="(e) => SetInt(key, c, (x,v) => x.Rack = v, e)" />
+            </div>
+            <div class="col-3">
+                <label class="form-label mb-0 small" title="PLC slot number (usually 1 for S7-300/400, 0 for S7-1200/1500)">Slot <span class="vde-hint">ⓘ</span></label>
+                <input type="number" class="form-control form-control-sm" value="@c.Slot"
+                       @onchange="(e) => SetInt(key, c, (x,v) => x.Slot = v, e)" />
+            </div>
+        </div>
+        <div class="row g-1 mb-1">
+            <div class="col-8">
+                <label class="form-label mb-0 small" title="S7 data block address, e.g. DB1.DBD0, DB1.DBX0.0, MW100">Address <span class="vde-hint">ⓘ</span></label>
+                <input type="text" class="form-control form-control-sm" value="@c.Address"
+                       @onchange="(e) => SetString(key, c, (x,v) => x.Address = v, e)" placeholder="DB1.DBD0" />
+            </div>
+            <div class="col-4">
+                <label class="form-label mb-0 small" title="Polling interval in milliseconds">Poll (ms) <span class="vde-hint">ⓘ</span></label>
+                <input type="number" class="form-control form-control-sm" value="@c.PollTime"
+                       @onchange="(e) => SetInt(key, c, (x,v) => x.PollTime = v, e, 1000)" />
+            </div>
+        </div>
+    };
+
+    private RenderFragment RenderOpcUaClient(string key) => __builder =>
+    {
+        var c = GetConfig<OpcUaClientFields>(key);
+        <div class="mb-1">
+            <label class="form-label mb-0 small" title="OPC UA server endpoint URL to connect to">Endpoint URL <span class="vde-hint">ⓘ</span></label>
+            <input type="text" class="form-control form-control-sm" value="@c.EndpointUrl"
+                   @onchange="(e) => SetString(key, c, (x,v) => x.EndpointUrl = v, e)" placeholder="opc.tcp://localhost:4840" />
+        </div>
+        <div class="row g-1 mb-1">
+            <div class="col-8">
+                <label class="form-label mb-0 small" title="Node ID of the remote variable to read, e.g. ns=2;s=Tag1">Node ID <span class="vde-hint">ⓘ</span></label>
+                <input type="text" class="form-control form-control-sm" value="@c.NodeId"
+                       @onchange="(e) => SetString(key, c, (x,v) => x.NodeId = v, e)" placeholder="ns=2;s=Demo.Static.Scalar.Double" />
+            </div>
+            <div class="col-4">
+                <label class="form-label mb-0 small" title="Polling interval in milliseconds">Poll (ms) <span class="vde-hint">ⓘ</span></label>
+                <input type="number" class="form-control form-control-sm" value="@c.PollTime"
+                       @onchange="(e) => SetInt(key, c, (x,v) => x.PollTime = v, e, 1000)" />
+            </div>
+        </div>
+    };
+
+    private RenderFragment RenderMqtt(string key) => __builder =>
+    {
+        var c = GetConfig<MqttFields>(key);
+        <div class="row g-1 mb-1">
+            <div class="col-8">
+                <label class="form-label mb-0 small" title="MQTT broker hostname or IP address">Broker <span class="vde-hint">ⓘ</span></label>
+                <input type="text" class="form-control form-control-sm" value="@c.Broker"
+                       @onchange="(e) => SetString(key, c, (x,v) => x.Broker = v, e)" placeholder="mqtt.example.com" />
+            </div>
+            <div class="col-4">
+                <label class="form-label mb-0 small" title="MQTT broker port (default 1883, TLS 8883)">Port <span class="vde-hint">ⓘ</span></label>
+                <input type="number" class="form-control form-control-sm" value="@c.Port"
+                       @onchange="(e) => SetInt(key, c, (x,v) => x.Port = v, e, 1883)" />
+            </div>
+        </div>
+        <div class="row g-1 mb-1">
+            <div class="col-7">
+                <label class="form-label mb-0 small" title="MQTT topic to subscribe to">Topic <span class="vde-hint">ⓘ</span></label>
+                <input type="text" class="form-control form-control-sm" value="@c.Topic"
+                       @onchange="(e) => SetString(key, c, (x,v) => x.Topic = v, e)" placeholder="sensors/temperature" />
+            </div>
+            <div class="col-5">
+                <label class="form-label mb-0 small" title="JSONPath expression to extract a value from the payload, e.g. $.temperature">JSON Path <span class="vde-hint">ⓘ</span></label>
+                <input type="text" class="form-control form-control-sm" value="@c.JsonPath"
+                       @onchange="(e) => SetNullableString(key, c, (x,v) => x.JsonPath = v, e)" placeholder="$.value" />
+            </div>
+        </div>
+    };
+
+    private RenderFragment RenderRest(string key) => __builder =>
+    {
+        var c = GetConfig<RestFields>(key);
+        <div class="mb-1">
+            <label class="form-label mb-0 small" title="HTTP(S) URL to poll for data">URL <span class="vde-hint">ⓘ</span></label>
+            <input type="text" class="form-control form-control-sm" value="@c.Url"
+                   @onchange="(e) => SetString(key, c, (x,v) => x.Url = v, e)" placeholder="https://api.example.com/data" />
+        </div>
+        <div class="row g-1 mb-1">
+            <div class="col-7">
+                <label class="form-label mb-0 small" title="JSONPath expression to extract a value from the response body">JSON Path <span class="vde-hint">ⓘ</span></label>
+                <input type="text" class="form-control form-control-sm" value="@c.JsonPath"
+                       @onchange="(e) => SetNullableString(key, c, (x,v) => x.JsonPath = v, e)" placeholder="$.temperature" />
+            </div>
+            <div class="col-5">
+                <label class="form-label mb-0 small" title="Polling interval in milliseconds">Poll (ms) <span class="vde-hint">ⓘ</span></label>
+                <input type="number" class="form-control form-control-sm" value="@c.PollTime"
+                       @onchange="(e) => SetInt(key, c, (x,v) => x.PollTime = v, e, 1000)" />
+            </div>
+        </div>
+    };
+
+    private RenderFragment RenderCsv(string key) => __builder =>
+    {
+        var c = GetConfig<CsvFields>(key);
+        <div class="mb-1">
+            <label class="form-label mb-0 small" title="Path to the CSV file (relative to working directory or absolute)">File Path <span class="vde-hint">ⓘ</span></label>
+            <input type="text" class="form-control form-control-sm" value="@c.FilePath"
+                   @onchange="(e) => SetString(key, c, (x,v) => x.FilePath = v, e)" placeholder="data.csv" />
+        </div>
+        <div class="row g-1 mb-1">
+            <div class="col-3">
+                <label class="form-label mb-0 small" title="0-based row index to read from">Row <span class="vde-hint">ⓘ</span></label>
+                <input type="number" class="form-control form-control-sm" value="@c.RowIndex"
+                       @onchange="(e) => SetInt(key, c, (x,v) => x.RowIndex = v, e)" />
+            </div>
+            <div class="col-3">
+                <label class="form-label mb-0 small" title="0-based column index to read from">Column <span class="vde-hint">ⓘ</span></label>
+                <input type="number" class="form-control form-control-sm" value="@c.ColumnIndex"
+                       @onchange="(e) => SetInt(key, c, (x,v) => x.ColumnIndex = v, e)" />
+            </div>
+            <div class="col-3">
+                <label class="form-label mb-0 small" title="Optional key column value to match a specific row">Key <span class="vde-hint">ⓘ</span></label>
+                <input type="text" class="form-control form-control-sm" value="@c.Key"
+                       @onchange="(e) => SetNullableString(key, c, (x,v) => x.Key = v, e)" />
+            </div>
+            <div class="col-3">
+                <label class="form-label mb-0 small" title="Polling interval in milliseconds">Poll (ms) <span class="vde-hint">ⓘ</span></label>
+                <input type="number" class="form-control form-control-sm" value="@c.PollTime"
+                       @onchange="(e) => SetInt(key, c, (x,v) => x.PollTime = v, e, 1000)" />
+            </div>
+        </div>
+    };
+
+    private RenderFragment RenderTcp(string key) => __builder =>
+    {
+        var c = GetConfig<TcpFields>(key);
+        <div class="row g-1 mb-1">
+            <div class="col-6">
+                <label class="form-label mb-0 small" title="IP address of the TCP device">IP Address <span class="vde-hint">ⓘ</span></label>
+                <input type="text" class="form-control form-control-sm" value="@c.IpAddress"
+                       @onchange="(e) => SetString(key, c, (x,v) => x.IpAddress = v, e)" />
+            </div>
+            <div class="col-3">
+                <label class="form-label mb-0 small" title="TCP port number">Port <span class="vde-hint">ⓘ</span></label>
+                <input type="number" class="form-control form-control-sm" value="@c.Port"
+                       @onchange="(e) => SetInt(key, c, (x,v) => x.Port = v, e)" />
+            </div>
+            <div class="col-3">
+                <label class="form-label mb-0 small" title="Polling interval in milliseconds">Poll (ms) <span class="vde-hint">ⓘ</span></label>
+                <input type="number" class="form-control form-control-sm" value="@c.PollTime"
+                       @onchange="(e) => SetInt(key, c, (x,v) => x.PollTime = v, e, 1000)" />
+            </div>
+        </div>
+        <div class="row g-1 mb-1">
+            <div class="col-6">
+                <label class="form-label mb-0 small" title="Command string sent to the TCP device on each poll">Command <span class="vde-hint">ⓘ</span></label>
+                <input type="text" class="form-control form-control-sm" value="@c.Command"
+                       @onchange="(e) => SetString(key, c, (x,v) => x.Command = v, e)" />
+            </div>
+            <div class="col-6">
+                <label class="form-label mb-0 small" title="Regular expression to extract the value from the response">Regex <span class="vde-hint">ⓘ</span></label>
+                <input type="text" class="form-control form-control-sm" value="@c.Regex"
+                       @onchange="(e) => SetNullableString(key, c, (x,v) => x.Regex = v, e)" />
+            </div>
+        </div>
+    };
+
+    private RenderFragment RenderSql(string key) => __builder =>
+    {
+        var c = GetConfig<SqlFields>(key);
+        <div class="mb-1">
+            <label class="form-label mb-0 small" title="Database connection string (PostgreSQL, SQLite, etc.)">Connection String <span class="vde-hint">ⓘ</span></label>
+            <input type="text" class="form-control form-control-sm" value="@c.ConnectionString"
+                   @onchange="(e) => SetString(key, c, (x,v) => x.ConnectionString = v, e)" placeholder="Host=…;Database=…" />
+        </div>
+        <div class="row g-1 mb-1">
+            <div class="col-8">
+                <label class="form-label mb-0 small" title="SQL query that returns a single scalar value">Query <span class="vde-hint">ⓘ</span></label>
+                <input type="text" class="form-control form-control-sm" value="@c.Query"
+                       @onchange="(e) => SetString(key, c, (x,v) => x.Query = v, e)" placeholder="SELECT value FROM sensors LIMIT 1" />
+            </div>
+            <div class="col-4">
+                <label class="form-label mb-0 small" title="Polling interval in milliseconds">Poll (ms) <span class="vde-hint">ⓘ</span></label>
+                <input type="number" class="form-control form-control-sm" value="@c.PollTime"
+                       @onchange="(e) => SetInt(key, c, (x,v) => x.PollTime = v, e, 1000)" />
+            </div>
+        </div>
+    };
+
+    private RenderFragment RenderEtherNetIP(string key) => __builder =>
+    {
+        var c = GetConfig<EtherNetIPFields>(key);
+        <div class="row g-1 mb-1">
+            <div class="col-5">
+                <label class="form-label mb-0 small" title="IP address of the EtherNet/IP device">IP Address <span class="vde-hint">ⓘ</span></label>
+                <input type="text" class="form-control form-control-sm" value="@c.IpAddress"
+                       @onchange="(e) => SetString(key, c, (x,v) => x.IpAddress = v, e)" />
+            </div>
+            <div class="col-4">
+                <label class="form-label mb-0 small" title="CIP routing path, e.g. 1,0 for backplane slot 0">Path <span class="vde-hint">ⓘ</span></label>
+                <input type="text" class="form-control form-control-sm" value="@c.Path"
+                       @onchange="(e) => SetString(key, c, (x,v) => x.Path = v, e)" placeholder="1,0" />
+            </div>
+            <div class="col-3">
+                <label class="form-label mb-0 small" title="Polling interval in milliseconds">Poll (ms) <span class="vde-hint">ⓘ</span></label>
+                <input type="number" class="form-control form-control-sm" value="@c.PollTime"
+                       @onchange="(e) => SetInt(key, c, (x,v) => x.PollTime = v, e, 1000)" />
+            </div>
+        </div>
+        <div class="row g-1 mb-1">
+            <div class="col-6">
+                <label class="form-label mb-0 small" title="Controller tag name to read/write">Tag <span class="vde-hint">ⓘ</span></label>
+                <input type="text" class="form-control form-control-sm" value="@c.Tag"
+                       @onchange="(e) => SetString(key, c, (x,v) => x.Tag = v, e)" placeholder="MyTag" />
+            </div>
+            <div class="col-6">
+                <label class="form-label mb-0 small" title="CIP data type of the tag (auto-detect if empty)">Type <span class="vde-hint">ⓘ</span></label>
+                <select class="form-select form-select-sm" value="@c.Type"
+                        @onchange="(e) => SetString(key, c, (x,v) => x.Type = v, e)">
+                    <option value="">(auto)</option>
+                    <option value="DINT">DINT</option>
+                    <option value="REAL">REAL</option>
+                    <option value="BOOL">BOOL</option>
+                    <option value="SINT">SINT</option>
+                    <option value="INT">INT</option>
+                    <option value="LINT">LINT</option>
+                    <option value="STRING">STRING</option>
+                </select>
+            </div>
+        </div>
+    };
+
+    private RenderFragment RenderKnx(string key) => __builder =>
+    {
+        var c = GetConfig<KnxFields>(key);
+        <div class="row g-1 mb-1">
+            <div class="col-5">
+                <label class="form-label mb-0 small" title="IP address of the KNX gateway">IP Address <span class="vde-hint">ⓘ</span></label>
+                <input type="text" class="form-control form-control-sm" value="@c.IpAddress"
+                       @onchange="(e) => SetString(key, c, (x,v) => x.IpAddress = v, e)" />
+            </div>
+            <div class="col-3">
+                <label class="form-label mb-0 small" title="KNX gateway UDP port (default 3671)">Port <span class="vde-hint">ⓘ</span></label>
+                <input type="number" class="form-control form-control-sm" value="@c.Port"
+                       @onchange="(e) => SetInt(key, c, (x,v) => x.Port = v, e)" />
+            </div>
+            <div class="col-4">
+                <label class="form-label mb-0 small" title="KNX datapoint type, e.g. 9.001 for temperature">DPT Type <span class="vde-hint">ⓘ</span></label>
+                <input type="text" class="form-control form-control-sm" value="@c.DptType"
+                       @onchange="(e) => SetString(key, c, (x,v) => x.DptType = v, e)" placeholder="9.001" />
+            </div>
+        </div>
+        <div class="mb-1">
+            <label class="form-label mb-0 small" title="KNX group address in Main/Middle/Sub format, e.g. 1/2/3">Group Address <span class="vde-hint">ⓘ</span></label>
+            <input type="text" class="form-control form-control-sm" value="@c.GroupAddress"
+                   @onchange="(e) => SetString(key, c, (x,v) => x.GroupAddress = v, e)" placeholder="1/2/3" />
+        </div>
+    };
+
+    private RenderFragment RenderSimulation(string key) => __builder =>
+    {
+        var c = GetConfig<SimulationFields>(key);
+        <div class="row g-1 mb-1">
+            <div class="col-4">
+                <label class="form-label mb-0 small" title="Waveform type to generate">Function <span class="vde-hint">ⓘ</span></label>
+                <select class="form-select form-select-sm" value="@c.Function"
+                        @onchange="(e) => SetString(key, c, (x,v) => x.Function = v, e)">
+                    <option value="Sine">Sine</option>
+                    <option value="Cosine">Cosine</option>
+                    <option value="Sawtooth">Sawtooth</option>
+                    <option value="Square">Square</option>
+                    <option value="Triangle">Triangle</option>
+                    <option value="Random">Random</option>
+                    <option value="RandomInt">RandomInt</option>
+                    <option value="Counter">Counter</option>
+                    <option value="Pulse">Pulse</option>
+                </select>
+            </div>
+            <div class="col-4">
+                <label class="form-label mb-0 small" title="Duration of one full waveform cycle in milliseconds">Period (ms) <span class="vde-hint">ⓘ</span></label>
+                <input type="number" class="form-control form-control-sm" value="@c.Period"
+                       @onchange="(e) => SetDouble(key, c, (x,v) => x.Period = v, e, 10000)" />
+            </div>
+            <div class="col-4">
+                <label class="form-label mb-0 small" title="How often the value is updated in milliseconds">Poll (ms) <span class="vde-hint">ⓘ</span></label>
+                <input type="number" class="form-control form-control-sm" value="@c.PollTime"
+                       @onchange="(e) => SetInt(key, c, (x,v) => x.PollTime = v, e, 1000)" />
+            </div>
+        </div>
+        <div class="row g-1 mb-1">
+            <div class="col-3">
+                <label class="form-label mb-0 small" title="Peak signal value (signal oscillates ±Amplitude around Offset)">Amplitude <span class="vde-hint">ⓘ</span></label>
+                <input type="number" class="form-control form-control-sm" step="any" value="@c.Amplitude"
+                       @onchange="(e) => SetDouble(key, c, (x,v) => x.Amplitude = v, e, 100)" />
+            </div>
+            <div class="col-3">
+                <label class="form-label mb-0 small" title="Vertical offset added to the signal">Offset <span class="vde-hint">ⓘ</span></label>
+                <input type="number" class="form-control form-control-sm" step="any" value="@c.Offset"
+                       @onchange="(e) => SetDouble(key, c, (x,v) => x.Offset = v, e)" />
+            </div>
+            <div class="col-3">
+                <label class="form-label mb-0 small" title="Minimum value for Random/RandomInt functions">Min <span class="vde-hint">ⓘ</span></label>
+                <input type="number" class="form-control form-control-sm" step="any" value="@c.Min"
+                       @onchange="(e) => SetDouble(key, c, (x,v) => x.Min = v, e)" />
+            </div>
+            <div class="col-3">
+                <label class="form-label mb-0 small" title="Maximum value for Random/RandomInt functions">Max <span class="vde-hint">ⓘ</span></label>
+                <input type="number" class="form-control form-control-sm" step="any" value="@c.Max"
+                       @onchange="(e) => SetDouble(key, c, (x,v) => x.Max = v, e, 100)" />
+            </div>
+        </div>
+    };
+
+    private RenderFragment RenderUnknown(string key) => __builder =>
+    {
+        <div class="text-muted small p-1">Unknown driver — edit in JSON below.</div>
+    };
+
+    // ─── Field models (mirror driver config classes) ─────────
+
+    private class ModbusFields
+    {
+        public string IpAddress { get; set; } = "";
+        public int Port { get; set; } = 502;
+        public byte UnitId { get; set; } = 1;
+        public ushort Register { get; set; }
+        public string? RegisterType { get; set; }
+        public int PollTime { get; set; } = 1000;
+    }
+
+    private class S7Fields
+    {
+        public string IpAddress { get; set; } = "";
+        public int Rack { get; set; }
+        public int Slot { get; set; }
+        public string Address { get; set; } = "";
+        public int PollTime { get; set; } = 1000;
+    }
+
+    private class OpcUaClientFields
+    {
+        public string EndpointUrl { get; set; } = "opc.tcp://localhost:4840";
+        public string NodeId { get; set; } = "";
+        public int PollTime { get; set; } = 1000;
+    }
+
+    private class MqttFields
+    {
+        public string Broker { get; set; } = "";
+        public int Port { get; set; } = 1883;
+        public string Topic { get; set; } = "";
+        public string? JsonPath { get; set; }
+    }
+
+    private class RestFields
+    {
+        public string Url { get; set; } = "";
+        public string? JsonPath { get; set; }
+        public int PollTime { get; set; } = 1000;
+    }
+
+    private class CsvFields
+    {
+        public string FilePath { get; set; } = "";
+        public int RowIndex { get; set; }
+        public int ColumnIndex { get; set; }
+        public string? Key { get; set; }
+        public int PollTime { get; set; } = 1000;
+    }
+
+    private class TcpFields
+    {
+        public string IpAddress { get; set; } = "";
+        public int Port { get; set; }
+        public string Command { get; set; } = "";
+        public string? Regex { get; set; }
+        public int PollTime { get; set; } = 1000;
+    }
+
+    private class SqlFields
+    {
+        public string ConnectionString { get; set; } = "";
+        public string Query { get; set; } = "";
+        public int PollTime { get; set; } = 1000;
+    }
+
+    private class EtherNetIPFields
+    {
+        public string IpAddress { get; set; } = "";
+        public string Path { get; set; } = "";
+        public string Tag { get; set; } = "";
+        public string Type { get; set; } = "";
+        public int PollTime { get; set; } = 1000;
+    }
+
+    private class KnxFields
+    {
+        public string IpAddress { get; set; } = "";
+        public int Port { get; set; }
+        public string GroupAddress { get; set; } = "";
+        public string DptType { get; set; } = "";
+    }
+
+    private class SimulationFields
+    {
+        public string Function { get; set; } = "Sine";
+        public double Period { get; set; } = 10000;
+        public double Amplitude { get; set; } = 100;
+        public double Offset { get; set; }
+        public double Phase { get; set; }
+        public int PollTime { get; set; } = 1000;
+        public double Min { get; set; }
+        public double Max { get; set; } = 100;
+    }
+}

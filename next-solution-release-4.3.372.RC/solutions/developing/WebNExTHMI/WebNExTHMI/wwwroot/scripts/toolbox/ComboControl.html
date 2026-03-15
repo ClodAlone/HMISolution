@@ -1,0 +1,404 @@
+﻿<div id="ComboControl" class="ComboControl" style="height: 100%;">
+    <img src="cl.gif" alt="" onload="onComboControlLoaded(this)" id="loadingImage" />
+    <div id="combo"></div>
+
+    <script>
+        function onComboControlLoaded(obj) {
+            var thisPage = $(obj).parent();
+            thisPage.localize();
+
+            var scope = thisPage.scope();
+            if (!scope)
+                return;
+            var paratt = thisPage.data(dataparameters);
+            if (!paratt)
+                return;
+
+            var thisParent = thisPage.parent();
+            $(obj).remove();
+
+            var webKitRenderCorrection = $(thisPage).hasClass("webKitRenderCorrection");
+            if (webKitRenderCorrection)
+                thisPage.css("will-change", "opacity");
+
+            var scaleY = 1;
+            if (webKitRenderCorrection)
+                scaleY = new WebKitCSSMatrix(window.getComputedStyle(thisPage[0]).webkitTransform).d;
+
+            setOpacity(scope, thisParent, thisPage);
+
+            var interval;
+            var deregisterListener;
+            var deregisterListener2;
+            var deregisterListenerActiveLanguage;
+            $(thisPage).bind('destroyed', function () {
+                if (interval)
+                    clearInterval(interval);
+                if (deregisterListener)
+                    deregisterListener();
+                if (deregisterListener2)
+                    deregisterListener2();
+                if (deregisterListenerActiveLanguage)
+                    deregisterListenerActiveLanguage();
+            });
+
+            var parameters = JSON.parse(paratt);
+
+            if (parameters.bFitInWindow && !webKitRenderCorrection)
+                thisParent.css("overflow", "visible");
+
+            var customFonts = [parameters.FontFamily];
+            if (parameters.FontSettingList)
+                $.each(parameters.FontSettingList, function (index, item) {
+                    customFonts.push(item.FontFamily);
+                });
+            loadCustomFonts(customFonts);
+            var dynamicFontElements = [];
+
+            var combocontainer = thisPage.find("#combo");
+            if (scope.biOS)
+                webkitMoveRotateTransform(thisParent, thisPage, combocontainer);
+
+            var bOpened;
+
+            var noDataText = i18next.t1('NoDataText');
+            var onSettingValue;
+            var bIsWithoutItemsSource = (!parameters.ItemsSource || parameters.ItemsSource.length == 0) && (!parameters.TagItemSource || !parameters.TagItemSource.SVGReferenceId) && !parameters.ReaderItemSources;
+            var titems = new Array();
+
+            if (parameters.ItemsSource)
+                titems = populateItemsSource(parameters.ItemsSource);
+
+            function styleInnerComboItems(el) {
+                if (parameters.ToggleButtonDimension != 2) {
+                    var btnWidth = (parameters.ToggleButtonDimension == 0 ? 15 : 23) + "px";
+                    el.find("div.dx-dropdowneditor-button").first().css({
+                        "min-width": btnWidth,
+                        "width": btnWidth
+                    });
+                }
+                var input = el.find("input.dx-texteditor-input").first();
+                var inputCss = {
+                    "color": getSolidColor(parameters.Foreground),
+                    "font-family": parameters.FontFamily,
+                    "font-size": parameters.FontSize,
+                    "font-weight": fontWeightConverter(parameters.FontWeight)
+                };
+                var fontStyle = parameters.FontStyle.toLowerCase();
+                if (fontStyle != "normal")
+                    inputCss["font-style"] = fontStyle;
+                input.css(inputCss);
+                dynamicFontElements.push(input);
+                if (parameters.ToggleButtonBackground && parameters.ToggleButtonBackground.Color)
+                    el.find(".dx-dropdowneditor-button").css({
+                        "background": parameters.ToggleButtonBackground.Color,
+                        "border": "none"
+                    });
+
+                var thisParentID = thisParent.attr("id");
+                var thisPageID = thisParentID + parameters.screenId;
+                var thisPageSelector = "#" + thisParentID + ".ComboControl";
+                var comboInjectedStyle = thisPageSelector + " .dx-dropdowneditor-icon::before { color: " + getSolidColor(parameters.Foreground) + "; }";
+                $("<style id=\"" + thisPageID + "\">" + comboInjectedStyle + "</style>").appendTo("head");
+            }
+
+            var editOptions = {
+                noDataText: noDataText,
+                height: thisParent.height(),
+                width: thisParent.width(),
+                disabled: thisParent.hasClass(disabledClass),
+                hint: i18next.t1(parameters.Tooltip),
+                items: titems,
+                onInitialized: function (e) {
+                    var el = e.component.element();
+                    var cssEdits = {
+                        "text-align": "center",
+                        "height": "100%"
+                    };
+                    var borderCss = {};
+                    setObjectBorder(borderCss, parameters);
+                    if (!$.isEmptyObject(borderCss))
+                        borderCss["border-color"] = parameters.BorderBrush.Color;
+                    else
+                        cssEdits["border"] = "none";
+                    if (parameters.Background.Color)
+                        cssEdits["background"] = parameters.Background.Color;
+                    if (parameters.Foreground.Color)
+                        cssEdits["color"] = getSolidColor(parameters.Foreground);
+
+                    fastdom.mutate(function () {
+                        if (!$.isEmptyObject(borderCss))
+                            el.css(borderCss);
+                        el.css(cssEdits);
+
+                        //setTimeout(function () {
+                        styleInnerComboItems(el);
+                        var selectBoxHeight = combocontainer[0].getBoundingClientRect().height;
+                        if (webKitRenderCorrection) {
+                            e.component.option("dropDownOptions.position", {
+                                my: 'left top', at: 'left top', of: window,
+                                offset: { x: thisParent.attr("x"), y: parseFloat(thisParent.attr("y")) + selectBoxHeight / scaleY + 1 }
+                            });
+                            scope.$on("iOSDeviceRotationCompleted", function (e, arg) {
+                                var selectBoxHeight = combocontainer[0].getBoundingClientRect().height;
+                                scaleY = new WebKitCSSMatrix(window.getComputedStyle(thisPage[0]).webkitTransform).d;
+                                edit.option("dropDownOptions.position", {
+                                    my: 'left top', at: 'left top', of: window,
+                                    offset: { x: thisParent.attr("x"), y: parseFloat(thisParent.attr("y")) + selectBoxHeight / scaleY + 1 }
+                                });
+                            });
+                        }
+                        //}, 1); //on inner elements rendering
+                    });
+                },
+                onOpened: function (e) {
+                    if (!bOpened && parameters.bFitInWindow && !webKitRenderCorrection) {
+                        var parentTranslate = getParentsGroupTranslate(thisParent);
+                        if (parentTranslate != null)
+                            thisParent.css("transform", "translate(" + parentTranslate.x + "px, " + parentTranslate.y + "px)");
+                        thisParent.detach().appendTo("#" + parameters.screenId);
+                        $(".dx-selectbox-popup-wrapper").detach().prependTo(thisParent).css("transform", "none");
+                    }
+                    
+                    if (!webKitRenderCorrection || bOpened)
+                        return;
+                    bOpened = true;
+
+                    fastdom.measure(function () {
+                        var popup = e.component.content();
+                        var rect = popup.find(".dx-scrollable-wrapper")[0].getBoundingClientRect();
+                        var outsideViewport = rect.top + rect.height > $(window).height();
+                        if (outsideViewport) {
+                            fastdom.mutate(function () {
+                                e.component.close();
+                                e.component.option("dropDownOptions.position", {
+                                    my: 'left top', at: 'left top', of: window,
+                                    offset: { x: thisParent.attr("x"), y: parseFloat(thisParent.attr("y")) - 1 - rect.height }
+                                });
+                                e.component.open();
+                            });
+                        }
+                    })
+                },
+                //onClosed: function (e) {
+                //},
+                onValueChanged: function (e) {
+                    if (onSettingValue)
+                        return;
+                    if (!(parameters.screenId in scope.dataValues) || !(parameters.SVGReferenceId in scope.dataValues[parameters.screenId]))
+                        return;
+                    if (!scope.dataValues[parameters.screenId][parameters.SVGReferenceId].isGood)
+                        return;
+                    //if (!e || typeof e.value !== 'number') {
+                    //    return;
+                    //}
+                    var writtenValue = e.value;
+                    if (scope.dataValues[parameters.screenId][parameters.SVGReferenceId].bIsNumeric)
+                        writtenValue = String(titems.indexOf(e.value));
+                    else if (scope.dataValues[parameters.screenId][parameters.SVGReferenceId].bIsBoolean)
+                        writtenValue = (titems.indexOf(e.value) > 0).toString();
+
+                    if (typeof (writtenValue) == "undefined")
+                        return;
+
+                    edit.option("disabled", true);
+                    try {
+                        scope.corehubconnection.invoke("SetValue", parameters.SVGReferenceId, writtenValue, parameters.screenId, false)
+                            .then((ret) => {
+                                edit.option("disabled", false);
+                            })
+                            .catch(err => {
+                                console.error(err.toString());
+
+                                edit.option({
+                                    "disabled": false,
+                                    "value": e.previousValue
+                                });
+                                scope.$broadcast(onError, { ex: err, value: "Error setting value : " + err.toString() + " for item : " + parameters.SVGItemId });
+                            });
+                    }
+                    catch (err) {
+
+                        console.error(err.toString());
+                    }
+                },
+                placeholder: parameters.SVGReferenceId ? i18next.t1('ConnectingToServer') : ""
+            };
+
+            var edit;
+
+            var mutateFunc = function () {
+                edit = combocontainer.dxSelectBox(editOptions).dxSelectBox("instance");
+
+                if (parameters.SVGReferenceId)
+                    applyTagQualityStyle(webKitRenderCorrection ? thisPage : thisParent, scope, parameters.screenId, parameters.SVGReferenceId);
+                deregisterListener = scope.$on(onDataChanged + parameters.screenId + parameters.SVGReferenceId, function (e, value) {
+                    applyTagQualityStyle(webKitRenderCorrection ? thisPage : thisParent, scope, parameters.screenId, parameters.SVGReferenceId);
+                    onSettingValue = true;
+                    try {
+                        if (scope.dataValues[parameters.screenId][parameters.SVGReferenceId].isGood) {
+                            if (bIsWithoutItemsSource && titems.length == 0) {
+                                titems = getEnumReferenceItemsList(scope.dataValues[parameters.screenId][parameters.SVGReferenceId]);
+                                if (titems.length > 0) {
+                                    edit.option({
+                                        "items": titems,
+                                        "placeholder": ""
+                                    });
+                                }
+                            }
+                            setComboValue(scope, parameters, edit, titems);
+                        }
+                        else
+                            edit.option("placeholder", scope.dataValues[parameters.screenId][parameters.SVGReferenceId].lastMessage);
+
+                        checkEnableCombo(scope, edit, thisParent, parameters.SVGReferenceId, parameters.screenId, parameters.TagItemSource)
+                    }
+                    finally {
+                        onSettingValue = false;
+                    }
+                });
+
+                if (parameters.TagItemSource) {
+                    deregisterListener2 = scope.$on(onDataChanged + parameters.screenId + parameters.TagItemSource.SVGReferenceId, function (e, value) {
+                        applyTagQualityStyle(webKitRenderCorrection ? thisPage : thisParent, scope, parameters.screenId, parameters.TagItemSource.SVGReferenceId);
+                        onSettingValue = true;
+                        let bReselectLastIndex;
+                        let lastSelectedIndex = -1;
+                        try {
+                            lastSelectedIndex = titems.indexOf(edit.option("displayValue"));
+                        }
+                        catch { }
+                        try {
+
+                            if (scope.dataValues[parameters.screenId][parameters.TagItemSource.SVGReferenceId].isGood) {
+
+                                titems = new Array();
+                                jQuery.each(scope.dataValues[parameters.screenId][parameters.TagItemSource.SVGReferenceId].invariantValue.split("|"), function (index, item) {
+
+                                    titems.push(i18next.t1(item));
+                                });
+
+                                edit.option({
+                                    "items": titems,
+                                    "placeholder": ""
+                                });
+                            }
+
+                            if (parameters.screenId in scope.dataValues && parameters.SVGReferenceId in scope.dataValues[parameters.screenId]) {
+                                if (titems.indexOf(scope.dataValues[parameters.screenId][parameters.SVGReferenceId].value) != -1)
+                                    setComboValue(scope, parameters, edit, titems);
+                                else if (lastSelectedIndex >= 0 && titems.length >= lastSelectedIndex)
+                                    bReselectLastIndex = true;
+                            }
+                        }
+                        finally {
+                            onSettingValue = false;
+
+                            if (bReselectLastIndex)
+                                edit.option("value", titems[lastSelectedIndex]);
+                        }
+                    });
+                }
+                else if (parameters.ReaderItemSources) {
+                    edit.option("disabled", true);
+                    try {
+                        scope.corehubconnection.invoke("GetEntityItemSources", parameters.ReaderItemSources.xmlUri, parameters.ReaderItemSources.xmlItems, parameters.ReaderItemSources.MaxTake, parameters.ReaderItemSources.DataProvider, parameters.ReaderItemSources.Connection, parameters.ReaderItemSources.Select, parameters.ReaderItemSources.Where, parameters.ReaderItemSources.GroupBy, parameters.ReaderItemSources.Sort, parameters.screenId)
+                            .then((ret) => {
+                                titems = new Array();
+                                jQuery.each(ret, function (index, item) {
+                                    titems.push(i18next.t1(item));
+                                });
+                                var editOptions = {
+                                    "items": titems,
+                                    "placeholder": ""
+                                };
+                                if (titems.length)
+                                    editOptions["value"] = titems[0];
+                                edit.option(editOptions);
+                            })
+                            .catch(err => {
+                                console.error(err.toString());
+                                scope.$broadcast(onError, { ex: err, value: "Error loading ComboControl itemssource: " + err.toString() });
+                            });
+                    }
+                    catch (err) {
+                        console.error(err.toString());
+                    }
+                    finally {
+                        edit.option("disabled", thisParent.hasClass(disabledClass));
+                    }
+                }
+
+                if (parameters.screenId in scope.dataValues && parameters.SVGReferenceId in scope.dataValues[parameters.screenId])
+                    setComboValue(scope, parameters, edit, titems);
+
+                checkEnableCombo(scope, edit, thisParent, parameters.SVGReferenceId, parameters.screenId, parameters.TagItemSource)
+
+                if (parameters.TagItemSource && parameters.screenId in scope.dataValues && parameters.TagItemSource.SVGReferenceId in scope.dataValues[parameters.screenId]) {
+
+                    titems = new Array();
+                    jQuery.each(scope.dataValues[parameters.screenId][parameters.TagItemSource.SVGReferenceId].invariantValue.split("|"), function (index, item) {
+
+                        titems.push(i18next.t1(item));
+                    });
+
+                    edit.option("items", titems);
+                }
+
+                $(thisParent).bind(disabledClassEvent, function () {
+
+                    checkEnableCombo(scope, edit, thisParent, parameters.SVGReferenceId, parameters.screenId, parameters.TagItemSource)
+                });
+
+                deregisterListenerActiveLanguage = scope.$on(onActiveLanguageChanged, function (e, value) {
+                    if (parameters.ItemsSource) {
+                        let lastSelectedIndex = titems.indexOf(edit.option("displayValue"));
+                        titems = populateItemsSource(parameters.ItemsSource);
+                        var newOptions = {
+                            "items": titems
+                        };
+                        if (titems.length >= lastSelectedIndex)
+                            newOptions["value"] = titems[lastSelectedIndex];
+                        edit.option(newOptions);
+                    }
+                    if (parameters.FontSettingList && (value in parameters.FontSettingList) !== -1) {
+                        currentCulture = value;
+                        var fontOpts = applyFontSettingList(dynamicFontElements, parameters.FontSettingList[value]);
+                    }
+                });
+            };
+            mutateHandler.scheduleMutate(parameters.screenId, mutateFunc);
+
+            function checkEnableCombo(scope, edit, thisParent, SVGReferenceId, screenId, tagItemSource) {
+                var enabled = false;
+                if (!SVGReferenceId)
+                    enabled = true;
+                else if (screenId in scope.dataValues && SVGReferenceId in scope.dataValues[screenId]) {
+                    enabled = !thisParent.hasClass(disabledClass) && (!tagItemSource || (scope.dataValues[screenId][SVGReferenceId].isGood && scope.dataValues[screenId][SVGReferenceId].isWritable && scope.dataValues[screenId][SVGReferenceId].isUserWritable));
+                }
+                var wasDisabled = edit.option("disabled");
+                edit.option("disabled", !enabled);
+            }
+
+            function setComboValue(scope, parameters, edit, titems) {
+                var localValue = scope.dataValues[parameters.screenId][parameters.SVGReferenceId].value;
+                try {
+                    let finalValue = localValue;
+                    if (scope.dataValues[parameters.screenId][parameters.SVGReferenceId].bIsNumeric)
+                        finalValue = titems[localValue];
+                    else if (scope.dataValues[parameters.screenId][parameters.SVGReferenceId].bIsBoolean)
+                        finalValue = normalizeBoolean(localValue) ? titems[1] : titems[0];
+
+                    edit.option({
+                        "value": finalValue,
+                        "placeholder": ""
+                    });
+                }
+                catch (err) {
+                    console.error(err.toString());
+                    edit.option("value", i18next.t1('UnknownSelectedValue'));
+                }
+            }
+        }
+    </script>
+</div>

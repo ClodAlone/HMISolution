@@ -1,0 +1,183 @@
+﻿<!-- Copyright © Northwoods Software Corporation, 2008-2015. All Rights Reserved. -->
+
+<UserControl x:Class="EntityRelationship.EntityRelationship" 
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" 
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" 
+    xmlns:go="http://schemas.nwoods.com/GoXam"
+    xmlns:local="clr-namespace:EntityRelationship">
+
+  <UserControl.Resources>
+    <DataTemplate x:Key="NodeTemplate">
+      <Border Background="Gray" BorderBrush="Gray" BorderThickness="2" CornerRadius="3" 
+              go:Part.SelectionAdorned="True" go:Part.Resizable="True"
+              go:Node.FromSpot="AllSides" go:Node.ToSpot="AllSides"
+              go:Node.Location="{Binding Path=Data.Location, Mode=TwoWay}">
+        <Grid>
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+          </Grid.RowDefinitions>
+          <Grid Grid.Row="0">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" HorizontalAlignment="Center"
+                       Text="{Binding Path=Data.Key}" FontWeight="Bold" />
+            <Button Grid.Column="1" Content="*" Click="Button_Click" />
+          </Grid>
+          <ListView Grid.Row="1" Background="White" HorizontalAlignment="Stretch"
+                    ItemsSource="{Binding Path=Data.Items}">
+            <ListView.View>
+              <GridView>
+                <GridView.Columns>
+                  <GridViewColumn>
+                    <GridViewColumn.CellTemplate>
+                      <DataTemplate>
+                        <go:NodePanel>
+                          <go:NodeShape go:NodePanel.Figure="{Binding Path=Figure}"
+                                Width="10" Height="10"
+                                Fill="{Binding Path=Color}"
+                                Stroke="Black" StrokeThickness="1" />
+                        </go:NodePanel>
+                      </DataTemplate>
+                    </GridViewColumn.CellTemplate>
+                  </GridViewColumn>
+                  <GridViewColumn Header="Name"
+                                  DisplayMemberBinding="{Binding Path=Name}" />
+                </GridView.Columns>
+              </GridView>
+            </ListView.View>
+          </ListView>
+        </Grid>
+      </Border>
+    </DataTemplate>
+    
+    <DataTemplate x:Key="LinkTemplate">
+      <go:LinkPanel go:Part.SelectionElementName="Shape" go:Part.SelectionAdorned="True"
+                    go:Part.Reshapable="True" go:Part.Deletable="False">
+        <go:Link.Route>
+          <go:Route Routing="Orthogonal" Curve="JumpOver" />
+        </go:Link.Route>
+        <go:LinkShape x:Name="Shape"
+                      Stroke="Black" StrokeThickness="1.5" />
+        <TextBlock Text="{Binding Path=Data.Text}" go:LinkPanel.Index="0"
+                   go:LinkPanel.Offset="NaN NaN" go:LinkPanel.Orientation="Upright" />
+        <TextBlock Text="{Binding Path=Data.ToText}" go:LinkPanel.Index="-1"
+                   go:LinkPanel.Offset="NaN NaN" go:LinkPanel.Orientation="Upright" />
+      </go:LinkPanel>
+    </DataTemplate>
+
+    <DataTemplate x:Key="SimplifiedNodeTemplate">
+      <Border Background="Gray" BorderBrush="Gray" BorderThickness="1"
+              go:Part.SelectionAdorned="True"
+              go:Node.FromSpot="AllSides" go:Node.ToSpot="AllSides"
+              go:Node.Location="{Binding Path=Data.Location, Mode=TwoWay}">
+        <TextBlock HorizontalAlignment="Center"
+                   Text="{Binding Path=Data.Key}" FontWeight="Bold" />
+      </Border>
+    </DataTemplate>
+
+    <DataTemplate x:Key="SimplifiedLinkTemplate">
+      <go:LinkShape x:Name="Shape"
+            Stroke="Black" StrokeThickness="1.5"
+            go:Part.SelectionAdorned="True" go:Part.Deletable="False">
+        <go:Link.Route>
+          <go:Route Routing="Orthogonal" />
+        </go:Link.Route>
+      </go:LinkShape>
+    </DataTemplate>
+  </UserControl.Resources>
+
+  <Grid>
+    <Grid.RowDefinitions>
+      <RowDefinition Height="5*" />
+      <RowDefinition Height="*" />
+    </Grid.RowDefinitions>
+    <go:Diagram x:Name="myDiagram" Grid.Row="0"
+                BorderBrush="Black" BorderThickness="1"
+                Background="AntiqueWhite"
+                InitialStretch="Uniform" Padding="5"
+                HorizontalContentAlignment="Center"
+                VerticalContentAlignment="Center"
+                NodeTemplate="{StaticResource NodeTemplate}"
+                LinkTemplate="{StaticResource LinkTemplate}"
+                MaximumSelectionCount="1"
+                SelectionChanged="myDiagram_SelectionChanged"
+                CenteredNodeData="{Binding ElementName=myDiagram, Path=SelectedNode.Data}">
+      <go:Diagram.Layout>
+        <!-- only do a layout once, when everything is initialized -->
+        <go:ForceDirectedLayout Conditions="InitialOnly" />
+      </go:Diagram.Layout>
+      
+      <!-- in-place print preview: a GridPattern showing where page breaks might be -->
+      <go:Node Id="PrintGrid">
+        <Grid go:Part.LayerName="Background" go:Part.Selectable="False"
+              go:Part.LayoutId="None" go:Node.Avoidable="False"
+              go:Part.InDiagramBounds="False" go:Part.Printable="False"
+              go:Node.LocationElementName="GridPattern"
+              go:Part.Visible="False">
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+          </Grid.RowDefinitions>
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="Auto" />
+          </Grid.ColumnDefinitions>
+          <!-- the print grid -->
+          <Border BorderBrush="Black" BorderThickness="1" Background="White">
+            <go:GridPattern Grid.Row="0" Grid.Column="0" x:Name="GridPattern">
+              <Path Stroke="Purple" StrokeThickness="2" go:GridPattern.Figure="HorizontalLine" />
+              <Path Stroke="Purple" StrokeThickness="2" go:GridPattern.Figure="VerticalLine" />
+            </go:GridPattern>
+          </Border>
+          <!-- shadows -->
+          <Polygon Grid.Row="0" Grid.Column="1" Fill="Gray"
+                   Points="0 0 20 20 0 20" VerticalAlignment="Top" />
+          <Rectangle Grid.Row="0" Grid.Column="1" Fill="Gray"
+                     Width="20" Margin="0 20 0 0" />
+          <Polygon Grid.Row="1" Grid.Column="0" Fill="Gray"
+                   Points="0 0 20 0 20 20" HorizontalAlignment="Left" />
+          <Rectangle Grid.Row="1" Grid.Column="0" Fill="Gray"
+                     Height="20" Margin="20 0 0 0" />
+          <Rectangle Grid.Row="1" Grid.Column="1" Fill="Gray"
+                     Width="20" Height="20" />
+        </Grid>
+      </go:Node>
+      
+      <!-- this node implements a mode-less form that can be dragged around
+           and scrolls around to stay near the node it is detailing -->
+      <go:Node Id="myDetails">
+        <local:EntityForm go:Part.LayerName="Tool" go:Part.Visible="False"
+                          go:Part.Deletable="False" go:Part.Copyable="False"
+                          go:Part.LayoutId="None" go:Part.Printable="False" />
+      </go:Node>
+    </go:Diagram>
+    <!-- display all of the nodes in this list; keep the selection in sync -->
+    <StackPanel Grid.Row="1" Orientation="Horizontal">
+      <TextBlock Text="Entities:" FontWeight="Bold" />
+      <ListBox x:Name="myListBox"
+             HorizontalAlignment="Left"
+             ItemsSource="{Binding ElementName=myDiagram, Path=Model.NodesSource}"
+             DisplayMemberPath="Key"
+             SelectionMode="Single"
+             SelectionChanged="myListBox_SelectionChanged" />
+      <StackPanel>
+        <CheckBox Content="Simplifies Templates"
+                  Click="SimplifyBox_Click" IsChecked="True" />
+        <TextBlock Text="when scale is small" />
+      </StackPanel>
+      <StackPanel x:Name="printPanel">
+        <StackPanel Orientation="Horizontal">
+          <CheckBox Content="Show In-place Print Preview"
+                    IsChecked="{Binding ElementName=myDiagram, Path=PrintManager.IsPreviewEnabled, Mode=TwoWay}" />
+          <Button x:Name="printButton" Margin="10 0 0 0" Content="Print" />
+        </StackPanel>
+        <TextBlock Text="The purple grid shows the standard page boundaries." />
+        <TextBlock Text="Use Control-Shift-mouse-wheel to change the print scale." />
+        <TextBlock Text="Use Control-mouse-wheel to change the diagram scale." />
+      </StackPanel>
+    </StackPanel>
+  </Grid>
+</UserControl>

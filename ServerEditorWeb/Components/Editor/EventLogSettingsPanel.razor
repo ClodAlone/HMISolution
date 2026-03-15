@@ -1,0 +1,135 @@
+@using ServerEditorWeb.Services
+@using SharedModels
+
+<div class="eventlog-settings-panel p-2">
+    <div class="d-flex align-items-center gap-2 mb-2 border-bottom pb-2">
+        <span class="fw-bold small">📓 Event Log Settings</span>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-header py-1 small fw-bold">⚙️ Configuration</div>
+        <div class="card-body py-2">
+            <div class="form-check mb-2">
+                <input type="checkbox" class="form-check-input" id="evtLogEnabled"
+                       checked="@_enabled"
+                       @onchange="(e) => { _enabled = (bool)(e.Value ?? false); UpdateConfig(); }" />
+                <label class="form-check-label small" for="evtLogEnabled">
+                    Enable event logging
+                </label>
+            </div>
+            <p class="text-muted small mb-2">
+                Records alarms, user authentication, driver errors, and system events to a SQLite database.
+            </p>
+
+            <div class="mb-2">
+                <label class="form-label small mb-0">Database Path</label>
+                <input type="text" class="form-control form-control-sm" style="font-size: 11px;"
+                       placeholder="events.db" disabled="@(!_enabled)"
+                       @bind="_dbPath" @bind:after="UpdateConfig" />
+                <div class="form-text" style="font-size: 10px;">
+                    Relative to nodes.json directory. Default: <code>events.db</code>
+                </div>
+            </div>
+
+            <div class="mb-2">
+                <label class="form-label small mb-0">Max Age (days)</label>
+                <input type="number" class="form-control form-control-sm" style="font-size: 11px; max-width: 150px;"
+                       min="0" placeholder="90" disabled="@(!_enabled)"
+                       @bind="_maxAgeDays" @bind:after="UpdateConfig" />
+                <div class="form-text" style="font-size: 10px;">
+                    Events older than this are automatically purged. 0 = keep forever. Default: 90.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header py-1 small fw-bold">📋 Logged Event Categories</div>
+        <div class="card-body py-2">
+            <table class="table table-sm mb-0" style="font-size: 12px;">
+                <thead>
+                    <tr>
+                        <th>Category</th>
+                        <th>Events</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span class="badge bg-danger">Alarm</span></td>
+                        <td>Alarm activated, returned to normal, acknowledged, confirmed</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge bg-primary">Auth</span></td>
+                        <td>User login, login failed, anonymous session</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge bg-warning text-dark">Driver</span></td>
+                        <td>Driver loaded, connection errors, read/poll errors</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge bg-info text-dark">System</span></td>
+                        <td>Server start/stop, configuration reloads</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public EventCallback OnPropertyChanged { get; set; }
+
+    [Inject] private NodeEditorService Editor { get; set; } = default!;
+
+    private bool _enabled = true;
+    private string _dbPath = "events.db";
+    private int _maxAgeDays = 90;
+
+    protected override void OnParametersSet()
+    {
+        var model = Editor.RootModel;
+        if (model != null)
+        {
+            var cfg = model.Server.EventLog;
+            if (cfg != null)
+            {
+                _enabled = cfg.Enabled;
+                _dbPath = cfg.DbPath;
+                _maxAgeDays = cfg.MaxAgeDays;
+            }
+            else
+            {
+                // No config section yet — defaults
+                _enabled = true;
+                _dbPath = "events.db";
+                _maxAgeDays = 90;
+            }
+        }
+    }
+
+    private void UpdateConfig()
+    {
+        var model = Editor.RootModel;
+        if (model != null)
+        {
+            if (_enabled)
+            {
+                model.Server.EventLog ??= new EventLogConfig();
+                model.Server.EventLog.Enabled = _enabled;
+                model.Server.EventLog.DbPath = string.IsNullOrWhiteSpace(_dbPath) ? "events.db" : _dbPath;
+                model.Server.EventLog.MaxAgeDays = _maxAgeDays;
+            }
+            else
+            {
+                // When disabled, still store the config so the user sees their previous values when re-enabling
+                model.Server.EventLog ??= new EventLogConfig();
+                model.Server.EventLog.Enabled = false;
+                model.Server.EventLog.DbPath = string.IsNullOrWhiteSpace(_dbPath) ? "events.db" : _dbPath;
+                model.Server.EventLog.MaxAgeDays = _maxAgeDays;
+            }
+
+            Editor.MarkChanged();
+            OnPropertyChanged.InvokeAsync();
+        }
+    }
+}

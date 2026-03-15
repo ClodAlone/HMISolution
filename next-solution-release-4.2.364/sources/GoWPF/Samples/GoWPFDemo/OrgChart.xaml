@@ -1,0 +1,114 @@
+﻿<!-- Copyright © Northwoods Software Corporation, 2008-2015. All Rights Reserved. -->
+
+<UserControl x:Class="OrgChart.OrgChart"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:go="http://schemas.nwoods.com/GoXam"
+    xmlns:local="clr-namespace:OrgChart">
+
+  <UserControl.Resources>
+    <local:ImageSizeConverter x:Key="theImageSizeConverter" />
+    
+    <DataTemplate x:Key="NodeTemplate">
+      <go:NodePanel go:Part.SelectionAdorned="True">
+        <Border Background="Azure" BorderBrush="Black" BorderThickness="1" MaxWidth="200">
+          <Grid MaxWidth="200">
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <Grid Grid.Row="0">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <TextBlock Grid.Column="0" Text="{Binding Path=Data.Name}" FontWeight="Bold"
+                         TextAlignment="Left" TextWrapping="Wrap" Margin="4 4 4 2" />
+              <Border Grid.Column="1" BorderBrush="Black" BorderThickness="2"
+                      Height="34" Margin="2"
+                      Width="{Binding Path=Data.Flag,
+                              Converter={StaticResource theImageSizeConverter}}">
+                <Image Stretch="Fill" Source="{Binding Path=Data.Flag}" />
+              </Border>
+            </Grid>
+            <TextBlock Grid.Row="1" Text="{Binding Path=Data.PersonData}"
+                       TextAlignment="Left" TextWrapping="Wrap" Margin="4 4 4 2" />
+          </Grid>
+        </Border>
+      </go:NodePanel>
+    </DataTemplate>
+
+    <DataTemplate x:Key="LinkTemplate">
+      <go:LinkShape Stroke="Black" StrokeThickness="1">
+        <go:Link.Route>
+          <go:Route Routing="Orthogonal" />
+        </go:Link.Route>
+      </go:LinkShape>
+    </DataTemplate>
+  </UserControl.Resources>
+
+  <Grid>
+    <Grid.RowDefinitions>
+      <RowDefinition Height="*" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
+    <!-- the main org chart -->
+    <go:Diagram Grid.Row="0" x:Name="myDiagram"
+                InitialScale="0.75"
+                InitialPanelSpot="MiddleTop"
+                InitialDiagramBoundsSpot="MiddleTop"
+                Padding="10"
+                HorizontalContentAlignment="Center"
+                VerticalContentAlignment="Top"
+                DragSelectingTool="{x:Null}"
+                DraggingTool="{x:Null}"
+                NodeTemplate="{StaticResource NodeTemplate}"
+                LinkTemplate="{StaticResource LinkTemplate}">
+      <go:Diagram.Layout>
+        <go:TreeLayout Angle="90" />
+      </go:Diagram.Layout>
+      <go:Diagram.DefaultTool>
+        <go:ToolManager WheelBehavior="Zooms" />
+      </go:Diagram.DefaultTool>
+    </go:Diagram>
+    <!-- an overview of the main org chart -->
+    <Border Grid.Row="0" Background="WhiteSmoke"
+            HorizontalAlignment="Left" VerticalAlignment="Top" 
+            BorderBrush="Black" BorderThickness="1">
+      <Border BorderBrush="White" BorderThickness="1">
+        <Border BorderBrush="Black" BorderThickness="1">
+          <StackPanel>
+            <TextBlock Text="Overview:" FontWeight="Bold" FontSize="10" />
+            <go:Overview x:Name="myOverview" Width="200" Height="100"
+                         Observed="{Binding ElementName=myDiagram}">
+              <go:Overview.BoxTemplate>
+                <DataTemplate>
+                  <Rectangle Stroke="Red" StrokeThickness="12" Fill="Transparent"
+                             go:Node.LayerName="Tool" go:Part.InDiagramBounds="False" />
+                </DataTemplate>
+              </go:Overview.BoxTemplate>
+            </go:Overview>
+          </StackPanel>
+        </Border>
+      </Border>
+    </Border>
+    <!-- some additional org chart information -->
+    <StackPanel Grid.Row="1" x:Name="myInfo"
+                Orientation="Horizontal" HorizontalAlignment="Right">
+      <TextBlock Text="Information gathered " FontSize="10" />
+      <TextBlock Text="{Binding Path=Date}" FontSize="10" />
+    </StackPanel>
+    <!-- a Slider that controls the DiagramPanel.Scale -->
+    <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Left">
+      <TextBlock Text="Scale: " VerticalAlignment="Center" />
+      <!-- This Slider uses a logarithmic scale,
+        which provides better user control at smaller values.
+        The Minimum means a DiagramPanel.Scale of 2^-4 == 1/16.
+        The Maximum means a DiagramPanel.Scale of 2^2 == 4.
+        The data-binding is defined in code when the Diagram.Template is applied,
+        after which the Diagram.Panel will exist. -->
+      <Slider x:Name="myLogScaleSlider" Orientation="Horizontal" Width="200"
+              Minimum="-4" Maximum="2" />
+    </StackPanel>
+  </Grid>
+</UserControl>

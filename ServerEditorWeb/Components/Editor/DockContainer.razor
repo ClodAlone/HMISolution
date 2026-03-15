@@ -1,0 +1,875 @@
+@namespace ServerEditorWeb.Components.Editor
+@using Microsoft.JSInterop
+@using ServerEditorWeb.Services
+@implements IAsyncDisposable
+
+<div class="dock-container @(_isMaximized ? "dock-maximized" : "")" @oncontextmenu="OnContainerContextMenu" @oncontextmenu:preventDefault @onkeydown="OnKeyDown" tabindex="0">
+    @if (_isMaximized)
+    {
+        @* Maximized mode — only show the maximized panel *@
+        var maxPanel = Panels.FirstOrDefault(p => p.Id == _maximizedPanelId);
+        @if (maxPanel != null)
+        {
+            <div class="dock-zone dock-zone-center dock-zone-maximized">
+                <ul class="dock-tabs">
+                    <li class="dock-tab active">
+                        <span>@maxPanel.Icon @maxPanel.Title</span>
+                    </li>
+                    <li class="dock-tab-spacer"></li>
+                    <li class="dock-tab-action" @onclick="RestoreMaximized" title="Restore (Esc)">
+                        <span>🗗</span>
+                    </li>
+                </ul>
+                <div class="dock-tab-content">
+                    @RenderPanel(maxPanel)
+                </div>
+            </div>
+        }
+    }
+    else
+    {
+        var autoRight = Panels.Where(p => p.Zone == "autohide-right").ToList();
+        var autoBottom = Panels.Where(p => p.Zone == "autohide-bottom").ToList();
+        var centerPanels = Panels.Where(p => p.Zone == "center").ToList();
+        var rightPanels = Panels.Where(p => p.Zone == "right").ToList();
+        var bottomPanels = Panels.Where(p => p.Zone == "bottom").ToList();
+        var zoneAutoRight = "autohide-right";
+        var zoneAutoBottom = "autohide-bottom";
+
+    @* Top row: center + right *@
+    <div class="dock-row-top">
+        @* Center zone — tabbed panels *@
+        <div class="dock-zone dock-zone-center">
+            @if (centerPanels.Count > 0)
+            {
+                <ul class="dock-tabs">
+                    @foreach (var p in centerPanels)
+                    {
+                        var panelId = p.Id;
+                        var zone = "center";
+                        <li class="dock-tab @(panelId == _activeCenterTab ? "active" : "")"
+                            @onclick="() => ActivateTab(panelId, zone)"
+                            @ondblclick="() => MaximizePanel(panelId)"
+                            @oncontextmenu="(e) => ShowTabContextMenu(e, panelId, zone)" @oncontextmenu:preventDefault
+                            @onmousedown="(e) => OnTabMouseDown(e, panelId, zone)">
+                            <span>@p.Icon @p.Title</span>
+                            <button class="dock-tab-close" @onclick="() => HidePanel(panelId)" @onclick:stopPropagation>✕</button>
+                        </li>
+                    }
+                    <li class="dock-tab-spacer"></li>
+                    <li class="dock-tab-action" @onclick="() => MaximizeActiveCenter()" title="Maximize active panel">
+                        <span>⬜</span>
+                    </li>
+                </ul>
+                var activeCenter = centerPanels.FirstOrDefault(p => p.Id == _activeCenterTab) ?? centerPanels.First();
+                <div class="dock-tab-content"
+                     @oncontextmenu="(e) => ShowPaneContextMenu(e, _activeCenterTab, centerPanels)" @oncontextmenu:preventDefault>
+                    @RenderPanel(activeCenter)
+                </div>
+            }
+        </div>
+
+        @* Right zone — tabbed panels *@
+        @if (rightPanels.Count > 0)
+        {
+            var activeRight = rightPanels.FirstOrDefault(p => p.Id == _activeRightTab) ?? rightPanels.First();
+            <div class="dock-splitter dock-splitter-v" @onmousedown="OnRightSplitterDown" @onmousedown:preventDefault></div>
+            <div class="dock-zone dock-zone-right" style="width: @(_rightWidth)px;">
+                <ul class="dock-tabs">
+                    @foreach (var p in rightPanels)
+                    {
+                        var panelId = p.Id;
+                        var zone = "right";
+                        <li class="dock-tab @(panelId == _activeRightTab ? "active" : "")"
+                            @onclick="() => ActivateTab(panelId, zone)"
+                            @ondblclick="() => MaximizePanel(panelId)"
+                            @oncontextmenu="(e) => ShowTabContextMenu(e, panelId, zone)" @oncontextmenu:preventDefault
+                            @onmousedown="(e) => OnTabMouseDown(e, panelId, zone)">
+                            <span>@p.Icon @p.Title</span>
+                            <button class="dock-tab-close" @onclick="() => HidePanel(panelId)" @onclick:stopPropagation>✕</button>
+                        </li>
+                    }
+                    <li class="dock-tab-spacer"></li>
+                    <li class="dock-tab-action" @onclick="() => AutoHideActiveRight()" title="Auto Hide (unpin panel)">
+                        <span>📌</span>
+                    </li>
+                </ul>
+                <div class="dock-tab-content"
+                     @oncontextmenu="(e) => ShowPaneContextMenu(e, _activeRightTab, rightPanels)" @oncontextmenu:preventDefault>
+                    @RenderPanel(activeRight)
+                </div>
+            </div>
+        }
+
+        @* Auto-hide right strip (rendered after the right zone, on the edge) *@
+        @if (autoRight.Count > 0)
+        {
+            <div class="dock-autohide-strip dock-autohide-strip-right">
+                @foreach (var p in autoRight)
+                {
+                    var panelId = p.Id;
+                    <div class="dock-autohide-tab dock-autohide-tab-right @(_autoHideRevealedId == panelId ? "active" : "")"
+                         @onclick="() => ToggleAutoHideReveal(panelId)"
+                         @oncontextmenu="(e) => ShowTabContextMenu(e, panelId, zoneAutoRight)" @oncontextmenu:preventDefault
+                         title="@p.Title">
+                        <span>@p.Icon</span>
+                        <span class="dock-autohide-label">@p.Title</span>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+
+    @* Bottom zone — tabbed panels *@
+    @if (bottomPanels.Count > 0)
+    {
+        var activeBottom = bottomPanels.FirstOrDefault(p => p.Id == _activeBottomTab) ?? bottomPanels.First();
+        <div class="dock-zone dock-zone-bottom" style="height: @(_bottomHeight)px;">
+            <div class="dock-splitter dock-splitter-h" @onmousedown="OnBottomSplitterDown" @onmousedown:preventDefault></div>
+            <ul class="dock-tabs">
+                @foreach (var p in bottomPanels)
+                {
+                    var panelId = p.Id;
+                    var zone = "bottom";
+                    <li class="dock-tab @(panelId == _activeBottomTab ? "active" : "")"
+                        @onclick="() => ActivateTab(panelId, zone)"
+                        @ondblclick="() => MaximizePanel(panelId)"
+                        @oncontextmenu="(e) => ShowTabContextMenu(e, panelId, zone)" @oncontextmenu:preventDefault
+                        @onmousedown="(e) => OnTabMouseDown(e, panelId, zone)">
+                        <span>@p.Icon @p.Title</span>
+                        <button class="dock-tab-close" @onclick="() => HidePanel(panelId)" @onclick:stopPropagation>✕</button>
+                    </li>
+                }
+                <li class="dock-tab-spacer"></li>
+                <li class="dock-tab-action" @onclick="() => AutoHideActiveBottom()" title="Auto Hide (unpin panel)">
+                    <span>📌</span>
+                </li>
+            </ul>
+            <div class="dock-tab-content"
+                 @oncontextmenu="(e) => ShowPaneContextMenu(e, _activeBottomTab, bottomPanels)" @oncontextmenu:preventDefault>
+                @RenderPanel(activeBottom)
+            </div>
+        </div>
+    }
+
+    @if (autoBottom.Count > 0)
+    {
+        <div class="dock-autohide-strip dock-autohide-strip-bottom">
+            @foreach (var p in autoBottom)
+            {
+                var panelId = p.Id;
+                <div class="dock-autohide-tab dock-autohide-tab-bottom @(_autoHideRevealedId == panelId ? "active" : "")"
+                     @onclick="() => ToggleAutoHideReveal(panelId)"
+                     @oncontextmenu="(e) => ShowTabContextMenu(e, panelId, zoneAutoBottom)" @oncontextmenu:preventDefault
+                     title="@p.Title">
+                    <span>@p.Icon</span>
+                    <span class="dock-autohide-label">@p.Title</span>
+                </div>
+            }
+        </div>
+    }
+
+    @* Auto-hide revealed flyout *@
+    @if (!string.IsNullOrEmpty(_autoHideRevealedId))
+    {
+        var revealedPanel = Panels.FirstOrDefault(p => p.Id == _autoHideRevealedId);
+        @if (revealedPanel != null)
+        {
+            var isRight = revealedPanel.Zone == "autohide-right";
+            <div class="dock-autohide-backdrop" @onclick="CloseAutoHideReveal"></div>
+            <div class="dock-autohide-flyout @(isRight ? "dock-autohide-flyout-right" : "dock-autohide-flyout-bottom")"
+                 style="@(isRight ? $"width: {_rightWidth}px;" : $"height: {_bottomHeight}px;")">
+                <div class="dock-autohide-flyout-header">
+                    <span>@revealedPanel.Icon @revealedPanel.Title</span>
+                    <div class="dock-panel-actions">
+                        <button class="dock-btn" @onclick="() => PinAutoHidePanel(_autoHideRevealedId)" title="Pin (dock)">📌</button>
+                        <button class="dock-btn" @onclick="CloseAutoHideReveal" title="Close">✕</button>
+                    </div>
+                </div>
+                <div class="dock-autohide-flyout-body">
+                    @RenderPanel(revealedPanel)
+                </div>
+            </div>
+        }
+    }
+
+    @* Floating panels *@
+    @foreach (var p in Panels.Where(p => p.Zone == "floating"))
+    {
+        var panelId = p.Id;
+        <DockPanel Id="@panelId" Title="@p.Title" Icon="@p.Icon"
+                   IsFloating="true"
+                   FloatX="p.FloatX" FloatY="p.FloatY"
+                   FloatWidth="p.FloatWidth" FloatHeight="p.FloatHeight"
+                   ZIndex="p.ZIndex"
+                   OnClose="() => HidePanel(panelId)"
+                   OnDock="() => DockPanel(panelId)"
+                   OnDragStart="StartDrag"
+                   OnResizeStart="StartResize"
+                   OnBringToFront="() => BringToFront(panelId)"
+                   OnContextMenu="OnFloatingContextMenu">
+            @RenderPanel(p)
+        </DockPanel>
+    }
+
+    @* Drop zone overlay during floating drag or tab undock *@
+    @if (_dragMode is "drag" or "tab-undock")
+    {
+        <div class="dock-drop-overlay">
+            <div class="dock-drop-zone dock-drop-center @(_dropTarget == "center" ? "active" : "")"
+                 @onmouseenter='() => _dropTarget = "center"' @onmouseleave='() => _dropTarget = ""'>
+                Center
+            </div>
+            <div class="dock-drop-zone dock-drop-right @(_dropTarget == "right" ? "active" : "")"
+                 @onmouseenter='() => _dropTarget = "right"' @onmouseleave='() => _dropTarget = ""'>
+                Right
+            </div>
+            <div class="dock-drop-zone dock-drop-bottom @(_dropTarget == "bottom" ? "active" : "")"
+                 @onmouseenter='() => _dropTarget = "bottom"' @onmouseleave='() => _dropTarget = ""'>
+                Bottom
+            </div>
+        </div>
+    }
+    } @* end of non-maximized layout *@
+
+    @* Tab context menu *@
+    <ContextMenu Visible="_contextMenuVisible && _contextMenuMode == ContextMenuMode.Tab" X="_contextMenuX" Y="_contextMenuY" OnClose="CloseContextMenu">
+        @if (_contextMenuZone is not "center")
+        {
+            <div class="dock-context-item" @onclick='() => MovePanel(_contextMenuPanelId, "center")'>📋 Move to Center</div>
+        }
+        @if (_contextMenuZone is not "right" and not "autohide-right")
+        {
+            <div class="dock-context-item" @onclick='() => MovePanel(_contextMenuPanelId, "right")'>▶ Move to Right</div>
+        }
+        @if (_contextMenuZone is not "bottom" and not "autohide-bottom")
+        {
+            <div class="dock-context-item" @onclick='() => MovePanel(_contextMenuPanelId, "bottom")'>▼ Move to Bottom</div>
+        }
+        @if (_contextMenuZone is not "floating")
+        {
+            <div class="dock-context-separator"></div>
+            <div class="dock-context-item" @onclick='() => FloatPanel(_contextMenuPanelId)'>🪟 Float</div>
+        }
+        <div class="dock-context-separator"></div>
+        @if (_contextMenuZone is "right" or "bottom")
+        {
+            <div class="dock-context-item" @onclick='() => AutoHidePanel(_contextMenuPanelId)'>📌 Auto Hide</div>
+        }
+        @if (_contextMenuZone is "autohide-right" or "autohide-bottom")
+        {
+            <div class="dock-context-item" @onclick='() => PinAutoHidePanel(_contextMenuPanelId)'>📌 Pin (Dock)</div>
+        }
+        <div class="dock-context-item" @onclick='() => MaximizePanelFromMenu(_contextMenuPanelId)'>⬜ Maximize</div>
+        <div class="dock-context-separator"></div>
+        <div class="dock-context-item dock-context-danger" @onclick='() => { HidePanel(_contextMenuPanelId); CloseContextMenu(); }'>✕ Close</div>
+    </ContextMenu>
+
+    @* Container context menu — toggle hidden panels *@
+    <ContextMenu Visible="_contextMenuVisible && _contextMenuMode == ContextMenuMode.Container" X="_contextMenuX" Y="_contextMenuY" OnClose="CloseContextMenu">
+        @{
+            var hiddenPanels = Panels.Where(p => p.Zone == "hidden").ToList();
+        }
+        @if (hiddenPanels.Count > 0)
+        {
+            <div class="dock-context-header">Show Panel</div>
+            @foreach (var p in hiddenPanels)
+            {
+                var panelId = p.Id;
+                <div class="dock-context-item" @onclick="() => { ShowPanel(panelId); CloseContextMenu(); }">@p.Icon @p.Title</div>
+            }
+        }
+        else
+        {
+            <div class="dock-context-item dock-context-disabled">No hidden panels</div>
+        }
+    </ContextMenu>
+</div>
+
+@code {
+    [Parameter] public List<DockPanelState> Panels { get; set; } = [];
+    [Parameter] public RenderFragment<DockPanelState>? PanelContent { get; set; }
+    [Parameter] public EventCallback OnLayoutChanged { get; set; }
+
+    [Inject] private IJSRuntime JS { get; set; } = default!;
+    [Inject] private DockLayoutService LayoutService { get; set; } = default!;
+
+    private string _activeCenterTab = "";
+    private string _activeRightTab = "";
+    private string _activeBottomTab = "";
+
+    private int _rightWidth = 400;
+    private int _bottomHeight = 200;
+
+    // Maximize state
+    private bool _isMaximized;
+    private string _maximizedPanelId = "";
+    public bool IsMaximized => _isMaximized;
+
+    // Auto-hide state
+    private string _autoHideRevealedId = "";
+
+    // Drag/resize state
+    private string _dragMode = ""; // "drag", "resize", "splitter-right", "splitter-bottom", "tab-undock"
+    private string _dragPanelId = "";
+    private double _dragOffsetX, _dragOffsetY;
+    private double _splitterStart;
+    private int _splitterOriginalSize;
+    private string _dropTarget = "";
+    private int _nextZ = 101;
+    private DotNetObjectReference<DockContainer>? _dotNetRef;
+
+    // Tab undock state
+    private double _tabDragStartX, _tabDragStartY;
+    private string _tabDragPanelId = "";
+    private string _tabDragSourceZone = "";
+    private bool _tabDragPending;
+
+    // Context menu state
+    private enum ContextMenuMode { Tab, Container }
+    private ContextMenuMode _contextMenuMode;
+    private bool _contextMenuVisible;
+    private double _contextMenuX, _contextMenuY;
+    private string _contextMenuPanelId = "";
+    private string _contextMenuZone = "";
+
+    // Persistence
+    private bool _layoutLoaded;
+    private System.Timers.Timer? _saveDebounce;
+
+    protected override void OnParametersSet()
+    {
+        if (!_layoutLoaded && Panels.Count > 0)
+        {
+            _layoutLoaded = true;
+            LoadLayout();
+        }
+
+        var centerPanels = Panels.Where(p => p.Zone == "center").ToList();
+        if (centerPanels.Count > 0 && !centerPanels.Any(p => p.Id == _activeCenterTab))
+            _activeCenterTab = centerPanels.First().Id;
+
+        var rightPanels = Panels.Where(p => p.Zone == "right").ToList();
+        if (rightPanels.Count > 0 && !rightPanels.Any(p => p.Id == _activeRightTab))
+            _activeRightTab = rightPanels.First().Id;
+
+        var bottomPanels = Panels.Where(p => p.Zone == "bottom").ToList();
+        if (bottomPanels.Count > 0 && !bottomPanels.Any(p => p.Id == _activeBottomTab))
+            _activeBottomTab = bottomPanels.First().Id;
+    }
+
+    private RenderFragment RenderPanel(DockPanelState panel) => builder =>
+    {
+        if (PanelContent != null)
+            PanelContent(panel)(builder);
+    };
+
+    // ─── Layout persistence ─────────────────────────────────
+
+    private void LoadLayout()
+    {
+        var settings = LayoutService.Load();
+        if (settings == null) return;
+
+        _rightWidth = settings.RightWidth;
+        _bottomHeight = settings.BottomHeight;
+        _activeCenterTab = settings.ActiveCenterTab;
+        _activeRightTab = settings.ActiveRightTab;
+        _activeBottomTab = settings.ActiveBottomTab;
+
+        foreach (var panel in Panels)
+        {
+            if (settings.Panels.TryGetValue(panel.Id, out var saved))
+            {
+                panel.Zone = saved.Zone;
+                panel.FloatX = saved.FloatX;
+                panel.FloatY = saved.FloatY;
+                panel.FloatWidth = saved.FloatWidth;
+                panel.FloatHeight = saved.FloatHeight;
+            }
+        }
+    }
+
+    private void SaveLayoutDebounced()
+    {
+        // Debounce saves to avoid writing to disk on every mouse move during drag/resize
+        _saveDebounce?.Stop();
+        _saveDebounce?.Dispose();
+        _saveDebounce = new System.Timers.Timer(300);
+        _saveDebounce.AutoReset = false;
+        _saveDebounce.Elapsed += (_, _) => SaveLayout();
+        _saveDebounce.Start();
+    }
+
+    private void SaveLayout()
+    {
+        var settings = new DockLayoutSettings
+        {
+            ActiveCenterTab = _activeCenterTab,
+            ActiveRightTab = _activeRightTab,
+            ActiveBottomTab = _activeBottomTab,
+            RightWidth = _rightWidth,
+            BottomHeight = _bottomHeight
+        };
+
+        foreach (var panel in Panels)
+        {
+            settings.Panels[panel.Id] = new PanelLayoutState
+            {
+                Zone = panel.Zone,
+                FloatX = panel.FloatX,
+                FloatY = panel.FloatY,
+                FloatWidth = panel.FloatWidth,
+                FloatHeight = panel.FloatHeight
+            };
+        }
+
+        LayoutService.Save(settings);
+    }
+
+    private void NotifyLayoutChanged()
+    {
+        SaveLayoutDebounced();
+        OnLayoutChanged.InvokeAsync();
+    }
+
+    private void ActivateTab(string panelId, string zone)
+    {
+        if (zone == "center") _activeCenterTab = panelId;
+        else if (zone == "right") _activeRightTab = panelId;
+        else if (zone == "bottom") _activeBottomTab = panelId;
+        SaveLayoutDebounced();
+    }
+
+    // ─── Panel operations ───────────────────────────────────
+
+    public void ShowPanel(string id, string zone = "center")
+    {
+        var p = Panels.FirstOrDefault(x => x.Id == id);
+        if (p != null)
+        {
+            p.Zone = zone;
+            if (zone == "center") _activeCenterTab = id;
+            else if (zone == "right") _activeRightTab = id;
+            else if (zone == "bottom") _activeBottomTab = id;
+        }
+        NotifyLayoutChanged();
+        StateHasChanged();
+    }
+
+    public void ActivatePanel(string id)
+    {
+        var p = Panels.FirstOrDefault(x => x.Id == id);
+        if (p == null) return;
+
+        if (p.Zone == "hidden")
+        {
+            ShowPanel(id, "center");
+            return;
+        }
+
+        if (p.Zone is "autohide-right" or "autohide-bottom")
+        {
+            _autoHideRevealedId = id;
+            StateHasChanged();
+            return;
+        }
+
+        ActivateTab(id, p.Zone);
+        StateHasChanged();
+    }
+
+    private void HidePanel(string id)
+    {
+        var p = Panels.FirstOrDefault(x => x.Id == id);
+        if (p != null) p.Zone = "hidden";
+        if (_autoHideRevealedId == id) _autoHideRevealedId = "";
+        NotifyLayoutChanged();
+    }
+
+    private void MovePanel(string id, string targetZone)
+    {
+        CloseContextMenu();
+        if (_autoHideRevealedId == id) _autoHideRevealedId = "";
+        var p = Panels.FirstOrDefault(x => x.Id == id);
+        if (p != null)
+        {
+            p.Zone = targetZone;
+            if (targetZone == "center") _activeCenterTab = id;
+            else if (targetZone == "right") _activeRightTab = id;
+            else if (targetZone == "bottom") _activeBottomTab = id;
+        }
+        NotifyLayoutChanged();
+    }
+
+    private void FloatPanel(string id)
+    {
+        CloseContextMenu();
+        if (_autoHideRevealedId == id) _autoHideRevealedId = "";
+        var p = Panels.FirstOrDefault(x => x.Id == id);
+        if (p != null)
+        {
+            p.Zone = "floating";
+            p.FloatX = 150;
+            p.FloatY = 100;
+            p.FloatWidth = 500;
+            p.FloatHeight = 400;
+            p.ZIndex = _nextZ++;
+        }
+        NotifyLayoutChanged();
+        StateHasChanged();
+    }
+
+    private void DockPanel(string id)
+    {
+        var p = Panels.FirstOrDefault(x => x.Id == id);
+        if (p != null)
+        {
+            p.Zone = "center";
+            _activeCenterTab = id;
+        }
+        NotifyLayoutChanged();
+    }
+
+    private void BringToFront(string id)
+    {
+        var p = Panels.FirstOrDefault(x => x.Id == id);
+        if (p != null)
+            p.ZIndex = _nextZ++;
+    }
+
+    // ─── Maximize / Restore ─────────────────────────────────
+
+    private void MaximizePanel(string panelId)
+    {
+        _isMaximized = true;
+        _maximizedPanelId = panelId;
+        _autoHideRevealedId = "";
+        StateHasChanged();
+    }
+
+    private void MaximizeActiveCenter()
+    {
+        if (!string.IsNullOrEmpty(_activeCenterTab))
+            MaximizePanel(_activeCenterTab);
+    }
+
+    private void MaximizePanelFromMenu(string panelId)
+    {
+        CloseContextMenu();
+        MaximizePanel(panelId);
+    }
+
+    public void ToggleMaximize()
+    {
+        if (_isMaximized)
+        {
+            RestoreMaximized();
+        }
+        else
+        {
+            // Maximize the currently active center panel
+            var centerPanels = Panels.Where(p => p.Zone == "center").ToList();
+            var activeId = centerPanels.FirstOrDefault(p => p.Id == _activeCenterTab)?.Id ?? centerPanels.FirstOrDefault()?.Id;
+            if (!string.IsNullOrEmpty(activeId))
+                MaximizePanel(activeId);
+        }
+    }
+
+    private void RestoreMaximized()
+    {
+        _isMaximized = false;
+        _maximizedPanelId = "";
+        StateHasChanged();
+    }
+
+    private void OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+        {
+            if (_isMaximized)
+            {
+                RestoreMaximized();
+            }
+            else if (!string.IsNullOrEmpty(_autoHideRevealedId))
+            {
+                CloseAutoHideReveal();
+            }
+        }
+    }
+
+    // ─── Auto-hide ──────────────────────────────────────────
+
+    private void AutoHideActiveRight()
+    {
+        if (!string.IsNullOrEmpty(_activeRightTab))
+            AutoHidePanel(_activeRightTab);
+    }
+
+    private void AutoHideActiveBottom()
+    {
+        if (!string.IsNullOrEmpty(_activeBottomTab))
+            AutoHidePanel(_activeBottomTab);
+    }
+
+    private void AutoHidePanel(string panelId)
+    {
+        CloseContextMenu();
+        var p = Panels.FirstOrDefault(x => x.Id == panelId);
+        if (p == null) return;
+
+        // Map the docked zone to an auto-hide zone
+        p.Zone = p.Zone switch
+        {
+            "right" => "autohide-right",
+            "bottom" => "autohide-bottom",
+            _ => "autohide-right" // default to right
+        };
+        NotifyLayoutChanged();
+        StateHasChanged();
+    }
+
+    private void PinAutoHidePanel(string panelId)
+    {
+        CloseContextMenu();
+        var p = Panels.FirstOrDefault(x => x.Id == panelId);
+        if (p == null) return;
+
+        // Restore to the original docked zone
+        p.Zone = p.Zone switch
+        {
+            "autohide-right" => "right",
+            "autohide-bottom" => "bottom",
+            _ => "right"
+        };
+
+        if (p.Zone == "right") _activeRightTab = panelId;
+        else if (p.Zone == "bottom") _activeBottomTab = panelId;
+
+        if (_autoHideRevealedId == panelId) _autoHideRevealedId = "";
+        NotifyLayoutChanged();
+        StateHasChanged();
+    }
+
+    private void ToggleAutoHideReveal(string panelId)
+    {
+        _autoHideRevealedId = _autoHideRevealedId == panelId ? "" : panelId;
+        StateHasChanged();
+    }
+
+    private void CloseAutoHideReveal()
+    {
+        _autoHideRevealedId = "";
+        StateHasChanged();
+    }
+
+    // ─── Context menu ───────────────────────────────────────
+
+    private void ShowTabContextMenu(MouseEventArgs e, string panelId, string zone)
+    {
+        _contextMenuPanelId = panelId;
+        _contextMenuZone = zone;
+        _contextMenuX = e.ClientX;
+        _contextMenuY = e.ClientY;
+        _contextMenuMode = ContextMenuMode.Tab;
+        _contextMenuVisible = true;
+    }
+
+    private void ShowPaneContextMenu(MouseEventArgs e, string activeTabId, List<DockPanelState> panels)
+    {
+        var panel = panels.FirstOrDefault(p => p.Id == activeTabId) ?? panels.First();
+        ShowTabContextMenu(e, panel.Id, panel.Zone);
+    }
+
+    private void OnFloatingContextMenu(DockPanelContextMenuEventArgs e)
+    {
+        ShowTabContextMenu(
+            new MouseEventArgs { ClientX = e.ClientX, ClientY = e.ClientY },
+            e.PanelId,
+            "floating");
+    }
+
+    private void CloseContextMenu()
+    {
+        _contextMenuVisible = false;
+    }
+
+    private void OnContainerContextMenu(MouseEventArgs e)
+    {
+        _contextMenuX = e.ClientX;
+        _contextMenuY = e.ClientY;
+        _contextMenuMode = ContextMenuMode.Container;
+        _contextMenuVisible = true;
+    }
+
+    // ─── Tab drag-to-undock ─────────────────────────────────
+
+    private async Task OnTabMouseDown(MouseEventArgs e, string panelId, string zone)
+    {
+        if (e.Button != 0) return; // Only left button
+        _tabDragPanelId = panelId;
+        _tabDragSourceZone = zone;
+        _tabDragStartX = e.ClientX;
+        _tabDragStartY = e.ClientY;
+        _tabDragPending = true;
+
+        _dotNetRef ??= DotNetObjectReference.Create(this);
+        _dragMode = "tab-pending";
+        await JS.InvokeVoidAsync("dockManager.startDrag", _dotNetRef, "tab-pending", "");
+    }
+
+    // ─── JS interop ─────────────────────────────────────────
+
+    private async Task StartJsDrag(string mode)
+    {
+        _dotNetRef ??= DotNetObjectReference.Create(this);
+        _dragMode = mode;
+        await JS.InvokeVoidAsync("dockManager.startDrag", _dotNetRef, mode, "");
+    }
+
+    private async Task StartDrag(DockPanelDragEventArgs e)
+    {
+        var p = Panels.FirstOrDefault(x => x.Id == e.PanelId);
+        if (p == null) return;
+        _dragPanelId = e.PanelId;
+        _dragOffsetX = e.StartX - p.FloatX;
+        _dragOffsetY = e.StartY - p.FloatY;
+        _dropTarget = "";
+        await StartJsDrag("drag");
+    }
+
+    private async Task StartResize(DockPanelDragEventArgs e)
+    {
+        var p = Panels.FirstOrDefault(x => x.Id == e.PanelId);
+        if (p == null) return;
+        _dragPanelId = e.PanelId;
+        _dragOffsetX = e.StartX;
+        _dragOffsetY = e.StartY;
+        await StartJsDrag("resize");
+    }
+
+    private async Task OnRightSplitterDown(MouseEventArgs e)
+    {
+        _splitterStart = e.ClientX;
+        _splitterOriginalSize = _rightWidth;
+        await StartJsDrag("splitter-right");
+    }
+
+    private async Task OnBottomSplitterDown(MouseEventArgs e)
+    {
+        _splitterStart = e.ClientY;
+        _splitterOriginalSize = _bottomHeight;
+        await StartJsDrag("splitter-bottom");
+    }
+
+    private const double TabUndockThreshold = 12;
+
+    [JSInvokable]
+    public void OnJsMouseMove(double clientX, double clientY)
+    {
+        switch (_dragMode)
+        {
+            case "tab-pending":
+                // Check if the user dragged far enough to trigger undock
+                var dx = clientX - _tabDragStartX;
+                var dy = clientY - _tabDragStartY;
+                if (Math.Sqrt(dx * dx + dy * dy) >= TabUndockThreshold)
+                {
+                    // Undock the tab into a floating panel
+                    var p = Panels.FirstOrDefault(x => x.Id == _tabDragPanelId);
+                    if (p != null)
+                    {
+                        p.Zone = "floating";
+                        p.FloatX = clientX - 100;
+                        p.FloatY = clientY - 15;
+                        p.FloatWidth = 500;
+                        p.FloatHeight = 400;
+                        p.ZIndex = _nextZ++;
+
+                        _dragPanelId = _tabDragPanelId;
+                        _dragOffsetX = 100;
+                        _dragOffsetY = 15;
+                        _dropTarget = "";
+                        _dragMode = "tab-undock";
+                    }
+                    _tabDragPending = false;
+                    InvokeAsync(StateHasChanged);
+                }
+                break;
+
+            case "tab-undock":
+            case "drag":
+                var dp = Panels.FirstOrDefault(x => x.Id == _dragPanelId);
+                if (dp != null)
+                {
+                    dp.FloatX = clientX - _dragOffsetX;
+                    dp.FloatY = clientY - _dragOffsetY;
+                    InvokeAsync(StateHasChanged);
+                }
+                break;
+
+            case "resize":
+                var rp = Panels.FirstOrDefault(x => x.Id == _dragPanelId);
+                if (rp != null)
+                {
+                    rp.FloatWidth = Math.Max(250, rp.FloatWidth + (clientX - _dragOffsetX));
+                    rp.FloatHeight = Math.Max(150, rp.FloatHeight + (clientY - _dragOffsetY));
+                    _dragOffsetX = clientX;
+                    _dragOffsetY = clientY;
+                    InvokeAsync(StateHasChanged);
+                }
+                break;
+
+            case "splitter-right":
+                var deltaR = _splitterStart - clientX;
+                _rightWidth = Math.Max(200, Math.Min(800, _splitterOriginalSize + (int)deltaR));
+                InvokeAsync(StateHasChanged);
+                break;
+
+            case "splitter-bottom":
+                var deltaB = _splitterStart - clientY;
+                _bottomHeight = Math.Max(100, Math.Min(600, _splitterOriginalSize + (int)deltaB));
+                InvokeAsync(StateHasChanged);
+                break;
+        }
+    }
+
+    [JSInvokable]
+    public void OnJsMouseUp(double clientX, double clientY)
+    {
+        if (_dragMode is "drag" or "tab-undock" && !string.IsNullOrEmpty(_dropTarget))
+        {
+            var p = Panels.FirstOrDefault(x => x.Id == _dragPanelId);
+            if (p != null)
+            {
+                p.Zone = _dropTarget;
+                if (_dropTarget == "center") _activeCenterTab = p.Id;
+                else if (_dropTarget == "right") _activeRightTab = p.Id;
+                else if (_dropTarget == "bottom") _activeBottomTab = p.Id;
+            }
+        }
+
+        // Save layout after any drag/resize/splitter/undock operation
+        var shouldSave = _dragMode is "drag" or "tab-undock" or "resize" or "splitter-right" or "splitter-bottom";
+
+        _dragMode = "";
+        _dragPanelId = "";
+        _dropTarget = "";
+        _tabDragPending = false;
+        _tabDragPanelId = "";
+        _tabDragSourceZone = "";
+
+        if (shouldSave)
+            NotifyLayoutChanged();
+
+        InvokeAsync(StateHasChanged);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try { await JS.InvokeVoidAsync("dockManager.stop"); } catch { }
+        _saveDebounce?.Stop();
+        _saveDebounce?.Dispose();
+        _dotNetRef?.Dispose();
+    }
+}

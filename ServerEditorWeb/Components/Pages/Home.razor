@@ -1,0 +1,917 @@
+﻿@page "/"
+@rendermode InteractiveServer
+@using Microsoft.JSInterop
+@using ServerEditorWeb.Models
+@using ServerEditorWeb.Services
+@using SharedModels
+@using ServerEditorWeb.Components.Editor
+@implements IDisposable
+
+<PageTitle>Server Editor</PageTitle>
+
+@if (_requiresLogin && !Auth.IsAuthenticated)
+{
+    <LoginDialog OnLoginResult="OnLoginResult" />
+}
+else if (Auth.MustChangePassword)
+{
+    @* -- Force Change Password Modal -- *@
+    <div class="login-overlay">
+        <div class="login-card">
+            <div class="login-header">
+                <span class="login-icon">🔑</span>
+                <h5 class="mb-0">Change Password</h5>
+            </div>
+            <div class="login-body">
+                <p class="text-muted small">You must change your password before continuing.</p>
+                <p class="text-muted small fst-italic" style="font-size: 10px;">
+                    @(SharedModels.PasswordValidator.GetRequirementsText(Editor.RootModel?.Server?.RequireStrongPassword ?? false))
+                </p>
+                @if (!string.IsNullOrEmpty(_changePwError))
+                {
+                    <div class="alert alert-danger py-1 small mb-2">@_changePwError</div>
+                }
+                @if (!string.IsNullOrEmpty(_changePwSuccess))
+                {
+                    <div class="alert alert-success py-1 small mb-2">@_changePwSuccess</div>
+                }
+                <div class="mb-2">
+                    <label class="form-label small">Current Password</label>
+                    <input type="password" class="form-control" @bind="_changePwCurrent" placeholder="Current password" />
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small">New Password</label>
+                    <input type="password" class="form-control" @bind="_changePwNew" placeholder="New password" />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small">Confirm New Password</label>
+                    <input type="password" class="form-control" @bind="_changePwConfirm" placeholder="Confirm password"
+                           @onkeydown="OnChangePwKeyDown" />
+                </div>
+                <button class="btn btn-primary w-100" @onclick="DoChangePassword">Change Password</button>
+            </div>
+        </div>
+    </div>
+}
+else
+{
+<div class="editor-container">
+    @* Menubar *@
+    <div class="editor-toolbar">
+        @if (_openMenu != null)
+        {
+            <div class="menubar-backdrop" @onclick="CloseMenus"></div>
+        }
+        <div class="menubar">
+            @* File menu *@
+            <div class="menubar-item @(_openMenu == "file" ? "open" : "")" @onclick='() => ToggleMenu("file")' @onmouseenter='() => HoverMenu("file")'>
+                File
+                @if (_openMenu == "file")
+                {
+                    <div class="menubar-dropdown">
+                        <div class="menu-item" @onclick="NewFile" @onclick:stopPropagation>
+                            <span class="menu-icon">📄</span><span class="menu-label">New</span><span class="menu-shortcut">Ctrl+N</span>
+                        </div>
+                        <div class="menu-separator"></div>
+                        <div class="menu-section-label">Open</div>
+                        <div class="menu-item @(string.IsNullOrEmpty(_selectedFile) ? "disabled" : "")" @onclick="LoadFileMenu" @onclick:stopPropagation>
+                            <span class="menu-icon">📂</span><span class="menu-label">Load Selected</span><span class="menu-shortcut">Ctrl+O</span>
+                        </div>
+                        @foreach (var file in _availableFiles.Take(5))
+                        {
+                            var f = file;
+                            <div class="menu-item" @onclick="() => QuickLoadFile(f)" @onclick:stopPropagation>
+                                <span class="menu-icon"></span><span class="menu-label">@Path.GetFileName(f)</span>
+                            </div>
+                        }
+                        @if (Editor.RecentFiles.Count > 0)
+                        {
+                            <div class="menu-separator"></div>
+                            <div class="menu-section-label">Recent</div>
+                            @foreach (var file in Editor.RecentFiles.Where(f => !_availableFiles.Contains(f)).Take(5))
+                            {
+                                var f = file;
+                                <div class="menu-item" @onclick="() => QuickLoadFile(f)" @onclick:stopPropagation>
+                                    <span class="menu-icon"></span><span class="menu-label">@Path.GetFileName(f)</span>
+                                </div>
+                            }
+                        }
+                        <div class="menu-separator"></div>
+                        <div class="menu-item @(!Editor.HasUnsavedChanges ? "disabled" : "")" @onclick="SaveMenu" @onclick:stopPropagation>
+                            <span class="menu-icon">💾</span><span class="menu-label">Save</span><span class="menu-shortcut">Ctrl+S</span>
+                        </div>
+                        <div class="menu-item" @onclick="SaveAsMenu" @onclick:stopPropagation>
+                            <span class="menu-icon">💾</span><span class="menu-label">Save As…</span><span class="menu-shortcut">Ctrl+Shift+S</span>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            @* Edit menu *@
+            <div class="menubar-item @(_openMenu == "edit" ? "open" : "")" @onclick='() => ToggleMenu("edit")' @onmouseenter='() => HoverMenu("edit")'>
+                Edit
+                @if (_openMenu == "edit")
+                {
+                    <div class="menubar-dropdown">
+                        <div class="menu-item @(Editor.SelectedItem is not (FolderNode or VariableGroupNode) ? "disabled" : "")" @onclick="AddFolderMenu" @onclick:stopPropagation>
+                            <span class="menu-icon">📁</span><span class="menu-label">Add Folder</span>
+                        </div>
+                        <div class="menu-item @(Editor.SelectedItem is not (FolderNode or VariableGroupNode) ? "disabled" : "")" @onclick="AddVariableMenu" @onclick:stopPropagation>
+                            <span class="menu-icon">🏷️</span><span class="menu-label">Add Variable</span>
+                        </div>
+                        <div class="menu-item @(Editor.SelectedItem is not ScriptGroupNode ? "disabled" : "")" @onclick="AddScriptMenu" @onclick:stopPropagation>
+                            <span class="menu-icon">⚡</span><span class="menu-label">Add Script</span>
+                        </div>
+                        <div class="menu-item @(Editor.SelectedItem is not ScreenGroupNode ? "disabled" : "")" @onclick="AddScreenMenu" @onclick:stopPropagation>
+                            <span class="menu-icon">🖼️</span><span class="menu-label">Add Screen</span>
+                        </div>
+                        <div class="menu-separator"></div>
+                        @{
+                            var canCopy = Editor.SelectedItem is VariableNode or FolderNode { Parent: not null } or ScriptNode or ScreenNode;
+                            var canPaste = Clipboard.CanPasteInto(Editor.SelectedItem);
+                        }
+                        <div class="menu-item @(!canCopy ? "disabled" : "")" @onclick="CopyMenu" @onclick:stopPropagation>
+                            <span class="menu-icon">📋</span><span class="menu-label">Copy</span><span class="menu-shortcut">Ctrl+C</span>
+                        </div>
+                        <div class="menu-item @(!canPaste ? "disabled" : "")" @onclick="PasteMenu" @onclick:stopPropagation>
+                            <span class="menu-icon">📌</span><span class="menu-label">Paste</span><span class="menu-shortcut">Ctrl+V</span>
+                        </div>
+                        <div class="menu-separator"></div>
+                        <div class="menu-item danger @(Editor.SelectedItem?.Parent == null ? "disabled" : "")" @onclick="DeleteMenu" @onclick:stopPropagation>
+                            <span class="menu-icon">🗑</span><span class="menu-label">Delete</span><span class="menu-shortcut">Del</span>
+                        </div>
+                    </div>
+                }
+            </div>
+
+             @* View menu *@
+            <div class="menubar-item @(_openMenu == "view" ? "open" : "")" @onclick='() => ToggleMenu("view")' @onmouseenter='() => HoverMenu("view")'>
+                View
+                @if (_openMenu == "view")
+                {
+                    <div class="menubar-dropdown">
+                        <div class="menu-section-label">Panels</div>
+                        @foreach (var p in _panels)
+                        {
+                            var panel = p;
+                            <div class="menu-item" @onclick="() => TogglePanelMenu(panel)" @onclick:stopPropagation>
+                                <span class="menu-check">@(panel.Zone != "hidden" ? "✓" : "")</span>
+                                <span class="menu-label">@panel.Icon @panel.Title</span>
+                            </div>
+                        }
+                        <div class="menu-separator"></div>
+                        <div class="menu-item" @onclick="ToggleMaximize" @onclick:stopPropagation>
+                            <span class="menu-check">@(_dockContainer?.IsMaximized == true ? "✓" : "")</span>
+                            <span class="menu-label">⬜ Maximize Active Panel</span>
+                            <span class="menu-shortcut">Esc</span>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            @* Settings menu *@
+            <div class="menubar-item @(_openMenu == "settings" ? "open" : "")" @onclick='() => ToggleMenu("settings")' @onmouseenter='() => HoverMenu("settings")'>
+                Settings
+                @if (_openMenu == "settings")
+                {
+                    <div class="menubar-dropdown">
+                        <div class="menu-section-label">Theme</div>
+                        <div class="menu-item" @onclick="SetLightTheme" @onclick:stopPropagation>
+                            <span class="menu-check">@(Theme.Theme == "light" ? "●" : "")</span>
+                            <span class="menu-label">☀️ Light</span>
+                        </div>
+                        <div class="menu-item" @onclick="SetDarkTheme" @onclick:stopPropagation>
+                            <span class="menu-check">@(Theme.Theme == "dark" ? "●" : "")</span>
+                            <span class="menu-label">🌙 Dark</span>
+                        </div>
+                        <div class="menu-separator"></div>
+                        <div class="menu-section-label">Server Endpoint</div>
+                        <div class="menu-item" style="pointer-events: none; padding: 4px 14px;">
+                            <input type="text" class="form-control form-control-sm"
+                                   style="width: 280px; pointer-events: all;"
+                                   value="@Editor.ServerEndpointUrl"
+                                   @onclick:stopPropagation
+                                   @onchange="e => { Editor.SetServerEndpointUrl(e.Value?.ToString() ?? string.Empty); }" />
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <div class="menubar-spacer"></div>
+
+            @* Status area *@
+            <div class="menubar-status">
+                @if (Auth.IsAuthenticated)
+                {
+                    <span class="badge bg-info text-dark" style="font-size: 10px;" title="@Auth.AccessLevel access">👤 @Auth.Username</span>
+                    <button class="dock-btn" title="Logout" @onclick="Logout" @onclick:stopPropagation>🔓</button>
+                }
+                @if (Editor.HasUnsavedChanges)
+                {
+                    <span class="badge bg-warning text-dark" style="font-size: 10px;">Unsaved</span>
+                }
+                @if (!string.IsNullOrEmpty(Editor.CurrentFilePath))
+                {
+                    <span title="@Editor.CurrentFilePath">@Path.GetFileName(Editor.CurrentFilePath)</span>
+                }
+                <button class="dock-btn" title="Toggle theme" @onclick="ToggleTheme" @onclick:stopPropagation>
+                    @(Theme.Theme == "dark" ? "☀️" : "🌙")
+                </button>
+            </div>
+        </div>
+    </div>
+
+    @* Toolbar *@
+    <div class="editor-iconbar">
+        @* File operations *@
+        <button class="iconbar-btn" title="New (Ctrl+N)" @onclick="NewFile">📄</button>
+        <button class="iconbar-btn" title="Save (Ctrl+S)" @onclick="Save"
+                disabled="@(!Editor.HasUnsavedChanges)">💾</button>
+        <button class="iconbar-btn" title="Save As… (Ctrl+Shift+S)" @onclick="() => { _saveAsPath = Editor.CurrentFilePath ?? string.Empty; _showSaveAsDialog = true; }">📥</button>
+
+        <span class="iconbar-sep"></span>
+
+        @* Edit operations *@
+        <button class="iconbar-btn" title="@($"Undo{(UndoRedo.UndoDescription != null ? $" — {UndoRedo.UndoDescription}" : "")} (Ctrl+Z)")" @onclick="PerformUndo"
+                disabled="@(!UndoRedo.CanUndo)">↩️</button>
+        <button class="iconbar-btn" title="@($"Redo{(UndoRedo.RedoDescription != null ? $" — {UndoRedo.RedoDescription}" : "")} (Ctrl+Y)")" @onclick="PerformRedo"
+                disabled="@(!UndoRedo.CanRedo)">↪️</button>
+        <button class="iconbar-btn" title="Copy (Ctrl+C)" @onclick="() => Editor.CopySelected(Clipboard)"
+                disabled="@(Editor.SelectedItem is not (VariableNode or FolderNode { Parent: not null } or ScriptNode or PlcProgramNode or ScreenNode))">📋</button>
+        <button class="iconbar-btn" title="Paste (Ctrl+V)" @onclick="() => Editor.PasteFromClipboard(Clipboard)"
+                disabled="@(!Clipboard.CanPasteInto(Editor.SelectedItem))">📌</button>
+        <button class="iconbar-btn" title="Delete (Del)" @onclick="Delete"
+                disabled="@(Editor.SelectedItem?.Parent == null)">🗑️</button>
+
+        <span class="iconbar-sep"></span>
+
+        @* Add operations *@
+        <button class="iconbar-btn" title="Add Folder" @onclick="AddFolder"
+                disabled="@(Editor.SelectedItem is not (FolderNode or VariableGroupNode))">📁</button>
+        <button class="iconbar-btn" title="Add Variable" @onclick="AddVariable"
+                disabled="@(Editor.SelectedItem is not (FolderNode or VariableGroupNode))">🏷️</button>
+        <button class="iconbar-btn" title="Add Script" @onclick="AddScript"
+                disabled="@(Editor.SelectedItem is not ScriptGroupNode)">⚡</button>
+        <button class="iconbar-btn" title="Add PLC Program" @onclick="AddPlcProgram"
+                disabled="@(Editor.SelectedItem is not PlcGroupNode)">⚙️</button>
+        <button class="iconbar-btn" title="Add Recipe" @onclick="AddRecipe"
+                disabled="@(Editor.SelectedItem is not RecipeGroupNode)">📦</button>
+        <button class="iconbar-btn" title="Add Screen" @onclick="AddScreen"
+                disabled="@(Editor.SelectedItem is not ScreenGroupNode)">🖼️</button>
+
+        <span class="iconbar-sep"></span>
+
+        @* Layout *@
+        <button class="iconbar-btn @(_dockContainer?.IsMaximized == true ? "iconbar-btn-active" : "")"
+                title="@(_dockContainer?.IsMaximized == true ? "Restore layout (Esc)" : "Maximize active panel")"
+                @onclick="ToggleMaximize">
+            @(_dockContainer?.IsMaximized == true ? "🗗" : "⬜")
+        </button>
+    </div>
+
+    @* Main Content *@
+    <div class="editor-main">
+        @* Left Panel: Tree (hidden when maximized) *@
+        @if (_dockContainer?.IsMaximized != true)
+        {
+        <div class="editor-tree">
+            <TreeView Nodes="Editor.RootItems" SelectedNode="Editor.SelectedItem" OnSelect="SelectNode"
+                    OnDoubleClick="OnNodeDoubleClick"
+                    OnAddFolder="OnAddFolder" OnAddVariable="OnAddVariable" OnAddScript="OnAddScript"
+                    OnAddPlcProgram="OnAddPlcProgram" OnAddRecipe="OnAddRecipe"
+                    OnAddScreen="OnAddScreen" OnAddUserGroup="OnAddUserGroup" OnAddUser="OnAddUser"
+                    OnDelete="OnDelete"
+                    OnCopy="OnCopyNode" OnPaste="OnPasteNode" />
+        </div>
+        }
+
+        @* Dockable Content Area *@
+        <DockContainer @ref="_dockContainer" Panels="_panels" OnLayoutChanged="StateHasChanged">
+            <PanelContent>
+                @if (context.Id == "properties")
+                {
+                    @if (Editor.SelectedScreenSymbol != null && Editor.SelectedItem is ScreenNode)
+                    {
+                        <ScreenSymbolProperties OnPropertyChanged="OnPropertyChanged" />
+                    }
+                    else
+                    {
+                        <NodeProperties Node="Editor.SelectedItem" OnPropertyChanged="OnPropertyChanged" />
+                    }
+                }
+                else if (context.Id == "json")
+                {
+                    <JsonEditor @ref="_jsonEditor"
+                                @bind-JsonText="Editor.JsonEditorText"
+                                OnRefresh="RefreshJson"
+                                OnApply="ApplyJson" />
+                }
+                else if (context.Id == "server")
+                {
+                    <ServerPanel NodesPath="@Editor.CurrentFilePath" />
+                }
+                else if (context.Id == "git")
+                {
+                    <GitPanel NodesPath="@Editor.CurrentFilePath" />
+                }
+                else if (context.Id == "opc")
+                {
+                    <OpcBrowsePanel EndpointUrl="@Editor.ServerEndpointUrl" />
+                }
+                else if (context.Id == "ai")
+                {
+                    <AiPanel CurrentJson="@Editor.JsonEditorText" OnJsonResult="OnAiJsonResult" />
+                }
+                else if (context.Id == "datalogging")
+                {
+                    <DataLoggingPanel NodesPath="@Editor.CurrentFilePath" />
+                }
+                else if (context.Id == "screen")
+                {
+                    <ScreenEditorPanel Node="Editor.SelectedItem" OnPropertyChanged="OnPropertyChanged" />
+                }
+                else if (context.Id == "symbols")
+                {
+                    <SymbolLibraryPanel OnSymbolSelected="OnLibrarySymbolSelected" />
+                }
+                else if (context.Id == "serverlog")
+                {
+                    <LogViewer Title="Server Logs" Service="_serverLogService" />
+                }
+                else if (context.Id == "applog")
+                {
+                    <LogViewer Title="App Log" Service="_appLogService" />
+                }
+                else if (context.Id == "users")
+                {
+                    <UserManagementPanel OnPropertyChanged="OnPropertyChanged" />
+                }
+                else if (context.Id == "strings")
+                {
+                    <StringEditorPanel OnPropertyChanged="OnPropertyChanged" />
+                }
+                else if (context.Id == "eventlog")
+                {
+                    <EventLogSettingsPanel OnPropertyChanged="OnPropertyChanged" />
+                }
+                else if (context.Id == "ladder")
+                {
+                    <LadderEditorPanel Node="Editor.SelectedItem" OnPropertyChanged="OnPropertyChanged" />
+                }
+                else if (context.Id == "crashes")
+                {
+                    <CrashReportsPanel />
+                }
+            </PanelContent>
+        </DockContainer>
+    </div>
+</div>
+} @* end of else (authenticated or no login required) *@
+
+@if (_showSaveAsDialog)
+{
+    <div class="modal-backdrop show" @onclick="() => _showSaveAsDialog = false"></div>
+    <div class="modal show d-block" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header py-2">
+                    <h6 class="modal-title">💾 Save As</h6>
+                    <button type="button" class="btn-close btn-close-sm" @onclick="() => _showSaveAsDialog = false"></button>
+                </div>
+                <div class="modal-body">
+                    <label class="form-label">File path:</label>
+                    <input type="text" class="form-control form-control-sm" @bind="_saveAsPath"
+                           placeholder="C:\path\to\nodes.json" />
+                    @if (!string.IsNullOrEmpty(Editor.CurrentFilePath))
+                    {
+                        <div class="mt-2 small text-muted">
+                            Current: <code>@Editor.CurrentFilePath</code>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer py-2">
+                    <button class="btn btn-sm btn-secondary" @onclick="() => _showSaveAsDialog = false">Cancel</button>
+                    <button class="btn btn-sm btn-success" @onclick="SaveAs" disabled="@string.IsNullOrEmpty(_saveAsPath)">💾 Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(_toast))
+{
+    <div class="toast-notification @(_toastSuccess ? "toast-success" : "toast-error")">
+        @_toast
+    </div>
+}
+
+@code {
+    [Inject] private NodeEditorService Editor { get; set; } = default!;
+    [Inject] private ClipboardService Clipboard { get; set; } = default!;
+    [Inject] private AuthService Auth { get; set; } = default!;
+    [Inject] private ThemeService Theme { get; set; } = default!;
+    [Inject] private IJSRuntime JS { get; set; } = default!;
+    [Inject] private UndoRedoService UndoRedo { get; set; } = default!;
+    [Inject] private PropertyGridService PropertyGrid { get; set; } = default!;
+
+    private LogViewerService _serverLogService = new();
+    private LogViewerService _appLogService = new();
+    private JsonEditor? _jsonEditor;
+    private DockContainer? _dockContainer;
+
+    private string _selectedFile = "";
+    private string[] _availableFiles = [];
+    private string _toast = "";
+    private bool _toastSuccess;
+    private bool _showSaveAsDialog;
+    private string _saveAsPath = "";
+
+    // Menu state
+    private string? _openMenu;
+    private bool _requiresLogin;
+
+    // Change password state
+    private string _changePwCurrent = "";
+    private string _changePwNew = "";
+    private string _changePwConfirm = "";
+    private string _changePwError = "";
+    private string _changePwSuccess = "";
+
+    // Idle auto-logoff
+    private DateTime _lastActivity = DateTime.UtcNow;
+    private System.Threading.Timer? _idleTimer;
+    private DotNetObjectReference<Home>? _idleRef;
+
+    // Tracks the last value synced to JS to avoid redundant interop calls
+    private bool _lastSyncedUnsaved;
+
+    private List<DockPanelState> _panels =
+    [
+        new() { Id = "properties", Title = "Properties", Icon = "🏷️", Zone = "right" },
+        new() { Id = "json", Title = "JSON Editor", Icon = "📝", Zone = "center" },
+        new() { Id = "screen", Title = "Screen Editor", Icon = "🖼️", Zone = "center" },
+        new() { Id = "datalogging", Title = "Data Logging", Icon = "📊", Zone = "center" },
+        new() { Id = "server", Title = "Server", Icon = "🖥️", Zone = "center" },
+        new() { Id = "git", Title = "Git", Icon = "🔀", Zone = "center" },
+        new() { Id = "opc", Title = "OPC Browse", Icon = "🔌", Zone = "right" },
+        new() { Id = "symbols", Title = "Symbol Library", Icon = "🏭", Zone = "right" },
+        new() { Id = "ai", Title = "AI", Icon = "🤖", Zone = "center" },
+        new() { Id = "users", Title = "Users", Icon = "👥", Zone = "center" },
+        new() { Id = "strings", Title = "Strings", Icon = "🌐", Zone = "center" },
+        new() { Id = "eventlog", Title = "Event Log", Icon = "📓", Zone = "center" },
+        new() { Id = "ladder", Title = "Ladder Editor", Icon = "⚡", Zone = "center" },
+        new() { Id = "serverlog", Title = "Server Logs", Icon = "📋", Zone = "bottom" },
+        new() { Id = "applog", Title = "App Log", Icon = "📒", Zone = "bottom" },
+        new() { Id = "crashes", Title = "Crash Reports", Icon = "🐛", Zone = "bottom" },
+    ];
+
+private void OnAddFolder(TreeNode node) { Editor.SelectedItem = node; Editor.AddFolder(); }
+private void OnAddVariable(TreeNode node) { Editor.SelectedItem = node; Editor.AddVariable(); }
+private void OnAddScript(TreeNode node) { Editor.SelectedItem = node; Editor.AddScript(); }
+private void OnAddPlcProgram(TreeNode node) { Editor.SelectedItem = node; Editor.AddPlcProgram(); }
+private void OnAddRecipe(TreeNode node) { Editor.SelectedItem = node; Editor.AddRecipe(); }
+private void OnAddScreen(TreeNode node) { Editor.SelectedItem = node; Editor.AddScreen(); }
+private void OnAddUserGroup(TreeNode node) { Editor.SelectedItem = node; Editor.AddUserGroup(); }
+private void OnAddUser(TreeNode node) { Editor.SelectedItem = node; Editor.AddUser(); }
+private void OnDelete(TreeNode node) { Editor.SelectedItem = node; Editor.DeleteSelected(); }
+private void OnCopyNode(TreeNode node) { Editor.SelectedItem = node; Editor.CopySelected(Clipboard); }
+private void OnPasteNode(TreeNode node) { Editor.SelectedItem = node; Editor.PasteFromClipboard(Clipboard); }
+
+    private DotNetObjectReference<Home>? _shortcutRef;
+
+    protected override void OnInitialized()
+    {
+        Editor.StateChanged += OnEditorStateChanged;
+        Editor.ScreenSelectionChanged += OnScreenSelectionChanged;
+        Theme.ThemeChanged += OnThemeChanged;
+        _availableFiles = Editor.GetAvailableFiles();
+        _serverLogService.Start();
+        _appLogService.AddLog("INF", "Server Editor Web started.");
+
+        if (!string.IsNullOrEmpty(Editor.CurrentFilePath))
+        {
+            _selectedFile = Editor.CurrentFilePath;
+            SetupLogDirectory();
+        }
+
+        _requiresLogin = AuthService.IsLoginRequired(Editor.RootModel);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await JS.InvokeVoidAsync("themeManager.setTheme", Theme.Theme);
+            _shortcutRef = DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("editorShortcuts.init", _shortcutRef);
+
+            // Setup idle tracking for auto-logoff
+            if (_requiresLogin)
+            {
+                _idleRef = DotNetObjectReference.Create(this);
+                await JS.InvokeVoidAsync("eval", """
+                    window.__edSetupIdle = function(dotNetRef) {
+                        var handler = function() { dotNetRef.invokeMethodAsync('OnUserActivity'); };
+                        document.addEventListener('mousemove', handler);
+                        document.addEventListener('keydown', handler);
+                        document.addEventListener('click', handler);
+                        document.addEventListener('touchstart', handler);
+                    };
+                """);
+                await JS.InvokeVoidAsync("__edSetupIdle", _idleRef);
+                _idleTimer = new System.Threading.Timer(CheckIdleTimeout, null, 5000, 5000);
+            }
+        }
+
+        // Sync browser beforeunload guard whenever the unsaved state changes
+        if (Editor.HasUnsavedChanges != _lastSyncedUnsaved)
+        {
+            _lastSyncedUnsaved = Editor.HasUnsavedChanges;
+            await JS.InvokeVoidAsync("editorShortcuts.setUnsavedChanges", _lastSyncedUnsaved);
+        }
+    }
+
+    [JSInvokable]
+    public void OnUserActivity()
+    {
+        _lastActivity = DateTime.UtcNow;
+    }
+
+    private void CheckIdleTimeout(object? state)
+    {
+        if (!Auth.IsAuthenticated || Auth.AutoLogOffSeconds <= 0) return;
+
+        var idleSeconds = (DateTime.UtcNow - _lastActivity).TotalSeconds;
+        if (idleSeconds >= Auth.AutoLogOffSeconds)
+        {
+            InvokeAsync(() =>
+            {
+                Logout();
+                _appLogService.AddLog("INF", "Auto log-off: session expired due to inactivity.");
+                StateHasChanged();
+            });
+        }
+    }
+
+    private async void OnThemeChanged()
+    {
+        await JS.InvokeVoidAsync("themeManager.setTheme", Theme.Theme);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void OnEditorStateChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void OnScreenSelectionChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void LoadFile()
+    {
+        if (string.IsNullOrEmpty(_selectedFile)) return;
+        var (success, msg) = Editor.LoadFromFile(_selectedFile);
+        ShowToast(success, msg);
+        if (success)
+        {
+            SetupLogDirectory();
+            _requiresLogin = AuthService.IsLoginRequired(Editor.RootModel);
+        }
+    }
+
+    private void Save()
+    {
+        if (string.IsNullOrEmpty(Editor.CurrentFilePath))
+        {
+            // No file path yet — redirect to Save As
+            _saveAsPath = "";
+            _showSaveAsDialog = true;
+            return;
+        }
+        var (success, msg) = Editor.Save();
+        ShowToast(success, msg);
+        if (success)
+            _appLogService.AddLog("INF", msg);
+    }
+
+    private void SaveAs()
+    {
+        if (string.IsNullOrEmpty(_saveAsPath)) return;
+        var (success, msg) = Editor.SaveAs(_saveAsPath);
+        ShowToast(success, msg);
+        if (success)
+        {
+            _showSaveAsDialog = false;
+            _selectedFile = _saveAsPath;
+            _availableFiles = Editor.GetAvailableFiles();
+            _appLogService.AddLog("INF", msg);
+            SetupLogDirectory();
+        }
+    }
+
+    private void NewFile()
+    {
+        Editor.NewFile();
+        _selectedFile = "";
+        _appLogService.AddLog("INF", "New configuration created.");
+    }
+
+    private void SelectNode(TreeNode node)
+    {
+        Editor.SelectNode(node);
+        if (node is not ScreenNode)
+            Editor.SetScreenSelection(null, []);
+    }
+
+    private void OnNodeDoubleClick(TreeNode node)
+    {
+        Editor.SelectNode(node);
+
+        var panelId = node switch
+        {
+            ScreenNode or ScreenGroupNode => "screen",
+            UserNode or UserGroupNode or UserGroupListNode => "users",
+            ScriptNode or ScriptGroupNode => "json",
+            PlcProgramNode pn when pn.PlcProgram.Language.Equals("LD", StringComparison.OrdinalIgnoreCase) => "ladder",
+            PlcProgramNode or PlcGroupNode => "properties",
+            RecipeNode or RecipeGroupNode => "properties",
+            _ => "properties"
+        };
+
+        _dockContainer?.ActivatePanel(panelId);
+    }
+
+    private void AddFolder() { Editor.AddFolder(); }
+    private void AddVariable() { Editor.AddVariable(); }
+    private void AddScript() { Editor.AddScript(); }
+    private void AddPlcProgram() { Editor.AddPlcProgram(); }
+    private void AddRecipe() { Editor.AddRecipe(); }
+    private void AddScreen() { Editor.AddScreen(); }
+    private void Delete() { Editor.DeleteSelected(); }
+
+    // ─── Menu helpers ───────────────────────────────────────
+
+    private void ToggleMenu(string menu) => _openMenu = _openMenu == menu ? null : menu;
+    private void HoverMenu(string menu) { if (_openMenu != null) _openMenu = menu; }
+    private void CloseMenus() => _openMenu = null;
+
+    private void LoadFileMenu() { CloseMenus(); LoadFile(); }
+    private void SaveMenu() { CloseMenus(); Save(); }
+    private void SaveAsMenu() { CloseMenus(); _saveAsPath = Editor.CurrentFilePath ?? ""; _showSaveAsDialog = true; }
+    private void AddFolderMenu() { CloseMenus(); AddFolder(); }
+    private void AddVariableMenu() { CloseMenus(); AddVariable(); }
+    private void AddScriptMenu() { CloseMenus(); AddScript(); }
+    private void AddScreenMenu() { CloseMenus(); AddScreen(); }
+    private void DeleteMenu() { CloseMenus(); Delete(); }
+    private void CopyMenu() { CloseMenus(); Editor.CopySelected(Clipboard); }
+    private void PasteMenu() { CloseMenus(); Editor.PasteFromClipboard(Clipboard); }
+
+    private void QuickLoadFile(string path)
+    {
+        CloseMenus();
+        _selectedFile = path;
+        LoadFile();
+    }
+
+    private void TogglePanelMenu(DockPanelState panel)
+    {
+        if (panel.Zone == "hidden")
+            _dockContainer?.ShowPanel(panel.Id, "center");
+        else
+            panel.Zone = "hidden";
+    }
+
+    private void ToggleMaximize()
+    {
+        CloseMenus();
+        _dockContainer?.ToggleMaximize();
+    }
+
+    private async void SetTheme(string theme)
+    {
+        CloseMenus();
+        Theme.SetTheme(theme);
+        await JS.InvokeVoidAsync("themeManager.setTheme", theme);
+    }
+
+    private void SetLightTheme() => SetTheme("light");
+    private void SetDarkTheme() => SetTheme("dark");
+
+    private async void ToggleTheme()
+    {
+        Theme.Toggle();
+        await JS.InvokeVoidAsync("themeManager.setTheme", Theme.Theme);
+    }
+
+    private void OnPropertyChanged()
+    {
+        Editor.MarkChanged();
+    }
+
+    private void PerformUndo()
+    {
+        if (UndoRedo.Undo())
+        {
+            Editor.MarkChanged();
+        }
+    }
+
+    private void PerformRedo()
+    {
+        if (UndoRedo.Redo())
+        {
+            Editor.MarkChanged();
+        }
+    }
+
+    // ─── Auth helpers ───────────────────────────────────────
+
+    private void OnLoginResult(bool success)
+    {
+        if (success)
+        {
+            _appLogService.AddLog("INF", $"User '{Auth.Username}' logged in ({Auth.AccessLevel}).");
+            _lastActivity = DateTime.UtcNow;
+            StateHasChanged();
+        }
+    }
+
+    private void Logout()
+    {
+        var user = Auth.Username;
+        Auth.Logout();
+        _appLogService.AddLog("INF", $"User '{user}' logged out.");
+        _requiresLogin = AuthService.IsLoginRequired(Editor.RootModel);
+    }
+
+    // ─── Change Password ────────────────────────────────────
+
+    private async Task OnChangePwKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            await DoChangePassword();
+    }
+
+    private Task DoChangePassword()
+    {
+        _changePwError = "";
+        _changePwSuccess = "";
+
+        var requireStrong = Editor.RootModel?.Server?.RequireStrongPassword ?? false;
+        var (success, message) = Auth.ChangePassword(_changePwCurrent, _changePwNew, _changePwConfirm, requireStrong);
+        if (success)
+        {
+            _changePwSuccess = message;
+            _changePwCurrent = "";
+            _changePwNew = "";
+            _changePwConfirm = "";
+            // Persist the password change
+            Editor.MarkChanged();
+            Editor.Save();
+        }
+        else
+        {
+            _changePwError = message;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private void OnLibrarySymbolSelected(SymbolLibraryItem item)
+    {
+        // Find the active screen from the selected node, or the screen editor panel context
+        var screenNode = Editor.SelectedItem as ScreenNode;
+        if (screenNode?.Screen == null)
+        {
+            // Try to find any screen node in the tree
+            _appLogService.AddLog("WRN", "Select a Screen node to add a library symbol.");
+            return;
+        }
+
+        var screen = screenNode.Screen;
+        var sym = new ScreenSymbol
+        {
+            Id = $"sym_{screen.Symbols.Count + 1}_{DateTime.Now.Ticks}",
+            Type = "svg",
+            X = 50 + screen.Symbols.Count * 20 % Math.Max(1, screen.Width - 100),
+            Y = 50 + screen.Symbols.Count * 20 % Math.Max(1, screen.Height - 80),
+            Width = item.DefaultWidth,
+            Height = item.DefaultHeight,
+            Label = item.Name,
+            SvgContent = item.SvgContent,
+            Fill = "none",
+            Stroke = "#333333"
+        };
+
+        screen.Symbols.Add(sym);
+        Editor.MarkChanged();
+        _dockContainer?.ShowPanel("screen", "center");
+    }
+
+    private void RefreshJson()
+    {
+        Editor.RefreshJsonFromTree();
+    }
+
+    private void ApplyJson()
+    {
+        var (success, msg) = Editor.ApplyJsonToTree();
+        _jsonEditor?.ShowMessage(success, msg);
+    }
+
+    private void OnAiJsonResult(string newJson)
+    {
+        var oldJson = Editor.JsonEditorText;
+        Editor.JsonEditorText = newJson;
+        _appLogService.AddLog("INF", "AI response applied.");
+        _appLogService.AddLog("DBG", $"JSON Length change: {newJson.Length - oldJson.Length}");
+        Editor.DiffText = newJson;
+    }
+
+    private void SetupLogDirectory()
+    {
+        if (!string.IsNullOrEmpty(Editor.CurrentFilePath))
+        {
+            var dir = Path.GetDirectoryName(Path.GetFullPath(Editor.CurrentFilePath));
+            if (dir != null)
+            {
+                var configName = Path.GetFileNameWithoutExtension(Editor.CurrentFilePath);
+                _serverLogService.SetLogDirectory(Path.Combine(dir, "Logs"), $"log-{configName}-*.txt");
+            }
+        }
+    }
+
+    private async void ShowToast(bool success, string message)
+    {
+        _toastSuccess = success;
+        _toast = message;
+        StateHasChanged();
+        await Task.Delay(3000);
+        _toast = "";
+        await InvokeAsync(StateHasChanged);
+    }
+
+    // ─── Keyboard shortcuts ─────────────────────────────────
+
+    [JSInvokable]
+    public void OnKeyboardCopy()
+    {
+        Editor.CopySelected(Clipboard);
+        InvokeAsync(StateHasChanged);
+    }
+
+    [JSInvokable]
+    public void OnKeyboardPaste()
+    {
+        Editor.PasteFromClipboard(Clipboard);
+        InvokeAsync(StateHasChanged);
+    }
+
+    [JSInvokable]
+    public void OnKeyboardSave()
+    {
+        Save();
+        InvokeAsync(StateHasChanged);
+    }
+
+    [JSInvokable]
+    public void OnKeyboardUndo()
+    {
+        PerformUndo();
+        InvokeAsync(StateHasChanged);
+    }
+
+    [JSInvokable]
+    public void OnKeyboardRedo()
+    {
+        PerformRedo();
+        InvokeAsync(StateHasChanged);
+    }
+
+    [JSInvokable]
+    public void OnKeyboardEscape()
+    {
+        if (_dockContainer != null)
+        {
+            if (_dockContainer.IsMaximized)
+                _dockContainer.ToggleMaximize();
+        }
+        InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        Editor.StateChanged -= OnEditorStateChanged;
+        Editor.ScreenSelectionChanged -= OnScreenSelectionChanged;
+        Theme.ThemeChanged -= OnThemeChanged;
+        UndoRedo.StateChanged -= OnUndoRedoStateChanged;
+        PropertyGrid.OnPropertySet -= OnPropertyGridValueSet;
+        _serverLogService.Dispose();
+        _appLogService.Dispose();
+        _shortcutRef?.Dispose();
+        _idleTimer?.Dispose();
+        _idleRef?.Dispose();
+    }
+}

@@ -1,0 +1,424 @@
+<ResourceDictionary mc:Ignorable="cs"
+                    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:cs="colorscheme_ignorable_uri"
+                    xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+                    xmlns:dxdash="http://schemas.devexpress.com/winfx/2008/xaml/dashboard"
+                    xmlns:dxdashi="http://schemas.devexpress.com/winfx/2008/xaml/dashboard/internal"
+                    xmlns:dxdasht="http://schemas.devexpress.com/winfx/2008/xaml/dashboard/themekeys"
+                    xmlns:dxm="http://schemas.devexpress.com/winfx/2008/xaml/map"
+                    xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+                    xmlns:dxt="http://schemas.devexpress.com/winfx/2008/xaml/core/themekeys"
+                    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <dxdashi:EventToCommandConverter x:Key="EventToCommandConverter"/>
+
+    <dxdashi:LegendLabelConverter x:Key="LegendLabelConverter"/>
+
+    <DataTemplate x:Key="LegendLabelTemplate">
+        <TextBlock Text="{Binding Converter={StaticResource ResourceKey=LegendLabelConverter}}"/>
+    </DataTemplate>
+
+    <DataTemplate x:Key="{dxdasht:MapItemThemeKey ResourceKey=DashboardColorListLegendTemplate}">
+        <dxm:ColorListLegend Alignment="{Binding ColorLegendAlignment}"
+                             ItemLabelTemplate="{StaticResource LegendLabelTemplate}"
+                             Tag="{Binding ColorLegendFormatter}"
+                             Visibility="{Binding ColorListLegendVisibility}"/>
+    </DataTemplate>
+
+    <DataTemplate x:Key="{dxdasht:MapItemThemeKey ResourceKey=DashboardColorScaleLegendTemplate}">
+        <dxm:ColorScaleLegend Alignment="{Binding ColorLegendAlignment}"
+                              ItemLabelTemplate="{StaticResource LegendLabelTemplate}"
+                              Tag="{Binding ColorLegendFormatter}"
+                              Visibility="{Binding ColorScaleLegendVisibility}"/>
+    </DataTemplate>
+
+    <DataTemplate x:Key="{dxdasht:MapItemThemeKey ResourceKey=BubbleColorListLegendTemplate}">
+        <dxm:ColorListLegend Alignment="{Binding ColorLegendAlignment}"
+                             ItemLabelTemplate="{StaticResource LegendLabelTemplate}"
+                             Tag="{Binding ColorLegendFormatter}"
+                             Visibility="{Binding BubbleColorListLegendVisibility}"/>
+    </DataTemplate>
+
+    <DataTemplate x:Key="{dxdasht:MapItemThemeKey ResourceKey=BubbleColorScaleLegendTemplate}">
+        <dxm:ColorScaleLegend Alignment="{Binding ColorLegendAlignment}"
+                              ItemLabelTemplate="{StaticResource LegendLabelTemplate}"
+                              Tag="{Binding ColorLegendFormatter}"
+                              Visibility="{Binding BubbleColorScaleLegendVisibility}"/>
+    </DataTemplate>
+
+    <DataTemplate x:Key="{dxdasht:MapItemThemeKey ResourceKey=BubbleSizeLegendTemplate}">
+        <dxm:SizeLegend Alignment="{Binding SizeLegendAlignment}"
+                        ItemLabelTemplate="{StaticResource LegendLabelTemplate}"
+                        Tag="{Binding SizeLegendFormatter}"
+                        Type="{Binding SizeLegendMode}"
+                        Visibility="{Binding BubbleSizeVisibility}"/>
+    </DataTemplate>
+
+    <DataTemplate x:Key="{dxdasht:MapItemThemeKey ResourceKey=PieColorListLegendTemplate}">
+        <dxm:ColorListLegend Alignment="{Binding ColorLegendAlignment}" Visibility="{Binding PieColorListLegendVisibility}"/>
+    </DataTemplate>
+
+    <DataTemplate x:Key="{dxdasht:MapItemThemeKey ResourceKey=PieColorScaleLegendTemplate}">
+        <dxm:ColorScaleLegend Alignment="{Binding ColorLegendAlignment}" Visibility="{Binding PieColorScaleLegendVisibility}"/>
+    </DataTemplate>
+
+    <DataTemplate x:Key="{dxdasht:MapItemThemeKey ResourceKey=PieSizeLegendTemplate}">
+        <dxm:SizeLegend Alignment="{Binding SizeLegendAlignment}"
+                        ItemLabelTemplate="{StaticResource LegendLabelTemplate}"
+                        Tag="{Binding SizeLegendFormatter}"
+                        Type="{Binding SizeLegendMode}"
+                        Visibility="{Binding PieSizeVisibility}"/>
+    </DataTemplate>
+
+    <DataTemplate x:Key="{dxdasht:MapItemThemeKey ResourceKey=DashboardsLayerTemplate}">
+        <ContentControl>
+            <dxm:VectorLayer x:Name="DashboardsLayer" SelectedItems="{Binding SelectedItems}">
+                <dxm:VectorLayer.Resources>
+                    <dxm:ListSourceDataAdapter x:Key="dashboardsLayerDataAdapter" DataSource="{Binding Items}"/>
+                    <dxm:ShapeTitleOptions x:Key="dashboardsLayerShapeTitleOptions"
+                                           Pattern="{Binding ShapeTitlesPattern}"
+                                           VisibilityMode="{Binding ShapeTitlesVisibility}"/>
+                    <dxm:ChoroplethColorizer x:Key="choroplethColorizer"
+                                             Colors="{Binding Colorizer.Colors}"
+                                             RangeStops="{Binding Colorizer.RangeStops}">
+                        <dxm:ChoroplethColorizer.ValueProvider>
+                            <dxm:ShapeAttributeValueProvider AttributeName="{Binding Colorizer.AttributeName}"/>
+                        </dxm:ChoroplethColorizer.ValueProvider>
+                    </dxm:ChoroplethColorizer>
+                </dxm:VectorLayer.Resources>
+                <dxmvvm:Interaction.Behaviors>
+                    <dxmvvm:EventToCommand Command="{Binding OnViewportChangedCommand}"
+                                           EventName="ViewportChanged"
+                                           PassEventArgsToCommand="True"/>
+                </dxmvvm:Interaction.Behaviors>
+                <dxm:VectorLayer.Data>
+                    <Binding Source="{StaticResource dashboardsLayerDataAdapter}"/>
+                </dxm:VectorLayer.Data>
+                <dxm:VectorLayer.ShapeTitleOptions>
+                    <Binding Source="{StaticResource dashboardsLayerShapeTitleOptions}"/>
+                </dxm:VectorLayer.ShapeTitleOptions>
+                <dxm:VectorLayer.Colorizer>
+                    <Binding Source="{StaticResource choroplethColorizer}"/>
+                </dxm:VectorLayer.Colorizer>
+            </dxm:VectorLayer>
+        </ContentControl>
+    </DataTemplate>
+
+    <DataTemplate x:Key="{dxdasht:MapItemThemeKey ResourceKey=BubbleLayerTemplate}">
+        <dxm:VectorLayer x:Name="BubbleLayer" SelectedItems="{Binding BubblesSelection}">
+            <dxm:VectorLayer.Resources>
+                <dxm:BubbleChartDataAdapter x:Key="bubbleDataAdapter"
+                                            DataSource="{Binding Bubbles}"
+                                            ItemMaxSize="{Binding BubbleMaxSize}"
+                                            ItemMinSize="20">
+                    <dxm:BubbleChartDataAdapter.AttributeMappings>
+                        <dxm:MapItemAttributeMapping Name="LatitudeSelection" Member="LatitudeSelection"/>
+                        <dxm:MapItemAttributeMapping Name="LongitudeSelection" Member="LongitudeSelection"/>
+                        <dxm:MapItemAttributeMapping Name="TooltipDimensions" Member="TooltipDimensions"/>
+                        <dxm:MapItemAttributeMapping Name="TooltipMeasures" Member="TooltipMeasures"/>
+                        <dxm:MapItemAttributeMapping Name="MainTooltip" Member="MainTooltip"/>
+                        <dxm:MapItemAttributeMapping Name="Weight" Member="Weight"/>
+                        <dxm:MapItemAttributeMapping Name="Color" Member="Color"/>
+                        <dxm:MapItemAttributeMapping Name="ClusteredCount" Member="ClusteredCount"/>
+                    </dxm:BubbleChartDataAdapter.AttributeMappings>
+                    <dxm:BubbleChartDataAdapter.Mappings>
+                        <dxm:MapBubbleMappingInfo Latitude="Latitude"
+                                                  Longitude="Longitude"
+                                                  Value="Weight"/>
+                    </dxm:BubbleChartDataAdapter.Mappings>
+                    <dxm:BubbleChartDataAdapter.MeasureRules>
+                        <dxm:MeasureRules RangeStops="{Binding BubbleRangeStops}">
+                            <dxm:MeasureRules.ValueProvider>
+                                <dxm:ItemAttributeValueProvider AttributeName="Weight"/>
+                            </dxm:MeasureRules.ValueProvider>
+                        </dxm:MeasureRules>
+                    </dxm:BubbleChartDataAdapter.MeasureRules>
+                    <dxmvvm:Interaction.Behaviors>
+                        <dxmvvm:EventToCommand Command="{Binding Path=Owner.CustomizeMapItemCommand}"
+                                               EventName="CustomizeMapItem"
+                                               PassEventArgsToCommand="True"/>
+                    </dxmvvm:Interaction.Behaviors>
+                </dxm:BubbleChartDataAdapter>
+                <dxm:ChoroplethColorizer x:Key="bubbleColorizer"
+                                         Colors="{Binding Colorizer.Colors}"
+                                         RangeStops="{Binding Colorizer.RangeStops}">
+                    <dxm:ChoroplethColorizer.ValueProvider>
+                        <dxm:ShapeAttributeValueProvider AttributeName="{Binding Colorizer.AttributeName}"/>
+                    </dxm:ChoroplethColorizer.ValueProvider>
+                </dxm:ChoroplethColorizer>
+            </dxm:VectorLayer.Resources>
+            <dxm:VectorLayer.Data>
+                <Binding Source="{StaticResource bubbleDataAdapter}"/>
+            </dxm:VectorLayer.Data>
+            <dxm:VectorLayer.Colorizer>
+                <Binding Source="{StaticResource bubbleColorizer}"/>
+            </dxm:VectorLayer.Colorizer>
+        </dxm:VectorLayer>
+    </DataTemplate>
+
+    <DataTemplate x:Key="{dxdasht:MapItemThemeKey ResourceKey=GeoPointLayerTemplate}">
+        <dxm:VectorLayer x:Name="GeoPointLayer" SelectedItems="{Binding GeoPointSelection}">
+            <dxm:VectorLayer.Resources>
+                <dxm:ListSourceDataAdapter x:Key="geoPointDataAdapter" DataSource="{Binding GeoPoints}">
+                    <dxmvvm:Interaction.Behaviors>
+                        <dxmvvm:EventToCommand Command="{Binding Path=Owner.CustomizeMapItemCommand}"
+                                               EventName="CustomizeMapItem"
+                                               PassEventArgsToCommand="True"/>
+                    </dxmvvm:Interaction.Behaviors>
+                    <dxm:ListSourceDataAdapter.ItemSettings>
+                        <dxm:MapCustomElementSettings>
+                            <dxm:MapCustomElementSettings.ContentTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="-13, -13">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Grid>
+                                            <Border x:Name="Stroke"
+                                                    Background="{DynamicResource {dxdasht:MapItemThemeKey ResourceKey=GeoPointBorderBrush}}"
+                                                    CornerRadius="45"
+                                                    Height="26"
+                                                    Opacity="0.38"
+                                                    Width="26"/>
+                                            <Border x:Name="Point"
+                                                    Background="{DynamicResource {dxdasht:MapItemThemeKey ResourceKey=GeoPointBackgroundBrush}}"
+                                                    BorderBrush="{DynamicResource {dxdasht:MapItemThemeKey ResourceKey=GeoPointBorderBrush}}"
+                                                    BorderThickness="2"
+                                                    CornerRadius="45"
+                                                    Height="{Binding PointSize}"
+                                                    Width="{Binding PointSize}"/>
+                                        </Grid>
+                                        <TextBlock FontSize="{DynamicResource {dxdasht:MapItemThemeKey ResourceKey=GeoPointDisplayTextFontSize}}"
+                                                   FontWeight="{DynamicResource {dxdasht:MapItemThemeKey ResourceKey=GeoPointDisplayTextFontWeight}}"
+                                                   Foreground="{Binding DisplayTextForeground}"
+                                                   Grid.Column="1"
+                                                   Margin="8,0,0,0"
+                                                   Text="{Binding DisplayText}"/>
+                                    </Grid>
+                                    <DataTemplate.Triggers>
+                                        <DataTrigger Binding="{Binding Highlighted}" Value="True">
+                                            <DataTrigger.Setters>
+                                                <Setter Property="Background"
+                                                        TargetName="Point"
+                                                        Value="{DynamicResource {dxdasht:MapItemThemeKey ResourceKey=GeoPointHighLightedBackgroundBrush}}"/>
+                                            </DataTrigger.Setters>
+                                        </DataTrigger>
+                                    </DataTemplate.Triggers>
+                                </DataTemplate>
+                            </dxm:MapCustomElementSettings.ContentTemplate>
+                        </dxm:MapCustomElementSettings>
+                    </dxm:ListSourceDataAdapter.ItemSettings>
+                    <dxm:ListSourceDataAdapter.Mappings>
+                        <dxm:MapItemMappingInfo Latitude="Latitude" Longitude="Longitude"/>
+                    </dxm:ListSourceDataAdapter.Mappings>
+                </dxm:ListSourceDataAdapter>
+            </dxm:VectorLayer.Resources>
+            <dxm:VectorLayer.Data>
+                <Binding Source="{StaticResource geoPointDataAdapter}"/>
+            </dxm:VectorLayer.Data>
+        </dxm:VectorLayer>
+    </DataTemplate>
+
+    <DataTemplate x:Key="{dxdasht:MapItemThemeKey ResourceKey=ClusteredGeoPointLayerTemplate}">
+        <dxm:VectorLayer x:Name="ClusteredGeoPointLayer" SelectedItems="{Binding GeoPointClusteredSelection}">
+            <dxm:VectorLayer.Resources>
+                <dxm:BubbleChartDataAdapter x:Key="clusteredGeoPointDataAdapter"
+                                            DataSource="{Binding ClusteredGeoPoints}"
+                                            ItemMaxSize="{Binding ClusteredGeoPointMaxSize}"
+                                            ItemMinSize="30">
+                    <dxmvvm:Interaction.Behaviors>
+                        <dxmvvm:EventToCommand Command="{Binding Path=Owner.CustomizeMapItemCommand}"
+                                               EventName="CustomizeMapItem"
+                                               PassEventArgsToCommand="True"/>
+                    </dxmvvm:Interaction.Behaviors>
+                    <dxm:BubbleChartDataAdapter.AttributeMappings>
+                        <dxm:MapItemAttributeMapping Name="LatitudeSelection" Member="LatitudeSelection"/>
+                        <dxm:MapItemAttributeMapping Name="LongitudeSelection" Member="LongitudeSelection"/>
+                        <dxm:MapItemAttributeMapping Name="TooltipDimensions" Member="TooltipDimensions"/>
+                        <dxm:MapItemAttributeMapping Name="TooltipMeasures" Member="TooltipMeasures"/>
+                        <dxm:MapItemAttributeMapping Name="MainTooltip" Member="MainTooltip"/>
+                        <dxm:MapItemAttributeMapping Name="Value" Member="Value"/>
+                        <dxm:MapItemAttributeMapping Name="ClusteredCount" Member="ClusteredCount"/>
+                    </dxm:BubbleChartDataAdapter.AttributeMappings>
+                    <dxm:BubbleChartDataAdapter.Mappings>
+                        <dxm:MapBubbleMappingInfo Latitude="Latitude"
+                                                  Longitude="Longitude"
+                                                  Value="ClusteredCount"/>
+                    </dxm:BubbleChartDataAdapter.Mappings>
+                    <dxm:BubbleChartDataAdapter.MeasureRules>
+                        <dxm:MeasureRules RangeStops="{Binding ClusteredGeoPointRangeStops}">
+                            <dxm:MeasureRules.ValueProvider>
+                                <dxm:ItemAttributeValueProvider AttributeName="ClusteredCount"/>
+                            </dxm:MeasureRules.ValueProvider>
+                        </dxm:MeasureRules>
+                    </dxm:BubbleChartDataAdapter.MeasureRules>
+                </dxm:BubbleChartDataAdapter>
+                <dxm:ChoroplethColorizer x:Key="clusteredGeoPointColorizer"
+                                         Colors="{Binding Colorizer.Colors}"
+                                         RangeStops="{Binding Colorizer.RangeStops}">
+                    <dxm:ChoroplethColorizer.ValueProvider>
+                        <dxm:ShapeAttributeValueProvider AttributeName="{Binding Colorizer.AttributeName}"/>
+                    </dxm:ChoroplethColorizer.ValueProvider>
+                </dxm:ChoroplethColorizer>
+            </dxm:VectorLayer.Resources>
+            <dxm:VectorLayer.Data>
+                <Binding Source="{StaticResource clusteredGeoPointDataAdapter}"/>
+            </dxm:VectorLayer.Data>
+            <dxm:VectorLayer.Colorizer>
+                <Binding Source="{StaticResource clusteredGeoPointColorizer}"/>
+            </dxm:VectorLayer.Colorizer>
+        </dxm:VectorLayer>
+    </DataTemplate>
+
+    <DataTemplate x:Key="{dxdasht:MapItemThemeKey ResourceKey=PieLayerTemplate}">
+        <dxm:VectorLayer x:Name="PieLayer" SelectedItems="{Binding PieSelection}">
+            <dxm:VectorLayer.Resources>
+                <dxm:ListSourceDataAdapter x:Key="pieSource" DataSource="{Binding PieData}"/>
+                <dxm:PieChartDataAdapter x:Key="segmentSource"
+                                         DataSource="{Binding PieSegmentData}"
+                                         ItemIdDataMember="PieItemDataMember"
+                                         ItemMaxSize="60"
+                                         ItemMinSize="20">
+                    <dxmvvm:Interaction.Behaviors>
+                        <dxmvvm:EventToCommand Command="{Binding Path=Owner.CustomizeMapItemCommand}"
+                                               EventName="CustomizeMapItem"
+                                               PassEventArgsToCommand="True"/>
+                    </dxmvvm:Interaction.Behaviors>
+                    <dxm:PieChartDataAdapter.AttributeMappings>
+                        <dxm:MapItemAttributeMapping Name="LatitudeSelection" Member="LatitudeSelection"/>
+                        <dxm:MapItemAttributeMapping Name="LongitudeSelection" Member="LongitudeSelection"/>
+                        <dxm:MapItemAttributeMapping Name="TooltipDimensions" Member="TooltipDimensions"/>
+                        <dxm:MapItemAttributeMapping Name="TooltipMeasures" Member="TooltipMeasures"/>
+                        <dxm:MapItemAttributeMapping Name="MainTooltip" Member="MainTooltip"/>
+                        <dxm:MapItemAttributeMapping Name="ClusteredCount" Member="ClusteredCount"/>
+                    </dxm:PieChartDataAdapter.AttributeMappings>
+                    <dxm:PieChartDataAdapter.Mappings>
+                        <dxm:MapPieMappingInfo Latitude="Latitude"
+                                               Longitude="Longitude"
+                                               SegmentId="Argument"
+                                               SegmentValue="Value"/>
+                    </dxm:PieChartDataAdapter.Mappings>
+                    <dxm:PieChartDataAdapter.MeasureRules>
+                        <dxm:MeasureRules RangeStops="{Binding PieRangeStops}"/>
+                    </dxm:PieChartDataAdapter.MeasureRules>
+                </dxm:PieChartDataAdapter>
+                <dx:BoolToObjectConverter x:Key="pieDataConverter"
+                                          FalseValue="{StaticResource pieSource}"
+                                          TrueValue="{StaticResource segmentSource}"/>
+                <dxm:KeyColorColorizer x:Key="pieColorizer"
+                                       Colors="{Binding KeyColorColorizer.Colors}"
+                                       Keys="{Binding KeyColorColorizer.Keys}">
+                    <dxm:KeyColorColorizer.ItemKeyProvider>
+                        <dxm:IdItemKeyProvider/>
+                    </dxm:KeyColorColorizer.ItemKeyProvider>
+                </dxm:KeyColorColorizer>
+            </dxm:VectorLayer.Resources>
+            <dxm:VectorLayer.Data>
+                <Binding Converter="{StaticResource pieDataConverter}" Path="WeightedPies"/>
+            </dxm:VectorLayer.Data>
+            <dxm:VectorLayer.Colorizer>
+                <Binding Source="{StaticResource pieColorizer}"/>
+            </dxm:VectorLayer.Colorizer>
+        </dxm:VectorLayer>
+    </DataTemplate>
+
+    <dxdasht:MapLegendTemplateSelector x:Key="{dxdasht:MapItemThemeKey ResourceKey=LegendTemplateSelector}"/>
+
+    <dxdasht:MapLayerTemplateSelector x:Key="{dxdasht:MapItemThemeKey ResourceKey=LayerTemplateSelector}"/>
+
+    <Style x:Key="{dxdasht:MapItemThemeKey ResourceKey=ViewStyle}" TargetType="dxm:MapControl">
+        <Setter Property="MinZoomLevel" Value="0.1"/>
+        <Setter Property="ZoomLevel" Value="{Binding ZoomLevel, Mode=TwoWay}"/>
+        <Setter Property="CenterPoint" Value="{Binding CenterPoint, Mode=TwoWay}"/>
+        <Setter Property="EnableScrolling" Value="{Binding EnableNavigation}"/>
+        <Setter Property="EnableZooming" Value="{Binding EnableNavigation}"/>
+        <Setter Property="UseSprings" Value="False"/>
+        <Setter Property="SelectionMode" Value="None"/>
+        <Setter Property="CoordinatesPanelOptions">
+            <Setter.Value>
+                <dxm:CoordinatesPanelOptions Visible="False"/>
+            </Setter.Value>
+        </Setter>
+        <Setter Property="ScrollButtonsOptions">
+            <Setter.Value>
+                <dxm:ScrollButtonsOptions Visible="False"/>
+            </Setter.Value>
+        </Setter>
+        <Setter Property="ZoomTrackbarOptions">
+            <Setter.Value>
+                <dxm:ZoomTrackbarOptions Visible="False"/>
+            </Setter.Value>
+        </Setter>
+        <Setter Property="ScalePanelOptions">
+            <Setter.Value>
+                <dxm:ScalePanelOptions Visible="False"/>
+            </Setter.Value>
+        </Setter>
+        <Setter Property="dxmvvm:Interaction.BehaviorsTemplate">
+            <Setter.Value>
+                <DataTemplate>
+                    <ItemsControl>
+                        <dxdashi:MapItemElementGenerator LayersSource="{Binding Layers}"
+                                                         LayerTemplateSelector="{DynamicResource {dxdasht:MapItemThemeKey ResourceKey=LayerTemplateSelector}}"
+                                                         LegendsSource="{Binding Legends}"
+                                                         LegendTemplateSelector="{DynamicResource {dxdasht:MapItemThemeKey ResourceKey=LegendTemplateSelector}}"/>
+                        <dxdashi:MapControlToolTipService UnregisterOnUnloaded="True">
+                            <dxdashi:MapControlToolTipService.ToolTip>
+                                <ItemsControl ItemsSource="{Binding ToolTipItems}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <TextBlock FontWeight="{Binding FontWeight}" Text="{Binding Text}"/>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </dxdashi:MapControlToolTipService.ToolTip>
+                        </dxdashi:MapControlToolTipService>
+                        <dxmvvm:EventToCommand Command="{Binding OnKeyUpCommand}"
+                                               EventArgsConverter="{StaticResource EventToCommandConverter}"
+                                               EventName="KeyUp"
+                                               PassEventArgsToCommand="True"/>
+                        <dxmvvm:EventToCommand Command="{Binding OnKeyDownCommand}"
+                                               EventArgsConverter="{StaticResource EventToCommandConverter}"
+                                               EventName="KeyDown"
+                                               PassEventArgsToCommand="True"/>
+                        <dxmvvm:EventToCommand Command="{Binding OnSizeChangedCommand}"
+                                               EventArgsConverter="{StaticResource EventToCommandConverter}"
+                                               EventName="SizeChanged"
+                                               PassEventArgsToCommand="True"/>
+                        <dxmvvm:EventToCommand Command="{Binding OnMouseUpCommand}"
+                                               EventArgsConverter="{StaticResource EventToCommandConverter}"
+                                               EventName="MouseUp"
+                                               PassEventArgsToCommand="True"/>
+                        <dxmvvm:EventToCommand Command="{Binding OnMouseDoubleClickCommand}"
+                                               EventArgsConverter="{StaticResource EventToCommandConverter}"
+                                               EventName="MouseDoubleClick"
+                                               PassEventArgsToCommand="True"/>
+                        <dxmvvm:EventToCommand Command="{Binding OnMouseDownCommand}"
+                                               EventArgsConverter="{StaticResource EventToCommandConverter}"
+                                               EventName="MouseDown"
+                                               PassEventArgsToCommand="True"/>
+                        <dxmvvm:EventToCommand Command="{Binding OnMouseMoveCommand}"
+                                               EventArgsConverter="{StaticResource EventToCommandConverter}"
+                                               EventName="MouseMove"
+                                               PassEventArgsToCommand="True"/>
+                        <dxmvvm:EventToCommand Command="{Binding OnMouseWheelCommand}"
+                                               EventArgsConverter="{StaticResource EventToCommandConverter}"
+                                               EventName="MouseWheel"
+                                               PassEventArgsToCommand="True"/>
+                        <dxmvvm:EventToCommand Command="{Binding OnSelectionChangingCommand}"
+                                               EventArgsConverter="{StaticResource EventToCommandConverter}"
+                                               EventName="SelectionChanging"
+                                               PassEventArgsToCommand="True"/>
+                    </ItemsControl>
+                </DataTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <DataTemplate x:Key="{dxdasht:MapItemThemeKey ResourceKey=Template}">
+        <dxm:MapControl Style="{Binding Path=(dxdash:DashboardLayoutItem.ViewStyle), RelativeSource={RelativeSource TemplatedParent}}"/>
+    </DataTemplate>
+
+</ResourceDictionary>

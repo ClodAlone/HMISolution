@@ -1,0 +1,47 @@
+#region Copyright Syncfusion Inc. 2001 - 2014
+// Copyright Syncfusion Inc. 2001 - 2014. All rights reserved.
+// Use of this code is subject to the terms of our license.
+// A copy of the current license can be obtained at any time by e-mailing
+// licensing@syncfusion.com. Any infringement will be prosecuted under
+// applicable laws. 
+#endregion
+// (c) Copyright Microsoft Corporation.
+// This source is subject to the Microsoft Public License (Ms-PL).
+// Please see http://go.microsoft.com/fwlink/?LinkID=131993 for details.
+// All other rights reserved.
+
+using System.Windows.Controls;
+using Syncfusion.Windows.Controls;
+
+namespace System.Windows.Automation.Peers
+{
+    /// <summary>
+    /// Exposes TimeUpDown types to UI Automation.
+    /// </summary>
+    /// <QualityBand>Preview</QualityBand>
+    public class TimeUpDownAutomationPeer : UpDownBaseAutomationPeer<DateTime?>
+    {
+        /// <summary>
+        /// Initializes a new instance of the TimeUpDownAutomationPeer class.
+        /// </summary>
+        /// <param name="owner">
+        /// The TimeUpDown that is associated with this TimeUpDownAutomationPeer.
+        /// </param>
+        public TimeUpDownAutomationPeer(TimeUpDown owner)
+            : base(owner)
+        {
+        }
+
+        #region AutomationPeer Overrides
+        /// <summary>
+        /// Gets the name of the TimeUpDown that is associated with this
+        /// TimeUpDownAutomationPeer.  This method is called by GetClassName.
+        /// </summary>
+        /// <returns>The name TimeUpDown.</returns>
+        protected override string GetClassNameCore()
+        {
+            return "TimeUpDown";
+        }
+        #endregion
+    }
+}

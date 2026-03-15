@@ -1,0 +1,99 @@
+﻿<!-- Copyright © Northwoods Software Corporation, 2008-2015. All Rights Reserved. -->
+
+<UserControl x:Class="SequentialFunction.SequentialFunction"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:go="http://schemas.nwoods.com/GoXam">
+  <UserControl.Resources>
+
+    <DataTemplate x:Key="ResizeAdornmentTemplate">
+      <go:SpotPanel>
+        <go:ToolHandle go:SpotPanel.Spot="0.0 0.5"
+                       go:NodePanel.Figure="Rectangle" Width="6" Height="6"
+                       Fill="Fuchsia" Stroke="Black" StrokeThickness="1" />
+        <go:ToolHandle go:SpotPanel.Spot="1.0 0.5"
+                       go:NodePanel.Figure="Rectangle" Width="6" Height="6"
+                       Fill="Fuchsia" Stroke="Black" StrokeThickness="1" />
+      </go:SpotPanel>
+    </DataTemplate>
+
+    <go:DataTemplateDictionary x:Key="NodeTemplates">
+      <DataTemplate x:Key="Step">
+        <go:NodePanel Sizing="Fixed" Height="60" Width="160"
+                    go:Part.SelectionAdorned="True"
+                    go:Node.Location="{Binding Path=Data.Location, Mode=TwoWay}"
+                    go:Node.LocationSpot="Center">
+          <go:NodeShape go:NodePanel.Figure="Rectangle"
+                      Stroke="Black" StrokeThickness="1" Fill="Pink"
+                      go:Node.PortId=""
+                      go:Node.FromSpot="MiddleBottom" go:Node.ToSpot="MiddleTop" />
+          <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center"
+                   Text="{Binding Path=Data.Text, Mode=TwoWay}"
+                   TextWrapping="Wrap"
+                   go:Part.TextEditable="True" />
+        </go:NodePanel>
+      </DataTemplate>
+
+      <DataTemplate x:Key="Transition">
+        <StackPanel Orientation="Horizontal"
+                  go:Part.SelectionElementName="Bar"
+                  go:Part.SelectionAdorned="True"
+                  go:Node.LocationElementName="Bar"
+                  go:Node.Location="{Binding Path=Data.Location, Mode=TwoWay}"
+                  go:Node.LocationSpot="Center">
+          <Rectangle x:Name="Bar" Stroke="Black" StrokeThickness="3"
+                   Height="3" Width="60"
+                   go:Node.PortId=""
+                   go:Node.FromSpot="MiddleBottom" go:Node.ToSpot="MiddleTop" />
+          <TextBlock Text="{Binding Path=Data.Text, Mode=TwoWay}"
+                   go:Part.TextEditable="True" />
+        </StackPanel>
+      </DataTemplate>
+
+      <DataTemplate x:Key="Parallel">
+        <StackPanel Orientation="Horizontal"
+                  go:Part.SelectionElementName="Bar"
+                  go:Part.SelectionAdorned="True"
+                  go:Part.Resizable="True"
+                  go:Part.ResizeAdornmentTemplate="{StaticResource ResizeAdornmentTemplate}"
+                  go:Node.LocationElementName="Bar"
+                  go:Node.Location="{Binding Path=Data.Location, Mode=TwoWay}"
+                  go:Node.LocationSpot="Center">
+          <Rectangle x:Name="Bar" Stroke="Black" StrokeThickness="1" Fill="Transparent"
+                   Height="6" Width="{Binding Path=Data.Width, Mode=TwoWay}"
+                   go:Node.PortId=""
+                   go:Node.FromSpot="BottomSide" go:Node.ToSpot="TopSide" />
+          <TextBlock Text="{Binding Path=Data.Text, Mode=TwoWay}"
+                   go:Part.TextEditable="True" />
+        </StackPanel>
+      </DataTemplate>
+    </go:DataTemplateDictionary>
+
+    <DataTemplate x:Key="LinkTemplate">
+      <go:LinkShape Stroke="Black" StrokeThickness="1"
+                    go:Part.SelectionAdorned="True">
+        <go:Link.Route>
+          <go:Route Routing="Orthogonal" />
+        </go:Link.Route>
+      </go:LinkShape>
+    </DataTemplate>
+  </UserControl.Resources>
+
+  <Grid>
+    <go:Diagram x:Name="myDiagram"
+                HorizontalContentAlignment="Stretch"
+                VerticalContentAlignment="Stretch"
+                Padding="10"
+                NodeTemplateDictionary="{StaticResource NodeTemplates}"
+                LinkTemplate="{StaticResource LinkTemplate}">
+      <go:Diagram.Layout>
+        <go:LayeredDigraphLayout Direction="90" SetsPortSpots="False" LayerSpacing="10" />
+      </go:Diagram.Layout>
+    </go:Diagram>
+    <StackPanel Orientation="Horizontal"
+                HorizontalAlignment="Right" VerticalAlignment="Top">
+      <Button Content="Save" Click="Save_Click" />
+      <Button Content="Load" Click="Load_Click" x:Name="LoadButton" IsEnabled="False" />
+    </StackPanel>
+  </Grid>
+</UserControl>

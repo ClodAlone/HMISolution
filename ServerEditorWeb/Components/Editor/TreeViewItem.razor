@@ -1,0 +1,99 @@
+@using ServerEditorWeb.Models
+
+<div class="tree-item">
+    <div class="tree-item-header @(Node.IsSelected ? "selected" : "")"
+         @onclick="() => OnSelect.InvokeAsync(Node)"
+         @onclick:stopPropagation="true"
+         @ondblclick="() => OnDoubleClick.InvokeAsync(Node)"
+         @ondblclick:stopPropagation="true"
+         @oncontextmenu="ShowContextMenu" @oncontextmenu:preventDefault @oncontextmenu:stopPropagation>
+
+        @if (Node.Children.Count > 0)
+        {
+            <span class="tree-toggle" @onclick="ToggleExpand" @onclick:stopPropagation="true">
+                @(Node.IsExpanded ? "▼" : "▶")
+            </span>
+        }
+        else
+        {
+            <span class="tree-toggle">&nbsp;&nbsp;</span>
+        }
+
+        <span class="tree-icon">@Node.Icon</span>
+        <span class="tree-name">@Node.Name</span>
+        <span class="tree-type">(@Node.TypeName)</span>
+    </div>
+
+    @if (_contextMenuVisible)
+    {
+        <TreeViewContextMenu Visible="true" X="@_contextMenuX" Y="@_contextMenuY" Node="Node"
+            OnClose="HideContextMenu"
+            OnAddFolder="OnAddFolder"
+            OnAddVariable="OnAddVariable"
+            OnAddScript="OnAddScript"
+            OnAddPlcProgram="OnAddPlcProgram"
+            OnAddRecipe="OnAddRecipe"
+            OnAddScreen="OnAddScreen"
+            OnAddUserGroup="OnAddUserGroup"
+            OnAddUser="OnAddUser"
+            OnRename="OnRename"
+            OnDelete="OnDelete"
+            OnCopy="OnCopy"
+            OnPaste="OnPaste" />
+    }
+
+    @if (Node.IsExpanded && Node.Children.Count > 0)
+    {
+        <div class="tree-children">
+            @foreach (var child in Node.Children)
+            {
+                <TreeViewItem Node="child" OnSelect="OnSelect" OnDoubleClick="OnDoubleClick" SelectedNode="SelectedNode"
+                    OnAddFolder="OnAddFolder" OnAddVariable="OnAddVariable" OnAddScript="OnAddScript"
+                    OnAddPlcProgram="OnAddPlcProgram" OnAddRecipe="OnAddRecipe"
+                    OnAddScreen="OnAddScreen" OnAddUserGroup="OnAddUserGroup" OnAddUser="OnAddUser"
+                    OnRename="OnRename" OnDelete="OnDelete"
+                    OnCopy="OnCopy" OnPaste="OnPaste" />
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public TreeNode Node { get; set; } = default!;
+    [Parameter] public TreeNode? SelectedNode { get; set; }
+    [Parameter] public EventCallback<TreeNode> OnSelect { get; set; }
+    [Parameter] public EventCallback<TreeNode> OnDoubleClick { get; set; }
+    [Parameter] public EventCallback<TreeNode> OnAddFolder { get; set; }
+    [Parameter] public EventCallback<TreeNode> OnAddVariable { get; set; }
+    [Parameter] public EventCallback<TreeNode> OnAddScript { get; set; }
+    [Parameter] public EventCallback<TreeNode> OnAddPlcProgram { get; set; }
+    [Parameter] public EventCallback<TreeNode> OnAddRecipe { get; set; }
+    [Parameter] public EventCallback<TreeNode> OnAddScreen { get; set; }
+    [Parameter] public EventCallback<TreeNode> OnAddUserGroup { get; set; }
+    [Parameter] public EventCallback<TreeNode> OnAddUser { get; set; }
+    [Parameter] public EventCallback<TreeNode> OnRename { get; set; }
+    [Parameter] public EventCallback<TreeNode> OnDelete { get; set; }
+    [Parameter] public EventCallback<TreeNode> OnCopy { get; set; }
+    [Parameter] public EventCallback<TreeNode> OnPaste { get; set; }
+
+    private bool _contextMenuVisible;
+    private double _contextMenuX, _contextMenuY;
+
+    private void ShowContextMenu(MouseEventArgs e)
+    {
+        _contextMenuX = e.ClientX;
+        _contextMenuY = e.ClientY;
+        _contextMenuVisible = true;
+        StateHasChanged();
+    }
+    private void HideContextMenu()
+    {
+        _contextMenuVisible = false;
+        StateHasChanged();
+    }
+
+    private void ToggleExpand()
+    {
+        Node.IsExpanded = !Node.IsExpanded;
+    }
+}

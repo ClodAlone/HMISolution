@@ -1,0 +1,104 @@
+<ResourceDictionary mc:Ignorable="cs"
+                    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:cs="colorscheme_ignorable_uri"
+                    xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+                    xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+                    xmlns:dxlc="http://schemas.devexpress.com/winfx/2008/xaml/layoutcontrol"
+                    xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+                    xmlns:dxp="http://schemas.devexpress.com/winfx/2008/xaml/printing"
+                    xmlns:dxpp="http://schemas.devexpress.com/winfx/2008/xaml/printing/parameters"
+                    xmlns:dxt="http://schemas.devexpress.com/winfx/2008/xaml/core/themekeys"
+                    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <ResourceDictionary.MergedDictionaries>
+        <dxt:ResourceDictionaryEx Source="/DevExpress.Xpf.Printing.v20.2;component/Themes/Generic/Constants.xaml"/>
+    </ResourceDictionary.MergedDictionaries>
+
+    <ControlTemplate x:Key="parametersControlTemplate" TargetType="dxpp:ParametersPanel">
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+            <Grid DataContext="{Binding ParametersModel, RelativeSource={RelativeSource TemplatedParent}}" Margin="12">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="auto"/>
+                    <RowDefinition Height="auto"/>
+                </Grid.RowDefinitions>
+                <ItemsControl Name="PART_parametersContainer"
+                              IsEnabled="{Binding CanEdit}"
+                              ItemsSource="{Binding Parameters}"
+                              ItemTemplateSelector="{Binding ParameterTemplateSelector, RelativeSource={RelativeSource TemplatedParent}}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Name="itemsPanel" Grid.IsSharedSizeScope="True"/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                </ItemsControl>
+                <dxlc:LayoutControl Grid.Row="1"
+                                    HorizontalAlignment="Right"
+                                    Margin="1,12"
+                                    Padding="0">
+                    <dxlc:LayoutGroup HorizontalAlignment="Stretch"
+                                      ItemLabelsAlignment="Local"
+                                      Orientation="Horizontal">
+                        <dxlc:LayoutItem>
+                            <Button Name="PART_resetButton"
+                                    Command="{Binding ResetParametersCommand}"
+                                    Content="{dxp:PrintingStringId StringId=ParametersReset}"/>
+                        </dxlc:LayoutItem>
+                        <dxlc:LayoutItem>
+                            <Button Name="PART_submitButton"
+                                    Command="{Binding SubmitParametersCommand}"
+                                    Content="{dxp:PrintingStringId StringId=ParametersSubmit}"/>
+                        </dxlc:LayoutItem>
+                    </dxlc:LayoutGroup>
+                </dxlc:LayoutControl>
+            </Grid>
+        </ScrollViewer>
+    </ControlTemplate>
+
+    <Style x:Key="{dxt:DefaultStyleThemeKey FullName=DevExpress.Xpf.Printing.Parameters.ParametersPanel}" TargetType="dxpp:ParametersPanel">
+        <Setter Property="ParameterTemplateSelector">
+            <Setter.Value>
+                <dxpp:ParameterTemplateSelector/>
+            </Setter.Value>
+        </Setter>
+        <Setter Property="Template" Value="{StaticResource parametersControlTemplate}"/>
+    </Style>
+
+    <Style x:Key="{dxt:DefaultStyleThemeKey FullName=DevExpress.Xpf.Printing.Parameters.ParameterLineLayout}" TargetType="dxpp:ParameterLineLayout">
+        <Setter Property="Margin" Value="0,3"/>
+        <Setter Property="Focusable" Value="False"/>
+        <Setter Property="Visibility" Value="{Binding Visible, Converter={dx:BooleanToVisibilityConverter}}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="dxpp:ParameterLineLayout">
+                    <ControlTemplate.Resources>
+                        <dxpp:ParameterDescriptionConverter x:Key="parameterDescriptionConverter"/>
+                    </ControlTemplate.Resources>
+                    <dxpp:AutoFitColumnGrid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition MinWidth="20"
+                                              SharedSizeGroup="descriptionColumn"
+                                              Width="0"/>
+                            <ColumnDefinition MinWidth="4" Width="4"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Label VerticalContentAlignment="Center">
+                            <TextBlock TextTrimming="CharacterEllipsis">
+                                <TextBlock.Text>
+                                    <MultiBinding Converter="{StaticResource parameterDescriptionConverter}">
+                                        <Binding Path="Description"/>
+                                        <Binding Path="Name"/>
+                                    </MultiBinding>
+                                </TextBlock.Text>
+                            </TextBlock>
+                        </Label>
+                        <ContentPresenter Content="{TemplateBinding Content}"
+                                          Grid.Column="2"
+                                          MinWidth="{Binding Content.MinWidth, RelativeSource={RelativeSource Self}}"/>
+                    </dxpp:AutoFitColumnGrid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+</ResourceDictionary>

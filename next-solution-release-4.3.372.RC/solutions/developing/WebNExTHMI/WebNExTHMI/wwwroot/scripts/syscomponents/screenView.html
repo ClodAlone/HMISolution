@@ -1,0 +1,979 @@
+﻿<div id="screenView" class="screenView">
+    <img src="cl.gif" alt="" onload="onScreenLoaded(this)" id="loadingImage" />
+    <div id="btnLogin" style="width:100%;height:100%;"></div>
+    <div id="svgcontainer"></div>
+
+    <script type="text/javascript">
+        function onScreenLoaded(obj) {
+            var thisPage = $(obj).parent();
+            $(obj).remove();
+            thisPage.localize();
+
+            var screenLoadedId;
+            var intervalAlive;
+            var intervalUpdateUICommands;
+            var listeningArray = new Array();
+            var controlInSecurity = new Array();
+            var controlInUICommand = new Array();
+            var deregisterListenerUser;
+            var deregisterListenerPopup;
+            var containerVisibilityObserver;
+
+            var svgcontainer = thisPage.find("#svgcontainer");
+            var scope = thisPage.scope();
+            if (!scope)
+                return;
+
+            $(thisPage).bind('destroyed', function () {
+                console.log('screenview unloaded');
+
+                listeningArray.forEach(function (item, index, array) {
+                    item();
+                });
+
+                if (deregisterListenerUser)
+                    deregisterListenerUser();
+
+                if (deregisterListenerPopup)
+                    deregisterListenerPopup();
+
+                if (intervalAlive)
+                    clearInterval(intervalAlive);
+                if (intervalUpdateUICommands)
+                    clearInterval(intervalUpdateUICommands);
+
+                if (containerVisibilityObserver)
+                    containerVisibilityObserver.disconnect();
+
+                if (screenLoadedId) {
+                    mutateHandler.terminatePageMutate(screenLoadedId);
+
+                    scope.corehubconnection.invoke("CloseScreen", screenLoadedId);
+
+                    scope.$broadcast(onViewClosed + screenLoadedId, screenLoadedId);
+
+                    if (scope.Styles)
+                        scope.Styles[screenLoadedId] = undefined;
+                    scope.dataValues[screenLoadedId] = [];
+
+                    if (screenLoadedId in window.currentEntitiesContext)
+                        delete window.currentEntitiesContext[screenLoadedId];
+                }
+
+                document.onmousemove = document.mousedown = document.mouseup =
+                    document.onkeydown = document.onkeyup = document.focus = null;
+            });
+
+            //if (!SVG.supported) {
+            //    scope.$broadcast(onError, { value: i18next.t('SVGNotSupported') });
+            //    scope.busyVisible = false;
+            //    scope.$apply();
+            //    return;
+            //}
+
+            var paratt = thisPage.data(dataparameters);
+            var parameters;
+            try {
+                parameters = JSON.parse(paratt);
+            }
+            catch (err) {
+                console.error(err.toString());
+                scope.busyVisible = false;
+                scope.$apply();
+                scope.$broadcast(onError, { ex: err, value: "Error opening : " + err.toString() });
+                return;
+            }
+
+            var popupparameter = thisPage.data(popupparameters);
+
+            var deregisterListener = scope.$on(onscreenHashReady + parameters.name, function (e, value) {
+
+                deregisterListener();
+
+                screenLoadedId = "id" + uuidv4();
+
+                //thisPage.append("<div style='position: fixed; top: 0; left: 0; color: black; background-color: rgba(255,255,255,0.5);'>" + screenLoadedId + "</div>");
+
+                registerScreenListeners(scope, listeningArray, screenLoadedId);
+
+                scope.corehubconnection.invoke("OpenScreen", screenLoadedId, parameters.name,
+                    parameters.parameter ? parameters.parameter : "", parameters.callerScreenId ? parameters.callerScreenId : "",
+                    value ? value.hash : 0, scope.biOS, parameters.isInFittedParent ? true : false, parameters.isdocked ? true : false)
+                    .then((ret) => {
+                        try {
+                            // screenLoadedId = ret.id;
+
+                            //if (screenLoadedId) {
+                            //    registerScreenListeners(scope, listeningArray, screenLoadedId);
+
+                            intervalAlive = setInterval(function () {
+                                scope.corehubconnection.invoke("KeepAliveScreen", screenLoadedId);
+                            }, 10000);
+                            //}
+
+                            if (!ret.hashOk)
+                                addScreenHash({
+                                    name: parameters.name,
+                                    hash: ret.hash,
+                                    data: ret.data,
+                                    controls: ret.controls,
+                                    commands: ret.commands,
+                                    animations: ret.animations,
+                                    entities: ret.entities,
+                                    style: ret.style,
+                                    id: screenLoadedId
+                                });
+                            else {
+                                ret.data = value.data;
+                                ret.controls = value.controls;
+                                ret.commands = value.commands;
+                                ret.animations = value.animations;
+                                ret.entities = value.entities;
+                                ret.style = value.style;
+                                // ret.id = value.id;
+                                ret.data = ret.data.replace(value.id, screenLoadedId);
+                            }
+
+                            if (!popupparameter) {
+                                scope.$broadcast(onUpdateScreenSettings, {
+                                    name: parameters.name,
+                                    parameter: parameters.parameter,
+                                    delayUnloadSecs: ret.delayUnloadSecs,
+                                    keepAlwaysInMemory: ret.keepAlwaysInMemory,
+                                    keepAlwaysTagsAlive: ret.keepAlwaysTagsAlive,
+                                    hideLayoutScreens: ret.hideLayoutScreens,
+                                    fullPath: ret.fullPath,
+                                    isdocked: parameters.isdocked
+                                });
+                            }
+
+                            var jid = '#' + screenLoadedId;
+
+                            var svgUrls = Array.from(ret.data.matchAll(/url\(#(.*?)\);/igm));
+                            var replaced = [];
+                            $(svgUrls).each(function (i, e) {
+                                if (replaced.indexOf(e[1]) === -1) {
+                                    var id = e[1];
+                                    replaced.push(id);
+                                    var replace = "id=\"" + id + "\"";
+                                    var re = new RegExp(replace, "igm");
+                                    var replace2 = "url\\(#" + id + "\\)";
+                                    var re2 = new RegExp(replace2, "igm");
+                                    ret.data = ret.data.replace(re, "id=\"" + screenLoadedId + id + "\"");
+                                    ret.data = ret.data.replace(re2, "url(#" + screenLoadedId + id + ")");
+                                }
+                            });
+
+                            var btnLogin = thisPage.find("#btnLogin");
+                            if (ret.requireUserLogin) {
+
+                                btnLogin.dxButton({
+                                    type: "normal",
+                                    text: i18next.t("Login"),
+                                    disabled: false,
+                                    onClick: function (e) {
+                                        scope.showLogin();
+                                    }
+                                }).dxButton("instance");
+
+                                if (!scope.currentUser) {
+                                    var deregisterLogin = scope.$on(hideEvent + loginPage, function (e, value) {
+                                        if (!scope.currentUser)
+                                            return;
+
+                                        if (deregisterLogin)
+                                            deregisterLogin();
+                                        waitForScreenViewHtml()
+                                    });
+                                    listeningArray.push(deregisterLogin);
+                                    btnLogin.show();
+                                    scope.showLogin();
+                                }
+                                else {
+                                    btnLogin.hide();
+                                    waitForScreenViewHtml()
+                                }
+                            }
+                            else {
+                                btnLogin.hide();
+                                waitForScreenViewHtml();
+                            }
+
+                            function waitForScreenViewHtml() {
+                                svgcontainer.html(ret.data).find(jid);
+                                if (!svgcontainer.is(":visible")) {
+                                    containerVisibilityObserver = new MutationObserver(function (mutations_list) {
+                                        if (mutations_list.length > 0 && svgcontainer.is(":visible")) {
+                                            containerVisibilityObserver.disconnect();
+                                            setScreenViewHtml();
+                                        }
+                                    });
+                                    containerVisibilityObserver.observe(thisPage[0], { attributes: true, subtree: true });
+                                }
+                                else
+                                    setScreenViewHtml();
+                            }
+
+                            function setScreenViewHtml() {
+                                let svg = SVG(jid);
+
+                                if (!svg) {
+                                    console.error(i18next.t('ErrorLoadingServerData') + ": " + parameters.name, jid, ret);
+                                    scope.busyVisible = false;
+                                    scope.$apply();
+                                    return;
+                                }
+
+                                //let svg = SVG(ret.data);
+                                //svg.addTo(svgcontainer[0]);
+
+                                if (popupparameter) {
+                                    var svgWidth;
+                                    var svgHeight;
+                                    var bFits = isNaN(svg.width()) && isNaN(svg.height());
+                                    if (bFits) {
+                                        svgWidth = svg.viewbox().width;
+                                        svgHeight = svg.viewbox().height;
+                                        svgcontainer.css("position", "static");
+                                        thisPage.css("height", "100%");
+                                    }
+                                    else {
+                                        svgWidth = svg.width();
+                                        svgHeight = svg.height();
+                                    }
+                                    var bHasKeep = bFits && $(svg.node).attr("preserveAspectRatio") != "none";
+                                    scope.$broadcast(onPopupSizeRequest + popupparameter, { w: svgWidth, h: svgHeight, windowStyle: ret.windowStyle, windowState: ret.windowState, bFitInWindow: bFits, bHasKeep: bHasKeep, titletxt: ret.title });
+                                }
+                                else if (scope.configurationSettings.restoreLastOpenScreenAndZoom) {
+
+                                    var localstorageOffsetKey = scope.configurationSettings.projectTitle + 'LastOffset';
+
+                                    if (parameters.isStartupRestoreScreen) {
+                                        var lastOffset = localStorage.getItem(localstorageOffsetKey);
+                                        if (lastOffset) {
+
+                                            try {
+                                                var values = lastOffset.split(',');
+
+                                                svgcontainer[0].scrollTop = parseFloat(values[0]);
+                                                svgcontainer[0].scrollLeft = parseFloat(values[1]);
+                                            } catch (err) { }
+                                        }
+                                    }
+
+                                    var delayOnScroll;
+                                    svgcontainer[0].onscroll = function () {
+                                        if (delayOnScroll) {
+                                            clearTimeout(delayOnScroll);
+                                            delayOnScroll = undefined;
+                                        }
+                                        delayOnScroll = setTimeout(function () {
+                                            delayOnScroll = undefined;
+
+                                            localStorage.setItem(localstorageOffsetKey, svgcontainer[0].scrollTop + ',' + svgcontainer[0].scrollLeft);
+                                        }, 250);
+                                    };
+                                }
+
+                                try {
+                                    if (ret.style) {
+                                        if (!scope.Styles)
+                                            scope.Styles = [];
+                                        scope.Styles[screenLoadedId] = ret.style;
+                                    }
+                                }
+                                catch (err) {
+                                    console.error(err.toString());
+                                }
+
+                                try {
+                                    function updateUICommands() {
+
+                                        jQuery.each(controlInUICommand, function (index, command) {
+
+                                            var ctrl = $(command.control.node);
+                                            if (scope.canExecuteCommand(command.item, command.control, screenLoadedId)) {
+
+                                                if (ctrl.hasClass(disabledClass) && controlInSecurity.indexOf(command.control.node) === -1) {
+
+                                                    ctrl.removeClass(disabledClass);
+                                                    ctrl.trigger(disabledClassEvent)
+                                                }
+                                            }
+                                            else {
+
+                                                if (!ctrl.hasClass(disabledClass)) {
+
+                                                    ctrl.addClass(disabledClass);
+                                                    ctrl.trigger(disabledClassEvent)
+                                                }
+                                            }
+                                        });
+                                    };
+
+                                    document.onmousemove = document.mousedown = document.mouseup =
+                                        document.onkeydown = document.onkeyup = document.focus = updateUICommands;
+                                    intervalUpdateUICommands = setInterval(function () {
+                                        updateUICommands();
+                                    }, 1000);
+                                }
+                                catch (err) {
+                                    console.error(err.toString());
+                                }
+
+                                try {
+                                    var entities;
+                                    if (ret.entities) {
+                                        entities = JSON.parse(ret.entities);
+
+                                        var bFirstTime = typeof window.currentEntitiesContext == "undefined";
+                                        if (bFirstTime)
+                                            window.currentEntitiesContext = {};
+                                        window.currentEntitiesContext[screenLoadedId] = {
+                                            scope: scope,
+                                            svg: svg,
+                                            entities: entities,
+                                            controlInSecurity: controlInSecurity
+                                        };
+
+                                        try {
+                                            zoomlevel = window.detectZoom.device();
+                                            if (bFirstTime)
+                                                window.addEventListener('resize', evaluateVisibilityZoom);
+                                        }
+                                        catch (err) {
+                                            if (bFirstTime)
+                                                window.visualViewport.addEventListener('resize', evaluateVisibilityZoom);
+                                        }
+
+                                        deregisterListenerUser = scope.$watch('currentUser', function (v) {
+                                            evaluateVisibilityZoom();
+
+                                            if (ret.requireUserLogin && typeof (v) !== "undefined") {
+                                                if (!scope.currentUser) {
+                                                    svg.hide();
+                                                    btnLogin.show();
+                                                }
+                                                else {
+                                                    btnLogin.hide();
+                                                    svg.show();
+                                                }
+                                            }
+                                        });
+
+                                        evaluateVisibilityZoom();
+                                        jQuery.each(entities, function (index, item) {
+                                            var control = svg.find('#' + item.SVGItemId);
+                                            if (control.length > 0)
+                                                control = control[0];
+
+                                            if (item.EnableManipulation && control.length > 0) {
+
+                                                svgPanZoom('#' + item.SVGItemId, {
+                                                    zoomEnabled: true,
+                                                    controlIconsEnabled: true,
+                                                    fit: true,
+                                                    center: true,
+                                                    // viewportSelector: document.getElementById('demo-tiger').querySelector('#g4') // this option will make library to misbehave. Viewport should have no transform attribute
+                                                });
+                                            }
+                                            var ctrl = $(control.node);
+                                            var plainID = ctrl[0].id;
+                                            var ctrlID = "#" + plainID;
+
+                                            ['mousedown', 'mouseup', 'touchstart', 'touchend', 'keydown', 'keyup'].forEach(function (fev) {
+                                                svgcontainer[0].addEventListener(fev, function (e) {
+                                                    var eventTarget = $(e.target);
+                                                    if (eventTarget.hasClass("shapeControl")) {
+                                                        if (eventTarget[0].id == plainID)
+                                                            ctrlev = eventTarget;
+                                                    }
+                                                    else {
+                                                        var ctrlev = eventTarget.closest("foreignObject" + ctrlID);
+                                                        if (ctrlev.length == 0) {
+                                                            ctrlev = eventTarget.closest("g" + ctrlID);
+                                                        }
+                                                    }
+                                                    if (!ctrlev || ctrlev.length == 0)
+                                                        return;
+
+                                                    if (!ctrlev.hasClass(disabledClass)) {
+                                                        if ((e.type == "mousedown" || e.type == "touchstart" || e.type == "keydown") &&
+                                                            scope.configurationSettings.enableUserManager &&
+                                                            (!hasAccessMask(scope, item.WritableAccessMask) ||
+                                                                !hasAccessLevel(scope, item.AccessRole, item.AccessLevel))) {
+                                                            e.stopPropagation();
+                                                            e.preventDefault();
+
+                                                            ctrlev.addClass(disabledClass);
+                                                            ctrlev.trigger(disabledClassEvent)
+
+                                                            setTimeout(function () {
+                                                                scope.showLogin();
+
+                                                                ctrlev.removeClass(disabledClass);
+                                                                ctrlev.trigger(disabledClassEvent)
+                                                            }, 100);
+                                                        }
+                                                        else if (!scope.configurationSettings.enableUserManager ||
+                                                            (hasAccessMask(scope, item.WritableAccessMask) &&
+                                                                hasAccessLevel(scope, item.AccessRole, item.AccessLevel))) {
+
+                                                            //function checkcontrol(commandUI) {
+                                                            //    return control.node.id === commandUI.control.node.id;
+                                                            //}
+
+                                                            jQuery.each(controlInUICommand, function (index, controlui) {
+                                                                if (control.node.id === controlui.control.node.id) {
+                                                                    if (scope.isCommandOnMouseDown(controlui.item, controlui.control, screenLoadedId)) {
+                                                                        
+                                                                        if (e.type == "mousedown" || e.type == "touchstart" || e.type == "keydown") {
+                                                                            if (controlui && scope.canExecuteCommand(controlui.item, controlui.control, screenLoadedId)) {
+                                                                                e.preventDefault();
+                                                                                controlui.item.eventCoords = getEventCoords(e);
+                                                                                scope.executeCommand(controlui.item, controlui.control, screenLoadedId, popupparameter);
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                    else {
+                                                                        
+                                                                        if (e.type == "mouseup" || e.type == "touchend" || e.type == "keyup") {
+                                                                                
+                                                                            if (controlui && scope.canExecuteCommand(controlui.item, controlui.control, screenLoadedId)) {
+                                                                                e.preventDefault();
+                                                                                controlui.item.eventCoords = getEventCoords(e);
+                                                                                scope.executeCommand(controlui.item, controlui.control, screenLoadedId, popupparameter);
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }
+                                                            });
+
+                                                            //  var controlui = controlInUICommand.find(checkcontrol)
+                                                        }
+                                                    }
+                                                }, true);
+                                            });
+                                        });
+                                    }
+                                    try {
+                                        if (ret.controls) {
+                                            var usercontrols = JSON.parse(ret.controls);
+                                            var webKitRenderCorrection = null;
+                                            var svgNode = $(svg.node);
+                                            var bParentHasKeep = svgNode.closest("svg.hasKeepAspectRatio").length > 0;
+                                            var bFullSize = svgNode.attr("width") == "100%" && svgNode.attr("height") == "100%";
+                                            if (bFullSize)
+                                                svgNode.addClass("fullSizeSVG");
+                                            if (scope.biOS && (bParentHasKeep || bFullSize)) {
+                                                webKitRenderCorrection = iOSRenderCorrection(svg.node);
+                                                var isEmbed = !parameters.isLayoutBar && parameters.isdocked;
+                                                var bHasKeep = bFullSize && svgNode.attr("preserveAspectRatio") != "none";
+                                                var composedForeignObjects = svg.find('foreignObject[iscomposed=true]').filter(function (fitem) { return $(fitem.node).closest("svg[id]").attr("id") == screenLoadedId; });
+
+                                                if (!popupparameter && (bParentHasKeep || bFullSize)) {
+                                                    if (bHasKeep || bParentHasKeep)
+                                                        svgNode.addClass("hasKeepAspectRatio");
+                                                    thisPage.attr("currentOrientation", $(window).height() > $(window).width() ? "Portrait" : "Landscape");
+                                                    function iOSOnRotate(isLayoutBar) {
+                                                        svgNode.toggleClass("rotated");
+                                                        thisPage.attr("currentOrientation", $(window).height() > $(window).width() ? "Portrait" : "Landscape");
+                                                        jQuery.each(usercontrols, function (index, item) {
+                                                            var control = svg.find('#' + item.SVGItemId);
+                                                            if (control.length > 0) {
+                                                                var fobj = control.filter(function (el) { return el.type == "foreignObject" });
+                                                                if (fobj.length > 0) {
+                                                                    control = thisPage.find("foreignObject#" + $(fobj[0].node).attr("id")).filter(function (j, fitem) { return $(fitem).closest("svg[id]").attr("id") == screenLoadedId; }).first();
+                                                                    var page = control.children().first();
+                                                                    var newWebKitCorrection = iOSrenderingFix(control, svg.node, page, webKitRenderCorrection, isEmbed, true);
+                                                                    fixGroupedPositionWebkit(control, page, newWebKitCorrection);
+                                                                }
+                                                            }
+                                                        });
+                                                        if (composedForeignObjects.length > 0) {
+                                                            $.each(svg.find('foreignObject[iscomposed=true]').filter(function (fitem) { return $(fitem.node).closest("svg[id]").attr("id") == screenLoadedId; }), function (index, item) {
+                                                                var fobj = $(item.node);
+                                                                if (bFullSize && !isEmbed && fobj.parent().closest(".scaledComposedObject").length == 0) {
+                                                                    var page = fobj.children("div").first();
+                                                                    var newWebKitCorrection = iOSrenderingFix(item.node, svg.node, page, webKitRenderCorrection, isEmbed, true);
+                                                                    fixGroupedPositionWebkit(item.node, page, newWebKitCorrection);
+                                                                }
+                                                            });
+                                                        }
+                                                        scope.$broadcast("iOSDeviceRotationCompleted");
+                                                    }
+
+                                                    function isWrongAspectRatio(oldSize, svgNode) {
+                                                        var svgRect = svgNode.getBoundingClientRect();
+                                                        return oldSize.width == svgRect.width && oldSize.height == svgRect.height;
+                                                        //return ($(window).height() - $(window).width()) * (svgRect.height - svgRect.width) < 0;
+                                                    }
+
+                                                    function checkClientRectChange(oldSize, startRect, svgNode, isLayoutBar, bForce) {
+                                                        if (!bForce && isWrongAspectRatio(oldSize, svgNode)) {
+                                                            window.requestAnimationFrame(function () {
+                                                                checkClientRectChange(oldSize, startRect, svgNode, isLayoutBar);
+                                                            });
+                                                        } else
+                                                            iOSOnRotate(isLayoutBar);
+                                                    };
+
+                                                    let drl = scope.$on("iOSDeviceRotated" + screenLoadedId, function (e, arg) {
+                                                        if (!isSafari()) {
+                                                            var svgRect = svg.node.getBoundingClientRect();
+                                                            var oldSize = { width: svgRect.width, height: svgRect.height };
+                                                            checkClientRectChange(oldSize, svgRect, svg.node, arg.isLayoutBar, arg.bForce);
+                                                        }
+                                                        else {
+                                                            iOSOnRotate(arg.isLayoutBar);
+                                                        }
+                                                    });
+                                                    listeningArray.push(drl);
+                                                }
+
+                                                $.each(composedForeignObjects, function (index, item) {
+                                                    var fobj = $(item.node);
+                                                    if (!isEmbed && fobj.parent().closest(".scaledComposedObject").length == 0) {
+                                                        fobj.addClass("scaledComposedObject");
+                                                        if (bFullSize)
+                                                            iOSrenderingFix(item.node, svg.node, fobj.children("div").first(), webKitRenderCorrection, isEmbed);
+                                                    }
+                                                });
+                                            }
+                                            var toolboxItems = [];
+                                            jQuery.each(usercontrols, function (index, item) {
+                                                var control = svg.find('#' + item.SVGItemId);
+                                                if (control.length > 0) {
+                                                    var fobj = control.filter(function (el) { return el.type == "foreignObject" });
+                                                    control = fobj.length > 0 ? fobj[0] : control[0];
+                                                }
+                                                if (popupparameter)
+                                                    item.currentPopupId = popupparameter;
+                                                item.screenId = screenLoadedId;
+                                                item.screenName = parameters.name;
+                                                if (parameters.parameter)
+                                                    item.parameter = parameters.parameter;
+                                                if (svgNode.attr("width") == "100%" && svgNode.attr("height") == "100%") {
+                                                    if (svgNode.attr("preserveAspectRatio") == "none")
+                                                        item.bFitInWindow = true;
+                                                    else
+                                                        item.bKeepAspectRatio = true;
+                                                    item.parentViewbox = {
+                                                        "width": svg.node.viewBox.baseVal.width,
+                                                        "height": svg.node.viewBox.baseVal.height
+                                                    };
+                                                }
+                                                if (entities) {
+                                                    var controlEntity = entities.find(function (ent) {
+                                                        return item.SVGItemId == ent.SVGItemId;
+                                                    });
+                                                    if (controlEntity)
+                                                        item.FontSettingList = controlEntity.FontSettingList;
+                                                }
+                                                try {
+                                                    var page = loadToolboxItem(scope, control.node.classList[0], control.node, svg.node, JSON.stringify(item), webKitRenderCorrection, parameters.isdocked && !parameters.isLayoutBar, popupparameter);
+                                                    toolboxItems.push({
+                                                        page: page,
+                                                        parent: control.node
+                                                    });
+                                                }
+                                                catch (err) {
+                                                    console.error("Error loading Toolbox item: #" + item.SVGItemId + " --- " + err.toString());
+                                                }
+                                            });
+                                            mutateHandler.preparePageMutate(screenLoadedId, svg.node, webKitRenderCorrection, toolboxItems.length)
+                                                .done(function () {
+                                                    fastdom.mutate(function () {
+                                                        try {
+                                                            if (ret.commands) {
+                                                                var commands = JSON.parse(ret.commands);
+                                                                jQuery.each(commands, function (index, item) {
+                                                                    var control = svg.find('#' + item.SVGItemId);
+                                                                    if (control.length > 0) {
+                                                                        control = control[0];
+                                                                        controlInUICommand.push({ item: item, control: control });
+                                                                        //control.on('click', function (e) {
+
+                                                                        //    if (scope.canExecuteCommand(item, control, screenLoadedId))
+                                                                        //        scope.executeCommand(item, control, screenLoadedId);
+                                                                        //})
+
+                                                                        if (control.type !== 'foreignObject' && !control.hasClass("fobjReplacer")) {
+
+                                                                            var delayMouseOut;
+                                                                            control.each(function (index, child) {
+                                                                                this.on('mouseover', function (e) {
+                                                                                    if (delayMouseOut) {
+                                                                                        clearTimeout(delayMouseOut);
+                                                                                        delayMouseOut = undefined;
+                                                                                    }
+                                                                                    else {
+                                                                                        control.animate(100).transform({ scale: 1.1, relative: true }).loop(2, true);
+                                                                                    }
+                                                                                });
+
+                                                                                this.on('mouseout', function (e) {
+                                                                                    delayMouseOut = setTimeout(function () {
+                                                                                        delayMouseOut = undefined;
+                                                                                        // control.animate(100).transform({ scale: 1.2 }).reverse();
+                                                                                    }, 50);
+                                                                                });
+                                                                            }, true);
+                                                                        }
+                                                                    }
+                                                                });
+                                                            }
+                                                        }
+                                                        catch (err) {
+                                                            console.error(err.toString());
+                                                        }
+                                                        try {
+
+                                                            if (ret.animations) {
+                                                                var animations = JSON.parse(ret.animations);
+                                                                jQuery.each(animations, function (index, item) {
+                                                                    var control = svg.find('#' + item.SVGItemId);
+                                                                    if (control.length > 0) {
+                                                                        if (webKitRenderCorrection)
+                                                                            control.addClass("webKitRenderCorrection");
+                                                                        control = control[0];
+
+                                                                        var controlNode = control;
+                                                                        if (control.hasClass("skip_me")) {
+                                                                            controlNode = control.node.children[0];
+                                                                            control = SVG(control.node.children[0]);
+                                                                        }
+
+                                                                        var $controlNode = jQuerize(controlNode);
+                                                                        scope.preInitAnimation(item, $controlNode);
+
+                                                                        if (screenLoadedId in scope.dataValues && item.SVGReferenceId in scope.dataValues[screenLoadedId] && scope.dataValues[screenLoadedId][item.SVGReferenceId].isGood) {
+                                                                            var vfloat = parseFloat(normalizeDataValue(scope.dataValues[screenLoadedId][item.SVGReferenceId]).dataValue);
+                                                                            scope.executeAnimation(item, control, vfloat, screenLoadedId);
+                                                                        }
+                                                                        var deregisterListener = scope.$on(onDataChanged + screenLoadedId + item.SVGReferenceId, function (e, value) {
+                                                                            var vfloat = parseFloat(normalizeDataValue(scope.dataValues[screenLoadedId][item.SVGReferenceId]).dataValue);
+                                                                            scope.executeAnimation(item, control, vfloat, screenLoadedId);
+                                                                        });
+                                                                        listeningArray.push(deregisterListener);
+                                                                    }
+                                                                });
+                                                            }
+                                                        }
+                                                        catch (err) {
+                                                            console.error(err.toString());
+                                                        }
+                                                    });
+                                                });
+                                            jQuery.each(toolboxItems, function (index, item) {
+                                                item.page.appendTo(item.parent);
+                                            });
+                                        }
+
+                                        if (entities) {
+                                            jQuery.each(entities, function (index, item) {
+
+                                                if (!item.IsHitTestVisible) {
+                                                    var control = svg.find('#' + item.SVGItemId);
+
+                                                    if (control.length > 0) {
+
+                                                        control = control[0];
+                                                        var ctrl = $(control.node);
+                                                        ctrl.css({
+                                                            "pointer-events": "none"
+                                                        });
+                                                    }
+                                                }
+                                            });
+                                        }
+                                    }
+                                    catch (err) {
+                                        console.error(err.toString());
+                                    }
+                                }
+                                catch (err) {
+                                    console.error(err.toString());
+                                }
+                            }
+                        }
+                        catch (err) {
+                                console.error("Error opening screen: ", parameters.name, " with parameters: ", parameters.parameter, err.toString());
+                                scope.$broadcast(onError, { ex: err, value: 'Error opening screen "' + parameters.name + '": ' + err.toString() });
+                            }
+
+                            if (!popupparameter && scope.configurationSettings.showDebugWindow) {
+                                var options = { modal: false, screenId: screenLoadedId, titletxt: 'Debug ' + parameters.name };
+                                scope.activatePopup('debugView', JSON.stringify(options));
+                            }
+
+                            if (scope.lastErrorDialog)
+                                scope.lastErrorDialog.hide();
+                            scope.busyVisible = false;
+                            scope.$apply();
+                    }).catch(err => {
+                        console.error(err.toString());
+                        scope.busyVisible = false;
+                        scope.$apply();
+                        scope.$broadcast(onError, { ex: err, value: 'Error opening screen "' + parameters.name + '": ' + err.toString() });
+                        scope.activateLastView();
+                    });
+            });
+
+            getScreenHash(scope, parameters.name);
+        }
+
+        function registerScreenListeners(scope, listeningArray, screenLoadedId) {
+            var drl1 = scope.$on("ReferenceUpdate" + screenLoadedId, function (e, listdata) {
+                jQuery.each(listdata, function (index, data) {
+                    if (!(screenLoadedId in scope.dataValues))
+                        scope.dataValues[screenLoadedId] = [];
+
+                    scope.dataValues[screenLoadedId][data.id] = data;
+                    scope.$broadcast(onDataChanged + screenLoadedId + data.id, data);
+                });
+                scope.$broadcast(onDataChanged + screenLoadedId, listdata);
+            });
+            listeningArray.push(drl1);
+
+            var drl2 = scope.$on("WriteValueError" + screenLoadedId, function (e, data) {
+                console.error(i18next.t('ErrorWritingValue') + data.humanReadable + ' : ' + data.value + ' : ' + data.exMessage);
+            });
+            listeningArray.push(drl2);
+
+            var drl3 = scope.$on("ErrorLoadingScreen" + screenLoadedId, function (e, data) {
+                var screenBaseName = "";
+                if (data.humanReadable != null && data.humanReadable.length > 0)
+                    screenBaseName = " (" + data.humanReadable + ")";
+                var errMsg = i18next.t('ErrorLoadingServerData') + screenBaseName;
+
+                if (scope.lastErrorDialog) {
+                    if (errMsg == scope.lastErrorDialog.message)
+                        return;
+                    scope.lastErrorDialog.hide();
+                }
+
+                scope.lastErrorDialog = DevExpress.ui.dialog.custom({
+                    title: i18next.t('Warning'),
+                    message: errMsg,
+                    buttons: [{
+                        text: i18next.t('OkText'),
+                        onClick: function (e) {
+                            return true;
+                        }
+                    }]
+                });
+                scope.lastErrorDialog.message = errMsg;
+                scope.lastErrorDialog.show();
+                //console.error(i18next.t('ErrorLoadingServerData'));
+            });
+            listeningArray.push(drl3);
+        }
+
+        function hasAccessLevel(scope, accessRole, accessLevel) {
+            var currentRole;
+            var currentLevel = -1;
+            if (scope.currentUser) {
+                currentRole = scope.currentUser.role;
+                currentLevel = scope.currentUser.level;
+            }
+
+            if (accessRole && (!currentRole || accessRole !== currentRole))
+                return false;
+            if (accessLevel > 0 && (currentLevel < 0 || currentLevel < accessLevel))
+                return false;
+            return true;
+        }
+
+        function hasAccessMask(scope, accessMask) {
+            var currentMask = 0;
+            if (scope.currentUser) {
+                currentMask = scope.currentUser.mask;
+            }
+
+            if (accessMask != 0 && (currentMask & accessMask) == 0)
+                return false;
+            return true;
+        }
+
+        function loadToolboxItem($scope, viewType, parent, svgnode, option, webKitRenderCorrection, isEmbed, popupparameter) {
+
+            try {
+                var page = $scope.loadHtmlOnDemand(viewType, false, true, option);
+
+                if (webKitRenderCorrection) {
+                    iOSrenderingFix(parent, svgnode, page, webKitRenderCorrection, isEmbed);
+                    fixGroupedPositionWebkit(parent, page, webKitRenderCorrection);
+                }
+                else if ($scope.biOS)
+                    fixGroupedPositionAndScale(parent, page, popupparameter);
+                if (option)
+                    page.data(dataparameters, option);
+                //page.appendTo(parent);
+                return page;
+            }
+            catch (e) {
+
+                if (e === true) {
+
+                    var deregisterListener = $scope.$on(onloadedHtmlOnDemand + viewType, function (e, value) {
+
+                        page = $scope.loadHtmlOnDemand(viewType, false, true, option);
+
+                        deregisterListener();
+
+                        if (webKitRenderCorrection) {
+                            iOSrenderingFix(parent, svgnode, page, webKitRenderCorrection, isEmbed);
+                            fixGroupedPositionWebkit(parent, page, webKitRenderCorrection);
+                        }
+                        else if ($scope.biOS)
+                            fixGroupedPositionAndScale(parent, page, popupparameter);
+
+                        if (option)
+                            page.data(dataparameters, option);
+                        //page.appendTo(parent);
+                        return page;
+                    });
+                }
+                else
+                    throw e;
+            }
+        }
+
+        function iOSRenderCorrection(svgNode) {
+            $(svgNode).css("opacity", 0.99999);
+            var webkitCorrection = {
+                widthFactor: svgNode.getBoundingClientRect().width / svgNode.viewBox.baseVal.width,
+                heightFactor: svgNode.getBoundingClientRect().height / svgNode.viewBox.baseVal.height,
+                centerLeftDelta: 0,
+                centerTopDelta: 0
+            };
+            if ($(svgNode).attr("preserveAspectRatio") == "none")
+                webkitCorrection.bFitInWindow = true;
+            else {
+                webkitCorrection.bKeepAspectRatio = true;
+                webkitCorrection.factor = Math.min(webkitCorrection.widthFactor, webkitCorrection.heightFactor);
+                let maxDimension = svgNode.viewBox.baseVal.width > svgNode.viewBox.baseVal.height ? svgNode.clientWidth : svgNode.clientHeight;
+                let bBiggerWidth = maxDimension == svgNode.clientWidth;
+                let minDimension = bBiggerWidth ? svgNode.clientHeight : svgNode.clientWidth;
+                let viewBoxAspectRatio = bBiggerWidth ? svgNode.viewBox.baseVal.width / svgNode.viewBox.baseVal.height : svgNode.viewBox.baseVal.height / svgNode.viewBox.baseVal.width;
+                let clientAspectRatio = bBiggerWidth ? svgNode.clientWidth / svgNode.clientHeight : svgNode.clientHeight / svgNode.clientWidth;
+                let deltaClientOffset = 0;
+                if (clientAspectRatio > viewBoxAspectRatio)
+                    deltaClientOffset = (clientAspectRatio - viewBoxAspectRatio) * (bBiggerWidth ? svgNode.clientHeight : svgNode.clientWidth);
+                let centerDelta = (minDimension - ((maxDimension - deltaClientOffset) / viewBoxAspectRatio)) / 2;
+                if (bBiggerWidth) {
+                    webkitCorrection.centerTopDelta = centerDelta;
+                    webkitCorrection.centerLeftDelta = deltaClientOffset / 2;
+                }
+                else {
+                    webkitCorrection.centerLeftDelta = centerDelta;
+                    webkitCorrection.centerTopDelta = deltaClientOffset / 2;
+                }
+            }
+            webkitCorrection.getWidthFactor = function () {
+                return webkitCorrection.bFitInWindow ? webkitCorrection.widthFactor : webkitCorrection.factor;
+            };
+            webkitCorrection.getHeightFactor = function () {
+                return webkitCorrection.bFitInWindow ? webkitCorrection.heightFactor : webkitCorrection.factor;
+            };
+            return webkitCorrection;
+        }
+
+        function iOSrenderingFix(foreignObjectNode, svgNode, page, webKitRenderCorrection, isEmbed, bRotated = false) {
+
+            $(page).addClass("webKitRenderCorrection");
+            var fobj = $(foreignObjectNode);
+            if (!fobj.attr("exportedX"))
+                fobj.attr({
+                    "exportedX": fobj.attr("x"),
+                    "exportedY": fobj.attr("y")
+                });
+
+            if (!isEmbed) {
+                if (!fobj.attr("isnested")) {
+                    if (fobj.attr("originalX") === undefined || fobj.attr("originalY") === undefined) {
+                        fobj.attr({
+                            "originalX": fobj.attr("x"),
+                            "originalY": fobj.attr("y")
+                        });
+                    }
+
+                    var attrNames = {
+                        "x": fobj.hasClass("customTransform") ? "customRotatedX" : "customX",
+                        "y": fobj.hasClass("customTransform") ? "customRotatedY" : "customY",
+                        "scale": fobj.hasClass("customTransform") ? "customRotatedScale" : "customScale"
+                    };
+                    if (fobj.attr(attrNames.x) === undefined || fobj.attr(attrNames.y) === undefined || fobj.attr(attrNames.scale) === undefined) {
+                        if (fobj.hasClass("customTransform"))
+                            webKitRenderCorrection = iOSRenderCorrection(svgNode); // //pair execution of correction (rotation occurred) => recomputing factor, centertopdelta, centerleftdelta with current client svg size
+                        var attrs = {};
+                        attrs[attrNames.x] = parseFloat(fobj.attr("originalX")) * webKitRenderCorrection.getWidthFactor() + webKitRenderCorrection.centerLeftDelta;
+                        attrs[attrNames.y] = parseFloat(fobj.attr("originalY")) * webKitRenderCorrection.getHeightFactor() + webKitRenderCorrection.centerTopDelta;
+                        var scalingX = webKitRenderCorrection.getWidthFactor();
+                        var scalingY = webKitRenderCorrection.getHeightFactor();
+                        if (fobj.attr("groupscalingx") != undefined) {
+                            scalingX *= parseFloat(fobj.attr("groupscalingx"));
+                            scalingY *= parseFloat(fobj.attr("groupscalingy"));
+                        }
+                        else {
+                            var groupScaling = getParentGroupScale(fobj);
+                            if (groupScaling) {
+                                scalingX *= groupScaling.x;
+                                scalingY *= groupScaling.y;
+                                attrs["groupscalingx"] = groupScaling.x;
+                                attrs["groupscalingy"] = groupScaling.y;
+                            }
+                        }
+                        attrs[attrNames.scale] = "scale(" + scalingX + "," + scalingY + ")";
+                        fobj.attr(attrs);
+                    }
+                    fobj.attr({
+                        "x": fobj.attr(attrNames.x),
+                        "y": fobj.attr(attrNames.y)
+                    });
+                    $(page).css("transform", fobj.attr(attrNames.scale));
+
+                    fobj.toggleClass("customTransform");
+                }
+            }
+            else {
+                if (bRotated) {
+                    fobj.attr({
+                        "x": fobj.attr("originalX"),
+                        "y": fobj.attr("originalY")
+                    });
+                    setTimeout(function () { //force DOM refresh
+                        fastdom.mutate(function () { $(svgNode).hide().show(); });
+                    }, 20);
+                    fastdom.mutate(function () {
+                        $(svgNode).css("opacity", 0.99999); //forcing WebKit to create a new RenderLayer for svgNode
+                    });
+                    return;
+                }
+                else {
+                    if (fobj.attr("originalX") === undefined || fobj.attr("originalY") === undefined) {
+                        fobj.attr({
+                            "originalX": fobj.attr("x"),
+                            "originalY": fobj.attr("y")
+                        });
+                    }
+                }
+            }
+            return webKitRenderCorrection;
+        }
+
+        function getEventCoords(e) {
+            var eventCoords = { x: e.pageX, y: e.pageY };
+            if (typeof (e.pageX) == "undefined" && typeof (e.pageY) == "undefined") {
+                try {
+                    eventCoords.x = e.changedTouches[event.changedTouches.length - 1].pageX;
+                    eventCoords.y = e.changedTouches[event.changedTouches.length - 1].pageY;
+                }
+                catch { }
+            }
+            return eventCoords;
+        }
+    </script>
+
+</div>

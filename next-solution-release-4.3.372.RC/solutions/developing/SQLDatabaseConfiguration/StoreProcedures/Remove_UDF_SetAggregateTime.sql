@@ -1,0 +1,1 @@
+IF object_id(N'dbo.UDF_SetAggregateTime', N'FN') IS NOT NULL DROP FUNCTION [dbo].[UDF_SetAggregateTime]

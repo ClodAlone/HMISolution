@@ -1,0 +1,81 @@
+﻿<!DOCTYPE html>
+<html style="height: 100%;">
+<head>
+    <link rel="manifest" href="../manifest.json">
+    <link rel="stylesheet" href="../../css/Site.css" />
+
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="description" content="">
+    <meta name="author" content="">
+
+    <link href="../../favicon.ico" rel="shortcut icon" type="image/x-icon" />
+    <title>WebNExTHMI</title>
+
+    <script src="../../lib/jquery/dist/jquery.min.js"></script>
+    <script src="../../lib/i18next/i18next.min.js"></script>
+    <script src="../../lib/i18next-xhr-backend/i18nextXHRBackend.min.js"></script>
+    <script src="../../lib/i18next-browser-languagedetector/i18nextBrowserLanguageDetector.min.js"></script>
+    <script src="../../lib/jquery-i18next/jquery-i18next.min.js"></script>
+</head>
+<body style='background-color: #2a2a2a; color: #dedede; font-weight: 400; font-size: 1.5em; font-family: "Helvetica Neue","Segoe UI","helvetica","verdana","sans-serif";'>
+    <div id="loadingContainer">
+        <div style="text-align: center; padding: 20px;">
+            <span id="loadingText">Initializing WebNExTHMI</span>
+            <div id="loadingEllipses" style="font-size: 2em;"></div>
+        </div>
+        <img src="../../images/Logo_MoviconNEXT2016.png" id="imgBackground" class="center" style="margin-top: 0;" />
+    </div>
+
+    <script type="text/javascript">
+        var iframe;
+        var curText = ".";
+        var pollingIntervalMS = 1000;
+
+        var url = new URL(window.location.href);
+        var webHMIURL = url.searchParams.get("webhmi");
+        
+        $(document).ready(function () {
+            if (!webHMIURL) {
+                $(loadingText).css("color", "red").text("Error: WebHMI URL is missing");
+                console.error("Initialization aborted: no WebHMI URL provided");
+                return;
+            }
+
+            initMessageListener();
+
+            iframe = document.createElement('iframe');
+            iframe.src = webHMIURL;
+            $(iframe).css("display", "none");
+            document.body.appendChild(iframe);
+
+            var loadingEllipses = $("#loadingEllipses");
+            loadingEllipses.text(curText);
+
+            setInterval(function () {
+                curText = curText.length == 3 ? "." : curText + ".";
+                loadingEllipses.text(curText);
+                checkWebHMIReady();
+            }, pollingIntervalMS);
+        });
+
+        function initMessageListener() {
+            var eventMethod = window.addEventListener ? "addEventListener" : "attachEvent";
+            var eventer = window[eventMethod];
+            var messageEvent = eventMethod == "attachEvent" ? "onmessage" : "message";
+
+            eventer(messageEvent, function (e) {
+                //var key = e.message ? "message" : "data";
+                //var data = e[key];
+                window.location.href = webHMIURL;
+            }, false);
+        }
+
+        function checkWebHMIReady() {
+            iframe.src = iframe.src;
+        }
+
+    </script>
+</body>
+</html>

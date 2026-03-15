@@ -1,0 +1,35 @@
+﻿// See https://aka.ms/new-console-template for more information
+using System.Net.Sockets;
+using System.Net;
+using Common;
+
+Console.WriteLine("Hello, World!");
+
+
+var listener = new UdpListener(new IPEndPoint(IPAddress.Any, 6524));
+
+// send data
+// client.Send(new byte[] { 1, 2, 3, 4, 5 }, 5);
+
+while (true)
+{
+    // then receive data
+    var received = await listener.Receive();
+
+    Console.Write("receive data from " + received.Message.ToString());
+}
+
+
+receive data from 3861:ghszuv: 1736754710
+    receive data from 4015:ghszwp: 1736754711
+    receive data from 4015:ghszwp: 1736754711
+    receive data from ??? 9mka~??d?is?I??2NM,?i?G?Vx4o
+k       F?N???c?D[??ud
+    receive data from ??? 9mka~??d?is?I??2NM,?i?G?Vx4o
+k       F?N???c?D[??ud
+    receive data from ???q?U??(???????p????t
+"
+??U&z?%??p?_?   H?
+    receive data from ???q?U??(???????p????t
+"
+??U&z?%??p?_?   H?

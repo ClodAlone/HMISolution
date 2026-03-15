@@ -1,0 +1,90 @@
+@using ServerEditorWeb.Services
+@using SharedModels
+
+<div class="login-overlay">
+    <div class="login-card">
+        <div class="login-header">
+            <span class="login-icon">🔐</span>
+            <h5 class="mb-0">Server Editor Login</h5>
+        </div>
+
+        <div class="login-body">
+            @if (!string.IsNullOrEmpty(_error))
+            {
+                <div class="alert alert-danger py-1 small mb-2">@_error</div>
+            }
+
+            <div class="mb-3">
+                <label class="form-label small">Username</label>
+                <input type="text" class="form-control" @bind="_username"
+                       @onkeydown="OnKeyDown" placeholder="Enter username" autofocus />
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label small">Password</label>
+                <input type="password" class="form-control" @bind="_password"
+                       @onkeydown="OnKeyDown" placeholder="Enter password" />
+            </div>
+
+            <button class="btn btn-primary w-100" @onclick="DoLogin" disabled="@_isLoading">
+                @if (_isLoading)
+                {
+                    <span class="spinner-border spinner-border-sm me-1"></span>
+                }
+                Sign In
+            </button>
+        </div>
+
+        <div class="login-footer">
+            <span class="text-muted small">Server Editor Web</span>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public EventCallback<bool> OnLoginResult { get; set; }
+
+    [Inject] private AuthService Auth { get; set; } = default!;
+    [Inject] private NodeEditorService Editor { get; set; } = default!;
+
+    private string _username = "";
+    private string _password = "";
+    private string _error = "";
+    private bool _isLoading;
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            await DoLogin();
+    }
+
+    private async Task DoLogin()
+    {
+        _error = "";
+        _isLoading = true;
+        StateHasChanged();
+
+        await Task.Delay(100); // Small delay for UI feedback
+
+        var model = Editor.RootModel;
+        if (model == null)
+        {
+            _error = "No project loaded.";
+            _isLoading = false;
+            return;
+        }
+
+        var (success, message) = Auth.Login(_username, _password, model.Users, model.UserGroups);
+
+        _isLoading = false;
+
+        if (success)
+        {
+            await OnLoginResult.InvokeAsync(true);
+        }
+        else
+        {
+            _error = message;
+        }
+    }
+}

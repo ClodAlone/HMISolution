@@ -1,0 +1,57 @@
+﻿<html>
+<head>
+  <title></title>
+  <style type="text/css">
+    .style1 {
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 10pt;
+    }
+  </style>
+</head>
+<body class="style1">
+<p>
+The Arrowheads sample shows all of the different values of the <strong>Arrowhead</strong> enumeration.  
+For every two <strong>Arrowhead</strong>s, a <strong>Node</strong> is created which a center <strong>Node</strong> links to.  
+The <strong>LinkPanel.ToArrowProperty</strong> and <strong>LinkPanel.FromArrowProperty</strong> is set on each link to show every Arrowhead.
+The property is set through data binding on properties in the custom data classes.
+In the Xaml, the following markup is used.
+<pre> go:LinkPanel.ToArrow=&quot;{Binding Path=Data.ToArrow}&quot;</pre>
+In the code, the <strong>ToArrow</strong> property is defined as follows.
+<pre> private Arrowhead ToArrow { get; set; }</pre>
+No special property definition is needed because the value never changes after it is set in the constructor.
+</p>
+<p>
+This sample also shows animation of the <strong>Node.Location</strong> property.  Using a <strong>Storyboard</strong>, <strong>PointAnimationUsingKeyFrame</strong>s
+for each <strong>Node</strong> are synchronized.  Each animation consists of <strong>LinearPointKeyFrame</strong>s whose values are the locations of every <strong>Node</strong>.
+In this way, each <strong>Node</strong> moves to the location of every other <strong>Node</strong> in sequence, using linear interpolation.  
+This motion approximates each <strong>Node</strong> moving in a circle, or a circle of <strong>Node</strong>s rotating about its center.
+Since neither Silverlight 3 nor Silverlight 4 supports path animations, this workaround is necessary.
+The animation repeats indefinitely.  This is achieved by setting the <strong>StoryBoard.RepeatBehavior</strong> to <strong>RepeatBehaviour.Forever</strong>.
+</p>
+<p>
+Since the geometries for the <strong>Arrowhead</strong>s are defined using the StreamGeometry path markup syntax, they are opaque and only their bounds can be retrieved.
+This lack of information makes it difficult to determine if an <strong>Arrowhead</strong> should be filled.
+In this sample, a custom converter is used to convert between an <strong>Arrowhead</strong> and a Brush for the Fill property.
+In the resources, a converter is defined.  It is later used in the binding.
+<pre>&lt;local&#58;ArrowheadFillConverter x:Key="theArrowheadFillConverter" /&gt;</pre>
+...
+<pre>Fill="{Binding Path=Data.FromArrow, Converter={StaticResource theArrowheadFillConverter}}"</pre>
+In the c-sharp file, the following custom converter is defined.
+<pre>public class ArrowheadFillConverter : Converter {
+
+    public override object Convert(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture) {
+      ...
+      Arrowhead arrow = (Arrowhead)value;
+      SolidColorBrush arrowFill = new SolidColorBrush(Colors.LightGray);  //If none of the below, use a LightGray brush color.
+      switch (arrow) {  //All of the cases in which the fill should be null, other than those on which a non-null Fill has no effect, i.e., Arrowhead.VerticalLine.
+        case Arrowhead.BackwardOpenTriangle: arrowFill = new SolidColorBrush(); break;
+        ...
+      }
+      return arrowFill;
+    }
+
+  }</pre>
+Only the cases in which setting a non-null fill would have an undesired effect are dealt with.
+</p>
+</body>
+</html>

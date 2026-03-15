@@ -1,0 +1,59 @@
+﻿<div id="ReportViewer" class="ReportViewer">
+    <img src="cl.gif" alt="" onload="onReportViewerControlLoaded(this)" id="loadingImage" />
+
+    <div id="edit"></div>
+
+    <script>
+        function onReportViewerControlLoaded(obj) {
+
+            var thisPage = $(obj).parent();
+            thisPage.localize();
+
+            var scope = thisPage.scope();
+            if (!scope)
+                return;
+            var paratt = thisPage.data(dataparameters);
+            if (!paratt)
+                return;
+
+            var thisParent = thisPage.parent();
+            $(obj).remove();
+
+            setOpacity(scope, thisParent, thisPage);
+
+            $(thisPage).bind('destroyed', function () {
+            });
+
+            var parameters = JSON.parse(paratt);
+
+            var editcontainer = thisPage.find("#edit");
+
+            var bWebkitRenderCorrection = $(thisPage).hasClass("webKitRenderCorrection");
+            if (scope.biOS && !bWebkitRenderCorrection)
+                webkitMoveRotateTransform(thisParent, thisPage, editcontainer);
+
+            var options = {
+                name: parameters.ReportName,
+                connectionString: parameters.ConnectionString,
+                parameters: parameters.Parameters,
+                screenId: parameters.screenId
+            };
+
+            if (parameters.SVGReferenceId)
+                options["SVGReferenceId"] = parameters.SVGReferenceId;
+
+            if (bWebkitRenderCorrection) {
+                $(thisPage).removeClass("webKitRenderCorrection");
+                options["webKitRenderCorrection"] = $(thisPage).css("transform");
+                $(thisPage).css({
+                    "transform": "none",
+                    "position": "relative",
+                    "width": "100%",
+                    "height": "100%"
+                });
+            }
+
+            attachView(scope, editcontainer, 'reportView', JSON.stringify(options), false, true);
+        }
+    </script>
+</div>

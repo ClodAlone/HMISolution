@@ -1,0 +1,16 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Windows.Input;
+using System.Collections;
+
+namespace UFInterfaces.Commandable
+{
+    public interface ICommandable
+    {
+        String Name { get; }
+        IEnumerable CommandList { get; set; }
+        bool WebHMISupported { get; }
+    }
+}

@@ -1,0 +1,110 @@
+﻿<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="clr-namespace:Syncfusion.Windows.Tools.Controls"
+    xmlns:shared="clr-namespace:Syncfusion.Windows.Shared;assembly=Syncfusion.Shared.WPF"
+	>
+
+	<ResourceDictionary.MergedDictionaries>
+		<ResourceDictionary Source="/Syncfusion.Tools.WPF;component/Controls/TabSplitter/Themes/Brushes.xaml" />
+		<ResourceDictionary Source="/Syncfusion.Tools.WPF;component/Controls/TabSplitter/Themes/CommonResources/SplitButton.xaml" />
+		<ResourceDictionary Source="/Syncfusion.Tools.WPF;component/Controls/TabSplitter/Themes/CommonResources/HorizontalButton.xaml" />
+		<ResourceDictionary Source="/Syncfusion.Tools.WPF;component/Controls/TabSplitter/Themes/CommonResources/VerticalButton.xaml" />
+		<ResourceDictionary Source="/Syncfusion.Tools.WPF;component/Controls/TabSplitter/Themes/CommonResources/Expand_CollapseButtons.xaml"/>
+	</ResourceDictionary.MergedDictionaries>
+
+	<LinearGradientBrush x:Key="GridSplitterBackground" StartPoint="0,0" EndPoint="0,1">
+		<LinearGradientBrush.GradientStops>
+			<GradientStop Color="#BBBBBB" Offset="0" />
+			<GradientStop Color="#EEEEEE" Offset="0.1" />
+			<GradientStop Color="#F0F0F0" Offset="0.3" />
+			<GradientStop Color="#F0F0F0" Offset="0.7" />
+			<GradientStop Color="#EEEEEE" Offset="0.8" />
+			<GradientStop Color="#E5E5E5" Offset="1" />
+		</LinearGradientBrush.GradientStops>
+	</LinearGradientBrush>
+
+	<ControlTemplate x:Key="CustomGridSplitterTemplate" TargetType="{x:Type local:CustomGridSplitter}">
+		<local:LayoutPanel x:Name="PART_SplitHeaderPanel" Panel.ZIndex="1"
+                       Height="{Binding Path=ActualHeight, RelativeSource={RelativeSource AncestorType={x:Type local:CustomGridSplitter}}}">
+			<Border x:Name="PART_SplitBorder" 
+              BorderBrush="#A0A0A0" BorderThickness="1" Background="{StaticResource Aero.GridSplitterBackground}">
+				<local:SplitHeaderPanel>
+					<ItemsControl x:Name="PART_TopPages" DockPanel.Dock="Left" >
+						<ItemsControl.ItemsPanel>
+							<ItemsPanelTemplate>
+								<local:PagesLayoutPanel FlowDirection="RightToLeft">
+									<local:PagesLayoutPanel.LayoutTransform>
+										<RotateTransform Angle="-180"/>
+									</local:PagesLayoutPanel.LayoutTransform>
+								</local:PagesLayoutPanel>
+							</ItemsPanelTemplate>
+						</ItemsControl.ItemsPanel>
+					</ItemsControl>
+					<Button x:Name="PART_SplitButton" Style="{StaticResource SplitButtonStyle}"
+							DockPanel.Dock="Left" ToolTip="Swap Panes" />
+					<ItemsControl x:Name="PART_BottomPages" DockPanel.Dock="Left" >
+						<ItemsControl.ItemsPanel>
+							<ItemsPanelTemplate>
+								<local:PagesLayoutPanel/>
+							</ItemsPanelTemplate>
+						</ItemsControl.ItemsPanel>
+					</ItemsControl>
+					<DockPanel x:Name="PART_SplitterMunuPanel" HorizontalAlignment="Right" DockPanel.Dock="Right"  Margin="0,1,0,0">
+						<Button x:Name="PART_VerticalButton" Style="{StaticResource VerticalButtonStyle}" ToolTip="Vertical Split" />
+						<Button x:Name="PART_HorizontalButton" BorderThickness="1" BorderBrush="{StaticResource Aero.SplitterButtonActiveBorderBrush}" Style="{StaticResource HorizontalButtonStyle}" ToolTip="Horizontal Split"  />
+						<ToggleButton x:Name="PART_Expand_ColapseButtons" Template="{StaticResource Expand_ColapseButtonTemplate}"
+									Command="local:TabSplitterCommands.CollapseBottomSelectedItem" ToolTip="Collapse Pane" />
+					</DockPanel>
+          <Border Name="PART_HorizContainerBorder"
+                    HorizontalAlignment="Left">
+            <Border Name="ResizedOptionLine" BorderThickness="0,1,0,1" Width="40" Height="4" BorderBrush="#808080"
+                  HorizontalAlignment="Center"/>
+          </Border>
+				</local:SplitHeaderPanel>
+			</Border>
+      <Canvas Name="DragPreviewLine" Height="3" Visibility="Collapsed">
+        <Line Name="Line1" Stroke="Black" Fill="Black" StrokeDashArray="1,1" StrokeThickness="1" X2="{TemplateBinding ActualWidth}" HorizontalAlignment="Stretch"/>
+        <Line Name="Line2" Stroke="Black" Fill="Black" StrokeDashArray="1,1" StrokeThickness="1" X1="1" Y1="1" Y2="1" X2="{TemplateBinding ActualWidth}" HorizontalAlignment="Stretch"/>
+        <Line Name="Line3" Stroke="Black" Fill="Black" StrokeDashArray="1,1" StrokeThickness="1" Y1="2" Y2="2" X2="{TemplateBinding ActualWidth}" HorizontalAlignment="Stretch"/>
+      </Canvas>
+		</local:LayoutPanel>
+		<ControlTemplate.Triggers>
+			<Trigger Property="ResizeDirection" Value="Columns" >
+				<Setter Property="LayoutTransform" TargetName="PART_SplitHeaderPanel">
+					<Setter.Value>
+						<RotateTransform Angle="90"/>
+					</Setter.Value>
+				</Setter>
+                <Setter Property="X2" TargetName="Line1" Value="{Binding Path=ActualHeight
+									, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type local:CustomGridSplitter}}}" />
+                <Setter Property="X2" TargetName="Line2" Value="{Binding Path=ActualHeight
+									, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type local:CustomGridSplitter}}}" />
+                <Setter Property="X2" TargetName="Line3" Value="{Binding Path=ActualHeight
+									, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type local:CustomGridSplitter}}}" />
+				<Setter Property="LayoutTransform" TargetName="PART_VerticalButton">
+					<Setter.Value>
+						<RotateTransform Angle="90"/>
+					</Setter.Value>
+				</Setter>
+                <Setter Property="BorderBrush" TargetName="PART_VerticalButton" Value="{StaticResource Aero.SplitterButtonActiveBorderBrush}"/>
+                <!--<Setter Property="Background" TargetName="PART_HorizontalButton" Value="Transparent"/>-->
+                <Setter Property="BorderBrush" TargetName="PART_HorizontalButton" Value="Transparent"/>
+                <Setter Property="LayoutTransform" TargetName="PART_HorizontalButton">
+					<Setter.Value>
+						<RotateTransform Angle="90"/>
+					</Setter.Value>
+				</Setter>
+
+			</Trigger>
+ 
+		</ControlTemplate.Triggers>
+	</ControlTemplate>
+
+	<Style x:Key="CustomGridSplitter" TargetType="{x:Type local:CustomGridSplitter}">
+    <Setter Property="Height" Value="22"/>
+    <Setter Property="HorizontalAlignment" Value="Center"/>
+    <Setter Property="VerticalAlignment" Value="Center"/>
+		<Setter Property="Template" Value="{StaticResource CustomGridSplitterTemplate}"/>
+	</Style>
+  
+</ResourceDictionary>

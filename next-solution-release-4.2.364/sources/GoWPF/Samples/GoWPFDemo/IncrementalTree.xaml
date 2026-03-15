@@ -1,0 +1,45 @@
+﻿<!-- Copyright © Northwoods Software Corporation, 2008-2015. All Rights Reserved. -->
+
+<UserControl x:Class="IncrementalTree.IncrementalTree"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" 
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:go="http://schemas.nwoods.com/GoXam">
+
+  <UserControl.Resources>
+    <!-- show either a "+" or a "-" as the Button content -->
+    <go:BooleanStringConverter x:Key="theButtonConverter" TrueString="-" FalseString="+" />
+    
+    <DataTemplate x:Key="NodeTemplate">
+      <StackPanel Orientation="Horizontal" go:Part.SelectionAdorned="True"
+                  go:Node.IsTreeExpanded="False">
+        <go:NodePanel Sizing="Auto">
+          <go:NodeShape go:NodePanel.Figure="Ellipse" Fill="{Binding Path=Data.Color}" />
+          <TextBlock Text="{Binding Path=Data.Color}" />
+        </go:NodePanel>
+        <!-- This Button changes the visibility of subtrees by toggling Node.IsExpandedTree -->
+        <Button x:Name="myCollapseExpandButton" Click="CollapseExpandButton_Click"
+            Content="{Binding Path=Node.IsExpandedTree, Converter={StaticResource theButtonConverter}}"
+            Width="20" />
+      </StackPanel>
+    </DataTemplate>
+  </UserControl.Resources>
+
+  <Grid>
+    <go:Diagram x:Name="myDiagram" Padding="10"
+                InitialPanelSpot="Center" InitialDiagramBoundsSpot="Center"
+                HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"
+                NodeTemplate="{StaticResource NodeTemplate}">
+      <!-- note that the Layout will occur whenever any parts change visibility,
+           as well as whenever nodes are added due to expanding a node -->
+      <go:Diagram.Layout>
+        <go:ForceDirectedLayout Conditions="Standard VisibleChanged" />
+      </go:Diagram.Layout>
+      <go:Diagram.CommandHandler>
+        <go:CommandHandler DeletingInclusions="SubTree" CopyingInclusions="SubTree" />
+      </go:Diagram.CommandHandler>
+      <go:Diagram.DraggingTool>
+        <go:DraggingTool Inclusions="SubTree" CopiesEffectiveCollection="True" />
+      </go:Diagram.DraggingTool>
+    </go:Diagram>
+  </Grid>
+</UserControl>

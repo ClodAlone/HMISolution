@@ -1,0 +1,150 @@
+<UserControl x:Class="WpfApp3.Plugins.MqttInfluxControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             mc:Ignorable="d" 
+             d:DesignHeight="400" d:DesignWidth="300">
+    <Grid Background="{DynamicResource PanelBackgroundBrush}">
+        <TabControl Background="Transparent" BorderThickness="0" Margin="5">
+            <TabControl.Resources>
+                <Style TargetType="TabItem">
+                    <Setter Property="Foreground" Value="{DynamicResource TextForegroundBrush}"/>
+                    <Setter Property="Background" Value="Transparent"/>
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="TabItem">
+                                <Grid>
+                                    <Border Name="Border" Margin="0,0,5,0" Background="Transparent" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,2">
+                                        <ContentPresenter x:Name="ContentSite" VerticalAlignment="Center" HorizontalAlignment="Center" ContentSource="Header" Margin="10,5"/>
+                                    </Border>
+                                </Grid>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsSelected" Value="True">
+                                        <Setter TargetName="Border" Property="BorderBrush" Value="{DynamicResource KeywordBrush}"/>
+                                        <Setter TargetName="Border" Property="BorderThickness" Value="0,0,0,2"/>
+                                    </Trigger>
+                                    <Trigger Property="IsSelected" Value="False">
+                                        <Setter TargetName="Border" Property="BorderBrush" Value="Transparent"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
+            </TabControl.Resources>
+            
+            <TabItem Header="MQTT Bridge">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="5">
+                        <TextBlock Text="MQTT Broker:" Foreground="{DynamicResource TextForegroundBrush}" Margin="0,5,0,0"/>
+                        <TextBox x:Name="BrokerBox" Text="localhost" Margin="0,5" Background="{DynamicResource EditorBackgroundBrush}" Foreground="{DynamicResource TextForegroundBrush}"/>
+
+                        <TextBlock Text="Topic:" Foreground="{DynamicResource TextForegroundBrush}" Margin="0,5,0,0"/>
+                        <TextBox x:Name="TopicBox" Text="sensors/#" Margin="0,5" Background="{DynamicResource EditorBackgroundBrush}" Foreground="{DynamicResource TextForegroundBrush}"/>
+
+                        <TextBlock Text="InfluxDB URL:" Foreground="{DynamicResource TextForegroundBrush}" Margin="0,5,0,0"/>
+                        <TextBox x:Name="InfluxUrlBox" Text="http://localhost:8086" Margin="0,5" Background="{DynamicResource EditorBackgroundBrush}" Foreground="{DynamicResource TextForegroundBrush}"/>
+
+                        <TextBlock Text="Influx Token:" Foreground="{DynamicResource TextForegroundBrush}" Margin="0,5,0,0"/>
+                        <PasswordBox x:Name="TokenBox" Margin="0,5" Background="{DynamicResource EditorBackgroundBrush}" Foreground="{DynamicResource TextForegroundBrush}"/>
+
+                         <TextBlock Text="Bucket:" Foreground="{DynamicResource TextForegroundBrush}" Margin="0,5,0,0"/>
+                        <TextBox x:Name="BucketBox" Text="my-bucket" Margin="0,5" Background="{DynamicResource EditorBackgroundBrush}" Foreground="{DynamicResource TextForegroundBrush}"/>
+
+                        <TextBlock Text="Org:" Foreground="{DynamicResource TextForegroundBrush}" Margin="0,5,0,0"/>
+                        <TextBox x:Name="OrgBox" Text="my-org" Margin="0,5" Background="{DynamicResource EditorBackgroundBrush}" Foreground="{DynamicResource TextForegroundBrush}"/>
+
+                        <Button x:Name="ConnectButton" Content="Start Bridge" Click="ConnectButton_Click" 
+                                Style="{StaticResource TitleBarButtonStyle}" Background="#3E3E42" BorderThickness="1" 
+                                Padding="10,5" HorizontalAlignment="Left" Margin="0,10"/>
+
+                        <TextBlock x:Name="StatusBlock" Text="Stopped" Margin="0,10,0,0" Foreground="{DynamicResource MutedTextForegroundBrush}"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="OPC UA Bridge">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="5">
+                        <TextBlock Text="OPC UA Server:" Foreground="{DynamicResource TextForegroundBrush}" Margin="0,5,0,0"/>
+                        <TextBox x:Name="OpcUrlBox" Text="opc.tcp://localhost:4840" Margin="0,5" Background="{DynamicResource EditorBackgroundBrush}" Foreground="{DynamicResource TextForegroundBrush}"/>
+
+                        <TextBlock Text="InfluxDB URL (Reuse optional):" Foreground="{DynamicResource TextForegroundBrush}" Margin="0,5,0,0"/>
+                        <TextBox x:Name="OpcInfluxUrlBox" Text="http://localhost:8086" Margin="0,5" Background="{DynamicResource EditorBackgroundBrush}" Foreground="{DynamicResource TextForegroundBrush}"/>
+
+                        <TextBlock Text="Influx Token:" Foreground="{DynamicResource TextForegroundBrush}" Margin="0,5,0,0"/>
+                        <PasswordBox x:Name="OpcTokenBox" Margin="0,5" Background="{DynamicResource EditorBackgroundBrush}" Foreground="{DynamicResource TextForegroundBrush}"/>
+
+                        <TextBlock Text="Bucket:" Foreground="{DynamicResource TextForegroundBrush}" Margin="0,5,0,0"/>
+                        <TextBox x:Name="OpcBucketBox" Text="opc-bucket" Margin="0,5" Background="{DynamicResource EditorBackgroundBrush}" Foreground="{DynamicResource TextForegroundBrush}"/>
+
+                        <TextBlock Text="Org:" Foreground="{DynamicResource TextForegroundBrush}" Margin="0,5,0,0"/>
+                        <TextBox x:Name="OpcOrgBox" Text="my-org" Margin="0,5" Background="{DynamicResource EditorBackgroundBrush}" Foreground="{DynamicResource TextForegroundBrush}"/>
+
+                        <TextBlock Text="Monitored Nodes:" Foreground="{DynamicResource TextForegroundBrush}" Margin="0,10,0,5"/>
+                        <Grid Height="150">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <ListBox x:Name="OpcNodesList" Background="{DynamicResource EditorBackgroundBrush}" Foreground="{DynamicResource TextForegroundBrush}" BorderThickness="0"/>
+                            <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,5">
+                                <Button Content="Add Selection" Click="AddSelection_Click" Style="{StaticResource TitleBarButtonStyle}" Background="#3E3E42" BorderThickness="1" Padding="5,2" Margin="0,0,5,0"/>
+                                <Button Content="Remove" Click="RemoveNode_Click" Style="{StaticResource TitleBarButtonStyle}" Background="#3E3E42" BorderThickness="1" Padding="5,2"/>
+                            </StackPanel>
+                        </Grid>
+
+                        <Button x:Name="OpcConnectButton" Content="Start OPC Bridge" Click="OpcConnectButton_Click" 
+                                Style="{StaticResource TitleBarButtonStyle}" Background="#3E3E42" BorderThickness="1" 
+                                Padding="10,5" HorizontalAlignment="Left" Margin="0,10"/>
+
+                        <TextBlock x:Name="OpcStatusBlock" Text="Stopped" Margin="0,10,0,0" Foreground="{DynamicResource MutedTextForegroundBrush}"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+            
+            <TabItem Header="Query Browser">
+                <Grid Margin="5">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    
+                    <StackPanel Grid.Row="0">
+                        <TextBlock Text="Time Range (Flux duration, e.g. -1h, -15m):" Foreground="{DynamicResource TextForegroundBrush}" Margin="0,0,0,2"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="RangeBox" Text="-1h" Background="{DynamicResource EditorBackgroundBrush}" Foreground="{DynamicResource TextForegroundBrush}" Margin="0,0,5,0"/>
+                            <Button Content="Query" Click="QueryButton_Click" Grid.Column="1"
+                                    Style="{StaticResource TitleBarButtonStyle}" Background="#3E3E42" BorderThickness="1" Padding="10,2"/>
+                        </Grid>
+                    </StackPanel>
+                    
+                    <DataGrid x:Name="ResultsGrid" Grid.Row="1" Margin="0,10,0,0" 
+                              AutoGenerateColumns="True" IsReadOnly="True"
+                              Background="{DynamicResource EditorBackgroundBrush}"
+                              RowBackground="{DynamicResource PanelBackgroundBrush}"
+                              AlternatingRowBackground="{DynamicResource EditorBackgroundBrush}"
+                              Foreground="Black"
+                              HeadersVisibility="Column"
+                              HorizontalGridLinesBrush="{DynamicResource BorderBrush}"
+                              VerticalGridLinesBrush="{DynamicResource BorderBrush}">
+                        <DataGrid.Resources>
+                            <Style TargetType="DataGridColumnHeader">
+                                <Setter Property="Background" Value="{DynamicResource PanelBackgroundBrush}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource TextForegroundBrush}"/>
+                                <Setter Property="Padding" Value="5,2"/>
+                                <Setter Property="BorderThickness" Value="0,0,1,1"/>
+                                <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+                            </Style>
+                        </DataGrid.Resources>
+                    </DataGrid>
+                </Grid>
+            </TabItem>
+        </TabControl>
+    </Grid>
+</UserControl>

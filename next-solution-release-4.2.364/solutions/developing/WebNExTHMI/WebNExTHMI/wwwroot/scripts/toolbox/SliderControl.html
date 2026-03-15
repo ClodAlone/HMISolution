@@ -1,0 +1,529 @@
+﻿<div id="SliderControl" class="SliderControl">
+    <img src="cl.gif" alt="" onload="onSliderLoaded(this)" id="loadingImage" />
+
+    <!--<div id="slider"></div>-->
+    <div id="nouislider"></div>
+
+    <script>
+        function onSliderLoaded(obj) {
+
+            var thisPage = $(obj).parent();
+            thisPage.localize();
+
+            var scope = thisPage.scope();
+            if (!scope)
+                return;
+            var paratt = thisPage.data(dataparameters);
+            if (!paratt)
+                return;
+
+            var thisParent = thisPage.parent();
+            var webKitRenderCorrection = thisPage.hasClass("webKitRenderCorrection");
+            var settingSlider = false;
+            var deregisterListenerActiveLanguage;
+
+            $(obj).remove();
+
+            setOpacity(scope, thisParent, thisPage);
+
+            if (webKitRenderCorrection)
+                thisPage.css("will-change", "opacity");
+
+            $(thisPage).bind('destroyed', function () {
+                if (deregisterListener)
+                    deregisterListener();
+                if (writeTimer)
+                    clearTimeout(writeTimer);
+                if (deregisterListenerActiveLanguage)
+                    deregisterListenerActiveLanguage();
+            });
+
+            var parameters = JSON.parse(paratt);
+
+            var customFonts = [parameters.FontFamily];
+            if (parameters.FontSettingList)
+                $.each(parameters.FontSettingList, function (index, item) {
+                    customFonts.push(item.FontFamily);
+                });
+            loadCustomFonts(customFonts);
+            var dynamicFontElements = [];
+
+            var onSettingValue;
+            var bIsSliding;
+
+            //var slidercontainer = thisPage.children().first();
+
+            var writeTimer;
+            var lastSetValue;
+            var lastSetPrevValue;
+
+            var foreignObject = thisPage.parent();
+            foreignObject.css({ "overflow": "visible" });
+
+            /* TEST CUSTOM LIBRARY NOUISLIDER */
+            var customslider = thisPage.find("#nouislider")[0];
+            if (scope.biOS)
+                webkitMoveRotateTransform(thisParent, thisPage, customslider);
+            var labelsNo = Math.max(2, parseInt((parameters.MaxValue - parameters.MinValue) / parameters.TickMajorFrequency, 10));
+            var isVertical = parameters.Orientation == "1";
+
+            var bSliding = false;
+            var bSlidingDenied = false;
+            var thumbWidth; //= touchSquareSize;
+            var thumbHeight; //= touchSquareSize;
+            var defaultTickSize = 6;
+            var maxTickSize = Math.max(parseInt(parameters.TickSize, 10), parseInt(parameters.TickMinorSize, 10));
+            var fontOptions = {
+                "font-family": parameters.FontFamily,
+                "font-size": parameters.FontSize + "px",
+                "font-weight": fontWeightConverter(parameters.FontWeight),
+                //"color": parameters.Foreground.Color
+            };
+            var fontStyle = parameters.FontStyle.toLowerCase();
+            if (fontStyle != "normal")
+                fontOptions["font-style"] = fontStyle;
+            
+            //$(customslider).slider();
+            var sliderLengthFactor = 0.82;
+            var options;
+            if (isVertical) {
+                options = {
+                    orientation: 'vertical',
+                    step: (typeof (parameters.SmallChange) != "undefined" ? parseFloat(parameters.SmallChange) : 0.1),
+                    direction: 'rtl',
+                    connect: [true, true],
+                    start: [0],
+                    range: {
+                        min: parameters.MinValue,
+                        max: parameters.MaxValue
+                    }
+                }
+                if (parameters.ShowLabel || parameters.TickSize > 0) {
+                    options.pips = {
+                        mode: 'count',
+                        values: labelsNo + 1
+                    };
+                }
+                if (webKitRenderCorrection)
+                    options.iOSViewboxFactor = window.innerHeight / parameters.parentViewbox.height;
+            }
+            else {
+                options = {
+                    orientation: 'horizontal',
+                    step: (typeof (parameters.SmallChange) != "undefined" ? parseFloat(parameters.SmallChange) : 0.1),
+                    connect: [true, true],
+                    start: [0],
+                    range: {
+                        min: parameters.MinValue,
+                        max: parameters.MaxValue
+                    }
+                };
+                if (parameters.ShowLabel || parameters.TickSize > 0) {
+                    options.pips = {
+                        mode: 'count',
+                        values: labelsNo + 1
+                    };
+                }
+                if (webKitRenderCorrection)
+                    options.iOSViewboxFactor = window.innerWidth / parameters.parentViewbox.width;
+            }
+
+            var mutateFunc = function () {
+
+                noUiSlider.create(customslider, options);
+
+                if (isVertical) {
+                    $(customslider).css({ "position": "relative", "height": thisParent.attr("height") * sliderLengthFactor, "left": thisParent.width() / 2 });
+                    $(customslider).find('.noUi-marker.noUi-marker-large').css({
+                        "width": parseInt(parameters.TickSize, 10),
+                        "height": parseInt(parameters.TickThickness, 10)
+                    });
+                    $(customslider).find('.noUi-marker.noUi-marker-normal').css({
+                        "width": parseInt(parameters.TickMinorSize, 10),
+                        "height": parseInt(parameters.TickThickness, 10)
+                    });
+
+                    if (!parameters.ShowLabel)
+                        $(customslider).find('.noUi-value').css("display", "none");
+                }
+                else {
+                    //$(customslider).css("margin-left", thisParent.attr("width") * (1 - sliderLengthFactor));
+                    $(customslider).css("margin-top", "7px");
+
+                    $(customslider).find('.noUi-marker.noUi-marker-large').css({
+                        "height": parseInt(parameters.TickSize, 10),
+                        "width": parseInt(parameters.TickThickness, 10)
+                    });
+                    $(customslider).find('.noUi-marker.noUi-marker-normal').css({
+                        "height": parseInt(parameters.TickMinorSize, 10),
+                        "width": parseInt(parameters.TickThickness, 10)
+                    });
+                    if (!parameters.ShowLabel)
+                        $(customslider).find('.noUi-value').css("display", "none");
+
+                    if (maxTickSize != defaultTickSize)
+                        $(customslider).find('.noUi-pips.noUi-pips-horizontal').css('top', -80 + defaultTickSize - maxTickSize);
+                }
+
+                ////////////////
+
+                $(thisParent).bind(disabledClassEvent, function () {
+                    var disabled = thisParent.hasClass(disabledClass);
+                    $(customslider).attr('disabled', disabled);
+                });
+
+                var sliderPips = $(customslider).find('.noUi-pips');
+                sliderPips.css(fontOptions);
+                dynamicFontElements.push(sliderPips);
+
+                if (parameters.TickColor) {
+                    sliderPips.css("color", parameters.TickColor.Color);
+                    $(customslider).find('.noUi-marker, .noUi-marker-large').css("background", parameters.TickColor.Color);
+                }
+
+                customslider.noUiSlider.on('set', function (values, handle, unencoded, tap, positions) {
+                    bIsSliding = false;
+                    if (!settingSlider)
+                        OnUserSlideSet(values);
+                });
+
+                customslider.noUiSlider.on('slide', function (values, handle, unencoded, tap, positions) {
+                    var firstSlide = !bSliding;
+                    bSliding = true;
+                    if ($(customslider).attr('disabled') || bSlidingDenied) {
+                        customslider.noUiSlider.set([Math.min(Math.max((lastSetValue ? lastSetValue : 0), parameters.MinValue), parameters.MaxValue)]);
+                        return;
+                    }
+                    if (firstSlide) {
+                        thisParent.trigger("mousedown"); //Access Rights Check
+                        if ($(customslider).attr('disabled')) {
+                            bSlidingDenied = true;
+                            return;
+                        }
+                    }
+                    OnUserSlideSet(values);
+                });
+                customslider.noUiSlider.on('end', function (values, handle, unencoded, tap, positions) {
+                    bSliding = false;
+                    bSlidingDenied = false;
+                });
+
+                if (parameters.SliderStyle && scope.Styles && scope.Styles[parameters.screenId]) {
+                    var styleSvg = SVG(scope.Styles[parameters.screenId]);
+                    var thumbStyle = styleSvg.find('#' + parameters.SliderStyle);
+                    if (thumbStyle.length > 0)
+                        thumbStyle = thumbStyle[0]; //.clone();
+
+                    if (parameters.ThumbColor || parameters.UseThumbOptions) {
+                        var tagsBG = styleSvg.find("[tag='BG']");
+                        if (parameters.ThumbColor) {
+                            for (var i = 0; i < tagsBG.length; i++)
+                                tagsBG[i].addClass(parameters.ThumbColor);
+                        }
+                        if (parameters.UseThumbOptions) {
+                            if (parameters.ThumbBorderBrush && parameters.ThumbBorderBrush.Color && parameters.ThumbBorderThickness > 0) {
+                                for (var i = 0; i < tagsBG.length; i++) {
+                                    tagsBG[i].attr({
+                                        "stroke": parameters.ThumbBorderBrush.Color,
+                                        "stroke-width": parameters.ThumbBorderThickness,
+                                        "rx": parseFloat(tagsBG[i].attr("rx")) - parameters.ThumbBorderThickness / 2,
+                                        "ry": parseFloat(tagsBG[i].attr("ry")) - parameters.ThumbBorderThickness / 2
+                                    });
+                                }
+                            }
+                        }
+                    }
+
+                    $(customslider).find('.noUi-handle').css({ "border-style": "none", "background": "transparent", "box-shadow": "none" });
+                    var touchArea = $(customslider).find('.noUi-touch-area');
+                    //var touchSquareSize = Math.min(touchArea.width(), touchArea.height());
+                    var factorHeight = parameters.ThumbFactor.FactorHeight != null ? parameters.ThumbFactor.FactorHeight : 1;
+                    var factorWidth = parameters.ThumbFactor.FactorWidth != null ? parameters.ThumbFactor.FactorWidth : 1;
+
+                    if (isVertical) {
+                        thumbWidth = parseFloat(thisParent.attr("width")) - 10;
+                        thumbHeight = thumbWidth * factorHeight;
+                        var maxSliderH = thisParent.attr("height") - thumbHeight;
+                        if (parseFloat($(customslider).css("height")) > maxSliderH)
+                            $(customslider).css("height", maxSliderH);
+
+                        //if (thumbWidth > 20)
+                        //    thisPage.find(".noUi-pips.noUi-pips-vertical").css("left", (thumbWidth - 20) / 2 - defaultTickSize + maxTickSize);
+
+                        var verticalPipsBar = $(customslider).find(".noUi-pips.noUi-pips-vertical");
+                        verticalPipsBar.css("left", - thumbWidth / 2 - 30);
+                        $(customslider).find('.noUi-value.noUi-value-vertical').css({
+                            "padding": 0,
+                            "width": "40px",
+                            "transform": "rotate(-90deg)", //translateX(-50%)
+                            "transform-origin": "bottom center"
+                        });
+                        $(customslider).find(".noUi-marker.noUi-marker-vertical").css("left", 27);
+                    }
+                    else {
+                        thumbHeight = parseFloat(thisParent.attr("height")) - 10;
+                        thumbWidth = thumbHeight * factorWidth;
+                        var maxSliderW = thisParent.attr("width") - thumbWidth;
+                        if (parseFloat($(customslider).css("width")) > maxSliderW)
+                            $(customslider).css("width", maxSliderW);
+                        if (thumbHeight > 40)
+                            thisPage.find("div.noUi-horizontal .noUi-base").css("transform", "translateY(" + ((thumbHeight - 40) / 2) + "px)");
+                    }
+                    $(thumbStyle.node).appendTo(touchArea).css({
+                        "width": thumbWidth,
+                        "height": thumbHeight,
+                        "position": "absolute",
+                        "top": (touchArea.height() - thumbHeight) / 2,
+                        "left": (touchArea.width() - thumbWidth) / 2,
+                        "z-index": 1
+                    });
+                }
+                $(customslider).css(isVertical ? "top" : "left", isVertical ? (thisParent.attr("height") - $(customslider).height()) / 2 : (thisParent.attr("width") - $(customslider).width()) / 2);
+
+                $(customslider).find('.noUi-connect').each(function (i, e) {
+                    var cssProps = {};
+                    if (!isVertical) {
+                        cssProps["width"] = $(this).width() + thumbWidth / 2;
+                        if (i == 0)
+                            cssProps["left"] = - thumbWidth / 2;
+                    }
+                    else {
+                        cssProps["height"] = $(this).height() + thumbHeight / 2;
+                        if (i > 0)
+                            cssProps["top"] = - thumbHeight / 2;
+                    }
+                    if (i == 0) {
+                        if (parameters.DecreaseButtonColor && parameters.DecreaseButtonColor.Color)
+                            cssProps["background"] = parameters.DecreaseButtonColor.Color;
+                    }
+                    else if (parameters.BarColor && parameters.BarColor.Color)
+                        cssProps["background"] = parameters.BarColor.Color;
+
+                    $(this).css(cssProps);
+                });
+
+                onSliderDataChanged();
+                
+                if (parameters.SVGReferenceId) {
+                    if (parameters.screenId in scope.dataValues && parameters.SVGReferenceId in scope.dataValues[parameters.screenId]) {
+                        applyTagQualityStyle(webKitRenderCorrection ? thisPage : thisParent, scope, parameters.screenId, parameters.SVGReferenceId, false, null, true);                
+                        if (scope.dataValues[parameters.screenId][parameters.SVGReferenceId].isGood)
+                            onSliderDataChanged();
+                    }
+                
+                    deregisterListener = scope.$on(onDataChanged + parameters.screenId + parameters.SVGReferenceId, function (e, value) {
+                        applyTagQualityStyle(webKitRenderCorrection ? thisPage : thisParent, scope, parameters.screenId, parameters.SVGReferenceId, false, null, true);
+                        onSliderDataChanged();
+                    });
+                }
+
+                if (parameters.FontSettingList)
+                    deregisterListenerActiveLanguage = scope.$on(onActiveLanguageChanged, function (e, value) {
+                        if ((value in parameters.FontSettingList) !== -1) {
+                            var fontOpts = applyFontSettingList(dynamicFontElements, parameters.FontSettingList[value]);
+                        }
+                    });
+            };
+
+            mutateHandler.scheduleMutate(parameters.screenId, mutateFunc);
+
+            function onSliderDataChanged() {
+                if (bIsSliding)
+                    return;
+                onSettingValue = true;
+                try {
+                    var newValue = Number.NaN;
+                    if (parameters.screenId in scope.dataValues && parameters.SVGReferenceId in scope.dataValues[parameters.screenId] &&
+                        scope.dataValues[parameters.screenId][parameters.SVGReferenceId].isGood) {
+                        //slider.option("value", newInvariantValue);
+                        settingSlider = true;
+                        customslider.noUiSlider.set([normalizeDataValue(scope.dataValues[parameters.screenId][parameters.SVGReferenceId]).dataValue]);
+                        settingSlider = false;
+
+                        if (parameters.UseEUnit) {
+                            if (!notNumeric(scope.dataValues[parameters.screenId][parameters.SVGReferenceId].rangeLow))
+                                customslider.noUiSlider.updateOptions({ range: { 'min': scope.dataValues[parameters.screenId][parameters.SVGReferenceId].rangeLow } });
+                            //slider.option("min", scope.dataValues[parameters.screenId][parameters.SVGReferenceId].rangeLow);
+                            if (!notNumeric(scope.dataValues[parameters.screenId][parameters.SVGReferenceId].rangeHigh))
+                                //slider.option("max", scope.dataValues[parameters.screenId][parameters.SVGReferenceId].rangeHigh);
+                                customslider.noUiSlider.updateOptions({ range: { 'max': scope.dataValues[parameters.screenId][parameters.SVGReferenceId].rangeHigh } });
+                        }
+                    }
+                }
+                finally {
+                    onSettingValue = false;
+                }
+            }
+
+            function OnUserSlideSet(values) {
+                if (onSettingValue)
+                    return;
+                bIsSliding = true;
+                if (!(parameters.screenId in scope.dataValues) || !(parameters.SVGReferenceId in scope.dataValues[parameters.screenId]))
+                    return;
+                if (!scope.dataValues[parameters.screenId][parameters.SVGReferenceId].isGood || thisParent.hasClass(disabledClass) || !scope.dataValues[parameters.screenId][parameters.SVGReferenceId].isWritable || !scope.dataValues[parameters.screenId][parameters.SVGReferenceId].isUserWritable)
+                    return;
+
+                if (typeof (lastSetPrevValue) == "undefined")
+                    lastSetPrevValue = customslider.noUiSlider.get();
+
+                if (scope.dataValues[parameters.screenId][parameters.SVGReferenceId].bIsScalar)
+                    values[0] = Math.round(values[0]);
+                lastSetValue = String(values[0]);
+                if (writeTimer == null) {
+                    writeTimer = setTimeout(() => {
+                        writeTimer = null;
+                        //console.log("SENDING LAST VALUE TO SERVER: " + lastSetValue);
+                        //customslider.option("disabled", true);
+                        scope.corehubconnection.invoke("SetValue", parameters.SVGReferenceId, lastSetValue, parameters.screenId)
+                            .then((ret) => {
+                                lastSetPrevValue = lastSetValue;
+                                //customslider.option("disabled", false);
+                            })
+                            .catch(err => {
+                                console.error(err.toString());
+                                //customslider.option("disabled", false);
+                                //slider.option("value", lastSetPrevValue);
+                                settingSlider = true;
+                                customslider.noUiSlider.set([lastSetPrevValue]);
+                                settingSlider = false;
+                                scope.$broadcast(onError, { ex: err, value: "Error setting value : " + err.toString() + " for item : " + parameters.SVGItemId });
+                            })
+                            .finally(() => {
+                                bIsSliding = false;
+                            });
+                    }, 100);
+                }
+            }
+
+            /* TEST CUSTOM LIBRARY NOUISLIDER */
+
+            //var slider = slidercontainer.dxSlider({
+            //    height: thisParent.attr("height"),
+            //    width: thisParent.attr("width"),
+            //    min: parameters.MinValue,
+            //    max: parameters.MaxValue,
+            //    label: {
+            //        visible: parameters.ShowLabel,
+            //        position: "top"
+            //    },
+            //    value: 0,
+            //    rtlEnabled: false,
+            //    tooltip: {
+            //        enabled: true,
+            //        showMode: "always",
+            //        position: "bottom"
+            //    },
+            //    onContentReady: function (e) {
+            //        var component = e.component.element();
+            //        if (parameters.TickColor) {
+            //            component.find(".dx-slider-label").css({
+            //                "color": parameters.TickColor.Color,
+            //                "font-size": parseInt(parameters.FontSize, 10),
+            //                "top": "-25px"
+            //            });
+            //        }
+            //    },
+            //    onValueChanged: function (e) {
+            //        if (onSettingValue)
+            //            return;
+            //        if (!(parameters.screenId in scope.dataValues) || !(parameters.SVGReferenceId in scope.dataValues[parameters.screenId]))
+            //            return;
+            //        if (!scope.dataValues[parameters.screenId][parameters.SVGReferenceId].isGood)
+            //            return;
+
+            //        lastSetValue = String(e.value);
+            //        lastSetPrevValue = e.previousValue;
+            //        if (writeTimer == null) {
+            //            writeTimer = setTimeout(() => {
+            //                writeTimer = null;
+            //                //console.log("SENDING LAST VALUE TO SERVER: " + lastSetValue);
+            //                //slider.option("disabled", true);
+            //                scope.corehubconnection.invoke("SetValue", parameters.SVGReferenceId, lastSetValue, parameters.screenId)
+            //                    .then((ret) => {
+            //                        //slider.option("disabled", false);
+            //                    })
+            //                    .catch(err => {
+            //                        console.error(err.toString());
+            //                        //slider.option("disabled", false);
+            //                        slider.option("value", lastSetPrevValue);
+            //                        scope.$broadcast(onError, { ex: err, value: "Error setting value : " + err.toString() + " for item : " + parameters.SVGItemId });
+            //                    });
+            //            }, 100);
+            //        }
+            //    }
+            //}).dxSlider("instance");
+
+            ////Slider with Vertical Orientation (BREAKS USER INTERACTION)
+            ////slider.option("height", thisParent.attr("width"));
+            ////slider.option("width", thisParent.attr("height"));
+            ////slidercontainer.css({ "transform-origin": "top left", "transform": "rotate(90deg)" }); // rotateX(180deg)
+            ////Slider with Vertical Orientation
+
+            ////Adding Extra Labels and Ticks
+            //var excursion = parseInt(parameters.MaxValue - parameters.MinValue, 10);
+
+            //if (parameters.TickMajorFrequency < excursion) {
+            //    var firstLabel = slidercontainer.find(".dx-slider-label").first();
+            //    slidercontainer.find(".dx-slider-label").last().remove();
+            //    var width = slidercontainer.attr("width") - parseInt(slidercontainer.find(".dx-slider-bar").css("margin-left"), 10) - parseInt(slidercontainer.find(".dx-slider-bar").css("margin-right"), 10);
+            //    var labelsNo = parseInt((parameters.MaxValue - parameters.MinValue) / parameters.TickMajorFrequency, 10);
+            //    var labelsStep = parseInt((parameters.MaxValue - parameters.MinValue) / labelsNo, 10);
+            //    //Major Ticks
+            //    for (i = 0; i <= labelsNo; i++) {
+            //        var leftOffset = Math.floor(width / labelsNo * i); // - parseInt(parameters.FontSize, 10) / 2;
+            //        firstLabel.after($("<div class='dx-slider-label xtralabels' style='top:-33px; font-size: " + parseInt(parameters.FontSize, 10) + "px; color: " + parameters.TickColor.Color + "; left:" + leftOffset + "px'>" + i * labelsStep + "</div>"));
+            //        firstLabel.after($("<div class='dx-slider-label xtraticks' style='top:-33px; text-align:center; left:" + (leftOffset - (parseInt(parameters.FontSize, 10) / 2)) + "px'><svg><line stroke='" + parameters.TickColor.Color + "' stroke-width='" + parseInt(parameters.TickThickness, 10) + "' x1='20' y1='26' x2='20' y2='" + (26 + parseInt(parameters.TickSize, 10)) + "'></line></svg></div>"));
+            //    }
+            //    //Minor Ticks
+            //    if (parseInt(parameters.TickMinorSize, 10) > 0) {
+            //        for (i = 0; i < excursion; i++) {
+            //            if (i == 0 || i % labelsStep != 0) {
+            //                var leftOffset = Math.floor(width / excursion * i); // - parseInt(parameters.FontSize, 10) / 2;
+            //                firstLabel.after($("<div class='dx-slider-label xtraticks' style='top:-33px; text-align:center; left:" + (leftOffset - (parseInt(parameters.FontSize, 10) / 2)) + "px'><svg><line stroke='" + parameters.TickColor.Color + "' stroke-width='" + parseInt(parameters.TickThickness, 10) + "' x1='20' y1='26' x2='20' y2='" + (26 + parseInt(parameters.TickMinorSize, 10)) + "'></line></svg></div>"));
+            //            }
+            //        }
+            //    }
+
+            //    //TickPlacement
+            //    if (parameters.TickPlacement == "2" || parameters.TickPlacement == "3") { //BottomRight || Both
+            //        slider.option("tooltip.position", "top");
+            //        slidercontainer.find(".xtraticks").css({ "top": slidercontainer.attr("height") / 2 });
+            //        slidercontainer.find(".xtralabels").css({ "top": slidercontainer.attr("height") / 2 + parseInt(parameters.TickSize, 10) + parseInt(parameters.FontSize, 10) + 10 });
+            //        if (parameters.TickPlacement == "3") { //Both
+            //            slider.option("tooltip.showMode", "onHover");
+            //            //Major Ticks
+            //            for (i = 0; i <= labelsNo; i++) {
+            //                var leftOffset = Math.floor(width / labelsNo * i); // - parseInt(parameters.FontSize, 10) / 2;
+            //                firstLabel.after($("<div class='dx-slider-label xtralabels' style='top:-33px; font-size: " + parseInt(parameters.FontSize, 10) + "px; color: " + parameters.TickColor.Color + "; left:" + leftOffset + "px'>" + i * labelsStep + "</div>"));
+            //                firstLabel.after($("<div class='dx-slider-label xtraticks' style='top:-33px; text-align:center; left:" + (leftOffset - (parseInt(parameters.FontSize, 10) / 2)) + "px'><svg><line stroke='" + parameters.TickColor.Color + "' stroke-width='" + parseInt(parameters.TickThickness, 10) + "' x1='20' y1='26' x2='20' y2='" + (26 + parseInt(parameters.TickSize, 10)) + "'></line></svg></div>"));
+            //            }
+            //            //Minor Ticks
+            //            if (parseInt(parameters.TickMinorSize, 10) > 0) {
+            //                for (i = 0; i < excursion; i++) {
+            //                    if (i == 0 || i % labelsStep != 0) {
+            //                        var leftOffset = Math.floor(width / excursion * i); // - parseInt(parameters.FontSize, 10) / 2;
+            //                        firstLabel.after($("<div class='dx-slider-label xtraticks' style='top:-33px; text-align:center; left:" + (leftOffset - (parseInt(parameters.FontSize, 10) / 2)) + "px'><svg><line stroke='" + parameters.TickColor.Color + "' stroke-width='" + parseInt(parameters.TickThickness, 10) + "' x1='20' y1='26' x2='20' y2='" + (26 + parseInt(parameters.TickMinorSize, 10)) + "'></line></svg></div>"));
+            //                    }
+            //                }
+            //            }
+            //        }
+            //    }
+            //    firstLabel.remove();
+            //}
+            ////Adding Extra Labels and Ticks
+
+            ////BarColor
+            //slidercontainer.find(".dx-slider-range.dx-slider-range-visible").css({
+            //    "background": parameters.BarColor.Color,
+            //    "border": "1px solid " + parameters.BarColor.Color
+            //});
+            ////BarColor
+
+            //SliderStyle (custom slider thumb)
+
+                //slidercontainer.find('.dx-slider-handle').css({ 'margin-top': -23, 'width': 40 }).html('<svg xmlns="http://www.w3.org/2000/svg" version="1.1"><circle cx="23" cy="23" r="20" stroke="#0000FF" stroke-width="3" fill="#5cb85c"></circle></svg>');
+                //slidercontainer.find('.dx-state-hover.dx-slider-handle, .dx-slider-handle').css({ 'border-width': 0, 'background-color': 'transparent' });
+        }
+    </script>
+</div>

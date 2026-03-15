@@ -1,0 +1,423 @@
+﻿<div id="ListBoxControl" class="ListBoxControl" style="height: 100%;">
+    <img src="cl.gif" alt="" onload="onListBoxControlLoaded(this)" id="loadingImage" />
+    <div id="combo"></div>
+
+    <script>
+        function onListBoxControlLoaded(obj) {
+            var thisPage = $(obj).parent();
+            thisPage.localize();
+
+            var scope = thisPage.scope();
+            if (!scope)
+                return;
+            var paratt = thisPage.data(dataparameters);
+            if (!paratt)
+                return;
+
+            var thisParent = thisPage.parent();
+            var webKitRenderCorrection = $(thisPage).hasClass("webKitRenderCorrection");
+            if (webKitRenderCorrection)
+                thisPage.css("will-change", "opacity");
+            $(obj).remove();
+
+            setOpacity(scope, thisParent, thisPage);
+
+            var interval;
+            var deregisterListener;
+            var deregisterListener2;
+            var deregisterListenerActiveLanguage;
+            $(thisPage).bind('destroyed', function () {
+                if (interval)
+                    clearInterval(interval);
+                if (deregisterListener)
+                    deregisterListener();
+                if (deregisterListener2)
+                    deregisterListener2();
+                if (deregisterListenerActiveLanguage)
+                    deregisterListenerActiveLanguage();
+            });
+
+            var parameters = JSON.parse(paratt);
+
+            var customFonts = [parameters.FontFamily];
+            if (parameters.FontSettingList)
+                $.each(parameters.FontSettingList, function (index, item) {
+                    customFonts.push(item.FontFamily);
+                });
+            loadCustomFonts(customFonts);
+            var dynamicFontElements = [];
+
+            var combocontainer = thisPage.find("#combo");
+            var scrollOptions = {
+                'direction': 'both'
+            };
+            if (scope.biOS)
+                webkitMoveRotateTransform(thisParent, thisPage, combocontainer);
+            
+            if (scope.biOS || (isMobile.Android() && parameters.bFitInWindow)) {
+                if (scope.biOS)
+                    thisPage.css("overflow", "hidden");
+                scrollOptions["useNative"] = false;
+                scrollOptions["scrollByThumb"] = true;
+            }
+
+            var inputCss = {
+                "color": getSolidColor(parameters.Foreground),
+                "font-family": parameters.FontFamily,
+                "font-size": parameters.FontSize,
+                "font-weight": fontWeightConverter(parameters.FontWeight)
+            };
+            var fontStyle = parameters.FontStyle.toLowerCase();
+            if (fontStyle != "normal")
+                inputCss["font-style"] = fontStyle;
+
+            var borderCss = {};
+            setObjectBorder(borderCss, parameters);
+
+            fastdom.mutate(function () {
+                combocontainer.css(inputCss);
+                dynamicFontElements.push(combocontainer);
+                if (!$.isEmptyObject(borderCss)) {
+                    borderCss["border-color"] = parameters.BorderBrush.Color;
+                    combocontainer.css(borderCss);
+                }
+            });
+
+            setOpacity(scope, thisParent, thisPage);
+
+            var noDataText = i18next.t1('NoDataText');
+            var onSettingValue;
+            var titems = new Array();
+            var lastSelection = [];
+            var bIsEnumStringType = null;
+
+            if (parameters.ItemsSource) {
+                titems = populateItemsSource(parameters.ItemsSource);
+
+                deregisterListenerActiveLanguage = scope.$on(onActiveLanguageChanged, function (e, value) {
+                    let selectedIndexes = [];
+                    $.each(edit.option("selectedItems"), function (index, item) {
+                        selectedIndexes.push(titems.indexOf(item));
+                    });
+                    titems = populateItemsSource(parameters.ItemsSource);                    
+
+                    setItems(titems);
+                    let lastSelectedItems = [];
+                    $.each(selectedIndexes, function (i, el) {
+                        lastSelectedItems.push(titems[el]);
+                    });
+                    edit.option("selectedItems", lastSelectedItems);
+
+                    if (parameters.FontSettingList && (value in parameters.FontSettingList) !== -1)
+                        var fontOpts = applyFontSettingList(dynamicFontElements, parameters.FontSettingList[value]);
+                });
+            }
+
+            var listOptions = {
+                noDataText: noDataText,
+                height: thisParent.height(),
+                width: thisParent.width(),
+                disabled: thisParent.hasClass(disabledClass),
+                hint: i18next.t1(parameters.Tooltip),
+                onInitialized: function (e) {
+                    var el = e.component.element();
+                    var cssEdits = {
+                        "text-align": "center",
+                        "height": "100%"
+                    };
+                    var borderCss = {};
+                    setObjectBorder(borderCss, parameters);
+                    if (!$.isEmptyObject(borderCss)) {
+                        borderCss["border-color"] = parameters.BorderBrush.Color;
+                    }
+                    else
+                        cssEdits["border"] = "none";
+                    if (parameters.Background.Color)
+                        cssEdits["background"] = parameters.Background.Color;
+                    if (parameters.Foreground.Color)
+                        cssEdits["color"] = getSolidColor(parameters.Foreground);
+                    fastdom.mutate(function () {
+                        el.css(cssEdits);
+                        el.css(borderCss);
+                        if (parameters.SelectionBackgroundColor && parameters.SelectionForegroundColor) {
+                            thisPage[0].style.setProperty("--listboxBgColor", parameters.SelectionBackgroundColor.Color);
+                            thisPage[0].style.setProperty("--listboxFgColor", parameters.SelectionForegroundColor.Color);
+                        }
+                    });
+                },
+                onContentReady: function (e) {
+                    var el = e.component.element();
+                    fastdom.measure(function () {
+                        var listItemContent = el.find(".dx-list-item-content");
+                        var listItem = el.find(".dx-list-item");
+                        fastdom.mutate(function () {
+                            listItemContent.css("text-align", parameters.HorizontalContentAlignment == 0 || parameters.HorizontalContentAlignment == 3 ? "left" : (parameters.HorizontalContentAlignment == 2 ? "right" : "center"));
+                            listItem.css({
+                                "border-width": 0,
+                                "color": getSolidColor(parameters.Foreground)
+                            });
+                        });
+                    });
+                    e.component._scrollView.option(scrollOptions);
+                },
+                showSelectionControls: false,
+                selectionMode: parameters.SelectionMode == 0 ? "single" : "multiple",
+                onSelectionChanged: function (e) {
+                    if (onSettingValue)
+                        return;
+                    if (!(parameters.screenId in scope.dataValues) || !(parameters.SVGReferenceId in scope.dataValues[parameters.screenId]))
+                        return;
+                    if (!scope.dataValues[parameters.screenId][parameters.SVGReferenceId].isGood)
+                        return;
+
+                    var selectedItems = edit.option("selectedItems");
+                    if (!selectedItems || selectedItems.length == 0)
+                        return;
+
+                    var writtenValue = "";
+                    $.each(selectedItems, function (index, item) {
+                        writtenValue += item;
+                        if (index != edit.option("selectedItems").length - 1)
+                            writtenValue += "|";
+                    });
+
+                    var bHadFocus = document.activeElement == edit.element()[0];
+                    edit.option("disabled", true);
+
+                    try {
+                        scope.corehubconnection.invoke("SetValue", parameters.SVGReferenceId, writtenValue, parameters.screenId, false)
+                            .then((ret) => {
+                                edit.option("disabled", false);
+                            })
+                            .catch(err => {
+                                console.error(err.toString());
+
+                                edit.option("disabled", false);
+                                edit.option("selectedItems", lastSelection);
+                                scope.$broadcast(onError, { ex: err, value: "Error setting value : " + err.toString() + " for item : " + parameters.SVGItemId });
+                            })
+                            .finally(() => {
+                                if (bHadFocus)
+                                    edit.focus();
+                            });
+                    }
+                    catch (err) {
+                        console.error(err.toString());
+                    }
+                },
+                placeholder: parameters.SVGReferenceId ? i18next.t1('ConnectingToServer') : ""
+            };
+
+            var edit;
+            var mutateFunc = function () {
+                edit = combocontainer.dxList(listOptions).dxList("instance");
+                setItems(titems);
+
+                edit.registerKeyHandler('downArrow', function (e) {
+                    e.preventDefault();
+                    var selectedItems = edit.option("selectedItems");
+                    var items = edit.option("items");
+                    try {
+                        var lastSelectedItem = selectedItems[selectedItems.length - 1];
+                        if (items.indexOf(lastSelectedItem) != items.length - 1) {
+                            let nextItemIndex = items.indexOf(lastSelectedItem) + 1;
+                            edit.option("selectedItems", [items[nextItemIndex]]);
+                            edit.scrollToItem(items[nextItemIndex]);
+                        }
+                    }
+                    catch { }
+                });
+
+                edit.registerKeyHandler('upArrow', function (e) {
+                    e.preventDefault();
+                    var selectedItems = edit.option("selectedItems");
+                    var items = edit.option("items");
+                    try {
+                        var lastSelectedItem = selectedItems[selectedItems.length - 1];
+                        if (items.indexOf(lastSelectedItem) != 0) {
+                            let nextItemIndex = items.indexOf(lastSelectedItem) - 1;
+                            edit.option("selectedItems", [items[nextItemIndex]]);
+                            edit.scrollToItem(items[nextItemIndex]);
+                        }
+                    }
+                    catch { }
+                });
+
+                deregisterListener = scope.$on(onDataChanged + parameters.screenId + parameters.SVGReferenceId, function (e, value) {
+                    applyTagQualityStyle(webKitRenderCorrection ? thisPage : thisParent, scope, parameters.screenId, parameters.SVGReferenceId);
+                    onSettingValue = true;
+                    try {
+                        if (scope.dataValues[parameters.screenId][parameters.SVGReferenceId].isGood) {
+                            if (bIsEnumStringType == null) {
+                                var itemslist = scope.dataValues[parameters.screenId][parameters.SVGReferenceId].enumStrings;
+                                if (itemslist) {
+                                    bIsEnumStringType = true;
+                                    jQuery.each(itemslist, function (index, item) {
+                                        titems.push(i18next.t1(item));
+                                    });
+                                    setItems(titems);
+                                }
+                                else
+                                    bIsEnumStringType = false;
+                            }
+                            if (!bIsEnumStringType) {
+                                setListValue(scope, parameters, edit, titems);
+                                lastSelection = edit.option("selectedItems");
+                            }
+                        }
+                        else
+                            edit.option("placeholder", scope.dataValues[parameters.screenId][parameters.SVGReferenceId].lastMessage);
+
+                        checkEnableList(scope, edit, thisParent, parameters.SVGReferenceId, parameters.screenId, parameters.TagItemSource)
+                    }
+                    finally {
+                        onSettingValue = false;
+                    }
+                });
+
+                if (parameters.TagItemSource) {
+                    deregisterListener2 = scope.$on(onDataChanged + parameters.screenId + parameters.TagItemSource.SVGReferenceId, function (e, value) {
+                        applyTagQualityStyle(webKitRenderCorrection ? thisPage : thisParent, scope, parameters.screenId, parameters.TagItemSource.SVGReferenceId);
+                        onSettingValue = true;
+                        let bReselectLastIndexes;
+                        let lastSelectedIndexes = [];
+                        try {
+                            var selectedItems = edit.option("selectedItems");
+                            if (selectedItems) {
+                                $.each(selectedItems, function (index, item) {
+                                    lastSelectedIndexes.push(titems.indexOf(item));
+                                });
+                            }
+                        }
+                        catch { }
+                        try {
+
+                            if (scope.dataValues[parameters.screenId][parameters.TagItemSource.SVGReferenceId].isGood) {
+                                
+                                titems = new Array();
+                                var itemslist = scope.dataValues[parameters.screenId][parameters.TagItemSource.SVGReferenceId].enumStrings;
+                                if (!itemslist)
+                                    itemslist = scope.dataValues[parameters.screenId][parameters.TagItemSource.SVGReferenceId].invariantValue.split("|");
+                                jQuery.each(itemslist, function (index, item) {
+                                    titems.push(i18next.t1(item));
+                                });
+                                setItems(titems);
+                                edit.option("placeholder", "");
+                            }
+
+                            if (parameters.screenId in scope.dataValues && parameters.SVGReferenceId in scope.dataValues[parameters.screenId]) {
+                                if (titems.indexOf(scope.dataValues[parameters.screenId][parameters.SVGReferenceId].value) != -1)
+                                    setListValue(scope, parameters, edit, titems);
+                                else
+                                    bReselectLastIndexes = true;
+                            }
+                        }
+                        finally {
+                            onSettingValue = false;
+
+                            if (bReselectLastIndexes) {
+                                let reselectItems = [];
+                                $.each(lastSelectedIndexes, function (index, item) {
+                                    if (titems.length >= item)
+                                        reselectItems.push(titems[item]);
+                                });
+                                edit.option("selectedItems", reselectItems);
+                            }
+                        }
+                    });
+                }
+                else if (parameters.ReaderItemSources) {
+                    edit.option("disabled", true);
+                    try {
+                        scope.corehubconnection.invoke("GetEntityItemSources", parameters.ReaderItemSources.xmlUri, parameters.ReaderItemSources.xmlItems, parameters.ReaderItemSources.MaxTake, parameters.ReaderItemSources.DataProvider, parameters.ReaderItemSources.Connection, parameters.ReaderItemSources.Select, parameters.ReaderItemSources.Where, parameters.ReaderItemSources.GroupBy, parameters.ReaderItemSources.Sort, parameters.screenId)
+                            .then((ret) => {
+                                titems = new Array();
+                                jQuery.each(ret, function (index, item) {
+                                    titems.push(i18next.t1(item));
+                                });
+                                setItems(titems);
+                                edit.option("placeholder", "");
+                                if (titems.length)
+                                    edit.option("selectedItems", [titems[0]]);
+                            })
+                            .catch(err => {
+                                console.error(err.toString());
+                                scope.$broadcast(onError, { ex: err, value: "Error loading ComboControl itemssource: " + err.toString() });
+                            });
+                    }
+                    catch (err) {
+                        console.error(err.toString());
+                    }
+                    finally {
+                        edit.option("disabled", thisParent.hasClass(disabledClass));
+                    }
+                }
+
+                applyTagQualityStyle(webKitRenderCorrection ? thisPage : thisParent, scope, parameters.screenId, parameters.SVGReferenceId);
+                if (parameters.screenId in scope.dataValues && parameters.SVGReferenceId in scope.dataValues[parameters.screenId])
+                    setListValue(scope, parameters, edit, titems);
+
+                checkEnableList(scope, edit, thisParent, parameters.SVGReferenceId, parameters.screenId, parameters.TagItemSource)
+
+                if (parameters.TagItemSource && parameters.screenId in scope.dataValues && parameters.TagItemSource.SVGReferenceId in scope.dataValues[parameters.screenId]) {
+                    titems = new Array();
+                    jQuery.each(scope.dataValues[parameters.screenId][parameters.TagItemSource.SVGReferenceId].invariantValue.split("|"), function (index, item) {
+                        titems.push(i18next.t1(item));
+                    });
+
+                    setItems(titems);
+                }
+
+                $(thisParent).bind(disabledClassEvent, function () {
+                    checkEnableList(scope, edit, thisParent, parameters.SVGReferenceId, parameters.screenId, parameters.TagItemSource)
+                });
+            };
+            mutateHandler.scheduleMutate(parameters.screenId, mutateFunc);
+
+            function checkEnableList(scope, edit, thisParent, SVGReferenceId, screenId, tagItemSource) {
+                var enabled = false;
+                if (!SVGReferenceId)
+                    enabled = true;
+                else if (screenId in scope.dataValues && SVGReferenceId in scope.dataValues[screenId]) {
+                    enabled = !thisParent.hasClass(disabledClass) && (!tagItemSource || (scope.dataValues[screenId][SVGReferenceId].isGood && scope.dataValues[screenId][SVGReferenceId].isWritable && scope.dataValues[screenId][SVGReferenceId].isUserWritable));
+                }
+                edit.option("disabled", !enabled);
+            }
+
+            function setListValue(scope, parameters, edit, titems) {
+                var localValue = scope.dataValues[parameters.screenId][parameters.SVGReferenceId].value;
+
+                try {
+                    let finalValue = scope.dataValues[parameters.screenId][parameters.SVGReferenceId].bIsInteger ? titems[localValue] : localValue;
+                    edit.option("selectedItems", finalValue.split("|"));
+                    edit.option("placeholder", "");
+                }
+                catch (err) {
+                    console.error(err.toString());
+                }
+            }
+
+            function setItems(titems) {
+                if (!edit)
+                    return;
+
+                edit.beginUpdate();
+                try {
+                    tempList = $("<div id='tempList'></div>").prependTo(combocontainer);
+                    var maxWidth = 0;
+                    $(titems).each(function (index, item) {
+                        var itemWidth = $("<div class='dx-list-item-content' style='display:block;'>" + item + "</div>").appendTo(tempList).width();
+                        if (itemWidth > maxWidth)
+                            maxWidth = itemWidth;
+                    });
+                    tempList.remove();
+                    edit.option("items", titems);
+                    combocontainer.find(".dx-list-item-content").css("width", maxWidth);
+                }
+                finally {
+                    edit.endUpdate();
+                }
+            }
+        }
+    </script>
+</div>

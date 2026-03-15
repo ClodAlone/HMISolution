@@ -1,0 +1,1108 @@
+﻿<div id="RealTimeTrendControl" class="RealTimeTrendControl">
+    <img src="cl.gif" alt="" onload="onRealTimeTrendControlLoaded(this)" id="loadingImage" />
+
+    <div id="trendOuterDiv" style="padding:10px;">
+        <div id="trend" style="overflow: hidden;"></div>
+        <div style="display: grid; grid-gap: 2px; grid-template-columns: auto auto; margin:5px;">
+            <div id="startbtn"></div>
+            <div id="pausebtn"></div>
+        </div>
+        <div id="legendDataGrid"></div>
+    </div>
+    
+    <script>
+        function onRealTimeTrendControlLoaded(obj) {
+
+            var thisPage = $(obj).parent();
+            thisPage.localize();
+
+            var scope = thisPage.scope();
+            if (!scope)
+                return;
+            var paratt = thisPage.data(dataparameters);
+            if (!paratt)
+                return;
+
+            var thisParent = thisPage.parent();
+            var webKitRenderCorrection = $(thisPage).hasClass("webKitRenderCorrection");
+
+            $(obj).remove();
+
+            setOpacity(scope, thisParent, thisPage);
+
+            var bFirstDrawn;
+            var gridBoxMinY = 0;
+            var gridBoxMaxY = Number.MAX_SAFE_INTEGER;
+            var interval;
+            var deregisterListeners = new Array();
+            $(thisPage).bind('destroyed', function () {
+                if (interval)
+                    clearInterval(interval);
+                deregisterListeners.forEach(function (item, index, array) {
+                    item();
+                });
+            });
+
+            var parameters = JSON.parse(paratt);
+            var fontOptions = {
+                "font-family": parameters.FontFamily,
+                "font-size": parameters.FontSize + "px",
+                "font-weight": fontWeightConverter(parameters.FontWeight),
+                "color": parameters.LegendAreaForeground.Color
+            };
+
+            var customFonts = [parameters.FontFamily, parameters.XAxsisFontSettings.FontFamily, parameters.YAxsisFontSettings.FontFamily];
+            if (parameters.FontSettingList)
+                $.each(parameters.FontSettingList, function (index, item) {
+                    customFonts.push(item.FontFamily);
+                });
+            loadCustomFonts(customFonts);
+            var dynamicFontElements = [];
+
+            //var firstPointDateTime;
+            var momentRecordEvery = moment.duration(parameters.RecordEvery);
+            var updateInterval = (momentRecordEvery.hours() * 3600 +
+                momentRecordEvery.minutes() * 60 +
+                momentRecordEvery.seconds()) * 1000 + momentRecordEvery.milliseconds();
+            var momentTimeRangeSeconds = moment.duration(parameters.ViewTimeFrame);
+            var timeRangeSeconds = momentTimeRangeSeconds.hours() * 3600 +
+                momentTimeRangeSeconds.minutes() * 60 +
+                momentTimeRangeSeconds.seconds();
+            var timeRangeMilliseconds = momentTimeRangeSeconds.asMilliseconds();
+            //var sampleMsDuration = timeRangeMilliseconds / updateInterval;
+            var sampleNumber = Math.min(parameters.SampleNumber, timeRangeSeconds / (updateInterval / 1000));
+            var trendouterdiv = thisPage.find("#trendOuterDiv");
+            var trendcontainer = thisPage.find("#trend");
+            var startButton = thisPage.find("#startbtn");
+            var pauseButton = thisPage.find("#pausebtn");
+            var startbtn;
+            var pausebtn;
+            var dataGridInstance;
+            var dataSource = new Array(sampleNumber);
+            var pens = [];
+            var interactiveControls = [];
+            var legendColumns = [];
+            var lastLegendValue;
+            var legendScrollStatus = {
+                reachedTop: true,
+                reachedBottom: false
+            };
+
+            var globalMin = Number.MAX_VALUE;
+            var globalMax = Number.MIN_VALUE;
+
+            var scrollingOptions = {
+                mode: "standard"
+            };
+            if (scope.biOS) {
+                webkitMoveRotateTransform(thisParent, thisPage, trendouterdiv);
+                scrollingOptions["useNative"] = false;
+                scrollingOptions["scrollByThumb"] = true;
+                if (webKitRenderCorrection)
+                    thisPage.css("will-change", "opacity");
+            }
+
+            var bHasBorder;
+            fastdom.mutate(function () {
+                var borderOptions = {};
+                setObjectBorder(borderOptions, parameters);
+                bHasBorder = !$.isEmptyObject(borderOptions);
+                if (bHasBorder)
+                    trendouterdiv.css(borderOptions);
+                if (parameters.PlotBackground)
+                    trendcontainer.css("background", parameters.PlotBackground.Color);
+                if (parameters.TrendBackground)
+                    trendouterdiv.css("background", parameters.TrendBackground.Color);
+                if (parameters.TrendOrientation == 1)
+                    trendcontainer.css("padding-bottom", "15px");
+            });
+
+            var translations = scope.setTranslations("RealTimeTrend", [
+                {
+                    id: "Visible",
+                    stringSuffix: "VisibleColumn",
+                    defValue: "Visible"
+                },
+                {
+                    id: "PenColor",
+                    stringSuffix: "PenColorColumn",
+                    defValue: "Pen Color"
+                },
+                {
+                    id: "PenName",
+                    stringSuffix: "PenNameColumn",
+                    defValue: "Pen Name"
+                },
+                {
+                    id: "EUnit",
+                    stringSuffix: "EUnitColumn",
+                    defValue: "EUnit"
+                },
+                {
+                    id: "Date",
+                    stringSuffix: "DateColumn",
+                    defValue: "Date"
+                },
+                {
+                    id: "Value",
+                    stringSuffix: "ValueColumn",
+                    defValue: "Value"
+                },
+                {
+                    id: "StatisticMin",
+                    stringSuffix: "StatisticMinColumn",
+                    defValue: "Min Statistic"
+                },
+                {
+                    id: "StatisticMax",
+                    stringSuffix: "StatisticMaxColumn",
+                    defValue: "Max Statistic"
+                },
+                {
+                    id: "Avg",
+                    stringSuffix: "AvgColumn",
+                    defValue: "Average"
+                },
+                {
+                    id: "Play",
+                    stringSuffix: "PlayBtnTitle",
+                    defValue: "Play"
+                },
+                {
+                    id: "Pause",
+                    stringSuffix: "PauseBtnTitle",
+                    defValue: "Pause"
+                },
+                {
+                    id: "MinColumn",
+                    stringSuffix: "MinColumn",
+                    defValue: "Min"
+                },
+                {
+                    id: "MaxColumn",
+                    stringSuffix: "MaxColumn",
+                    defValue: "Max"
+                }
+            ]);
+
+            initLegendColumns();
+
+            var trendClass = (function () {
+                return {
+                    init: function (trendcontainer, chart) {
+                        //private props & methods
+                        var state = {
+                            bPlaying: true
+                        };
+                        var updateState = function (propsObj) {
+                            for (var prop in propsObj) {
+                                if (prop in state)
+                                    state[prop] = propsObj[prop];
+                            }
+                        };
+                        var managePlayStop = function (bPlay) {
+                            pauseButton.dxButton("instance").option("disabled", !bPlay);
+                            startButton.dxButton("instance").option("disabled", bPlay);
+                            chart.beginUpdate();
+                            updateState({ "bPlaying": bPlay });
+                            chart.option({
+                                "commonSeriesSettings.point.visible": false, //!bPlay,
+                                "tooltip.enabled": !bPlay,
+                                "argumentAxis.visualRangeUpdateMode": bPlay ? "shift" /*"auto"*/ : "keep",
+                                "zoomAndPan.argumentAxis": bPlay ? "pan" : "both"
+                            });
+                            updateRanges();
+                            chart.endUpdate();
+                            //showHideLegend();
+                        };
+                        //var showHideLegend = function () {
+                        //    if (state.bPlaying) {
+                        //        $(trendcontainer).height(containerFullHeight);
+                        //        chart.option("size.height", containerFullHeight );
+                        //        chart.render({ force: true });
+                        //    }
+                        //    else {
+                        //        containerFullHeight = $(trendcontainer).height();
+                        //        $(trendcontainer).height(300);
+                        //        chart.option("size.height", 300);
+                        //        chart.render({ force: true });
+                        //    }
+                        //};
+                        //var containerFullHeight;
+                        //public props & methods
+                        return {
+                            isPlaying: function () {
+                                return state.bPlaying;
+                            },
+                            play: function () {
+                                managePlayStop(true);
+                            },
+                            stop: function () {
+                                managePlayStop(false);
+                            }
+                        }
+                    }
+                };
+            })();
+
+            var tempDataSource = [];
+
+            var lineTypesMap = [
+                "line",
+                "stepline",
+                "bar",
+                "scatter",
+                "area"
+            ];
+
+            jQuery.each(parameters.PenList, function (index, item) {
+                var penName = i18next.t1(item.Name);
+                var rangeLow = item.Range.Low;
+                var rangeHigh = item.Range.High;
+                pens.push({
+                    valueField: item.SVGReferenceId,
+                    color: item.LColor,
+                    name: penName,
+                    type: lineTypesMap[parseInt(item.PenStyle, 10)],
+                    point: {
+                        visible: lineTypesMap[parseInt(item.PenStyle, 10)] == "scatter"
+                    },
+                    width: item.StrokeThickness,
+                    svgIndicator: '<svg viewBox="0 0 15 15" xmlns="http://www.w3.org/2000/svg" version="1.1" xmlns: xlink="http://www.w3.org/1999/xlink" style="vertical-align: top;"><polyline fill="' + item.LColor + '" points="0,7 7,0 15,0 15,15 7,15" /></svg>',
+                    axis: item.Name,
+                    minPlottedValue: 0,
+                    maxPlottedValue: 0
+                });
+                var penIndicatorStyle = "width:15px;height:15px;position:" + (scope.biOS && !parameters.bFitInWindow && !isInFittedParent(thisPage) ? "fixed" : "absolute") + ";";
+                if (parameters.TrendOrientation == 1)
+                    penIndicatorStyle += "transform:rotate(90deg);";
+                pens[pens.length - 1]["valueIndicator"] = $("<div id='penValueIndicator" + (pens.length - 1) + "' style='" + penIndicatorStyle + "'>" + pens[pens.length - 1]["svgIndicator"] + "</div>");
+                tempDataSource.push({
+                    "id": item.SVGReferenceId,
+                    "Visible": true,
+                    "PenColor": item.LColor,
+                    "PenName": penName,
+                    "ItemValue": "0",
+                    "Min": rangeLow,
+                    "Max": rangeHigh,
+                    "Statistics": {
+                        "MinStat": "0",
+                        "MaxStat": "0",
+                        "Average": "0",
+                        "Samples": 0
+                    }
+                });
+            });
+
+            var legendds = new DevExpress.data.DataSource({
+                store: {
+                    type: 'array',
+                    data: tempDataSource,
+                    key: "id"
+                }
+            });
+
+            var chartOptions = {
+                adaptiveLayout: {
+                    width: 0,
+                    height: 0,
+                    keepLabels: true
+                },
+                dataSource: dataSource, //store
+                legend: {
+                    visible: false, //true,
+                    orientation: "horizontal",
+                    verticalAlignment: "bottom",
+                    horizontalAlignment: "center"
+                },
+                series: pens,
+                commonSeriesSettings: {
+                    argumentField: "dateTime",
+                    point: {
+                        visible: false,
+                        size: 5,
+                        hoverMode: "allArgumentPoints"
+                    }
+                },
+                onSeriesClick: function (info) {
+                    var serie = info.target;
+                    if (isMobile.Android())
+                        setTimeout(function () { legendUpdateClickedValue(serie); }, 0);
+                    else
+                        legendUpdateClickedValue(serie);
+                },
+                rotated: parameters.TrendOrientation == 1,
+                synchronizeMultiAxes: false,
+                tooltip: {
+                    enabled: false,
+                    shared: true,
+                    customizeTooltip: function (info) {
+                        return {
+                            html: (function () {
+                                var retHtml = "<div id='argumentDiv' tooltipArgument='" + trendcontainer.dxChart("instance")._argumentAxes[0].getFormattedValue(info.points[0].originalArgument).replace(/<br\/?>/g, " ") + "'><div class='tooltip-body'>";
+                                info.points.forEach(function (item, index, array) {
+                                    if (item.argument == info.argument) {
+                                        retHtml += "<div><span style='width:5px;height:15px;display:inline-block;background:" + item.point.series.getColor() + ";'/>" +
+                                            "</span>&nbsp;<span class='value-text' id='serie" + item.point.series.index + "ValueText'>" + parseFloat(Math.round(item.value * 100) / 100).toFixed(2) + "</span></div>";
+                                    }
+                                });
+                                retHtml += "</div></div>";
+                                return retHtml;
+                            })()
+                        };
+                    }
+                },
+                scrollBar: {
+                    visible: parameters.RuntimeMode == "1"
+                },
+                animation: {
+                    enabled: false
+                    //easing: "linear",
+                    //duration: 200,
+                    //maxPointCountSupported: 300
+                },
+                zoomAndPan: {
+                    valueAxis: "pan",
+                    argumentAxis: "pan",
+                    dragToZoom: true,
+                    allowMouseWheel: true,
+                    panKey: "shift"
+                },
+                argumentAxis: {
+                    wholeRange: {
+                        endValue: null
+                    },
+                    visualRangeUpdateMode: "shift", /*auto*/
+                    visualRange: {
+                        length: { milliseconds: timeRangeMilliseconds }
+                    },
+                    type: "continuous",
+                    argumentType: "datetime",
+                    aggregationInterval: "milliseconds",
+                    grid: {
+                        visible: true
+                    },
+                    minorGrid: {
+                        visible: parameters.XMinorGridLineVisible
+                    },
+                    label: {
+                        alignment: "right",
+                        format: function (date) {
+                            //var month = padString(date.getMonth() + 1, 2, '0'),
+                            //day = padString(date.getDate(), 2, '0'),
+                            //year = date.getFullYear();
+                            var timeLabel;
+                            var dateLabel;
+                            if (!parameters.DateFormat)
+                                dateLabel = moment(date).format("L"); //day + "/" + month + "/" + year;
+                            else
+                                dateLabel = moment(date).format(parameters.DateFormat);
+                            if (!parameters.TimeFormat)
+                                timeLabel = moment(date).format("LTS"); //padString(date.getHours(), 2, '0') + ":" + padString(date.getMinutes(), 2, '0') + ":" + padString(date.getSeconds(), 2, '0');
+                            else
+                                timeLabel = moment(date).format(parameters.TimeFormat);
+
+                            return dateLabel + "<br/>" + timeLabel;
+                        },
+                        font: {
+                            color: parameters.AxisLabelForeground.Color,
+                            family: parameters.XAxsisFontSettings.FontFamily,
+                            size: parameters.XAxsisFontSettings.FontSize,
+                            weight: fontWeightConverter(parameters.XAxsisFontSettings.FontWeight, true)
+                        }
+                    },
+                    inverted: parameters.TrendOrientation == 1
+                },
+                valueAxis:
+                {
+                    allowDecimals: true,
+                    valueType: "numeric",
+                    logarithmBase: parameters.LogarithmicBaseYScale,
+                    type: parameters.LogarithmicYScale ? "logarithmic" : "continuous",
+                    grid: {
+                        visible: true
+                    },
+                    minorGrid: {
+                        visible: parameters.YMinorGridLineVisible
+                    },
+                    label: {
+                        font: {
+                            family: parameters.YAxsisFontSettings.FontFamily,
+                            size: parameters.YAxsisFontSettings.FontSize,
+                            weight: fontWeightConverter(parameters.YAxsisFontSettings.FontWeight, true),
+                            color: parameters.AxisLabelForeground.Color
+                        }
+                    }
+                },
+                size: {
+                    height: $(thisParent).attr("height") - (parameters.LegendAreaVisible ? 180 : (parameters.RuntimeMode == 1 ? 65 : 20)),
+                    width: $(thisParent).attr("width") - 40,
+                },
+                //onDrawn: function (e) {
+                //},
+                onInitialized: function (e) {
+                    InitializeLegend();
+                }
+            };
+            if (parameters.AxisStroke && parameters.AxisStroke.Color)
+                chartOptions["commonAxisSettings"] = { color: parameters.AxisStroke.Color };
+            let bArgAxisColorSet = false;
+            if (parameters.PrimaryAxisGridColor && parameters.PrimaryAxisGridColor.Color) {
+                bArgAxisColorSet = true;
+                chartOptions.argumentAxis.grid.color = parameters.PrimaryAxisGridColor.Color;
+            }
+            if (parameters.GridColor && parameters.GridColor.Color && !bArgAxisColorSet)
+                chartOptions.argumentAxis.grid.color = parameters.PrimaryAxisGridColor.Color;
+            if (parameters.XMinorGridLineColor && parameters.XMinorGridLineColor.Color) {
+                chartOptions.argumentAxis.minorGrid.color = parameters.XMinorGridLineColor.Color;
+                chartOptions.argumentAxis.minorGrid.opacity = 1;
+            }
+            configureAxisGrid(chartOptions.valueAxis);
+            
+            var chart;
+            var chartSeries;
+            var trend;
+            var mutateFunc = function () {
+                chart = trendcontainer.dxChart(chartOptions).dxChart("instance");
+                if (bHasBorder)
+                    chart.option("size.height", parseFloat(chart.option("size.height")) - parseFloat(trendouterdiv.css("border-width")) * 2);
+
+                initAxesScales();
+                
+                var timefunc = function () {
+                    chart.beginUpdate();
+
+                    var newitem =
+                    {
+                        //id: dataSource.length,
+                        dateTime: new Date(new Date().getTime())
+                    };
+
+                    var bGlobalLimitsChanged = false;
+
+                    jQuery.each(parameters.PenList, function (index, item) {
+                        if (parameters.screenId in scope.dataValues && item.SVGReferenceId in scope.dataValues[parameters.screenId] &&
+                            scope.dataValues[parameters.screenId][item.SVGReferenceId].isGood) {
+                            var newValue = scope.dataValues[parameters.screenId][item.SVGReferenceId].invariantValue;
+                            newitem[item.SVGReferenceId] = newValue;
+                            var newVal = parseFloat(newValue);
+                            if (!parameters.AutomaticGeneralScale)
+                                checkUpdateAxesScales(index, newVal);
+                            else {
+                                if (newVal < globalMin) {
+                                    bGlobalLimitsChanged = true;
+                                    globalMin = newVal;
+                                }
+                                else if (newVal > globalMax) {
+                                    bGlobalLimitsChanged = true;
+                                    globalMax = newVal;
+                                }
+                            }
+                        }
+                        else
+                            newitem[item.SVGReferenceId] = Number.NaN;
+                    });
+                    if (parameters.AutomaticGeneralScale && bGlobalLimitsChanged) {
+                        jQuery.each(parameters.PenList, function (index, item) {
+                            updateAxesScales(index, globalMin, globalMax);
+                        });
+                    }
+
+                    //dataSource.splice(0, 1);
+                    dataSource.push(newitem);
+                    removeExceedingItems();
+
+                    if (trend.isPlaying()) {
+                        //updateRanges();
+                        chart.option("dataSource", dataSource);
+                    }
+
+                    chart.endUpdate();
+
+                    if (trend.isPlaying()) {
+                        var labels = trendcontainer.find("g.dxc-arg-elements>text");
+                        var firstLabel = labels.first();
+                        if (firstLabel && firstLabel[0]) {
+                            var firstLabelBox = firstLabel[0].getBBox();
+                            chart.beginUpdate();
+                            if (firstLabelBox.x < 36.9) {
+                                chart.option("argumentAxis.label.alignment", "left");
+                            }
+                            else
+                                chart.option("argumentAxis.label.alignment", "right");
+                            chart.option("argumentAxis.visualRange.startValue", new Date(Date.now() - timeRangeMilliseconds));
+                            chart.endUpdate();
+                        }
+                    }
+
+                    updateValueIndicatorsAndLegend(newitem);
+                };
+
+                trend = trendClass.init(trendcontainer, chart);
+
+                if (parameters.RuntimeMode == "1") {
+                    startbtn = startButton.dxButton({
+                        icon: "images/toolbox/play.svg",
+                        hint: translations.Play(),
+                        type: "normal",
+                        disabled: true,
+                        onClick: function (e) {
+                            if (!trend.isPlaying())
+                                trend.play();
+                        }
+                    }).dxButton("instance");
+                    pausebtn = pauseButton.dxButton({
+                        icon: "images/toolbox/pause.svg",
+                        hint: translations.Pause(),
+                        type: "normal",
+                        onClick: function (e) {
+                            if (trend.isPlaying()) {
+                                trend.stop();
+                            }
+                        }
+                    }).dxButton("instance");
+                }
+
+                $(thisParent).bind(disabledClassEvent, function () {
+                    $(interactiveControls).each(function (i, el) {
+                        if (el) el.option("disabled", thisParent.hasClass(disabledClass));
+                    });
+                    if (startbtn)
+                        startbtn.option("disabled", thisParent.hasClass(disabledClass) ? true : trend.isPlaying());
+                    if (pausebtn)
+                        pausebtn.option("disabled", thisParent.hasClass(disabledClass) ? true : !trend.isPlaying());
+                });
+
+                interval = setInterval(timefunc, updateInterval);
+
+                var deregisterListenerActiveLanguage = scope.$on(onActiveLanguageChanged, function (e, value) {
+                    changeLanguage();
+                    if (parameters.FontSettingList && (value in parameters.FontSettingList) !== -1) {
+                        var fontOpts = applyFontSettingList(dynamicFontElements, parameters.FontSettingList[value]);
+                        if (chart) {
+                            var opt1 = buildFontOptionsDevExtreme(parameters.FontSettingList[value], chart.option("argumentAxis.label.font"));
+                            var opt2 = buildFontOptionsDevExtreme(parameters.FontSettingList[value], chart.option("valueAxis.label.font"));
+                            chart.option({
+                                "argumentAxis.label.font": opt1,
+                                "valueAxis.label.font": opt2
+                            });
+                        }
+                    }
+                });
+                deregisterListeners.push(deregisterListenerActiveLanguage);
+
+                if (parameters.SVGReferenceId) {
+                    if (parameters.screenId in scope.dataValues && parameters.SVGReferenceId in scope.dataValues[parameters.screenId]) {
+                        applyTagQualityStyle(webKitRenderCorrection ? thisPage : thisParent, scope, parameters.screenId, parameters.SVGReferenceId);
+                    }
+                    var deregisterListener = scope.$on(onDataChanged + parameters.screenId + parameters.SVGReferenceId, function (e, value) {
+                        applyTagQualityStyle(webKitRenderCorrection ? thisPage : thisParent, scope, parameters.screenId, parameters.SVGReferenceId);
+                    });
+                    deregisterListeners.push(deregisterListener);
+                }
+            };
+
+            mutateHandler.scheduleMutate(parameters.screenId, mutateFunc);
+
+            function legendUpdateClickedValue(serie) {
+                if (!trend.isPlaying()) {
+                    var clickedArgument = $(".dxc-tooltip").find("#argumentDiv").first().attr("tooltipArgument");
+                    if (parameters.LegendAreaVisible) {
+                        jQuery.each(parameters.PenList, function (index, item) {
+                            var pointValue = parseFloat($(".dxc-tooltip").find("#serie" + index + "ValueText").text()).toFixed(3);
+                            if (!isNaN(pointValue)) {
+                                var store = legendds.store();
+                                store.update(item.SVGReferenceId, {
+                                    "ItemValue": pointValue,
+                                    "ItemDate": clickedArgument
+                                });
+                                legendds.load();
+                            }
+                        });
+                    }
+                }
+                togglePenSelection(serie.index);
+            }
+
+            function initLegendColumns() {
+                legendColumns = [
+                    {
+                        name: "Visible",
+                        dataField: "Visible",
+                        dataType: "boolean",
+                        caption: translations.Visible()
+                    },
+                    {
+                        name: "PenColor",
+                        dataField: "PenColor",
+                        caption: translations.PenColor(),
+                        cellTemplate: function (element, info) {
+                            element.append("<div style='border-radius:3px;border:1px solid black;width:18px;height:18px;margin:auto;vertical-align:middle;background:" + info.text + ";'></div>");
+                        }
+                    },
+                    {
+                        name: "PenName",
+                        dataField: "PenName",
+                        caption: translations.PenName()
+                    },
+                    {
+                        name: "EUnit",
+                        dataField: "EUnit",
+                        caption: translations.EUnit()
+                    },
+                    {
+                        name: "Date",
+                        dataField: "ItemDate",
+                        caption: translations.Date()
+                    },
+                    {
+                        name: "Value",
+                        dataField: "ItemValue",
+                        caption: translations.Value()
+                    },
+                    {
+                        name: "MinColumn",
+                        dataField: "Min",
+                        caption: translations.MinColumn()
+                    },
+                    {
+                        name: "MaxColumn",
+                        dataField: "Max",
+                        caption: translations.MaxColumn()
+                    },
+                    {
+                        name: "StatisticMin",
+                        dataField: "Statistics.MinStat",
+                        caption: translations.StatisticMin()
+                    },
+                    {
+                        name: "StatisticMax",
+                        dataField: "Statistics.MaxStat",
+                        caption: translations.StatisticMax()
+                    },
+                    {
+                        name: "Avg",
+                        dataField: "Statistics.Average",
+                        caption: translations.Avg()
+                    }
+                ];
+            }
+
+            function togglePenSelection(clickedIndex) {
+                var bWasSelected = pens[clickedIndex].selected == true;
+                var currentValueAxis = chart.option("valueAxis");
+                chart.beginUpdate();
+                $.each(currentValueAxis, function (index, item) {
+                    pens[index].selected = index == clickedIndex && !bWasSelected;
+                    var newWidth = pens[index].selected ? parameters.PenList[index].StrokeThickness + 5 : parameters.PenList[index].StrokeThickness;
+                    chart.option("series[" + index + "].width", newWidth);
+                    if (!parameters.AutomaticGeneralScale && !parameters.PenList[clickedIndex].ShowAxis) {
+                        currentValueAxis[index]["label"] = currentValueAxis[index]["tick"] = currentValueAxis[index]["minorTick"] = { color: parameters.PenList[index].LColor, visible: parameters.PenList[index].ShowAxis || (index == clickedIndex && !bWasSelected) };
+                        currentValueAxis[index]["grid"]["visible"] = parameters.YGridLineVisible && (parameters.PenList[index].ShowAxis || index == clickedIndex);
+                    }
+                });
+                chart.option("valueAxis", currentValueAxis);
+                chart.endUpdate();
+            }
+
+            function InitializeLegend() {
+                var dataGridContainer = thisPage.find("#legendDataGrid");
+                if (!parameters.LegendAreaVisible) {
+                    dataGridContainer.css("display", "none");
+                    return;
+                }
+
+                var thisParentID = thisParent.attr("id");
+                var thisPageID = thisParentID + parameters.screenId;
+                var thisPageSelector = "#" + thisParentID + ".RealTimeTrendControl";
+
+                var legendStyle = thisPageSelector + " #legendDataGrid .dx-header-row, " + thisPageSelector + " #legendDataGrid .dx-data-row td { color: " + parameters.LegendAreaForeground.Color + "; }";
+                if (parameters.ToolbarBackground && parameters.Background)
+                    legendStyle += thisPageSelector + " #legendDataGrid .dx-datagrid-headers td { background: " + parameters.ToolbarBackground.Color + "; } " + thisPageSelector + " #legendDataGrid .dx-data-row td { background: " + parameters.Background.Color + "; }";
+
+                $("<style id=\"" + thisPageID + "\">" + legendStyle + "</style>").appendTo("head");
+
+                let dataFieldLayoutMap = {
+                    "Visible": "Visible",
+                    "PenColor": "LColor",
+                    "PenName": "DName",
+                    "ItemValue": "DValue",
+                    "ItemDate": "LastClickedPointDate",
+                    "EUnit": "EUnit",
+                    "Min": "RangeLow",
+                    "Max": "RangeHigh",
+                    "Statistics.MinStat": "MinValue",
+                    "Statistics.MaxStat": "MaxValue",
+                    "Statistics.Average": "AvgValue"
+                };
+
+                $.each(legendColumns, function (index, item) {
+                    item.visible = true;
+                    if (parameters.ListViewLayout && parameters.ListViewLayout.length > 0) {
+                        var gridLayoutItem;
+                        var gridLayoutItemIndex = parameters.ListViewLayout.findIndex(function (el) { return el.FieldName == dataFieldLayoutMap[item.dataField] || el.ColumnTag == dataFieldLayoutMap[item.dataField] });
+                        if (gridLayoutItemIndex === -1)
+                            item.visible = false;
+                        else {
+                            gridLayoutItem = parameters.ListViewLayout[gridLayoutItemIndex];
+                            item.visibleIndex = gridLayoutItemIndex;
+                        }
+                    }
+                    if (item.visible) {
+                        if (gridLayoutItem) {
+                            var actWidth = parseFloat(gridLayoutItem.ActualWidth);
+                            if (!isNaN(actWidth)) {
+                                item.width = gridLayoutItem.ActualWidth;
+                            }
+                            if (gridLayoutItem.SortIndex != -1 && gridLayoutItem.ColumnOrder != 0) {
+                                item.sortIndex = gridLayoutItem.SortIndex;
+                                item.sortOrder = gridLayoutItem.ColumnOrder == 1 ? "asc" : "desc";
+                            }
+                        }
+                    }
+                });
+
+                dataGridContainer.height(thisPage.parent().height() - trendcontainer.height() - 70);
+                dataGridInstance = dataGridContainer.dxDataGrid({
+                    columns: legendColumns,
+                    columnResizingMode: "widget",
+                    allowColumnResizing: true,
+                    dataSource: legendds,
+                    onEditorPreparing: function (e) {
+                        if (e.parentType === "dataRow" && e.dataField === "Visible") {
+                            e.editorElement.dxCheckBox({
+                                value: e.value,
+                                onInitialized: function (e) {
+                                    interactiveControls.push(e.component);
+                                },
+                                onValueChanged: function (ea) {
+                                    var series = chart.option('series');
+                                    var thisSeries = series[e.row.rowIndex];
+                                    var penValueAxis = chart.option("valueAxis")[e.row.rowIndex];
+                                    var penValueIndicatorElement = thisPage.find("#penValueIndicator" + e.row.rowIndex);
+                                    if (ea.value) {
+                                        thisSeries.visible = true;
+                                        penValueAxis["hiddenByLegend"] = false;
+                                        penValueAxis["visible"] = penValueAxis["label"]["visible"] = penValueAxis["tick"]["visible"] = penValueAxis["minorTick"]["visible"] = true;
+                                        if (penValueIndicatorElement.length > 0)
+                                            penValueIndicatorElement.show();
+                                    }
+                                    else {
+                                        thisSeries.visible = false;
+                                        penValueAxis["hiddenByLegend"] = true;
+                                        penValueAxis["visible"] = penValueAxis["label"]["visible"] = penValueAxis["tick"]["visible"] = penValueAxis["minorTick"]["visible"] = false;
+                                        if (penValueIndicatorElement.length > 0)
+                                            penValueIndicatorElement.hide();
+                                    }
+                                    chart.option('series', series);
+                                }
+                            });
+                            e.cancel = true;
+                        }
+                    },
+                    loadPanel: {
+                        enabled: true
+                    },
+                    scrolling: scrollingOptions,
+                    paging: {
+                        pageSize: 50,
+                    },
+                    onContentReady: function (e) {
+                        e.component.option("loadPanel.enabled", false);
+                        var el = e.component.element();
+                        el.css(fontOptions);
+                    },
+                    repaintChangesOnly: true,
+                    selection: {
+                        mode: "single"
+                    },
+                    hoverStateEnabled: true,
+                    onRowClick: function (e) {
+                        if (thisParent.hasClass(disabledClass))
+                            return;
+
+                        togglePenSelection(e.rowIndex);
+                    }
+                }).dxDataGrid("instance");
+            }
+
+            function removeExceedingItems() {
+                if (dataSource.length >= parameters.SampleNumber)
+                    dataSource.shift();
+            }
+
+            function getNewAverage(oldSamplesNumber, lastAverage, newValue) {
+                if (notNumeric(newValue))
+                    return lastAverage;
+                return (lastAverage * oldSamplesNumber + newValue) / (oldSamplesNumber + 1);
+            }
+
+            function updateValueIndicatorsAndLegend(newitem, bOnlyLegend = false) {
+                if (!bOnlyLegend) {
+                    if (!chartSeries)
+                        chartSeries = trendcontainer.dxChart("getAllSeries");
+                    jQuery.each(parameters.PenList, function (index, item) {
+                        var lastPoint = chartSeries[index].getPointsByArg(newitem.dateTime)[0];
+                        if (lastPoint) {
+                            if (!bFirstDrawn) {
+                                bFirstDrawn = true;
+                                var gridBox = trendcontainer.find(".dxc-grids-group")[0].getBBox();
+                                gridBoxMinY = gridBox.y;
+                                gridBoxMaxY = gridBoxMinY + gridBox.height;
+                                if (!parameters.XGridLineVisible)
+                                    chart.option("argumentAxis.grid.visible", false);
+                                if (!parameters.YGridLineVisible)
+                                    chart.option("valueAxis.grid.visible", false);
+                            }
+                            var indicatorY = lastPoint.y;
+                            if (indicatorY < gridBoxMinY)
+                                indicatorY = gridBoxMinY;
+                            if (indicatorY > gridBoxMaxY)
+                                indicatorY = gridBoxMaxY;
+                            var penValueIndicatorElement = thisPage.find("#penValueIndicator" + index);
+                            if (!penValueIndicatorElement.length)
+                                pens[index].valueIndicator.appendTo(thisPage);
+                            penValueIndicatorElement.css("top", indicatorY + (parameters.TrendOrientation == 1 ? 10 : 3));
+                            if (trend.isPlaying())
+                                penValueIndicatorElement.css("left", lastPoint.x + (parameters.TrendOrientation == 1 ? 3 : 15));
+                        }
+                    });
+                }
+
+                if (!parameters.LegendAreaVisible)
+                    return;
+
+                if (legendds.isLoading()) {
+                    lastLegendValue = newitem;
+                    return;
+                }
+                jQuery.each(parameters.PenList, function (index, item) {
+                    var store = legendds.store();
+                    var currentValue = parseFloat(newitem[item.SVGReferenceId]);
+                    var valueString = currentValue.toFixed(3);
+                    store.byKey(item.SVGReferenceId).done(function (storeItem) {
+                        var updatingObj = {
+                            "Statistics": {
+                                "Average": getNewAverage(storeItem.Statistics.Samples, parseFloat(storeItem.Statistics.Average), currentValue).toFixed(3),
+                                "Samples": storeItem.Statistics.Samples + 1
+                            }
+                        };
+                        if (trend.isPlaying())
+                            updatingObj["ItemValue"] = valueString;
+                        if (parseFloat(storeItem.Statistics.MinStat) > currentValue)
+                            updatingObj.Statistics.MinStat = valueString;
+                        if (parseFloat(storeItem.Statistics.MaxStat) < currentValue)
+                            updatingObj.Statistics.MaxStat = valueString;
+                        store.update(item.SVGReferenceId, updatingObj).done(function (dataobj, key) {
+                            legendds.reload().done(function (res) {
+                                if (!undefinedOrNull(lastLegendValue))
+                                    updateValueIndicatorsAndLegend(lastLegendValue, true);
+                            });
+                        });
+                    });
+                });
+            }
+
+            function changeLanguage() {
+                if (dataGridInstance)
+                    for (var i = 0; i < dataGridInstance.columnCount(); i++)
+                        dataGridInstance.columnOption(i, "caption", translations[dataGridInstance.columnOption(i, "name")]());
+                if (startbtn)
+                    startbtn.option("hint", translations.Play());
+                if (pausebtn)
+                    pausebtn.option("hint", translations.Pause());
+            }
+
+            function updateRanges() {
+                chart.beginUpdate();
+                chart.getArgumentAxis().visualRange(
+                    {
+                        //length: { milliseconds: timeRangeMilliseconds },
+                        startValue: new Date(Date.now() - timeRangeMilliseconds),
+                        endValue: Date.now()
+                    }
+                );
+                chart.option("argumentAxis.wholeRange.endValue", trend.isPlaying() ? null : Date.now());
+                chart.endUpdate();
+            }
+
+            function configureAxisGrid(vAxisObj) {
+                vAxisObj["grid"]["visible"] = parameters.YGridLineVisible;
+                vAxisObj["minorGrid"]["visible"] = parameters.YMinorGridLineVisible;
+                if (parameters.GridColor && parameters.GridColor.Color) {
+                    vAxisObj["minorGrid"]["color"] = parameters.GridColor.Color;
+                    vAxisObj["minorGrid"]["opacity"] = 1;
+                }
+                if (parameters.SecAxisGridColor && parameters.SecAxisGridColor.Color) {
+                    vAxisObj["grid"]["color"] = parameters.SecAxisGridColor.Color;
+                    vAxisObj["grid"]["opacity"] = 1;
+                }
+            }
+
+            function initAxesScales() {
+                var newValueAxes = [];
+                for (var i = 0; i < pens.length; i++) {
+                    var vAxisObj = {
+                        allowDecimals: true,
+                        valueType: "numeric",
+                        logarithmBase: parameters.LogarithmicBaseYScale,
+                        type: parameters.LogarithmicYScale ? "logarithmic" : "continuous",
+                        tick: {},
+                        minorTick: {},
+                        label: {
+                            font: {
+                                family: parameters.YAxsisFontSettings.FontFamily,
+                                size: parameters.YAxsisFontSettings.FontSize,
+                                weight: fontWeightConverter(parameters.YAxsisFontSettings.FontWeight, true),
+                                color: parameters.AxisLabelForeground.Color
+                            }
+                        },
+                        grid: { visible: i == 0 },
+                        minorGrid: { visible: i == 0 && parameters.YMinorGridLineVisible },
+                        axisDivisionFactor: 20
+                    }
+                    if (!parameters.AutomaticGeneralScale)
+                        vAxisObj.color = vAxisObj.tick["color"] = vAxisObj.minorTick["color"] = pens[i].color;
+
+                    configureAxisGrid(vAxisObj);
+
+                    //vAxisObj["wholeRange"] = { startValue: pens[i].minPlottedValue, endValue: pens[i].maxPlottedValue };
+                    //vAxisObj["visualRange"] = { startValue: pens[i].minPlottedValue, endValue: pens[i].maxPlottedValue };
+                    //vAxisObj["name"] = pens[i].axis;
+                    //vAxisObj["visualRangeUpdateMode"] = "keep";
+
+                    //newValueAxes.push(vAxisObj);
+
+                    var min = 0;
+                    var max = 0;
+                    vAxisObj["visualRangeUpdateMode"] = "keep";
+                    //vAxisObj["label"] = vAxisObj["tick"] = { visible: parameters.PenList[i].ShowAxis || (parameters.AutomaticGeneralScale ? i == 0 : false) };
+                    var ticksAndLabelsVisible = parameters.PenList[i].ShowAxis || (parameters.AutomaticGeneralScale ? i == 0 : false);
+                    vAxisObj["tick"] = { visible: ticksAndLabelsVisible };
+                    vAxisObj["minorTick"] = { visible: ticksAndLabelsVisible };
+                    vAxisObj["label"] = {
+                        visible: ticksAndLabelsVisible,
+                        font: {
+                            family: parameters.YAxsisFontSettings.FontFamily,
+                            size: parameters.YAxsisFontSettings.FontSize,
+                            weight: fontWeightConverter(parameters.YAxsisFontSettings.FontWeight, true),
+                            color: pens[i].color
+                        }
+                    };
+                    if (!parameters.PenList[i].AutoScale && !parameters.AutomaticGeneralScale) {
+                        min = parameters.PenList[i].Range.Low;
+                        max = parameters.PenList[i].Range.High;
+                        if (max % 3 == 0)
+                            vAxisObj["axisDivisionFactor"] = 30;
+                    }
+                    else if (parameters.AutomaticGeneralScale) {
+                        if (parseFloat(pens[i].minPlottedValue) < globalMin)
+                            globalMin = parseFloat(pens[i].minPlottedValue);
+                        if (parseFloat(pens[i].maxPlottedValue) > globalMax)
+                            globalMax = parseFloat(pens[i].maxPlottedValue);
+                    }
+                    else {
+                        min = pens[i].minPlottedValue;
+                        max = pens[i].maxPlottedValue
+                    }
+                    if (!parameters.AutomaticGeneralScale) {
+                        vAxisObj["wholeRange"] = { startValue: min, endValue: max };
+                        vAxisObj["visualRange"] = { startValue: min, endValue: max };
+                        vAxisObj["name"] = pens[i].axis;
+                        if (parameters.MajorYTicks) {
+                            vAxisObj["tickInterval"] = tickIntervalRound5(min, max, parameters.MajorYTicks);
+                            if (parameters.YSmallTicksPerInterval)
+                                vAxisObj["minorTickInterval"] = vAxisObj["tickInterval"] / (parameters.YSmallTicksPerInterval + 1);
+                        }
+                        newValueAxes.push(vAxisObj);
+                    }
+                }
+                if (parameters.AutomaticGeneralScale) {
+                    for (var i = 0; i < pens.length; i++) {
+                        newValueAxes.push({
+                            allowDecimals: true,
+                            valueType: "numeric",
+                            logarithmBase: parameters.LogarithmicBaseYScale,
+                            type: parameters.LogarithmicYScale ? "logarithmic" : "continuous",
+                            name: pens[i].axis,
+                            visualRangeUpdateMode: "keep",
+                            grid: { visible: parameters.YGridLineVisible },
+                            minorGrid: { visible: parameters.YMinorGridLineVisible }
+                            //axisDivisionFactor: 20
+                            //wholeRange: { startValue: globalMin, endValue: globalMax },
+                            //visualRange: { startValue: globalMin, endValue: globalMax }
+                        });
+                        configureAxisGrid(newValueAxes[newValueAxes.length - 1]);
+                    }
+                }
+                if (parameters.MajorXTicks)
+                    chart.option("argumentAxis.tickInterval", { milliseconds: Math.round(timeRangeMilliseconds / parameters.MajorXTicks) });
+                if (parameters.XSmallTicksPerInterval) {
+                    chart.option("argumentAxis.minorTickInterval", { milliseconds: Math.round(timeRangeMilliseconds / parameters.MajorXTicks) / (parameters.XSmallTicksPerInterval + 1) });
+                }
+                chart.option("valueAxis", newValueAxes);
+            }
+
+            function checkUpdateAxesScales(index, newValue) {
+                if (!parameters.PenList[index].AutoScale && !parameters.AutomaticGeneralScale)
+                    return;
+                var bLimitsChanged;
+                if (newValue < pens[index].minPlottedValue) {
+                    bLimitsChanged = true;
+                    pens[index].minPlottedValue = newValue;
+                }
+                if (newValue > pens[index].maxPlottedValue) {
+                    bLimitsChanged = true;
+                    pens[index].maxPlottedValue = newValue;
+                }
+                if (bLimitsChanged)
+                    updateAxesScales(index, pens[index].minPlottedValue, pens[index].maxPlottedValue) 
+            }
+
+            function updateAxesScales(index, minValue, maxValue) {
+                var currentValueAxis = chart.option("valueAxis");
+                if (!currentValueAxis[index])
+                    return;
+
+                var ticksAndLabelsVisible = (parameters.PenList[index].ShowAxis || (parameters.AutomaticGeneralScale ? index == 0 : false)) && !currentValueAxis[index]["hiddenByLegend"];
+                currentValueAxis[index]["tick"] = { visible: ticksAndLabelsVisible };
+                currentValueAxis[index]["minorTick"] = { visible: ticksAndLabelsVisible };
+                currentValueAxis[index]["label"] = {
+                    visible: ticksAndLabelsVisible,
+                    font: {
+                        family: parameters.YAxsisFontSettings.FontFamily,
+                        size: parameters.YAxsisFontSettings.FontSize,
+                        weight: fontWeightConverter(parameters.YAxsisFontSettings.FontWeight, true),
+                        color: pens[index].color
+                    }
+                };
+
+                if (!parameters.AutomaticGeneralScale)
+                    currentValueAxis[index]["tick"]["color"] = pens[index].color;
+
+                if (!parameters.PenList[index].AutoScale && !parameters.AutomaticGeneralScale) {
+                    chart.option("valueAxis", currentValueAxis);
+                    return;
+                }
+
+                if (minValue != Number.MIN_VALUE && maxValue != Number.MAX_VALUE) {
+                    var padding = (maxValue - minValue) * parseFloat(parameters.ScalePaddingFactor) / 100;
+                    var newAxisMin = minValue - padding;
+                    var newAxisMax = maxValue + padding;
+                    currentValueAxis[index]["wholeRange"] = { startValue: newAxisMin, endValue: newAxisMax };
+                    currentValueAxis[index]["visualRange"] = { startValue: newAxisMin, endValue: newAxisMax };
+                    if (parameters.MajorYTicks) {
+                        currentValueAxis[index]["tickInterval"] = tickIntervalRound5(newAxisMin, newAxisMax, parameters.MajorYTicks);
+                        if (parameters.YSmallTicksPerInterval)
+                            currentValueAxis[index]["minorTickInterval"] = currentValueAxis[index]["tickInterval"] / (parameters.YSmallTicksPerInterval + 1);
+                    }
+                }
+                chart.option("valueAxis", currentValueAxis);
+            }
+
+            function tickIntervalRound5(axisMin, axisMax, parameter) {
+                return Math.ceil((axisMax - axisMin) / parameter / 5) * 5;
+            }
+        }
+    </script>
+</div>

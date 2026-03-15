@@ -1,0 +1,55 @@
+@using Microsoft.JSInterop
+@implements IAsyncDisposable
+
+<div @ref="_element"></div>
+
+@code {
+    [Parameter] public string Value { get; set; } = "";
+    [Parameter] public EventCallback<string> ValueChanged { get; set; }
+    [Parameter] public string Language { get; set; } = "json";
+    [Parameter] public string Height { get; set; } = "300px";
+
+    [Inject] private IJSRuntime JS { get; set; } = default!;
+
+    private ElementReference _element;
+    private DotNetObjectReference<CodeEditor>? _dotNetRef;
+    private bool _initialized;
+    private string _lastValue = "";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _dotNetRef = DotNetObjectReference.Create(this);
+            _lastValue = Value ?? "";
+            await JS.InvokeVoidAsync("codeEditor.create", _element, _dotNetRef, _lastValue, Language, Height);
+            _initialized = true;
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_initialized && (Value ?? "") != _lastValue)
+        {
+            _lastValue = Value ?? "";
+            await JS.InvokeVoidAsync("codeEditor.setValue", _element, _lastValue);
+        }
+    }
+
+    [JSInvokable]
+    public async Task OnEditorChanged(string value)
+    {
+        _lastValue = value;
+        await ValueChanged.InvokeAsync(value);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_initialized)
+        {
+            try { await JS.InvokeVoidAsync("codeEditor.destroy", _element); }
+            catch { }
+        }
+        _dotNetRef?.Dispose();
+    }
+}

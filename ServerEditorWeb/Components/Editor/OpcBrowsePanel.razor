@@ -1,0 +1,299 @@
+@using ServerEditorWeb.Services
+@implements IDisposable
+
+<div class="opc-browse-panel" @onmousemove="OnMouseMove" @onmouseup="OnMouseUp">
+    @* Connection bar *@
+    <div class="d-flex gap-2 mb-3 align-items-center">
+        <div class="position-relative" style="max-width: 400px; flex: 1;">
+            <div class="input-group input-group-sm">
+                <input type="text" class="form-control form-control-sm"
+                       placeholder="opc.tcp://localhost:14840/SimpleOpcFileServer"
+                       @bind="_endpointUrl" @bind:event="oninput"
+                       @onfocus="() => _showDropdown = true"
+                       @onkeydown="HandleEndpointKeyDown" />
+                @if (Opc.RecentEndpoints.Count > 0)
+                {
+                    <button class="btn btn-outline-secondary" type="button"
+                            @onclick="ToggleDropdown" @onclick:stopPropagation="true"
+                            title="Recent endpoints">
+                        <span class="@(_showDropdown ? "bi-chevron-up" : "bi-chevron-down")" style="font-size: .75rem;">▼</span>
+                    </button>
+                }
+            </div>
+            @if (_showDropdown && Opc.RecentEndpoints.Count > 0)
+            {
+                <div class="dropdown-menu show w-100 shadow-sm" style="max-height: 200px; overflow-y: auto; font-size: .85rem;">
+                    @foreach (var ep in Opc.RecentEndpoints)
+                    {
+                        <button class="dropdown-item text-truncate" type="button"
+                                @onclick="() => SelectEndpoint(ep)" title="@ep">
+                            @ep
+                        </button>
+                    }
+                </div>
+            }
+        </div>
+        <button class="btn btn-sm btn-primary" @onclick="Connect" disabled="@_connecting">
+            @if (_connecting)
+            {
+                <span class="spinner-border spinner-border-sm me-1"></span>
+            }
+            🔌 Connect
+        </button>
+        @if (Opc.IsConnected)
+        {
+            <button class="btn btn-sm btn-outline-secondary" @onclick="Opc.Disconnect">Disconnect</button>
+            <span class="badge bg-success">Connected</span>
+        }
+        else
+        {
+            <span class="badge bg-secondary">Disconnected</span>
+        }
+    </div>
+
+    @if (!string.IsNullOrEmpty(Opc.ErrorMessage))
+    {
+        <div class="alert alert-danger py-1 px-2 small">@Opc.ErrorMessage</div>
+    }
+
+    @if (Opc.IsConnected)
+    {
+        <div class="d-flex gap-3" style="height: calc(100% - 80px); overflow: hidden;">
+            @* Browse tree *@
+            <div class="opc-tree-panel" style="width: 320px; min-width: 200px; overflow: auto; border-right: 1px solid var(--bs-border-color); padding-right: 8px;">
+                <h6 class="text-muted mb-2">Browse</h6>
+                @foreach (var node in Opc.RootNodes)
+                {
+                    <OpcTreeNode Node="node" OnSelect="OnNodeSelected" OnExpand="OnNodeExpand" SelectedNodeId="@_selectedNodeId" />
+                }
+            </div>
+
+            @* Monitor table *@
+            <div class="flex-grow-1" style="overflow: auto;">
+                <h6 class="text-muted mb-2">Monitor</h6>
+                @if (Opc.MonitoredItems.Count == 0)
+                {
+                    <p class="text-muted small">Select a node to monitor its values.</p>
+                }
+                else
+                {
+                    <table class="table table-sm table-hover small opc-monitor-table" style="table-layout: fixed; width: 100%;">
+                        <colgroup>
+                            <col style="@($"width:{_colWidths[0]}px")" />
+                            <col />
+                            <col style="@($"width:{_colWidths[2]}px")" />
+                            <col style="@($"width:{_colWidths[3]}px")" />
+                            <col style="@($"width:{_colWidths[4]}px")" />
+                        </colgroup>
+                        <thead>
+                            <tr>
+                                <th class="opc-th-resize">
+                                    Name
+                                    <span class="opc-col-resizer" @onmousedown="e => StartResize(e, 0)" @onmousedown:preventDefault></span>
+                                </th>
+                                <th>Value</th>
+                                <th class="opc-th-resize">
+                                    Status
+                                    <span class="opc-col-resizer" @onmousedown="e => StartResize(e, 2)" @onmousedown:preventDefault></span>
+                                </th>
+                                <th class="opc-th-resize">
+                                    Timestamp
+                                    <span class="opc-col-resizer" @onmousedown="e => StartResize(e, 3)" @onmousedown:preventDefault></span>
+                                </th>
+                                <th style="width:80px;"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in Opc.MonitoredItems)
+                            {
+                                <tr>
+                                    <td class="text-truncate" title="@item.DisplayName">@item.DisplayName</td>
+                                    <td class="text-truncate" title="@item.Value">
+                                        @if (item.IsWritable && _editingNodeId == item.NodeIdString)
+                                        {
+                                            <div class="d-flex gap-1">
+                                                <input type="text" class="form-control form-control-sm" style="max-width: 160px;"
+                                                       @bind="_editValue" @bind:event="oninput"
+                                                       @onkeydown="e => HandleEditKeyDown(e, item)" />
+                                                <button class="btn btn-sm btn-success" @onclick="() => CommitWrite(item)">✓</button>
+                                                <button class="btn btn-sm btn-outline-secondary" @onclick="CancelEdit">✕</button>
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <span @ondblclick="() => StartEdit(item)">@item.Value</span>
+                                        }
+                                    </td>
+                                    <td class="text-nowrap"><span class="badge @(item.StatusCode == "Good" ? "bg-success" : "bg-warning text-dark")">@item.StatusCode</span></td>
+                                    <td class="text-truncate" title="@item.Timestamp">@item.Timestamp</td>
+                                    <td>
+                                        @if (item.IsWritable && _editingNodeId != item.NodeIdString)
+                                        {
+                                            <button class="btn btn-sm btn-outline-primary" @onclick="() => StartEdit(item)" title="Write value">✏</button>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+                @if (!string.IsNullOrEmpty(_writeMessage))
+                {
+                    <div class="alert @(_writeSuccess ? "alert-success" : "alert-danger") py-1 px-2 small mt-2">@_writeMessage</div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string EndpointUrl { get; set; } = "";
+    [Inject] private OpcClientService Opc { get; set; } = default!;
+
+    private string _endpointUrl = "";
+    private bool _connecting;
+    private bool _showDropdown;
+    private string _selectedNodeId = "";
+    private string _editingNodeId = "";
+    private string _editValue = "";
+    private string _writeMessage = "";
+    private bool _writeSuccess;
+    private int[] _colWidths = [180, 0, 100, 130, 80];
+    private int _resizingCol = -1;
+    private double _resizeStartX;
+
+    protected override void OnInitialized()
+    {
+        if (!string.IsNullOrEmpty(EndpointUrl))
+            _endpointUrl = EndpointUrl;
+        else if (Opc.RecentEndpoints.Count > 0)
+            _endpointUrl = Opc.RecentEndpoints[0];
+        Opc.StateChanged += OnOpcStateChanged;
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (!string.IsNullOrEmpty(EndpointUrl) && _endpointUrl != EndpointUrl)
+            _endpointUrl = EndpointUrl;
+    }
+
+    private void OnOpcStateChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    private async Task Connect()
+    {
+        if (string.IsNullOrWhiteSpace(_endpointUrl)) return;
+        _showDropdown = false;
+        _connecting = true;
+        StateHasChanged();
+        try
+        {
+            await Opc.ConnectAsync(_endpointUrl);
+        }
+        finally
+        {
+            _connecting = false;
+            StateHasChanged();
+        }
+    }
+
+    private void ToggleDropdown()
+    {
+        _showDropdown = !_showDropdown;
+    }
+
+    private void SelectEndpoint(string endpoint)
+    {
+        _endpointUrl = endpoint;
+        _showDropdown = false;
+    }
+
+    private async Task HandleEndpointKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+            _showDropdown = false;
+        else if (e.Key == "Enter")
+            await Connect();
+    }
+
+    private async Task OnNodeExpand(OpcBrowseNode node)
+    {
+        if (!node.ChildrenLoaded)
+        {
+            await Opc.LoadChildrenAsync(node);
+            StateHasChanged();
+        }
+    }
+
+    private async Task HandleEditKeyDown(KeyboardEventArgs e, OpcMonitoredValue item)
+    {
+        if (e.Key == "Enter")
+            await CommitWrite(item);
+    }
+
+    private async Task OnNodeSelected(OpcBrowseNode node)
+    {
+        _selectedNodeId = node.NodeIdString;
+        _editingNodeId = "";
+        _writeMessage = "";
+        await Opc.SelectNodeAsync(node);
+    }
+
+    private void StartEdit(OpcMonitoredValue item)
+    {
+        if (!item.IsWritable) return;
+        _editingNodeId = item.NodeIdString;
+        _editValue = item.Value;
+        _writeMessage = "";
+    }
+
+    private void CancelEdit()
+    {
+        _editingNodeId = "";
+        _editValue = "";
+    }
+
+    private async Task CommitWrite(OpcMonitoredValue item)
+    {
+        var (success, msg) = await Opc.WriteValueAsync(item.ResolvedNodeId, _editValue);
+        _writeSuccess = success;
+        _writeMessage = msg;
+        if (success) _editingNodeId = "";
+        StateHasChanged();
+        _ = ClearWriteMessage();
+    }
+
+    private async Task ClearWriteMessage()
+    {
+        await Task.Delay(3000);
+        _writeMessage = "";
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void StartResize(MouseEventArgs e, int colIndex)
+    {
+        _resizingCol = colIndex;
+        _resizeStartX = e.ClientX;
+    }
+
+    private void OnMouseMove(MouseEventArgs e)
+    {
+        if (_resizingCol < 0) return;
+        var delta = (int)(e.ClientX - _resizeStartX);
+        if (delta == 0) return;
+        _resizeStartX = e.ClientX;
+        _colWidths[_resizingCol] = Math.Max(60, _colWidths[_resizingCol] + delta);
+    }
+
+    private void OnMouseUp(MouseEventArgs e)
+    {
+        _resizingCol = -1;
+    }
+
+    public void Dispose()
+    {
+        Opc.StateChanged -= OnOpcStateChanged;
+    }
+}

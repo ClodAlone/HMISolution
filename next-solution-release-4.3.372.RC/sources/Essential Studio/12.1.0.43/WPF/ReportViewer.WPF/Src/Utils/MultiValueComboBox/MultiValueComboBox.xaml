@@ -1,0 +1,82 @@
+﻿<ResourceDictionary 
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" 
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:System="clr-namespace:System;assembly=mscorlib">
+
+    <Geometry x:Key="DownArrowGeometry">M 0 0 L 3.5 4 L 7 0 Z</Geometry>
+    
+    <Style x:Key="CheckBoxListBoxItemStyle" TargetType="ListBoxItem">
+        <Setter Property="Foreground" Value="#FF000000" />
+        <Setter Property="IsSelected" Value="{Binding Path=IsSelected}"></Setter>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ListBoxItem">
+                    <Grid>
+                        <CheckBox  Content="{Binding Path=DisplayField}" IsChecked="{Binding Path=IsSelected, Mode=TwoWay}" ClickMode="Press"/>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <ControlTemplate x:Key="ToggleButtonStyle" TargetType="ToggleButton">
+        
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="20"></RowDefinition>
+            </Grid.RowDefinitions>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition/>
+                <ColumnDefinition Width="20"/>
+            </Grid.ColumnDefinitions>
+            <Border x:Name="ButtonBorder" Background="{TemplateBinding Background}" Grid.ColumnSpan="2" BorderBrush="#FF707070" CornerRadius="2" BorderThickness="1">                
+            </Border>
+            <TextBlock Margin="5,0,0,0" VerticalAlignment="Center" Text="{TemplateBinding Content}"  ToolTip="{TemplateBinding Content}" Width="115"></TextBlock>
+            <Path x:Name="ToggleButtonArrow" Grid.Column="1" HorizontalAlignment="Center" Margin="3,1,0,0" VerticalAlignment="Center" Fill="Black" Data="{StaticResource DownArrowGeometry}"/>
+        </Grid>
+
+        <ControlTemplate.Triggers>
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Fill" TargetName="ToggleButtonArrow" Value="#AFAFAF"/>
+            </Trigger>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="#99C1E2"/>
+            </Trigger>
+            <Trigger Property="IsChecked" Value="True">
+                <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="#C0A776"/>
+            </Trigger>            
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+    <LinearGradientBrush x:Key="ButtonNormalBackground" EndPoint="0,1" StartPoint="0,0">
+        <GradientStop Color="#F3F3F3" Offset="0"/>
+        <GradientStop Color="#EBEBEB" Offset="0.5"/>
+        <GradientStop Color="#DDDDDD" Offset="0.5"/>
+        <GradientStop Color="#CDCDCD" Offset="1"/>
+    </LinearGradientBrush>
+
+    <Style x:Key="PART_comboboxStyle" TargetType="{x:Type ComboBox}" BasedOn="{StaticResource {x:Type ComboBox}}">
+        <Setter Property="MinWidth" Value="100"/>
+        <Setter Property="Margin" Value="5"/>
+        <Setter Property="MinHeight" Value="25"/>
+        <Setter Property="OverridesDefaultStyle" Value="true"/>
+        <Setter Property="Background" Value="{StaticResource ButtonNormalBackground}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ComboBox">
+                    <Grid>
+                        <ToggleButton Background="{TemplateBinding Background}" Content="{TemplateBinding Tag}" Focusable="False" IsChecked="{Binding Path=IsDropDownOpen,Mode=TwoWay,RelativeSource={RelativeSource TemplatedParent}}" Template="{StaticResource ToggleButtonStyle}"/> 
+                        <Popup Name="DropDownPopUp" Placement="Bottom" IsOpen="{TemplateBinding IsDropDownOpen}" Focusable="False" PopupAnimation="Slide">
+                            <Grid SnapsToDevicePixels="True" MinWidth="{TemplateBinding ActualWidth}" MaxHeight="{TemplateBinding MaxDropDownHeight}">
+                                <Border BorderBrush="Black" BorderThickness="1"/>
+                                <ScrollViewer BorderBrush="Black" Padding="1" BorderThickness="1">
+                                    <ListBox x:Name="PART_comboListBox" SelectionMode="Multiple" ItemsSource="{TemplateBinding ItemsSource}" ItemContainerStyle="{StaticResource CheckBoxListBoxItemStyle}" HorizontalAlignment="Stretch" />
+                                </ScrollViewer>
+                            </Grid>
+                        </Popup>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+</ResourceDictionary>

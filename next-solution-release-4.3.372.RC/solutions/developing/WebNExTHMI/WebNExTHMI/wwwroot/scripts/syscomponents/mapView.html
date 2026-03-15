@@ -1,0 +1,513 @@
+﻿<style>
+    .dx-overlay-content.dx-popup-normal {
+        overflow: visible!important;
+    }
+    .dx-overlay-content #svgcontainer {
+        overflow: visible;
+    }
+</style>
+
+<div id="mapView" class="mapView">
+    <img src="cl.gif" alt="" onload="onMapLoaded(this)" id="loadingImage" />
+    <div id="mapcontainer"></div>
+
+    <script>
+        DevExpress.viz.dxVectorMap.prototype._UndocumentedGeoToScreen = function (geoCoords) {
+            var projection = this._projection;
+            return projection._toScreen(projection._toTransformed(projection._engine.project(geoCoords)))
+        }
+        //DevExpress.viz.dxMap.prototype._UndocumentedGeoToScreen = function(geoCoords) {
+        //  var projection = this._projection;
+        //  return projection._toScreen(projection._toTransformed(projection._engine.project(geoCoords)))
+        //}
+
+        function onMapLoaded(obj) {
+
+            var thisPage = $(obj).parent();
+            var thisParent = thisPage.parent();
+            $(obj).remove();
+            thisPage.localize();
+            var scope = thisPage.scope();
+            if (!scope)
+                return;
+
+            var screenLoaded = {};
+            var pinInfos = [];
+            var mapWidget;
+            var deregisterListenerPopup;
+            var timeoutProcPins;
+            var timeoutProcResize;
+            var listeningArray = new Array();
+            var bUseLeafLet = !scope.configurationSettings.legacyMapView;
+            var mapRoot;
+            var interval;
+            var positionObserver;
+            var visibilityObserver;
+
+            $(thisPage).bind('destroyed', function () {
+                console.log('mapview unloaded');
+
+                if (timeoutProcPins)
+                    clearTimeout(timeoutProcPins);
+                if (timeoutProcResize)
+                    clearTimeout(timeoutProcResize);
+                if (deregisterListenerPopup)
+                    deregisterListenerPopup();
+                if (interval)
+                    clearInterval(interval);
+
+                listeningArray.forEach(function (item, index, array) {
+                    item();
+                });
+
+                if (positionObserver)
+                    positionObserver.disconnect();
+                if (visibilityObserver)
+                    visibilityObserver.disconnect();
+
+                for (var key in screenLoaded) {
+                    scope.$broadcast(onPopupCloseRequest + key, key);
+                }
+
+                window.removeEventListener("resize", onWindowHeightChanged);
+                screenLoaded = {};
+                if (bUseLeafLet && mapWidget)
+                    mapWidget.remove();
+            });
+
+            var targetNode = thisPage[0];
+            if (bUseLeafLet) {
+                visibilityObserver = new MutationObserver(function () {
+                    if (targetNode.style.display == 'none') {
+                        for (var key in screenLoaded) {
+                            scope.$broadcast(onPopupCloseRequest + key, key);
+                        }
+                    }
+                });
+                visibilityObserver.observe(targetNode, { attributes: true, childList: false });
+            }
+
+            var paratt = thisPage.data(dataparameters);
+            var parameters;
+            try {
+                parameters = JSON.parse(paratt);
+            }
+            catch (err) {
+            }
+
+            var mapcontainer = thisPage.children().first();
+
+            var popupparameter = thisPage.data(popupparameters);
+
+            if (popupparameter) {
+                if (!bUseLeafLet) {
+                    deregisterListenerPopup = scope.$on(onPopupResize + popupparameter, function (value, obj) {
+                        mapWidget.option("height", thisParent.height());
+                        mapWidget.option("width", thisParent.width());
+                        mapWidget.option("size.height", thisParent.height());
+                        mapWidget.option("size.width", thisParent.width());
+                    });
+                }
+                else {
+                    positionObserver = new MutationObserver(function (mutationList) {
+                        for (const mutation of mutationList) {
+                            if (mutation.type === 'attributes' && mutation.attributeName == "style" && $(mutation.target).hasClass("dx-overlay-content")) {
+                                mapWidget.invalidateSize();
+                                processPinsDelayed();
+                                break;
+                            }
+                        }
+                    });
+                    positionObserver.observe($(ROOT)[0], { attributes: true, subtree: true });
+                }
+            }
+
+            function attachPopup($scope, viewType, parent, option, x, y) {
+
+                $scope.busyVisible = true;
+                $scope.$apply();
+                try {
+                    var page = $scope.loadHtmlOnDemand(viewType, true, false, option);
+
+                    showPopup({
+                        transparent: true,
+                        noshading: true,
+                        $scope: $scope,
+                        parent: parent,
+                        content: page,
+                        showtitle: false,
+                        showclose: false,
+                        dragenabled: true,
+                        resizeenabled: false,
+                        disableanimation: true,
+                        x: x,
+                        y: y,
+                        hideBorder: true,
+                        notScrollable: true
+                    });
+                }
+                catch (e) {
+
+                    if (e === true) {
+
+                        var deregisterListener = $scope.$on(onloadedHtmlOnDemand + viewType, function (e, value) {
+
+                            page = $scope.loadHtmlOnDemand(viewType, true, false, option);
+
+                            deregisterListener();
+
+                            showPopup({
+                                transparent: true,
+                                noshading: true,
+                                $scope: $scope,
+                                parent: parent,
+                                content: page,
+                                showtitle: false,
+                                showclose: false,
+                                dragenabled: true,
+                                resizeenabled: false,
+                                disableanimation: true,
+                                x: x,
+                                y: y,
+                                hideBorder: true
+                            });
+                        });
+                    }
+                    else
+                        throw e;
+                }
+            }
+
+            function processResizeDelayed() {
+                if (timeoutProcResize)
+                    clearTimeout(timeoutProcResize);
+                timeoutProcResize = setTimeout(onWindowHeightChanged, 10);
+            }
+
+            function processPinsDelayed() {
+                if (timeoutProcPins)
+                    clearTimeout(timeoutProcPins);
+                timeoutProcPins = setTimeout(processPins, 10);
+            }
+
+            function processPins() {
+
+                var screendetected = [];
+
+                var bForceAll = false;
+                var geoTopLeft;
+                var geoBottomRight;
+                var zoomLevel;
+
+                if (bUseLeafLet) {
+                    geoTopLeft = mapWidget.containerPointToLatLng(L.point(0, 0));
+                    geoBottomRight = mapWidget.containerPointToLatLng(L.point(mapRoot.width(), mapRoot.height()));
+                    zoomLevel = mapWidget.getZoom();
+                }
+                else {
+                    geoTopLeft = mapWidget.convertToGeo(0, 0);
+                    geoBottomRight = mapWidget.convertToGeo(mapcontainer.width(), mapcontainer.height());
+                    zoomLevel = mapWidget.zoomFactor();
+                }
+                
+                jQuery.each(pinInfos, function (index, pin) {
+                    var normalizeScreenId = pin.Url.replace(/[^a-zA-Z0-9]/g, '_');
+                    var bVisible;
+                    if (bUseLeafLet)
+                        bVisible = (pin.Latitude < geoTopLeft.lat && pin.Latitude > geoBottomRight.lat &&
+                            pin.Longitude > geoTopLeft.lng && pin.Longitude < geoBottomRight.lng || bForceAll) &&
+                            zoomLevel >= pin.MinZoomLevel && zoomLevel <= pin.MaxZoomLevel;
+                    else
+                        bVisible = (pin.Latitude < geoTopLeft[1] && pin.Latitude > geoBottomRight[1] &&
+                            pin.Longitude > geoTopLeft[0] && pin.Longitude < geoBottomRight[0] || bForceAll) &&
+                            zoomLevel >= pin.MinZoomLevel && zoomLevel <= pin.MaxZoomLevel;
+
+                    if (bVisible) {
+                        //if (bUseLeaflet)
+                        //L.marker({ lon: pin.Longitude, lat: pin.Latitude }).bindPopup('The screen is here').addTo(mapWidget);
+
+                        let screenLatLng = latLngToScreen(pin.Latitude, pin.Longitude);
+                        
+                        let screenLat = bUseLeafLet ? screenLatLng.x : screenLatLng[0];
+                        let screenLng = bUseLeafLet ? screenLatLng.y : screenLatLng[1];
+                        screendetected.push(normalizeScreenId);
+                        if (!(normalizeScreenId in screenLoaded)) {
+                            screenLoaded[normalizeScreenId] = { id: normalizeScreenId, lastLat: pin.Latitude, lastLng: pin.Longitude };
+
+                            var options = { name: pin.Url };
+                            attachPopup(scope, 'screenView', normalizeScreenId, JSON.stringify(options), screenLat, screenLng);
+                        }
+                        else {
+                            scope.$broadcast(onPopupSizeRequest + normalizeScreenId, { x: screenLat, y: screenLng });
+                        }
+                    }
+                });
+
+                for (var key in screenLoaded) {
+
+                    var found = screendetected.indexOf(key);
+                    if (found === -1) {
+
+                        delete screenLoaded[key];
+
+                        scope.$broadcast(onPopupCloseRequest + key, key);
+                    }
+                }
+            }
+
+            scope.corehubconnection.invoke("RegisterLiveMapPins")
+                .then((pageId) => {
+                    var drl1 = scope.$on("PositionUpdate" + pageId, function (e, listdata) {
+                        jQuery.each(listdata, function (index, data) {
+                            var mapPin = pinInfos.find(pin => { return pin.Url == data.screenUri; });
+                            if (typeof mapPin != "undefined" && (data.latValue != null || data.lonValue != null)) {
+                                if (data.latValue != null)
+                                    mapPin.Latitude = data.latValue;
+                                if (data.lonValue != null)
+                                    mapPin.Longitude = data.lonValue;
+                            }
+
+                            var normalizeScreenId = data.screenUri.replace(/[^a-zA-Z0-9]/g, '_');
+
+                            if (normalizeScreenId in screenLoaded) {
+                                var lat = screenLoaded[normalizeScreenId].lastLat;
+                                var lng = screenLoaded[normalizeScreenId].lastLng;
+
+                                if (data.latValue != null) {
+                                    lat = data.latValue;
+                                    screenLoaded[normalizeScreenId].lastLat = data.latValue;
+                                }
+
+                                if (data.lonValue != null) {
+                                    lng = data.lonValue;
+                                    screenLoaded[normalizeScreenId].lastLng = data.lonValue;
+                                }
+
+                                try {
+                                    let screenLatLng = latLngToScreen(lat, lng);
+                                    let screenLat = bUseLeafLet ? screenLatLng.x : screenLatLng[0];
+                                    let screenLng = bUseLeafLet ? screenLatLng.y : screenLatLng[1];
+
+                                    scope.$broadcast(onPopupSizeRequest + normalizeScreenId, { x: screenLat, y: screenLng });
+                                }
+                                catch { }
+                            }
+                        });
+                    });
+                    listeningArray.push(drl1);
+                }).catch(err => {
+                    console.error(err.toString());
+                    scope.busyVisible = false;
+                    scope.$apply();
+                    scope.$broadcast(onError, { ex: err, value: "Error registering pins : " + err.toString() });
+                });
+
+            function getMapOffset() {
+                var mapContainerOffset = mapcontainer.offset();
+                return {
+                    top: mapContainerOffset.top, left: mapContainerOffset.left
+                };
+            }
+
+            function onWindowHeightChanged() {
+                mapcontainer.css("height", $(ROOTAppBars).height());
+                mapWidget.invalidateSize();
+            }
+
+            if (bUseLeafLet) {
+                $('meta[name=viewport]').attr("content", "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no");
+                mapRoot = mapcontainer;
+                if (currentRoot == ROOTAppBars) {                    
+                    if (!popupparameter)
+                        mapcontainer.css("height", $(ROOTAppBars).height());
+                    window.addEventListener("resize", processResizeDelayed);
+                }
+                else
+                    mapRoot.empty();
+                mapWidget = L.map(mapRoot[0]);
+                
+                var center = parameters ? parameters.center : [0, 0];
+                var zoom = parameters ? parameters.zoom : (scope.configurationSettings.mapZoomFactor ? scope.configurationSettings.mapZoomFactor : 1);
+                if (scope.configurationSettings.mapMaxZoomFactor) {
+                    try {
+                        zoom = Math.min(zoom, scope.configurationSettings.mapMaxZoomFactor);
+                    }
+                    catch { }
+                }
+                var bInitViewSet;
+                if (typeof (center) != "undefined" && typeof (zoom) != "undefined") {
+                    bInitViewSet = true;
+                    mapWidget.setView(center, zoom);
+                }
+
+                if (!bInitViewSet || zoom == 1)
+                    mapWidget.fitWorld({ animate: false }).zoomIn();
+
+                mapWidget.on("moveend", function (e) {
+                    processPinsDelayed();
+                });
+
+                var mapConfig = {
+                    crs: L.CRS.Simple,
+                    maxZoom: scope.configurationSettings.mapMaxZoomFactor ? scope.configurationSettings.mapMaxZoomFactor : "*",
+                    maxBoundsViscosity: 1.0
+                };
+
+                if (scope.configurationSettings.mapBounds) {
+                    try {
+                        let mapBounds = JSON.parse(scope.configurationSettings.mapBounds);
+                        if (mapBounds && mapBounds.length > 0) {
+                            mapWidget.setZoom(1);
+                            mapWidget.setMaxBounds(mapBounds);
+                            mapWidget.fitBounds(mapBounds);
+                            var boundsZoomLevel = mapWidget.getZoom();
+                            mapWidget.setMinZoom(boundsZoomLevel);
+                            if (boundsZoomLevel < zoom)
+                                mapWidget.setZoom(zoom);
+                        }
+                    }
+                    catch { }
+                }
+                else {
+                    var worldBounds = L.latLngBounds(L.latLng(-89.98155760646617, -180), L.latLng(89.99346179538875, 180));
+                    mapWidget.setMaxBounds(worldBounds);
+                }
+
+                var defaultMapTilesUrl = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+                var mapTilesUrl = defaultMapTilesUrl;
+                if (scope.configurationSettings.mapViewTilesURL)
+                    mapTilesUrl = scope.configurationSettings.mapViewTilesURL;
+                else { //OpenStreetMap tiles configuration
+                    mapConfig.maxZoom = Math.min(mapConfig.maxZoom, 19);
+                    mapConfig.attribution = '&copy; <a href="https://openstreetmap.org/copyright">OpenStreetMap contributors</a>';
+                }
+                if (scope.configurationSettings.mapViewTilesOptions) {
+                    try {
+                        let mapTilesCustomOptions = JSON.parse(scope.configurationSettings.mapViewTilesOptions);
+                        if (mapTilesCustomOptions) {
+                            for (key in mapTilesCustomOptions) {
+                                mapConfig[key] = mapTilesCustomOptions[key];
+                            }
+                        }
+                    }
+                    catch { }
+                }
+
+                L.tileLayer(mapTilesUrl, mapConfig).addTo(mapWidget);
+
+                L.control.scale({ imperial: true, metric: true }).addTo(mapWidget);
+
+                if (scope.configurationSettings.mapLayers) {
+                    try {
+                        mapLayers = JSON.parse(scope.configurationSettings.mapLayers);
+                        $.each(mapLayers, function (index, layer) {
+                            let geoJsonURL = layer.dataSource;
+                            if (geoJsonURL) {
+                                let xhr = new XMLHttpRequest();
+                                xhr.open('GET', geoJsonURL);
+                                xhr.setRequestHeader('Content-Type', 'application/json');
+                                xhr.responseType = 'json';
+                                xhr.onload = function () {
+                                    if (xhr.status !== 200) return;
+                                    var myJson = L.geoJson(xhr.response);
+                                    myJson.addTo(mapWidget);
+                                };
+                                xhr.send();
+                            }
+                        });
+                    }
+                    catch { }
+                }
+            }
+
+            if (bUseLeafLet)
+                getListMapPins();
+            else {
+                mapcontainer.css("overflow", "auto");
+                interval = setInterval(function () {
+                    if (!mapcontainer.height() || !mapcontainer.width())
+                        return;
+                    clearInterval(interval);
+                    interval = null;
+
+                    //if (!scope.configurationSettings.mapProvider) {
+                    let mapLayers = [{
+                        dataSource: DevExpress.viz.map.sources.world,
+                        hoverEnabled: false
+                    }];
+
+                    if (scope.configurationSettings.mapLayers) {
+                        try {
+                            mapLayers = JSON.parse(scope.configurationSettings.mapLayers);
+                        }
+                        catch { }
+                    }
+
+                    var mapConfig = {
+                        layers: mapLayers,
+                        zoomFactor: parameters ? parameters.zoom : (scope.configurationSettings.mapZoomFactor ? scope.configurationSettings.mapZoomFactor : 1),
+                        maxZoomFactor: scope.configurationSettings.mapMaxZoomFactor ? scope.configurationSettings.mapMaxZoomFactor : 256,
+                        size: {
+                            height: mapcontainer.height(),
+                            width: mapcontainer.width()
+                        },
+                        center: parameters ? parameters.center : undefined,
+                        onZoomFactorChanged: function (e) {
+                            processPinsDelayed();
+                        },
+                        onCenterChanged: function (e) {
+                            processPinsDelayed();
+                        }
+                    };
+
+                    if (scope.configurationSettings.mapBounds) {
+                        try {
+                            let mapBounds = JSON.parse(scope.configurationSettings.mapBounds);
+                            if (mapBounds && mapBounds.length > 0) {
+                                mapConfig.bounds = [mapBounds[0][1], mapBounds[1][0], mapBounds[1][1], mapBounds[0][0]];
+                            }
+                        }
+                        catch { }
+                    }
+
+                    mapWidget = mapcontainer.dxVectorMap(mapConfig).dxVectorMap("instance");
+
+                    getListMapPins();
+
+                }, 500);
+            }
+
+            function getListMapPins() {
+                scope.corehubconnection.invoke("GetListMapPins")
+                    .then((ret) => {
+
+                        pinInfos = ret;
+                        
+                        processPins();
+
+                        scope.busyVisible = false;
+                        scope.$apply();
+                    })
+                    .catch(err => {
+                        console.error(err.toString());
+                        scope.busyVisible = false;
+                        scope.$apply();
+                        scope.$broadcast(onError, { ex: err, value: "Error sending image : " + err.toString() });
+                    });
+            }
+
+            function latLngToScreen(lat, lng) {
+                var screenCoords;
+                if (bUseLeafLet) {
+                    screenCoords = mapWidget.latLngToContainerPoint(L.latLng(lat, lng));
+                    var mapOffset = getMapOffset();
+                    screenCoords.x += mapOffset.left;
+                    screenCoords.y += mapOffset.top;
+                }
+                else
+                    screenCoords = mapWidget._UndocumentedGeoToScreen([lng, lat]);
+                return screenCoords;
+            }
+        }
+    </script>
+</div>

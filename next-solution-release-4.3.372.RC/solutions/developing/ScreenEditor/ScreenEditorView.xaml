@@ -1,0 +1,1205 @@
+﻿<UserControl x:Class="ScreenManager.ScreenEditorView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:lc="http://schemas.devexpress.com/winfx/2008/xaml/layoutcontrol"
+    xmlns:properties="clr-namespace:ScreenManager.Properties"
+    xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core" 
+    xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+    xmlns:dxa="http://schemas.devexpress.com/winfx/2008/xaml/accordion"    
+    xmlns:self="clr-namespace:ScreenManager"
+    xmlns:appproperties="clr-namespace:WPFUtilities.Properties;assembly=WPFUtilities"
+    xmlns:dxb="http://schemas.devexpress.com/winfx/2008/xaml/bars"
+    FocusManager.FocusedElement="{Binding ElementName=MainSurface}"
+    PreviewDrop="MainSurface_Drop"
+    PreviewKeyDown="MainSurface_PreviewKeyDown"
+    PreviewKeyUp="MainSurface_PreviewKeyUp"
+    xmlns:utilities="clr-namespace:WPFUtilities.Converters;assembly=WPFUtilities"
+    xmlns:opcua="clr-namespace:OPCUAViewModel.Converters;assembly=OPCUAViewModel"
+    xmlns:dxgt="http://schemas.devexpress.com/winfx/2008/xaml/grid/themekeys"
+    xmlns:dxg="http://schemas.devexpress.com/winfx/2008/xaml/grid"
+    xmlns:dxi="http://schemas.devexpress.com/winfx/2008/xaml/core/internal"
+    xmlns:sys="clr-namespace:System;assembly=mscorlib"
+    xmlns:dxdo="http://schemas.devexpress.com/winfx/2008/xaml/docking"
+    xmlns:dxeh="http://schemas.devexpress.com/winfx/2008/xaml/editors/internal"
+    x:Name="ScreenEditorControl" PreviewMouseWheel="MainSurface_PreviewMouseWheel" 
+    Loaded="ScreenEditorControl_Loaded" Width="800" Height="600">
+    
+    <UserControl.Resources>
+
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Storyboards.xaml" />
+              <ResourceDictionary Source="/SharedResources;component/Resources/SharedImages.xaml" />
+              <ResourceDictionary Source="/SharedResources;component/Resources/Screen.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+          <utilities:FontToMinRowHeightConverter x:Key="fontToMinRowHeightConverter" x:Shared="True" />
+
+            <self:ToPercentConverter x:Key="scaleToPercentConverter" />
+            <self:BarItemMinWidthConverter x:Key="BarItemMinWidthConverter" />
+            <opcua:UriConverter x:Key="UriConverter" />
+            <utilities:UriToUriAbsoluteImageConverter x:Key="uriToUriAbsoluteImageConverter" x:Shared="True"/>
+            <self:BoolToYesNoConverter x:Key="BoolToYesNoConverter" />
+            <Grid x:Key="WaitingRepositoryItem" Width="100" Height="60" x:Shared="False">
+                <Grid.RowDefinitions>
+                    <RowDefinition MaxHeight="10"/>
+                    <RowDefinition />
+                </Grid.RowDefinitions>
+                <ProgressBar Grid.Row="0" Opacity="0.5" IsIndeterminate="True" MaxHeight="10"/>
+                <TextBlock  Grid.Row="1" Text="{x:Static properties:Resources.ScreanViewLoading}" />
+            </Grid>
+
+            <DataTemplate x:Key="TreeColumnDataTemplate">
+                <DockPanel HorizontalAlignment="Stretch">
+                    <TextBlock Text="{Binding RowData.Row.ItemHeader}" VerticalAlignment="Center" />
+                    <CheckBox Margin="4 0 0 0" Loaded="OnCheckboxLoaded" Click="OnTreeNodeChecked" />
+                </DockPanel>
+            </DataTemplate>
+
+            <Grid x:Key="ErrorRepositoryItem" Width="100" Height="60" x:Shared="False">
+                <Grid.RowDefinitions>
+                    <RowDefinition />
+                    <RowDefinition />
+                </Grid.RowDefinitions>
+                <TextBlock Text="??????" Foreground="Red" Background="DarkGray" FontSize="30"/>
+                <TextBlock  Grid.Row="1" Text="{x:Static properties:Resources.ScreanViewNotFound}" />
+            </Grid>
+
+            <DataTemplate x:Key="Data">
+                <Grid>
+                    <StackPanel>
+                        <dxe:ImageEdit IsPrintingMode="True" Source="{Binding Content}" />
+                    </StackPanel>
+                </Grid>
+            </DataTemplate>
+
+            <dxg:TreeListControl x:Key="objectBrowserTree" SelectionMode="Row">
+                <dxg:TreeListControl.Columns>
+                    <dxg:TreeListColumn Width="200" FieldName="ItemHeader" FilterPopupMode="Excel" Header="{x:Static properties:Resources.TreeName}" />
+                    <dxg:TreeListColumn Width="50" FieldName="ZLayer" FilterPopupMode="Excel" SortIndex="0" SortOrder="Descending" Header="{x:Static properties:Resources.TreeZLayer}" />
+                    <dxg:TreeListColumn Width="50" FieldName="VisualCount" FilterPopupMode="Excel" Header="{x:Static properties:Resources.TreeVisual}" />
+                    <dxg:TreeListColumn Width="50" FieldName="LogicCount" FilterPopupMode="Excel" Header="{x:Static properties:Resources.TreeLogic}" />
+                    <dxg:TreeListColumn Width="50" FieldName="ContainsCode" FilterPopupMode="Excel" Header="{x:Static properties:Resources.TreeContainsCode}" />
+                    <dxg:TreeListColumn Width="50" FieldName="IsDynamic" FilterPopupMode="Excel" Header="{x:Static properties:Resources.TreeIsDynamic}" />
+                </dxg:TreeListControl.Columns>
+                <dxg:TreeListControl.View>
+                    <dxg:TreeListView Name="treeListView" NavigationStyle="Row" AllowTreeIndentScrolling="True" RowDoubleClick="OnRowDoubleClick" SearchPanelAllowFilter="True"
+                                ImageFieldName="ResourceIcon" ShowNodeImages="True" VerticalScrollbarVisibility="Auto" ShowSearchPanelMode="Always"
+                                AllowEditing="False" IsColumnChooserVisible="False" IsColumnMenuEnabled="False"
+                                ShowColumnHeaders="True" ShowDragDropHint="True" ShowVerticalLines="False" ShowHorizontalLines="False" ShowIndicator="False"
+                                IsSynchronizedWithCurrentItem="True" NodeExpanding="OnTreeNodeExpanding" AutoWidth="True" NodeCollapsing="OnTreeNodeCollapsing" AllowDragDrop="False">
+                        <!-- StartRecordDrag="TreeListControl_DragStart" DropRecord="TreeListControl_DragEnd" CompleteRecordDragDrop="TreeListControl_CompletedDragDrop"-->
+                        <dxg:TreeListView.RowStyle>
+                            <Style TargetType="{x:Type dxg:RowControl}">
+                                <Style.Triggers>
+                                    <MultiDataTrigger>
+                                        <MultiDataTrigger.Conditions>
+                                            <Condition Binding="{Binding RelativeSource={RelativeSource Mode=Self}, Path=SelectionState}" Value="None"/>
+                                            <Condition Binding="{Binding RelativeSource={RelativeSource Mode=Self}, Path=IsMouseOver}" Value="True" />
+                                        </MultiDataTrigger.Conditions>
+                                        <Setter Property="Background" Value="{dxi:ThemeResource {dxgt:GridRowThemeKey ResourceKey=CellBorderFocusedBrush}}" />
+                                    </MultiDataTrigger>
+                                </Style.Triggers>
+                                <!--<Setter Property="ContextMenu" Value="{Binding Path=Row.TreeItemInnerObject, Converter={StaticResource TagToContextMenuConverter}}" />-->
+                            </Style>
+                        </dxg:TreeListView.RowStyle>
+                        <dxg:TreeListView.CellStyle>
+                            <Style TargetType="{x:Type dxg:LightweightCellEditor}">
+                              <Setter Property="MinHeight" Value="{Binding FontSize, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}, Converter={StaticResource fontToMinRowHeightConverter}, Mode=OneWay}" />
+                            </Style>
+                        </dxg:TreeListView.CellStyle>
+                    </dxg:TreeListView>
+                </dxg:TreeListControl.View>
+            </dxg:TreeListControl>
+
+           <dxg:TreeListControl x:Key="referenceListTree" SelectionMode="Row" Tag="True"
+                                FilterChanged="OnFilterChanged">
+            <dxg:TreeListControl.Resources>
+              <ResourceDictionary>
+                <ResourceDictionary.MergedDictionaries>
+                  <ResourceDictionary Source="/ScreenManager;component/Resources/SearchPanelResources.xaml"/>
+                </ResourceDictionary.MergedDictionaries>      
+                <DataTemplate x:Key="ReferenceListCellDisplayTemplate">
+                    <TextBlock Padding="3,0,0,0" VerticalAlignment="Center" 
+                               Text="{Binding Path=Value}" 
+                               dxeh:TextBlockService.EnableTextHighlighting="True" 
+                               dxeh:TextBlockService.HighlightedTextCriteria="Contains" 
+                               dxeh:TextBlockService.HighlightedText="{Binding View.SearchString}" />
+                </DataTemplate>                  
+              </ResourceDictionary>
+            </dxg:TreeListControl.Resources>
+                <dxg:TreeListControl.Columns>
+                    <dxg:TreeListColumn ReadOnly="True" AllowEditing="False" FilterPopupMode="Excel" SortIndex="0" SortOrder="Ascending" 
+                                        DisplayMemberBinding="{Binding Path=Name, Mode=OneWay}" FieldName="Name" Header="{x:Static properties:Resources.TreeName}"
+                                        CellDisplayTemplate="{StaticResource ReferenceListCellDisplayTemplate}" />
+                    <dxg:TreeListColumn ReadOnly="True" AllowEditing="False" FilterPopupMode="Excel" SortIndex="1" SortOrder="Ascending" 
+                                        DisplayMemberBinding="{Binding Path=StringRepresentation, Mode=OneWay}"  FieldName="StringRepresentation" Header="{x:Static properties:Resources.TreeHumanReadable}"
+                                        CellDisplayTemplate="{StaticResource ReferenceListCellDisplayTemplate}" />
+                    <dxg:TreeListColumn ReadOnly="True" AllowEditing="False" FilterPopupMode="Excel" SortIndex="1" SortOrder="Ascending" 
+                                        DisplayMemberBinding="{Binding Path=AppName, Mode=OneWay}" FieldName="AppName" Header="{x:Static properties:Resources.TreeAppName}"
+                                        CellDisplayTemplate="{StaticResource ReferenceListCellDisplayTemplate}" />
+                    <dxg:TreeListColumn ReadOnly="True" AllowEditing="False" FilterPopupMode="Excel" SortIndex="2" SortOrder="Ascending" 
+                                        DisplayMemberBinding="{Binding Path=EndpointUrl, Mode=OneWay}" FieldName="EndpointUrl" Header="{x:Static properties:Resources.TreeEndpointUrl}"
+                                        CellDisplayTemplate="{StaticResource ReferenceListCellDisplayTemplate}" />
+                    <dxg:TreeListColumn ReadOnly="True" AllowEditing="False" FilterPopupMode="Excel" SortIndex="3" SortOrder="Ascending" 
+                                        DisplayMemberBinding="{Binding Path=RelativePath, Mode=OneWay}" FieldName="RelativePath" Header="{x:Static properties:Resources.TreeRelativePath}"
+                                        CellDisplayTemplate="{StaticResource ReferenceListCellDisplayTemplate}" />
+                    <dxg:TreeListColumn ReadOnly="True" AllowEditing="False" FilterPopupMode="Excel" SortIndex="3" SortOrder="Ascending" 
+                                        DisplayMemberBinding="{Binding Path=ResolvedNodeId, Mode=OneWay}" FieldName="ResolvedNodeId" Header="{x:Static properties:Resources.TreeResolvedNodeId}"
+                                        CellDisplayTemplate="{StaticResource ReferenceListCellDisplayTemplate}" />
+                </dxg:TreeListControl.Columns>
+                <dxg:TreeListControl.View>
+                    <dxg:TreeListView Name="treeListView" NavigationStyle="Row" AllowTreeIndentScrolling="True" RowDoubleClick="OnRowDoubleClick" SearchPanelHorizontalAlignment="Stretch"
+                                ImageFieldName="ResourceIcon" ShowNodeImages="True" VerticalScrollbarVisibility="Auto" SearchPanelAllowFilter="True"
+                                AllowEditing="False" IsColumnChooserVisible="False" IsColumnMenuEnabled="False" ShowSearchPanelMode="Always"
+                                ShowColumnHeaders="True" ShowDragDropHint="True" ShowVerticalLines="False" ShowHorizontalLines="False" ShowIndicator="False"
+                                SearchStringToFilterCriteria="OnSearchStringChanged"
+                                IsSynchronizedWithCurrentItem="True" NodeExpanding="OnTreeNodeExpanding" AutoWidth="True" NodeCollapsing="OnTreeNodeCollapsing" AllowDragDrop="False">
+                        <!-- StartRecordDrag="TreeListControl_DragStart" DropRecord="TreeListControl_DragEnd" CompleteRecordDragDrop="TreeListControl_CompletedDragDrop"-->
+                        <dxg:TreeListView.RowStyle>
+                            <Style TargetType="{x:Type dxg:RowControl}">
+                                <Style.Triggers>
+                                    <MultiDataTrigger>
+                                        <MultiDataTrigger.Conditions>
+                                            <Condition Binding="{Binding RelativeSource={RelativeSource Mode=Self}, Path=SelectionState}" Value="None"/>
+                                            <Condition Binding="{Binding RelativeSource={RelativeSource Mode=Self}, Path=IsMouseOver}" Value="True" />
+                                        </MultiDataTrigger.Conditions>
+                                        <Setter Property="Background" Value="{dxi:ThemeResource {dxgt:GridRowThemeKey ResourceKey=CellBorderFocusedBrush}}" />
+                                    </MultiDataTrigger>
+                                </Style.Triggers>
+                                <!--<Setter Property="ContextMenu" Value="{Binding Path=Row.TreeItemInnerObject, Converter={StaticResource TagToContextMenuConverter}}" />-->
+                            </Style>
+                        </dxg:TreeListView.RowStyle>
+                        <dxg:TreeListView.CellStyle>
+                            <Style TargetType="{x:Type dxg:LightweightCellEditor}">
+                              <Setter Property="MinHeight" Value="{Binding FontSize, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}, Converter={StaticResource fontToMinRowHeightConverter}, Mode=OneWay}" />
+                            </Style>
+                        </dxg:TreeListView.CellStyle>
+                    </dxg:TreeListView>
+                </dxg:TreeListControl.View>
+            </dxg:TreeListControl>
+
+        </ResourceDictionary>
+        
+    </UserControl.Resources>
+    
+    <!-- Command Binding section -->
+    <UserControl.InputBindings>
+        <KeyBinding Key="ESC" Command="ApplicationCommands.Stop" />
+    </UserControl.InputBindings>
+    
+    <UserControl.CommandBindings>
+
+
+        <CommandBinding Command="ApplicationCommands.Save"
+                    Executed="OnCommandSave" 
+                    CanExecute="CanCommandSave" />
+
+        <CommandBinding Command="ApplicationCommands.Print"
+                    Executed="OnCommandPrint" 
+                    CanExecute="CanAlwaysExecute" />
+
+        <CommandBinding Command="ApplicationCommands.Stop"
+                    Executed="OnCommandStop" 
+                    CanExecute="CanAlwaysExecute" />
+
+        <CommandBinding Command="ApplicationCommands.SelectAll"
+                    Executed="OnCommandSelectAll" 
+                    CanExecute="CanAlwaysExecute" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.ToggleGrid}" 
+                    Executed="OnToggleGrid" 
+                    CanExecute="CanToggleGrid" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.SetGrid}" 
+                    Executed="OnSetGrid" 
+                    CanExecute="CanSetGrid" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.LayoutEdit}" 
+                    Executed="OnLayoutEdit" 
+                    CanExecute="CanAlwaysExecute" />
+                
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.SnapToGrid}" 
+                    Executed="OnSnapToGrid" 
+                    CanExecute="CanSnapToGrid" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.SmartSnap}" 
+                    Executed="OnSmartSnap" 
+                    CanExecute="CanSmartSnap" />
+
+      <CommandBinding Command="{x:Static self:UIGeneralCommands.ResetTransormOriginSettings}"
+                  Executed="OnResetTransormOriginSettings"
+                  CanExecute="CanResetTransormOriginSettings" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.ShowHideRotationThumb}" 
+                    Executed="OnShowHideRotationThumb" 
+                    CanExecute="CanExecuteSelectedOne" />
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.LockPosition}" 
+                    Executed="OnLockPosition" 
+                    CanExecute="CanExecuteSelected" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.CreateGroup}" 
+                    Executed="OnCreateGroup" 
+                    CanExecute="CanExecuteSelectedFirstLevel" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.Regroup}" 
+                    Executed="Regroup" 
+                    CanExecute="CanExecuteRegroup" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.CreateVerticalStackPanel}" 
+                    Executed="OnCreateVerticalStackPanel" 
+                    CanExecute="CanExecuteSelectedFirstLevel" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.CreateHorizontalStackPanel}" 
+                    Executed="OnCreateHorizontalStackPanel" 
+                    CanExecute="CanExecuteSelectedFirstLevel" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.CreateVerticalWrapPanel}" 
+                    Executed="OnCreateVerticalWrapPanel" 
+                    CanExecute="CanExecuteSelectedFirstLevel" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.CreateHorizontalWrapPanel}" 
+                    Executed="OnCreateHorizontalWrapPanel" 
+                    CanExecute="CanExecuteSelectedFirstLevel" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.CreateDockPanel}" 
+                    Executed="OnCreateDockPanel" 
+                    CanExecute="CanExecuteSelectedFirstLevel" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.CreateGridPanel}" 
+                    Executed="OnCreateGridPanel" 
+                    CanExecute="CanExecuteSelectedFirstLevel" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.UnGroupItem}" 
+                    Executed="OnUnCreateGroup" 
+                    CanExecute="CanExecuteUngroupItem" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.CreateExpander}" 
+                    Executed="OnCreateExpander" 
+                    CanExecute="CanExecuteSelectedFirstLevel" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.CreateGroupBox}" 
+                    Executed="OnCreateGroupBox" 
+                    CanExecute="CanExecuteSelectedFirstLevel" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.CreateBorder}" 
+                    Executed="OnCreateBorder" 
+                    CanExecute="CanExecuteSelectedFirstLevel" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.GeneratePowerTemplate}" 
+                    Executed="OnGeneratePowerTemplate" 
+                    CanExecute="CanExecuteGeneratePowerTemplate" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.ResolvePowerTemplate}" 
+                    Executed="OnResolvePowerTemplate" 
+                    CanExecute="CanExecuteResolvePowerTemplate" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.CreateScreenTemplate}" 
+                    Executed="OnCreateScreenTemplate" 
+                    CanExecute="CanAlwaysExecute" />
+
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.ShadowEffect}" 
+                    Executed="OnShadowEffect" 
+                    CanExecute="CanExecuteSelected" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.OuterGlowEffect}" 
+                    Executed="OnOuterGlowEffect" 
+                    CanExecute="CanExecuteSelected" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.BlurEffect}" 
+                    Executed="OnBlurEffect" 
+                    CanExecute="CanExecuteSelected" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.ReflectionEffect}" 
+                    Executed="OnReflectionEffect" 
+                    CanExecute="CanExecuteSelected" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.RunTest}" 
+                    Executed="OnRunTest" 
+                    CanExecute="CanAlwaysExecute" />
+
+        <!--<CommandBinding Command="{x:Static self:UIGeneralCommands.ChangeEditingMode}" 
+                    Executed="OnChangeEditMode"
+                    CanExecute="CanAlwaysExecute" />-->
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.InsertObjectType}" 
+                    Executed="OnInsertObjectType"
+                    CanExecute="CanAlwaysExecute" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.MoveUp}" 
+                    Executed="OnMoveUp" 
+                    CanExecute="CanExecuteSelected" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.MoveDown}" 
+                    Executed="OnMoveDown" 
+                    CanExecute="CanExecuteSelected" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.MoveLeft}" 
+                    Executed="OnMoveLeft" 
+                    CanExecute="CanExecuteSelected" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.MoveRight}" 
+                    Executed="OnMoveRight" 
+                    CanExecute="CanExecuteSelected" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.Rotate}" 
+                    Executed="OnRotate" 
+                    CanExecute="CanExecuteSelected" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.ImportXaml}" 
+                    Executed="OnImportXaml" 
+                    CanExecute="CanAlwaysExecute" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.Rename}" 
+                    Executed="OnRename" 
+                    CanExecute="CanExecuteRename" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.ZoomIn}" 
+                    Executed="OnZoomIn" 
+                    CanExecute="CanExecuteZoomIn" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.ZoomOut}" 
+                    Executed="OnZoomOut" 
+                    CanExecute="CanExecuteZoomOut" />
+
+        <CommandBinding Command="ApplicationCommands.Cut"
+                    Executed="OnCutEvent" 
+                    CanExecute="CanExecuteSelected" />
+        <CommandBinding Command="ApplicationCommands.Delete"
+                    Executed="OnDeleteEvent" 
+                    CanExecute="CanExecuteSelected" />
+        <CommandBinding Command="ApplicationCommands.Paste"
+                    Executed="OnPasteEvent" 
+                    CanExecute="CanExecutePaste" />
+        <CommandBinding Command="ApplicationCommands.Copy"
+                    Executed="OnCopyEvent" 
+                    CanExecute="CanExecuteSelectedFirstLevel" />
+
+        <CommandBinding Command="ApplicationCommands.Undo"
+                    Executed="OnUndoEvent" 
+                    CanExecute="CanExecuteUndo" />
+        <CommandBinding Command="ApplicationCommands.Redo"
+                    Executed="OnRedoEvent" 
+                    CanExecute="CanExecuteRedo" />
+
+
+        <CommandBinding Command="EditingCommands.ToggleBold"
+                    Executed="OnToggleBold" 
+                    CanExecute="CanToggleBold" />
+
+        <CommandBinding Command="EditingCommands.ToggleItalic"
+                    Executed="OnToggleItalic" 
+                    CanExecute="CanToggleItalic" />
+
+        <CommandBinding Command="EditingCommands.ToggleUnderline"
+                    Executed="OnToggleUnderline" 
+                    CanExecute="CanToggleUnderline" />
+
+        <CommandBinding Command="EditingCommands.IncreaseFontSize"
+                    Executed="OnIncreaseFontSize" 
+                    CanExecute="CanIncreaseFontSize" />
+
+        <CommandBinding Command="EditingCommands.DecreaseFontSize"
+                    Executed="OnDecreaseFontSize" 
+                    CanExecute="CanDecreaseFontSize" />
+
+        <CommandBinding Command="EditingCommands.AlignLeft"
+                    Executed="OnTexHorAlignLeft" 
+                    CanExecute="CanTexHorAlign" />
+
+        <CommandBinding Command="EditingCommands.AlignCenter"
+                    Executed="OnTexHorAlignCenter" 
+                    CanExecute="CanTexHorAlign" />
+
+        <CommandBinding Command="EditingCommands.AlignRight"
+                    Executed="OnTexHorAlignRight" 
+                    CanExecute="CanTexHorAlign" />
+
+        <CommandBinding Command="EditingCommands.AlignJustify"
+                    Executed="OnTexHorAlignJustify" 
+                    CanExecute="CanTexHorAlign" />
+
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.EnableUndoRedo}"
+                    Executed="OnEnableUndoRedo" 
+                    CanExecute="CanAlwaysExecute" />
+        
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.MoveLast}"
+                    Executed="OnMoveLast" 
+                    CanExecute="CanExecuteSelectedOneOnFirstLevel" />
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.MoveFirst}"
+                    Executed="OnMoveFirst" 
+                    CanExecute="CanExecuteSelectedOneOnFirstLevel" />
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.MovePrev}"
+                    Executed="OnMovePrev" 
+                    CanExecute="CanExecuteSelectedOneOnFirstLevel" />
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.MoveNext}"
+                    Executed="OnMoveNext" 
+                    CanExecute="CanExecuteSelectedOneOnFirstLevel" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.AlignCenterHorizontal}"
+                    Executed="OnAlignCenterHorizontal" 
+                    CanExecute="CanExecuteSelectedAnyOnFirstLevel" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.AlignCenterVertical}"
+                    Executed="OnAlignCenterVertical" 
+                    CanExecute="CanExecuteSelectedAnyOnFirstLevel" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.AlignLeft}"
+                    Executed="OnAlignLeft" 
+                    CanExecute="CanExecuteSelectedManyOnFirstLevel" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.AlignTop}"
+                    Executed="OnAlignTop" 
+                    CanExecute="CanExecuteSelectedManyOnFirstLevel" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.AlignRight}"
+                    Executed="OnAlignRight" 
+                    CanExecute="CanExecuteSelectedManyOnFirstLevel" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.AlignBottom}"
+                    Executed="OnAlignBottom" 
+                    CanExecute="CanExecuteSelectedManyOnFirstLevel" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.SetSameWidth}"
+                    Executed="OnSetSameWidth" 
+                    CanExecute="CanExecuteSelectedManyOnFirstLevel" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.SetSameHeight}"
+                    Executed="OnSetSameHeight" 
+                    CanExecute="CanExecuteSelectedManyOnFirstLevel" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.SetSameBoth}"
+                    Executed="OnSetSameBoth" 
+                    CanExecute="CanExecuteSelectedManyOnFirstLevel" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.DistributeSpace}"
+                    Executed="OnDistributeSpace" 
+                    CanExecute="CanExecuteSelectedManyOnFirstLevel" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.PropertyMapper}"
+                    Executed="OnPropertyMapper" 
+                    CanExecute="CanExecuteSelectedMany" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.DynamicPropertyMapper}"
+                    Executed="OnDynamicPropertyMapper" 
+                    CanExecute="CanExecuteDynamicPropertyMapper" />
+        
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.AddSymbolLibrary}"
+                    Executed="OnAddSymolLibrary" 
+                    CanExecute="CanExecuteSelected" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.UpdateSymbolLibrary}"
+                    Executed="OnUpdateSymolLibrary" 
+                    CanExecute="CanExecuteUpdateSymbolLibrary" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.ShowInlineProperties}"
+                    Executed="OnShowInlineProperties" 
+                    CanExecute="CanExecuteSelectedOne" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.ShowInlineCommands}"
+                    Executed="OnShowInlineCommands" 
+                    CanExecute="CanExecuteShowInlineCommands" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.ShowInlineAnimations}"
+                    Executed="OnShowInlineAnimations" 
+                    CanExecute="CanExecuteShowInlineAnimations" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.EditDataContextItem}"
+                    Executed="OnEditDataContextItem" 
+                    CanExecute="CanExecuteSelectedOne" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.EditDataTypeItem}"
+                    Executed="OnEditDataTypeItem" 
+                    CanExecute="CanExecuteSelectedOne" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.StrokeThickness}"
+                    Executed="OnStrokeThickness" 
+                    CanExecute="CanApplyLineStyle" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.StrokeDashArray}"
+                    Executed="OnStrokeDashArray" 
+                    CanExecute="CanApplyLineStyle" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.BrushEditor}"
+                    Executed="OnBrushEditor" 
+                    CanExecute="CanAlwaysExecute" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.PenEditor}"
+            Executed="OnPenEditor" 
+            CanExecute="CanExecuteSelected" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.LineEditor}"
+            Executed="OnLineEditor" 
+            CanExecute="CanExecuteSelected" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.StyleEditor}"
+                    Executed="OnStyleEditor" 
+                    CanExecute="CanExecuteSelected" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.CopyReference}"
+                    Executed="OnCopyReference" 
+                    CanExecute="CanExecuteCopyReference" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.PasteReference}"
+                    Executed="OnPasteReference" 
+                    CanExecute="CanExecutePasteReference" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.CopyCommands}"
+                    Executed="OnCopyCommands" 
+                    CanExecute="CanExecuteCopyCommands" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.PasteCommands}"
+                    Executed="OnPasteCommands" 
+                    CanExecute="CanExecutePasteCommands" />
+
+      <CommandBinding Command="{x:Static self:UIGeneralCommands.CopyFontSettingList}"
+                  Executed="OnCopyFontSettingList"
+                  CanExecute="CanExecuteCopyFontSettingList" />
+
+      <CommandBinding Command="{x:Static self:UIGeneralCommands.PasteFontSettingList}"
+                  Executed="OnPasteFontSettingList"
+                  CanExecute="CanExecutePasteFontSettingList" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.CopyAnimations}"
+                    Executed="OnCopyAnimations" 
+                    CanExecute="CanExecuteCopyAnimations" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.PasteAnimations}"
+                    Executed="OnPasteAnimations" 
+                    CanExecute="CanExecutePasteAnimations" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.ExecuteDroppingCode}"
+                    Executed="OnExecuteDroppingCode" 
+                    CanExecute="CanExecuteDroppingCode" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.RefreshRepositoryItems}"
+                    Executed="OnRefreshRepositoryItems" 
+                    CanExecute="CanRefreshRepositoryItems" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.SelectNext}"
+            Executed="OnSelectNext" 
+            CanExecute="CanAlwaysExecute" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.SelectPrev}"
+            Executed="OnSelectPrev" 
+            CanExecute="CanAlwaysExecute" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.SetZOrder}"
+            Executed="OnSetZOrder" 
+            CanExecute="CanSetZOrder" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.EditExpression}"
+            Executed="OnEditExpression" 
+            CanExecute="CanExecuteSelectedOne" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.EditReverseExpression}"
+            Executed="OnEditReverseExpression" 
+            CanExecute="CanExecuteSelectedOne" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.ClearExpression}"
+            Executed="OnClearExpression" 
+            CanExecute="CanExecuteSelectedOne" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.ClearReverseExpression}"
+            Executed="OnClearReverseExpression" 
+            CanExecute="CanExecuteSelectedOne" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.FlipVertical}"
+            Executed="OnFlipVertical" 
+            CanExecute="CanExecuteSelectedAny" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.FlipHorizontal}"
+            Executed="OnFlipHorizontal" 
+            CanExecute="CanExecuteSelectedAny" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.DynamicPropertyInspector}" 
+                    Executed="OnDynamicPropertyInspector"
+                    CanExecute="CanDynamicPropertyInspector" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.DynamicStringInspector}" 
+                    Executed="OnDynamicStringInspector"
+                    CanExecute="CanDynamicStringInspector" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.ExploreObjectTree}" 
+                    Executed="OnExploreObjectTree"
+                    CanExecute="CanExploreObjectTree" />
+
+        <CommandBinding Command="ApplicationCommands.Properties"
+                    Executed="OnCommandProperties" 
+                    CanExecute="CanExecuteSelectedAny" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.ShowAdornerExpander}" 
+                    Executed="OnShowAdornerExpander"
+                    CanExecute="CanAlwaysExecute" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.EditVisibilityLevel}" 
+                    Executed="OnEditVisibilityLevel"
+                    CanExecute="CanAlwaysExecute" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.ToolbarEditVisibilityLevel}" 
+                    Executed="OnToolbarEditVisibilityLevel"
+                    CanExecute="CanAlwaysExecute" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.EditAlias}" 
+                    Executed="OnEditAlias"
+                    CanExecute="CanExecuteEditAlias" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.EnCacheMode}" 
+                    Executed="OnEnCacheMode"
+                    CanExecute="CanExecuteSelectedOne" />
+        
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.EnableManipulation}"
+                  Executed="OnEnableManipulation"
+                  CanExecute="CanExecuteSelected" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.Enable3D}"
+                  Executed="OnEnable3D"
+                  CanExecute="CanEnable3D" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.Enable3DCamera}"
+                  Executed="OnEnable3DCamera"
+                  CanExecute="CanEnable3DCamera" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.Edit3DCameraPositions}"
+                  Executed="OnEdit3DCameraPositions"
+                  CanExecute="CanEdit3DCameraPositions" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.AddStringId}"
+            Executed="OnAddStringId"
+            CanExecute="CanAddStringId" />
+        
+    </UserControl.CommandBindings>
+
+    <dxb:BarManager.DXContextMenu>
+        <dxb:PopupMenu x:Name="contextMenu" Opened="cm_Opened" Opacity=".8">
+            <dxb:PopupMenu.Items>
+                <dxb:BarStaticItem 
+                  Glyph="{StaticResource SMCommonproperties}"
+                  ToolTipService.ShowOnDisabled="True" x:Name="entityNameBI">
+                    <dxb:BarStaticItem.ContentTemplate>
+                        <DataTemplate>
+                          <DockPanel HorizontalAlignment="Left">
+                            <TextBlock Text="{TemplateBinding Content}" DockPanel.Dock="Left" />
+                            <Button Command="{x:Static self:UIGeneralCommands.Rename}" Margin="5,0">
+                              <Button.Content>
+                                <StackPanel Orientation="Horizontal">
+                                  <Image Width="16" Height="16" Source="{StaticResource EditGeneralSmall}"/>
+                                </StackPanel>
+                              </Button.Content>
+                            </Button>
+                          </DockPanel>
+                        </DataTemplate>
+                    </dxb:BarStaticItem.ContentTemplate>
+                </dxb:BarStaticItem>
+
+                <dxb:BarItemLinkSeparator />
+
+              <dxb:BarButtonItem x:Name="entityTagBI" Command="{x:Static self:UIGeneralCommands.EditDataContextItem}"  Glyph="{StaticResource SMitemdatacontext}"
+                                 Content="{x:Static properties:UICommandResource.EditDataContextItemText}">
+                <dxb:BarButtonItem.ContentTemplate>
+                    <DataTemplate>
+                      <DockPanel HorizontalAlignment="Stretch" LastChildFill="True">
+                        <TextBlock Margin="5,0" DockPanel.Dock="Right"
+                         Text="{x:Static properties:UICommandResource.EditDataContextItemGesturesDisplayText}" />
+                        <TextBlock Text="{TemplateBinding Content}">
+                          <TextBlock.MinWidth>
+                            <MultiBinding Converter="{StaticResource BarItemMinWidthConverter}" Mode="OneWay">
+                              <Binding RelativeSource="{RelativeSource AncestorType={x:Type UserControl}}"/>
+                            </MultiBinding>
+                          </TextBlock.MinWidth>                       
+                      </TextBlock>
+                      </DockPanel>
+                    </DataTemplate>
+                  </dxb:BarButtonItem.ContentTemplate>
+                </dxb:BarButtonItem>
+                
+                <dxb:BarButtonItem x:Name="entityAnimationsBI" Command="{x:Static self:UIGeneralCommands.ShowInlineAnimations}"
+                                   Content="{x:Static properties:UICommandResource.ShowInlineAnimationsText}">
+                  <dxb:BarButtonItem.ContentTemplate>
+                    <DataTemplate>
+                      <DockPanel HorizontalAlignment="Stretch" LastChildFill="True">
+                        <TextBlock Margin="5,0" DockPanel.Dock="Right"
+                         Text="{x:Static properties:UICommandResource.ShowInlineAnimationsGesturesDisplayText}" />
+                        <TextBlock Text="{TemplateBinding Content}">
+                          <TextBlock.MinWidth>
+                            <MultiBinding Converter="{StaticResource BarItemMinWidthConverter}" Mode="OneWay">
+                              <Binding RelativeSource="{RelativeSource AncestorType={x:Type UserControl}}"/>
+                            </MultiBinding>
+                          </TextBlock.MinWidth>
+                        </TextBlock>
+                      </DockPanel>
+                    </DataTemplate>
+                  </dxb:BarButtonItem.ContentTemplate>
+                </dxb:BarButtonItem>
+                <dxb:BarButtonItem x:Name="entityCommandsBI" Command="{x:Static self:UIGeneralCommands.ShowInlineCommands}"
+                                   Content="{x:Static properties:UICommandResource.ShowInlineCommandsText}">
+                  <dxb:BarButtonItem.ContentTemplate>
+                    <DataTemplate>
+                      <DockPanel HorizontalAlignment="Stretch" LastChildFill="True">
+                        <TextBlock Margin="5,0" DockPanel.Dock="Right"
+                         Text="{x:Static properties:UICommandResource.ShowInlineCommandsGesturesDisplayText}" />
+                        <TextBlock Text="{TemplateBinding Content}">
+                          <TextBlock.MinWidth>
+                            <MultiBinding Converter="{StaticResource BarItemMinWidthConverter}" Mode="OneWay">
+                              <Binding RelativeSource="{RelativeSource AncestorType={x:Type UserControl}}"/>
+                            </MultiBinding>
+                          </TextBlock.MinWidth>                        
+                      </TextBlock>
+                      </DockPanel>
+                    </DataTemplate>
+                  </dxb:BarButtonItem.ContentTemplate>
+                </dxb:BarButtonItem>
+                <!--<dxb:BarButtonItem x:Name="entityItemSourceBI" Command="{x:Static self:UIGeneralCommands.ShowInlineProperties}" Content="{x:Static properties:UICommandResource.ShowInlineItemsSourceText}" CommandParameter="3"/>-->
+                <dxb:BarButtonItem Command="{x:Static self:UIGeneralCommands.DynamicPropertyInspector}" Glyph="{StaticResource SMDataFind}" Content="{x:Static properties:UICommandResource.DynamicPropertyInspectorText}" />
+                <dxb:BarButtonItem Command="{x:Static self:UIGeneralCommands.DynamicStringInspector}" Glyph="{StaticResource SMStringFind}" Content="{x:Static properties:UICommandResource.DynamicStringInspectorText}" />
+
+                <dxb:BarItemLinkSeparator />
+
+                <dxb:BarSubItem Content="{x:Static self:Properties.UICommandResource.EditMenuText}">
+                    <dxb:BarButtonItem ShowKeyGesture="True" KeyGesture="Ctrl+Z" Command="ApplicationCommands.Undo" Content="{x:Static appproperties:ApplicationCommandsResource.Undo}" Glyph="{StaticResource UndoSmall}" />
+                    <dxb:BarButtonItem ShowKeyGesture="True" KeyGesture="Ctrl+Y" Command="ApplicationCommands.Redo" Content="{x:Static appproperties:ApplicationCommandsResource.Redo}" Glyph="{StaticResource RedoSmall}" />
+
+                    <dxb:BarItemLinkSeparator />
+
+                    <dxb:BarButtonItem ShowKeyGesture="True" KeyGesture="Ctrl+C" Command="ApplicationCommands.Copy" Content="{x:Static appproperties:ApplicationCommandsResource.Copy}" Glyph="{StaticResource CopySmall}" />
+                    <dxb:BarButtonItem ShowKeyGesture="True" KeyGesture="Ctrl+V" Command="ApplicationCommands.Paste" Content="{x:Static appproperties:ApplicationCommandsResource.Paste}" Glyph="{StaticResource PasteSmall}" />
+                    <dxb:BarButtonItem ShowKeyGesture="True" KeyGesture="Ctrl+X" Command="ApplicationCommands.Cut" Content="{x:Static appproperties:ApplicationCommandsResource.Cut}" Glyph="{StaticResource CutSmall}" />
+                    <dxb:BarButtonItem ShowKeyGesture="True" KeyGesture="Del" Command="ApplicationCommands.Delete" Content="{x:Static appproperties:ApplicationCommandsResource.Delete}" Glyph="{StaticResource DeleteSmall}" />
+
+                    <dxb:BarItemLinkSeparator />
+
+                    <dxb:BarButtonItem Command="{x:Static self:UIGeneralCommands.CopyReference}" Content="{x:Static properties:UICommandResource.CopyReferenceText}">
+                    </dxb:BarButtonItem>
+                    <dxb:BarButtonItem Command="{x:Static self:UIGeneralCommands.PasteReference}" Content="{x:Static properties:UICommandResource.PasteReferenceText}">
+                    </dxb:BarButtonItem>
+
+                    <dxb:BarItemLinkSeparator />
+
+                    <dxb:BarButtonItem Command="{x:Static self:UIGeneralCommands.CopyCommands}" Content="{x:Static properties:UICommandResource.CopyCommandsText}">
+                    </dxb:BarButtonItem>
+                    <dxb:BarButtonItem Command="{x:Static self:UIGeneralCommands.PasteCommands}" Content="{x:Static properties:UICommandResource.PasteCommandsText}">
+                    </dxb:BarButtonItem>
+
+                    <dxb:BarItemLinkSeparator />
+
+                    <dxb:BarButtonItem Command="{x:Static self:UIGeneralCommands.CopyAnimations}" Content="{x:Static properties:UICommandResource.CopyAnimationsText}">
+                    </dxb:BarButtonItem>
+                    <dxb:BarButtonItem Command="{x:Static self:UIGeneralCommands.PasteAnimations}" Content="{x:Static properties:UICommandResource.PasteAnimationsText}">
+                    </dxb:BarButtonItem>
+
+                  <dxb:BarItemLinkSeparator />
+
+                  <dxb:BarButtonItem Command="{x:Static self:UIGeneralCommands.CopyFontSettingList}" Content="{x:Static properties:UICommandResource.CopyFontSettingListText}">
+                  </dxb:BarButtonItem>
+                  <dxb:BarButtonItem Command="{x:Static self:UIGeneralCommands.PasteFontSettingList}" Content="{x:Static properties:UICommandResource.PasteFontSettingListText}">
+                  </dxb:BarButtonItem>
+                </dxb:BarSubItem>
+
+                <dxb:BarSubItem Content="{x:Static self:Properties.UICommandResource.SymbolMenuText}">
+                    <dxb:BarButtonItem Command="{x:Static self:UIGeneralCommands.ExploreObjectTree}" Glyph="{StaticResource SMTree}" Content="{x:Static properties:UICommandResource.ExploreObjectTreeText}" />
+                    <dxb:BarItemLinkSeparator />
+                    <dxb:BarSubItem Content="{x:Static self:Properties.UICommandResource.CreateGroupMenuText}">
+                        <dxb:BarButtonItem ShowKeyGesture="True" KeyGesture="Ctrl+G" Command="{x:Static self:UIGeneralCommands.CreateGroup}" Glyph="{StaticResource SMCreateGroup}" Content="{x:Static properties:UICommandResource.CreateGroupText}" />
+                        <dxb:BarButtonItem Command="{x:Static self:UIGeneralCommands.CreateVerticalStackPanel}" Glyph="{StaticResource SMCreateVerticalStackPanel}" Content="{x:Static properties:UICommandResource.CreateVerticalStackPanelText}" />
+                        <dxb:BarButtonItem Command="{x:Static self:UIGeneralCommands.CreateHorizontalStackPanel}" Glyph="{StaticResource SMCreateHorizontalStackPanel}" Content="{x:Static properties:UICommandResource.CreateHorizontalStackPanelText}" />
+                        <dxb:BarButtonItem Command="{x:Static self:UIGeneralCommands.CreateVerticalWrapPanel}" Glyph="{StaticResource SMCreateVerticalWrapPanel}" Content="{x:Static properties:UICommandResource.CreateVerticalWrapPanelText}" />
+                        <dxb:BarButtonItem Command="{x:Static self:UIGeneralCommands.CreateHorizontalWrapPanel}" Glyph="{StaticResource SMCreateHorizontalWrapPanel}" Content="{x:Static properties:UICommandResource.CreateHorizontalWrapPanelText}" />
+                        <dxb:BarButtonItem Command="{x:Static self:UIGeneralCommands.CreateDockPanel}" Glyph="{StaticResource SMCreateDockPanel}" Content="{x:Static properties:UICommandResource.CreateDockPanelText}" />
+                        <dxb:BarButtonItem Command="{x:Static self:UIGeneralCommands.CreateGridPanel}" Glyph="{StaticResource SMCreateGridPanel}" Content="{x:Static properties:UICommandResource.CreateGridPanelText}" />
+                        <dxb:BarButtonItem Command="{x:Static self:UIGeneralCommands.CreateExpander}" Glyph="{StaticResource SMCreateExpander}" Content="{x:Static properties:UICommandResource.CreateExpanderText}" />
+                        <dxb:BarButtonItem Command="{x:Static self:UIGeneralCommands.CreateGroupBox}" Glyph="{StaticResource SMCreateGroupBox}" Content="{x:Static properties:UICommandResource.CreateGroupBoxText}" />
+                        <dxb:BarButtonItem Command="{x:Static self:UIGeneralCommands.CreateBorder}" Glyph="{StaticResource SMCreateBorder}" Content="{x:Static properties:UICommandResource.CreateBorderText}" />
+                        <dxb:BarItemLinkSeparator />
+                        <dxb:BarButtonItem Command="{x:Static self:UIGeneralCommands.Regroup}" Glyph="{StaticResource SMCreateGroup}" Content="{x:Static properties:UICommandResource.RegroupText}" />
+                    </dxb:BarSubItem>
+                    <dxb:BarButtonItem ShowKeyGesture="True" KeyGesture="Ctrl+Shift+G" Command="{x:Static self:UIGeneralCommands.UnGroupItem}" Content="{x:Static properties:UICommandResource.UnGroupItemText}" />
+
+                    <dxb:BarItemLinkSeparator />
+
+                    <dxb:BarButtonItem Command="{x:Static self:UIGeneralCommands.AddSymbolLibrary}" Glyph="{StaticResource SMAddToSymbolLibrary}" Content="{x:Static properties:UICommandResource.AddSymbolLibraryItemText}" />
+                    <dxb:BarButtonItem Command="{x:Static self:UIGeneralCommands.UpdateSymbolLibrary}" Glyph="{StaticResource SMUpdateToSymbolLibrary}" Content="{x:Static properties:UICommandResource.UpdateSymbolLibraryItemText}" />
+
+                    <dxb:BarItemLinkSeparator />
+                    <dxb:BarButtonItem Command="{x:Static self:UIGeneralCommands.GeneratePowerTemplate}" Glyph="{StaticResource SMPowerTemplate}" Content="{x:Static properties:UICommandResource.GeneratePowerTemplateText}" />
+                    <dxb:BarButtonItem Command="{x:Static self:UIGeneralCommands.ResolvePowerTemplate}" Glyph="{StaticResource SMResolvePowerTemplate}" Content="{x:Static properties:UICommandResource.ResolvePowerTemplateText}" />
+                </dxb:BarSubItem>
+
+                <dxb:BarSubItem Content="{x:Static self:Properties.UICommandResource.ZLayerMenuText}">
+                    <dxb:BarButtonItem ShowKeyGesture="True" KeyGesture="Ctrl+F" Command="{x:Static self:UIGeneralCommands.MoveFirst}" Content="{x:Static properties:UICommandResource.MoveFirstItemText}" Glyph="{StaticResource SMMoveFirst}" />
+                    <dxb:BarButtonItem ShowKeyGesture="True" KeyGesture="Ctrl+L" Command="{x:Static self:UIGeneralCommands.MoveLast}" Content="{x:Static properties:UICommandResource.MoveLastItemText}" Glyph="{StaticResource SMMoveLast}" />
+                    <dxb:BarButtonItem ShowKeyGesture="True" KeyGesture="Ctrl+N" Command="{x:Static self:UIGeneralCommands.MoveNext}" Content="{x:Static properties:UICommandResource.MoveNextItemText}" Glyph="{StaticResource SMMoveNext}" />
+                    <dxb:BarButtonItem ShowKeyGesture="True" KeyGesture="Ctrl+M" Command="{x:Static self:UIGeneralCommands.MovePrev}" Content="{x:Static properties:UICommandResource.MovePrevItemText}" Glyph="{StaticResource SMMovePrev}" />
+                </dxb:BarSubItem>
+
+                <dxb:BarSubItem x:Name="rotationMenu" Content="{x:Static self:Properties.UICommandResource.RotateMenuText}">
+                    <dxb:BarButtonItem x:Name="rotationMode" Command="{x:Static self:UIGeneralCommands.ShowHideRotationThumb}" Content="{x:Static properties:UICommandResource.ShowHideRotationThumbText}" Glyph="{StaticResource SMRotateR}" />
+                    <dxb:BarButtonItem x:Name="rotationOrigin" Command="{x:Static self:UIGeneralCommands.ResetTransormOriginSettings}" Content="{x:Static properties:UICommandResource.ResetTransormOriginSettingsText}" Glyph="{StaticResource ClearSmall}" />
+                  <dxb:BarItemLinkSeparator />
+                    <dxb:BarButtonItem Command="{x:Static self:UIGeneralCommands.Rotate}" CommandParameter="0" Content="0" Glyph="{StaticResource SMRotateR}" />
+                    <dxb:BarButtonItem Command="{x:Static self:UIGeneralCommands.Rotate}" CommandParameter="90" Content="90" Glyph="{StaticResource SMRotateR}" />
+                    <dxb:BarButtonItem Command="{x:Static self:UIGeneralCommands.Rotate}" CommandParameter="180" Content="180" Glyph="{StaticResource SMRotateR}" />
+                    <dxb:BarButtonItem Command="{x:Static self:UIGeneralCommands.Rotate}" CommandParameter="270" Content="270" Glyph="{StaticResource SMRotateR}" />
+                    <dxb:BarButtonItem Content="{Binding}">
+                        <dxb:BarButtonItem.ContentTemplate>
+                            <DataTemplate>
+                                <DockPanel HorizontalAlignment="Left">
+                                    <TextBlock DockPanel.Dock="Left" Text="{x:Static properties:UICommandResource.RotateText}"/>
+                                  <dxe:SpinEdit Loaded="OnRotationControlLoaded" DockPanel.Dock="Right" Margin="10,0" x:Name="textRot" Text="0" Increment="1"
+                                      LostFocus="RotationValue_LostFocus" HorizontalAlignment="Left" PreviewKeyDown="textRot_PreviewKeyDown"
+                                      MaskType="Numeric" EditValueType="{x:Type sys:Double}" Mask="##0.0#" MaskUseAsDisplayFormat="True"
+                                      EditValueChanged="textRot_EditValueChanged" Width="90"  MinValue="0" MaxValue="360" Value="0"/>
+                                </DockPanel>
+                            </DataTemplate>
+                        </dxb:BarButtonItem.ContentTemplate>
+                    </dxb:BarButtonItem>
+                    <dxb:BarItemLinkSeparator />
+                    <dxb:BarButtonItem Command="{x:Static self:UIGeneralCommands.FlipVertical}" Content="{x:Static properties:UICommandResource.FlipVerticalText}" Glyph="{StaticResource SMflipvertical}" />
+                    <dxb:BarButtonItem Command="{x:Static self:UIGeneralCommands.FlipHorizontal}" Content="{x:Static properties:UICommandResource.FlipHorizontalText}" Glyph="{StaticResource SMfliphorizontal}" />
+                </dxb:BarSubItem>
+
+                <dxb:BarCheckItem x:Name="lockMode" Command="{x:Static self:UIGeneralCommands.LockPosition}" Content="{x:Static properties:UICommandResource.LockPositionText}" Glyph="{StaticResource SMLock}" />
+                <dxb:BarItemLinkSeparator />
+                <dxb:BarButtonItem x:Name="executeCode" Command="{x:Static self:UIGeneralCommands.ExecuteDroppingCode}" Glyph="{StaticResource SMScriptManager}" Content="{x:Static properties:UICommandResource.ExecuteDroppingCodeText}" />
+                <dxb:BarItemLinkSeparator />
+                 <dxb:BarCheckItem x:Name="entityManipulationBI" Command="{x:Static self:UIGeneralCommands.EnableManipulation}" Content="{x:Static properties:UICommandResource.EnableManipulationText}" Glyph="{StaticResource SMmanipulation}" />
+                <dxb:BarItemLinkSeparator />
+                <dxb:BarSubItem x:Name="edit3dInnerBI" Content="{x:Static self:Properties.Resources.SmartProp3DInnerScreen}" IsVisible="False">
+                  <dxb:BarEditItem ToolTipService.ShowOnDisabled="True" x:Name="inner3dUriBI"
+                                   Glyph="{StaticResource SMEditorSmall}">
+                    <dxb:BarEditItem.ContentTemplate>
+                      <DataTemplate>
+                        <Grid>
+                          <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="9*"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                          </Grid.ColumnDefinitions>
+                          <TextBlock Margin="0,0,5,0" Text="{x:Static self:Properties.Resources.InnerScreenTextMenu}">
+                            <TextBlock.MinWidth>
+                              <MultiBinding Converter="{StaticResource BarItemMinWidthConverter}" Mode="OneWay">
+                                <Binding RelativeSource="{RelativeSource AncestorType={x:Type UserControl}}"/>
+                              </MultiBinding>
+                            </TextBlock.MinWidth>
+                          </TextBlock>
+                          <TextBox x:Name="txtScreen" IsReadOnly="True"
+                                   MinWidth="120"
+                                   Text="{Binding Tag, ElementName=btnUri}" 
+                                   Grid.Column="1" HorizontalAlignment="Stretch"/>
+                          <Button Click="Click_BrowseScreen" Margin="5,0,0,0" Grid.Column="2" x:Name="btnUri" 
+                                  Tag="{Binding Path=DataContext.Screen3DUri, RelativeSource={RelativeSource AncestorType={x:Type dxb:IBarEditItemLinkControl}}, Mode=TwoWay}">
+                            <Button.Content>
+                              <Image Source="{StaticResource EditGeneralSmall}" Height="16" Width="16" />
+                            </Button.Content>
+                          </Button>
+                          <Button Click="Click_ClearScreen" Margin="5,0,0,0" Grid.Column="3" x:Name="btnClearUri"
+                                  Tag="{Binding Tag, ElementName=btnUri, Mode=TwoWay}">
+                            <Button.Content>
+                              <Image Source="{StaticResource ClearSmall}" Height="16" Width="16" />
+                            </Button.Content>
+                          </Button>
+                        </Grid>
+                      </DataTemplate>
+                    </dxb:BarEditItem.ContentTemplate>
+                  </dxb:BarEditItem>
+                  <dxb:BarEditItem ToolTipService.ShowOnDisabled="True" x:Name="inner3dParameterBI"
+                                   Glyph="{StaticResource SMScreenParameter}">
+                    <dxb:BarEditItem.ContentTemplate>
+                      <DataTemplate>
+                        <Grid>
+                          <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="9*"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                          </Grid.ColumnDefinitions>
+                          <TextBlock Margin="0,0,5,0" Text="{x:Static self:Properties.Resources.InnerParameterTextMenu}">
+                            <TextBlock.MinWidth>
+                              <MultiBinding Converter="{StaticResource BarItemMinWidthConverter}" Mode="OneWay">
+                                <Binding RelativeSource="{RelativeSource AncestorType={x:Type UserControl}}"/>
+                              </MultiBinding>
+                            </TextBlock.MinWidth>
+                          </TextBlock>
+                          <TextBox x:Name="txtParameter" IsReadOnly="True"
+                                   MinWidth="120"
+                                   Text="{Binding Tag, ElementName=btnParam}"
+                                   Grid.Column="1" HorizontalAlignment="Stretch"/>
+                          <Button Click="Click_BrowseParameter" Margin="5,0,0,0" Grid.Column="2" x:Name="btnParam"
+                                  Tag="{Binding Path=DataContext.Screen3DParameter, RelativeSource={RelativeSource AncestorType={x:Type dxb:IBarEditItemLinkControl}}, Mode=TwoWay}">
+                            <Button.Content>
+                              <Image Source="{StaticResource EditGeneralSmall}" Height="16" Width="16" />
+                            </Button.Content>
+                          </Button>
+                          <Button Click="Click_ClearParameter" Margin="5,0,0,0" Grid.Column="3" x:Name="btnClearParam"
+                                  Tag="{Binding Tag, ElementName=btnParam, Mode=TwoWay}">
+                            <Button.Content>
+                              <Image Source="{StaticResource ClearSmall}" Height="16" Width="16" />
+                            </Button.Content>
+                          </Button>
+                        </Grid>
+                      </DataTemplate>
+                    </dxb:BarEditItem.ContentTemplate>
+                  </dxb:BarEditItem>
+                </dxb:BarSubItem>
+                <dxb:BarSubItem x:Name="edit3dBI" Content="{x:Static self:Properties.Resources.ThreeDEditing}">
+                    <dxb:BarCheckItem x:Name="enable3DBI" CloseSubMenuOnClick="False"  IsVisible="False" Command="{x:Static self:UIGeneralCommands.Enable3D}" Content="{x:Static properties:UICommandResource.Enable3DText}" Glyph="{StaticResource SM3dedit}" />
+                    <dxb:BarCheckItem x:Name="enable3DCameraBI" CloseSubMenuOnClick="False" IsVisible="False" Command="{x:Static self:UIGeneralCommands.Enable3DCamera}" Content="{x:Static properties:UICommandResource.Enable3DCameraText}" Glyph="{StaticResource SM3Dcameraedit}" />
+                    <dxb:BarButtonItem x:Name="edit3DCameraPositionsBI" IsVisible="False" Command="{x:Static self:UIGeneralCommands.Edit3DCameraPositions}" Content="{x:Static properties:UICommandResource.Edit3DCameraPositionsText}" Glyph="{StaticResource SM3dcamerapositionedit}" />
+                </dxb:BarSubItem>
+                <dxb:BarButtonItem ShowKeyGesture="True" KeyGesture="F6" x:Name="editAlias" Command="{x:Static self:UIGeneralCommands.EditAlias}" Content="{x:Static properties:UICommandResource.EditAliasText}" Glyph="{StaticResource SMEditAlias}" />
+                <dxb:BarButtonItem Command="{x:Static self:UIGeneralCommands.EditDataTypeItem}"  Glyph="{StaticResource SMitemdatatype}" Content="{x:Static properties:UICommandResource.EditDataTypeItemText}" />
+            </dxb:PopupMenu.Items>
+        </dxb:PopupMenu>
+    </dxb:BarManager.DXContextMenu>
+
+    <Grid>
+      <!-- Workaround: forcing resourcedictionary required assembly load otherwise an exception is thrown on DXTabItem show -->
+      <dxa:AccordionControl Visibility="Collapsed"/>
+
+      <dxdo:DockLayoutManager x:Name="dockingManagerScreenEditor" dx:DXSerializer.AllowProperty="OnAllowPropertyHandler" ClosingBehavior="ImmediatelyRemove"
+                DockOperationStarting="OnDockOperationStarting" DockItemEndDocking="OnDockItemEndDocking" DockingStyle="VS2010" AutoHideExpandMode="MouseDown" FloatingMode="Desktop" 
+                DockItemClosing="OnDockItemClosing" DockItemExpanded="OnDockItemExpanded" DockItemCollapsed="OnDockItemCollapsed">
+            <dxdo:LayoutGroup x:Name="rootScreenLayoutGroup" DestroyOnClosingChildren="False">
+                <dxdo:DocumentGroup x:Name="screenChildDocumentGroup" MDIStyle="Tabbed" ShowTabHeaders="True" ShowTabForSinglePage="True" DestroyOnClosingChildren="False" ClosePageButtonShowMode="InAllTabPageHeaders">
+                    <dxdo:LayoutPanel x:Name="screenChildMainPanel" FloatOnDoubleClick="False">
+                        <Grid x:Name="gridLayout">
+                            <!--<menuControls:ToolbarControl x:Name="toolbarControl" DataContext="{Binding RelativeSource={RelativeSource Self}}" />-->
+                            <Grid x:Name="gridEditor">
+
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="*" />
+                                    <RowDefinition Height="30" />
+                                </Grid.RowDefinitions>
+
+                                <ScrollViewer Grid.Row="0" CanContentScroll="True" ClipToBounds="True" ScrollChanged="Scroller_OnScrollChanged"
+                          HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" x:Name="Scroller" Background="DarkGray">
+
+                                    <!--<tools:OverviewContentHolder Name="_Contentholder" BorderBrush="Black" ClipToBounds="True">-->
+
+                                    <Grid>
+                                        <Canvas x:Name="cvsBackground" IsHitTestVisible="False" VerticalAlignment="Top" HorizontalAlignment="Left">
+                                            <Canvas.LayoutTransform>
+                                                <TransformGroup>
+                                                    <ScaleTransform x:Name="PART_ZoomTransformBackground" ScaleX="{Binding RelativeSource={RelativeSource AncestorType={x:Type UserControl}}, Path=ZoomLevelX}"
+                                                ScaleY="{Binding RelativeSource={RelativeSource AncestorType={x:Type UserControl}}, Path=ZoomLevelY}" />
+                                                    <TranslateTransform x:Name="PART_PanTransformBackground" X="{Binding RelativeSource={RelativeSource AncestorType={x:Type UserControl}}, Path=OffsetLevelX}"
+                                                Y="{Binding RelativeSource={RelativeSource AncestorType={x:Type UserControl}}, Path=OffsetLevelY}" />
+                                                </TransformGroup>
+                                            </Canvas.LayoutTransform>
+                                        </Canvas>
+                                        <Canvas x:Name="MainSurface" Background="Transparent" AllowDrop="True" VirtualizingPanel.IsVirtualizing="True"
+                            ClipToBounds="True" VerticalAlignment="Top" HorizontalAlignment="Left"
+                            ManipulationStarting="Window_ManipulationStarting"
+                            ManipulationDelta="Window_ManipulationDelta"
+                            ManipulationInertiaStarting="Window_InertiaStarting"
+                            ManipulationCompleted="Window_ManipulationCompleted"
+                            PreviewDragOver="MainSurface_DragOver" 
+                            PreviewQueryContinueDrag="MainSurface_QueryContinueDrag" 
+                            PreviewMouseMove="MainSurface_MouseMove" 
+                            PreviewMouseDown="MainSurface_MouseDown" 
+                            PreviewMouseUp="MainSurface_MouseUp">
+                                            <Canvas.ToolTip>
+                                                <ToolTip x:Name="tooltipTag" Visibility="Collapsed"/>
+                                            </Canvas.ToolTip>
+
+                                            <Canvas.LayoutTransform>
+                                                <TransformGroup>
+                                                    <ScaleTransform x:Name="PART_ZoomTransform" ScaleX="{Binding RelativeSource={RelativeSource AncestorType={x:Type UserControl}}, Path=ZoomLevelX}"
+                                                ScaleY="{Binding RelativeSource={RelativeSource AncestorType={x:Type UserControl}}, Path=ZoomLevelY}" />
+                                                    <TranslateTransform x:Name="PART_PanTransform" X="{Binding RelativeSource={RelativeSource AncestorType={x:Type UserControl}}, Path=OffsetLevelX}"
+                                                Y="{Binding RelativeSource={RelativeSource AncestorType={x:Type UserControl}}, Path=OffsetLevelY}" />
+                                                </TransformGroup>
+                                            </Canvas.LayoutTransform>
+
+                                        </Canvas>
+
+                                        <Rectangle x:Name="borderMainSurface" VerticalAlignment="Top" HorizontalAlignment="Left"
+                            StrokeDashArray="2.0 2.0"
+                           Stroke="Black"
+                           StrokeThickness="1">
+                                            <Rectangle.LayoutTransform>
+                                                <TransformGroup>
+                                                    <ScaleTransform x:Name="PART_ZoomTransformRect" ScaleX="{Binding RelativeSource={RelativeSource AncestorType={x:Type UserControl}}, Path=ZoomLevelX}"
+                                            ScaleY="{Binding RelativeSource={RelativeSource AncestorType={x:Type UserControl}}, Path=ZoomLevelY}" />
+                                                    <TranslateTransform x:Name="PART_PanTransformRect" X="{Binding RelativeSource={RelativeSource AncestorType={x:Type UserControl}}, Path=OffsetLevelX}"
+                                            Y="{Binding RelativeSource={RelativeSource AncestorType={x:Type UserControl}}, Path=OffsetLevelY}" />
+                                                </TransformGroup>
+                                            </Rectangle.LayoutTransform>
+                                            <Rectangle.Effect>
+                                                <DropShadowEffect ShadowDepth="1" Color="White"/>
+                                            </Rectangle.Effect>
+                                        </Rectangle>
+                                    </Grid>
+
+                                    <!--</tools:OverviewContentHolder>-->
+                                </ScrollViewer>
+                                <StackPanel x:Name="editingTools" Orientation="Horizontal" Grid.Row="1" Margin="4">
+                                    <TextBlock VerticalAlignment="Center" HorizontalAlignment="Left" TextAlignment="Right"
+                                               Text="{x:Static properties:Resources.ScreenViewLanguage}" />
+                                    <ComboBox SelectedIndex="0" SelectionChanged="ComboChangeLanguage" x:Name="langCombo" Margin="2,0,0,0"
+                                              Width="100" IsEditable="False" ItemsSource="{Binding RelativeSource={RelativeSource AncestorType={x:Type UserControl}}, Path=ActiveLanguages, Mode=OneWay}"/>
+
+                                    <!--<TextBlock VerticalAlignment="Center" HorizontalAlignment="Right" Width="50" Margin="10,0,0,0" Text="{x:Static properties:Resources.ScreenViewGrid}" />
+                                    <dxe:SpinEdit MaskType="Numeric" Mask="n0" EditValueType="{x:Type sys:Double}" VerticalAlignment="Center" HorizontalAlignment="Left" Width="50" Increment="1" MinValue="0" MaxValue="1000" AllowSpinOnMouseWheel="False" IsTextEditable="True" EditValue="{Binding RelativeSource={RelativeSource AncestorType={x:Type UserControl}}, Path=GridSize, UpdateSourceTrigger=PropertyChanged}" />-->
+
+                                    <TextBlock VerticalAlignment="Center" HorizontalAlignment="Left"  TextAlignment="Right"
+                                               Margin="10,0,0,0" Text="{x:Static properties:Resources.ScreanViewZoom}" />
+                                    <dxe:ComboBoxEdit MaskType="Numeric" Mask="n0" EditValueType="{x:Type sys:Double}" 
+                                                      VerticalAlignment="Center"  Margin="2,0,0,0"
+                                                      HorizontalAlignment="Left" x:Name="comboZoom"
+                                                      Width="100"  
+                                                      AllowSpinOnMouseWheel="False" IsTextEditable="True" 
+                                                      EditValue="{Binding RelativeSource={RelativeSource AncestorType={x:Type UserControl}}, 
+                                                      Path=ZoomLevel, Converter={StaticResource scaleToPercentConverter}, 
+                                                      UpdateSourceTrigger=PropertyChanged}" />
+                                  <RepeatButton x:Name="btnZoomOut" Margin="2,0,0,0"
+                                                Command="{x:Static self:UIGeneralCommands.ZoomOut}"
+                                                Delay="500" Interval="50"
+                                                ToolTip="{x:Static properties:Resources.ZoomOut}">
+                                    <Image Source="{StaticResource SMzoomout}" Stretch="Uniform" Width="16" Height="16" VerticalAlignment="Center"
+                                      ToolTip="{x:Static properties:Resources.ZoomOut}"
+                                      HorizontalAlignment="Center" IsHitTestVisible="False"/>
+                                  </RepeatButton>
+
+                                  <RepeatButton x:Name="btnZoomIn" Margin="2,0,0,0"
+                                                Command="{x:Static self:UIGeneralCommands.ZoomIn}"
+                                                Delay="500" Interval="50"
+                                                ToolTip="{x:Static properties:Resources.ZoomIn}">
+                                    <Image Source="{StaticResource SMzoomin}" Stretch="Uniform" Width="16" Height="16" VerticalAlignment="Center"
+                                      ToolTip="{x:Static properties:Resources.ZoomIn}"
+                                      HorizontalAlignment="Center" IsHitTestVisible="False"/>
+                                  </RepeatButton>
+
+                                  <StackPanel Orientation="Horizontal" x:Name="stackEntityOptions">
+                                        <TextBlock VerticalAlignment="Center" HorizontalAlignment="Left"  TextAlignment="Right"
+                                               Margin="10,0,0,0" Text="{x:Static properties:Resources.EnityX}" />
+                                        <dxe:SpinEdit MaskType="Numeric" Mask="#########0.00" EditValueType="{x:Type sys:Double}" 
+                                                  VerticalAlignment="Center" HorizontalAlignment="Left"  Margin="2,0,0,0" Width="100" 
+                                                  Increment="1" AllowSpinOnMouseWheel="False" DisplayFormatString="#########0.00" 
+                                                  IsTextEditable="True" EditValue="{Binding RelativeSource={RelativeSource 
+                                                  AncestorType={x:Type UserControl}}, Path=SelectionXPos, UpdateSourceTrigger=PropertyChanged}" />
+                                        <TextBlock VerticalAlignment="Center" HorizontalAlignment="Left"  TextAlignment="Right"
+                                               Margin="10,0,0,0" Text="{x:Static properties:Resources.EnityY}" />
+                                        <dxe:SpinEdit MaskType="Numeric" Mask="#########0.00" EditValueType="{x:Type sys:Double}" 
+                                                  VerticalAlignment="Center" HorizontalAlignment="Left"  Margin="2,0,0,0" Width="100"
+                                                  Increment="1" AllowSpinOnMouseWheel="False"  DisplayFormatString="#########0.00" 
+                                                  IsTextEditable="True" EditValue="{Binding RelativeSource={RelativeSource 
+                                                  AncestorType={x:Type UserControl}}, Path=SelectionYPos, UpdateSourceTrigger=PropertyChanged}" />
+                                        <TextBlock VerticalAlignment="Center" HorizontalAlignment="Left"  TextAlignment="Right"
+                                               Margin="10,0,0,0" Text="{x:Static properties:Resources.EnityWidth}" />
+                                            <dxe:SpinEdit MaskType="Numeric" Mask="#########0.00" EditValueType="{x:Type sys:Double}" 
+                                                  VerticalAlignment="Center" HorizontalAlignment="Left"  Margin="2,0,0,0" Width="100"
+                                                  Increment="1" MinValue="0" AllowSpinOnMouseWheel="False"  DisplayFormatString="#########0.00" 
+                                                  IsTextEditable="True" EditValue="{Binding RelativeSource={RelativeSource 
+                                                  AncestorType={x:Type UserControl}}, Path=SelectionWidth, UpdateSourceTrigger=PropertyChanged}" />
+                                        <TextBlock VerticalAlignment="Center" HorizontalAlignment="Left"  TextAlignment="Right"
+                                               Margin="10,0,0,0" Text="{x:Static properties:Resources.EnityHeight}" />
+                                                <dxe:SpinEdit MaskType="Numeric" Mask="#########0.00" EditValueType="{x:Type sys:Double}" 
+                                                  VerticalAlignment="Center" HorizontalAlignment="Left"  Margin="2,0,0,0" Width="100"
+                                                  Increment="1" MinValue="0" AllowSpinOnMouseWheel="False"  DisplayFormatString="#########0.00" 
+                                                  IsTextEditable="True" EditValue="{Binding RelativeSource={RelativeSource 
+                                                  AncestorType={x:Type UserControl}}, Path=SelectionHeight, UpdateSourceTrigger=PropertyChanged}" />
+                                    </StackPanel>
+                                    <!--<Slider Margin="10 0 10 0" Minimum="10" LargeChange="20" TickFrequency="10" Maximum="200" SmallChange="10" TickPlacement="TopLeft" Width="200" Value="{Binding RelativeSource={RelativeSource AncestorType={x:Type UserControl}}, Path=ZoomLevel, Converter={StaticResource scaleToPercentConverter}}" />-->
+
+                                    <!--<ToggleButton x:Name="btnOverview" ToolTip="{x:Static self:Properties.Resources.OverviewButtonTooltip}">
+                                        <ToggleButton.Content>
+                                            <Image Width="16" Height="16" Source="{StaticResource SMScreenManager}" />
+                                        </ToggleButton.Content>
+                                    </ToggleButton>-->
+                                            <!--<ToggleButton x:Name="btnExplorer" ToolTip="{x:Static self:Properties.Resources.ExplorerButtonTooltip}">
+                                        <ToggleButton.Content>
+                                            <Image Width="16" Height="16" Source="{StaticResource SMPrototypesList}" />
+                                        </ToggleButton.Content>
+                                    </ToggleButton>
+                                    <ToggleButton x:Name="btnEntityReference" ToolTip="{x:Static self:Properties.Resources.ReferenceListButtonTooltip}">
+                                        <ToggleButton.Content>
+                                            <Image Width="16" Height="16" Source="{StaticResource SMEntities}" />
+                                        </ToggleButton.Content>
+                                    </ToggleButton>-->
+
+                                    <!--<Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition/>
+                                            <ColumnDefinition/>
+                                            <ColumnDefinition/>
+                                            <ColumnDefinition/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock x:Name="txtX" Grid.Column="0" Margin="4"/>
+                                        <TextBlock x:Name="txtY" Grid.Column="1" Margin="4"/>
+                                        <TextBlock x:Name="txtWidth" Grid.Column="2" Margin="4"/>
+                                        <TextBlock x:Name="txtHeight" Grid.Column="3" Margin="4"/>
+                                    </Grid>-->
+                                </StackPanel>
+                            </Grid>
+
+                            <lc:LayoutControl x:Name="layoutItems" Background="Transparent" IsCustomization="True" Visibility="Collapsed"/>
+
+                        </Grid>
+                    </dxdo:LayoutPanel>
+                </dxdo:DocumentGroup>
+            </dxdo:LayoutGroup>
+            <dxdo:DockLayoutManager.AutoHideGroups>
+                <dxdo:AutoHideGroup DockType="Bottom" x:Name="ScreenEditorAutoHideGroup_ObjectsPanel" DestroyOnClosingChildren="False">
+                    <dxdo:LayoutPanel FloatOnDoubleClick="False" IsVisibleChanged="OnObjectsPanelVisibilityChanged" AutoHidden="True" x:Name="ObjectsPanel" Opacity="0.9" AllowClose="False" Caption="{x:Static self:Properties.Resources.ExplorerButtonTooltip}" ItemHeight="300">
+                      <Grid>
+                        <dxe:FlyoutControl
+                                x:Name="objectsPanelFlyoutControl"
+                                Content="{x:Static self:Properties.Resources.PopupFlyoutMessage}"
+                                HorizontalAlignment="Stretch"
+                                VerticalAlignment="Top"
+                                AllowMoveAnimation="False"
+                                PlacementTarget="{Binding ElementName=ObjectsPanelTreeContainer}"
+                                IsOpen="False">
+                          <dxe:FlyoutControl.Settings>
+                            <dxe:FlyInSettings />
+                          </dxe:FlyoutControl.Settings>
+                        </dxe:FlyoutControl>
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition />
+                              </Grid.RowDefinitions>
+                            <Button Click="ObjectsRefresh_Click" Grid.Row="0" HorizontalAlignment="Stretch" Content="{x:Static properties:Resources.RefreshView}" MinWidth="50" />
+                            <ContentControl Grid.Row="1" x:Name="ObjectsPanelTreeContainer">
+
+                            </ContentControl>
+                          </Grid>
+                      </Grid>
+                    </dxdo:LayoutPanel>
+                </dxdo:AutoHideGroup>
+                <dxdo:AutoHideGroup DockType="Bottom" x:Name="ScreenEditorAutoHideGroup_ReferencesPanel" DestroyOnClosingChildren="False">
+                    <dxdo:LayoutPanel FloatOnDoubleClick="False" IsVisibleChanged="OnReferencesPanelVisibilityChanged" AutoHidden="True" x:Name="ReferencesPanel" Opacity="0.9" AllowClose="False" Caption="{x:Static self:Properties.Resources.ReferenceListButtonTooltip}" ItemHeight="300">
+                        <Grid>
+                            <dxe:FlyoutControl
+                                x:Name="referenceFlyoutControl" 
+                                Content="{x:Static self:Properties.Resources.PopupFlyoutMessage}"
+                                HorizontalAlignment="Stretch"
+                                PlacementTarget="{Binding ElementName=entityReferenceList}"
+                                VerticalAlignment="Top"
+                                AllowMoveAnimation="False" 
+                                IsOpen="False">
+                                <dxe:FlyoutControl.Settings>
+                                    <dxe:FlyInSettings />
+                                </dxe:FlyoutControl.Settings>
+                            </dxe:FlyoutControl>
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition />
+                                </Grid.RowDefinitions>
+                                <Button Click="ReferenceRefresh_Click" Grid.Row="0" HorizontalAlignment="Stretch" Content="{x:Static properties:Resources.RefreshView}" MinWidth="50" />
+                                <ContentControl Grid.Row="1" Name="entityReferenceList">
+                                    <!--<ContentControl.Effect>
+                                        <DropShadowEffect Opacity="0.5" ShadowDepth="10"/>
+                                    </ContentControl.Effect>-->
+                                </ContentControl>
+                            </Grid>
+                        </Grid>
+                    </dxdo:LayoutPanel>
+                </dxdo:AutoHideGroup>
+            </dxdo:DockLayoutManager.AutoHideGroups>
+        </dxdo:DockLayoutManager>
+    </Grid>
+</UserControl>

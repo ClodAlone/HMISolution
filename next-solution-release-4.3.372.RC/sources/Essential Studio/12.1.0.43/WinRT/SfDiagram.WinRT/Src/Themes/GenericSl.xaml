@@ -1,0 +1,907 @@
+﻿<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="clr-namespace:Syncfusion.UI.Xaml.Diagram"
+    xmlns:localControls="clr-namespace:Syncfusion.UI.Xaml.Diagram.Controls"
+    xmlns:panels="clr-namespace:Syncfusion.UI.Xaml.Diagram.Panels"
+    xmlns:util="clr-namespace:Syncfusion.UI.Xaml.Diagram.Utility"
+    xmlns:printing="clr-namespace:Syncfusion.UI.Xaml.Diagram.Controls"
+    xmlns:stencil="clr-namespace:Syncfusion.UI.Xaml.Diagram.Stencil">
+  <ResourceDictionary.MergedDictionaries>
+    <ResourceDictionary Source="/Syncfusion.SfDiagram.Silverlight;Component/Themes/WpfSlResource.xaml"/>
+  </ResourceDictionary.MergedDictionaries>
+  <util:PathConverter x:Key="PathConverter"/>
+  <util:InvertAngleConverter x:Key="InvertAngleConverter"/>
+  <util:NulltoVisibilityConverter x:Key="NulltoVisibilityConverter"/>
+  <util:NullToBooleanConverter x:Key="NullToBooleanConverter"/>
+
+  <Style TargetType="local:SfDiagram">
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="local:SfDiagram">
+          <Border
+      util:FocusUtility.FocusOnLoad="False"
+      Background="{TemplateBinding Background}"
+      BorderBrush="{TemplateBinding BorderBrush}"
+      BorderThickness="{TemplateBinding BorderThickness}">
+            <Grid>
+              <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition/>
+              </Grid.RowDefinitions>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition/>
+              </Grid.ColumnDefinitions>
+              <!--<Ruler/>-->
+              <Canvas x:Name="InVisibleCanvas" Opacity="0" Width="0" Height="0"/>
+              <ContentPresenter  HorizontalAlignment="Left" VerticalAlignment="Top" Grid.RowSpan="2" Grid.ColumnSpan="2" x:Name="PART_Preview"/>
+              <Rectangle Fill="{StaticResource RulerBackgroundThemeBrush}"/>
+              <ContentPresenter Grid.Row="0" Grid.Column="1" Content="{TemplateBinding HorizontalRuler}"/>
+              <ContentPresenter Grid.Row="1" Grid.Column="0" Content="{TemplateBinding VerticalRuler}"/>
+              <Rectangle Grid.Row="1" Grid.Column="1" x:Name="PART_Background"/>
+              <localControls:ScrollViewer x:Name="Part_Scrollviewer" Grid.Row="1" Grid.Column="1" Page="{TemplateBinding Page}"
+                                          Tag="{StaticResource SegmentDictionary}">
+                <!--<Grid>-->
+                <!-- <Background/> -->
+                <!-- <GridLines/> -->
+                <!--<localControls:ZoomPanControl Grid.Row="1" Grid.Column="1" Background="Transparent">-->
+                <!--<Canvas>
+                                        <ContentPresenter x:Name="PART_ContentPresenter" Content="{TemplateBinding Page}"/>
+                                    </Canvas>-->
+                <!--</localControls:ZoomPanControl>-->
+                <!-- <Adorner/> -->
+                <!--</Grid>-->
+              </localControls:ScrollViewer>
+            </Grid>
+          </Border>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+    <Setter Property="Background" Value="{StaticResource SfDiargamBackgroundThemeBrush}"></Setter>
+  </Style>
+
+  <Style TargetType="printing:PrintPreviewControl">
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="printing:PrintPreviewControl">
+          <Border>
+            <Grid  HorizontalAlignment="Center" VerticalAlignment="Center" x:Name="PrintableArea">
+              <Image x:Name="PreviewImage" HorizontalAlignment="Stretch"  VerticalAlignment="Stretch" Source="{TemplateBinding PrintSource}"></Image>
+            </Grid>
+          </Border>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+ <Style TargetType="local:Node">
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="local:Node">
+          <Border Background="{TemplateBinding Background}"
+        BorderBrush="{TemplateBinding BorderBrush}"
+        BorderThickness="{TemplateBinding BorderThickness}">
+            <Grid>
+              <Path x:Name="Path" Data="{Binding RelativeSource={RelativeSource Mode=TemplatedParent}, Path=Shape, Converter={StaticResource PathConverter}}"
+      RenderTransformOrigin="0.5,0.5"
+      Style="{TemplateBinding ShapeStyle}"/>
+              <ContentPresenter Content="{TemplateBinding Content}" x:Name="ContentPresenter" RenderTransformOrigin="0.5,0.5"
+                  HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                  VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                  ContentTemplate="{TemplateBinding  ContentTemplate}"/>
+              <panels:AnnotationPanel x:Name="PART_Annotations"/>
+            </Grid>
+          </Border>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+  
+  <Style TargetType="local:PortBase">
+    <Setter Property="ShapeStyle">
+      <Setter.Value>
+        <Style TargetType="Path">
+          <Setter Property="Stroke" Value="{StaticResource PathStrokeThemeBrush}"/>
+          <Setter Property="StrokeThickness" Value="{StaticResource ConnectorThemeThickness}"/>
+          <Setter Property="Width" Value="{StaticResource PortThemeWidth}"/>
+          <Setter Property="Height" Value="{StaticResource PortThemeHeight}"/>
+        </Style>
+      </Setter.Value>
+    </Setter>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="local:PortBase">
+          <Border
+    Background="{TemplateBinding Background}"
+    BorderBrush="{TemplateBinding BorderBrush}"
+    BorderThickness="{TemplateBinding BorderThickness}">
+            <Grid>
+              <Path Data="{Binding RelativeSource={RelativeSource Mode=TemplatedParent}, Path=Shape, Converter={StaticResource PathConverter}}"
+        Style="{TemplateBinding ShapeStyle}"/>
+              <ContentPresenter Content="{TemplateBinding Content}"
+HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+ContentTemplate="{TemplateBinding  ContentTemplate}"/>
+              <!--ContentTemplateSelector="{TemplateBinding  ContentTemplateSelector}"/>-->
+              <!--<Rectangle  Fill="LightSeaGreen" Stretch="Fill"></Rectangle>-->
+            </Grid>
+          </Border>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <Style TargetType="local:Connector">
+    <Setter Property="ConnectorGeometryStyle">
+      <Setter.Value>
+        <Style TargetType="Path">
+          <Setter Property="Stroke" Value="{StaticResource PathStrokeThemeBrush}"/>
+          <Setter Property="StrokeThickness" Value="{StaticResource ConnectorThemeThickness}"/>
+        </Style>
+      </Setter.Value>
+    </Setter>
+    <Setter Property="SourceDecoratorStyle">
+      <Setter.Value>
+        <Style TargetType="Path">
+          <Setter Property="Stroke" Value="{StaticResource PathStrokeThemeBrush}"/>
+          <Setter Property="Fill" Value="{StaticResource PathStrokeThemeBrush}"/>
+          <Setter Property="StrokeThickness" Value="{StaticResource ConnectorThemeThickness}"/>
+          <Setter Property="Width" Value="{StaticResource ConnectorDecoratorThemeWidth}"/>
+          <Setter Property="Height" Value="{StaticResource ConnectorDecoratorThemeHeight}"/>
+        </Style>
+      </Setter.Value>
+    </Setter>
+    <Setter Property="TargetDecoratorStyle">
+      <Setter.Value>
+        <Style TargetType="Path">
+          <Setter Property="Stroke" Value="{StaticResource PathStrokeThemeBrush}"/>
+          <Setter Property="Fill" Value="{StaticResource PathStrokeThemeBrush}"/>
+          <Setter Property="StrokeThickness" Value="{StaticResource ConnectorThemeThickness}"/>
+          <Setter Property="Width" Value="{StaticResource ConnectorDecoratorThemeWidth}"/>
+          <Setter Property="Height" Value="{StaticResource ConnectorDecoratorThemeHeight}"/>
+        </Style>
+      </Setter.Value>
+    </Setter>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="local:Connector">
+          <Border
+    Background="{TemplateBinding Background}"
+    BorderBrush="{TemplateBinding BorderBrush}"
+    BorderThickness="{TemplateBinding BorderThickness}">
+            <Canvas>
+              <Path Style="{TemplateBinding ConnectorGeometryStyle}"
+      Data="{TemplateBinding Geometry}"/>
+              <Path StrokeThickness="23" Stroke="Transparent"
+      Data="{TemplateBinding TransparentGeometry}"/>
+              <Path x:Name="PART_SourceDecorator" Style="{TemplateBinding SourceDecoratorStyle}"
+      Data="{Binding RelativeSource={RelativeSource Mode=TemplatedParent}, Path=SourceDecorator, Converter={StaticResource PathConverter}}"/>
+              <Path x:Name="PART_TargetDecorator" Style="{TemplateBinding TargetDecoratorStyle}"
+      Data="{Binding RelativeSource={RelativeSource Mode=TemplatedParent}, Path=TargetDecorator, Converter={StaticResource PathConverter}}"/>
+              <panels:AnnotationPanel x:Name="PART_Annotations">
+              </panels:AnnotationPanel>
+            </Canvas>
+          </Border>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <Style TargetType="local:Group">
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="local:Group">
+          <Border
+    Background="{TemplateBinding Background}"
+    BorderBrush="{TemplateBinding BorderBrush}"
+    BorderThickness="{TemplateBinding BorderThickness}">
+            <!--<Grid>
+                            <Rectangle StrokeThickness="1" Stroke="GreenYellow" StrokeDashArray="2,2" Stretch="Fill"/>
+                        </Grid>-->
+            <Grid>
+              <Canvas x:Name="PART_Ports">
+              </Canvas>
+              <panels:AnnotationPanel x:Name="PART_Annotations">
+              </panels:AnnotationPanel>
+            </Grid>
+          </Border>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <SolidColorBrush x:Key="SelectorThumbBrush" Color="#FF09388C"/>
+
+  <Style TargetType="localControls:DiagramThumb">
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="localControls:DiagramThumb">
+          <Border x:Name="thumb"
+    Background="{TemplateBinding Background}"
+    BorderBrush="{TemplateBinding BorderBrush}"
+    BorderThickness="{TemplateBinding BorderThickness}" Opacity="0.6" Width="25" Height="25"
+        RenderTransformOrigin="0.5,0.5">
+            <Border.RenderTransform>
+              <ScaleTransform></ScaleTransform>
+            </Border.RenderTransform>
+            <Grid>
+              <Ellipse Fill="Transparent"></Ellipse>
+              <Ellipse  Fill="{StaticResource SelectorThumbBrush}" Stroke="#4288DB" StrokeThickness="1.1" Margin="4"/>
+            </Grid>
+            <VisualStateManager.VisualStateGroups>
+              <VisualStateGroup x:Name="ThumbStates">
+                <VisualState x:Name="Normal">
+                  <Storyboard>
+                    <DoubleAnimation Storyboard.TargetProperty="Opacity" Storyboard.TargetName="thumb"
+                                     To="0.6" Duration="0"></DoubleAnimation>
+                    <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).ScaleTransform.ScaleX" To="1"
+                                     Storyboard.TargetName="thumb" Duration="0"></DoubleAnimation>
+                    <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).ScaleTransform.ScaleY" To="1"
+                                     Storyboard.TargetName="thumb" Duration="0"></DoubleAnimation>
+                  </Storyboard>
+                </VisualState>
+                <VisualState x:Name="Pressed">
+                  <Storyboard>
+                    <DoubleAnimation Storyboard.TargetProperty="Opacity" Storyboard.TargetName="thumb"
+                                     To="0.9" Duration="0"></DoubleAnimation>
+                    <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).ScaleTransform.ScaleX" To="1.5"
+                                     Storyboard.TargetName="thumb" Duration="0"></DoubleAnimation>
+                    <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).ScaleTransform.ScaleY" To="1.5"
+                                     Storyboard.TargetName="thumb" Duration="0"></DoubleAnimation>
+                  </Storyboard>
+                </VisualState>
+
+              </VisualStateGroup>
+            </VisualStateManager.VisualStateGroups>
+          </Border>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <ResourceDictionary x:Key="SegmentDictionary">
+    <Style TargetType="localControls:DiagramThumb" x:Key="BezierThumb">
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="localControls:DiagramThumb">
+            <Border x:Name="thumb"
+    Background="{TemplateBinding Background}"
+    BorderBrush="{TemplateBinding BorderBrush}"
+    BorderThickness="{TemplateBinding BorderThickness}" Opacity="0.6" Width="23" Height="23"
+      RenderTransformOrigin="0.5,0.5">
+              <Border.RenderTransform>
+                <ScaleTransform></ScaleTransform>
+              </Border.RenderTransform>
+              <Grid>
+                <Ellipse Fill="Transparent"></Ellipse>
+                <Ellipse Fill="#FF167F40" Stroke="{StaticResource BezierThumbThemeBrush}"  StrokeThickness="1" Margin="4"/>
+              </Grid>
+              <VisualStateManager.VisualStateGroups>
+                <VisualStateGroup x:Name="ThumbStates">
+                  <VisualState x:Name="Pressed">
+                    <Storyboard>
+                      <DoubleAnimation Storyboard.TargetProperty="Opacity" Storyboard.TargetName="thumb"
+                                   To="0.9" Duration="0"></DoubleAnimation>
+                      <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).ScaleTransform.ScaleX" To="1.3"
+                                   Storyboard.TargetName="thumb" Duration="0"></DoubleAnimation>
+                      <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).ScaleTransform.ScaleY" To="1.3"
+                                   Storyboard.TargetName="thumb" Duration="0"></DoubleAnimation>
+                    </Storyboard>
+                  </VisualState>
+
+                  <VisualState x:Name="Normal">
+                    <Storyboard>
+                      <DoubleAnimation Storyboard.TargetProperty="Opacity" Storyboard.TargetName="thumb"
+                                   To="0.6" Duration="0"></DoubleAnimation>
+                      <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).ScaleTransform.ScaleX" To="1"
+                                   Storyboard.TargetName="thumb" Duration="0"></DoubleAnimation>
+                      <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).ScaleTransform.ScaleY" To="1"
+                                   Storyboard.TargetName="thumb" Duration="0"></DoubleAnimation>
+                    </Storyboard>
+                  </VisualState>
+
+                </VisualStateGroup>
+              </VisualStateManager.VisualStateGroups>
+            </Border>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <Style TargetType="localControls:DiagramThumb" x:Key="OrthogonalThumb">
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="localControls:DiagramThumb">
+            <Border x:Name="thumb"
+    Background="{TemplateBinding Background}"
+    BorderBrush="{TemplateBinding BorderBrush}"
+    BorderThickness="{TemplateBinding BorderThickness}" Opacity="0.6"
+      RenderTransformOrigin="0.5,0.5">
+              <Border.RenderTransform>
+                <ScaleTransform></ScaleTransform>
+              </Border.RenderTransform>
+              <Grid>
+                <Border Background="Transparent">
+                  <Path Data="F1M394.0391,414.7725L412.0391,421.7725L394.0391,428.7725L376.0391,421.7725z" Fill="#FF26A95D" Stretch="Fill" Stroke="{StaticResource OrthoThumbThemeBrush}" />
+                </Border>
+              </Grid>
+              <VisualStateManager.VisualStateGroups>
+                <VisualStateGroup x:Name="ThumbStates">
+                  <VisualState x:Name="Normal">
+                    <Storyboard>
+                      <DoubleAnimation Storyboard.TargetProperty="Opacity" Storyboard.TargetName="thumb"
+                                   To="0.6" Duration="0"></DoubleAnimation>
+                      <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).ScaleTransform.ScaleX" To="1"
+                                   Storyboard.TargetName="thumb" Duration="0"></DoubleAnimation>
+                      <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).ScaleTransform.ScaleY" To="1"
+                                   Storyboard.TargetName="thumb" Duration="0"></DoubleAnimation>
+                    </Storyboard>
+                  </VisualState>
+
+                  <VisualState x:Name="Pressed">
+                    <Storyboard>
+                      <DoubleAnimation Storyboard.TargetProperty="Opacity" Storyboard.TargetName="thumb"
+                                   To="0.9" Duration="0"></DoubleAnimation>
+                      <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).ScaleTransform.ScaleX" To="1.3"
+                                   Storyboard.TargetName="thumb" Duration="0"></DoubleAnimation>
+                      <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).ScaleTransform.ScaleY" To="1.3"
+                                   Storyboard.TargetName="thumb" Duration="0"></DoubleAnimation>
+                    </Storyboard>
+                  </VisualState>
+                </VisualStateGroup>
+              </VisualStateManager.VisualStateGroups>
+            </Border>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style TargetType="localControls:DiagramThumb" x:Key="EndThumb">
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="localControls:DiagramThumb">
+            <Border x:Name="thumb"
+    Background="{TemplateBinding Background}"
+    BorderBrush="{TemplateBinding BorderBrush}"
+    BorderThickness="{TemplateBinding BorderThickness}" Opacity="0.6" Width="25" Height="25"
+      RenderTransformOrigin="0.5,0.5">
+              <Border.RenderTransform>
+                <ScaleTransform></ScaleTransform>
+              </Border.RenderTransform>
+              <Grid>
+                <Ellipse Fill="Transparent"></Ellipse>
+                <Ellipse  Fill="{StaticResource SelectorThumbBrush}" Stroke="#4288DB" StrokeThickness="1.1" Margin="4"/>
+              </Grid>
+              <VisualStateManager.VisualStateGroups>
+                <VisualStateGroup x:Name="ThumbStates">
+                  <VisualState x:Name="Normal">
+                    <Storyboard>
+                      <DoubleAnimation Storyboard.TargetProperty="Opacity" Storyboard.TargetName="thumb"
+                                   To="0.6" Duration="0"></DoubleAnimation>
+                      <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).ScaleTransform.ScaleX" To="1"
+                                   Storyboard.TargetName="thumb" Duration="0"></DoubleAnimation>
+                      <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).ScaleTransform.ScaleY" To="1"
+                                   Storyboard.TargetName="thumb" Duration="0"></DoubleAnimation>
+                    </Storyboard>
+                  </VisualState>
+                  <VisualState x:Name="Pressed">
+                    <Storyboard>
+                      <DoubleAnimation Storyboard.TargetProperty="Opacity" Storyboard.TargetName="thumb"
+                                   To="0.9" Duration="0"></DoubleAnimation>
+                      <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).ScaleTransform.ScaleX" To="1.5"
+                                   Storyboard.TargetName="thumb" Duration="0"></DoubleAnimation>
+                      <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).ScaleTransform.ScaleY" To="1.5"
+                                   Storyboard.TargetName="thumb" Duration="0"></DoubleAnimation>
+                    </Storyboard>
+                  </VisualState>
+
+                </VisualStateGroup>
+              </VisualStateManager.VisualStateGroups>
+            </Border>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+  </ResourceDictionary>
+
+  <Style x:Key="RotatorThumbStyle" TargetType="localControls:DiagramThumb">
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="localControls:DiagramThumb">
+          <Border
+    Background="{TemplateBinding Background}"
+    BorderBrush="{TemplateBinding BorderBrush}"
+    BorderThickness="{TemplateBinding BorderThickness}">
+            <Viewbox Height="28" Width="28">
+              <Grid>
+                <Path Data="F1M23.467,11.733C23.467,18.213 18.214,23.466 11.734,23.466 5.253,23.466 0,18.213 0,11.733 0,5.253 5.253,0 11.734,0 18.214,0 23.467,5.253 23.467,11.733" Fill="#FF09388C" Stroke="#4288DB" StrokeThickness="1.5" />
+                <Path Data="F1M8.742,0.09C3.074,-0.833,0.251,5.588,2.862,9.789L0,10.473 5.867,12.979 5.93,6.6 4.124,9.021C2.064,5.932 3.923,1.747 7.943,1.531 12.885,1.265 14.062,7.847 10.435,10.353 9.644,10.898 10.394,12.199 11.191,11.648 15.964,8.351 14.603,1.045 8.742,0.09" Fill="White" Margin="3.632,5.515,4.552,4.485" Stretch="Fill" UseLayoutRounding="False"/>
+              </Grid>
+            </Viewbox>
+          </Border>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <Style x:Key="PivotThumbStyle" TargetType="localControls:DiagramThumb">
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="localControls:DiagramThumb">
+          <Border
+    Background="{TemplateBinding Background}"
+    BorderBrush="{TemplateBinding BorderBrush}"
+    BorderThickness="{TemplateBinding BorderThickness}" Width="25" Height="25" RenderTransformOrigin="0.5,0.5" Opacity="0.6" x:Name="thumb">
+
+            <Border.RenderTransform>
+              <ScaleTransform></ScaleTransform>
+            </Border.RenderTransform>
+            <Grid>
+              <Ellipse Fill="#4288DB"  StrokeThickness="8" Stroke="Transparent"></Ellipse>
+              <Ellipse Fill="{StaticResource SelectorThumbBrush}" Margin="5"/>
+              <Ellipse Margin="13" Fill="White" Stroke="#FF777F85" StrokeThickness="1" />
+            </Grid>
+            <VisualStateManager.VisualStateGroups>
+              <VisualStateGroup x:Name="ThumbStates">
+                <VisualState x:Name="Normal">
+                  <Storyboard>
+                    <DoubleAnimation Storyboard.TargetProperty="Opacity" Storyboard.TargetName="thumb"
+                                     To="0.6" Duration="0"></DoubleAnimation>
+                    <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).ScaleTransform.ScaleX" To="1"
+                                     Storyboard.TargetName="thumb" Duration="0"></DoubleAnimation>
+                    <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).ScaleTransform.ScaleY" To="1"
+                                     Storyboard.TargetName="thumb" Duration="0"></DoubleAnimation>
+                  </Storyboard>
+                </VisualState>
+                <VisualState x:Name="Pressed">
+                  <Storyboard>
+                    <DoubleAnimation Storyboard.TargetProperty="Opacity" Storyboard.TargetName="thumb"
+                                     To="0.9" Duration="0"></DoubleAnimation>
+                    <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).ScaleTransform.ScaleX" To="1.5"
+                                     Storyboard.TargetName="thumb" Duration="0"></DoubleAnimation>
+                    <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).ScaleTransform.ScaleY" To="1.5"
+                                     Storyboard.TargetName="thumb" Duration="0"></DoubleAnimation>
+                  </Storyboard>
+                </VisualState>
+
+              </VisualStateGroup>
+            </VisualStateManager.VisualStateGroups>
+          </Border>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <Style x:Key="SelectorCommandButtonStyle" TargetType="localControls:DiagramThumb">
+    <Setter Property="Foreground" Value="White"/>
+    <Setter Property="FontFamily" Value="Segoe UI Symbol"/>
+    <Setter Property="FontWeight" Value="Normal"/>
+    <Setter Property="FontSize" Value="20"/>
+    <!--<Setter Property="AutomationProperties.ItemType" Value="App Bar Button"/>-->
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="localControls:DiagramThumb">
+          <Border x:Name="thumb"
+        BorderBrush="{TemplateBinding BorderBrush}"
+        BorderThickness="{TemplateBinding BorderThickness}">
+            <Grid x:Name="RootGrid" Background="Transparent">
+              <TextBlock x:Name="BackgroundGlyph" Text="&#xE0A8;"
+           FontFamily="Segoe UI Symbol" FontSize="53.333" Margin="-4,-19,0,0" Foreground="{TemplateBinding Background}"/>
+              <TextBlock Visibility="Collapsed"
+    x:Name="TextLabel"
+    Margin="0,0,2,0"
+    FontSize="15"
+    TextAlignment="Center"
+    Width="88"
+    MaxHeight="32"
+    TextTrimming="WordEllipsis"
+    Style="{StaticResource BasicTextStyle}"/>
+              <ContentPresenter
+    HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+    VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+    ContentTemplate="{StaticResource SelectorThumbContentTemplate}" Tag="{TemplateBinding Tag}"
+    x:Name="Content"/>
+            </Grid>
+            <VisualStateManager.VisualStateGroups>
+              <VisualStateGroup x:Name="CommonStates">
+                <VisualState x:Name="Normal"/>
+                <VisualState x:Name="PointerOver">
+                  <Storyboard>
+                    <ObjectAnimationUsingKeyFrames Storyboard.TargetName="BackgroundGlyph" Storyboard.TargetProperty="Foreground">
+                      <DiscreteObjectKeyFrame KeyTime="0" Value="#5d9692"/>
+                    </ObjectAnimationUsingKeyFrames>
+                  </Storyboard>
+                </VisualState>
+                <VisualState x:Name="Pressed">
+                  <Storyboard>
+                    <ObjectAnimationUsingKeyFrames Storyboard.TargetName="BackgroundGlyph" Storyboard.TargetProperty="Foreground">
+                      <DiscreteObjectKeyFrame KeyTime="0" Value="#5d9692"/>
+                    </ObjectAnimationUsingKeyFrames>
+                    <ObjectAnimationUsingKeyFrames Storyboard.TargetName="Content" Storyboard.TargetProperty="Foreground">
+                      <DiscreteObjectKeyFrame KeyTime="0" Value="Black"/>
+                    </ObjectAnimationUsingKeyFrames>
+                  </Storyboard>
+                </VisualState>
+                <!--<VisualState x:Name="Disabled">
+                                    <Storyboard>
+
+                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="Content" Storyboard.TargetProperty="Foreground">
+                                            <DiscreteObjectKeyFrame KeyTime="0" Value="{StaticResource AppBarItemDisabledForegroundThemeBrush}"/>
+                                        </ObjectAnimationUsingKeyFrames>
+                                        <ObjectAnimationUsingKeyFrames Storyboard.TargetName="TextLabel" Storyboard.TargetProperty="Foreground">
+                                            <DiscreteObjectKeyFrame KeyTime="0" Value="{StaticResource AppBarItemDisabledForegroundThemeBrush}"/>
+                                        </ObjectAnimationUsingKeyFrames>
+                                    </Storyboard>
+                                </VisualState>-->
+              </VisualStateGroup>
+            </VisualStateManager.VisualStateGroups>
+          </Border>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <DataTemplate x:Key="SelectorThumbContentTemplate">
+    <Path
+                    StrokeThickness="1"
+                    Width="20" Height="20"
+                    Stretch="Uniform"
+                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                    RenderTransformOrigin="0.5,0.5"
+                    Fill="{Binding Path=Foreground, RelativeSource={RelativeSource Mode=TemplatedParent}}"
+                    Data="{Binding Path=Tag, RelativeSource={RelativeSource Mode=TemplatedParent}}">
+    </Path>
+  </DataTemplate>
+  <Style TargetType="local:Selector">
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="local:Selector">
+          <Border
+    Background="{TemplateBinding Background}"
+    BorderBrush="{TemplateBinding BorderBrush}"
+    BorderThickness="{TemplateBinding BorderThickness}">
+            <panels:SelectorPanel x:Name="PART_SelectorPanel">
+              <panels:SelectorPanel.Resources>
+                <Style x:Key="pathStyle" TargetType="Shape">
+                  <Setter Property="StrokeThickness" Value="1"/>
+                  <Setter Property="Stroke" Value="{StaticResource PathStrokeThemeBrush}"/>
+                </Style>
+              </panels:SelectorPanel.Resources>
+              <Grid Margin="-70" Visibility="{TemplateBinding QuickCommands}">
+
+                <localControls:DiagramThumb BorderThickness="0" RenderTransformOrigin="0.5,0.5"
+        HorizontalContentAlignment="Center" Width="40" Height="40"
+        VerticalContentAlignment="Center"  HorizontalAlignment="Center" x:Name="DeleteCommandThumb"
+        VerticalAlignment="Bottom" Command ="{Binding DiagramCommands.Delete, RelativeSource={RelativeSource Mode=TemplatedParent}}"
+        Style="{StaticResource SelectorCommandButtonStyle}"
+        Background="#FFD74651"
+        Tag="F1M377.5879,673.9355L376.1439,675.4095L369.8539,668.9945L363.5639,675.4095L362.1189,673.9355L368.4079,667.5205L362.1189,661.1035L363.5639,659.6295L369.8539,666.0465L376.1439,659.6295L377.5879,661.1035L371.2989,667.5205z"
+                                                            >
+                  <localControls:DiagramThumb.RenderTransform>
+                    <RotateTransform Angle="{Binding Path=RenderTransform.Rotation,
+                                                                RelativeSource={RelativeSource Mode=TemplatedParent},
+                                                                Converter={StaticResource InvertAngleConverter}}"/>
+                  </localControls:DiagramThumb.RenderTransform>
+                </localControls:DiagramThumb>
+
+                <localControls:DiagramThumb BorderThickness="0"
+        HorizontalContentAlignment="Center" x:Name="DuplicateCommandThumb"
+        VerticalContentAlignment="Center"  HorizontalAlignment="Right"
+        VerticalAlignment="Bottom" Command="{Binding DiagramCommands.Duplicate, RelativeSource={RelativeSource Mode=TemplatedParent}}"
+                                            DragCommand="{Binding DiagramCommands.Duplicate, RelativeSource={RelativeSource Mode=TemplatedParent}}"
+        Style="{StaticResource SelectorCommandButtonStyle}"
+                                            Background="#FF0D72BA" Width="40" Height="40"
+                                            Tag="M13.671994,14.169995 L1.0569996,14.169995 1.0569996,3.6649869 1.8049993,3.6649869 1.8049993,2.609986 0,2.609986 0,15.224996 14.724994,15.224996 14.724994,13.377994 13.671994,13.377994 z M2.6349954,12.613986 L17.358003,12.613986 17.358003,1.323489E-23 2.6349954,1.323489E-23 z"
+                                                            >
+                  <localControls:DiagramThumb.RenderTransform>
+                    <RotateTransform Angle="{Binding Path=RenderTransform.Rotation,
+                                                                RelativeSource={RelativeSource Mode=TemplatedParent},
+                                                                Converter={StaticResource InvertAngleConverter}}"/>
+                  </localControls:DiagramThumb.RenderTransform>
+                </localControls:DiagramThumb>
+
+                <localControls:DiagramThumb BorderThickness="0"
+        HorizontalContentAlignment="Center"
+        VerticalContentAlignment="Center"  HorizontalAlignment="Right" x:Name="DrawCommandThumb"
+        VerticalAlignment="Center" DragCommand="{Binding DiagramCommands.Draw, RelativeSource={RelativeSource Mode=TemplatedParent}}"
+    Style="{StaticResource SelectorCommandButtonStyle}"
+                                            Background="#FF60437B" Width="40" Height="40"
+                                            Tag="F1M423.144,677.5312L423.144,671.2692L410.147,671.2692L410.147,666.4982L423.144,666.4982L423.144,661.0822L431.368,669.3062z"
+                                                            >
+                  <localControls:DiagramThumb.RenderTransform>
+                    <RotateTransform Angle="{Binding Path=RenderTransform.Rotation,
+                                                                RelativeSource={RelativeSource Mode=TemplatedParent},
+                                                                Converter={StaticResource InvertAngleConverter}}"/>
+                  </localControls:DiagramThumb.RenderTransform>
+                </localControls:DiagramThumb>
+              </Grid>
+              <ContentPresenter Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"/>
+              <Rectangle Style="{StaticResource pathStyle}" Stretch="Fill" StrokeDashArray="2, 2"></Rectangle>
+              <Line X1="0" X2="0" Y1="0" Y2="0"  StrokeDashArray="2, 2" Style="{StaticResource pathStyle}"/>
+              <localControls:DiagramThumb x:Name="PART_TopLeft" HorizontalAlignment="Left" VerticalAlignment="Top"/>
+              <localControls:DiagramThumb  x:Name="PART_Top" HorizontalAlignment="Center" VerticalAlignment="Top"/>
+              <localControls:DiagramThumb x:Name="PART_TopRight" HorizontalAlignment="Right" VerticalAlignment="Top"/>
+              <localControls:DiagramThumb  x:Name="PART_Left" HorizontalAlignment="Left" VerticalAlignment="Center"/>
+              <localControls:DiagramThumb  x:Name="PART_Right" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+              <localControls:DiagramThumb x:Name="PART_BottomLeft" HorizontalAlignment="Left" VerticalAlignment="Bottom"/>
+              <localControls:DiagramThumb  x:Name="PART_Bottom" HorizontalAlignment="Center" VerticalAlignment="Bottom"/>
+              <localControls:DiagramThumb x:Name="PART_BottomRight" HorizontalAlignment="Right" VerticalAlignment="Bottom"/>
+              <localControls:DiagramThumb Style="{StaticResource PivotThumbStyle}" x:Name="PART_Pivot" Visibility="Collapsed"/>
+              <localControls:DiagramThumb Style="{StaticResource RotatorThumbStyle}" x:Name="PART_Rotator"/>
+            </panels:SelectorPanel>
+          </Border>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+
+  <!--<Style TargetType="localControls:Rotator">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="localControls:Rotator">
+                    <Border
+                        Background="{TemplateBinding Background}"
+                        BorderBrush="{TemplateBinding BorderBrush}"
+                        BorderThickness="{TemplateBinding BorderThickness}">
+                        <Canvas>
+
+                        </Canvas>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>-->
+
+  <Style TargetType="stencil:Stencil">
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="stencil:Stencil">
+          <Border
+    Background="{TemplateBinding Background}"
+    BorderBrush="{TemplateBinding BorderBrush}"
+    BorderThickness="{TemplateBinding BorderThickness}">
+            <Grid>
+              <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"></RowDefinition>
+                <RowDefinition Height="*"></RowDefinition>
+              </Grid.RowDefinitions>
+              <Border>
+                <ComboBox Padding="10" IsEnabled="{Binding Path=SymbolFilters, RelativeSource={RelativeSource TemplatedParent},Converter={StaticResource NullToBooleanConverter}}"
+                          Visibility="{Binding Path=Constraints, RelativeSource={RelativeSource TemplatedParent},Converter={StaticResource NulltoVisibilityConverter}}"
+                          Background="#ffffff" BorderBrush="LightGray" BorderThickness="1"
+          HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+          ItemsSource="{TemplateBinding SymbolFilters}"
+          SelectedItem="{Binding Path=SelectedFilter, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}">
+                  <ComboBox.ItemTemplate>
+                    <DataTemplate>
+                      <TextBlock VerticalAlignment="Center" HorizontalAlignment="Left" Margin="5,0,0,0" Foreground="Black" Text="{Binding Content}" />
+                    </DataTemplate>
+                  </ComboBox.ItemTemplate>
+                </ComboBox>
+              </Border>
+              <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                <stencil:SymbolGroup ItemsSource="{TemplateBinding SymbolGroup}">
+                  <stencil:SymbolGroup.ItemsPanel>
+                    <ItemsPanelTemplate>
+                      <StackPanel/>
+                    </ItemsPanelTemplate>
+                  </stencil:SymbolGroup.ItemsPanel>
+                  <stencil:SymbolGroup.HeaderTemplate>
+                    <DataTemplate/>
+                  </stencil:SymbolGroup.HeaderTemplate>
+                  <stencil:SymbolGroup.Template>
+                    <ControlTemplate TargetType="stencil:SymbolGroup">
+                      <Border
+              Background="{TemplateBinding Background}"
+              BorderBrush="{TemplateBinding BorderBrush}"
+              BorderThickness="{TemplateBinding BorderThickness}">
+                        <ItemsPresenter/>
+                      </Border>
+                    </ControlTemplate>
+                  </stencil:SymbolGroup.Template>
+                </stencil:SymbolGroup>
+              </ScrollViewer>
+            </Grid>
+          </Border>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <Style TargetType="stencil:Symbol">
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="BorderBrush" Value="#FF7F7F7F"/>
+    <Setter Property="Background" Value="#FFDDDDDD"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="stencil:Symbol">
+          <Grid Background="Transparent">
+            <Border x:Name="symbolborder"
+  Padding="{TemplateBinding Padding}"
+  Background="{TemplateBinding Background}"
+  BorderBrush="{TemplateBinding BorderBrush}"
+  BorderThickness="{TemplateBinding BorderThickness}">
+              <ContentPresenter Content="{TemplateBinding Content}"
+  ContentTemplate="{TemplateBinding ContentTemplate}"/>
+            </Border>
+            <VisualStateManager.VisualStateGroups>
+              <VisualStateGroup x:Name="CommonStates">
+                <VisualState x:Name="Normal">
+                </VisualState>
+                <VisualState x:Name="Pressed">
+                  <Storyboard>
+                    <ObjectAnimationUsingKeyFrames Storyboard.TargetName="symbolborder" Storyboard.TargetProperty="Background">
+                      <DiscreteObjectKeyFrame KeyTime="0" Value="{StaticResource SymbolPressedBackgroundThemeBrush}"/>
+                    </ObjectAnimationUsingKeyFrames>
+                  </Storyboard>
+                </VisualState>
+              </VisualStateGroup>
+            </VisualStateManager.VisualStateGroups>
+          </Grid>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <Style TargetType="localControls:AnnotationEditor">
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="localControls:AnnotationEditor">
+          <Border
+    Background="{TemplateBinding Background}"
+    BorderBrush="{TemplateBinding BorderBrush}"
+    BorderThickness="{TemplateBinding BorderThickness}">
+            <Grid>
+              <ContentPresenter x:Name="PART_ContentPresenter"/>
+            </Grid>
+          </Border>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <Style TargetType="localControls:Ruler">
+    <Setter Property="Foreground" Value="{StaticResource RulerForegroundThemeBrush}"/>
+    <Setter Property="Background" Value="{StaticResource RulerBackgroundThemeBrush}"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="localControls:Ruler">
+          <Border BorderBrush="{TemplateBinding BorderBrush}"
+        BorderThickness="{TemplateBinding BorderThickness}"
+        Background="{TemplateBinding Background}">
+            <Canvas x:Name="Part_RulerPanel">
+            </Canvas>
+          </Border>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <Style TargetType="localControls:RulerSegment">
+    <Setter Property="UseLayoutRounding" Value="True"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="localControls:RulerSegment">
+          <Canvas x:Name="Part_RulerSegmentPanel">
+            <Canvas.Resources>
+              <localControls:LabelConverter x:Key="LabelConverter"/>
+            </Canvas.Resources>
+            <TextBlock x:Name="PART_Label" Padding="0"
+           Text="{Binding Path=StartValue, 
+                                                  RelativeSource={RelativeSource Mode=TemplatedParent}, 
+                                                  Converter={StaticResource LabelConverter}}"/>
+          </Canvas>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <Style TargetType="localControls:RunTimeConnectionIndicator">
+    <Setter Property="Width" Value="100"></Setter>
+    <Setter Property="Height" Value="100"></Setter>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="localControls:RunTimeConnectionIndicator">
+          <Grid>
+            <Path x:Name="path0" Data="F1M311.832,302.7778L278.832,302.7778L278.832,316.4448L311.832,316.4448L311.832,349.4448L325.498,349.4448L325.498,316.4448L325.498,302.7778z"
+                  Fill="#FF09388C" Height="30" Stretch="Fill" VerticalAlignment="Bottom" HorizontalAlignment="Left" Width="30" RenderTransformOrigin="0.5,0.5">
+              <Path.RenderTransform>
+                <TranslateTransform/>
+              </Path.RenderTransform>
+            </Path>
+            <Path x:Name="path1" Data="F1M386.502,302.7778L353.502,302.7778L339.836,302.7778L339.836,316.4448L339.836,349.4448L353.502,349.4448L353.502,316.4448L386.502,316.4448z"
+                  Fill="#FF09388C" Height="30" Stretch="Fill" Width="30" HorizontalAlignment="Right"  VerticalAlignment="Bottom" RenderTransformOrigin="0.5,0.5">
+              <Path.RenderTransform>
+                <TranslateTransform/>
+              </Path.RenderTransform>
+            </Path>
+            <Path x:Name="path2" Data="F1M311.832,242.105L311.832,275.105L278.832,275.105L278.832,288.772L311.832,288.772L325.498,288.772L325.498,275.105L325.498,242.105z"
+                  Fill="#FF09388C" Height="30" Stretch="Fill"  VerticalAlignment="Top" HorizontalAlignment="Left" Width="30" RenderTransformOrigin="0.5,0.5">
+              <Path.RenderTransform>
+                <TranslateTransform/>
+              </Path.RenderTransform>
+            </Path>
+            <Path x:Name="path3" Data="F1M353.502,275.105L353.502,242.105L339.836,242.105L339.836,275.105L339.836,288.772L353.502,288.772L386.502,288.772L386.502,275.105z"
+                  Fill="#FF09388C" Height="30" Stretch="Fill" Width="30" HorizontalAlignment="Right" VerticalAlignment="Top" RenderTransformOrigin="0.5,0.5">
+              <Path.RenderTransform>
+                <TranslateTransform/>
+              </Path.RenderTransform>
+            </Path>
+            <VisualStateManager.VisualStateGroups>
+              <VisualStateGroup x:Name="connectionIndication">
+                <VisualState x:Name="Connecting">
+                  <Storyboard RepeatBehavior="Forever">
+                    <DoubleAnimationUsingKeyFrames Storyboard.TargetProperty="(UIElement.RenderTransform).TranslateTransform.X" Storyboard.TargetName="path0">
+                      <EasingDoubleKeyFrame KeyTime="0" Value="-30"/>
+                      <EasingDoubleKeyFrame KeyTime="0:0:0.4" Value="18"/>
+                      <EasingDoubleKeyFrame KeyTime="0:0:0.7" Value="20"/>
+                    </DoubleAnimationUsingKeyFrames>
+                    <DoubleAnimationUsingKeyFrames Storyboard.TargetProperty="(UIElement.RenderTransform).TranslateTransform.Y" Storyboard.TargetName="path0">
+                      <EasingDoubleKeyFrame KeyTime="0" Value="30"/>
+                      <EasingDoubleKeyFrame KeyTime="0:0:0.4" Value="-19"/>
+                      <EasingDoubleKeyFrame KeyTime="0:0:0.7" Value="-21"/>
+                    </DoubleAnimationUsingKeyFrames>
+                    <DoubleAnimationUsingKeyFrames Storyboard.TargetProperty="(UIElement.RenderTransform).TranslateTransform.X" Storyboard.TargetName="path1">
+                      <EasingDoubleKeyFrame KeyTime="0" Value="30"/>
+                      <EasingDoubleKeyFrame KeyTime="0:0:0.4" Value="-19"/>
+                      <EasingDoubleKeyFrame KeyTime="0:0:0.7" Value="-21"/>
+                    </DoubleAnimationUsingKeyFrames>
+                    <DoubleAnimationUsingKeyFrames Storyboard.TargetProperty="(UIElement.RenderTransform).TranslateTransform.Y" Storyboard.TargetName="path1">
+                      <EasingDoubleKeyFrame KeyTime="0" Value="30"/>
+                      <EasingDoubleKeyFrame KeyTime="0:0:0.4" Value="-19"/>
+                      <EasingDoubleKeyFrame KeyTime="0:0:0.7" Value="-21"/>
+                    </DoubleAnimationUsingKeyFrames>
+                    <DoubleAnimationUsingKeyFrames Storyboard.TargetProperty="(UIElement.RenderTransform).TranslateTransform.X" Storyboard.TargetName="path2">
+                      <EasingDoubleKeyFrame KeyTime="0" Value="-30"/>
+                      <EasingDoubleKeyFrame KeyTime="0:0:0.4" Value="18"/>
+                      <EasingDoubleKeyFrame KeyTime="0:0:0.7" Value="20"/>
+                    </DoubleAnimationUsingKeyFrames>
+                    <DoubleAnimationUsingKeyFrames Storyboard.TargetProperty="(UIElement.RenderTransform).TranslateTransform.Y" Storyboard.TargetName="path2">
+                      <EasingDoubleKeyFrame KeyTime="0" Value="-30"/>
+                      <EasingDoubleKeyFrame KeyTime="0:0:0.4" Value="18"/>
+                      <EasingDoubleKeyFrame KeyTime="0:0:0.7" Value="20"/>
+                    </DoubleAnimationUsingKeyFrames>
+                    <DoubleAnimationUsingKeyFrames Storyboard.TargetProperty="(UIElement.RenderTransform).TranslateTransform.X" Storyboard.TargetName="path3">
+                      <EasingDoubleKeyFrame KeyTime="0" Value="30"/>
+                      <EasingDoubleKeyFrame KeyTime="0:0:0.4" Value="-19"/>
+                      <EasingDoubleKeyFrame KeyTime="0:0:0.7" Value="-21"/>
+                    </DoubleAnimationUsingKeyFrames>
+                    <DoubleAnimationUsingKeyFrames Storyboard.TargetProperty="(UIElement.RenderTransform).TranslateTransform.Y" Storyboard.TargetName="path3">
+                      <EasingDoubleKeyFrame KeyTime="0" Value="-30"/>
+                      <EasingDoubleKeyFrame KeyTime="0:0:0.4" Value="18"/>
+                      <EasingDoubleKeyFrame KeyTime="0:0:0.7" Value="20"/>
+                    </DoubleAnimationUsingKeyFrames>
+                    <DoubleAnimationUsingKeyFrames Storyboard.TargetProperty="(UIElement.Opacity)" Storyboard.TargetName="path0">
+                      <EasingDoubleKeyFrame KeyTime="0" Value="0"/>
+                      <EasingDoubleKeyFrame KeyTime="0:0:0.4" Value="1"/>
+                      <EasingDoubleKeyFrame KeyTime="0:0:0.7" Value="0"/>
+                    </DoubleAnimationUsingKeyFrames>
+                    <DoubleAnimationUsingKeyFrames Storyboard.TargetProperty="(UIElement.Opacity)" Storyboard.TargetName="path1">
+                      <EasingDoubleKeyFrame KeyTime="0" Value="0"/>
+                      <EasingDoubleKeyFrame KeyTime="0:0:0.4" Value="1"/>
+                      <EasingDoubleKeyFrame KeyTime="0:0:0.7" Value="0"/>
+                    </DoubleAnimationUsingKeyFrames>
+                    <DoubleAnimationUsingKeyFrames Storyboard.TargetProperty="(UIElement.Opacity)" Storyboard.TargetName="path2">
+                      <EasingDoubleKeyFrame KeyTime="0" Value="0"/>
+                      <EasingDoubleKeyFrame KeyTime="0:0:0.4" Value="1"/>
+                      <EasingDoubleKeyFrame KeyTime="0:0:0.7" Value="0"/>
+                    </DoubleAnimationUsingKeyFrames>
+                    <DoubleAnimationUsingKeyFrames Storyboard.TargetProperty="(UIElement.Opacity)" Storyboard.TargetName="path3">
+                      <EasingDoubleKeyFrame KeyTime="0" Value="0"/>
+                      <EasingDoubleKeyFrame KeyTime="0:0:0.4" Value="1"/>
+                      <EasingDoubleKeyFrame KeyTime="0:0:0.7" Value="0"/>
+                    </DoubleAnimationUsingKeyFrames>
+                  </Storyboard>
+                </VisualState>
+                <VisualState x:Name="Normal">
+                  <Storyboard></Storyboard>
+                </VisualState>
+              </VisualStateGroup>
+            </VisualStateManager.VisualStateGroups>
+          </Grid>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+</ResourceDictionary>

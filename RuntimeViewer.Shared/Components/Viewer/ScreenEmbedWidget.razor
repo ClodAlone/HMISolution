@@ -1,0 +1,148 @@
+@using RuntimeViewer.Shared.Services
+@using SharedModels
+
+<div class="screenembed-widget" @onclick:stopPropagation @onmousedown:stopPropagation @onmouseup:stopPropagation>
+    @if (_resolvedScreens.Count == 0)
+    {
+        <div class="screenembed-empty">No screens configured</div>
+    }
+    else if (_resolvedScreens.Count == 1)
+    {
+        @* Single screen — render directly, no tabs *@
+        <div class="screenembed-content">
+            <ScreenRenderer Screen="@_resolvedScreens[0]" IsKiosk="false" />
+        </div>
+    }
+    else
+    {
+        @* Multiple screens — tabbed with lazy load *@
+        <ul class="screenembed-tabs">
+            @foreach (var (screen, idx) in _resolvedScreens.Select((s, i) => (s, i)))
+            {
+                var index = idx;
+                <li class="screenembed-tab @(index == _activeTab ? "active" : "")"
+                    @onclick="() => SetActiveTab(index)">
+                    @screen.Name
+                </li>
+            }
+        </ul>
+        <div class="screenembed-content">
+            @if (_activeTab >= 0 && _activeTab < _resolvedScreens.Count)
+            {
+                @* Lazy load: only render the active tab *@
+                if (!_loadedTabs.Contains(_activeTab))
+                {
+                    _loadedTabs.Add(_activeTab);
+                }
+
+                @foreach (var idx in _loadedTabs)
+                {
+                    var isVisible = idx == _activeTab;
+                    <div class="screenembed-tab-pane" style="display: @(isVisible ? "block" : "none");">
+                        <ScreenRenderer Screen="@_resolvedScreens[idx]" IsKiosk="false" />
+                    </div>
+                }
+            }
+        </div>
+    }
+</div>
+
+<style>
+    .screenembed-widget {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        background: var(--bg-secondary, #f8f9fa);
+        border-radius: 4px;
+    }
+
+    .screenembed-empty {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        color: #6c757d;
+        font-size: 12px;
+    }
+
+    .screenembed-tabs {
+        display: flex;
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        background: #1e293b;
+        border-bottom: 2px solid #334155;
+        flex-shrink: 0;
+        overflow-x: auto;
+    }
+
+    .screenembed-tab {
+        padding: 4px 12px;
+        font-size: 11px;
+        color: #94a3b8;
+        cursor: pointer;
+        white-space: nowrap;
+        border-bottom: 2px solid transparent;
+        margin-bottom: -2px;
+        transition: color 0.15s, border-color 0.15s;
+    }
+
+    .screenembed-tab:hover {
+        color: #e2e8f0;
+    }
+
+    .screenembed-tab.active {
+        color: #38bdf8;
+        border-bottom-color: #38bdf8;
+        font-weight: 600;
+    }
+
+    .screenembed-content {
+        flex: 1;
+        overflow: auto;
+        min-height: 0;
+    }
+
+    .screenembed-tab-pane {
+        width: 100%;
+        height: 100%;
+    }
+</style>
+
+@code {
+    [Parameter] public List<string> ScreenNames { get; set; } = new();
+    [Inject] private ProjectService Project { get; set; } = default!;
+
+    private List<ScreenConfig> _resolvedScreens = new();
+    private int _activeTab;
+    private HashSet<int> _loadedTabs = new() { 0 };
+
+    protected override void OnParametersSet()
+    {
+        _resolvedScreens = new List<ScreenConfig>();
+        foreach (var name in ScreenNames)
+        {
+            var screen = Project.Screens.FirstOrDefault(
+                s => s.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+            if (screen != null)
+                _resolvedScreens.Add(screen);
+        }
+
+        // Reset active tab if out of range
+        if (_activeTab >= _resolvedScreens.Count)
+        {
+            _activeTab = 0;
+            _loadedTabs = new HashSet<int> { 0 };
+        }
+    }
+
+    private void SetActiveTab(int index)
+    {
+        _activeTab = index;
+        // Lazy load: tab content is only rendered when first activated
+        _loadedTabs.Add(index);
+    }
+}
+

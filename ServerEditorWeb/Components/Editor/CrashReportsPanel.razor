@@ -1,0 +1,347 @@
+@using SharedModels
+@using ServerEditorWeb.Services
+@using Microsoft.JSInterop
+@inject NodeEditorService Editor
+@inject IJSRuntime JS
+
+<div class="crash-reports-panel">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <h6 class="mb-0">🐛 Crash Reports</h6>
+        <div class="d-flex gap-1">
+            <button class="btn btn-sm btn-outline-secondary" @onclick="Refresh">↻ Refresh</button>
+            @if (_reports.Count > 0)
+            {
+                <button class="btn btn-sm btn-outline-danger" @onclick="ClearAll">🗑 Clear All</button>
+            }
+        </div>
+    </div>
+
+    @if (_reports.Count == 0)
+    {
+        <div class="text-muted small text-center py-4">
+            <div style="font-size: 32px;">✅</div>
+            <div class="mt-1">No crash reports. All processes running clean.</div>
+        </div>
+    }
+    else
+    {
+        <div class="crash-list">
+            @foreach (var report in _reports)
+            {
+                var isExpanded = _expandedId == report.Id;
+                <div class="crash-item @(isExpanded ? "expanded" : "")">
+                    <div class="crash-header" @onclick="() => Toggle(report.Id)">
+                        <span class="crash-severity @SeverityClass(report.Source)">@report.Source</span>
+                        <span class="crash-process badge bg-secondary">@report.Process</span>
+                        <span class="crash-type">@report.ExceptionType.Split('.')[^1]</span>
+                        <span class="crash-time">@report.TimestampUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</span>
+                        <button class="btn btn-sm btn-outline-danger crash-delete" @onclick="() => Delete(report.Id)" @onclick:stopPropagation title="Delete">✕</button>
+                    </div>
+                    @if (isExpanded)
+                    {
+                        <div class="crash-details">
+                            <table class="table table-sm table-borderless mb-2" style="font-size: 10px;">
+                                <tbody>
+                                    <tr><td class="text-muted" style="width: 100px;">Exception</td><td class="font-monospace">@report.ExceptionType</td></tr>
+                                    <tr><td class="text-muted">Message</td><td>@report.Message</td></tr>
+                                    <tr><td class="text-muted">Process</td><td>@report.Process (PID @report.ProcessId)</td></tr>
+                                    <tr><td class="text-muted">Source</td><td>@report.Source</td></tr>
+                                    <tr><td class="text-muted">Time (UTC)</td><td>@report.TimestampUtc.ToString("o")</td></tr>
+                                    <tr><td class="text-muted">Machine</td><td>@report.MachineName</td></tr>
+                                    <tr><td class="text-muted">OS</td><td>@report.OsDescription</td></tr>
+                                    <tr><td class="text-muted">Runtime</td><td>@report.RuntimeVersion</td></tr>
+                                    <tr><td class="text-muted">Memory</td><td>@report.MemoryMB MB</td></tr>
+                                    <tr><td class="text-muted">Threads</td><td>@report.ThreadCount</td></tr>
+                                </tbody>
+                            </table>
+
+                            <div class="crash-stack-label">Stack Trace</div>
+                            <pre class="crash-stack">@report.StackTrace</pre>
+
+                            @if (!string.IsNullOrEmpty(report.InnerException))
+                            {
+                                <div class="crash-stack-label">Inner Exception</div>
+                                <pre class="crash-stack">@report.InnerException</pre>
+                            }
+
+                            <div class="d-flex gap-1 mt-1">
+                                <button class="btn btn-sm btn-outline-primary" @onclick="() => CopyToClipboard(report)">📋 Copy</button>
+                                <button class="btn btn-sm btn-outline-warning" @onclick="() => SendEmail(report)">📧 Send Email</button>
+                                @if (_emailStatus != null && _emailReportId == report.Id)
+                                {
+                                    <span class="small align-self-center @(_emailSuccess ? "text-success" : "text-danger")">@_emailStatus</span>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    }
+</div>
+
+<style>
+    .crash-reports-panel {
+        padding: 8px;
+        height: 100%;
+        overflow-y: auto;
+    }
+
+    .crash-list {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .crash-item {
+        border: 1px solid var(--border-color, #dee2e6);
+        border-radius: 6px;
+        overflow: hidden;
+        background: var(--bg-secondary, #f8f9fa);
+    }
+
+    .crash-item.expanded {
+        border-color: var(--bs-primary, #0d6efd);
+    }
+
+    .crash-header {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 8px;
+        cursor: pointer;
+        font-size: 11px;
+    }
+
+    .crash-header:hover {
+        background: rgba(0,0,0,0.04);
+    }
+
+    .crash-severity {
+        font-size: 9px;
+        font-weight: 600;
+        padding: 1px 6px;
+        border-radius: 3px;
+        text-transform: uppercase;
+        flex-shrink: 0;
+    }
+
+    .crash-severity.fatal { background: #dc3545; color: white; }
+    .crash-severity.appdomain { background: #dc3545; color: white; }
+    .crash-severity.taskscheduler { background: #fd7e14; color: white; }
+    .crash-severity.blazor { background: #e83e8c; color: white; }
+    .crash-severity.manual { background: #6c757d; color: white; }
+
+    .crash-process {
+        font-size: 9px;
+        flex-shrink: 0;
+    }
+
+    .crash-type {
+        font-family: monospace;
+        font-weight: 600;
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .crash-time {
+        color: var(--text-muted, #6c757d);
+        font-size: 10px;
+        flex-shrink: 0;
+        font-family: monospace;
+    }
+
+    .crash-delete {
+        font-size: 9px;
+        padding: 0 4px;
+        line-height: 1;
+        flex-shrink: 0;
+    }
+
+    .crash-details {
+        padding: 8px 10px;
+        border-top: 1px solid var(--border-color, #dee2e6);
+        background: var(--bg-tertiary, rgba(0,0,0,0.02));
+    }
+
+    .crash-details .table td {
+        padding: 1px 4px;
+        vertical-align: top;
+    }
+
+    .crash-stack-label {
+        font-size: 9px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: var(--text-muted, #6c757d);
+        margin-bottom: 2px;
+    }
+
+    .crash-stack {
+        font-size: 10px;
+        background: #1e293b;
+        color: #e2e8f0;
+        padding: 6px 8px;
+        border-radius: 4px;
+        max-height: 200px;
+        overflow-y: auto;
+        white-space: pre-wrap;
+        word-break: break-all;
+        margin-bottom: 4px;
+    }
+</style>
+
+@code {
+    private List<CrashReport> _reports = new();
+    private string? _expandedId;
+    private string? _emailStatus;
+    private string? _emailReportId;
+    private bool _emailSuccess;
+
+    protected override void OnInitialized()
+    {
+        Refresh();
+    }
+
+    private void Refresh()
+    {
+        var allReports = new List<CrashReport>();
+
+        // Editor's own crash_reports directory
+        if (!string.IsNullOrEmpty(CrashReporter.CrashDirectory))
+            allReports.AddRange(CrashReporter.ReadAll(CrashReporter.CrashDirectory));
+
+        // Server's crash_reports directory (next to the nodes.json config)
+        if (!string.IsNullOrEmpty(Editor.CurrentFilePath))
+        {
+            var serverCrashDir = Path.Combine(
+                Path.GetDirectoryName(Path.GetFullPath(Editor.CurrentFilePath)) ?? "",
+                "crash_reports");
+            if (serverCrashDir != CrashReporter.CrashDirectory && Directory.Exists(serverCrashDir))
+                allReports.AddRange(CrashReporter.ReadAll(serverCrashDir));
+        }
+
+        // Deduplicate by Id, newest first
+        var seen = new HashSet<string>();
+        _reports = new List<CrashReport>();
+        foreach (var r in allReports.OrderByDescending(r => r.TimestampUtc))
+        {
+            if (seen.Add(r.Id))
+                _reports.Add(r);
+        }
+    }
+
+    private void Toggle(string id)
+    {
+        _expandedId = _expandedId == id ? null : id;
+    }
+
+    private void Delete(string id)
+    {
+        CrashReporter.Delete(id);
+        // Also try the server directory
+        if (!string.IsNullOrEmpty(Editor.CurrentFilePath))
+        {
+            var serverCrashDir = Path.Combine(
+                Path.GetDirectoryName(Path.GetFullPath(Editor.CurrentFilePath)) ?? "",
+                "crash_reports");
+            CrashReporter.Delete(id, serverCrashDir);
+        }
+        _reports.RemoveAll(r => r.Id == id);
+        if (_expandedId == id) _expandedId = null;
+    }
+
+    private void ClearAll()
+    {
+        CrashReporter.ClearAll();
+        if (!string.IsNullOrEmpty(Editor.CurrentFilePath))
+        {
+            var serverCrashDir = Path.Combine(
+                Path.GetDirectoryName(Path.GetFullPath(Editor.CurrentFilePath)) ?? "",
+                "crash_reports");
+            CrashReporter.ClearAll(serverCrashDir);
+        }
+        _reports.Clear();
+        _expandedId = null;
+    }
+
+    private async Task CopyToClipboard(CrashReport report)
+    {
+        var text = $"""
+            === CRASH REPORT ===
+            Id:        {report.Id}
+            Time:      {report.TimestampUtc:o}
+            Process:   {report.Process} (PID {report.ProcessId})
+            Source:    {report.Source}
+            Machine:   {report.MachineName}
+            OS:        {report.OsDescription}
+            Runtime:   {report.RuntimeVersion}
+            Memory:    {report.MemoryMB} MB
+            Threads:   {report.ThreadCount}
+
+            Exception: {report.ExceptionType}
+            Message:   {report.Message}
+
+            Stack Trace:
+            {report.StackTrace}
+            {(report.InnerException != null ? $"\nInner Exception:\n{report.InnerException}" : "")}
+            """;
+
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", text);
+        }
+        catch { }
+    }
+
+    private static string SeverityClass(string source) => source.ToLowerInvariant() switch
+    {
+        "fatal" => "fatal",
+        "appdomain" => "appdomain",
+        "taskscheduler" => "taskscheduler",
+        "blazor" => "blazor",
+        _ => "manual"
+    };
+
+    private CrashEmailConfig? GetEmailConfig()
+    {
+        var cfg = Editor.RootModel?.Server?.CrashEmail;
+        if (cfg != null && string.IsNullOrWhiteSpace(cfg.ProjectName))
+        {
+            // Default project name from config file name
+            if (!string.IsNullOrEmpty(Editor.CurrentFilePath))
+                cfg.ProjectName = Path.GetFileNameWithoutExtension(Editor.CurrentFilePath);
+        }
+        return cfg;
+    }
+
+    private async Task SendEmail(CrashReport report)
+    {
+        _emailReportId = report.Id;
+        _emailStatus = "Sending…";
+        _emailSuccess = false;
+        StateHasChanged();
+
+        var config = GetEmailConfig();
+        if (config == null || string.IsNullOrWhiteSpace(config.SmtpHost))
+        {
+            _emailStatus = "⚠ No SMTP configured. Add Server.CrashEmail to your project config.";
+            return;
+        }
+
+        // Run on thread pool to avoid blocking the UI
+        var error = await Task.Run(() => CrashReporter.SendEmail(report, config));
+        if (error == null)
+        {
+            _emailSuccess = true;
+            _emailStatus = "✅ Sent!";
+        }
+        else
+        {
+            _emailStatus = $"❌ {error}";
+        }
+    }
+}

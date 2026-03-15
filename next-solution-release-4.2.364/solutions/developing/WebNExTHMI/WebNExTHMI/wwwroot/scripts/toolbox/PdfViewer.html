@@ -1,0 +1,566 @@
+﻿<!--<script src="lib/pdf.js/pdf.min.js"></script>-->
+<link rel="stylesheet" href="lib/pdf.js/pdf_viewer.css" />
+<div id="PdfViewer" class="PdfViewer" style="width: 100%; height: 100%;">
+    <img src="cl.gif" alt="" onload="onPdfViewerControlLoaded(this)" id="loadingImage" />
+    
+    <div id="mainContainer">
+        <div id="large-indicator"></div>
+        <div id="buttonsContainer" style="padding: 5px;">
+            <div id="download" style="float:left;"></div>
+            <div id="print" style="float:left;"></div>
+            <div id="find" style="float:left;"></div>
+            <div class="toolbarSeparator10">&nbsp;</div>
+            <div id="chevronup" style="float:left;"></div>
+            <div id="chevrondown" style="float:left;"></div>
+            <div class="toolbarSeparator10">&nbsp;</div>
+            <div id="curPageTextbox" style="float:left;"></div>
+            <div id="totalPagesLabel" style="float:left;"><span style="font-size: 1.5em; padding: 2px;">/<span id="totalPagesLabelInner">0</span></span></div>
+            <div class="toolbarSeparator10">&nbsp;</div>
+            <div id="plus" style="float:left;"></div>
+            <div id="minus" style="float:left;"></div>
+            <div id="zoomcombo" style="float:left; width: 150px;"></div>
+            <div style="display: table; float: left; height: 100%;">
+                <div id="singlePageLabel" style="display: table-cell; vertical-align: middle;"></div>
+                <div id="singlePageFlag" style="display: table-cell; vertical-align: middle; padding: 4px;"></div>
+            </div>
+        </div>
+        <div id="edit" style="text-align: center; width: 100%; overflow: auto;">
+            <div id="errorMessage" style="background-color: white; color: red; padding: 10px; font-size: 1.5em;"></div>
+        </div>
+    </div>
+
+    <script>
+        function onPdfViewerControlLoaded(obj) {
+
+            var thisPage = $(obj).parent();
+            thisPage.localize();
+
+            var scope = thisPage.scope();
+            if (!scope)
+                return;
+            var paratt = thisPage.data(dataparameters);
+            if (!paratt)
+                return;
+
+            var thisParent = thisPage.parent();
+            $(obj).remove();
+
+            var webKitRenderCorrection = $(thisPage).hasClass("webKitRenderCorrection");
+            if (webKitRenderCorrection)
+                thisPage.css("will-change", "opacity");
+
+            setOpacity(scope, thisParent, thisPage);
+
+            var deregisterListenerActiveLanguage;
+            var deregisterListener;
+            $(thisPage).bind('destroyed', function () {
+                if (pdfDoc)
+                    pdfDoc.destroy();
+                editcontainer[0].removeEventListener('scroll', onContainerScroll);
+                if (deregisterListenerActiveLanguage)
+                    deregisterListenerActiveLanguage();
+                if (deregisterListener)
+                    deregisterListener();
+            });
+
+            var mainContainer = thisPage.find("#mainContainer");
+            if (scope.biOS)
+                webkitMoveRotateTransform(thisParent, thisPage, mainContainer);
+
+            var parameters = JSON.parse(paratt);
+            var thisPageID = thisParent.attr("id") + parameters.screenId;
+            var bUpdatingPageByScrolling;
+
+            var loadingIndicatorDiv = thisPage.find("#large-indicator");
+            var editcontainer = thisPage.find("#edit");
+            var errorDiv = thisPage.find("#errorMessage");
+            var translationPrefix = "_PdfViewer_";
+
+            var ticking = false;
+            var lastKnownScrollPosition = 0;
+            var pageHeight;
+            var pageMargin;
+            
+            var documentPath = documentsFolder + scope.configurationSettings.projectTitle + "/" + parameters.DocumentPath;
+            var pageno = 1;
+            if (parameters.PageNumber > 0)
+                pageno = parameters.PageNumber;
+            //var currentPage = pageno;
+            var totalPages = 0;
+
+            var buttonsContainer = thisPage.find("#buttonsContainer");
+            var divOptions = { "margin-right": "2px" };
+            if (parameters.ToolbarForeground)
+                divOptions["color"] = parameters.ToolbarForeground.Color;
+
+            var downloadbtn = buttonsContainer.find("#download");
+            var printbtn = buttonsContainer.find("#print");
+            var findbtn = buttonsContainer.find("#find");
+            var chevronupbtn = buttonsContainer.find("#chevronup");
+            var chevrondownbtn = buttonsContainer.find("#chevrondown");
+            var curPageTextbox = buttonsContainer.find("#curPageTextbox");
+            var totalPagesLabelInner = buttonsContainer.find("#totalPagesLabelInner");
+            var plusbtn = buttonsContainer.find("#plus");
+            var minusbtn = buttonsContainer.find("#minus");
+
+            var zoomcombodiv = thisPage.find("#zoomcombo");
+            var zoomComboItems = [
+                "",
+                i18next.t1(translationPrefix + "Zoom_100", "Zoom 100%"),
+                i18next.t1(translationPrefix + "Fit_Page", "Zoom Fit Page"),
+                i18next.t1(translationPrefix + "Fit_Width", "Zoom Fit Width")
+            ];
+            var singlePageFlagDiv = thisPage.find("#singlePageFlag");
+            var singlePageLabelDiv = thisPage.find("#singlePageLabel");
+            singlePageLabelDiv.text(i18next.t1(translationPrefix + "SinglePageView", "Single Page"));
+
+            var pdfjs;
+            var pdfDoc;
+            var scale = 1;
+            var pageRendering = false;
+            var pageNumPending = [];
+            var pageOriginalViewport = null;
+            var chd;
+            var cpt;
+            var chu;
+            var zoomcombo;
+            var plb;
+            var mib;
+            var db;
+            var pb;
+            var fdb;
+            
+            var interactiveControls;
+            var loadingIndicator;
+            var currentCulture = navigator.language;
+
+            editcontainer[0].addEventListener('scroll', onContainerScroll);
+
+            deregisterListenerActiveLanguage = scope.$on(onActiveLanguageChanged, function (e, value) {
+                if (currentCulture == value)
+                    return;
+
+                currentCulture = value;
+
+                fastdom.mutate(function () {
+                    if (singlePageLabelDiv)
+                        singlePageLabelDiv.text(i18next.t1(translationPrefix + "SinglePageView", "Single Page"));
+                    if (zoomcombo) {
+                        var selectedIndex = zoomComboItems.indexOf(zoomcombo.option("displayValue"));
+                        zoomComboItems = [
+                            "",
+                            i18next.t1(translationPrefix + "Zoom_100", "Zoom 100%"),
+                            i18next.t1(translationPrefix + "Fit_Page", "Zoom Fit Page"),
+                            i18next.t1(translationPrefix + "Fit_Width", "Zoom Fit Width")
+                        ];
+                        zoomcombo.option("items", zoomComboItems);
+                        zoomcombo.option({
+                            "placeholder": i18next.t1(translationPrefix + "Select_Zoom", "Select Zoom..."),
+                            "value": zoomComboItems[Math.max(0, selectedIndex)]
+                        });
+                    }
+                    if (db)
+                        db.option("hint", i18next.t1(translationPrefix + "SaveAs", "Save As"));
+                    if (pb)
+                        pb.option("hint", i18next.t1(translationPrefix + "Print", "Print"));
+                    if (fdb)
+                        fdb.option("hint", i18next.t1(translationPrefix + "Find", "Find"));
+                    if (chu)
+                        chu.option("hint", i18next.t1(translationPrefix + "PrevPage", "Prev Page"));
+                    if (chd)
+                        chd.option("hint", i18next.t1(translationPrefix + "NextPage", "Next Page"));
+                    if (plb)
+                        plb.option("hint", i18next.t1(translationPrefix + "ZoomIn", "Zoom In"));
+                    if (mib)
+                        mib.option("hint", i18next.t1(translationPrefix + "ZoomOut", "Zoom Out"));
+                });
+            });
+
+            require.config({
+                paths: {
+                    'pdfjs-dist/build/pdf': 'lib/pdf.js/pdf.min',
+                    'pdfjs-dist/build/pdf.worker': 'lib/pdf.js/pdf.worker.min',
+                    'pdfjs-dist/web/pdf_viewer': 'lib/pdf.js/pdf_viewer.min',
+                }
+            });
+
+            require(['pdfjs-dist/build/pdf'], function (code) {
+                pdfjs = code;
+                pdfjs.GlobalWorkerOptions.workerSrc = 'lib/pdf.js/pdf.worker.min.js';
+
+                var mutateFunc = function () {
+                    var options = {};
+                    setObjectBorder(options, parameters);
+                    if (!$.isEmptyObject(options))
+                        mainContainer.css(options);
+
+                    if (parameters.ToolbarBackground)
+                        buttonsContainer.css("background", parameters.ToolbarBackground.Color);
+                    buttonsContainer.children("div").css(divOptions);
+
+                    var singlePageFlag = singlePageFlagDiv.dxCheckBox({
+                        onValueChanged: function (ea) {
+                            if (ea.value)
+                                thisPage.addClass("singlePage");
+                            else
+                                thisPage.removeClass("singlePage");
+                            goTopage(1);
+                        }
+                    }).dxCheckBox("instance");
+                    db = downloadbtn.dxButton({
+                        hint: i18next.t1(translationPrefix + "SaveAs", "Save As"),
+                        icon: "download",
+                        type: "normal",
+                        onClick: function (e) {
+                            window.open(documentPath, '_blank');
+                        }
+                    }).dxButton("instance");
+                    pb = printbtn.dxButton({
+                        hint: i18next.t1(translationPrefix + "Print", "Print"),
+                        icon: "print",
+                        type: "normal",
+                        onClick: function (e) {
+                            window.open(documentPath, '_blank');
+                        }
+                    }).dxButton("instance");
+                    fdb = findbtn.dxButton({
+                        hint: i18next.t1(translationPrefix + "Find", "Find"),
+                        icon: "find",
+                        type: "normal",
+                        onClick: function (e) {
+                            window.open(documentPath, '_blank');
+                        }
+                    }).dxButton("instance");
+                    chu = chevronupbtn.dxButton({
+                        hint: i18next.t1(translationPrefix + "PrevPage", "Prev Page"),
+                        icon: "chevronup",
+                        type: "normal",
+                        disabled: true,
+                        onClick: function (e) {
+                            if (pageno > 1)
+                                goTopage(pageno - 1);
+                        }
+                    }).dxButton("instance");
+                    chd = chevrondownbtn.dxButton({
+                        hint: i18next.t1(translationPrefix + "NextPage", "Next Page"),
+                        icon: "chevrondown",
+                        type: "normal",
+                        onClick: function (e) {
+                            if (pageno < totalPages)
+                                goTopage(pageno + 1);
+                        }
+                    }).dxButton("instance");
+                    var bSettingPageno = false;
+                    cpt = curPageTextbox.dxTextBox({
+                        value: pageno,
+                        width: 40,
+                        onValueChanged: function (e) {
+                            if (bUpdatingPageByScrolling) {
+                                bUpdatingPageByScrolling = false;
+                                return;
+                            }
+                            if (!bSettingPageno && e.previousValue != null) {
+                                var newPageNo = parseInt(e.value, 10);
+                                var bRet = false;
+                                if (!isNaN(newPageNo) && pdfDoc && totalPages >= newPageNo)
+                                    bRet = goTopage(e.value)
+                                if (!bRet) {
+                                    bSettingPageno = true;
+                                    try {
+                                        e.component.option("value", e.previousValue);
+                                    }
+                                    finally {
+                                        bSettingPageno = false;
+                                    }
+                                }
+                            }
+                        }
+                    }).dxTextBox("instance");
+                    plb = plusbtn.dxButton({
+                        hint: i18next.t1(translationPrefix + "ZoomIn", "Zoom In"),
+                        icon: "plus",
+                        type: "normal",
+                        onClick: function (e) {
+                            if (zoomcombo)
+                                zoomcombo.option("value", zoomcombo.option("items")[0]);
+                            scale += 0.1;
+                            renderAllPages();
+                        }
+                    }).dxButton("instance");
+                    mib = minusbtn.dxButton({
+                        hint: i18next.t1(translationPrefix + "ZoomOut", "Zoom Out"),
+                        icon: "minus",
+                        type: "normal",
+                        onClick: function (e) {
+                            if (zoomcombo)
+                                zoomcombo.option("value", zoomcombo.option("items")[0]);
+                            if (parseFloat(scale.toFixed(2)) > 0.1) {
+                                scale -= 0.1;
+                                renderAllPages();
+                            }
+                            else {
+                                e.component.option("disabled", true);
+                            }
+                        },
+                        onContentReady: function (e) {
+                            let buttonsContainerHeight = $(e.component.element()).height() + parseFloat(buttonsContainer.css("padding-top"), 10) + parseFloat(buttonsContainer.css("padding-bottom"), 10) + 1.5;
+                            buttonsContainer.css("height", buttonsContainerHeight);
+                            editcontainer.css("height", thisParent.height() - buttonsContainerHeight - parseFloat(mainContainer.css("border-top-width")) - parseFloat(mainContainer.css("border-bottom-width")));
+                        }
+                    }).dxButton("instance");
+                    zoomcombo = zoomcombodiv.dxSelectBox({
+                        items: zoomComboItems,
+                        placeholder: i18next.t1(translationPrefix + "Select_Zoom", "Select Zoom..."),
+                        onValueChanged: function (e) {
+                            if (e.value != zoomComboItems[0]) {
+                                switch (e.value) {
+                                    case zoomComboItems[1]:
+                                        zoom_100();
+                                        break;
+                                    case zoomComboItems[2]:
+                                        zoom_fitPage();
+                                        break;
+                                    case zoomComboItems[3]:
+                                        zoom_fitWidth();
+                                        break;
+                                }
+                            }
+                        },
+                        onOpened: function (e) {
+                            if (parameters.bFitInWindow)
+                                $(".dx-selectbox-popup-wrapper").detach().prependTo(zoomcombodiv).css("transform", "none");
+                        }
+                    }).dxSelectBox("instance");
+
+                    interactiveControls = [db, pb, fdb, chu, chd, cpt, plb, mib, zoomcombo, singlePageFlag];
+
+                    mainContainer.css("background", parameters.Background.Color);
+
+                    loadingIndicatorDiv.css({
+                        position: scope.biOS && !parameters.bFitInWindow && !isInFittedParent(thisPage) ? "fixed" : "absolute",
+                        top: (parseFloat(thisParent.attr("height")) - 60) / 2,
+                        left: (parseFloat(thisParent.attr("width")) - 60) / 2
+                    });
+                    loadingIndicator = loadingIndicatorDiv.dxLoadIndicator({
+                        height: 60,
+                        width: 60,
+                        visible: true
+                    }).dxLoadIndicator("instance");
+
+                    $(thisParent).bind(disabledClassEvent, function () {
+                        $.each(interactiveControls, function (i, el) {
+                            if (el)
+                                el.option("disabled", thisParent.hasClass(disabledClass) ? false : (!pageRendering ? true : false));
+                        });
+                    });
+
+                    if (parameters.SVGReferenceId) {
+                        if (parameters.screenId in scope.dataValues && parameters.SVGReferenceId in scope.dataValues[parameters.screenId]) {
+                            applyTagQualityStyle(webKitRenderCorrection ? thisPage : thisParent, scope, parameters.screenId, parameters.SVGReferenceId);
+                        }
+                        deregisterListener = scope.$on(onDataChanged + parameters.screenId + parameters.SVGReferenceId, function (e, value) {
+                            applyTagQualityStyle(webKitRenderCorrection ? thisPage : thisParent, scope, parameters.screenId, parameters.SVGReferenceId);
+                        });
+                    }
+
+                    loadPDFDocument(true);
+                }
+
+                mutateHandler.scheduleMutate(parameters.screenId, mutateFunc);
+
+                //require(['pdfjs-dist/web/pdf_viewer'], function (code) {
+                //    viewerjs = code;
+                //    console.log("PDFJS VIEWER LOADED:", viewerjs);
+                //}, function (err) { console.log("VIEWER LOADING ERROR:", err); });
+            }, function (err) { console.error("Pdf.js library loading error:", err); });
+
+            function onContainerScroll(e) {
+                lastKnownScrollPosition = editcontainer[0].scrollTop;
+                if (!ticking) {
+                    ticking = true;
+                    window.requestAnimationFrame(function () {
+                        var newPageNo = Math.floor(lastKnownScrollPosition / pageHeight) + 1;
+                        if (pageno != newPageNo) {
+                            bUpdatingPageByScrolling = true;
+                            _updatePageNo(newPageNo);
+                        }
+                        ticking = false;
+                    });
+                }
+            }
+
+            function renderPage(num) {
+                pageRendering = true;
+                pdfDoc.getPage(num).then(function (page) {
+                    var canvasId = thisPageID + '-pdf-viewer-' + num;
+                    editcontainer.append($('<canvas/>', { 'id': canvasId }));
+                    var canvas = document.getElementById(canvasId);
+
+                    var viewport = page.getViewport({ scale: scale });
+
+                    if (pageOriginalViewport == null)
+                        pageOriginalViewport = viewport;
+
+                    canvas.height = viewport.height;
+                    canvas.width = viewport.width;
+                    var ctx = canvas.getContext('2d');
+                    // Render PDF page into canvas context
+                    var renderContext = {
+                        canvasContext: ctx,
+                        viewport: viewport
+                    };
+                    var renderTask = page.render(renderContext);
+                    // Wait for rendering to finish
+                    renderTask.promise.then(function () {
+                        if (pageNumPending.length > 0) {
+                            renderPage(pageNumPending[0]);
+                            pageNumPending.shift();
+                            if (pageNumPending.length == 0)
+                                onFullPdfLoaded();
+                        }
+                    }).catch(function (err) {
+                        DevExpress.ui.notify({ message: i18next.t1("PdfRenderingError"), width: 400, shading: true }, "error", 1000);
+                        pageNumPending = [];
+                        enablePdfViewer();
+                    });
+                }).catch(function (err) {
+                    DevExpress.ui.notify({ message: i18next.t1("PdfRenderingError"), width: 400, shading: true }, "error", 1000);
+                    pageNumPending = [];
+                    enablePdfViewer();
+                });
+            }
+
+            function enablePdfViewer() {
+                pageRendering = false;
+                if (loadingIndicator)
+                    loadingIndicator.option("visible", false);
+                if (!thisParent.hasClass(disabledClass)) {
+                    $.each(interactiveControls, function (i, el) {
+                        if (el) {
+                            if (el == chu)
+                                prevPageCheckEnabled();
+                            else if (el == chd)
+                                nextPageCheckEnabled();
+                            else
+                                el.option("disabled", false);
+                        }
+                    });
+                }
+            }
+
+            function onFullPdfLoaded() {
+                enablePdfViewer();
+                var firstPage = editcontainer.find("#" + thisPageID + "-pdf-viewer-1")[0];
+                pageHeight = firstPage.scrollHeight;
+                pageMargin = parseFloat($(firstPage).css("padding-top")) + parseFloat($(firstPage).css("padding-bottom"));
+                if (pageno != 1)
+                    goTopage(pageno);
+            }
+
+            function prevPageCheckEnabled() {
+                if (pageno == 1)
+                    chu.option("disabled", true);
+                else
+                    chu.option("disabled", false);
+            }
+
+            function nextPageCheckEnabled() {
+                try {
+                    if (pageno == pdfDoc.numPages)
+                        chd.option("disabled", true);
+                    else
+                        chd.option("disabled", false);
+                }
+                catch { }
+            }
+
+            function _updatePageNo(num) {
+                pageno = num;
+                if (cpt)
+                    cpt.option("value", pageno);
+                //pageElem[0].scrollIntoView();
+                prevPageCheckEnabled();
+                nextPageCheckEnabled();
+            }
+
+            function goTopage(num) {
+                if (isNaN(num) || num <= 0)
+                    return false;
+
+                var pageElem = editcontainer.find("#" + thisPageID + "-pdf-viewer-" + num);
+                if (pageElem.length > 0) {
+                    _updatePageNo(num);
+                    editcontainer[0].scrollTop = (pageno - 1) * (pageElem[0].scrollHeight + pageMargin);
+                    return true;
+                }
+                return false;
+            }
+
+            function queueRenderPage(num) {
+                if (pageRendering) {
+                    pageNumPending.push(num);
+                } else {
+                    renderPage(num);
+                }
+            }
+
+            function renderAllPages() {
+                if (loadingIndicator)
+                    loadingIndicator.option("visible", true);
+
+                editcontainer.find("canvas").remove();
+                $.each(interactiveControls, function (i, el) {
+                    if (el)
+                        el.option("disabled", true);
+                });
+                for (var i = 1; i <= pdfDoc.numPages; i++) {
+                    queueRenderPage(i);
+                }
+            }
+
+            function loadPDFDocument(bFirstLoading) {
+                errorDiv.hide();
+                totalPages = 0;
+                pdfjs.getDocument(documentPath).promise.then(function (pdfDoc_) {
+                    pdfDoc = pdfDoc_;
+                    totalPages = pdfDoc.numPages;
+                    pageOriginalViewport = null;
+                    totalPagesLabelInner.text(totalPages);
+                    if (!bFirstLoading) {
+                        pageno = 1;
+                        if (zoomComboItems)
+                            zoomComboItems.option("value", zoomComboItems[0]);
+                    }
+                    renderAllPages();
+                }).catch(function (err) {
+                    console.error(err);
+                    $.each(interactiveControls, function (i, el) {
+                        if (el)
+                            el.option("disabled", true);
+                    });
+                    if (loadingIndicator)
+                        loadingIndicator.option("visible", false);
+                    errorDiv.text(i18next.t1("PDF Loading Error") + ": " + err).show();
+                });
+            }
+
+            /* REGION ZOOM */
+            function zoom_fitPage() {
+                var widthScale = editcontainer[0].clientWidth / pageOriginalViewport.width;
+                var heightScale = editcontainer[0].clientHeight / pageOriginalViewport.height;
+                scale = Math.min(widthScale, heightScale);
+                renderAllPages();
+            }
+            function zoom_fitWidth() {
+                var widthScale = editcontainer[0].clientWidth / pageOriginalViewport.width;
+                scale = widthScale;
+                renderAllPages();
+            }
+            function zoom_100() {
+                scale = 1;
+                renderAllPages();
+            }
+            /* END REGION */
+        }
+    </script>
+</div>

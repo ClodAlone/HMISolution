@@ -1,0 +1,729 @@
+@using ServerEditorWeb.Models
+@using ServerEditorWeb.Services
+@using SharedModels
+@implements IDisposable
+
+@if (_selectedSymbol != null)
+{
+    <div class="properties-panel">
+        <div class="d-flex align-items-center gap-2 mb-2">
+            <h6 class="mb-0">Symbol Properties</h6>
+            @if (_selectedSymbols.Count > 1)
+            {
+                <span class="badge bg-primary" style="font-size: 9px;">@_selectedSymbols.Count selected</span>
+            }
+        </div>
+
+        @if (!string.IsNullOrEmpty(_selectedSymbol.GroupId))
+        {
+            <div class="small mb-2">
+                <span class="text-muted">Group:</span>
+                <span class="badge bg-secondary ms-1" style="font-size: 9px;">@_selectedSymbol.GroupId</span>
+            </div>
+        }
+
+        <div class="mb-2">
+            <label class="form-label mb-0 small">Type</label>
+            <input type="text" class="form-control form-control-sm" value="@_selectedSymbol.Type" disabled />
+        </div>
+
+        <div class="d-flex gap-1 mb-2">
+            <div>
+                <label class="form-label mb-0 small">X</label>
+                <input type="number" class="form-control form-control-sm" @bind="_selectedSymbol.X" @bind:after="OnChanged" />
+            </div>
+            <div>
+                <label class="form-label mb-0 small">Y</label>
+                <input type="number" class="form-control form-control-sm" @bind="_selectedSymbol.Y" @bind:after="OnChanged" />
+            </div>
+        </div>
+        <div class="d-flex gap-1 mb-2">
+            <div>
+                <label class="form-label mb-0 small">Width</label>
+                <input type="number" class="form-control form-control-sm" @bind="_selectedSymbol.Width" @bind:after="OnChanged" />
+            </div>
+            <div>
+                <label class="form-label mb-0 small">Height</label>
+                <input type="number" class="form-control form-control-sm" @bind="_selectedSymbol.Height" @bind:after="OnChanged" />
+            </div>
+        </div>
+
+        <div class="mb-2">
+            <label class="form-label mb-0 small">Label</label>
+            <input type="text" class="form-control form-control-sm" @bind="_selectedSymbol.Label" @bind:after="OnChanged" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label mb-0 small">Rotation</label>
+            <input type="number" class="form-control form-control-sm" step="any" @bind="_selectedSymbol.Rotation" @bind:after="OnChanged" />
+        </div>
+
+        <div class="d-flex gap-1 mb-2">
+            <div>
+                <label class="form-label mb-0 small">Fill</label>
+                <input type="color" class="form-control form-control-sm form-control-color" style="width: 35px; height: 28px;"
+                       @bind="_selectedSymbol.Fill" @bind:after="OnChanged" />
+            </div>
+            <div>
+                <label class="form-label mb-0 small">Stroke</label>
+                <input type="color" class="form-control form-control-sm form-control-color" style="width: 35px; height: 28px;"
+                       @bind="_selectedSymbol.Stroke" @bind:after="OnChanged" />
+            </div>
+            <div>
+                <label class="form-label mb-0 small">StrokeW</label>
+                <input type="number" class="form-control form-control-sm" step="0.5" style="width: 55px;"
+                       @bind="_selectedSymbol.StrokeWidth" @bind:after="OnChanged" />
+            </div>
+        </div>
+
+        <hr class="my-2" />
+        <h6 class="mb-2 small text-primary">OPC Variable Binding</h6>
+
+        <div class="mb-2">
+            <label class="form-label mb-0 small">Variable Path</label>
+            <VariablePathPicker Value="@_selectedSymbol.VariablePath"
+                                ValueChanged="(v) => { _selectedSymbol.VariablePath = v; }"
+                                OnChanged="OnChanged"
+                                Placeholder="Select or type variable…" />
+            @if (!string.IsNullOrEmpty(_selectedSymbol.VariablePath))
+            {
+                var lv = GetLiveValue(_selectedSymbol);
+                <span class="small text-muted">Live: <strong>@(lv ?? "—")</strong></span>
+            }
+        </div>
+
+        <div class="mb-2">
+            <label class="form-label mb-0 small">Fill Binding</label>
+            <input type="text" class="form-control form-control-sm"
+                   placeholder="value > 50 ? '#ff0000' : '#00ff00'"
+                   @bind="_selectedSymbol.FillBinding" @bind:after="OnChanged" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label mb-0 small">Label Binding</label>
+            <input type="text" class="form-control form-control-sm"
+                   placeholder="value + ' °C'"
+                   @bind="_selectedSymbol.LabelBinding" @bind:after="OnChanged" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label mb-0 small">Visibility Binding</label>
+            <input type="text" class="form-control form-control-sm"
+                   placeholder="value == true"
+                   @bind="_selectedSymbol.VisibilityBinding" @bind:after="OnChanged" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label mb-0 small">Rotation Binding</label>
+            <input type="text" class="form-control form-control-sm"
+                   placeholder="value * 3.6"
+                   @bind="_selectedSymbol.RotationBinding" @bind:after="OnChanged" />
+        </div>
+        <div class="d-flex gap-1 mb-2">
+            <div>
+                <label class="form-label mb-0 small">Min</label>
+                <input type="number" step="any" class="form-control form-control-sm"
+                       @bind="_selectedSymbol.MinValue" @bind:after="OnChanged" />
+            </div>
+            <div>
+                <label class="form-label mb-0 small">Max</label>
+                <input type="number" step="any" class="form-control form-control-sm"
+                       @bind="_selectedSymbol.MaxValue" @bind:after="OnChanged" />
+            </div>
+        </div>
+
+        @if (_selectedSymbol.Type is "hdachart" or "hdagrid")
+        {
+            <hr class="my-2" />
+            <h6 class="mb-2 small text-success">@(_selectedSymbol.Type == "hdachart" ? "📊 HDA Chart Settings" : "📋 HDA Grid Settings")</h6>
+
+            <div class="mb-2">
+                <label class="form-label mb-0 small">Variables (@_selectedSymbol.HdaVariablePaths.Count series)</label>
+                @for (int i = 0; i < _selectedSymbol.HdaVariablePaths.Count; i++)
+                {
+                    var idx = i;
+                    <div class="d-flex gap-1 mb-1 align-items-center">
+                        <VariablePathPicker Value="@_selectedSymbol.HdaVariablePaths[idx]"
+                                            ValueChanged="(v) => { _selectedSymbol.HdaVariablePaths[idx] = v ?? string.Empty; }"
+                                            OnChanged="OnChanged"
+                                            Placeholder="Variable path…"
+                                            InputStyle="font-size: 10px;" />
+                        <button class="btn btn-sm btn-outline-danger py-0 px-1" style="font-size: 9px;"
+                                @onclick="() => { _selectedSymbol.HdaVariablePaths.RemoveAt(idx); OnChanged(); }">✕</button>
+                    </div>
+                }
+                <button class="btn btn-sm btn-outline-success w-100 py-0" style="font-size: 10px;"
+                        @onclick="() => { _selectedSymbol.HdaVariablePaths.Add(string.Empty); OnChanged(); }">＋ Add Variable</button>
+            </div>
+
+            <div class="d-flex gap-1 mb-2">
+                <div>
+                    <label class="form-label mb-0 small">Time Range (min)</label>
+                    <select class="form-select form-select-sm" style="font-size: 10px;"
+                            @bind="_selectedSymbol.HdaTimeRangeMinutes" @bind:after="OnChanged">
+                        <option value="5">5 min</option>
+                        <option value="15">15 min</option>
+                        <option value="60">1 hour</option>
+                        <option value="360">6 hours</option>
+                        <option value="1440">24 hours</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label mb-0 small">Max Points</label>
+                    <input type="number" class="form-control form-control-sm" style="font-size: 10px; width: 80px;"
+                           @bind="_selectedSymbol.HdaMaxPoints" @bind:after="OnChanged" />
+                </div>
+            </div>
+        }
+
+        @if (_selectedSymbol.Type is "editbox")
+        {
+            <hr class="my-2" />
+            <h6 class="mb-2 small" style="color: #60a5fa;">✏️ EditBox Settings</h6>
+
+            <div class="mb-2">
+                <label class="form-label mb-0 small">Spin Step</label>
+                <input type="number" step="any" class="form-control form-control-sm" style="font-size: 10px; width: 100px;"
+                       @bind="_selectedSymbol.EditBoxStep" @bind:after="OnChanged" />
+                <div class="form-text" style="font-size: 9px;">Increment/decrement per spin click. Spin buttons appear only for numeric values.</div>
+            </div>
+
+            <div class="mb-2">
+                <label class="form-label mb-0 small">Display Format</label>
+                <select class="form-select form-select-sm" style="font-size: 10px;"
+                        @bind="_selectedSymbol.EditBoxFormat" @bind:after="OnChanged">
+                    <option value="">(raw value)</option>
+                    <option value="F0">Integer (F0)</option>
+                    <option value="F1">1 decimal (F1)</option>
+                    <option value="F2">2 decimals (F2)</option>
+                    <option value="F3">3 decimals (F3)</option>
+                    <option value="F4">4 decimals (F4)</option>
+                </select>
+            </div>
+
+            <div class="d-flex gap-1 mb-2">
+                <div>
+                    <label class="form-label mb-0 small">Min Value</label>
+                    <input type="number" step="any" class="form-control form-control-sm" style="font-size: 10px; width: 80px;"
+                           @bind="_selectedSymbol.MinValue" @bind:after="OnChanged" />
+                </div>
+                <div>
+                    <label class="form-label mb-0 small">Max Value</label>
+                    <input type="number" step="any" class="form-control form-control-sm" style="font-size: 10px; width: 80px;"
+                           @bind="_selectedSymbol.MaxValue" @bind:after="OnChanged" />
+                </div>
+            </div>
+            <div class="form-text" style="font-size: 9px;">Min/Max clamp the spin buttons. Leave empty for no limits.</div>
+        }
+
+        @if (_selectedSymbol.Type is "ipcamera")
+        {
+            _selectedSymbol.Camera ??= new CameraConfig();
+
+            <hr class="my-2" />
+            <h6 class="mb-2 small" style="color: #ef4444;">📷 IP Camera Settings</h6>
+
+            <div class="mb-2">
+                <label class="form-label mb-0 small">Camera ID</label>
+                <input type="text" class="form-control form-control-sm" style="font-size: 10px;"
+                       @bind="_selectedSymbol.Camera.CameraId" @bind:after="OnChanged" placeholder="cam1" />
+                <div class="form-text" style="font-size: 9px;">Unique identifier. Used in the stream URL.</div>
+            </div>
+
+            <div class="mb-2">
+                <label class="form-label mb-0 small">Protocol</label>
+                <select class="form-select form-select-sm" style="font-size: 10px;"
+                        @bind="_selectedSymbol.Camera.Protocol" @bind:after="OnChanged">
+                    <option value="mjpeg">Motion JPEG (MJPEG stream)</option>
+                    <option value="rtsp">RTSP (via FFmpeg)</option>
+                    <option value="http">HTTP Snapshot (polling)</option>
+                </select>
+            </div>
+
+            <div class="mb-2">
+                <label class="form-label mb-0 small">Camera URL</label>
+                <input type="text" class="form-control form-control-sm" style="font-size: 10px;"
+                       @bind="_selectedSymbol.Camera.Url" @bind:after="OnChanged"
+                       placeholder="@(_selectedSymbol.Camera.Protocol == "rtsp" ? "rtsp://192.168.1.100:554/stream" : _selectedSymbol.Camera.Protocol == "mjpeg" ? "http://192.168.1.100/mjpeg" : "http://192.168.1.100/snapshot.jpg")" />
+            </div>
+
+            <div class="d-flex gap-1 mb-2">
+                <div>
+                    <label class="form-label mb-0 small">FPS</label>
+                    <input type="number" class="form-control form-control-sm" style="font-size: 10px; width: 60px;"
+                           min="1" max="30" @bind="_selectedSymbol.Camera.Fps" @bind:after="OnChanged" />
+                </div>
+                <div>
+                    <label class="form-label mb-0 small">Username</label>
+                    <input type="text" class="form-control form-control-sm" style="font-size: 10px; width: 100px;"
+                           @bind="_selectedSymbol.Camera.Username" @bind:after="OnChanged" placeholder="(optional)" />
+                </div>
+                <div>
+                    <label class="form-label mb-0 small">Password</label>
+                    <input type="password" class="form-control form-control-sm" style="font-size: 10px; width: 100px;"
+                           @bind="_selectedSymbol.Camera.Password" @bind:after="OnChanged" placeholder="(optional)" />
+                </div>
+            </div>
+
+            <hr class="my-2" />
+            <h6 class="mb-2 small" style="color: #facc15;">🤖 YOLO Object Detection</h6>
+
+            <div class="form-check mb-2">
+                <input type="checkbox" class="form-check-input" id="@($"yolo_{_selectedSymbol.Id}")"
+                       checked="@_selectedSymbol.Camera.EnableYolo"
+                       @onchange="(e) => { _selectedSymbol.Camera!.EnableYolo = (bool)(e.Value ?? false); OnChanged(); }" />
+                <label class="form-check-label small" for="@($"yolo_{_selectedSymbol.Id}")">
+                    Enable YOLO object detection
+                </label>
+            </div>
+
+            @if (_selectedSymbol.Camera.EnableYolo)
+            {
+                <div class="mb-2">
+                    <label class="form-label mb-0 small">ONNX Model Path</label>
+                    <input type="text" class="form-control form-control-sm" style="font-size: 10px;"
+                           @bind="_selectedSymbol.Camera.YoloModelPath" @bind:after="OnChanged"
+                           placeholder="yolov8n.onnx (default)" />
+                    <div class="form-text" style="font-size: 9px;">Path to YOLOv8 ONNX model. Leave empty for default.</div>
+                </div>
+
+                <div class="mb-2">
+                    <label class="form-label mb-0 small">Confidence Threshold</label>
+                    <input type="number" step="0.05" min="0.1" max="1.0"
+                           class="form-control form-control-sm" style="font-size: 10px; width: 80px;"
+                           @bind="_selectedSymbol.Camera.YoloConfidence" @bind:after="OnChanged" />
+                </div>
+
+                <div class="mb-2">
+                    <label class="form-label mb-0 small">Detection Variable Prefix</label>
+                    <input type="text" class="form-control form-control-sm" style="font-size: 10px;"
+                           @bind="_selectedSymbol.Camera.DetectionVariablePrefix" @bind:after="OnChanged"
+                           placeholder="e.g. Camera1.Detection" />
+                    <div class="form-text" style="font-size: 9px;">
+                        Server writes: <code>Prefix.Label</code>, <code>Prefix.Confidence</code>, <code>Prefix.Count</code>
+                    </div>
+                </div>
+
+                <div class="form-check mb-2">
+                    <input type="checkbox" class="form-check-input" id="@($"drawdet_{_selectedSymbol.Id}")"
+                           checked="@_selectedSymbol.Camera.DrawDetections"
+                           @onchange="(e) => { _selectedSymbol.Camera!.DrawDetections = (bool)(e.Value ?? false); OnChanged(); }" />
+                    <label class="form-check-label small" for="@($"drawdet_{_selectedSymbol.Id}")">
+                        Draw bounding boxes on stream
+                    </label>
+                </div>
+            }
+        }
+
+        @if (_selectedSymbol.Type is "recipe")
+        {
+            <hr class="my-2" />
+            <h6 class="mb-2 small" style="color: #a78bfa;">📦 Recipe Settings</h6>
+
+            <div class="mb-2">
+                <label class="form-label mb-0 small">Recipe Name</label>
+                @{
+                    var recipeNames = Editor?.RootModel?.Recipes?.Select(r => r.Name).ToList() ?? new List<string>();
+                }
+                @if (recipeNames.Count > 0)
+                {
+                    <select class="form-select form-select-sm" style="font-size: 10px;"
+                            @bind="_selectedSymbol.RecipeName" @bind:after="OnChanged">
+                        <option value="">(select a recipe)</option>
+                        @foreach (var rn in recipeNames)
+                        {
+                            <option value="@rn">@rn</option>
+                        }
+                    </select>
+                }
+                else
+                {
+                    <input type="text" class="form-control form-control-sm" style="font-size: 10px;"
+                           @bind="_selectedSymbol.RecipeName" @bind:after="OnChanged"
+                           placeholder="e.g. Furnace Setup" />
+                }
+                <div class="form-text" style="font-size: 9px;">Must match a Recipe definition name. The widget will show Load/Save/Activate/Delete controls at runtime.</div>
+            </div>
+
+            @if (!string.IsNullOrEmpty(_selectedSymbol.RecipeName))
+            {
+                var matchedRecipe = Editor?.RootModel?.Recipes?.FirstOrDefault(r =>
+                    r.Name.Equals(_selectedSymbol.RecipeName, StringComparison.OrdinalIgnoreCase));
+                @if (matchedRecipe != null)
+                {
+                    <div class="small text-muted mb-1">
+                        <strong>@matchedRecipe.Variables.Count</strong> variable(s) in recipe:
+                    </div>
+                    <div style="max-height: 80px; overflow-y: auto; font-size: 9px; background: #1e293b; border-radius: 3px; padding: 4px;">
+                        @foreach (var rv in matchedRecipe.Variables)
+                        {
+                            <div style="color: #94a3b8;">[@rv.Index] @(!string.IsNullOrEmpty(rv.DisplayName) ? rv.DisplayName : rv.VariablePath)</div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="small text-warning">⚠ No matching recipe definition found for "@_selectedSymbol.RecipeName"</div>
+                }
+            }
+        }
+
+        @if (_selectedSymbol.Type is "screenembed")
+        {
+            <hr class="my-2" />
+            <h6 class="mb-2 small" style="color: #38bdf8;">🪟 Screen Embed Settings</h6>
+
+            <div class="mb-2">
+                <label class="form-label mb-0 small">Embedded Screens</label>
+                <div class="form-text mb-1" style="font-size: 9px;">
+                    Select screens to embed. If more than one is selected, a tab bar appears at runtime with lazy loading.
+                </div>
+
+                @for (var i = 0; i < _selectedSymbol.EmbeddedScreens.Count; i++)
+                {
+                    var index = i;
+                    var screenNames = Editor?.RootModel?.Screens?.Select(s => s.Name).ToList() ?? new List<string>();
+                    <div class="d-flex gap-1 mb-1 align-items-center">
+                        @if (screenNames.Count > 0)
+                        {
+                            <select class="form-select form-select-sm flex-grow-1" style="font-size: 10px;"
+                                    value="@_selectedSymbol.EmbeddedScreens[index]"
+                                    @onchange="(e) => UpdateEmbeddedScreen(index, e)">
+                                <option value="">(select a screen)</option>
+                                @foreach (var sn in screenNames)
+                                {
+                                    <option value="@sn">@sn</option>
+                                }
+                            </select>
+                        }
+                        else
+                        {
+                            <input type="text" class="form-control form-control-sm flex-grow-1" style="font-size: 10px;"
+                                   value="@_selectedSymbol.EmbeddedScreens[index]"
+                                   @onchange="(e) => UpdateEmbeddedScreen(index, e)"
+                                   placeholder="Screen name" />
+                        }
+                        <button class="btn btn-sm btn-outline-danger" style="font-size: 9px; padding: 1px 4px;"
+                                @onclick="() => RemoveEmbeddedScreen(index)"
+                                title="Remove">✕</button>
+                    </div>
+                }
+
+                <button class="btn btn-sm btn-outline-primary mt-1" style="font-size: 10px;"
+                        @onclick="AddEmbeddedScreen">
+                    + Add Screen
+                </button>
+            </div>
+
+            @if (_selectedSymbol.EmbeddedScreens.Count > 1)
+            {
+                <div class="small text-muted" style="font-size: 9px;">
+                    💡 @_selectedSymbol.EmbeddedScreens.Count screens → tab bar with lazy loading at runtime.
+                </div>
+            }
+            else if (_selectedSymbol.EmbeddedScreens.Count == 1)
+            {
+                <div class="small text-muted" style="font-size: 9px;">
+                    Single screen → rendered directly (no tabs).
+                </div>
+            }
+        }
+
+        @if (_selectedSymbol.Type is "eventlog")
+        {
+            <hr class="my-2" />
+            <h6 class="mb-2 small" style="color: #94a3b8;">📓 Event Log Settings</h6>
+
+            <div class="d-flex gap-1 mb-2">
+                <div>
+                    <label class="form-label mb-0 small">Time Range</label>
+                    <select class="form-select form-select-sm" style="font-size: 10px;"
+                            @bind="_selectedSymbol.EventLogTimeRangeMinutes" @bind:after="OnChanged">
+                        <option value="5">5 min</option>
+                        <option value="15">15 min</option>
+                        <option value="60">1 hour</option>
+                        <option value="360">6 hours</option>
+                        <option value="1440">24 hours</option>
+                        <option value="10080">7 days</option>
+                        <option value="0">All</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label mb-0 small">Max Rows</label>
+                    <input type="number" class="form-control form-control-sm" style="font-size: 10px; width: 80px;"
+                           @bind="_selectedSymbol.EventLogMaxRows" @bind:after="OnChanged" />
+                </div>
+            </div>
+
+            <div class="mb-2">
+                <label class="form-label mb-0 small">Category Filter</label>
+                <select class="form-select form-select-sm" style="font-size: 10px;"
+                        @bind="_selectedSymbol.EventLogCategories" @bind:after="OnChanged">
+                    <option value="">All Categories</option>
+                    <option value="Alarm">Alarm only</option>
+                    <option value="Auth">Auth only</option>
+                    <option value="Driver">Driver only</option>
+                    <option value="System">System only</option>
+                    <option value="Alarm,Auth">Alarm + Auth</option>
+                    <option value="Alarm,Driver">Alarm + Driver</option>
+                    <option value="Alarm,Auth,Driver">Alarm + Auth + Driver</option>
+                    <option value="Driver,System">Driver + System</option>
+                </select>
+            </div>
+        }
+
+        <hr class="my-2" />
+        <h6 class="mb-2 small text-warning">🔒 Access Control</h6>
+        <div class="mb-2">
+            <label class="form-label mb-0 small">Required Access Level</label>
+            <select class="form-select form-select-sm" style="font-size: 11px;"
+                    @bind="_selectedSymbol.RequiredAccess" @bind:after="OnChanged">
+                <option value="">(none — always visible)</option>
+                <option value="Read">Read — hidden if user has no read access</option>
+                <option value="Write">Write — commands require write access</option>
+                <option value="ReadWrite">ReadWrite — read to see, write to interact</option>
+            </select>
+        </div>
+
+        <hr class="my-2" />
+        <h6 class="mb-2 small text-success">⚡ Commands (@_selectedSymbol.Commands.Count)</h6>
+
+        @foreach (var cmd in _selectedSymbol.Commands)
+        {
+            var c = cmd;
+            <div class="border rounded p-1 mb-2" style="font-size: 11px; background: var(--surface-alt, #f8f8f8);">
+                <div class="d-flex gap-1 mb-1 align-items-center">
+                    <select class="form-select form-select-sm" style="font-size: 10px;"
+                            @bind="c.Action" @bind:after="OnChanged">
+                        <optgroup label="Navigation">
+                            <option value="NavigateScreen">Navigate Screen</option>
+                            <option value="OpenScreenPopup">Open Screen Popup</option>
+                            <option value="OpenScreenModal">Open Screen Modal</option>
+                        </optgroup>
+                        <optgroup label="Variable">
+                            <option value="SetVariable">Set Variable</option>
+                            <option value="ResetVariable">Reset Variable (→ 0)</option>
+                            <option value="ToggleVariable">Toggle Variable</option>
+                            <option value="IncrementVariable">Increment Variable</option>
+                            <option value="DecrementVariable">Decrement Variable</option>
+                            <option value="WriteVariable">Write Variable</option>
+                        </optgroup>
+                        <optgroup label="Scripting">
+                            <option value="ExecuteJavaScript">Execute JavaScript</option>
+                            <option value="ExecuteScript">Execute Script</option>
+                        </optgroup>
+                        <optgroup label="Authentication">
+                            <option value="Login">Show Login</option>
+                            <option value="Logout">Logout</option>
+                        </optgroup>
+                        <optgroup label="Alarms">
+                            <option value="AcknowledgeAllAlarms">Acknowledge All Alarms</option>
+                            <option value="ResetAllAlarms">Reset All Alarms</option>
+                        </optgroup>
+                        <optgroup label="Localization">
+                            <option value="ChangeLanguage">Change Language</option>
+                        </optgroup>
+                    </select>
+                    <select class="form-select form-select-sm" style="font-size: 10px; width: 100px; flex-shrink: 0;"
+                            @bind="c.Trigger" @bind:after="OnChanged">
+                        <option value="Click">Click</option>
+                        <option value="MouseDown">Mouse Down</option>
+                        <option value="MouseUp">Mouse Up</option>
+                        <option value="WhilePressed">While Pressed</option>
+                    </select>
+                    <button class="btn btn-sm btn-outline-danger py-0 px-1" style="font-size: 9px;"
+                            @onclick="() => { _selectedSymbol.Commands.Remove(c); OnChanged(); }">✕</button>
+                </div>
+
+                @if (c.Action is "NavigateScreen" or "OpenScreenPopup" or "OpenScreenModal")
+                {
+                    <div class="mb-1">
+                        <label class="form-label mb-0" style="font-size: 10px;">Target Screen</label>
+                        <select class="form-select form-select-sm" style="font-size: 10px;"
+                                @bind="c.TargetScreen" @bind:after="OnChanged">
+                            <option value="">(select)</option>
+                            @foreach (var scr in GetScreenNames())
+                            {
+                                <option value="@scr">@scr</option>
+                            }
+                        </select>
+                    </div>
+                }
+
+                @if (c.Action is "SetVariable" or "ResetVariable" or "ToggleVariable"
+                    or "IncrementVariable" or "DecrementVariable" or "WriteVariable")
+                {
+                    <div class="mb-1">
+                        <label class="form-label mb-0" style="font-size: 10px;">Variable Path</label>
+                        <VariablePathPicker Value="@c.VariablePath"
+                                            ValueChanged="(v) => { c.VariablePath = v ?? string.Empty; }"
+                                            OnChanged="OnChanged"
+                                            Placeholder="Select variable…"
+                                            InputStyle="font-size: 10px;" />
+                    </div>
+                }
+
+                @if (c.Action is "SetVariable" or "WriteVariable" or "IncrementVariable" or "DecrementVariable")
+                {
+                    <div class="mb-1">
+                        <label class="form-label mb-0" style="font-size: 10px;">
+                            @(c.Action is "IncrementVariable" or "DecrementVariable" ? "Step" : "Value")
+                        </label>
+                        <input type="text" class="form-control form-control-sm" style="font-size: 10px;"
+                               placeholder="@(c.Action is "IncrementVariable" or "DecrementVariable" ? "1" : "true")"
+                               @bind="c.Value" @bind:after="OnChanged" />
+                    </div>
+                }
+
+                @if (c.Trigger == "WhilePressed")
+                {
+                    <div class="mb-1">
+                        <label class="form-label mb-0" style="font-size: 10px;">Release Value</label>
+                        <input type="text" class="form-control form-control-sm" style="font-size: 10px;"
+                               placeholder="0 or false" @bind="c.ReleaseValue" @bind:after="OnChanged" />
+                    </div>
+                }
+
+                @if (c.Action is "ExecuteJavaScript")
+                {
+                    <div class="mb-1">
+                        <label class="form-label mb-0" style="font-size: 10px;">JavaScript Code</label>
+                        <textarea class="form-control form-control-sm" style="font-size: 10px; font-family: monospace; min-height: 60px;"
+                                  placeholder="document.querySelector('.rv-canvas').style.background = 'red';"
+                                  @bind="c.Script" @bind:after="OnChanged"></textarea>
+                        <span class="text-muted" style="font-size: 9px;">Full browser DOM access including SVG elements.</span>
+                    </div>
+                }
+
+                @if (c.Action is "ExecuteScript")
+                {
+                    <div class="mb-1">
+                        <label class="form-label mb-0" style="font-size: 10px;">Script</label>
+                        <textarea class="form-control form-control-sm" style="font-size: 10px; font-family: monospace; min-height: 80px;"
+                                  placeholder="write(Root.Plant.Motor1, true)&#10;set(.rv-canvas rect, fill, #ff0000)&#10;delay(500)&#10;toggle(Root.Plant.Motor1)"
+                                  @bind="c.Script" @bind:after="OnChanged"></textarea>
+                        <span class="text-muted" style="font-size: 9px;">
+                            Commands: write(path, value) · toggle(path) · js(code) · set(selector, attr, value) · css(selector, prop, value) · log(msg) · alert(msg) · delay(ms)
+                        </span>
+                    </div>
+                }
+
+                @if (c.Action is "AcknowledgeAllAlarms" or "ResetAllAlarms")
+                {
+                    <div class="mb-1">
+                        <label class="form-label mb-0" style="font-size: 10px;">Comment (optional)</label>
+                        <input type="text" class="form-control form-control-sm" style="font-size: 10px;"
+                               placeholder="Acknowledged from RuntimeViewer"
+                               @bind="c.Value" @bind:after="OnChanged" />
+                    </div>
+                }
+
+                @if (c.Action is "ChangeLanguage")
+                {
+                    <div class="mb-1">
+                        <label class="form-label mb-0" style="font-size: 10px;">Language Code</label>
+                        <input type="text" class="form-control form-control-sm" style="font-size: 10px;"
+                               placeholder="en, de, fr, es, it, ja…"
+                               @bind="c.Value" @bind:after="OnChanged" />
+                        <span class="text-muted" style="font-size: 9px;">
+                            Set active language at runtime. Labels prefixed with @@ are resolved from the String Table.
+                        </span>
+                    </div>
+                }
+            </div>
+        }
+
+        <button class="btn btn-sm btn-outline-success w-100 py-0" style="font-size: 11px;"
+                @onclick="AddCommand">＋ Add Command</button>
+    </div>
+}
+else
+{
+    <div class="properties-panel">
+        <p class="text-muted p-2">Select a symbol on the canvas to edit its properties.</p>
+    </div>
+}
+
+@code {
+    [Inject] private NodeEditorService Editor { get; set; } = default!;
+    [Inject] private OpcClientService Opc { get; set; } = default!;
+
+    [Parameter] public EventCallback OnPropertyChanged { get; set; }
+
+    private ScreenSymbol? _selectedSymbol => Editor.SelectedScreenSymbol;
+    private IReadOnlyList<ScreenSymbol> _selectedSymbols => Editor.SelectedScreenSymbols;
+
+    private static int _nextCmdId = 1;
+
+    protected override void OnInitialized()
+    {
+        Editor.ScreenSelectionChanged += OnSelectionChanged;
+    }
+
+    private void OnSelectionChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void OnChanged()
+    {
+        OnPropertyChanged.InvokeAsync();
+    }
+
+    private string? GetLiveValue(ScreenSymbol sym)
+    {
+        if (string.IsNullOrEmpty(sym.VariablePath)) return null;
+
+        foreach (var item in Opc.MonitoredItems)
+        {
+            if (item.DisplayName == sym.VariablePath ||
+                item.NodeIdString.EndsWith(sym.VariablePath, StringComparison.OrdinalIgnoreCase))
+                return item.Value;
+        }
+        return null;
+    }
+
+    private void AddCommand()
+    {
+        if (_selectedSymbol == null) return;
+        _selectedSymbol.Commands.Add(new SymbolCommand
+        {
+            Id = $"cmd_{_nextCmdId++}",
+            Action = "NavigateScreen",
+            Trigger = "Click"
+        });
+        OnChanged();
+    }
+
+    private List<string> GetScreenNames()
+    {
+        return Editor.RootModel?.Screens.Select(s => s.Name).ToList() ?? [];
+    }
+
+    // ─── Screen Embed helpers ───────────────────────────────
+
+    private void AddEmbeddedScreen()
+    {
+        _selectedSymbol?.EmbeddedScreens.Add("");
+        OnChanged();
+    }
+
+    private void RemoveEmbeddedScreen(int index)
+    {
+        if (_selectedSymbol != null && index >= 0 && index < _selectedSymbol.EmbeddedScreens.Count)
+        {
+            _selectedSymbol.EmbeddedScreens.RemoveAt(index);
+            OnChanged();
+        }
+    }
+
+    private void UpdateEmbeddedScreen(int index, ChangeEventArgs e)
+    {
+        if (_selectedSymbol != null && index >= 0 && index < _selectedSymbol.EmbeddedScreens.Count)
+        {
+            _selectedSymbol.EmbeddedScreens[index] = e.Value?.ToString() ?? "";
+            OnChanged();
+        }
+    }
+
+    public void Dispose()
+    {
+        Editor.ScreenSelectionChanged -= OnSelectionChanged;
+    }
+}

@@ -1,0 +1,850 @@
+﻿<div id="GridAlarmWindow" class="GridAlarmWindow">
+    <img src="cl.gif" alt="" onload="onGridAlarmWindowLoaded(this)" id="loadingImage" />
+
+    <div id="mainContainer">
+        <div id="topToolbar" style="display: none; width:100%;">
+            <div id="bestfitbtn" style="margin: 5px 2.5px;"></div>
+            <div id="activeFilterCriteriaContainer" style="margin: 5px 2.5px; display: inline-block;">
+                <div id="btnClearFilter"></div>
+                <div id="activeFilterCriteria" style="margin-left: 2.5px; display: inline-block;"></div>
+            </div>
+        </div>
+
+        <div id="alarmgrid"></div>
+
+        <div id="alarmToolbar" style="padding:5px; text-align: center;">
+            <div id="btnAckAll"></div>
+            <div id="btnResetAll"></div>
+            <div id="btnAck"></div>
+            <div id="btnReset"></div>
+            <div id="btnToggleSound"></div>
+        </div>
+    </div>
+
+    <script>
+        function onGridAlarmWindowLoaded(obj) {
+
+            var thisPage = $(obj).parent();
+            thisPage.localize();
+
+            var scope = thisPage.scope();
+            if (!scope)
+                return;
+            var paratt = thisPage.data(dataparameters);
+            if (!paratt)
+                return;
+
+            var thisParent = thisPage.parent();
+            $(obj).remove();
+
+            setOpacity(scope, thisParent, thisPage);
+
+            var webKitRenderCorrection = $(thisPage).hasClass("webKitRenderCorrection");
+            var thisParentId = thisParent.attr("id");
+            var interval;
+            var intervalBlink;
+            var deregisterListener;
+            var deregisterListenerActiveLanguage;
+
+            var parameters = JSON.parse(paratt);
+            var connectChildAlarms = parameters.ConnectChildAlarms == true ? true : false;
+
+            $(thisPage).bind('destroyed', function () {
+                if (interval)
+                    clearInterval(interval);
+                if (intervalBlink)
+                    clearInterval(intervalBlink);
+                if (deregisterListener)
+                    deregisterListener();
+                if (deregisterListenerActiveLanguage)
+                    deregisterListenerActiveLanguage();
+                if (connectChildAlarms) {
+                    scope.corehubconnection.invoke("UnsubscribeChildrenAlarmServer", parameters.screenId)
+                        .then((ret) => {
+
+                        })
+                        .catch(err => {
+                            console.error(err.toString());
+                            var errorText = i18next.t1('ErrorUnsubscribingChildrenAlarmServer') + err.toString();
+                            scope.$broadcast(onError, { ex: err, value: errorText });
+                        });
+                }
+            });
+
+            var mainContainer = thisPage.find("#mainContainer");
+            var scrollingOptions = {
+                mode: webKitRenderCorrection ? "standard" : "virtual"
+            };
+
+            if (connectChildAlarms) {
+                scope.corehubconnection.invoke("SubscribeChildrenAlarmServer", parameters.screenId)
+                    .then((ret) => {
+
+                    })
+                    .catch(err => {
+                        console.error(err.toString());
+                        var errorText = i18next.t1('ErrorSubscribingChildrenAlarmServer') + err.toString();
+                        bannerText.option("value", errorText);
+                        scope.$broadcast(onError, { ex: err, value: errorText });
+                    });
+            }
+
+            if (scope.biOS) {
+                webkitMoveRotateTransform(thisParent, thisPage, mainContainer);
+                if (webKitRenderCorrection)
+                    thisPage.css("will-change", "opacity");
+            }
+            if (scope.biOS || (isMobile.Android() && parameters.bFitInWindow)) {
+                scrollingOptions["useNative"] = false;
+                scrollingOptions["scrollByThumb"] = true;
+            }
+
+            var customFonts = [parameters.FontFamily, parameters.HeaderFontSettings.FontFamily, parameters.AlarmAreaFontSettings.FontFamily];
+            if (parameters.FontSettingList)
+                $.each(parameters.FontSettingList, function (index, item) {
+                    customFonts.push(item.FontFamily);
+                });
+            loadCustomFonts(customFonts);
+            var dynamicFontElements = [];
+
+            let arrayrow = [];
+            var selectedData;
+            var connected = false;
+            var container = thisPage.find("#alarmgrid");
+            var btnContainer = container.next();
+            var bLanguageChanged = false;
+            var parametersFilterCriteria = "";
+            var parametersOriginalFilterCriteria = "";
+            var parametersJSFilterCriteria;
+            if (parameters.FilterCriteria) {
+                parametersJSFilterCriteria = parameters.FilterCriteria.replace(/indexOf\((.*?)\)/g, "indexOf(\"$1\")").replace().replace(/(^|\s|\(+)itemData\.time /g, "$1itemData.timeticks ").replace(/(itemData\..*? [\!=]= )(.*?)(\s|$|\)+)/g, "$1\"$2\"$3");
+                parametersFilterCriteria = parametersJSFilterCriteria;
+                parametersOriginalFilterCriteria = parameters.OriginalFilterCriteria;
+            }
+
+            var iconSizeMap = {};
+            var bestfitbtn;
+            var btnAckAllDiv = btnContainer.children().first();
+            var btnResetAllDiv = btnAckAllDiv.next();
+            var btnAckDiv = btnResetAllDiv.next();
+            var btnResetDiv = btnAckDiv.next();
+            var btnAckAll;
+            var btnResetAll;
+            var btnReset;
+            var btnToggleSound;
+            var btnAck;
+            var lastRet = {};
+            var bForceUpdateDataSource = false;
+            var btnToggleSoundDiv = btnResetDiv.next();
+            var noDataText = i18next.t1('ConnectingToServer');
+            var severityColorMap = {};
+            var currentCulture = navigator.language;
+            var thisParentHeight = $(thisParent).attr("height");
+            var bestfitbtnDiv = thisPage.find("#bestfitbtn");
+            var activeFilterCriteriaDiv = thisPage.find("#activeFilterCriteria");
+            var activeFilterCriteriaContainerDiv = thisPage.find("#activeFilterCriteriaContainer");
+            var btnClearFilterDiv = thisPage.find("#btnClearFilter");
+            var topToolbar = thisPage.find("#topToolbar");
+            var alarmToolbar = thisPage.find("#alarmToolbar");
+            var topToolbarVisible = false;
+            var alarmToolbarReady;
+            var dataGridReady;
+            var columnAlignment = parameters.HorizontalColumnAlignment == 1 ? "center" : (parameters.HorizontalColumnAlignment == 2 ? "right" : "left");
+            var translationPrefix = "_AlarmWindow_";
+            var translations = scope.setTranslations("AlarmWindow", [
+                {
+                    id: "BestFitBtn",
+                    stringSuffix: "BestFit",
+                    defValue: "Best Fit"
+                },
+                {
+                    id: "AckAll",
+                    stringSuffix: "AckAllCmd",
+                    defValue: "Ack All"
+                },
+                {
+                    id: "Ack",
+                    stringSuffix: "AckCmd",
+                    defValue: "Ack"
+                },
+                {
+                    id: "AckedTime",
+                    stringSuffix: "AckedTransitionTime",
+                    defValue: "Acked Transition Time"
+                },
+                {
+                    id: "ActiveTime",
+                    stringSuffix: "ActiveTransitionTime",
+                    defValue: "Active Transition Time"
+                },
+                {
+                    id: "ActiveEffectiveTime",
+                    stringSuffix: "ActiveEffectiveTransitionTime",
+                    defValue: "Change State Time"
+                },
+                {
+                    id: "ActSettings",
+                    stringSuffix: "ActualSettings",
+                    defValue: "Actual Settings"
+                },
+                {
+                    id: "AddComment",
+                    stringSuffix: "AddCommentCmd",
+                    defValue: "Add Comment"
+                },
+                {
+                    id: "Comm",
+                    stringSuffix: "Comment",
+                    defValue: "Comment"
+                },
+                {
+                    id: "Confirm",
+                    stringSuffix: "ConfirmCmd",
+                    defValue: "Reset"
+                },
+                {
+                    id: "ConfirmAll",
+                    stringSuffix: "ConfirmAllCmd",
+                    defValue: "Reset All"
+                },
+                {
+                    id: "DisableSound",
+                    stringSuffix: "DisableSoundCmd",
+                    defValue: "Sound"
+                }
+            ]);
+
+            var headerFontOptions = {
+                "font-family": parameters.HeaderFontSettings.FontFamily,
+                "font-size": parameters.HeaderFontSettings.FontSize + "px",
+                "font-weight": fontWeightConverter(parameters.HeaderFontSettings.FontWeight),
+                "color": getSolidColor(parameters.ToolbarForeground),
+                "background": parameters.Background.Color
+            };
+            var dataFontOptions = {
+                "font-family": parameters.AlarmAreaFontSettings.FontFamily,
+                "font-size": parameters.AlarmAreaFontSettings.FontSize + "px",
+                "font-weight": fontWeightConverter(parameters.AlarmAreaFontSettings.FontWeight),
+                "color": getSolidColor(parameters.AlarmAreaSelectedForeground)
+            };
+
+            var gridAlarmOpts = {
+                showBorders: true,
+                columnResizingMode: "widget",
+                disabled: thisParent.hasClass(disabledClass),
+                editing: {
+                    editEnabled: false,
+                    editMode: 'row',
+                    insertEnabled: false,
+                    removeEnabled: false
+                },
+                width: "100%",
+                allowColumnReordering: true,
+                allowColumnResizing: true,
+                onRowPrepared: function (e) {
+                    if (e.rowType != 'data')
+                        return;
+                    else if (e.data.needsAcknoledge) {
+                        arrayrow.push(e.rowElement);
+                        if (blink) {
+                            e.rowElement.addClass("blinkingRow");
+                        }
+                    }
+                    updateThresholdElementColor(e.data, jQuerize(e.rowElement), parameters.Thresholds, severityColorMap);
+                },
+                onInitialized: function (e) {
+                    setTimeout(function () {
+                        dataGridReady = true;
+                        if (alarmToolbarReady)
+                            updateGridHeight($(e.component.element()));
+                    }, 1);
+                },
+                //filterValue: parameters.FilterCriteria,
+                selection: {
+                    mode: "multiple"
+                },
+                scrolling: scrollingOptions,
+                paging: {
+                    pageSize: 50,
+                },
+                filterRow: {
+                    visible: parameters.ShowFilterPanel ? true : false
+                },
+                filterPanel: { visible: parameters.ShowFilterPanel ? true : false },
+                loadPanel: {
+                    enabled: true
+                },
+                columns: loadColumns(),
+                noDataText: noDataText,
+                onSelectionChanged: function (e) {
+                    var ackDisabled = true;
+                    var resetDisabled = true;
+                    if (connected) {
+
+                        for (var i = 0; i < e.selectedRowsData.length; ++i) {
+
+                            if (e.selectedRowsData[i].needsAcknoledge) {
+                                ackDisabled = false;
+                                break;
+                            }
+                        }
+                        for (var i = 0; i < e.selectedRowsData.length; ++i) {
+
+                            if (e.selectedRowsData[i].needsConfirm) {
+                                resetDisabled = false;
+                                break;
+                            }
+                        }
+                    }
+
+                    btnAck.option("disabled", ackDisabled);
+                    btnReset.option("disabled", resetDisabled);
+
+                    selectedData = e.selectedRowsData;
+                }
+            };
+
+            var dataGrid;
+            var blink = false;
+
+            var mutateFunc = function () {
+                alarmToolbar.css("background", parameters.Background.Color);
+                $.each(alarmToolbar.children("div"), function (i, el) {
+                    var elem = $(el);
+                    elem.css({
+                        "font-family": parameters.FontFamily,
+                        "font-size": parameters.FontSize + "px",
+                        "font-weight": fontWeightConverter(parameters.FontWeight),
+                        "color": getSolidColor(parameters.Foreground),
+                        "background": parameters.Background.Color,
+                        "min-width": 70
+                    });
+                    dynamicFontElements.push(elem);
+                });
+                bestfitbtnDiv.css({
+                    "font-family": parameters.FontFamily,
+                    "font-size": parameters.FontSize + "px",
+                    "font-weight": fontWeightConverter(parameters.FontWeight),
+                    "color": getSolidColor(parameters.ToolbarForeground)
+                });
+                dynamicFontElements.push(bestfitbtnDiv);
+
+                setGridFontStyle();
+
+                if (parametersOriginalFilterCriteria || parameters.ShowBestFitButton) {
+                    topToolbarVisible = true;
+                    topToolbar.css({
+                        "display": "block",
+                        "background": parameters.Background.Color
+                    });
+                    if (parameters.ShowBestFitButton) {
+                        bestfitbtn = bestfitbtnDiv.dxButton({
+                            text: translations.BestFitBtn(),
+                            type: "normal",
+                            onClick: function (e) {
+                                for (var i = 0; i < dataGrid.columnCount(); i++) {
+                                    if (dataGrid.columnOption(i, 'visible')) {
+                                        dataGrid.columnOption(i, 'width', 'auto');
+                                    }
+                                }
+                                dataGrid.option("columnAutoWidth", true);
+                                dataGrid.repaint();
+                            }
+                        }).dxButton("instance");
+                    }
+
+                    if (parametersJSFilterCriteria) {
+                        let btnClearFilter = btnClearFilterDiv.dxCheckBox({
+                            value: true,
+                            onValueChanged: function (ea) {
+                                parametersFilterCriteria = ea.value ? parametersJSFilterCriteria : null;
+                                bForceUpdateDataSource = true;
+                            }
+                        }).dxCheckBox("instance");
+                        activeFilterCriteriaDiv.text("[" + parametersOriginalFilterCriteria + "]");
+                    }
+                }
+
+                dataGrid = container.dxDataGrid(gridAlarmOpts).dxDataGrid("instance");
+
+                if (parameters.Background)
+                    $(thisPage.find(".dx-datagrid-rowsview")[0]).css("background", parameters.Background.Color);
+
+                var options = {};
+                setObjectBorder(options, parameters);
+                if (!$.isEmptyObject(options))
+                    mainContainer.css(options);
+
+                btnAckAll = btnAckAllDiv.dxButton({
+                    text: parameters.UseIcon ? "" : translations.AckAll(),
+                    icon: parameters.UseIcon ? "images/toolbox/gridAlarmWindow/CircleCheck.svg" : null,
+                    type: "normal",
+                    disabled: true,
+                    onContentReady: function (e) {
+                        alarmToolbarReady = true;
+                        if (dataGridReady)
+                            updateGridHeight(dataGrid.element());
+                    },
+                    onClick: function (e) {
+                        prepareAckReset(dataGrid, scope, false, parameters.SVGReferenceId, parameters.screenId);
+                    }
+                }).dxButton("instance");
+
+                btnResetAll = btnResetAllDiv.dxButton({
+                    text: parameters.UseIcon ? "" : translations.ConfirmAll(),
+                    icon: parameters.UseIcon ? "images/toolbox/gridAlarmWindow/CircleUncheck.svg" : null,
+                    type: "normal",
+                    disabled: true,
+                    onClick: function (e) {
+                        prepareAckReset(dataGrid, scope, true, parameters.SVGReferenceId, parameters.screenId);
+                    }
+                }).dxButton("instance");
+
+                btnAck = btnAckDiv.dxButton({
+                    text: parameters.UseIcon ? "" : translations.Ack(),
+                    icon: parameters.UseIcon ? "images/toolbox/gridAlarmWindow/Check.svg" : null,
+                    type: "normal",
+                    disabled: true,
+                    onClick: function (e) {
+
+                        prepareAckReset(dataGrid, scope, false, parameters.SVGReferenceId, parameters.screenId, selectedData);
+                    }
+                }).dxButton("instance");
+
+                btnReset = btnResetDiv.dxButton({
+                    text: parameters.UseIcon ? "" : translations.Confirm(),
+                    icon: parameters.UseIcon ? "images/toolbox/gridAlarmWindow/Uncheck.svg" : null,
+                    type: "normal",
+                    disabled: true,
+                    onClick: function (e) {
+
+                        prepareAckReset(dataGrid, scope, true, parameters.SVGReferenceId, parameters.screenId, selectedData);
+                    }
+                }).dxButton("instance");
+
+                btnToggleSound = btnToggleSoundDiv.dxButton({
+                    text: parameters.UseIcon ? "" : translations.DisableSound(),
+                    icon: parameters.UseIcon ? "images/toolbox/gridAlarmWindow/Mute.svg" : null,
+                    type: "normal",
+                    disabled: false,
+                    onClick: function (e) {
+                        $(e.component.element()).toggleClass("clicked");
+                        scope.corehubconnection.invoke("ToggleAlarmSound");
+                    }
+                }).dxButton("instance");
+
+                deregisterListenerActiveLanguage = scope.$on(onActiveLanguageChanged, function (e, value) {
+                    if (currentCulture != value)
+                        bLanguageChanged = true;
+                    currentCulture = value;
+
+                    jQuery.each(parameters.GridLayout, function (index, item) {
+                        let stringSuffix = item.ColumnTag ? item.ColumnTag : item.FieldName;
+                        dataGrid.columnOption(index, 'caption', i18next.t1(translationPrefix + stringSuffix, i18next.t1(stringSuffix)));
+                    });
+
+                    dataGrid.option("columns", loadColumns());
+
+                    noDataText = i18next.t1('ConnectingToServer');
+                    if (!connected)
+                        dataGrid.option("noDataText", noDataText);
+
+                    if (bestfitbtn)
+                        bestfitbtn.option("text", translations.BestFitBtn());
+                    btnAckAll.option("text", translations.AckAll());
+                    btnResetAll.option("text", translations.ConfirmAll());
+                    btnAck.option("text", translations.Ack());
+                    btnReset.option("text", translations.Confirm());
+                    btnToggleSound.option("text", translations.DisableSound());
+
+                    if (parameters.FontSettingList && (value in parameters.FontSettingList) !== -1) {
+                        var fontOpts = applyFontSettingList(dynamicFontElements, parameters.FontSettingList[value]);
+                        for (var cssProp in fontOpts) {
+                            headerFontOptions[cssProp] = fontOpts[cssProp];
+                            dataFontOptions[cssProp] = fontOpts[cssProp];
+                        }
+                        setGridFontStyle();
+                    }
+                });
+
+                $(thisParent).bind(disabledClassEvent, function () {
+                    dataGrid.option("disabled", thisParent.hasClass(disabledClass));
+                });
+
+                if (!parameters.DisableBlinkAnimation) {
+                    intervalBlink = setInterval(function () {
+                        blink = !blink;
+                        for (let i = 0; i < arrayrow.length; i++) {
+                            if (blink) {
+                                fastdom.mutate(function () {
+                                    if (arrayrow[i])
+                                        arrayrow[i].addClass("blinkingRow");
+                                });
+                            }
+                            else {
+                                fastdom.measure(function () {
+                                    if (!arrayrow[i])
+                                        return;
+                                    var thresColor = arrayrow[i].attr("thresholdColor");
+                                    fastdom.mutate(function () {
+                                        if (arrayrow[i]) {
+                                            arrayrow[i].removeClass("blinkingRow");
+                                            arrayrow[i].css("background", thresColor);
+                                        }
+                                    });
+                                });
+                            }
+                        }
+                    }, 1000);
+                }
+
+                applyTagQualityStyle(webKitRenderCorrection ? thisPage : thisParent, scope, parameters.screenId, parameters.SVGReferenceId);
+                if (scope.dataValues[parameters.screenId] && scope.dataValues[parameters.screenId][parameters.SVGReferenceId] && scope.dataValues[parameters.screenId][parameters.SVGReferenceId].isGood && !interval)
+                    setTimer();
+
+                deregisterListener = scope.$on(onDataChanged + parameters.screenId + parameters.SVGReferenceId, function (e, value) {
+                    applyTagQualityStyle(webKitRenderCorrection ? thisPage : thisParent, scope, parameters.screenId, parameters.SVGReferenceId);
+                    if (scope.dataValues[parameters.screenId][parameters.SVGReferenceId].isGood) {
+                        if (!interval)
+                            setTimer();
+                    }
+                    else {
+                        if (interval) {
+                            clearInterval(interval);
+                            dataGrid.option("noDataText", noDataText);
+                            interval = undefined;
+                        }
+
+                        connected = false;
+                        btnAckAll.option("disabled", true);
+                        btnResetAll.option("disabled", true);
+                        btnAck.option("disabled", true);
+                        btnReset.option("disabled", true);
+                    }
+                });
+            };
+
+            mutateHandler.scheduleMutate(parameters.screenId, mutateFunc);
+
+            function setGridFontStyle() {
+                var inlineHeaderOptions = Object.entries(headerFontOptions).map(function (kv) { return (`${kv[0]}:${kv[1]}`) }).join(';') + ";";
+                var inlineDataOptions = Object.entries(dataFontOptions).map(function (kv) { return (`${kv[0]}:${kv[1]}`) }).join(';') + ";";
+
+                var styleID = buildStyleID(thisPage, thisParentId, parameters.screenName);
+                var dlStyle = $("#" + styleID);
+                if (dlStyle.length > 0)
+                    dlStyle.remove();
+                $("<style id=\"" + styleID + "\">#" + thisParentId + ".GridAlarmWindow .dx-header-row { " + inlineHeaderOptions + " } #" + thisParentId + ".GridAlarmWindow .dx-data-row td { " + inlineDataOptions + " }</style>").appendTo("head");
+            }
+
+            function stateConditionConverter(originalValue, columnTag) {
+                try {
+                    var oldValue = originalValue.split("|");
+                    if (columnTag == "Condition")
+                        originalValue = translateReason(oldValue[0].trim());
+                    else
+                        originalValue = i18next.t1(oldValue[1].trim());
+                }
+                finally {
+                    return originalValue;
+                }
+            }
+
+            function loadColumns() {
+                var columns = [];
+                jQuery.each(parameters.GridLayout, function (index, item) {
+                    let stringSuffix = item.ColumnTag ? item.ColumnTag : item.FieldName;
+                    let colCaption = i18next.t1(item.ResourceKey);
+                    colCaption = i18next.t1(translationPrefix + stringSuffix, colCaption);
+                    var col = {
+                        dataField: lowercaseFirstLetter(item.FieldName),
+                        name: "col" + index,
+                        caption: colCaption,
+                        width: item.ActualWidth,
+                        alignment: columnAlignment
+                    };
+                    if (item.FieldName == "SeverityIcon") {
+                        col["cellTemplate"] = function (container, options) {
+                            var severityIcon;
+                            var severityIconPath;
+                            try {
+                                severityIcon = findThresholdDataBySeverity(options.data.severity || 0, parameters.Thresholds, severityColorMap).ThresholdIconPath;
+                            }
+                            catch { }
+                            $(container).css({
+                                "padding": 0,
+                                "position": "relative"
+                            });
+                            if (!severityIcon)
+                                severityIconPath = options.data.severity > 0 ? "images/toolbox/gridAlarmWindow/IconAlarm.png" : "images/toolbox/gridAlarmWindow/IconMessage.png";
+                            else
+                                severityIconPath = "images/" + scope.configurationSettings.projectTitle + "/" + severityIcon;
+                            if (iconSizeMap[severityIconPath])
+                                setCellBackgroundImage(container, severityIconPath, iconSizeMap[severityIconPath]);
+                            else {
+                                var image = new Image();
+                                image.src = severityIconPath;
+                                image.onload = function () {
+                                    var imageSize = {
+                                        w: image.naturalWidth,
+                                        h: image.naturalHeight
+                                    }
+                                    iconSizeMap[severityIconPath] = imageSize;
+                                    setCellBackgroundImage(container, severityIconPath, imageSize);
+                                };
+                            }
+                        }
+                    }
+                    else
+                        col["cellTemplate"] = function (container, options) {
+                            let templateOpts = {};
+                            let template = $("<div>", { "class": "cellContent" });
+                            let outerTemplateContainer = template;
+                            switch (parameters.TextWrapping) {
+                                case 0: //wrap with overflow
+                                    templateOpts["text-overflow"] = "ellipsis";
+                                    templateOpts["overflow"] = "hidden";
+                                    break;
+                                case 1: //nowrap
+                                    templateOpts["white-space"] = "nowrap";
+                                    templateOpts["text-overflow"] = "ellipsis";
+                                    templateOpts["overflow"] = "hidden";
+                                    break;
+                                case 2: //wrap
+                                    templateOpts["overflow-wrap"] = "break-word";
+                                    break;
+                            }
+                            let bWrapped = parameters.TextWrapping == 0 || parameters.TextWrapping == 2;
+                            if (bWrapped)
+                                templateOpts["white-space"] = "break-spaces";
+                            var displayValue = options.displayValue;
+                            if (item.FieldName == "Message") {
+                                try {
+                                    displayValue = i18next.t1(displayValue);
+                                }
+                                catch { }
+                            }
+                            else if (item.ColumnTag == "Condition" || item.ColumnTag == "State")
+                                displayValue = stateConditionConverter(displayValue, item.ColumnTag);
+                            template.text(displayValue);
+                            if (parameters.RowHeight > 0) {
+                                container.css("background", "inherit");
+                                let templateWrapper = $("<div>", { "class": "fixedHeightTemplateContainer" });
+                                templateWrapper.css({ "position": "relative", "overflow": "hidden", "text-overflow": "ellipsis", "background": "inherit" });
+                                outerTemplateContainer = templateWrapper;
+                                template.appendTo(templateWrapper);
+                                fastdom.mutate(function () {
+                                    let minCellHeight = getCellHeightWithoutWrapping(template);
+                                    let realCellHeight = Math.max(parameters.RowHeight, minCellHeight);
+                                    template.css(templateOpts);
+                                    if (!bWrapped)
+                                        template.addClass("verticalCenteredContent");
+                                    else if (realCellHeight <= parameters.RowHeight)
+                                        cellContentStaticVerticalCentering(template, container);
+                                    templateWrapper.css("height", realCellHeight);
+                                    if (template[0].clientHeight > realCellHeight) { //simulating vertical text-overflow: ellipsis
+                                        let ellipsis = $("<div>", { "class": "fixedHeightCellEllipsis" });
+                                        ellipsis.css({ "position": "absolute", "bottom": 0, "right": 0, "padding": 2, "background": "inherit" });
+                                        ellipsis.html("&hellip;").appendTo(templateWrapper);
+                                    }
+                                });
+                            }
+                            else {
+                                template.css(templateOpts);
+                                if (bWrapped)
+                                    cellContentStaticVerticalCentering(template, container);
+                            }
+
+                            outerTemplateContainer.appendTo(container);
+                        }
+                    setColumnOrdering(item, col);
+                    columns.push(col);
+                });
+                return columns;
+            }
+
+            function cellContentStaticVerticalCentering(template, container) {
+                fastdom.mutate(function () {
+                    template.css("margin-top", container.height() / 2 - template.height() / 2);
+                });
+            }
+
+            function getCellHeightWithoutWrapping(template) {
+                template.addClass("notWrappedCell");
+                let height = template[0].clientHeight;
+                template.removeClass("notWrappedCell");
+                return height;
+            }
+
+            function setCellBackgroundImage(container, imageUrl, imageSize) {
+                var template = $("<div>", { "class": "alarmThresholdIconContainer" });
+                var bgTemplate = $("<div>", { "class": "cellTemplateBgContainer" });
+                var templateCss = {
+                    "background-image": 'url("' + imageUrl + '")',
+                    "background-size": "contain",
+                    "max-width": imageSize.w,
+                    "max-height": imageSize.h
+                };
+                fastdom.mutate(function () {
+                    var heightMargin = container.height() - imageSize.h;
+                    if (heightMargin > 0)
+                        templateCss["margin-top"] = heightMargin / 2;
+                    template.css(templateCss).appendTo(bgTemplate);
+                    bgTemplate.css({
+                        "width": "100%",
+                        "display": "flex",
+                        "justify-content": "center"
+                    }).appendTo(container);
+                });
+            }
+
+            function translateReason(str) {
+                switch (str) {
+                    case "Active":
+                        return i18next.t1("StateON", "ON");
+                    case "High":
+                        return i18next.t1("StateONHigh", "ON (High)");
+                    case "HighHigh":
+                        return i18next.t1("StateONHighHigh", "ON (HighHigh)");
+                    case "Low":
+                        return i18next.t1("StateONLow", "ON (Low)");
+                    case "LowLow":
+                        return i18next.t1("StateONLowLow", "ON (LowLow)");
+                    case "HighActive":
+                        return i18next.t1("StateONHighActive", "ON (HighActive)");
+                    case "HighHighActive":
+                        return i18next.t1("StateONHighHighActive", "ON (HighHighActive)");
+                    case "LowActive":
+                        return i18next.t1("StateONLowActive", "ON (LowActive)");
+                    case "LowLowActive":
+                        return i18next.t1("StateONLowLowActive", "ON (LowLowActive)");
+                    case "Inactive":
+                        return i18next.t1("StateOFF", "OFF");
+                    case "Unacknowledged":
+                        return i18next.t1("StateUnacknowledged", "Unacknowledged");
+                    case "Unconfirmed":
+                        return i18next.t1("StateUnconfirmed", "Unconfirmed");
+                    case "Suppressed":
+                        return i18next.t1("StateSuppressed", "Suppressed");
+                    case "TimedShelved":
+                        return i18next.t1("StateTimedShelved", "Timed Shelved");
+                    default:
+                        return i18next.t1(str);
+                }
+            }
+
+            function updateGridHeight(dataGridElement) {
+                dataGridElement.height(thisParentHeight - (topToolbarVisible ? topToolbar.height() : 0) - (alarmToolbar.height() + 10) - parameters.BorderThickness.Top - parameters.BorderThickness.Bottom);
+            }
+
+            function getFilteredData() {
+                var filterExpr = dataGrid.getCombinedFilter();
+                if (!filterExpr)
+                    return dataGrid.option("dataSource");
+
+                return DevExpress.data.query(dataGrid.option("dataSource"))
+                    .filter(filterExpr)
+                    .toArray();
+            }
+
+            function setTimer() {
+                dataGrid.option("noDataText", "");
+                pollData(scope, dataGrid, parameters.SVGReferenceId, parameters.screenId, btnAckAll, btnResetAll, arrayrow)
+                connected = true;
+
+                interval = setInterval(function () {
+                    if (connected)
+                        pollData(scope, dataGrid, parameters.SVGReferenceId, parameters.screenId, btnAckAll, btnResetAll, arrayrow)
+
+                }, 1000);
+            }
+
+            function localizedExtendedDate(timeTicks, defValue = "") {
+                var mdate = moment(ticksToTimestamp(timeTicks)).locale(currentCulture);
+                if (!mdate.isValid())
+                    return defValue;
+                return mdate.format("L LTS");
+            }
+
+            function pollData(scope, dataGrid, id, screenId, btnAckAll, btnResetAll, arrayrow) {
+                var bForceRefresh = false;
+                if (bLanguageChanged) {
+                    bLanguageChanged = false;
+                    bForceRefresh = true;
+                }
+
+                scope.corehubconnection.invoke("GetConditionStateList", id, screenId, false, bForceRefresh, null, connectChildAlarms)
+                    .then((ret) => {
+                        $.each(ret, function (index, item) {
+                            item.time = localizedExtendedDate(item.timeticks, item.time);
+                            item.activeEffectiveTransitionTime = localizedExtendedDate(item.activeEffectiveTransitionTimeTicks, item.activeEffectiveTransitionTimeTicks);
+                            item.enabledTransitionTime = localizedExtendedDate(item.enabledTransitionTimeTicks, item.enabledTransitionTime);
+                            item.activeTransitionTime = localizedExtendedDate(item.activeTransitionTimeTicks, item.activeTransitionTime);
+                            item.ackedTransitionTime = localizedExtendedDate(item.ackedTransitionTimeTicks, item.ackedTransitionTime);
+                            item.confirmedTransitionTime = localizedExtendedDate(item.confirmedTransitionTimeTicks, item.confirmedTransitionTime);
+                            item.suppressedTransitionTime = localizedExtendedDate(item.suppressedTransitionTimeTicks, item.suppressedTransitionTime);
+                            item.shelvingTransitionTime = localizedExtendedDate(item.shelvingTransitionTimeTicks, item.shelvingTransitionTime);
+                            item.receiveTime = localizedExtendedDate(item.receiveTimeTicks, item.receiveTime);
+                        });
+                        var retStr = JSON.stringify(ret);
+                        var bChanged = retStr != lastRet;
+                        if (bChanged)
+                            arrayrow.length = 0;
+                        fastdom.mutate(function () {
+                            if (bChanged)
+                                lastRet = retStr;
+                            if (bChanged || bForceUpdateDataSource) {
+                                updateDatasource(dataGrid, ret, parametersFilterCriteria);
+                                if (bForceUpdateDataSource)
+                                    bForceUpdateDataSource = false;
+                            }
+                            dataGrid.option("loadPanel.enabled", false);
+
+                            btnAckAll.option("disabled", ret.length == 0);
+                            btnResetAll.option("disabled", ret.length == 0);
+                        });
+                    })
+                    .catch(err => {
+
+                        console.error(err.toString());
+                        dataGrid.option("loadPanel.enabled", false);
+                        var errorText = i18next.t1('ErrorGettingConditionList') + err.toString();
+                        dataGrid.option("noDataText", errorText);
+                        scope.$broadcast(onError, { ex: err, value: errorText });
+                    });
+            }
+
+            function prepareAckReset(dataGrid, scope, isReset, id, screenId, data) {
+                if (!data)
+                    data = getFilteredData();
+
+                var list = data.map(function (obj) { return obj.nodeId; });
+                ackReset(scope, isReset, id, screenId, list);
+            }
+
+            function ackReset(scope, isReset, id, screenId, list) {
+
+                scope.busyVisible = true;
+                scope.$apply();
+
+                scope.corehubconnection.invoke("AckReset", id, screenId, list, isReset, connectChildAlarms)
+                    .then((ret) => {
+
+                        scope.busyVisible = false;
+                        scope.$apply();
+                    })
+                    .catch(err => {
+
+                        console.error(err.toString());
+
+                        var errorText = i18next.t1('ErrorAckReset') + err.toString();
+                        scope.$broadcast(onError, { ex: err, value: errorText });
+
+                        scope.busyVisible = false;
+                        scope.$apply();
+                    });
+            }
+        }
+
+    </script>
+</div>

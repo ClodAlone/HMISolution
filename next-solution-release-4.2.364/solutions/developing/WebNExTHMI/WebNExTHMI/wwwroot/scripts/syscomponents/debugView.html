@@ -1,0 +1,128 @@
+﻿<div id="debugView" class="debugView">
+    <img src="cl.gif" alt="" onload="onDebugViewLoaded(this)" id="loadingImage" />
+    <div id="debugview"></div>
+
+    <script>
+        function onDebugViewLoaded(obj) {
+
+            var thisPage = $(obj).parent();
+            var thisParent = thisPage.parent();
+            $(obj).remove();
+            thisPage.localize();
+            var scope = thisPage.scope();
+            if (!scope)
+                return;
+
+            var deregisterListener;
+            var deregisterListenerPopup;
+            var deregisterListenerViewClosed;
+            var timeoutFetch;
+            $(thisPage).bind('destroyed', function () {
+
+                if (deregisterListener)
+                    deregisterListener();
+                if (deregisterListenerPopup)
+                    deregisterListenerPopup();
+                if (deregisterListenerViewClosed)
+                    deregisterListenerViewClosed();
+                if (timeoutFetch)
+                    clearTimeout(timeoutFetch);
+            });
+
+            var paratt = thisPage.data(dataparameters);
+            var parameters = JSON.parse(paratt);
+            var popupparameter = thisPage.data(popupparameters);
+
+            var container = thisPage.children().first();
+
+            var columns = [];
+            columns.push({ dataField: 'name', caption: i18next.t('name') });
+            columns.push({ dataField: 'isGood', caption: i18next.t('isGood') });
+            columns.push({ dataField: 'lastMessage', caption: i18next.t('lastMessage') });
+            columns.push({ dataField: 'value', caption: i18next.t('value') });
+
+            var dataGrid = container.dxDataGrid({
+                showBorders: true,
+                columnResizingMode: "widget",
+                editing: {
+                    editEnabled: false,
+                    editMode: 'row',
+                    insertEnabled: false,
+                    removeEnabled: false
+                },
+                allowColumnReordering: true,
+                allowColumnResizing: true,
+                selection: {
+                    mode: "multiple"
+                },
+                scrolling: {
+                    mode: "virtual"
+                },
+                loadPanel: {
+                    enabled: false
+                },
+                columns: columns,
+                width: 600,
+                height: 400
+            }).dxDataGrid("instance");
+
+            if (popupparameter) {
+                scope.$broadcast(onPopupSizeRequest + popupparameter, { w: container.attr("width"), h: container.attr("height") });
+                dataGrid.option("width", '100%');
+                dataGrid.option("height", container.height());
+
+                deregisterListenerViewClosed = scope.$on(onViewClosed + parameters.screenId, function (value, obj) {
+
+                    scope.$broadcast(onPopupCloseRequest + popupparameter, popupparameter);
+                });
+            }
+
+            deregisterListenerPopup = scope.$on(onPopupResize + popupparameter, function (value, obj) {
+                dataGrid.option("height", thisParent.height());
+            });
+
+            var referenceNames;
+            deregisterListener = scope.$on(onDataChanged + parameters.screenId, function (e, value) {
+
+                updateDataSource(scope, dataGrid, referenceNames, parameters.screenId);
+            });
+            updateDataSource(scope, dataGrid, referenceNames);
+
+            function fetchNames() {
+                scope.corehubconnection.invoke("GetReferenceNameList", parameters.screenId)
+                    .then((ret) => {
+
+                        referenceNames = ret;
+                        if (referenceNames.length > 0)
+                            updateDataSource(scope, dataGrid, referenceNames, parameters.screenId);
+                        else {
+                            if (timeoutFetch)
+                                clearTimeout(timeoutFetch);
+                            timeoutFetch = setTimeout(fetchNames, 2000);
+                        }
+                    })
+                    .catch(err => {
+
+                        console.error(err.toString());
+                    });
+            };
+
+            fetchNames();
+        }
+
+        function updateDataSource(scope, dataGrid, referenceNames, screenId) {
+
+            var datasource = [];
+            if (screenId in scope.dataValues) {
+                for (var key in scope.dataValues[screenId]) {
+
+                    if (referenceNames)
+                        scope.dataValues[screenId][key].name = referenceNames[key];
+                    datasource.push(scope.dataValues[screenId][key]);
+                }
+            }
+
+            dataGrid.option("dataSource", datasource);
+        }
+    </script>
+</div>

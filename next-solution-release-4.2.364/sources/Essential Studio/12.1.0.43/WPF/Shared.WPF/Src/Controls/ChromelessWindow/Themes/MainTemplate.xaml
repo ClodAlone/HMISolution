@@ -1,0 +1,720 @@
+﻿<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+   xmlns:local="clr-namespace:Syncfusion.Windows.Shared">
+
+    <ResourceDictionary.MergedDictionaries>
+        <ResourceDictionary Source="/Syncfusion.Shared.WPF;component/Controls/ChromelessWindow/Themes/SkinTemplates.xaml" />
+        <ResourceDictionary Source="/Syncfusion.Shared.WPF;component/Controls/ChromelessWindow/Themes/Brushes.xaml"/>
+        <ResourceDictionary Source="/Syncfusion.Shared.WPF;component/Controls/ChromelessWindow/Themes/Office2007Templates.xaml"/>
+        <ResourceDictionary Source="/Syncfusion.Shared.WPF;component/Themes/LangDictionary.xaml" />
+    </ResourceDictionary.MergedDictionaries>
+    
+    <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
+    <local:CornerRadiusConverter x:Key="CRConvert"/>
+    
+    <Style TargetType="{x:Type local:TitleBar}">
+        <Setter Property="Focusable" Value="False"/>
+    </Style>
+    <Style TargetType="{x:Type local:TitleButton}">
+        <Setter Property="Focusable" Value="False"/>
+    </Style>
+    
+    <LinearGradientBrush x:Key="ResizeGripperForeground" EndPoint="1,0.75" StartPoint="0,0.25">
+        <GradientStop Color="#FFFFFF" Offset="0.3"/>
+        <GradientStop Color="#BBC5D7" Offset="0.75"/>
+        <GradientStop Color="#6D83A9" Offset="1"/>
+    </LinearGradientBrush>
+    <Style x:Key="ResizeStyle" TargetType="{x:Type local:ResizeGripStyle}">
+        <Setter Property="HorizontalAlignment" Value="Right"/>
+        <Setter Property="VerticalAlignment" Value="Bottom"/>
+        <Setter Property="Visibility" Value="Collapsed"/>
+        <Setter Property="IsTabStop" Value="false"/>
+        <Setter Property="Cursor" Value="SizeNWSE"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type local:ResizeGripStyle}">
+                    <Grid Background="Transparent" SnapsToDevicePixels="true">
+                        <Path Data="M 9,0 L 11,0 L 11,11 L 0,11 L 0,9 L 3,9 L 3,6 L 6,6 L 6,3 L 9,3 z" HorizontalAlignment="Right" VerticalAlignment="Bottom" >
+                            <Path.Fill>
+                                <DrawingBrush TileMode="Tile" Viewbox="0,0,3,3" Viewport="0,0,3,3" ViewportUnits="Absolute" ViewboxUnits="Absolute">
+                                    <DrawingBrush.Drawing>
+                                        <DrawingGroup>
+                                            <GeometryDrawing Brush="{StaticResource ResizeGripperForeground}" Geometry="M 0,0 L 2,0 L 2,2 L 0,2 z "/>
+                                        </DrawingGroup>
+                                    </DrawingBrush.Drawing>
+                                </DrawingBrush>
+                            </Path.Fill>
+                        </Path>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+
+    </Style>
+
+    <ControlTemplate x:Key="DefaultTemp" TargetType="{x:Type local:ChromelessWindow}">
+        <AdornerDecorator>
+            <Border Name="OuterBorder" CornerRadius="{Binding RelativeSource={RelativeSource FindAncestor,  AncestorType={x:Type local:ChromelessWindow}}, Path=CornerRadius}"  BorderThickness="{TemplateBinding ResizeBorderThickness}" 
+                    BorderBrush="{TemplateBinding ResizeBorderBrush}" Background="{Binding RelativeSource={RelativeSource FindAncestor,  AncestorType={x:Type local:ChromelessWindow}}, Path=ResizeBorderBrush}">
+                <Grid x:Name="RootGrid">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <Border x:Name="ContentAreaBorder" CornerRadius="{Binding RelativeSource={RelativeSource FindAncestor,  AncestorType={x:Type local:ChromelessWindow}}, Path=CornerRadius, Converter={StaticResource CRConvert}}" Background="{TemplateBinding Background}" Grid.Row="1"  >
+                       <Grid x:Name="ChildGrid">
+                           <local:ResizeGripStyle x:Name="PART_Resizegrip" Style="{TemplateBinding ResizeGripStyle}" HorizontalAlignment="right" VerticalAlignment="Bottom" Visibility="Collapsed" IsTabStop="False" Cursor="SizeNWSE" Margin="0,0,3,3" />
+                           <ContentPresenter Name="contentpresenter" />
+                       </Grid>
+                    </Border>
+                    <local:TitleBar Height="30" Template="{TemplateBinding TitleBarTemplate}" Foreground="{TemplateBinding Foreground}" Background="{TemplateBinding TitleBarBackground}" Name="PART_TitleBar" >
+                        <Grid VerticalAlignment="Top" >
+                            <StackPanel Orientation="Horizontal">
+                                <Image x:Name="PART_Icon" Source="{Binding RelativeSource={RelativeSource FindAncestor,  AncestorType={x:Type local:ChromelessWindow}}, Path=Icon}" VerticalAlignment="Center"  HorizontalAlignment="Left" Margin="4,4,2,4"  MaxWidth="16" MaxHeight="16" MinWidth="16" MinHeight="16"                                        Visibility="{Binding Path=ShowIcon, Converter={StaticResource BooleanToVisibilityConverter},RelativeSource={RelativeSource TemplatedParent}}"/>
+                                <ContentControl Focusable="False" Foreground="{TemplateBinding Foreground}"  Content="{TemplateBinding Title}" VerticalAlignment="Center" HorizontalAlignment="Left" x:Name="TitlePresenter" Margin="5,5,5,5" />
+                            </StackPanel>
+                            <StackPanel x:Name="MinMaxCloseStackPanel"  Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,0" VerticalAlignment="Center">
+                                <local:TitleButton Command="local:ChromelessWindow.ToggleMinimizedState" x:Name="MinimizeButton"  Template="{TemplateBinding MinimizeButtonTemplate}" ToolTip="{StaticResource MinimizeTooltip}"/>
+                                <local:TitleButton Command="local:ChromelessWindow.ToggleMaximizedState" Visibility="Collapsed" Name="PART_MaximizeButton" Template="{TemplateBinding MaximizeButtonTemplate}"    ToolTip="{StaticResource MaximizeTooltip}"/>
+                                <local:TitleButton Command="local:ChromelessWindow.ToggleMaximizedState" Visibility="Collapsed" Name="PART_RestoreButton" Template="{TemplateBinding RestoreButtonTemplate}"    ToolTip="{StaticResource RestoreTooltip}"/>
+                                <local:TitleButton Command="local:ChromelessWindow.CloseWindow" x:Name="CloseButton" Template="{TemplateBinding CloseButtonTemplate}"   ToolTip="{StaticResource CloseTooltip}"/>
+                            </StackPanel>
+                        </Grid>
+                    </local:TitleBar>
+                </Grid>
+            </Border>
+        </AdornerDecorator>
+        <ControlTemplate.Triggers>
+            <Trigger Property="ResizeMode" Value="NoResize">
+                <Setter Property="Visibility" Value="Collapsed" TargetName="MinimizeButton"/>
+                <Setter Property="Visibility" Value="Collapsed" TargetName="PART_MaximizeButton"/>
+                <Setter Property="Visibility" Value="Collapsed" TargetName="PART_RestoreButton"/>
+                <Setter Property="ResizeBorderThickness" Value="1"/>
+            </Trigger>
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="ResizeMode" Value="CanResizeWithGrip"/>
+                    <Condition Property="WindowState" Value="Normal"/>
+                </MultiTrigger.Conditions>
+                <Setter Property="Visibility" Value="Visible" TargetName="PART_Resizegrip"/>
+
+            </MultiTrigger>
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="ResizeMode" Value="NoResize"/>
+                    <Condition Property="WindowState" Value="Maximized"/>
+                </MultiTrigger.Conditions>
+                <Setter Property="Visibility" Value="Collapsed" TargetName="MinimizeButton"/>
+                <Setter Property="Visibility" Value="Collapsed" TargetName="PART_MaximizeButton"/>
+                <Setter Property="Visibility" Value="Collapsed" TargetName="PART_RestoreButton"/>
+            </MultiTrigger>
+            <Trigger Property="local:SkinStorage.VisualStyle" Value="Default">
+                <Setter Property="CornerRadius" TargetName="OuterBorder" Value="{Binding RelativeSource={RelativeSource FindAncestor,  AncestorType={x:Type local:ChromelessWindow}}, Path=CornerRadius}"/>
+                <Setter Property="CornerRadius" TargetName="ContentAreaBorder" Value="{Binding RelativeSource={RelativeSource FindAncestor,  AncestorType={x:Type local:ChromelessWindow}}, Path=CornerRadius, Converter={StaticResource CRConvert}}"/>
+                <Setter Property="Background" TargetName="OuterBorder" Value="{Binding RelativeSource={RelativeSource FindAncestor,  AncestorType={x:Type local:ChromelessWindow}}, Path=ResizeBorderBrush}"/>
+            </Trigger>
+
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+    <ControlTemplate x:Key="OrangeSkinTemp" TargetType="{x:Type local:ChromelessWindow}">
+        <AdornerDecorator>
+            <Border Name="OuterBorder" CornerRadius="{Binding RelativeSource={RelativeSource FindAncestor,  AncestorType={x:Type local:ChromelessWindow}}, Path=CornerRadius}" BorderThickness="3"   BorderBrush="{TemplateBinding ResizeBorderBrush}">
+                <Border Name="InnerBorder" CornerRadius="5,5,0,0" Margin="1"  Background="{TemplateBinding Background}">
+                    <Grid x:Name="RootGrid">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        <Border Name="ContentAreaBorder" CornerRadius="0,0,5,5" Background="{TemplateBinding Background}" Grid.Row="1"  >
+                            <Grid x:Name="ChildGrid">
+                                <local:ResizeGripStyle x:Name="PART_Resizegrip" Style="{TemplateBinding ResizeGripStyle}" HorizontalAlignment="right" VerticalAlignment="Bottom" Visibility="Collapsed" IsTabStop="False" Cursor="SizeNWSE" Margin="0,0,3,3" />
+                                <ContentPresenter Name="contentpresenter" />
+                            </Grid>
+                        </Border>
+                        <Border Name="TitleBarBorder"  CornerRadius="5,5,0,0"  Grid.Row="0"  >
+                            <Grid Name="grid" VerticalAlignment="Top" >
+                                <local:TitleBar Height="30" Template="{TemplateBinding TitleBarTemplate}" Foreground="{TemplateBinding Foreground}" Background="{TemplateBinding TitleBarBackground}" Name="PART_TitleBar" >
+                                    <StackPanel Orientation="Horizontal">
+                                        <Image x:Name="PART_Icon" Source="{Binding RelativeSource={RelativeSource FindAncestor,  AncestorType={x:Type local:ChromelessWindow}}, Path=Icon}" VerticalAlignment="Center"  HorizontalAlignment="Left" Margin="7,4,2,4"  MaxWidth="16" MaxHeight="16" MinWidth="16" MinHeight="16" 
+                                               Visibility="{Binding Path=ShowIcon, Converter={StaticResource BooleanToVisibilityConverter},RelativeSource={RelativeSource TemplatedParent}}"/>
+                                        <ContentControl Focusable="False" Foreground="{TemplateBinding Foreground}"  Content="{TemplateBinding Title}" VerticalAlignment="Center" HorizontalAlignment="Left" x:Name="TitlePresenter" Margin="5,5,5,4" />
+                                    </StackPanel>
+                                </local:TitleBar>
+                                <StackPanel x:Name="MinMaxCloseStackPanel"  Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,0" VerticalAlignment="Center">
+                                    <local:TitleButton Command="local:ChromelessWindow.ToggleMinimizedState" x:Name="MinimizeButton"  Template="{TemplateBinding MinimizeButtonTemplate}" ToolTip="{StaticResource MinimizeTooltip}"/>
+                                    <local:TitleButton Command="local:ChromelessWindow.ToggleMaximizedState" Visibility="Collapsed" Name="PART_MaximizeButton" Template="{TemplateBinding MaximizeButtonTemplate}" ToolTip="{StaticResource MaximizeTooltip}"/>
+                                    <local:TitleButton Command="local:ChromelessWindow.ToggleMaximizedState" Visibility="Collapsed" Name="PART_RestoreButton" Template="{TemplateBinding RestoreButtonTemplate}"  ToolTip="{StaticResource RestoreTooltip}"/>
+                                    <local:TitleButton Command="local:ChromelessWindow.CloseWindow" x:Name="CloseButton" Template="{TemplateBinding CloseButtonTemplate}" ToolTip="{StaticResource CloseTooltip}"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                    </Grid>
+                </Border>
+            </Border>
+        </AdornerDecorator>
+        <ControlTemplate.Triggers>
+            <Trigger Property="ResizeMode" Value="NoResize">
+                <Setter Property="Visibility" Value="Collapsed" TargetName="MinimizeButton"/>
+                <Setter Property="Visibility" Value="Collapsed" TargetName="PART_MaximizeButton"/>
+                <Setter Property="Visibility" Value="Collapsed" TargetName="PART_RestoreButton"/>
+                <Setter Property="ResizeBorderThickness" Value="1"/>
+            </Trigger>
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="ResizeMode" Value="CanResizeWithGrip"/>
+                    <Condition Property="WindowState" Value="Normal"/>
+                </MultiTrigger.Conditions>
+                <Setter Property="Visibility" Value="Visible" TargetName="PART_Resizegrip"/>
+
+            </MultiTrigger>
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="ResizeMode" Value="NoResize"/>
+                    <Condition Property="WindowState" Value="Maximized"/>
+                </MultiTrigger.Conditions>
+                <Setter Property="Visibility" Value="Collapsed" TargetName="MinimizeButton"/>
+                <Setter Property="Visibility" Value="Collapsed" TargetName="PART_MaximizeButton"/>
+                <Setter Property="Visibility" Value="Collapsed" TargetName="PART_RestoreButton"/>
+            </MultiTrigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+    <ControlTemplate x:Key="SkinTemp" TargetType="{x:Type local:ChromelessWindow}">
+        <AdornerDecorator>
+            <Border Name="OuterBorder" CornerRadius="{Binding RelativeSource={RelativeSource FindAncestor,  AncestorType={x:Type local:ChromelessWindow}}, Path=CornerRadius}" Background="{StaticResource Blue.OuterBackground}" BorderThickness="{TemplateBinding ResizeBorderThickness}" BorderBrush="{TemplateBinding ResizeBorderBrush}">
+                <Border Name="InnerBorder" CornerRadius="5" Background="{TemplateBinding Background}">
+                    <Grid x:Name="RootGrid">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        <Border Name="ContentAreaBorder" Background="{TemplateBinding Background}" Grid.Row="1"  >
+                            <Grid x:Name="ChildGrid">
+                                <local:ResizeGripStyle x:Name="PART_Resizegrip" Style="{TemplateBinding ResizeGripStyle}" HorizontalAlignment="right" VerticalAlignment="Bottom" Visibility="Collapsed" IsTabStop="False" Cursor="SizeNWSE" Margin="0,0,3,3" />
+                                <ContentPresenter Name="contentpresenter"   />
+                            </Grid>
+                        </Border>
+                        <Border Name="TitleBarBorder"  CornerRadius="5,5,0,0"  Grid.Row="0"  >
+                            <Grid VerticalAlignment="Top">
+                                <local:TitleBar Template="{TemplateBinding TitleBarTemplate}" Foreground="{TemplateBinding Foreground}" Background="{TemplateBinding TitleBarBackground}" Name="PART_TitleBar" >
+                                    <StackPanel Orientation="Horizontal">
+                                        <Image x:Name="PART_Icon" Source="{Binding RelativeSource={RelativeSource FindAncestor,  AncestorType={x:Type local:ChromelessWindow}}, Path=Icon}" VerticalAlignment="Center"  HorizontalAlignment="Left" Margin="4,4,2,4"  MaxWidth="16" MaxHeight="16" MinWidth="16" MinHeight="16" 
+                                               Visibility="{Binding Path=ShowIcon, Converter={StaticResource BooleanToVisibilityConverter},RelativeSource={RelativeSource TemplatedParent}}"/>
+                                        <ContentControl Focusable="False" Foreground="{TemplateBinding Foreground}"  Content="{TemplateBinding Title}" VerticalAlignment="Center" HorizontalAlignment="Left" x:Name="TitlePresenter" Margin="5,5,5,5" />
+                                    </StackPanel>
+                                </local:TitleBar>
+
+                                <StackPanel x:Name="MinMaxCloseStackPanel"  Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,0" VerticalAlignment="Center">
+                                    <local:TitleButton Command="local:ChromelessWindow.ToggleMinimizedState" x:Name="MinimizeButton"  Template="{TemplateBinding MinimizeButtonTemplate}" ToolTip="{StaticResource MinimizeTooltip}"/>
+                                    <local:TitleButton Command="local:ChromelessWindow.ToggleMaximizedState" Visibility="Collapsed" Name="PART_MaximizeButton" Template="{TemplateBinding MaximizeButtonTemplate}"    ToolTip="{StaticResource MaximizeTooltip}"/>
+                                    <local:TitleButton Command="local:ChromelessWindow.ToggleMaximizedState" Visibility="Collapsed" Name="PART_RestoreButton" Template="{TemplateBinding RestoreButtonTemplate}"    ToolTip="{StaticResource RestoreTooltip}"/>
+                                    <local:TitleButton Command="local:ChromelessWindow.CloseWindow" x:Name="CloseButton" Template="{TemplateBinding CloseButtonTemplate}"   ToolTip="{StaticResource CloseTooltip}"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                    </Grid>
+                </Border>
+            </Border>
+        </AdornerDecorator>
+        <ControlTemplate.Triggers>
+            <Trigger Property="ResizeMode" Value="NoResize">
+                <Setter Property="Visibility" Value="Collapsed" TargetName="MinimizeButton"/>
+                <Setter Property="Visibility" Value="Collapsed" TargetName="PART_MaximizeButton"/>
+                <Setter Property="Visibility" Value="Collapsed" TargetName="PART_RestoreButton"/>
+                <Setter Property="ResizeBorderThickness" Value="1"/>
+            </Trigger>
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="ResizeMode" Value="CanResizeWithGrip"/>
+                    <Condition Property="WindowState" Value="Normal"/>
+                </MultiTrigger.Conditions>
+                <Setter Property="Visibility" Value="Visible" TargetName="PART_Resizegrip"/>
+
+            </MultiTrigger>
+
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="ResizeMode" Value="NoResize"/>
+                    <Condition Property="WindowState" Value="Maximized"/>
+                </MultiTrigger.Conditions>
+                <Setter Property="Visibility" Value="Collapsed" TargetName="MinimizeButton"/>
+                <Setter Property="Visibility" Value="Collapsed" TargetName="PART_MaximizeButton"/>
+                <Setter Property="Visibility" Value="Collapsed" TargetName="PART_RestoreButton"/>
+            </MultiTrigger>
+            <Trigger Property="local:SkinStorage.VisualStyle" Value="ShinyBlue">
+                <Setter Property="Background" TargetName="OuterBorder" Value="{StaticResource ButtonBackgroundBrushKey.ShinyBlue}"/>
+            </Trigger>
+            <Trigger Property="local:SkinStorage.VisualStyle" Value="ShinyRed">
+                <Setter Property="Background" TargetName="OuterBorder" Value="{StaticResource ButtonBackgroundBrushKey.ShinyBlue}"/>
+            </Trigger>
+            <Trigger Property="local:SkinStorage.VisualStyle" Value="Office2007Blue">
+                <Setter Property="CornerRadius" TargetName="OuterBorder" Value="5"/>
+                <Setter Property="CornerRadius" TargetName="InnerBorder" Value="5"/>
+                <Setter Property="CornerRadius" TargetName="ContentAreaBorder" Value="0,0,5,5"/>
+                <Setter Property="CornerRadius" TargetName="TitleBarBorder" Value="5,5,0,0"/>
+                <Setter Property="Background" TargetName="OuterBorder" Value="#B0CBEF"/>
+            </Trigger>
+
+            <Trigger Property="local:SkinStorage.VisualStyle" Value="Office2007Black">
+                <Setter Property="CornerRadius" TargetName="OuterBorder" Value="5"/>
+                <Setter Property="CornerRadius" TargetName="InnerBorder" Value="5"/>
+                <Setter Property="CornerRadius" TargetName="ContentAreaBorder" Value="0,0,5,5"/>
+                <Setter Property="CornerRadius" TargetName="TitleBarBorder" Value="5,5,0,0"/>
+                <Setter Property="Background" TargetName="OuterBorder" Value="#404040"/>
+            </Trigger>
+            <Trigger Property="local:SkinStorage.VisualStyle" Value="Office2007Silver">
+                <Setter Property="CornerRadius" TargetName="OuterBorder" Value="5"/>
+                <Setter Property="CornerRadius" TargetName="InnerBorder" Value="5"/>
+                <Setter Property="Background" TargetName="OuterBorder" Value="#DEDDDE"/>
+            </Trigger>
+
+
+            <Trigger Property="local:SkinStorage.VisualStyle" Value="Blend">
+                <Setter Property="CornerRadius" TargetName="OuterBorder" Value="5"/>
+                <Setter Property="CornerRadius" TargetName="InnerBorder" Value="5"/>
+                <Setter Property="CornerRadius" TargetName="ContentAreaBorder" Value="0,0,5,5"/>
+                <Setter Property="CornerRadius" TargetName="TitleBarBorder" Value="5,5,0,0"/>
+                <Setter Property="Background" TargetName="OuterBorder" Value="#FF333333"/>
+            </Trigger>
+
+            <Trigger Property="local:SkinStorage.VisualStyle" Value="Office2003">
+                <Setter Property="CornerRadius" TargetName="OuterBorder" Value="5"/>
+                <Setter Property="CornerRadius" TargetName="InnerBorder" Value="5"/>
+                <Setter Property="Background" TargetName="OuterBorder" Value="{StaticResource Office2003BorderBrush}"/>
+            </Trigger>
+            <Trigger Property="local:SkinStorage.VisualStyle" Value="WMPClassic">
+                <Setter Property="CornerRadius" TargetName="OuterBorder" Value="5"/>
+                <Setter Property="CornerRadius" TargetName="InnerBorder" Value="5"/>
+                <Setter Property="CornerRadius" TargetName="ContentAreaBorder" Value="0,0,5,5"/>
+                <Setter Property="CornerRadius" TargetName="TitleBarBorder" Value="5,5,0,0"/>
+                <Setter Property="Background" TargetName="OuterBorder" Value="{StaticResource WMP_ContentAreaBackground}"/>
+            </Trigger>
+            <Trigger Property="local:SkinStorage.VisualStyle" Value="ForestGreen">
+                <Setter Property="CornerRadius" TargetName="OuterBorder" Value="0"/>
+                <Setter Property="CornerRadius" TargetName="InnerBorder" Value="0"/>
+                <Setter Property="CornerRadius" TargetName="ContentAreaBorder" Value="0"/>
+                <Setter Property="CornerRadius" TargetName="TitleBarBorder" Value="0"/>
+                <Setter Property="Margin" TargetName="InnerBorder" Value="3,2,3,3"/>
+                <Setter Property="Background" TargetName="OuterBorder" Value="{StaticResource ForestGreen}"/>
+            </Trigger>
+            <Trigger Property="local:SkinStorage.VisualStyle" Value="CoolBlue">
+                <Setter Property="CornerRadius" TargetName="OuterBorder" Value="0"/>
+                <Setter Property="CornerRadius" TargetName="InnerBorder" Value="0"/>
+                <Setter Property="CornerRadius" TargetName="ContentAreaBorder" Value="0"/>
+                <Setter Property="CornerRadius" TargetName="TitleBarBorder" Value="0"/>
+                <Setter Property="Margin" TargetName="InnerBorder" Value="3,2,3,3"/>
+                <Setter Property="Background" TargetName="OuterBorder" Value="{StaticResource CoolBlue}"/>
+            </Trigger>
+            <Trigger Property="local:SkinStorage.VisualStyle" Value="LawnGreen">
+                <Setter Property="CornerRadius" TargetName="OuterBorder" Value="0"/>
+                <Setter Property="CornerRadius" TargetName="InnerBorder" Value="0"/>
+                <Setter Property="CornerRadius" TargetName="ContentAreaBorder" Value="0"/>
+                <Setter Property="CornerRadius" TargetName="TitleBarBorder" Value="0"/>
+                <Setter Property="Margin" TargetName="InnerBorder" Value="3,2,3,3"/>
+                <Setter Property="Background" TargetName="OuterBorder" Value="{StaticResource LawnGreen}"/>
+            </Trigger>
+            <Trigger Property="local:SkinStorage.VisualStyle" Value="OrangeRed">
+                <Setter Property="CornerRadius" TargetName="OuterBorder" Value="0"/>
+                <Setter Property="CornerRadius" TargetName="InnerBorder" Value="0"/>
+                <Setter Property="CornerRadius" TargetName="ContentAreaBorder" Value="0"/>
+                <Setter Property="CornerRadius" TargetName="TitleBarBorder" Value="0"/>
+                <Setter Property="Margin" TargetName="InnerBorder" Value="3,2,3,3"/>
+                <Setter Property="Background" TargetName="OuterBorder" Value="{StaticResource OrangeRed}"/>
+            </Trigger>
+
+            <Trigger Property="local:SkinStorage.VisualStyle" Value="ChocolateYellow">
+                <Setter Property="CornerRadius" TargetName="OuterBorder" Value="0"/>
+                <Setter Property="CornerRadius" TargetName="InnerBorder" Value="0"/>
+                <Setter Property="CornerRadius" TargetName="ContentAreaBorder" Value="0"/>
+                <Setter Property="CornerRadius" TargetName="TitleBarBorder" Value="0"/>
+                <Setter Property="Margin" TargetName="InnerBorder" Value="3,2,3,3"/>
+                <Setter Property="Background" TargetName="OuterBorder" Value="{StaticResource ChocolateYellow}"/>
+            </Trigger>
+            <Trigger Property="local:SkinStorage.VisualStyle" Value="SpringGreen">
+                <Setter Property="CornerRadius" TargetName="OuterBorder" Value="0"/>
+                <Setter Property="CornerRadius" TargetName="InnerBorder" Value="0"/>
+                <Setter Property="CornerRadius" TargetName="ContentAreaBorder" Value="0"/>
+                <Setter Property="CornerRadius" TargetName="TitleBarBorder" Value="0"/>
+                <Setter Property="Margin" TargetName="InnerBorder" Value="3,2,3,3"/>
+                <Setter Property="Background" TargetName="OuterBorder" Value="{StaticResource SpringGreen}"/>
+            </Trigger>
+            <Trigger Property="local:SkinStorage.VisualStyle" Value="BrightGray">
+                <Setter Property="CornerRadius" TargetName="OuterBorder" Value="0"/>
+                <Setter Property="CornerRadius" TargetName="InnerBorder" Value="0"/>
+                <Setter Property="CornerRadius" TargetName="ContentAreaBorder" Value="0"/>
+                <Setter Property="CornerRadius" TargetName="TitleBarBorder" Value="0"/>
+                <Setter Property="Margin" TargetName="InnerBorder" Value="3,2,3,3"/>
+                <Setter Property="Background" TargetName="OuterBorder" Value="{StaticResource BrightGray}"/>
+            </Trigger>
+            <Trigger Property="local:SkinStorage.VisualStyle" Value="BlueWave">
+                <Setter Property="CornerRadius" TargetName="OuterBorder" Value="0"/>
+                <Setter Property="CornerRadius" TargetName="InnerBorder" Value="0"/>
+                <Setter Property="CornerRadius" TargetName="ContentAreaBorder" Value="0"/>
+                <Setter Property="CornerRadius" TargetName="TitleBarBorder" Value="0"/>
+                <Setter Property="Margin" TargetName="InnerBorder" Value="3,2,3,3"/>
+                <Setter Property="Background" TargetName="OuterBorder" Value="{StaticResource BlueWave}"/>
+            </Trigger>
+            <Trigger Property="local:SkinStorage.VisualStyle" Value="MixedGreen">
+                <Setter Property="CornerRadius" TargetName="OuterBorder" Value="0"/>
+                <Setter Property="CornerRadius" TargetName="InnerBorder" Value="0"/>
+                <Setter Property="CornerRadius" TargetName="ContentAreaBorder" Value="0"/>
+                <Setter Property="CornerRadius" TargetName="TitleBarBorder" Value="0"/>
+                <Setter Property="Margin" TargetName="InnerBorder" Value="3,2,3,3"/>
+                <Setter Property="Background" TargetName="OuterBorder" Value="{StaticResource MixedGreen}"/>
+            </Trigger>
+
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+  
+    <Style TargetType="{x:Type local:ChromelessWindow}" >
+        <Setter Property="ResizeGripStyle" Value="{StaticResource ResizeStyle}"/>
+        <Setter Property="AllowsTransparency" Value="true" />
+        <Setter Property="WindowStyle" Value="None" />
+        <Setter Property="ResizeBorderThickness" Value="2" />
+        <Setter Property="SnapsToDevicePixels" Value="False"/>
+        <Setter Property="Icon" Value="..\Resources\app.png"/>
+        <Setter Property="CornerRadius" Value="5"/>
+        <Setter Property="FontFamily" Value="Segoe UI"/>
+        <Setter Property="TitleBarBackground" Value="{StaticResource Default.TitleBarBackground}"/>
+        <Setter Property="Background" Value="{StaticResource WhiteSmoke}"/>
+        <Setter Property="ResizeBorderBrush" Value="{StaticResource OrangeRedBorderBrush}" />
+        <Setter Property="MinimizeButtonTemplate" Value="{StaticResource MinimizeD}"/>
+        <Setter Property="MaximizeButtonTemplate" Value="{StaticResource MaximizeD}"/>
+        <Setter Property="RestoreButtonTemplate" Value="{StaticResource RestoreD}"/>
+        <Setter Property="CloseButtonTemplate" Value="{StaticResource CloseD}"/>
+        <Setter Property="TitleBarTemplate" Value="{StaticResource DefaultTitleBarTemplate}"/>
+        <Setter Property="Foreground" Value="{StaticResource White}"/>
+        <Setter Property="MinWidth" Value="300"/>
+        <Setter Property="MinHeight" Value="120"/>
+        <!--<Setter Property="Focusable" Value="False"/>-->
+        <Setter Property="local:SkinStorage.VisualStyle" Value="Default"/>
+        <Setter Property="Template" Value="{StaticResource DefaultTemp}"/>
+        <Style.Triggers>
+            <Trigger Property="local:SkinStorage.VisualStyle" Value="Office2007Blue">
+                <Setter Property="TitleBarBackground" Value="{StaticResource Blue_ContentAreaBackground}"/>
+                <Setter Property="Background" Value="{StaticResource LightBlue}"/>
+                <Setter Property="ResizeBorderBrush" Value="{StaticResource Blue.TitleBarBorderBrush}"/>
+                <Setter Property="MinimizeButtonTemplate" Value="{StaticResource MinimizeBlue}"/>
+                <Setter Property="MaximizeButtonTemplate" Value="{StaticResource MaximizeBlue}"/>
+                <Setter Property="RestoreButtonTemplate" Value="{StaticResource RestoreBlue}"/>
+                <Setter Property="CloseButtonTemplate" Value="{StaticResource CloseBlue}"/>
+                <Setter Property="TitleBarTemplate" Value="{StaticResource BlueTitleBarTemplate}"/>
+                <Setter Property="Foreground" Value="{StaticResource BlueText}"/>
+                <Setter Property="Template" Value="{StaticResource SkinTemp}"/>
+            </Trigger>
+
+            <Trigger Property="local:SkinStorage.VisualStyle" Value="Office2007Black">
+                <Setter Property="TitleBarBackground" Value="{StaticResource Black_ContentAreaBackground}"/>
+                <Setter Property="Background" Value="{StaticResource Gray}"/>
+                <Setter Property="ResizeBorderBrush" Value="{StaticResource BlackBorderBrush}"/>
+                <Setter Property="MinimizeButtonTemplate" Value="{StaticResource MinimizeBlack}"/>
+                <Setter Property="MaximizeButtonTemplate" Value="{StaticResource MaximizeBlack}"/>
+                <Setter Property="RestoreButtonTemplate" Value="{StaticResource RestoreBlack}"/>
+                <Setter Property="CloseButtonTemplate" Value="{StaticResource CloseBlack}"/>
+                <Setter Property="TitleBarTemplate" Value="{StaticResource BlackTitleBarTemplate}"/>
+                <Setter Property="Foreground" Value="{StaticResource White}"/>
+                <Setter Property="Template" Value="{StaticResource SkinTemp}"/>
+            </Trigger>
+
+            <Trigger Property="local:SkinStorage.VisualStyle" Value="Office2007Silver">
+                <Setter Property="TitleBarBackground" Value="{StaticResource Silver_ContentAreaBackground}"/>
+                <Setter Property="Background" Value="{StaticResource Silver}"/>
+                <Setter Property="ResizeBorderBrush" Value="{StaticResource Silver.TitleBarBorderBrush}"/>
+                <Setter Property="MinimizeButtonTemplate" Value="{StaticResource MinimizeSilver}"/>
+                <Setter Property="MaximizeButtonTemplate" Value="{StaticResource MaximizeSilver}"/>
+                <Setter Property="RestoreButtonTemplate" Value="{StaticResource RestoreSilver}"/>
+                <Setter Property="CloseButtonTemplate" Value="{StaticResource CloseSilver}"/>
+                <Setter Property="TitleBarTemplate" Value="{StaticResource SilverTitleBarTemplate}"/>
+                <Setter Property="Foreground" Value="{StaticResource DullGray}"/>
+                <Setter Property="Template" Value="{StaticResource SkinTemp}"/>
+            </Trigger>
+
+            <Trigger Property="local:SkinStorage.VisualStyle" Value="Office2003">
+                <Setter Property="TitleBarBackground" Value="{StaticResource Office2003BackgroundBrush}"/>
+                <Setter Property="Background" Value="{StaticResource LightBlue}"/>
+                <Setter Property="ResizeBorderBrush" Value="{StaticResource Office2003BorderBrush}"/>
+                <Setter Property="MinimizeButtonTemplate" Value="{StaticResource Minimize03Blue}"/>
+                <Setter Property="MaximizeButtonTemplate" Value="{StaticResource Maximize03Blue}"/>
+                <Setter Property="RestoreButtonTemplate" Value="{StaticResource Restore03Blue}"/>
+                <Setter Property="CloseButtonTemplate" Value="{StaticResource Close03Blue}"/>
+                <Setter Property="TitleBarTemplate" Value="{StaticResource Blue03TitleBarTemplate}"/>
+                <Setter Property="Foreground" Value="{StaticResource BlueText}"/>
+                <Setter Property="Template" Value="{StaticResource SkinTemp}"/>
+            </Trigger>
+
+            <Trigger Property="local:SkinStorage.VisualStyle" Value="Blend">
+                <Setter Property="TitleBarBackground" Value="{StaticResource Blend_ContentAreaBackground}"/>
+                <Setter Property="Background" Value="{StaticResource BlendContentArea}"/>
+                <Setter Property="ResizeBorderBrush" Value="{StaticResource BlendBorderBrush}"/>
+                <Setter Property="MinimizeButtonTemplate" Value="{StaticResource MinimizeBlend}"/>
+                <Setter Property="MaximizeButtonTemplate" Value="{StaticResource MaximizeBlend}"/>
+                <Setter Property="RestoreButtonTemplate" Value="{StaticResource RestoreBlend}"/>
+                <Setter Property="CloseButtonTemplate"  Value="{StaticResource CloseBlend}"/>
+                <Setter Property="TitleBarTemplate" Value="{StaticResource BlendTitleBarTemplate}"/>
+                <Setter Property="Foreground" Value="{StaticResource White}"/>
+                <Setter Property="Template" Value="{StaticResource SkinTemp}"/>
+            </Trigger>
+
+            <Trigger Property="local:SkinStorage.VisualStyle" Value="ShinyRed">
+                <Setter Property="TitleBarBackground" Value="{StaticResource TitleBarBackgroundBrushKey.ShinyRed}"/>
+                <Setter Property="Background" Value="{StaticResource ContentAreaBackgroundBrushKey.ShinyRed}"/>
+                <Setter Property="ResizeBorderBrush" Value="{StaticResource TitleBarBorderBrushKey.ShinyRed}"/>
+                <Setter Property="MinimizeButtonTemplate" Value="{StaticResource Minimize.ShinyRed}"/>
+                <Setter Property="MaximizeButtonTemplate" Value="{StaticResource Maximize.ShinyRed}"/>
+                <Setter Property="RestoreButtonTemplate" Value="{StaticResource Restore.ShinyRed}"/>
+                <Setter Property="CloseButtonTemplate" Value="{StaticResource Close.ShinyRed}"/>
+                <Setter Property="TitleBarTemplate" Value="{StaticResource TitleBarTemplate.ShinyRed}"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrushKey.ShinyRed}"/>
+                <Setter Property="Template" Value="{StaticResource SkinTemp}"/>
+            </Trigger>
+
+            <Trigger Property="local:SkinStorage.VisualStyle" Value="ShinyBlue">
+                <Setter Property="TitleBarBackground" Value="{StaticResource TitleBarBackgroundBrushKey.ShinyBlue}"/>
+                <Setter Property="Background" Value="{StaticResource ContentAreaBackgroundBrushKey.ShinyRed}"/>
+                <Setter Property="ResizeBorderBrush" Value="{StaticResource TitleBarBorderBrushKey.ShinyBlue}"/>
+                <Setter Property="MinimizeButtonTemplate" Value="{StaticResource Minimize.ShinyBlue}"/>
+                <Setter Property="MaximizeButtonTemplate" Value="{StaticResource Maximize.ShinyBlue}"/>
+                <Setter Property="RestoreButtonTemplate" Value="{StaticResource Restore.ShinyBlue}"/>
+                <Setter Property="CloseButtonTemplate" Value="{StaticResource Close.ShinyBlue}"/>
+                <Setter Property="TitleBarTemplate" Value="{StaticResource TitleBarTemplate.ShinyBlue}"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrushKey.ShinyRed}"/>
+                <Setter Property="Template" Value="{StaticResource SkinTemp}"/>
+            </Trigger>
+
+            <Trigger Property="local:SkinStorage.VisualStyle" Value="SyncOrange">
+                <Setter Property="TitleBarBackground" Value="{StaticResource OrangeTitleContentAreaBackground}"/>
+                <Setter Property="Background" Value="{StaticResource ContentBackground.Orange}"/>
+                <Setter Property="ResizeBorderBrush" Value="{StaticResource Orange.TitleBarBorderBrush}"/>
+                <Setter Property="MinimizeButtonTemplate" Value="{StaticResource MinimizeOrange}"/>
+                <Setter Property="MaximizeButtonTemplate" Value="{StaticResource MaximizeOrange}"/>
+                <Setter Property="RestoreButtonTemplate" Value="{StaticResource RestoreOrange}"/>
+                <Setter Property="CloseButtonTemplate" Value="{StaticResource CloseOrange}"/>
+                <Setter Property="TitleBarTemplate" Value="{StaticResource OrangeTitleBarTemplate}"/>
+                <Setter Property="Foreground" Value="{StaticResource OrangeText}"/>
+                <Setter Property="Template" Value="{StaticResource OrangeSkinTemp}"/>
+            </Trigger>
+
+            <Trigger Property="local:SkinStorage.VisualStyle" Value="WMPClassic">
+                <Setter Property="TitleBarBackground" Value="{StaticResource WMP_ContentAreaBackground}"/>
+                <Setter Property="Background" Value="{StaticResource Gray}"/>
+                <Setter Property="ResizeBorderBrush" Value="{StaticResource WMPBorderBrush}" />
+                <Setter Property="MinimizeButtonTemplate"  Value="{StaticResource MinimizeWmp}"/>
+                <Setter Property="MaximizeButtonTemplate" Value="{StaticResource MaximizeWmp}"/>
+                <Setter Property="RestoreButtonTemplate" Value="{StaticResource RestoreWmp}"/>
+                <Setter Property="CloseButtonTemplate" Value="{StaticResource CloseWmp}"/>
+                <Setter Property="TitleBarTemplate" Value="{StaticResource WMPTitleBarTemplate}"/>
+                <Setter Property="Foreground" Value="{StaticResource White}"/>
+                <Setter Property="Template" Value="{StaticResource SkinTemp}"/>
+            </Trigger>
+
+            <Trigger Property="local:SkinStorage.VisualStyle" Value="ForestGreen">
+                <Setter Property="TitleBarBackground" Value="{StaticResource ForestGreen}"/>
+                <Setter Property="Background" Value="{StaticResource WhiteSmoke}"/>
+                <Setter Property="ResizeBorderBrush" Value="{StaticResource ForestGreenBorderBrush}" />
+                <Setter Property="MinimizeButtonTemplate" Value="{StaticResource MinimizeFG}"/>
+                <Setter Property="MaximizeButtonTemplate" Value="{StaticResource MaximizeFG}"/>
+                <Setter Property="RestoreButtonTemplate" Value="{StaticResource RestoreFG}"/>
+                <Setter Property="CloseButtonTemplate" Value="{StaticResource CloseFG}"/>
+                <Setter Property="TitleBarTemplate" Value="{StaticResource ForestGreenTitleBarTemplate}"/>
+                <Setter Property="Foreground" Value="{StaticResource White}"/>
+                <Setter Property="Template" Value="{StaticResource SkinTemp}"/>
+            </Trigger>
+
+            <Trigger Property="local:SkinStorage.VisualStyle" Value="CoolBlue">
+                <Setter Property="TitleBarBackground" Value="{StaticResource CoolBlue}"/>
+                <Setter Property="Background" Value="{StaticResource WhiteSmoke}"/>
+                <Setter Property="ResizeBorderBrush" Value="{StaticResource CoolBlueBorderBrush}" />
+                <Setter Property="MinimizeButtonTemplate" Value="{StaticResource MinimizeCoolBlue}"/>
+                <Setter Property="MaximizeButtonTemplate" Value="{StaticResource MaximizeCoolBlue}"/>
+                <Setter Property="RestoreButtonTemplate"  Value="{StaticResource RestoreCoolBlue}"/>
+                <Setter Property="CloseButtonTemplate" Value="{StaticResource CloseCoolBlue}"/>
+                <Setter Property="TitleBarTemplate" Value="{StaticResource CoolBlueTitleBarTemplate}"/>
+                <Setter Property="Foreground" Value="{StaticResource White}"/>
+                <Setter Property="Template" Value="{StaticResource SkinTemp}"/>
+            </Trigger>
+
+            <Trigger Property="local:SkinStorage.VisualStyle" Value="LawnGreen">
+                <Setter Property="TitleBarBackground" Value="{StaticResource LawnGreen}"/>
+                <Setter Property="Background" Value="{StaticResource WhiteSmoke}"/>
+                <Setter Property="ResizeBorderBrush" Value="{StaticResource LawnGreenBorderBrush}" />
+                <Setter Property="MinimizeButtonTemplate" Value="{StaticResource MinimizeLG}"/>
+                <Setter Property="MaximizeButtonTemplate" Value="{StaticResource MaximizeLG}"/>
+                <Setter Property="RestoreButtonTemplate" Value="{StaticResource RestoreLG}"/>
+                <Setter Property="CloseButtonTemplate" Value="{StaticResource CloseLG}"/>
+                <Setter Property="TitleBarTemplate" Value="{StaticResource LawnGreenTitleBarTemplate}"/>
+                <Setter Property="Foreground" Value="{StaticResource White}"/>
+                <Setter Property="Template" Value="{StaticResource SkinTemp}"/>
+            </Trigger>
+
+            <Trigger Property="local:SkinStorage.VisualStyle" Value="OrangeRed">
+                <Setter Property="TitleBarBackground" Value="{StaticResource OrangeRed}"/>
+                <Setter Property="Background" Value="{StaticResource LightBrown}"/>
+                <Setter Property="ResizeBorderBrush" Value="{StaticResource OrangeRedBorderBrush}" />
+                <Setter Property="MinimizeButtonTemplate" Value="{StaticResource MinimizeOR}"/>
+                <Setter Property="MaximizeButtonTemplate" Value="{StaticResource MaximizeOR}"/>
+                <Setter Property="RestoreButtonTemplate" Value="{StaticResource RestoreOR}"/>
+                <Setter Property="CloseButtonTemplate" Value="{StaticResource CloseOR}"/>
+                <Setter Property="TitleBarTemplate" Value="{StaticResource OrangeRedTitleBarTemplate}"/>
+                <Setter Property="Foreground" Value="{StaticResource White}"/>
+                <Setter Property="Template" Value="{StaticResource OrangeSkinTemp}"/>
+            </Trigger>
+
+
+            <Trigger Property="local:SkinStorage.VisualStyle" Value="ChocolateYellow">
+                <Setter Property="TitleBarBackground" Value="{StaticResource ChocolateYellow}"/>
+                <Setter Property="Background" Value="{StaticResource LightYellow}"/>
+                <Setter Property="ResizeBorderBrush" Value="{StaticResource ChocolateYellowBorderBrush}" />
+                <Setter Property="MinimizeButtonTemplate" Value="{StaticResource MinimizeCY}"/>
+                <Setter Property="MaximizeButtonTemplate" Value="{StaticResource MaximizeCY}"/>
+                <Setter Property="RestoreButtonTemplate" Value="{StaticResource RestoreCY}"/>
+                <Setter Property="CloseButtonTemplate" Value="{StaticResource CloseCY}"/>
+                <Setter Property="TitleBarTemplate" Value="{StaticResource ChocolateYellowTitleBarTemplate}"/>
+                <Setter Property="Foreground" Value="{StaticResource White}"/>
+                <Setter Property="Template" Value="{StaticResource SkinTemp}"/>
+            </Trigger>
+
+            <Trigger Property="local:SkinStorage.VisualStyle" Value="SpringGreen">
+                <Setter Property="TitleBarBackground" Value="{StaticResource SpringGreen}"/>
+                <Setter Property="Background" Value="{StaticResource WhiteSmoke}"/>
+                <Setter Property="ResizeBorderBrush" Value="{StaticResource SpringGreenBorderBrush}" />
+                <Setter Property="MinimizeButtonTemplate" Value="{StaticResource MinimizeSG}"/>
+                <Setter Property="MaximizeButtonTemplate" Value="{StaticResource MaximizeSG}"/>
+                <Setter Property="RestoreButtonTemplate" Value="{StaticResource RestoreSG}"/>
+                <Setter Property="CloseButtonTemplate" Value="{StaticResource CloseSG}"/>
+                <Setter Property="TitleBarTemplate" Value="{StaticResource SpringGreenTitleBarTemplate}"/>
+                <Setter Property="Foreground" Value="{StaticResource SpringGreenTitleBarTemplate}"/>
+                <Setter Property="Template" Value="{StaticResource SkinTemp}"/>
+            </Trigger>
+
+            <Trigger Property="local:SkinStorage.VisualStyle" Value="BrightGray">
+                <Setter Property="TitleBarBackground" Value="{StaticResource BrightGray}"/>
+                <Setter Property="Background" Value="{StaticResource Gray}"/>
+                <Setter Property="ResizeBorderBrush" Value="{StaticResource BrightGrayBorderBrush}" />
+                <Setter Property="MinimizeButtonTemplate" Value="{StaticResource MinimizeBG}"/>
+                <Setter Property="MaximizeButtonTemplate" Value="{StaticResource MaximizeBG}"/>
+                <Setter Property="RestoreButtonTemplate" Value="{StaticResource RestoreBG}"/>
+                <Setter Property="CloseButtonTemplate" Value="{StaticResource CloseBG}"/>
+                <Setter Property="TitleBarTemplate" Value="{StaticResource BrightGrayTitleBarTemplate}"/>
+                <Setter Property="Foreground" Value="{StaticResource White}"/>
+                <Setter Property="Template" Value="{StaticResource SkinTemp}"/>
+            </Trigger>
+
+            <Trigger Property="local:SkinStorage.VisualStyle" Value="BlueWave">
+                <Setter Property="TitleBarBackground" Value="{StaticResource BlueWave}"/>
+                <Setter Property="Background" Value="{StaticResource WhiteSmoke}"/>
+                <Setter Property="ResizeBorderBrush" Value="{StaticResource BlueWaveBorderBrush}" />
+                <Setter Property="MinimizeButtonTemplate" Value="{StaticResource MinimizeBW}"/>
+                <Setter Property="MaximizeButtonTemplate" Value="{StaticResource MaximizeBW}"/>
+                <Setter Property="RestoreButtonTemplate" Value="{StaticResource RestoreBW}"/>
+                <Setter Property="CloseButtonTemplate" Value="{StaticResource CloseBW}"/>
+                <Setter Property="TitleBarTemplate" Value="{StaticResource BlueWaveTitleBarTemplate}"/>
+                <Setter Property="Foreground" Value="{StaticResource White}"/>
+                <Setter Property="Template" Value="{StaticResource SkinTemp}"/>
+            </Trigger>
+
+            <Trigger Property="local:SkinStorage.VisualStyle" Value="MixedGreen">
+                <Setter Property="TitleBarBackground" Value="{StaticResource MixedGreen}"/>
+                <Setter Property="Background" Value="{StaticResource WhiteSmoke}"/>
+                <Setter Property="ResizeBorderBrush" Value="{StaticResource MixedGreenBorderBrush}" />
+                <Setter Property="MinimizeButtonTemplate" Value="{StaticResource MinimizeMG}"/>
+                <Setter Property="MaximizeButtonTemplate" Value="{StaticResource MaximizeMG}"/>
+                <Setter Property="RestoreButtonTemplate" Value="{StaticResource RestoreMG}"/>
+                <Setter Property="CloseButtonTemplate" Value="{StaticResource CloseMG}"/>
+                <Setter Property="TitleBarTemplate" Value="{StaticResource MixedGreenTitleBarTemplate}"/>
+                <Setter Property="Foreground" Value="{StaticResource White}"/>
+                <Setter Property="Template" Value="{StaticResource SkinTemp}"/>
+            </Trigger>
+
+            <Trigger Property="local:SkinStorage.VisualStyle" Value="Default">
+                <Setter Property="TitleBarBackground" Value="{StaticResource Default.TitleBarBackground}"/>
+                <Setter Property="Background" Value="{StaticResource WhiteSmoke}"/>
+                <Setter Property="ResizeBorderBrush" Value="{StaticResource OrangeRedBorderBrush}" />
+                <Setter Property="MinimizeButtonTemplate" Value="{StaticResource MinimizeD}"/>
+                <Setter Property="MaximizeButtonTemplate" Value="{StaticResource MaximizeD}"/>
+                <Setter Property="RestoreButtonTemplate" Value="{StaticResource RestoreD}"/>
+                <Setter Property="CloseButtonTemplate" Value="{StaticResource CloseD}"/>
+                <Setter Property="TitleBarTemplate" Value="{StaticResource DefaultTitleBarTemplate}"/>
+                <Setter Property="Foreground" Value="{StaticResource White}"/>
+                <Setter Property="Template" Value="{StaticResource DefaultTemp}"/>
+            </Trigger>
+
+            <Trigger Property="local:SkinStorage.VisualStyle" Value="Luna.NormalColor">
+                <Setter Property="TitleBarBackground" Value="{StaticResource Default.TitleBarBackground}"/>
+                <Setter Property="Background" Value="{StaticResource WhiteSmoke}"/>
+                <Setter Property="ResizeBorderBrush" Value="{StaticResource OrangeRedBorderBrush}" />
+                <Setter Property="MinimizeButtonTemplate" Value="{StaticResource MinimizeD}"/>
+                <Setter Property="MaximizeButtonTemplate" Value="{StaticResource MaximizeD}"/>
+                <Setter Property="RestoreButtonTemplate" Value="{StaticResource RestoreD}"/>
+                <Setter Property="CloseButtonTemplate" Value="{StaticResource CloseD}"/>
+                <Setter Property="TitleBarTemplate" Value="{StaticResource DefaultTitleBarTemplate}"/>
+                <Setter Property="Foreground" Value="{StaticResource White}"/>
+                <Setter Property="Template" Value="{StaticResource DefaultTemp}"/>
+            </Trigger>
+            <Trigger Property="local:SkinStorage.VisualStyle" Value="Luna.Homestead">
+                <Setter Property="TitleBarBackground" Value="{StaticResource Default.TitleBarBackground}"/>
+                <Setter Property="Background" Value="{StaticResource WhiteSmoke}"/>
+                <Setter Property="ResizeBorderBrush" Value="{StaticResource OrangeRedBorderBrush}" />
+                <Setter Property="MinimizeButtonTemplate" Value="{StaticResource MinimizeD}"/>
+                <Setter Property="MaximizeButtonTemplate" Value="{StaticResource MaximizeD}"/>
+                <Setter Property="RestoreButtonTemplate" Value="{StaticResource RestoreD}"/>
+                <Setter Property="CloseButtonTemplate" Value="{StaticResource CloseD}"/>
+                <Setter Property="TitleBarTemplate" Value="{StaticResource DefaultTitleBarTemplate}"/>
+                <Setter Property="Foreground" Value="{StaticResource White}"/>
+                <Setter Property="Template" Value="{StaticResource DefaultTemp}"/>
+            </Trigger>
+
+            <Trigger Property="local:SkinStorage.VisualStyle" Value="Luna.Metallic">
+                <Setter Property="TitleBarBackground" Value="{StaticResource Default.TitleBarBackground}"/>
+                <Setter Property="Background" Value="{StaticResource WhiteSmoke}"/>
+                <Setter Property="ResizeBorderBrush" Value="{StaticResource OrangeRedBorderBrush}" />
+                <Setter Property="MinimizeButtonTemplate" Value="{StaticResource MinimizeD}"/>
+                <Setter Property="MaximizeButtonTemplate" Value="{StaticResource MaximizeD}"/>
+                <Setter Property="RestoreButtonTemplate" Value="{StaticResource RestoreD}"/>
+                <Setter Property="CloseButtonTemplate" Value="{StaticResource CloseD}"/>
+                <Setter Property="TitleBarTemplate" Value="{StaticResource DefaultTitleBarTemplate}"/>
+                <Setter Property="Foreground" Value="{StaticResource White}"/>
+                <Setter Property="Template" Value="{StaticResource DefaultTemp}"/>
+            </Trigger>
+            <Trigger Property="local:SkinStorage.VisualStyle" Value="Aero.NormalColor">
+                <Setter Property="TitleBarBackground" Value="{StaticResource Default.TitleBarBackground}"/>
+                <Setter Property="Background" Value="{StaticResource WhiteSmoke}"/>
+                <Setter Property="ResizeBorderBrush" Value="{StaticResource OrangeRedBorderBrush}" />
+                <Setter Property="MinimizeButtonTemplate" Value="{StaticResource MinimizeD}"/>
+                <Setter Property="MaximizeButtonTemplate" Value="{StaticResource MaximizeD}"/>
+                <Setter Property="RestoreButtonTemplate" Value="{StaticResource RestoreD}"/>
+                <Setter Property="CloseButtonTemplate" Value="{StaticResource CloseD}"/>
+                <Setter Property="TitleBarTemplate" Value="{StaticResource DefaultTitleBarTemplate}"/>
+                <Setter Property="Foreground" Value="{StaticResource White}"/>
+                <Setter Property="Template" Value="{StaticResource DefaultTemp}"/>
+            </Trigger>
+
+            <Trigger Property="local:SkinStorage.VisualStyle" Value="Zune.NormalColor">
+                <Setter Property="TitleBarBackground" Value="{StaticResource Default.TitleBarBackground}"/>
+                <Setter Property="Background" Value="{StaticResource WhiteSmoke}"/>
+                <Setter Property="ResizeBorderBrush" Value="{StaticResource OrangeRedBorderBrush}" />
+                <Setter Property="MinimizeButtonTemplate" Value="{StaticResource MinimizeD}"/>
+                <Setter Property="MaximizeButtonTemplate" Value="{StaticResource MaximizeD}"/>
+                <Setter Property="RestoreButtonTemplate" Value="{StaticResource RestoreD}"/>
+                <Setter Property="CloseButtonTemplate" Value="{StaticResource CloseD}"/>
+                <Setter Property="TitleBarTemplate" Value="{StaticResource DefaultTitleBarTemplate}"/>
+                <Setter Property="Foreground" Value="{StaticResource White}"/>
+                <Setter Property="Template" Value="{StaticResource DefaultTemp}"/>
+            </Trigger>
+
+            <Trigger Property="local:SkinStorage.VisualStyle" Value="Royale.NormalColor">
+                <Setter Property="TitleBarBackground" Value="{StaticResource Default.TitleBarBackground}"/>
+                <Setter Property="Background" Value="{StaticResource WhiteSmoke}"/>
+                <Setter Property="ResizeBorderBrush" Value="{StaticResource OrangeRedBorderBrush}" />
+                <Setter Property="MinimizeButtonTemplate" Value="{StaticResource MinimizeD}"/>
+                <Setter Property="MaximizeButtonTemplate" Value="{StaticResource MaximizeD}"/>
+                <Setter Property="RestoreButtonTemplate" Value="{StaticResource RestoreD}"/>
+                <Setter Property="CloseButtonTemplate" Value="{StaticResource CloseD}"/>
+                <Setter Property="TitleBarTemplate" Value="{StaticResource DefaultTitleBarTemplate}"/>
+                <Setter Property="Foreground" Value="{StaticResource White}"/>
+                <Setter Property="Template" Value="{StaticResource DefaultTemp}"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+</ResourceDictionary>

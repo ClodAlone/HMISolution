@@ -1,0 +1,249 @@
+﻿<div id="IpCameraControl" class="IpCameraControl" style="height: 100%; margin: auto;">
+    <img src="cl.gif" alt="" onload="onIpCameraControlLoaded(this)" id="loadingImage" />
+
+    <div id="edit">
+        <img id="cameraFrame" style="height: 100%; width: 100%;" />
+        <div id="messageDiv" style="position: absolute; top: 5px;">
+            <div id="statusMessageDiv" style="border: 1px solid #000; padding: 10px; display: none; background: #333;"></div>
+            <div id="errorMessageDiv" style="border: 1px solid #000; padding: 10px; display: none; background: #B9192E; "></div>
+        </div>
+    </div>
+
+    <script>
+        function onIpCameraControlLoaded(obj) {
+
+            var thisPage = $(obj).parent();
+            thisPage.localize();
+
+            var scope = thisPage.scope();
+            if (!scope)
+                return;
+            var paratt = thisPage.data(dataparameters);
+            if (!paratt)
+                return;
+
+            var thisParent = thisPage.parent();
+            $(obj).remove();
+
+            var listeningArray = new Array();
+
+            setOpacity(scope, thisParent, thisPage);
+            var deregisterListener;
+            $(thisPage).bind('destroyed', function () {
+                stop();
+                if (reconnectTimeout)
+                    clearTimeout(reconnectTimeout);
+                if (errorShowingTimeout)
+                    clearTimeout(errorShowingTimeout);
+                listeningArray.forEach(function (item, index, array) {
+                    item();
+                });
+                if (deregisterListener)
+                    deregisterListener();
+            });
+
+            var parameters = JSON.parse(paratt);
+            var popupparameter = parameters.currentPopupId;
+
+            if (parameters.FontFamily)
+                loadCustomFonts([parameters.FontFamily]);
+
+            var container = thisPage.find("#edit");
+            var cameraFrame = thisPage.find("#cameraFrame");
+            var messageDiv = thisPage.find("#messageDiv");
+            var statusMessageDiv = thisPage.find("#statusMessageDiv");
+            var errorMessageDiv = thisPage.find("#errorMessageDiv");
+            var bInit;
+            var bWaitingNextFrame;
+            var lastBitmapImage;
+            var frameSize = {
+                height: 0,
+                width: 0,
+                ratio: 1
+            };
+            var bImageRatioSet;
+            var thisPageHeight;
+            var sourceId;
+            var lastFrameHash = "";
+            var latestPollRequestTimeMS;
+            var reconnectTimeout;
+            var bIsPlaying;
+            var bStreamDisposed;
+            var errorShowingTimeout;
+            var errorShowingTimeoutMS = 5000;
+            
+            var webKitRenderCorrection = thisPage.hasClass("webKitRenderCorrection");
+            if (scope.biOS) {
+                webkitMoveRotateTransform(thisParent, thisPage, container);
+                if (webKitRenderCorrection)
+                    thisPage.css("will-change", "opacity");
+            }
+
+            if (!parameters.KeepAspectRatio) {
+                container.css("height", "100%");
+            }
+            else if (popupparameter) {
+                thisPage.css({
+                    "display": "flex",
+                    "justify-content": "center",
+                    "align-items": "center"
+                });
+                thisPageHeight = thisPage.height();
+            }
+
+            //if (popupparameter && parameters.KeepAspectRatio && parameters.bFitInWindow) {
+            //    var drl1 = scope.$on(onPopupResize + popupparameter, function (value, obj) {
+            //        fixControlRatio(cameraFrame[0].getBoundingClientRect());
+            //    });
+            //    listeningArray.push(drl1);
+            //}
+
+            var mutateFunc = function () {
+                messageDiv.css({
+                    "left": container.width() / 2,
+                    "transform": "translateX(-50%)"
+                });
+                showMessage(i18next.t1("WaitText"));
+
+                var options = {};
+                setObjectBorder(options, parameters);
+                if (!$.isEmptyObject(options))
+                    container.css(options);
+
+                if (parameters.SVGReferenceId) {
+                    if (parameters.screenId in scope.dataValues && parameters.SVGReferenceId in scope.dataValues[parameters.screenId]) {
+                        applyTagQualityStyle(webKitRenderCorrection ? thisPage : thisParent, scope, parameters.screenId, parameters.SVGReferenceId);
+                    }
+                    deregisterListener = scope.$on(onDataChanged + parameters.screenId + parameters.SVGReferenceId, function (e, value) {
+                        applyTagQualityStyle(webKitRenderCorrection ? thisPage : thisParent, scope, parameters.screenId, parameters.SVGReferenceId);
+                    });
+                }
+
+                sourceId = btoa(parameters.Uri + parameters.User + parameters.Password);
+
+                if (!parameters.Uri)
+                    showMessage(i18next.t1("UriNotSet"));
+                else {
+                    scope.corehubconnection.invoke("LoadMjpegStream", parameters.screenId, sourceId, parameters.Uri, parameters.User, parameters.Password,
+                        parameters.CloseTimeout)
+                        .then((ret) => {
+                            bStreamDisposed = false;
+                            play();
+                        })
+                        .catch(err => {
+                            console.error("LoadMjpegStream Error:", err);
+                        });
+                }
+            }
+            mutateHandler.scheduleMutate(parameters.screenId, mutateFunc);
+
+            function showMessage(msg, isError = false) {
+                var msgContainer = isError ? errorMessageDiv : statusMessageDiv;
+                if (isError) {
+                    if (errorShowingTimeout)
+                        clearTimeout(errorShowingTimeout);
+                    errorShowingTimeout = setTimeout(function () { hideMessage(true); }, errorShowingTimeoutMS);
+                }
+                msgContainer.text(msg).show();
+            }
+
+            function hideMessage(isError = false) {
+                var msgContainer = statusMessageDiv;
+                if (isError) {
+                    errorShowingTimeout = null;
+                    msgContainer = errorMessageDiv;
+                    if (bStreamDisposed) //mantain the latest error message if the stream is permanently closed
+                        return;
+                }
+                msgContainer.hide();
+            }
+
+            function updateSrcImage() {
+                hideMessage();
+                cameraFrame.attr("src", `data:image/jpeg;base64,${lastBitmapImage}`);
+                if (popupparameter && parameters.KeepAspectRatio && !bImageRatioSet) {
+                    if (frameSize.width == 0 && frameSize.height == 0) {
+                        frameSize.height = cameraFrame.height();
+                        frameSize.width = cameraFrame.width();
+                        frameSize.ratio = frameSize.width / frameSize.height;
+                    }
+                    if (frameSize.height > thisPageHeight) {
+                        bImageRatioSet = true;
+                        var newW = thisPageHeight * frameSize.width / frameSize.height;
+                        container.width(newW);
+                    }
+                }
+            }
+
+            function pollFrame() {
+                if (bWaitingNextFrame || !bIsPlaying)
+                    return;
+
+                var now = Date.now();
+                if (bInit && latestPollRequestTimeMS && now - latestPollRequestTimeMS < parameters.FrameRateUpdateImage) {
+                    requestAnimationFrame(function () {
+                        pollFrame();
+                    });
+                    return;
+                }
+                latestPollRequestTimeMS = now;
+
+                if (!bInit)
+                    bInit = true;
+
+                bWaitingNextFrame = true;
+                scope.corehubconnection.invoke("GetLastFrameData", parameters.screenId, sourceId, lastFrameHash)
+                    .then((ret) => {
+                        bWaitingNextFrame = false;
+                        var ipCameraFrame = ret[0];
+                        var ipCameraError = ret[1];
+                        if (ipCameraError) {
+                            pause();
+                            showMessage(i18next.t1("IPCameraError: " + ipCameraError), true);
+                            if (parameters.ReconnectInterval > 0) {
+                                showMessage(i18next.t1("ReconnectingIn") + parameters.ReconnectInterval + " " + i18next.t1("ms") + "...");
+                                if (!reconnectTimeout) {
+                                    reconnectTimeout = setTimeout(function () {
+                                        reconnectTimeout = null;
+                                        play();
+                                    }, parameters.ReconnectInterval);
+                                }
+                            }
+                            else
+                                stop();
+                        }
+                        else if (bIsPlaying) {
+                            if (ipCameraFrame) {
+                                lastBitmapImage = ret[0].FrameData;
+                                lastFrameHash = ret[0].FrameHash;
+                                updateSrcImage();
+                            }
+                            pollFrame();
+                        }
+                    })
+                    .finally(() => {
+                        bWaitingNextFrame = false;
+                    });
+            }
+
+            function play() {
+                bIsPlaying = true;
+                pollFrame();
+            }
+
+            function pause() {
+                bIsPlaying = false;
+            }
+
+            function stop() {
+                bStreamDisposed = true;
+                pause();
+                listeningArray.forEach(function (item, index, array) {
+                    item();
+                });
+
+                scope.corehubconnection.invoke("DisposeMjpegStream", parameters.screenId, sourceId);
+            }
+        }
+    </script>
+</div>

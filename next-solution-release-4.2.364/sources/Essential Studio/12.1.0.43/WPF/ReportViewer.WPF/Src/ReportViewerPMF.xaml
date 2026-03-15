@@ -1,0 +1,310 @@
+﻿<UserControl x:Class="Syncfusion.Windows.Reports.Viewer.ReportViewer"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"    
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:syncfusion="http://schemas.syncfusion.com/wpf"
+    xmlns:loading="clr-namespace:Syncfusion.Windows.Reports.Viewer.Utils"
+    xmlns:prop="clr-namespace:Syncfusion.ReportViewer.WPF.Properties"
+    MinHeight="200" MinWidth="300" Background="White">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Themes/generic.xaml" />
+                <ResourceDictionary Source="Utils/MultiValueComboBox/MultiValueComboBox.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <Grid x:Name="MainGrid" Height="Auto" Margin="0,0,0,0" Background="Transparent">
+        <Grid.RowDefinitions>
+            <RowDefinition Name="toolBarGridRow" Height="28"/>
+            <RowDefinition Name="dsCredentialRow" Height="Auto"/>
+            <RowDefinition Name="parameterGridRow" Height="Auto"/>
+            <RowDefinition Name="viewerContentRow" Height="*" />
+            <RowDefinition Name="gridExceptionRow" Height="0"/>
+            <RowDefinition Name="loadingIndicatorRow" Height="0"/>
+        </Grid.RowDefinitions>
+
+        <!--Toolbar-->
+        <StackPanel Name="toolBar" Height="28" Orientation="Horizontal" Grid.ColumnSpan="2" Margin="0">
+            <StackPanel.Background>
+                <LinearGradientBrush EndPoint="0.5,1" StartPoint="0.5,0">
+                    <GradientStop Color="#FFFEFBF4" Offset="0.027"/>
+                    <GradientStop Color="#FFEAEEEF" Offset="0.029"/>
+                    <GradientStop Color="#FFDCE4F1" Offset="0.498"/>
+                    <GradientStop Color="#FFE6EAF3" Offset="0.966"/>
+                    <GradientStop Color="FloralWhite" Offset="0.968"/>
+                    <GradientStop Color="#FFD4DBEB" Offset="0.503"/>
+                </LinearGradientBrush>
+
+            </StackPanel.Background>
+
+            <!--Print-->
+            <Button Style="{StaticResource ButtonStyle}" Name="buttonPrint" Width="22" Height="22" ToolTip="{x:Static prop:Resources.menuItemPrint}" IsEnabled="False" Click="buttonPrint_Click" Margin="2,3,2,3" >
+                <Image Source="{StaticResource PrintDisabled}" Stretch="None"/>
+                <!--PrintDisabled-->
+            </Button>
+
+            <ComboBox Name="exportControl" Height="22" Width="35" Style="{StaticResource ExportComboBox}" ItemContainerStyle="{StaticResource ItemTemplate}" IsEnabled="False" ToolTip="Export" />
+
+            <Rectangle HorizontalAlignment="Center"  Height="21.599" VerticalAlignment="Center" Width="1.6">
+                <Rectangle.Fill>
+                    <LinearGradientBrush EndPoint="0.662,0.5" StartPoint="0.338,0.5">
+                        <GradientStop Color="#FFBCBCBC" Offset="0.508"/>
+                        <GradientStop Color="White" Offset="0.525"/>
+                    </LinearGradientBrush>
+                </Rectangle.Fill>
+            </Rectangle>
+
+            <!--Navigate to First-->
+            <Button Style="{StaticResource ButtonStyle}" Name="buttonFirst" ToolTip="{x:Static prop:Resources.menuItemFirst}" Width="22" Height="22" Click="buttonFirst_Click" IsEnabled="False" Margin="0,3,0,3" >
+                <Image Source="{StaticResource First_NavDisabled}" Stretch="None"/>
+                <!--First_NavDisabled-->
+            </Button>
+
+            <!--Navigate to Previous-->
+            <Button Style="{StaticResource ButtonStyle}" Name="buttonPrevious" Width="22" Height="22" ToolTip="{x:Static prop:Resources.menuItemPrevious}" Click="buttonPrevious_Click" IsEnabled="False" Margin="2,3,2,3" >
+                <Image Source="{StaticResource Previous_NavDisabled}"/>
+                <!--Previous_NavDisabled-->
+            </Button>
+
+            <!--Current Page-->
+            <TextBox Name="textBoxCurrentPage" Width="60" Height="22" IsReadOnly="False" IsEnabled="False" BorderBrush="Gray" Margin="2,3,2,3" >
+            </TextBox>
+            <TextBlock Name="labelOf" Width="Auto" VerticalAlignment="Center" Foreground="Black" Margin="2,3,5,3">of</TextBlock>
+
+            <!--Totla number of pages-->
+            <TextBlock Name="textBoxTotalPages" Width="Auto" xml:space="preserve" IsEnabled="false" Margin="2,3,5,3" VerticalAlignment="Center" Foreground="Black" TextAlignment="Center" HorizontalAlignment="Center"/>
+
+            <!--Navigate to Next-->
+            <Button Style="{StaticResource ButtonStyle}" Name="buttonNext" Width="22" Height="22" ToolTip="{x:Static prop:Resources.menuItemNext}" Click="buttonNext_Click" IsEnabled="False" Margin="2,3,2,3" >
+                <Image Source="{StaticResource Next_NavDisabled}" Stretch="None"/>
+                <!--Next_NavDisabled-->
+            </Button>
+
+            <!--Navigate to Last-->
+            <Button Style="{StaticResource ButtonStyle}" Name="buttonLast" Width="22" Height="22" ToolTip="{x:Static prop:Resources.menuItemLast}" Click="buttonLast_Click" IsEnabled="False" Margin="2,3,2,3" >
+                <Image Source="{StaticResource Last_NavDisabled}" Stretch="None"/>
+                <!--Last_NavDisabled-->
+            </Button>
+
+            <!--Back Parent Report-->
+            <Button Style="{StaticResource ButtonStyle}" Name="btnback" Width="22" Height="22" ToolTip="{x:Static prop:Resources.toolTipBack}" IsEnabled="True" Click="Btn_back_Click" Margin="2,3,2,3" Visibility="Collapsed">
+                <Image Source="{StaticResource ReportBack}" Stretch="None"/>
+            </Button>
+
+            <Rectangle HorizontalAlignment="Center"  Height="21.599" VerticalAlignment="Center" Width="1.6">
+                <Rectangle.Fill>
+                    <LinearGradientBrush EndPoint="0.662,0.5" StartPoint="0.338,0.5">
+                        <GradientStop Color="#FFBCBCBC" Offset="0.508"/>
+                        <GradientStop Color="White" Offset="0.525"/>
+                    </LinearGradientBrush>
+                </Rectangle.Fill>
+            </Rectangle>
+
+            <!--Zooming-->
+            <Border Name="comboBoxExternalBorder" BorderBrush="Gray" Width="70" Height="22" ToolTip="{x:Static prop:Resources.toolTipZoom}" BorderThickness="0" Margin="2,3,2,3">
+                <ComboBox Name="comboBoxPageZoom" Width="70" Height="22"  SelectedIndex="2" IsEnabled="False">
+                    <ComboBoxItem Content="25%"/>
+                    <ComboBoxItem Content="50%"/>
+                    <ComboBoxItem Content="100%"/>
+                    <ComboBoxItem Content="200%"/>
+                    <ComboBoxItem Content="300%"/>
+                    <ComboBoxItem Content="400%"/>
+                    <ComboBoxItem Content="500%"/>
+                </ComboBox>
+            </Border>
+
+            <!--Print Layout-->
+            <ToggleButton Style="{StaticResource ViewerToggleButtonStyle}" Name="buttonPrintLayout" Width="22" Height="22" ToolTip="{x:Static prop:Resources.menuItemPrintLayout}" IsEnabled="False" Margin="2,3,2,3">
+                <Image Source="{StaticResource PrintLayoutXDisabled}" Stretch="None" />
+                <!--PrintLayoutXDisabled-->
+            </ToggleButton>
+
+            <!--Print Setup-->
+            <Button Style="{StaticResource ButtonStyle}" Name="buttonPageSetup" Width="22" Height="22" ToolTip="{x:Static prop:Resources.toolTipPageSetUp}" IsEnabled="False" Click="buttonPageSetup_Click" Margin="2,3,2,3" Visibility="Visible" >
+                <Image Source="{StaticResource PageSetup}" Stretch="None"/>
+                <!--PrintSetupDisabled-->
+            </Button>
+
+            <Rectangle HorizontalAlignment="Center"  Height="21.599" VerticalAlignment="Center" Width="1.6">
+                <Rectangle.Fill>
+                    <LinearGradientBrush EndPoint="0.662,0.5" StartPoint="0.338,0.5">
+                        <GradientStop Color="#FFBCBCBC" Offset="0.508"/>
+                        <GradientStop Color="White" Offset="0.525"/>
+                    </LinearGradientBrush>
+                </Rectangle.Fill>
+            </Rectangle>
+
+            <!--Refresh -->
+            <Button Style="{StaticResource ButtonStyle}" Height="22" Width="22" Name="buttonRefresh" ToolTip="{x:Static prop:Resources.menuItemRefresh}" IsEnabled="False" Click="buttonRefresh_Click" Margin="2,3,2,3">
+                <Image Source="{StaticResource RefreshDisabled}" HorizontalAlignment="Center" VerticalAlignment="Center" Height="16" Width="16" Stretch="Fill" />
+                <!--RefreshDisabled-->
+            </Button>
+
+            <!--Show/Hide Document map-->
+            <Button Style="{StaticResource ButtonStyle}" Name="buttonShowOrHideDocumentMap" Width="22" ToolTip="{x:Static prop:Resources.menuItemShowHide}" IsEnabled="False" Visibility="Collapsed" Margin="2,3,2,3" Click="buttonDocumentMap_Click" >
+                <Image Source="{StaticResource ShowHideDisabled}" Stretch="None" HorizontalAlignment="Center" VerticalAlignment="Center" Height="16" Width="16"/>
+                <!--ShowHideDisabled-->
+            </Button>
+
+            <!--Parameterised query-->
+            <Button Style="{StaticResource ButtonStyle}" Name="buttonParameters" Width="22" Height="22" ToolTip="{x:Static prop:Resources.toolTipParameters}" IsEnabled="False" Visibility="Collapsed" Margin="2,3,2,3" Background="Transparent" Click="ButtonParameters_OnClick">
+                    <Image Source="{StaticResource ParametersDisabled}" Stretch="None" />
+                    <!--ParametersDisabled-->
+            </Button>
+
+            <Rectangle HorizontalAlignment="Center"  Height="21.599" VerticalAlignment="Center" Width="1.6">
+                <Rectangle.Fill>
+                    <LinearGradientBrush EndPoint="0.662,0.5" StartPoint="0.338,0.5">
+                        <GradientStop Color="#FFBCBCBC" Offset="0.508"/>
+                        <GradientStop Color="White" Offset="0.525"/>
+                    </LinearGradientBrush>
+                </Rectangle.Fill>
+            </Rectangle>
+
+            <TextBox Name="textBoxFind" Width="60" Height="22" xml:space="preserve" IsEnabled="False" BorderBrush="Gray" ToolTip="{x:Static prop:Resources.toolTipFindTextBox}" Margin="2,3,2,3" Visibility="Collapsed"/>
+            
+            <!--Find-->
+            <Button Style="{StaticResource ButtonStyle}" Name="buttonFind" Width="22" Height="22" ToolTip="{x:Static prop:Resources.toolTipFind}" IsEnabled="False" Visibility="Collapsed" Margin="2,3,2,3">
+                <Image Source="{StaticResource FindDisabled}" Stretch="None"/> <!--FindDisabled-->
+            </Button>            
+        </StackPanel>
+
+        <!-- DataSoruce Credential Prompt -->
+        <Grid Grid.Row="1" FlowDirection="LeftToRight">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" x:Name="rowDefinitionFordsCredentialBlock"/>
+            </Grid.RowDefinitions>
+            <ScrollViewer Name="scorllDSCredentialBlock" HorizontalAlignment="Stretch" VerticalScrollBarVisibility="Auto"  HorizontalScrollBarVisibility="Disabled" Visibility="Collapsed">
+                <StackPanel Name="stackPaneldsCredential" Grid.Row="0" Background="LightBlue" Width="Auto" Height="Auto">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="300*"/>
+                            <ColumnDefinition Width="100*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid Background="#efefef" x:Name="grid_DsCredentialblock" Grid.Column="0" Width="Auto">
+                            <StackPanel Width="Auto" Name="sPanel_Head">
+                            </StackPanel>
+                        </Grid>
+                        <StackPanel Grid.Column="1" Background="#efefef">
+                            <Button Content="{x:Static prop:Resources.btnViewReport}" HorizontalAlignment="Right" x:Name="btnViewReport1" Width="Auto" Click="btnViewReport_Click" Margin="0,5,20,5"/>
+                        </StackPanel>
+                    </Grid>
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+
+
+        <Grid Grid.Row="2" FlowDirection="LeftToRight">
+            <!--Parameter prompt panel-->
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" x:Name="rowDefinitionForParameterBlock"/>
+            </Grid.RowDefinitions>
+            <ScrollViewer x:Name="scrollViewerParamBlock" HorizontalAlignment="Stretch" VerticalScrollBarVisibility="Auto"  HorizontalScrollBarVisibility="Disabled" Visibility="Collapsed">
+                <StackPanel Name="stackPanelParameters" Grid.Row="0" Background="LightBlue" Width="Auto" Height="Auto">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="100*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <Grid Background="#efefef" x:Name="grid_ReportParameterBlock" Grid.Column="0" >
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                            </Grid.RowDefinitions>
+                        </Grid>
+
+                        <StackPanel Grid.Column="1" Background="#efefef">
+                            <Button Content="{x:Static prop:Resources.btnViewReport}" HorizontalAlignment="Right" x:Name="btnViewReport" Width="Auto" Click="Button_View_Report_Click" Margin="0,5,20,5"/>
+                        </StackPanel>
+                    </Grid>
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+
+        <Grid Name="gridRenderingRegion" Grid.Row="3" Height="Auto" Margin="0,0,0,0" FlowDirection="LeftToRight">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"></RowDefinition>
+                    <RowDefinition Height="*"></RowDefinition>
+                </Grid.RowDefinitions>
+                <Grid Name="ExceptionGrid" Grid.Row="0" Visibility="Collapsed" Background="LightBlue">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="24"></ColumnDefinition>
+                        <ColumnDefinition Width="749"></ColumnDefinition>
+                        <ColumnDefinition Width="0" />
+                    </Grid.ColumnDefinitions>
+                    <Image Source="{StaticResource error}" Height="24" Width="24" Margin="5,5,5,5" Grid.ColumnSpan="2" HorizontalAlignment="Left"></Image>
+                    <TextBlock Grid.Column="1" HorizontalAlignment="Stretch" VerticalAlignment="Center" Height="23" Margin="10,7,10,0" Width="730">
+                        Report Viewer encountered some issues loading this report. Please click <Hyperlink Click="Hyperlink_Click">here</Hyperlink>  to see details of the issues.
+                    </TextBlock>
+                </Grid>
+                <Grid Grid.Row="1" x:Name="renderArea">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"></ColumnDefinition>
+                        <ColumnDefinition Width="Auto"></ColumnDefinition>
+                        <ColumnDefinition Width="*"></ColumnDefinition>
+                    </Grid.ColumnDefinitions>
+                    <Grid Grid.Column="0" Height="Auto" Width="Auto" x:Name="treeItemArea" Visibility="Collapsed">
+                        <TreeView Name="DocumentMap" Height="Auto" Width="Auto" BorderThickness="0"/>
+                    </Grid>
+                    <GridSplitter x:Name="viewerSpliter" Visibility="Collapsed" Grid.Column="1" ShowsPreview="True" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" ResizeBehavior="PreviousAndNext" Width="5" Background="#FFD4DBEB"/>
+                    <!--Viewer Page-->
+                    <ScrollViewer x:Name="scrollViewer" Grid.Column="2" Height="Auto" Width="Auto" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" HorizontalContentAlignment="Center" VerticalContentAlignment="Center">
+                        <ScrollViewer.Resources>
+                            <DataTemplate x:Key="ReportViewerCellTeamplate">
+                                <ContentControl Content="{Binding Path=CellBoundValue}"></ContentControl>
+                            </DataTemplate>
+                        </ScrollViewer.Resources>
+                        <StackPanel Orientation="Vertical" Name="PageView" Height="Auto" Width="Auto" Background="White">
+                            <StackPanel.LayoutTransform>
+                                <ScaleTransform x:Name="Zoom"></ScaleTransform>
+                            </StackPanel.LayoutTransform>
+                            <Border x:Name="PageViewBody" Background="Transparent" Height="Auto" Width="Auto">
+                                <StackPanel x:Name="PageViewContainer" Background="Transparent" Height="Auto" Width="Auto">
+                                    <Border Name="PageHeaderBorder" Height="Auto" Width="Auto" Background="Transparent">
+                                        <Canvas x:Name="CanvasHeader" Visibility="Collapsed" Background="Transparent"/>
+                                    </Border>
+                                    <Border Name="PageBodyBorder" Height="Auto" Width="Auto" Background="Transparent">
+                                        <Canvas x:Name="canvasContentPage" Grid.Row="2" Background="Transparent" Width="Auto" Height="Auto"/>
+                                    </Border>
+                                    <Border Name="PageFooterBorder" Height="Auto" Width="Auto" Background="Transparent">
+                                        <Canvas x:Name="CanvasFooter" Visibility="Collapsed" Background="Transparent"/>
+                                    </Border>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
+            </Grid>
+        </Grid>
+
+        <Grid x:Name="gridException" Grid.Row="4" Background="White" Visibility="Collapsed" FlowDirection="LeftToRight">
+            <StackPanel  Orientation="Vertical" HorizontalAlignment="Center">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" >
+                    <Image Name="imageException" Source="{StaticResource Exception}" Width="48" HorizontalAlignment="Center"/>
+                    <TextBlock Name="textBlockException"></TextBlock>
+                </StackPanel>
+                <ScrollViewer Name="groupBoxExpandedExceptionScroll" Grid.Row="3" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" Height="400">
+                    <GroupBox Name="groupBoxExpandedException" Width="420" Margin="5,0,5,0" FlowDirection="RightToLeft" BorderThickness="0">
+                        <GroupBox.Header>
+                            <ToggleButton Name="toggleShowDetails" HorizontalAlignment="Right" Margin="0,0,0,0" Click="toggleShowDetails_Click" VerticalAlignment="Bottom">Show Details</ToggleButton>
+                        </GroupBox.Header>
+                        <WrapPanel Name="ShowError" Visibility="Collapsed" Width="{Binding ElementName=groupBoxExpandedException,Path=Width}">
+                            <TextBox Name="textBlockStackTrace" TextWrapping="Wrap" FlowDirection="LeftToRight" Width="390" IsReadOnly="True" GotFocus="textBlockStackTrace_GotFocus" ></TextBox>
+                        </WrapPanel>
+                    </GroupBox>
+                </ScrollViewer>
+            </StackPanel>
+        </Grid>
+
+        <Grid x:Name="gridLoadingIndicator" Grid.Row="5" Background="White" Visibility="Collapsed" FlowDirection="LeftToRight">
+            <loading:LoadingIndicator></loading:LoadingIndicator>
+        </Grid>
+    </Grid>
+</UserControl>

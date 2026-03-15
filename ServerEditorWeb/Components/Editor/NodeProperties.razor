@@ -1,0 +1,497 @@
+@using ServerEditorWeb.Models
+@using ServerEditorWeb.Services
+@using SharedModels
+
+@if (Node == null)
+{
+    <div class="properties-panel">
+        <p class="text-muted">Select an item to view its properties.</p>
+    </div>
+}
+else if (Node is FolderNode folder)
+{
+    <div class="properties-panel">
+        <h5>📁 Folder Properties</h5>
+        <div class="mb-3">
+            <label class="form-label">Name</label>
+            <input type="text" class="form-control" @bind="folder.Name" @bind:after="OnChanged" />
+        </div>
+        <div class="text-muted">
+            Children: @folder.Children.Count (Folders: @(folder.Children.OfType<FolderNode>().Count()), Variables: @(folder.Children.OfType<VariableNode>().Count()))
+        </div>
+    </div>
+}
+else if (Node is VariableNode variable)
+{
+    <div class="properties-panel">
+        <h5>🏷️ Variable Properties</h5>
+        <div class="mb-3">
+            <label class="form-label">Name</label>
+            <input type="text" class="form-control" @bind="variable.Name" @bind:after="OnChanged" />
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Type</label>
+            <select class="form-select" @bind="variable.Variable.Type" @bind:after="OnChanged">
+                @foreach (var t in VariableNode.AvailableTypes)
+                {
+                    <option value="@t">@t</option>
+                }
+            </select>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Access</label>
+            <select class="form-select" @bind="variable.Variable.Access" @bind:after="OnChanged">
+                <option value="Read">Read</option>
+                <option value="Write">Write</option>
+                <option value="ReadWrite">ReadWrite</option>
+            </select>
+        </div>
+
+        <VariableDriverEditor Variable="variable.Variable"
+                              VariableNode="variable"
+                              OnChanged="OnChanged" />
+
+        <div class="mb-3">
+            <div class="d-flex align-items-center justify-content-between">
+                <label class="form-label mb-0">Driver Settings (JSON)</label>
+                <button class="btn btn-sm btn-link py-0" style="font-size: 9px;"
+                        @onclick="() => _showDriverJson = !_showDriverJson">
+                    @(_showDriverJson ? "▼ Hide" : "▶ Show")
+                </button>
+            </div>
+            @if (_showDriverJson)
+            {
+                <CodeEditor @bind-Value="variable.DriverSettingsJson" @bind-Value:after="OnDriverJsonChanged" Language="json" Height="120px" />
+            }
+        </div>
+    </div>
+}
+else if (Node is ScriptNode script)
+{
+    <div class="properties-panel">
+        <h5>⚡ Script Properties</h5>
+        <div class="mb-3">
+            <label class="form-label">Name</label>
+            <input type="text" class="form-control" @bind="script.Name" @bind:after="OnChanged" />
+        </div>
+        <div class="mb-3 form-check">
+            <input class="form-check-input" type="checkbox" @bind="script.Script.Enabled" @bind:after="OnChanged" />
+            <label class="form-check-label">Enabled</label>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Interval (ms)</label>
+            <input type="number" class="form-control" @bind="script.Script.IntervalMs" @bind:after="OnChanged" />
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Language</label>
+            <select class="form-select" @bind="script.Script.Language" @bind:after="OnLanguageChanged">
+                <option value="CSharp">C#</option>
+                <option value="VB">VB.NET</option>
+            </select>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Code</label>
+            <CodeEditor @bind-Value="script.Script.Code" @bind-Value:after="OnChanged"
+                        Language="@GetEditorLanguage(script.Script.Language)" Height="250px" />
+        </div>
+        <button class="btn btn-sm btn-outline-primary" @onclick="CheckSyntax" disabled="@_checkingSyntax">
+            @if (_checkingSyntax)
+            {
+                <span class="spinner-border spinner-border-sm me-1"></span>
+            }
+            Check Syntax
+        </button>
+        @if (!string.IsNullOrEmpty(_syntaxResult))
+        {
+            <div class="mt-2 alert @(_syntaxSuccess ? "alert-success" : "alert-danger")">@_syntaxResult</div>
+        }
+    </div>
+}
+else if (Node is ScriptGroupNode)
+{
+    <div class="properties-panel">
+        <h5>📜 Script Group</h5>
+        <p class="text-muted">Select a script to edit, or add a new one.</p>
+    </div>
+}
+else if (Node is PlcProgramNode plcNode)
+{
+    <div class="properties-panel">
+        <h5>⚙️ PLC Program Properties</h5>
+        <div class="mb-3">
+            <label class="form-label">Name</label>
+            <input type="text" class="form-control" @bind="plcNode.Name" @bind:after="OnChanged" />
+        </div>
+        <div class="mb-3 form-check">
+            <input class="form-check-input" type="checkbox" @bind="plcNode.PlcProgram.Enabled" @bind:after="OnChanged" />
+            <label class="form-check-label">Enabled</label>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Cycle Time (ms)</label>
+            <input type="number" class="form-control" @bind="plcNode.PlcProgram.IntervalMs" @bind:after="OnChanged" />
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Language</label>
+            <select class="form-select" @bind="plcNode.PlcProgram.Language" @bind:after="OnPlcLanguageChanged">
+                <option value="ST">Structured Text (ST)</option>
+                <option value="IL">Instruction List (IL)</option>
+                <option value="LD">Ladder Diagram (LD)</option>
+            </select>
+        </div>
+
+        @if (plcNode.PlcProgram.Language.Equals("LD", StringComparison.OrdinalIgnoreCase))
+        {
+            <div class="alert alert-info small">
+                <strong>⚡ Ladder Diagram</strong> — Double-click the node or open the
+                <strong>Ladder Editor</strong> panel to use the graphical editor with contacts, coils, and function blocks.
+            </div>
+        }
+        else
+        {
+            <div class="mb-3">
+                <label class="form-label">@GetPlcLanguageLabel(plcNode.PlcProgram.Language) Code</label>
+                <CodeEditor @bind-Value="plcNode.PlcProgram.Code" @bind-Value:after="OnChanged"
+                            Language="@GetPlcEditorLanguage(plcNode.PlcProgram.Language)" Height="300px" />
+            </div>
+            <button class="btn btn-sm btn-outline-primary" @onclick="CheckPlcSyntax" disabled="@_checkingSyntax">
+                @if (_checkingSyntax)
+                {
+                    <span class="spinner-border spinner-border-sm me-1"></span>
+                }
+                Check Syntax
+            </button>
+            @if (!string.IsNullOrEmpty(_syntaxResult))
+            {
+                <div class="mt-2 alert @(_syntaxSuccess ? "alert-success" : "alert-danger")">@_syntaxResult</div>
+            }
+        }
+    </div>
+}
+else if (Node is PlcGroupNode)
+{
+    <div class="properties-panel">
+        <h5>🔧 PLC Programs</h5>
+        <p class="text-muted">Select a PLC program to edit, or add a new one.</p>
+        <p class="text-muted small">
+            PLC programs use IEC 61131-3 languages to read and write OPC variables cyclically.<br/>
+            Supported languages: <strong>Structured Text (ST)</strong>, <strong>Instruction List (IL)</strong>, and <strong>Ladder Diagram (LD)</strong>.
+        </p>
+    </div>
+}
+else if (Node is RecipeNode recipeNode)
+{
+    <div class="properties-panel">
+        <h5>📦 Recipe Properties</h5>
+        <div class="mb-3">
+            <label class="form-label">Name</label>
+            <input type="text" class="form-control" @bind="recipeNode.Name" @bind:after="OnChanged" />
+        </div>
+        <div class="mb-3 form-check">
+            <input class="form-check-input" type="checkbox" @bind="recipeNode.Recipe.Enabled" @bind:after="OnChanged" />
+            <label class="form-check-label">Enabled</label>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Database Path</label>
+            <input type="text" class="form-control" @bind="recipeNode.Recipe.DbPath" @bind:after="OnChanged"
+                   placeholder="recipes/{name}.db (relative to config)" />
+            <div class="form-text">Leave empty for default: <code>recipes/@(recipeNode.Name).db</code></div>
+        </div>
+
+        <h6 class="mt-3">Recipe Variables</h6>
+        <p class="text-muted small">
+            Each variable is identified by a stable <strong>Index</strong> (used as the column key in the database)
+            and maps to an OPC <strong>Variable Path</strong>.
+        </p>
+
+        <table class="table table-sm table-bordered">
+            <thead>
+                <tr>
+                    <th style="width: 60px;">Index</th>
+                    <th>Variable Path</th>
+                    <th style="width: 120px;">Display Name</th>
+                    <th style="width: 40px;"></th>
+                </tr>
+            </thead>
+            <tbody>
+                @for (int i = 0; i < recipeNode.Recipe.Variables.Count; i++)
+                {
+                    var idx = i;
+                    var rv = recipeNode.Recipe.Variables[idx];
+                    <tr>
+                        <td>
+                            <input type="number" class="form-control form-control-sm" value="@rv.Index"
+                                   @onchange="e => { rv.Index = int.TryParse(e.Value?.ToString(), out var n) ? n : rv.Index; OnChanged(); }" />
+                        </td>
+                        <td>
+                            <input type="text" class="form-control form-control-sm" value="@rv.VariablePath"
+                                   placeholder="e.g. Plant.Furnace.Temperature"
+                                   @onchange="e => { rv.VariablePath = e.Value?.ToString() ?? string.Empty; OnChanged(); }" />
+                        </td>
+                        <td>
+                            <input type="text" class="form-control form-control-sm" value="@rv.DisplayName"
+                                   placeholder="(optional)"
+                                   @onchange="e => { rv.DisplayName = e.Value?.ToString() ?? string.Empty; OnChanged(); }" />
+                        </td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-danger" @onclick="() => RemoveRecipeVariable(recipeNode, idx)" title="Remove">✕</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        <button class="btn btn-sm btn-outline-primary" @onclick="() => AddRecipeVariable(recipeNode)">➕ Add Variable</button>
+
+        <div class="alert alert-info small mt-3">
+            <strong>OPC Variables at Runtime:</strong><br/>
+            The server creates the following variables under <code>Recipe.@(recipeNode.Name)</code>:
+            <ul class="mb-0 mt-1">
+                <li><code>.Load</code> — Write a recipe name to load stored values into OPC variables</li>
+                <li><code>.Save</code> — Write a recipe name to save current OPC variable values</li>
+                <li><code>.Activate</code> — Write a recipe name to load + set as active</li>
+                <li><code>.Delete</code> — Write a recipe name to delete it from the database</li>
+                <li><code>.ActiveName</code> — Read the currently active recipe name</li>
+                <li><code>.RecipeList</code> — Read a comma-separated list of stored recipes</li>
+                <li><code>.LastStatus</code> — Read the result of the last operation</li>
+            </ul>
+        </div>
+    </div>
+}
+else if (Node is RecipeGroupNode)
+{
+    <div class="properties-panel">
+        <h5>🍳 Recipes</h5>
+        <p class="text-muted">Select a recipe to edit, or add a new one.</p>
+        <p class="text-muted small">
+            Recipes store named sets of variable values in a SQLite database.<br/>
+            At runtime, OPC command variables allow loading, saving, and activating recipes
+            from HMI screens, scripts, or PLC programs.
+        </p>
+    </div>
+}
+else if (Node is ScreenNode screen)
+{
+    <div class="properties-panel">
+        <h5>🖼️ Screen Properties</h5>
+        <div class="mb-3">
+            <label class="form-label">Name</label>
+            <input type="text" class="form-control" @bind="screen.Name" @bind:after="OnChanged" />
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Width</label>
+            <input type="number" class="form-control" @bind="screen.Screen.Width" @bind:after="OnChanged" />
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Height</label>
+            <input type="number" class="form-control" @bind="screen.Screen.Height" @bind:after="OnChanged" />
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Background</label>
+            <input type="color" class="form-control form-control-color" @bind="screen.Screen.Background" @bind:after="OnChanged" />
+        </div>
+        <div class="text-muted">
+            Symbols: @screen.Screen.Symbols.Count
+        </div>
+        <p class="text-muted small mt-2">Use the Screen Editor panel to design the SVG layout and bind OPC variables.</p>
+    </div>
+}
+else if (Node is ScreenGroupNode)
+{
+    <div class="properties-panel">
+        <h5>🖥️ Screen Group</h5>
+        <p class="text-muted">Select a screen to edit, or add a new one.</p>
+    </div>
+}
+else if (Node is UserGroupListNode)
+{
+    <div class="properties-panel">
+        <h5>👥 Users & Groups</h5>
+        <p class="text-muted">Right-click to add a user group, then add users to groups.</p>
+        <p class="text-muted small">Use the Users panel for full management including passwords and access levels.</p>
+    </div>
+}
+else if (Node is UserGroupNode ugNode)
+{
+    <div class="properties-panel">
+        <h5>🛡️ User Group Properties</h5>
+        <div class="mb-3">
+            <label class="form-label">Name</label>
+            <input type="text" class="form-control" @bind="ugNode.Name" @bind:after="OnChanged" />
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Access Level (OPC Variables)</label>
+            <select class="form-select" @bind="ugNode.UserGroup.AccessLevel" @bind:after="OnChanged">
+                <option value="Read">Read</option>
+                <option value="Write">Write</option>
+                <option value="ReadWrite">ReadWrite</option>
+            </select>
+        </div>
+        <div class="mb-3 form-check">
+            <input class="form-check-input" type="checkbox" @bind="ugNode.UserGroup.CanAccessEditor" @bind:after="OnChanged" />
+            <label class="form-check-label">Can access project editor</label>
+        </div>
+        <div class="text-muted">
+            Users: @(ugNode.Children.OfType<UserNode>().Count())
+        </div>
+    </div>
+}
+else if (Node is UserNode uNode)
+{
+    <div class="properties-panel">
+        <h5>👤 User Properties</h5>
+        <div class="mb-3">
+            <label class="form-label">Username</label>
+            <input type="text" class="form-control" @bind="uNode.Name" @bind:after="OnChanged" />
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Group</label>
+            <input type="text" class="form-control" value="@uNode.User.Group" readonly />
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Password</label>
+            @if (!string.IsNullOrEmpty(uNode.User.PasswordHash))
+            {
+                <div>
+                    <span class="badge bg-success">🔒 Encrypted</span>
+                    <small class="text-muted ms-2">Use the Users panel to reset.</small>
+                </div>
+            }
+            else
+            {
+                <span class="text-warning small">⚠ No password set. Use the Users panel to set one.</span>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public TreeNode? Node { get; set; }
+    [Parameter] public EventCallback OnPropertyChanged { get; set; }
+
+    [Inject] private SyntaxCheckService SyntaxChecker { get; set; } = default!;
+
+    private string _syntaxResult = "";
+    private bool _syntaxSuccess;
+    private bool _checkingSyntax;
+    private bool _showDriverJson;
+
+    private async Task OnChanged()
+    {
+        await OnPropertyChanged.InvokeAsync();
+    }
+
+    private async Task OnDriverJsonChanged()
+    {
+        // The JSON editor was changed manually — trigger re-render of the visual editor
+        await OnPropertyChanged.InvokeAsync();
+        StateHasChanged();
+    }
+
+    private async Task OnLanguageChanged()
+    {
+        _syntaxResult = "";
+        await OnPropertyChanged.InvokeAsync();
+    }
+
+    private static string GetEditorLanguage(string language)
+    {
+        return language.Equals("VB", StringComparison.OrdinalIgnoreCase)
+            || language.Equals("VB.NET", StringComparison.OrdinalIgnoreCase)
+            || language.Equals("VisualBasic", StringComparison.OrdinalIgnoreCase)
+            ? "vb" : "csharp";
+    }
+
+    private async Task CheckSyntax()
+    {
+        if (Node is ScriptNode script)
+        {
+            _syntaxResult = "";
+            _checkingSyntax = true;
+            StateHasChanged();
+
+            try
+            {
+                var code = script.Script.Code;
+                var language = script.Script.Language;
+                var (success, message) = await Task.Run(() => SyntaxChecker.CheckSyntax(code, language));
+                _syntaxSuccess = success;
+                _syntaxResult = message;
+            }
+            catch (Exception ex)
+            {
+                _syntaxSuccess = false;
+                _syntaxResult = $"Error: {ex.Message}";
+            }
+            finally
+            {
+                _checkingSyntax = false;
+            }
+        }
+    }
+
+    private async Task CheckPlcSyntax()
+    {
+        if (Node is PlcProgramNode plcNode)
+        {
+            _syntaxResult = "";
+            _checkingSyntax = true;
+            StateHasChanged();
+
+            try
+            {
+                var code = plcNode.PlcProgram.Code;
+                var language = plcNode.PlcProgram.Language;
+                var (success, message) = await Task.Run(() => SyntaxChecker.CheckPlcSyntax(code, language));
+                _syntaxSuccess = success;
+                _syntaxResult = message;
+            }
+            catch (Exception ex)
+            {
+                _syntaxSuccess = false;
+                _syntaxResult = $"Error: {ex.Message}";
+            }
+            finally
+            {
+                _checkingSyntax = false;
+            }
+        }
+    }
+
+    private async Task OnPlcLanguageChanged()
+    {
+        _syntaxResult = "";
+        await OnPropertyChanged.InvokeAsync();
+    }
+
+    private static string GetPlcEditorLanguage(string language) => language?.ToUpperInvariant() switch
+    {
+        "IL" => "text",
+        "LD" => "text",
+        _ => "st"
+    };
+
+    private static string GetPlcLanguageLabel(string language) => language?.ToUpperInvariant() switch
+    {
+        "IL" => "Instruction List",
+        "LD" => "Ladder Diagram",
+        _ => "Structured Text"
+    };
+
+    private void AddRecipeVariable(RecipeNode node)
+    {
+        var nextIndex = node.Recipe.Variables.Count > 0
+            ? node.Recipe.Variables.Max(v => v.Index) + 1
+            : 0;
+        node.Recipe.Variables.Add(new RecipeVariable { Index = nextIndex, VariablePath = "", DisplayName = "" });
+        OnChanged();
+    }
+
+    private void RemoveRecipeVariable(RecipeNode node, int listIndex)
+    {
+        if (listIndex >= 0 && listIndex < node.Recipe.Variables.Count)
+        {
+            node.Recipe.Variables.RemoveAt(listIndex);
+            OnChanged();
+        }
+    }
+}

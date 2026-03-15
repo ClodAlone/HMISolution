@@ -1,0 +1,61 @@
+﻿<html>
+<head>
+  <title></title>
+  <style type="text/css">
+    .style1 {
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 10pt;
+    }
+  </style>
+</head>
+<body class="style1">
+<p>
+This diagram demonstrates the expanding/collapsing subgraphs where members of each subgraph are only created "on-demand",
+when the user clicks on the "expand" Button.
+</p>
+<p>
+As you expand the tree, it automatically performs an animated force-directed layout
+and layered-digraph layouts within subgraphs.
+Remember that you can use control-mouse-wheel to zoom out and zoom into the diagram.
+</p>
+<p>
+The data for each node is implemented by the <b>SimpleData</b> class.
+It defines an <b>EverExpanded</b> property that indicates whether we have already
+created all of its "member" data and added them to the model.
+The <b>EverExpanded</b> property defaults to false,
+to match the initial value of <b>go:Node.IsSubGraphExpanded="False"</b> in the node DataTemplate,
+which specifies that the subgraphs start collapsed.
+</p>
+<p>
+When the user clicks on the "expand" Button, the button click event handler finds the corresponding
+<b>SimpleData</b> by going up the visual tree to find the <b>Node</b> and then getting its <b>Data</b>.
+If <b>SimpleData.EverExpanded</b> is false, the code creates a random number of <b>SimpleData</b>
+children for that node, including some that are subgraphs, each with a random <b>Color</b> property.
+The code also connects each node with another node by adding the "to" node key to
+the "from" node's <b>ToKeys</b> list.
+Then the button click event handler changes the value of <b>Node.IsExpandedSubGraph</b>,
+thereby expanding or collapsing the subgraph.
+</p>
+<p>
+Some subgraphs result in there being no members at all.  In this case the Button is made invisible.
+</p>
+<p>
+All changes are performed within a transaction.
+You should always surround your code with <b>StartTransaction</b> and <b>CommitTransaction</b>.
+</p>
+<p>
+The diagram's <b>Diagram.Layout</b> is an instance of <b>ForceDirectedLayout</b>.
+The standard conditions under which the layout will be performed include
+when nodes or links or group-memberships are added or removed from the model.
+This particular <b>ForceDirectedLayout</b> also includes the condition that changing
+the size of any group will cause another layout.
+In this case that means that when the user expands or collapses a node,
+another layout occurs again.
+</p>
+<p>
+Each subgraph has its own <b>LayeredDigraphLayout</b> that positions its member nodes
+and routes its member links.
+It too is set to perform a layout whenever a member subgraph changes size.
+</p>
+	</body>
+</html>

@@ -1,0 +1,693 @@
+﻿<div id="DataloggerViewer" class="DataloggerViewer">
+    <img src="cl.gif" alt="" onload="onDataloggerViewerLoaded(this)" id="loadingImage" />
+
+    <div id="mainContainer">
+        <div id="buttonsContainer">
+            <div>
+                <div class="topButton" id="bestfitbtn" style="float:left; margin: 3px 3px 0px 3px;"></div>
+                <span id="startTimeLbl" style="float:left; margin: 10px 5px;"></span>
+                <div class="topButton" id="startdatetime" style="float: left;"></div>
+                <span id="endTimeLbl" style="float:left; margin: 10px 5px;"></span>
+                <div class="topButton" id="enddatetime" style="float: left;"></div>
+                <div class="topButton" id="minutebtn" style="float:left; margin: 3px;"></div>
+                <div class="topButton" id="hourbtn" style="float: left; margin: 3px;"></div>
+                <div class="topButton" id="daybtn" style="float:left; margin: 3px;"></div>
+                <div class="topButton" id="weekbtn" style="float:left; margin: 3px;"></div>
+                <div class="topButton" id="monthbtn" style="float:left; margin: 3px;"></div>
+                <div class="topButton" id="yearbtn" style="float:left; margin: 3px;"></div>
+                <div class="topButton" id="allbtn" style="float:left; margin: 3px;"></div>
+                <div class="topButton" id="historianComboDiv" style="display: inline-block; margin: 3px;"></div>
+            </div>
+        </div>
+
+        <div id="activeFilterCriteriaContainer" class="dx-nav-item" style="padding: 5px 2.5px; display: none;">
+            <div id="btnClearFilter"></div>
+            <div id="activeFilterCriteria" style="margin-left: 2.5px; display: inline-block;"></div>
+        </div>
+
+        <div id="mainGrid" style="overflow: hidden;"></div>
+        <div id="refreshbtn"></div>
+    </div>
+
+    <!--<div class="grid" style="display: grid; grid-template-columns: auto auto;">
+        <div id="startbtn"></div>
+        <div id="pausebtn"></div>
+    </div>
+    <div id="legendDataGrid"></div>-->
+
+    <script>
+        function onDataloggerViewerLoaded(obj) {
+            var thisPage = $(obj).parent();
+            thisPage.localize();
+
+            var scope = thisPage.scope();
+            if (!scope)
+                return;
+            var paratt = thisPage.data(dataparameters);
+            if (!paratt)
+                return;
+
+            $(obj).remove();
+            var thisParent = thisPage.parent();
+            var thisParentId = thisParent.attr("id");
+            var thisGridSelector = "#" + thisParentId + ".DataloggerViewer";
+
+            var refreshPeriod = 0;
+            var refreshTimeout;
+            var lastTimerExecutedMS;
+
+            setOpacity(scope, thisParent, thisPage);
+
+            var deregisterListenerActiveLanguage;
+            var deregisterListener;
+            $(thisPage).bind('destroyed', function () {
+                if (deregisterListenerActiveLanguage)
+                    deregisterListenerActiveLanguage();
+                if (deregisterListener)
+                    deregisterListener();
+                if (refreshTimeout)
+                    clearInterval(refreshTimeout);
+            });
+
+            var parameters = JSON.parse(paratt);
+
+            var mainContainer = thisPage.find("#mainContainer");
+            var webKitRenderCorrection = $(thisPage).hasClass("webKitRenderCorrection");
+            var scrollingOptions = {
+                mode: webKitRenderCorrection ? "standard" : "virtual"
+            };
+            if (scope.biOS) {
+                webkitMoveRotateTransform(thisParent, thisPage, mainContainer);
+                if (webKitRenderCorrection)
+                    thisPage.css("will-change", "opacity");
+            }
+            if (scope.biOS || (isMobile.Android() && parameters.bFitInWindow)) {
+                scrollingOptions["useNative"] = false;
+                scrollingOptions["scrollByThumb"] = true;
+            }
+
+            var customFonts = [parameters.FontFamily];
+            if (parameters.FontSettingList)
+                $.each(parameters.FontSettingList, function (index, item) {
+                    customFonts.push(item.FontFamily);
+                });
+            loadCustomFonts(customFonts);
+            var dynamicFontElements = [];
+
+            var currentCulture = navigator.language;
+            var historianList = [""];
+            var defaultDatalogger;
+            
+            var mainGrid = thisPage.find("#mainGrid");
+            var historianComboDiv = thisPage.find("#historianComboDiv");
+            var btnMinDiv = thisPage.find("#minutebtn");
+            var btnHourDiv = thisPage.find("#hourbtn");
+            var btnDayDiv = thisPage.find("#daybtn");
+            var btnWeekDiv = thisPage.find("#weekbtn");
+            var btnMonthDiv = thisPage.find("#monthbtn");
+            var btnYearDiv = thisPage.find("#yearbtn");
+            var btnAllDiv = thisPage.find("#allbtn");
+            var refreshbtnDiv = thisPage.find("#refreshbtn");
+            var bestfitbtnDiv = thisPage.find("#bestfitbtn");
+            var buttonsContainer = thisPage.find("#buttonsContainer");
+            var topBarHelper = topBarButtonsHelper(true, buttonsContainer, parameters, getSolidColor(parameters.Foreground));
+            var filterType = ["None", "All", "Minute", "Hour", "Day", "Week", "Month", "Year"];
+            var timezoneOffset = (new Date()).getTimezoneOffset() * 60 * 1000;
+
+            var activeFilterCriteriaDiv = thisPage.find("#activeFilterCriteria");
+            var activeFilterCriteriaContainerDiv = thisPage.find("#activeFilterCriteriaContainer");
+            var btnClearFilterDiv = thisPage.find("#btnClearFilter");
+            var parametersFilterCriteria = "";
+            var parametersOriginalFilterCriteria = "";
+            var parametersJSFilterCriteria;
+            if (parameters.FilterCriteria) {
+                parametersJSFilterCriteria = parameters.FilterCriteria.replace(/indexOf\((.*?)\)/g, "indexOf(\"$1\")").replace().replace(/(^|\s|\(+)itemData\.time /g, "$1itemData.timeticks ").replace(/(itemData\..*? [\!=]= )(.*?)(\s|$|\)+)/g, "$1\"$2\"$3");
+                parametersFilterCriteria = parametersJSFilterCriteria;
+                parametersOriginalFilterCriteria = parameters.OriginalFilterCriteria;
+            }
+
+            var bRequestDispatched;
+            var bDataloggerChanged = false;
+            var utcTimeColName;
+            var localTimeColName;
+            var translationsPrefix = "DataloggerViewer";
+            var i18nextPrefix = "_" + translationsPrefix + "_";
+            var visibleColumns = [];
+
+            var translations = scope.setTranslations(translationsPrefix, [
+                {
+                    id: "All",
+                    stringSuffix: "All",
+                    defValue: "All"
+                },
+                {
+                    id: "Minute",
+                    stringSuffix: "Minute",
+                    defValue: "Minute"
+                },
+                {
+                    id: "Hour",
+                    stringSuffix: "Hour",
+                    defValue: "Hour"
+                },
+                {
+                    id: "Day",
+                    stringSuffix: "Day",
+                    defValue: "Day"
+                },
+                {
+                    id: "Week",
+                    stringSuffix: "Week",
+                    defValue: "Week"
+                },
+                {
+                    id: "Month",
+                    stringSuffix: "Month",
+                    defValue: "Month"
+                },
+                {
+                    id: "Year",
+                    stringSuffix: "Year",
+                    defValue: "Year"
+                },
+                {
+                    id: "Fit",
+                    stringSuffix: "BestFit",
+                    defValue: "Best Fit"
+                },
+                {
+                    id: "Ref",
+                    stringSuffix: "RefreshDataCommand",
+                    defValue: "Refresh"
+                },
+                {
+                    id: "Start",
+                    stringSuffix: "DateTimeStart",
+                    defValue: "Start Time"
+                },
+                {
+                    id: "End",
+                    stringSuffix: "DateTimeEnd",
+                    defValue: "End Time"
+                }
+            ]);
+
+            var fontOptions = {
+                "font-family": parameters.FontFamily,
+                "font-size": parameters.FontSize + "px",
+                "font-weight": fontWeightConverter(parameters.FontWeight),
+                "color": getSolidColor(parameters.Foreground)
+            };
+            var fontStyle = parameters.FontStyle.toLowerCase();
+            if (fontStyle != "normal")
+                fontOptions["font-style"] = fontStyle;
+
+            if (parameters.Background)
+                buttonsContainer.find(".topButton").css("background", parameters.Background.Color);
+
+            if (!webKitRenderCorrection && parameters.Background)
+                thisParent.css("background", parameters.Background.Color);
+            refreshbtnDiv.css(fontOptions);
+            dynamicFontElements.push(refreshbtnDiv);
+
+            var startTimeLbl = thisPage.find("#startTimeLbl");
+            var endTimeLbl = thisPage.find("#endTimeLbl");
+            startTimeLbl.text(translations.Start()).css(fontOptions);
+            endTimeLbl.text(translations.End()).css(fontOptions);
+            dynamicFontElements.push(startTimeLbl);
+            dynamicFontElements.push(endTimeLbl);
+
+            var now = new Date();
+            var inlineOptions;
+            if (parameters.Background)
+                inlineOptions += "background:" + parameters.Background.Color + ";";
+            var styleID = buildStyleID(thisPage, thisParentId, parameters.screenName);
+            var gridStyle;
+            var bCellsStyled;
+
+            var dlViewerOptions = {
+                showBorders: true,
+                columnResizingMode: "widget",
+                disabled: thisParent.hasClass(disabledClass),
+                width: "100%",
+                editing: {
+                    allowUpdating: false,
+                    allowAdding: false,
+                    allowDeleting: false,
+                    mode: 'cell'
+                },
+                allowColumnReordering: true,
+                allowColumnResizing: true,
+                //onRowPrepared: function (e) {
+                //    if (e.rowType != 'data')
+                //        return;
+                //    else if (e.data.needsAcknoledge) {
+                //        arrayrow.push(e.rowElement);
+                //    }
+                //},
+                //focusedRowEnabled: true,
+                errorRowEnabled: false,
+                groupPanel: {
+                    visible: true
+                },
+                filterPanel: { visible: true },
+                searchPanel: { visible: true },
+                grouping: {
+                    contextMenuEnabled: true,
+                    autoExpandAll: false
+                },
+                onInitialized: function (e) {
+                    setTimeout(function () {
+                        var el = e.component.element();
+                        $(el).height(thisParent.height() - findRealHeight(activeFilterCriteriaContainerDiv) - refreshbtn.element().height() - buttonsContainer.height() - 12 - parameters.BorderThickness.Top - parameters.BorderThickness.Bottom);
+                    }, 1);
+                },
+                onContentReady: function (e) {
+                    var el = e.component.element();
+                    fastdom.mutate(function () {
+                        if (parameters.Foreground) {
+                            var fg = getSolidColor(parameters.Foreground);
+                            el.find(".dx-header-row").css("color", fg);
+                            el.find(".dx-data-row td").css("color", fg);
+                        }
+                        if (parameters.Background)
+                            el.find("div.dx-datagrid.dx-gridbase-container, div.dx-toolbar-items-container").css("background", parameters.Background.Color);
+                    });
+                    if (!bCellsStyled) {
+                        if ($(".dx-data-row td").length > 0) {
+                            bCellsStyled = true;
+                            var cellsStyle = thisGridSelector + " .dx-data-row td {border-width: 1px; border-style: solid; border-color: " + $(".dx-data-row td").css("border-right-color") + ";}";
+                            if (gridStyle)
+                                fastdom.mutate(function () {
+                                    gridStyle[0].sheet.insertRule(cellsStyle);
+                                });
+                        }
+                    }
+                },
+                //filterValue: parameters.FilterCriteria,
+                scrolling: scrollingOptions,
+                paging: {
+                    pageSize: 50,
+                },
+                //filterRow: {
+                //    visible: parameters.ShowFilterPanel ? true : false
+                //},
+                loadPanel: {
+                    enabled: true
+                },
+                //columns: loadColumns(),
+                customizeColumns: function (cols) {
+                    visibleColumns = [];
+                    var items = dataGrid.getDataSource().items();
+                    cols.forEach((col) => {
+                        if (bDataloggerChanged)
+                            resetColumnLayout(col);
+                        else if (parameters.GridLayout && parameters.GridLayout.length > 0) {
+                            var gridLayoutItem = parameters.GridLayout.find(function (item) { return item.FieldName == col.dataField || item.ColumnTag == col.dataField });
+                            if (gridLayoutItem === undefined)
+                                col.visible = false;
+                        }
+                        if (col.visible) {
+                            visibleColumns.push(col);
+                            col.caption = i18next.t1(i18nextPrefix + col.dataField, col.caption);
+                            if (items.length > 0) {
+                                if (gridLayoutItem) {
+                                    var actWidth = parseFloat(gridLayoutItem.ActualWidth);
+                                    if (!isNaN(actWidth))
+                                        col.width = gridLayoutItem.ActualWidth;
+                                    setColumnOrdering(gridLayoutItem, col);
+                                }
+                                if (items[0][col.dataField] && items[0][col.dataField].length && typeof (items[0][col.dataField]) == "string") {
+                                    var coldate = new Date(items[0][col.dataField]);
+                                    if (!isNaN(coldate)) {
+                                        col.dataType = "date";
+                                        col.format = {
+                                            formatter: function (originalValue) {
+                                                var ret = moment(originalValue)./*subtract(new Date().getTimezoneOffset(), "minutes").*/locale(currentCulture).format("L LTS")
+                                                return ret;
+                                            }
+                                        };
+                                        col.cellTemplate = function (element, info) {
+                                            var finalValue = info.text;
+                                            if (info.column.dataField == localTimeColName)
+                                                finalValue = moment(info.data[utcTimeColName]).subtract(timezoneOffset, "ms").locale(currentCulture).format("L LTS");
+                                            element.append("<div>" + finalValue + "</div>");
+                                        };
+                                    }
+                                }
+                            }
+                        }
+                    });
+                },
+                noDataText: i18next.t1("NoDataText")
+            };
+
+            var historianCombo;
+            var startDatebox;
+            var endDatebox;
+            var refreshbtn;
+            var commandButtons;
+
+            var dataGrid;
+            var mutateFunc = function () {
+                dynamicFontElements.push(...topBarHelper.styleButtons());
+
+                dataGrid = mainGrid.dxDataGrid(dlViewerOptions).dxDataGrid("instance");
+
+                setFontStyle();
+
+                startDatebox = thisPage.find("#startdatetime").dxDateBox({
+                    type: "datetime",
+                    value: now,
+                    onContentReady: function (e) {
+                        e.component.element().css("width", (e.component.element().width() * 0.78) + "px");
+                    }
+                }).dxDateBox("instance");
+
+                endDatebox = thisPage.find("#enddatetime").dxDateBox({
+                    type: "datetime",
+                    value: now,
+                    onContentReady: function (e) {
+                        e.component.element().css("width", (e.component.element().width() * 0.78) + "px");
+                    }
+                }).dxDateBox("instance");
+
+                var btnMin = btnMinDiv.dxButton({
+                    text: translations.Minute(),
+                    hint: translations.Minute(),
+                    type: "normal",
+                    disabled: true,
+                    onClick: function (e) {
+                        CreateDataSource("Minute");
+                    }
+                }).dxButton("instance");
+                var btnHour = btnHourDiv.dxButton({
+                    text: translations.Hour(),
+                    hint: translations.Hour(),
+                    type: "normal",
+                    disabled: true,
+                    onClick: function (e) {
+                        CreateDataSource("Hour");
+                    }
+                }).dxButton("instance");
+                var btnDay = btnDayDiv.dxButton({
+                    text: translations.Day(),
+                    hint: translations.Day(),
+                    type: "normal",
+                    disabled: true,
+                    onClick: function (e) {
+                        CreateDataSource("Day");
+                    }
+                }).dxButton("instance");
+                var btnWeek = btnWeekDiv.dxButton({
+                    text: translations.Week(),
+                    hint: translations.Week(),
+                    type: "normal",
+                    disabled: true,
+                    onClick: function (e) {
+                        CreateDataSource("Week");
+                    }
+                }).dxButton("instance");
+                var btnMonth = btnMonthDiv.dxButton({
+                    text: translations.Month(),
+                    hint: translations.Month(),
+                    type: "normal",
+                    disabled: true,
+                    onClick: function (e) {
+                        CreateDataSource("Month");
+                    }
+                }).dxButton("instance");
+                var btnYear = btnYearDiv.dxButton({
+                    text: translations.Year(),
+                    hint: translations.Year(),
+                    type: "normal",
+                    disabled: true,
+                    onClick: function (e) {
+                        CreateDataSource("Year");
+                    }
+                }).dxButton("instance");
+                var btnAll = btnAllDiv.dxButton({
+                    text: translations.All(),
+                    hint: translations.All(),
+                    type: "normal",
+                    disabled: true,
+                    onClick: function (e) {
+                        CreateDataSource("All");
+                    }
+                }).dxButton("instance");
+                var bestfitbtn = bestfitbtnDiv.dxButton({
+                    text: translations.Fit(),
+                    hint: translations.Fit(),
+                    type: "normal",
+                    disabled: true,
+                    onContentReady: function (e) {
+                        topBarHelper.setHeight($(e.component.element()));
+                    },
+                    onClick: function (e) {
+                        for (var i = 0; i < dataGrid.columnCount(); i++) {
+                            if (dataGrid.columnOption(i, 'visible')) {
+                                dataGrid.columnOption(i, 'width', 'auto');
+                            }
+                        }
+                        dataGrid.option("columnAutoWidth", true);
+                        dataGrid.repaint();
+                    }
+                }).dxButton("instance");
+                refreshbtn = refreshbtnDiv.dxButton({
+                    text: translations.Ref(),
+                    hint: translations.Ref(),
+                    type: "normal",
+                    disabled: true,
+                    width: $(refreshbtnDiv).css("width"),
+                    onClick: function (e) {
+                        RefreshData();
+                    }
+                }).dxButton("instance");
+                if (parametersJSFilterCriteria) {
+                    activeFilterCriteriaContainerDiv.show();
+                    let btnClearFilter = btnClearFilterDiv.dxCheckBox({
+                        value: true,
+                        onValueChanged: function (ea) {
+                            parametersFilterCriteria = ea.value ? parametersJSFilterCriteria : null;
+                            RefreshData();
+                        }
+                    }).dxCheckBox("instance");
+                    activeFilterCriteriaDiv.text("[" + parametersOriginalFilterCriteria + "]");
+                }
+
+                commandButtons = [btnMin, btnHour, btnDay, btnWeek, btnMonth, btnYear, btnAll, bestfitbtn, refreshbtn, startDatebox, endDatebox];
+
+                buttonsContainer.css("background", parameters.ToolbarBackground.Color);
+
+                $(thisParent).bind(disabledClassEvent, function () {
+                    $(commandButtons).each(function (i, el) {
+                        if (el) el.option("disabled", thisParent.hasClass(disabledClass));
+                    });
+                });
+
+                var options = {};
+                setObjectBorder(options, parameters);
+                if (!$.isEmptyObject(options))
+                    mainContainer.css(options);
+
+                historianCombo = historianComboDiv.dxSelectBox({
+                    disabled: true,
+                    onInitialized: function (e) {
+                        commandButtons.push(e.component);
+                        var el = e.component.element();
+                        var cssEdits = fontOptions;
+                        if (parameters.Foreground.Color)
+                            cssEdits["color"] = getSolidColor(parameters.Foreground);
+                        dynamicFontElements.push(el);
+                        el.css(cssEdits);
+                        setTimeout(function () {
+                            var input = el.find("input.dx-texteditor-input").first();
+                            var inputCss = fontOptions;
+                            inputCss.color = getSolidColor(parameters.Foreground);
+                            input.css(inputCss);
+                        }, 1); //on inner elements rendering
+                    },
+                    onValueChanged: function (e) {
+                        if (e.previousValue != null) {
+                            bDataloggerChanged = historianCombo.option("value") != defaultDatalogger;
+                            CreateDataSource("None", true);
+                        }
+                    }
+                }).dxSelectBox("instance");
+
+                deregisterListenerActiveLanguage = scope.$on(onActiveLanguageChanged, function (e, value) {
+                    currentCulture = value;
+
+                    //dataGrid.option("columns", loadColumns());
+                    fastdom.mutate(function () {
+                        dataGrid.option("noDataText", i18next.t1("NoDataText"));
+
+                        startTimeLbl.text(translations.Start());
+                        endTimeLbl.text(translations.End());
+                        btnMin.option({ "text": translations.Minute(), "hint": translations.Minute() });
+                        btnHour.option({ "text": translations.Hour(), "hint": translations.Hour() });
+                        btnDay.option({ "text": translations.Day(), "hint": translations.Day() });
+                        btnWeek.option({ "text": translations.Week(), "hint": translations.Week() });
+                        btnMonth.option({ "text": translations.Month(), "hint": translations.Month() });
+                        btnYear.option({ "text": translations.Year(), "hint": translations.Year() });
+                        btnAll.option({ "text": translations.All(), "hint": translations.All() });
+                        bestfitbtn.option({ "text": translations.Fit(), "hint": translations.Fit() });
+                        refreshbtn.option({ "text": translations.Ref(), "hint": translations.Ref() });
+
+                        if (parameters.FontSettingList && (value in parameters.FontSettingList) !== -1) {
+                            var fontOpts = applyFontSettingList(dynamicFontElements, parameters.FontSettingList[value]);
+                            for (var cssProp in fontOpts)
+                                fontOptions[cssProp] = fontOpts[cssProp];
+                            setFontStyle();
+                        }
+
+                        $.each(visibleColumns, function (index, col) {
+                            dataGrid.columnOption(col.dataField, "caption", i18next.t1(i18nextPrefix + col.dataField, col.caption));
+                        });
+                    });
+                });
+
+                if (parameters.SVGReferenceId) {
+                    if (parameters.screenId in scope.dataValues && parameters.SVGReferenceId in scope.dataValues[parameters.screenId]) {
+                        applyTagQualityStyle(webKitRenderCorrection ? thisPage : thisParent, scope, parameters.screenId, parameters.SVGReferenceId);
+                    }
+                    deregisterListener = scope.$on(onDataChanged + parameters.screenId + parameters.SVGReferenceId, function (e, value) {
+                        applyTagQualityStyle(webKitRenderCorrection ? thisPage : thisParent, scope, parameters.screenId, parameters.SVGReferenceId);
+                    });
+                }
+
+                InitValues();
+            };
+
+            mutateHandler.scheduleMutate(parameters.screenId, mutateFunc);
+
+            function RefreshData(bAutoRefresh = false) {
+                CreateDataSource("None", true, bAutoRefresh);
+            }
+
+            function SetRefreshTimeout(period) {
+                if (period <= 0)
+                    RefreshData(true);
+                else {
+                    refreshTimeout = setTimeout(function () {
+                        RefreshData(true);
+                    }, period);
+                }
+            }
+
+            function GetRemainingRefreshTime() {
+                return refreshPeriod - ((new Date()).getTime() - lastTimerExecutedMS);
+            }
+
+            function InitValues() {
+                scope.corehubconnection.invoke("InitDataloggerValues", parameters.screenId)
+                    .then((ret) => {
+                        historianList = ret;
+                        historianCombo.option({
+                            "items": historianList,
+                            "disabled": thisParent.hasClass(disabledClass)
+                        });
+                        if (parameters.DataLoggerName && historianList.indexOf(parameters.DataLoggerName) !== -1)
+                            defaultDatalogger = parameters.DataLoggerName;
+                        else
+                            defaultDatalogger = historianList[0];
+                        historianCombo.option("value", defaultDatalogger);
+
+                        var rp = parseInt(parameters.RefreshTimeout, 10);
+                        if (rp > 0) {
+                            refreshPeriod = rp * 1000;
+                            SetRefreshTimeout(refreshPeriod);
+                        }
+
+                        CreateDataSource(filterType[parseInt(parameters.FilterType, 10) + 1]);
+
+                        scope.busyVisible = false;
+                        scope.$apply();
+                    })
+                    .catch(err => {
+                        console.error(err.toString());
+                        scope.$broadcast(onError, { ex: err, value: getClientErrorText(err, "ErrorDBDataLoad") });
+
+                        $(commandButtons).each(function (i, el) { el.option("disabled", thisParent.hasClass(disabledClass)); });
+                        
+                        scope.busyVisible = false;
+                        scope.$apply();
+                    });
+            }
+
+            function setFontStyle() {
+                inlineOptions = Object.entries(fontOptions).map(function (kv) { return (`${kv[0]}:${kv[1]}`) }).join(';') + ";";
+                var dlStyle = $("#" + styleID);
+                if (dlStyle.length > 0)
+                    dlStyle.remove();
+                gridStyle = $("<style id=\"" + styleID + "\">" + thisGridSelector + " .dx-datebox-datetime input, " + thisGridSelector + " td.dx-group-cell, " + thisGridSelector + " div.dx-item-content, " + thisGridSelector + " .dx-header-row, " + thisGridSelector + " .dx-data-row td, " + thisGridSelector + " div.dx-item-content, " + thisGridSelector + " .dx-datagrid-content input.dx-texteditor-input { " + inlineOptions + " }</style>").appendTo("head");
+            }
+
+            function resetColumnLayout(col) {
+                col.visible = true;
+                col.width = undefined;
+                col.sortIndex = undefined;
+                col.sortOrder = undefined;
+            }
+
+            function CreateDataSource(rangeType, bRefresh = false, bAutoRefresh = false) {
+                if (bRequestDispatched)
+                    return;
+                bRequestDispatched = true;
+                
+                if (!rangeType)
+                    rangeType = "None";
+                var startDateTime = null;
+                var endDateTime = null;
+                if (bRefresh) {
+                    if (startDatebox.option("value") >= endDatebox.option("value")) {
+                        scope.$broadcast(onError, { ex: null, value: thisParentId + ": " + i18next.t1("EndDateMustBeGreater") });
+                        bRequestDispatched = false;
+                        scope.$apply();
+                        return;
+                    }
+                    startDateTime = moment(startDatebox.option("value").getTime() - timezoneOffset).unix();
+                    endDateTime = moment(endDatebox.option("value").getTime() - timezoneOffset).unix();
+                }
+
+                if (bAutoRefresh)
+                    lastTimerExecutedMS = (new Date()).getTime();
+
+                var selectedDatalogger = historianCombo.option("value");
+                scope.corehubconnection.invoke("LoadDataloggerViewerData", parameters.screenId, parameters.ConnectionString, historianList, selectedDatalogger, parameters.MaxRows, parameters.CommandTimeout, rangeType, startDateTime, endDateTime)
+                    .then((ret) => {
+                        ret = JSON.parse(ret);
+                        var dateTimeStart = moment(ticksToTimestamp(ret.StartDateTimeTicks) + timezoneOffset).toDate();
+                        var dateTimeEnd = moment(ticksToTimestamp(ret.EndDateTimeTicks) + timezoneOffset).toDate();
+
+                        utcTimeColName = ret.UtcTimeColName;
+                        localTimeColName = ret.LocalTimeColName;
+
+                        startDatebox.option("value", dateTimeStart);
+                        endDatebox.option("value", dateTimeEnd);
+
+                        updateDatasource(dataGrid, ret["DataRows"], parametersFilterCriteria);
+
+                        $(commandButtons).each(function (i, el) { el.option("disabled", thisParent.hasClass(disabledClass)); });
+                        
+                        scope.busyVisible = false;
+                        scope.$apply();
+                    })
+                    .catch(err => {
+                        console.error(err.toString());
+                        scope.$broadcast(onError, { ex: err, value: getClientErrorText(err, "ErrorDBDataLoad") });
+
+                        $(commandButtons).each(function (i, el) { el.option("disabled", thisParent.hasClass(disabledClass)); });
+
+                        scope.busyVisible = false;
+                        scope.$apply();
+                    })
+                    .finally(() => {
+                        bRequestDispatched = false;
+                        if (bAutoRefresh)
+                            SetRefreshTimeout(GetRemainingRefreshTime());
+                    });
+            }
+        }
+    </script>
+</div>

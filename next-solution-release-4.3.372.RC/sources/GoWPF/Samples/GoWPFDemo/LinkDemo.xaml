@@ -1,0 +1,412 @@
+﻿<!-- Copyright © Northwoods Software Corporation, 2008-2015. All Rights Reserved. -->
+
+<UserControl x:Class="LinkDemo.LinkDemo"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:go="http://schemas.nwoods.com/GoXam"
+    xmlns:local="clr-namespace:LinkDemo">
+
+  <UserControl.Resources>
+    <go:NullBooleanConverter x:Key="theNullBooleanConverter" />
+    <local:ArrowheadFillConverter x:Key="theArrowheadFillConverter" />
+
+    <!-- Defines the template for drawing the nodes.
+         The NodePanel includes several Data Bindings such as Location,
+         which preserves a Node's location when its figure is changed.
+         It also binds the FromSpot and ToSpot of the Nodes to properties
+         from the MyNodeData class.  The NodePanel contains a single child
+         element, a NodeShape, which binds to the Figure and Color properties. -->
+    <DataTemplate x:Key="NodeTemplate">
+      <go:NodePanel go:Part.SelectionElementName="Shape"
+                    go:Part.SelectionAdorned="True"
+                    go:Node.Location="{Binding Path=Data.Location}" 
+                    go:Part.Resizable="True"
+                    go:Node.FromSpot="{Binding Path=Data.FromSpot}"
+                    go:Node.ToSpot="{Binding Path=Data.ToSpot}">
+        <go:NodeShape x:Name="Shape"
+              go:NodePanel.Figure="{Binding Path=Data.Figure}"
+              Stroke="Black" StrokeThickness="3"
+              Fill="{Binding Path=Data.Color, Mode=OneTime}"
+              Width="80" Height="80" MinWidth="20" MinHeight="20" />
+      </go:NodePanel>
+    </DataTemplate>
+
+    <!-- The LinkPanel is more complex than the NodePanel in that it has
+         several child elements and a complex Link.Route property.  
+         Like the NodePanel and NodeShape in the template above,
+         LinkPanel and Route bind to many user-created properties,
+         which are defined in the MyLinkData class. -->
+    <DataTemplate x:Key="LinkTemplate">
+      <go:LinkPanel go:Part.SelectionElementName="Path" go:Part.Reshapable="True">
+        <go:Link.Route>
+          <go:Route Curve="{Binding Path=Data.Curve}"
+                    Routing="{Binding Path=Data.Routing}"
+                    Curviness="{Binding Path=Data.Curviness}"
+                    Corner="{Binding Path=Data.Corner}"
+                    Smoothness="{Binding Path=Data.Smoothness}"
+                    ToEndSegmentLength="{Binding Path=Data.ToEndSegmentLength}"
+                    FromEndSegmentLength="{Binding Path=Data.FromEndSegmentLength}"
+                    ToShortLength="{Binding Path=Data.ToShortLength}"
+                    FromShortLength="{Binding Path=Data.FromShortLength}" />
+        </go:Link.Route>
+        <go:LinkShape x:Name="Path"
+              Stroke="{Binding Path=Data.Color, Mode=OneTime}"
+              StrokeThickness="{Binding Path=Data.Thickness, Mode=OneTime}" />
+        <Path x:Name="ToArrowPath" Stroke="Black" go:LinkPanel.ToArrow="{Binding Path=Data.ToArrow}" 
+              go:LinkPanel.ToArrowScale="{Binding Path=Data.ToArrowScale}" 
+              Fill="{Binding Path=Data.ToArrow, Converter={StaticResource theArrowheadFillConverter}}" />
+        <Path x:Name="FromArrowPath" Stroke="Black" go:LinkPanel.FromArrow="{Binding Path=Data.FromArrow}" 
+              go:LinkPanel.FromArrowScale="{Binding Path=Data.FromArrowScale}" 
+              Fill="{Binding Path=Data.FromArrow, Converter={StaticResource theArrowheadFillConverter}}" />
+        <TextBlock Text="From" go:LinkPanel.Index="0"
+                   go:LinkPanel.Offset="NaN NaN"
+                   go:LinkPanel.Orientation="Upright" />
+        <TextBlock Text="Mid"
+                   go:LinkPanel.Offset="0 NaN"
+                   go:LinkPanel.Orientation="Upright" />
+        <TextBlock Text="To" go:LinkPanel.Index="-1"
+                   go:LinkPanel.Offset="NaN NaN"
+                   go:LinkPanel.Orientation="Upright" />
+      </go:LinkPanel>
+    </DataTemplate>
+  </UserControl.Resources>
+
+  <Grid>
+    <Grid.RowDefinitions>
+      <RowDefinition Height="*" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
+    <go:Diagram Grid.Row="0" x:Name="myDiagram"
+                VerticalContentAlignment="Stretch"
+                HorizontalContentAlignment="Stretch"
+                NodeTemplate="{StaticResource NodeTemplate}"
+                LinkTemplate="{StaticResource LinkTemplate}" />
+    <StackPanel Grid.Row="1" Orientation="Horizontal">
+      <GroupBox Header="Node"
+                IsEnabled="{Binding Path=SelectedNode, ElementName=myDiagram,
+                            Converter={StaticResource theNullBooleanConverter}}">
+        <StackPanel>
+          <StackPanel Orientation="Horizontal">
+            <TextBlock Text="Figure" Margin="0 0 5 0" VerticalAlignment="Center" />
+            <ComboBox x:Name="FigureBox" MinWidth="120"
+                      SelectionChanged="FigureChanged" />
+          </StackPanel>
+
+          <TabControl x:Name="ToFromSpotTabControl" Margin="0 10 0 0">
+            <TabControl.Resources>
+              <!-- This style is for all radio buttons indicating particular spots -->
+              <Style TargetType="RadioButton">
+                <Setter Property="Margin" Value="5" />
+                <Setter Property="Content" Value="" />
+              </Style>
+              <!-- These styles are used to select the side spots for ports -->
+              <Style TargetType="CheckBox" x:Key="TallCheckBoxStyle">
+                <Setter Property="RenderTransform">
+                  <Setter.Value>
+                    <ScaleTransform ScaleX="1" ScaleY="3" />
+                  </Setter.Value>
+                </Setter>
+                <Setter Property="Width" Value="16" />
+                <Setter Property="Height" Value="48" />
+                <Setter Property="Content" Value="" />
+              </Style>
+              <Style TargetType="CheckBox" x:Key="LongCheckBoxStyle">
+                <Setter Property="RenderTransform">
+                  <Setter.Value>
+                    <ScaleTransform ScaleX="3" ScaleY="1" />
+                  </Setter.Value>
+                </Setter>
+                <Setter Property="Width" Value="48" />
+                <Setter Property="Height" Value="16" />
+              </Style>
+            </TabControl.Resources>
+            <TabItem x:Name="FromPortTab" Header="FromSpot">
+              <StackPanel Orientation="Horizontal">
+                <Grid>
+                  <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                  </Grid.RowDefinitions>
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <TextBlock Grid.Row="0" Grid.Column="0" Text="None"
+                             HorizontalAlignment="Center" FontWeight="Bold" />
+                  <TextBlock Grid.Row="0" Grid.Column="1" Text="Specific" FontWeight="Bold"
+                             Grid.ColumnSpan="3" HorizontalAlignment="Center" />
+                  <RadioButton x:Name="FromNone" IsChecked="True"
+                               Grid.Row="1" Grid.Column="0" GroupName="FromGroup"
+                               Click="NodeRadioButton_Click" />
+                  <RadioButton x:Name="FromTopLeft"
+                               Grid.Row="1" Grid.Column="1" GroupName="FromGroup"
+                               Click="NodeRadioButton_Click" />
+                  <RadioButton x:Name="FromTopCenter"
+                               Grid.Row="1" Grid.Column="2" GroupName="FromGroup"
+                               Click="NodeRadioButton_Click"  />
+                  <RadioButton x:Name="FromTopRight"
+                               Grid.Row="1" Grid.Column="3" GroupName="FromGroup"
+                               Click="NodeRadioButton_Click" />
+                  <RadioButton x:Name="FromMiddleLeft"
+                               Grid.Row="2" Grid.Column="1" GroupName="FromGroup"
+                               Click="NodeRadioButton_Click" />
+                  <RadioButton x:Name="FromCenter"
+                               Grid.Row="2" Grid.Column="2" GroupName="FromGroup"
+                               Click="NodeRadioButton_Click" />
+                  <RadioButton x:Name="FromMiddleRight"
+                               Grid.Row="2" Grid.Column="3" GroupName="FromGroup"
+                               Click="NodeRadioButton_Click" />
+                  <RadioButton x:Name="FromBottomLeft"
+                               Grid.Row="3" Grid.Column="1" GroupName="FromGroup"
+                               Click="NodeRadioButton_Click" />
+                  <RadioButton x:Name="FromBottomCenter"
+                               Grid.Row="3" Grid.Column="2" GroupName="FromGroup"
+                               Click="NodeRadioButton_Click" />
+                  <RadioButton x:Name="FromBottomRight"
+                               Grid.Row="3" Grid.Column="3" GroupName="FromGroup"
+                               Click="NodeRadioButton_Click" />
+                </Grid>
+                <Grid>
+                  <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                  </Grid.RowDefinitions>
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <TextBlock Grid.Row="0" Grid.Column="0" Text="Sides" FontWeight="Bold"
+                             Grid.ColumnSpan="3" HorizontalAlignment="Center" />
+                  <CheckBox x:Name="FromLeftCB"
+                            Grid.Row="2" Grid.Column="0"
+                            Style="{StaticResource TallCheckBoxStyle}"
+                            Checked="CheckBox_Changed" Unchecked="CheckBox_Changed" />
+                  <CheckBox x:Name="FromTopCB"
+                            Grid.Row="1" Grid.Column="1"
+                            Style="{StaticResource LongCheckBoxStyle}"
+                            Checked="CheckBox_Changed" Unchecked="CheckBox_Changed" />
+                  <CheckBox x:Name="FromRightCB"
+                            Grid.Row="2" Grid.Column="2"
+                            Style="{StaticResource TallCheckBoxStyle}"
+                            Checked="CheckBox_Changed" Unchecked="CheckBox_Changed" />
+                  <CheckBox x:Name="FromBottomCB"
+                            Grid.Row="3" Grid.Column="1"
+                            Style="{StaticResource LongCheckBoxStyle}"
+                            Checked="CheckBox_Changed" Unchecked="CheckBox_Changed" />
+                </Grid>
+              </StackPanel>
+            </TabItem>
+            <TabItem x:Name="ToPortTab" Header="ToSpot">
+              <StackPanel Orientation="Horizontal">
+                <Grid>
+                  <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                  </Grid.RowDefinitions>
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <TextBlock Grid.Row="0" Grid.Column="0" Text="None"
+                             HorizontalAlignment="Center" FontWeight="Bold" />
+                  <TextBlock Grid.Row="0" Grid.Column="1" Text="Specific" FontWeight="Bold"
+                             Grid.ColumnSpan="3" HorizontalAlignment="Center" />
+                  <RadioButton x:Name="ToNone" IsChecked="True"
+                               Grid.Row="1" Grid.Column="0" GroupName="ToGroup"
+                               Click="NodeRadioButton_Click" />
+                  <RadioButton x:Name="ToTopLeft"
+                               Grid.Row="1" Grid.Column="1" GroupName="ToGroup"
+                               Click="NodeRadioButton_Click" />
+                  <RadioButton x:Name="ToTopCenter"
+                               Grid.Row="1" Grid.Column="2" GroupName="ToGroup"
+                               Click="NodeRadioButton_Click" />
+                  <RadioButton x:Name="ToTopRight"
+                               Grid.Row="1" Grid.Column="3" GroupName="ToGroup"
+                               Click="NodeRadioButton_Click" />
+                  <RadioButton x:Name="ToMiddleLeft"
+                               Grid.Row="2" Grid.Column="1" GroupName="ToGroup"
+                               Click="NodeRadioButton_Click" />
+                  <RadioButton x:Name="ToCenter"
+                               Grid.Row="2" Grid.Column="2" GroupName="ToGroup"
+                               Click="NodeRadioButton_Click" />
+                  <RadioButton x:Name="ToMiddleRight"
+                               Grid.Row="2" Grid.Column="3" GroupName="ToGroup"
+                               Click="NodeRadioButton_Click" />
+                  <RadioButton x:Name="ToBottomLeft"
+                               Grid.Row="3" Grid.Column="1" GroupName="ToGroup"
+                               Click="NodeRadioButton_Click" />
+                  <RadioButton x:Name="ToBottomCenter"
+                               Grid.Row="3" Grid.Column="2" GroupName="ToGroup"
+                               Click="NodeRadioButton_Click" />
+                  <RadioButton x:Name="ToBottomRight"
+                               Grid.Row="3" Grid.Column="3" GroupName="ToGroup"
+                               Click="NodeRadioButton_Click" />
+                </Grid>
+                <Grid>
+                  <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                  </Grid.RowDefinitions>
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <TextBlock Grid.Row="0" Grid.Column="0" Text="Sides" FontWeight="Bold"
+                             Grid.ColumnSpan="3" HorizontalAlignment="Center" />
+                  <CheckBox x:Name="ToLeftCB"
+                            Grid.Row="2" Grid.Column="0"
+                            Style="{StaticResource TallCheckBoxStyle}"
+                            Checked="CheckBox_Changed" Unchecked="CheckBox_Changed" />
+                  <CheckBox x:Name="ToTopCB"
+                            Grid.Row="1" Grid.Column="1"
+                            Style="{StaticResource LongCheckBoxStyle}"
+                            Checked="CheckBox_Changed" Unchecked="CheckBox_Changed" />
+                  <CheckBox x:Name="ToRightCB"
+                            Grid.Row="2" Grid.Column="2"
+                            Style="{StaticResource TallCheckBoxStyle}"
+                            Checked="CheckBox_Changed" Unchecked="CheckBox_Changed" />
+                  <CheckBox x:Name="ToBottomCB"
+                            Grid.Row="3" Grid.Column="1"
+                            Style="{StaticResource LongCheckBoxStyle}"
+                            Checked="CheckBox_Changed" Unchecked="CheckBox_Changed" />
+                </Grid>
+              </StackPanel>
+            </TabItem>
+          </TabControl>
+        </StackPanel>
+      </GroupBox>
+
+      <GroupBox Header="Link"
+                IsEnabled="{Binding Path=SelectedLink, ElementName=myDiagram,
+                            Converter={StaticResource theNullBooleanConverter}}">
+        <StackPanel Orientation="Horizontal">
+          <StackPanel>
+            <StackPanel Orientation="Horizontal">
+              <GroupBox Header="Routing">
+                <StackPanel>
+                  <RadioButton x:Name="NormalRoutingRB"
+                             Content="Normal" GroupName="LinkRoutingGroup"
+                             Click="LinkRadioButton_Click" />
+                  <RadioButton x:Name="OrthogonalRoutingRB"
+                             Content="Orthogonal" GroupName="LinkRoutingGroup"
+                             Click="LinkRadioButton_Click" />
+                  <RadioButton x:Name="AvoidsNodesRoutingRB"
+                             Content="AvoidsNodes" GroupName="LinkRoutingGroup"
+                             Click="LinkRadioButton_Click" />
+                </StackPanel>
+              </GroupBox>
+              <GroupBox Header="Curve">
+                <StackPanel>
+                  <RadioButton x:Name="NoneCurveRB"
+                             Content="None" GroupName="LinkCurveGroup"
+                             Click="LinkRadioButton_Click" />
+                  <RadioButton x:Name="JumpOverCurveRB"
+                             Content="JumpOver" GroupName="LinkCurveGroup"
+                             Click="LinkRadioButton_Click" />
+                  <RadioButton x:Name="JumpGapCurveRB"
+                             Content="JumpGap" GroupName="LinkCurveGroup"
+                             Click="LinkRadioButton_Click" />
+                  <RadioButton x:Name="BezierCurveRB"
+                             Content="Bezier" GroupName="LinkCurveGroup"
+                             Click="LinkRadioButton_Click" />
+                </StackPanel>
+              </GroupBox>
+            </StackPanel>
+
+            <StackPanel Orientation="Horizontal" Margin="0 5 0 0">
+              <TextBlock Text="Curviness" VerticalAlignment="Center" />
+              <Slider x:Name="CurvinessSlider" Width="60" Margin="5 0 5 0"
+                    Minimum="-200" Maximum="200"
+                    ValueChanged="Slider_ValueChanged" />
+              <TextBox Name="CurvinessTextBox" VerticalAlignment="Center"
+                     Text="{Binding Path=SelectedLink.Data.Curviness,
+                                    ElementName=myDiagram}"
+                     MinWidth="40" MaxLength="3"
+                     TextChanged="SliderText_TextChanged" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Margin="0 5 0 0">
+              <TextBlock Text="Corner" VerticalAlignment="Center" />
+              <Slider x:Name="CornerSlider" Width="60" Margin="5 0 5 0"
+                    Minimum="0" Maximum="50"
+                    ValueChanged="Slider_ValueChanged" />
+              <TextBox Name="CornerTextBox" VerticalAlignment="Center"
+                     Text="{Binding Path=SelectedLink.Data.Corner,
+                                    ElementName=myDiagram}"
+                     MinWidth="40" MaxLength="3"
+                     TextChanged="SliderText_TextChanged" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Margin="0 5 0 0">
+              <TextBlock Text="Smoothness" VerticalAlignment="Center" />
+              <Slider x:Name="SmoothnessSlider" Width="60" Margin="5 0 5 0"
+                    Minimum="-1.0" Maximum="1.0"
+                    ValueChanged="Slider_ValueChanged" />
+              <TextBox Name="SmoothnessTextBox" VerticalAlignment="Center"
+                     Text="{Binding Path=SelectedLink.Data.Smoothness,
+                                    ElementName=myDiagram}"
+                     MinWidth="40" MaxLength="3"
+                     TextChanged="SliderText_TextChanged" />
+            </StackPanel>
+          </StackPanel>
+          
+          <TabControl x:Name="ToFromArrowTabControl">
+            <TabItem x:Name="ToArrowTab" Header="ToArrow">
+              <StackPanel Orientation="Vertical">
+                <ComboBox x:Name="ToArrowBox" Width="140" Margin="5 5 5 0" SelectionChanged="ArrowheadChanged" HorizontalAlignment="Left" />
+                <StackPanel Orientation="Horizontal" Margin="5 0 0 0">
+                  <TextBlock Text="ToArrowScale" Margin="5 5 5 0" />
+                  <Slider x:Name="ToArrowScaleSlider" Width="60" Minimum="0.1" Maximum="10.0" ValueChanged="Slider_ValueChanged" />
+                  <TextBox x:Name="ToArrowScaleBox" Width="30" TextChanged="SliderText_TextChanged" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="5 0 5 0">
+                  <TextBlock Text="ToEndSegmentLength" Margin="5 5 5 0" />
+                  <Slider x:Name="ToEndSegmentLengthSlider" Width="60" Minimum="0" Maximum="50" Value="0.0" ValueChanged="Slider_ValueChanged" />
+                  <TextBox x:Name="ToEndSegmentLengthBox" Width="35" TextChanged="SliderText_TextChanged" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="5 0 5 0">
+                  <TextBlock Text="ToShortLength" Margin="5 5 5 0" />
+                  <Slider x:Name="ToShortLengthSlider" Width="60" Minimum="0" Maximum="50" Value="0.0" ValueChanged="Slider_ValueChanged" />
+                  <TextBox x:Name="ToShortLengthBox" Width="35" TextChanged="SliderText_TextChanged" />
+                </StackPanel>
+              </StackPanel>
+            </TabItem>
+            <TabItem x:Name="FromArrowTab" Header="FromArrow">
+              <StackPanel Orientation="Vertical">
+                <ComboBox x:Name="FromArrowBox" Width="140" Margin="5 5 5 0" SelectionChanged="ArrowheadChanged" HorizontalAlignment="Left" />
+                <StackPanel Orientation="Horizontal" Margin="5 0 0 0">
+                  <TextBlock Text="FromArrowScale" Margin="5 5 5 0" />
+                  <Slider x:Name="FromArrowScaleSlider" Width="60" Minimum="0.1" Maximum="10.0" ValueChanged="Slider_ValueChanged" />
+                  <TextBox x:Name="FromArrowScaleBox" Width="30" TextChanged="SliderText_TextChanged" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="5 0 5 0">
+                  <TextBlock Text="FromEndSegmentLength" Margin="5 5 5 0" />
+                  <Slider x:Name="FromEndSegmentLengthSlider" Width="60" Minimum="0" Maximum="50" Value="0.0" ValueChanged="Slider_ValueChanged" />
+                  <TextBox x:Name="FromEndSegmentLengthBox" Width="35" TextChanged="SliderText_TextChanged" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="5 0 5 0">
+                  <TextBlock Text="FromShortLength" Margin="5 5 5 0" />
+                  <Slider x:Name="FromShortLengthSlider" Width="60" Minimum="0" Maximum="50" Value="0.0" ValueChanged="Slider_ValueChanged" />
+                  <TextBox x:Name="FromShortLengthBox" Width="35" TextChanged="SliderText_TextChanged" />
+                </StackPanel>
+              </StackPanel>
+            </TabItem>
+          </TabControl>
+          
+        </StackPanel>
+      </GroupBox>
+    </StackPanel>
+  </Grid>
+</UserControl>

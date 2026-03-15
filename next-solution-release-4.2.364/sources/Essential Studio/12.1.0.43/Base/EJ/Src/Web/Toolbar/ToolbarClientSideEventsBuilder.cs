@@ -1,0 +1,51 @@
+#region Copyright Syncfusion Inc. 2001 - 2014
+// Copyright Syncfusion Inc. 2001 - 2014. All rights reserved.
+// Use of this code is subject to the terms of our license.
+// A copy of the current license can be obtained at any time by e-mailing
+// licensing@syncfusion.com. Any infringement will be prosecuted under
+// applicable laws. 
+#endregion
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using Syncfusion.JavaScript.Models;
+
+namespace Syncfusion.JavaScript
+{
+    public class ToolbarClientSideEventsBuilder
+    {
+        private ToolbarProperties toolbarModel;
+        public ToolbarClientSideEventsBuilder(ToolbarProperties toolbarProp)
+        {
+            toolbarModel = toolbarProp;
+        }
+        //Events
+        public ToolbarClientSideEventsBuilder Create(String create)
+        {
+            toolbarModel.Create = create;
+            return this;
+        }
+        public ToolbarClientSideEventsBuilder Click(String click)
+        {
+            toolbarModel.Click = click;
+            return this;
+        }
+        public ToolbarClientSideEventsBuilder ItemLeave(String itemLeave)
+        {
+            toolbarModel.ItemLeave = itemLeave;
+            return this;
+        }
+        public ToolbarClientSideEventsBuilder ItemHover(String itemHover)
+        {
+            toolbarModel.ItemHover = itemHover;
+            return this;
+        }
+        public ToolbarClientSideEventsBuilder Destroy(String destroy)
+        {
+            toolbarModel.Destroy = destroy;
+            return this;
+        }
+    }
+}

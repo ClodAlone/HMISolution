@@ -1,0 +1,97 @@
+﻿<UserControl x:Class="DBControls.Controls.ImageColumnsEditor"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:properties="clr-namespace:DBControls.Properties"
+             xmlns:self="clr-namespace:DBControls"
+             xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+             mc:Ignorable="d" 
+             Height="300" Width="300">
+    <!-- x:Name="ImageColumnsEditorControl"-->
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/RuntimeLightSharedResources;component/Resources/SharedImages.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <StackPanel Grid.Row="0" Orientation="Horizontal" HorizontalAlignment="Center">
+            <Button x:Name="btnAddThreshold" Content="{x:Static properties:Resources.AddTresholdTitle}" HorizontalAlignment="Right" VerticalAlignment="Center" Click="btnAddThreshold_Click" Margin="5,0" Padding="15" />
+            <Button x:Name="btnDelThreshold" Content="{x:Static properties:Resources.DelTresholdTitle}" HorizontalAlignment="Right" VerticalAlignment="Center" Click="btnDelThreshold_Click" Margin="5,0" Padding="15" />
+            <Button x:Name="btnClearThreshold" Content="{x:Static properties:Resources.ClearTresholdTitle}" HorizontalAlignment="Right" VerticalAlignment="Center" Click="btnClearThreshold_Click" Margin="5,0" Padding="15" />
+        </StackPanel>
+        <ListBox Margin="0 20 0 0" HorizontalAlignment="Stretch" Grid.Row="1" x:Name="ListBoxThresholds" SelectionChanged="OnListBoxSelectionChanged" ScrollViewer.HorizontalScrollBarVisibility="Disabled" SelectionMode="Single" ItemsSource="{Binding ImageThresholds, RelativeSource={RelativeSource AncestorType=UserControl}}">
+            <ListBox.CommandBindings>
+                <CommandBinding Command="Copy"
+                    Executed="OnCommandCopy" 
+                    CanExecute="CanCommandCopy" />
+                <CommandBinding Command="Cut"
+                    Executed="OnCommandCut" 
+                    CanExecute="CanCommandCut" />
+                <CommandBinding Command="Paste"
+                    Executed="OnCommandPaste" 
+                    CanExecute="CanCommandPaste" />
+            </ListBox.CommandBindings>
+            <ListBox.ItemContainerStyle>
+                <Style TargetType="ListBoxItem">
+                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                    <!--<Setter Property="Padding" Value="0" />
+                    <Setter Property="Margin" Value="0" />-->
+                    <EventSetter Event="PreviewMouseDown" Handler="OnItemPreviewMouseDown" />
+                    <EventSetter Event="KeyDown" Handler="OnItemKeyDown" />
+                </Style>
+            </ListBox.ItemContainerStyle>
+            <ListBox.Template>
+                <ControlTemplate>
+                    <DockPanel LastChildFill="True">
+                        <Grid DockPanel.Dock="Top">
+                            <Grid.Resources>
+                                <Style TargetType="Label">
+                                    <Setter Property="HorizontalContentAlignment" Value="Center" />
+                                    <Setter Property="VerticalContentAlignment" Value="Center" />
+                                </Style>
+                            </Grid.Resources>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="4*" />
+                                <ColumnDefinition Width="2*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Label Grid.Column="0"></Label>
+                            <Label Grid.Column="1" Content="{x:Static properties:Resources.ThresholdImage}" />
+                            <Label Grid.Column="2" Content="{x:Static properties:Resources.ThresholdValue}" />
+                            <Label Grid.Column="3" Content="{x:Static properties:Resources.Caption}" />
+                        </Grid>
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="200">
+                            <ItemsPresenter></ItemsPresenter>
+                        </ScrollViewer>
+                    </DockPanel>
+                </ControlTemplate>
+            </ListBox.Template>
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="4*" />
+                            <ColumnDefinition Width="2*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Border Padding="3" Grid.Column="0">
+                            <Path VerticalAlignment="Center" Fill="#BFFFFFFF" Data="M 0 0 L 0 12 L 6 6 Z"/>
+                        </Border>
+                        <ContentPresenter Grid.Column="1" ContentTemplate="{Binding ListThresholdDt, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                        <TextBox Grid.Column="2" Text="{Binding Path=ImageThresholdValue}"/>
+                        <dxe:ComboBoxEdit Grid.Column="3" ItemsSource="{dxe:EnumItemsSource EnumType={x:Type self:CaptionAlignmentEnum}}" EditValue="{Binding Path=ImageCaption, Mode=TwoWay}" IsSynchronizedWithCurrentItem="True" />
+                    </Grid>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+    </Grid>
+</UserControl>

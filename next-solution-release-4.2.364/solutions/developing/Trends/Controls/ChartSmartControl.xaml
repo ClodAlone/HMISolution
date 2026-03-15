@@ -1,0 +1,195 @@
+﻿<UserControl xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"  
+             x:Class="Trends.Controls.ChartSmartControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             mc:Ignorable="d" Height="640" Width="960"
+             xmlns:local="clr-namespace:Trends.Converters"
+             xmlns:dxg="http://schemas.devexpress.com/winfx/2008/xaml/grid"
+             xmlns:self="clr-namespace:Trends.Controls"
+             xmlns:enum="clr-namespace:Trends"
+             xmlns:sys="clr-namespace:System;assembly=mscorlib"
+             xmlns:commonconverters="clr-namespace:Converters;assembly=Converters"
+             xmlns:common="clr-namespace:OPCUAViewModel.Converters;assembly=OPCUAViewModel"
+             xmlns:properties="clr-namespace:Trends.Properties"
+             xmlns:smartutils="clr-namespace:SmartControlUtilities.Controls;assembly=SmartControlUtilities"
+             xmlns:utilities="clr-namespace:WPFUtilities.Converters;assembly=WPFUtilities"
+             xmlns:commoncontrols="http://progea.com/CommonControls">
+    
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/SharedResources;component/Resources/SharedImages.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+            <commonconverters:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
+            <commonconverters:BooleanToInvertionVisibilityConverter x:Key="BooleanToInvertionVisibilityConverter"/>
+
+            <local:ListCountConverter x:Key="ListCountConverter" />
+            <commonconverters:InverseBooleanConverter x:Key="InverseBooleanConverter"/>
+            <local:BrushToColorConverter x:Key="BrushToColorConverter" />
+            <self:ColorToBrushConverter x:Key="ColorToBrushConverter" />
+            <Style x:Key="itemstyle" TargetType="{x:Type ListViewItem}">
+                <!--<EventSetter Event="MouseDoubleClick" Handler="HandleDoubleClick" />-->
+                <Style.Triggers>
+                    <Trigger Property="IsSelected" Value="True" >
+                        <Setter Property="Background" Value="Gray" />
+                        <Setter Property="Foreground" Value="Black" />
+                    </Trigger>
+                    <Trigger Property="IsMouseOver" Value="True">
+                        <Setter Property="Background" Value="#797979"/>
+                        <Setter Property="Foreground" Value="Black" />
+                    </Trigger>
+                </Style.Triggers>
+            </Style>
+        </ResourceDictionary>
+    </UserControl.Resources>
+  
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition />
+        </Grid.RowDefinitions>
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition/>
+                <ColumnDefinition/>
+                <ColumnDefinition/>
+                <ColumnDefinition/>
+            </Grid.ColumnDefinitions>
+            <Button Click="OnAdd" ToolTip="{x:Static properties:Resources.AddPen}" Margin="5,5,5,5">
+                <Button.Content>
+                    <Image Margin="2" Source="{StaticResource AddNewSmall}" Height="16" Width="16" />
+                </Button.Content>
+
+            </Button>
+            <Button Grid.Column="1" IsEnabled="False" x:Name="btnDelete" 
+                        ToolTip="{x:Static properties:Resources.RemovePen}" Click="OnDelete" Margin="5,5,5,5">
+                <Button.Content>
+                    <Image Margin="2" Source="{StaticResource RemoveMinusSmall}" Height="16" Width="16" />
+                </Button.Content>
+            </Button>
+          <Button Click="OnMoveUp" Grid.Column="2"
+                  ToolTip="{x:Static properties:Resources.MoveUp}" Margin="5,5,5,5">
+            <Button.Content>
+              <Image Margin="2" Source="{StaticResource MoveUpSmall}" Height="16" Width="16" />
+            </Button.Content>
+
+          </Button>
+          <Button Click="OnMoveDown" Grid.Column="3" 
+                  ToolTip="{x:Static properties:Resources.MoveDown}" Margin="5,5,5,5">
+            <Button.Content>
+              <Image Margin="2" Source="{StaticResource MoveDownSmall}" Height="16" Width="16" />
+            </Button.Content>
+          </Button>
+        </Grid>
+        <dxg:GridControl AllowDrop="False" Grid.Row="6" Name="gridControl">
+            <dxg:GridControl.Columns>
+                <dxg:GridColumn Visible="{Binding SimpleDiagram, Converter={StaticResource InverseBooleanConverter}, Mode=OneWay, UpdateSourceTrigger=PropertyChanged}" AllowDrop="False" x:Name="penColor" DisplayMemberBinding="{Binding Path=LColor, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Header="{x:Static properties:Resources.PenColor}">
+                    <dxg:GridColumn.CellTemplate>
+                        <DataTemplate>
+                            <commoncontrols:CustomPopupColorEdit OnlySolidColors="True" Name="PART_Editor" Document="{Binding Document, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=UserControl}}" BrushSelected="OnBrushSelected" Color="{Binding RowData.Row.LColor, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                        </DataTemplate>
+                    </dxg:GridColumn.CellTemplate>
+                </dxg:GridColumn>
+                <dxg:GridColumn AllowDrop="False" Header="{x:Static properties:Resources.PenName}">
+                    <dxg:GridColumn.CellTemplate>
+                        <DataTemplate>
+                            <smartutils:PenNameSelector PropName="Name" 
+                                    OnApplyChanges="OnApplyChanges" DataContext="{Binding RowData.Row, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Document="{Binding Document, RelativeSource={RelativeSource AncestorType=UserControl, Mode=FindAncestor}, Mode=OneWay}" />
+                        </DataTemplate>
+                    </dxg:GridColumn.CellTemplate>
+                </dxg:GridColumn>
+                <dxg:GridColumn  Name="dlrsource" Header="{x:Static properties:Resources.Dlrsource}">
+                    <dxg:GridColumn.CellTemplate>
+                        <DataTemplate>
+                            <DockPanel LastChildFill="True" Grid.Column="1" Grid.Row="1"
+                                               HorizontalAlignment="Stretch" VerticalAlignment="Center">
+                                <CheckBox Click="CheckBox_Click" HorizontalAlignment="Center" IsChecked="{Binding Data.Dlrsource, Mode=TwoWay,UpdateSourceTrigger=PropertyChanged}"/>
+                            </DockPanel>
+                        </DataTemplate>
+                    </dxg:GridColumn.CellTemplate>
+                </dxg:GridColumn>
+                <dxg:GridColumn AllowDrop="False" AllowEditing="False" Header="{x:Static properties:Resources.TagName}">
+                    <dxg:GridColumn.CellTemplate>
+                        <DataTemplate>
+                            <smartutils:TagSelector RuntimeVersion="False" ReferencedTag="TagReference" HistoricalPropName="HistoricalName" ColumnPropName="ColuName" DlrsourcePropName="Dlrsource"
+                                    OnApplyChanges="OnApplyChanges" Tag="{Binding Data.TagReference}" DataContext="{Binding RowData.Row, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Document="{Binding Document, RelativeSource={RelativeSource AncestorType=UserControl, Mode=FindAncestor}, Mode=OneWay}" />
+                        </DataTemplate>
+                    </dxg:GridColumn.CellTemplate>
+                </dxg:GridColumn>
+                <dxg:GridColumn AllowDrop="False" Name="historicalName" AllowEditing="False" DisplayMemberBinding="{Binding Path=HistoricalName, Mode=TwoWay}" Header="{x:Static properties:Resources.HistoricalName}">
+                    <dxg:GridColumn.CellTemplate>
+                        <DataTemplate>
+                            <DockPanel LastChildFill="True" ToolTip="{Binding Data.HistoricalName}" Grid.Column="1" Grid.Row="1"
+                                           HorizontalAlignment="Stretch" VerticalAlignment="Center">
+                                <TextBox IsReadOnly="False" x:Name="historical" HorizontalAlignment="Stretch" VerticalAlignment="Center"
+                                                 ToolTip="{Binding Data.HistoricalName}" Text="{Binding Data.HistoricalName}" />
+                            </DockPanel>
+                        </DataTemplate>
+                    </dxg:GridColumn.CellTemplate>
+                </dxg:GridColumn>
+                <dxg:GridColumn x:Name="arrayIndex" AllowDrop="False" Width="50" DisplayMemberBinding="{Binding Path=ArrayIndex, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Header="{x:Static properties:Resources.ArrayIndex}">
+                    <dxg:GridColumn.EditSettings>
+                        <dxe:TextEditSettings MaskType="Numeric" Mask="d" />
+                    </dxg:GridColumn.EditSettings>
+                </dxg:GridColumn>
+                <dxg:GridColumn x:Name="strokeThickness" AllowDrop="False" Width="50" DisplayMemberBinding="{Binding Path=StrokeThickness, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Header="{x:Static properties:Resources.StrokeThickness}">
+                    <dxg:GridColumn.EditSettings>
+                        <dxe:TextEditSettings MaskType="Numeric" Mask="d" />
+                    </dxg:GridColumn.EditSettings>
+                </dxg:GridColumn>
+                <dxg:GridColumn AllowDrop="False" DisplayMemberBinding="{Binding Path=PenStyle, Mode=TwoWay}" Header="{x:Static properties:Resources.PenStyle}">
+                    <dxg:GridColumn.EditSettings>
+                        <dxe:ComboBoxEditSettings 
+                            HorizontalContentAlignment="Left"
+                            IsTextEditable="False"
+                            AllowNullInput="False"
+                            AcceptsReturn="False"
+                            AutoComplete="False"
+                            ImmediatePopup="True"
+                            ItemsSource="{dxe:EnumItemsSource EnumType={x:Type enum:PredefinedPenKinds}}">
+                        </dxe:ComboBoxEditSettings>
+                    </dxg:GridColumn.EditSettings>
+                </dxg:GridColumn>
+                <dxg:GridColumn AllowDrop="False" Width="50" DisplayMemberBinding="{Binding Path=Range.Low, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Header="{x:Static properties:Resources.Min}">
+                    <dxg:GridColumn.EditSettings>
+                        <dxe:TextEditSettings MaskType="Numeric" Mask="g" />
+                    </dxg:GridColumn.EditSettings>
+                </dxg:GridColumn>
+                <dxg:GridColumn AllowDrop="False" Width="50" DisplayMemberBinding="{Binding Path=Range.High, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Header="{x:Static properties:Resources.Max}">
+                    <dxg:GridColumn.EditSettings>
+                        <dxe:TextEditSettings MaskType="Numeric" Mask="g" />
+                    </dxg:GridColumn.EditSettings>
+                </dxg:GridColumn>
+                <dxg:GridColumn Visible="{Binding SimpleDiagram, Mode=OneWay, UpdateSourceTrigger=PropertyChanged}" AllowDrop="False" x:Name="pointColos" Header="{x:Static properties:Resources.PenColor}">
+                    <dxg:GridColumn.CellTemplate>
+                        <DataTemplate>
+                            <DockPanel LastChildFill="True" Grid.Column="1" Grid.Row="1"
+                                               HorizontalAlignment="Stretch" VerticalAlignment="Center">
+                                <Button DockPanel.Dock="Right" Click="ButtonPColorClear_Click" HorizontalAlignment="Stretch" VerticalAlignment="Center">
+                                    <Button.Content>
+                                        <Image Source="{StaticResource CancelSmall}" Height="16" Width="16" />
+                                    </Button.Content>
+                                </Button>
+                                <Button Tag="{Binding Data.PointSettings, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" DockPanel.Dock="Right" Click="ButtonPColor_Click" HorizontalAlignment="Stretch" VerticalAlignment="Center">
+                                    <Button.Content>
+                                        <Image Source="{StaticResource EditGeneralSmall}" Height="16" Width="16" />
+                                    </Button.Content>
+                                </Button>
+                                <TextBlock  Text="{Binding Data.PointSettings, Converter={StaticResource ListCountConverter}, Mode=OneWay}"/>
+                            </DockPanel>
+                        </DataTemplate>
+                    </dxg:GridColumn.CellTemplate>
+                </dxg:GridColumn>
+            </dxg:GridControl.Columns>
+            <dxg:GridControl.View>
+                <dxg:TableView AllowMoveColumnToDropArea="False" Name="tableView" ShowTotalSummary="False"  
+                                       FocusedRowChanged="tableView_FocusedRowChanged"
+                                       CellValueChanging="tableView_CellValueChanging"
+                                       CellValueChanged="tableView_CellValueChanged"  
+                                       AutoWidth="true" ShowGroupPanel="False" />
+            </dxg:GridControl.View>
+        </dxg:GridControl>
+    </Grid>
+</UserControl>

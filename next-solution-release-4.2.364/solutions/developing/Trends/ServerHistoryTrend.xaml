@@ -1,0 +1,638 @@
+﻿<UserControl x:Class="Trends.ServerHistoryTrend"
+             xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"  
+             xmlns:converters="clr-namespace:Converters;assembly=Converters"
+             xmlns:dxc="http://schemas.devexpress.com/winfx/2008/xaml/charts"  
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" 
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:properties="clr-namespace:Trends.Properties"
+             xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+	         xmlns:dxd="http://schemas.devexpress.com/winfx/2008/xaml/docking"
+             xmlns:dxg="http://schemas.devexpress.com/winfx/2008/xaml/grid"
+             xmlns:dxb="http://schemas.devexpress.com/winfx/2008/xaml/bars" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:locals="clr-namespace:Trends.Converters"
+             xmlns:self="clr-namespace:Trends.Controls"
+             xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+             xmlns:layout="clr-namespace:GridLayout;assembly=GridLayout"
+             xmlns:commonproperties="clr-namespace:WPFUtilities.Properties;assembly=WPFUtilities"
+             xmlns:remoteconverters="clr-namespace:Converters;assembly=Converters"
+             xmlns:dxgt="http://schemas.devexpress.com/winfx/2008/xaml/grid/themekeys"
+             xmlns:utilities="clr-namespace:WPFUtilities;assembly=WPFUtilities" 
+             mc:Ignorable="d dx" d:DesignHeight="400" d:DesignWidth="500" >
+
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/RuntimeLightSharedResources;component/Resources/SharedImages.xaml" />
+              <ResourceDictionary Source="/RuntimeLightSharedResources;component/Resources/Trends.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+            <remoteconverters:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+            <Storyboard x:Key="MouseOverOpacity">
+                <DoubleAnimationUsingKeyFrames BeginTime="00:00:00" Storyboard.TargetProperty="(UIElement.Opacity)" Storyboard.TargetName="toolbar">
+                    <SplineDoubleKeyFrame KeyTime="00:00:00.1000000" Value="1" KeySpline="0,0,0.5,1" />
+                </DoubleAnimationUsingKeyFrames>
+                <DoubleAnimationUsingKeyFrames BeginTime="00:00:00" Storyboard.TargetProperty="(FrameworkElement.Height)" Storyboard.TargetName="toolbar">
+                    <SplineDoubleKeyFrame KeyTime="00:00:00.5" Value="{Binding DefToolbarHeight, RelativeSource={RelativeSource AncestorType={x:Type UserControl}, Mode=FindAncestor}}" KeySpline="0,0,0.5,1" />
+                </DoubleAnimationUsingKeyFrames>
+            </Storyboard>
+            <Storyboard x:Key="MouseLeaveOpacity">
+                <DoubleAnimationUsingKeyFrames BeginTime="00:00:00" Storyboard.TargetProperty="(UIElement.Opacity)" Storyboard.TargetName="toolbar">
+                    <SplineDoubleKeyFrame KeyTime="00:00:00.5" Value="0.1" KeySpline="0,0,0.5,1" />
+                </DoubleAnimationUsingKeyFrames>
+                <DoubleAnimationUsingKeyFrames BeginTime="00:00:00" Storyboard.TargetProperty="(FrameworkElement.Height)" Storyboard.TargetName="toolbar">
+                    <SplineDoubleKeyFrame KeyTime="00:00:00.5" Value="5" KeySpline="0,0,0.5,1" />
+                </DoubleAnimationUsingKeyFrames>
+            </Storyboard>
+        </ResourceDictionary>
+
+    </UserControl.Resources>
+    <Grid x:Name="view">
+        <Grid.Resources>
+            <self:EnumToNameConverter x:Key="EnumToNameConverter" />
+            <converters:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+            <converters:BooleanToInvertionVisibilityConverter x:Key="BooleanToInvertionVisibilityConverter" />
+            <converters:UpDownValueConverter x:Key="UpDownValueConverter" />
+            <locals:TextToVisibilityConverter x:Key="TextToVisibilityConverter" />
+            <Style TargetType="{x:Type Button}" x:Key="ButtonRowCommandStyle">
+            </Style>
+            <!--<Style TargetType="{x:Type dxg:GridControl}" x:Key="DataSourceGridStyle">
+                <Setter Property="ItemsSource" Value="{Binding Values, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}}"/>
+            </Style>
+            <Style TargetType="{x:Type dxc:AreaSeries2D}" x:Key="DataSourceStyle">
+                <Setter Property="DataSource" Value="{Binding Values, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}}"/>
+            </Style>-->
+
+            <Style TargetType="{x:Type Button}" x:Key="ButtonFetch">
+                <!--<Setter Property="Command" Value="{Binding HistoryReadModel.GetResults}"/>-->
+            </Style>
+
+            <Style TargetType="{x:Type Button}" x:Key="ButtonNext">
+                <!--<Setter Property="Command" Value="{Binding HistoryReadModel.GetNextResults}"/>-->
+            </Style>
+
+            <Style TargetType="{x:Type Button}" x:Key="ButtonStop">
+                <!--<Setter Property="Command" Value="{Binding HistoryReadModel.StopResults}"/>-->
+            </Style>
+        </Grid.Resources>
+
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        <AdornerDecorator Grid.Row="1" x:Name="adorner">
+            <dxd:DockLayoutManager x:Name="dockManager">
+
+                <dxd:LayoutGroup x:Name="groupGeneral">
+
+                    <dxd:LayoutPanel ShowCaption="False" Caption="Chart" x:Name="chartPanel">
+                        <Grid x:Name="chartGrid">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="100*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="100*" />
+                                <RowDefinition Height="11*"/>
+                            </Grid.RowDefinitions>
+                            <Grid Grid.Row="1" Grid.ColumnSpan="3">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition />
+                                    <ColumnDefinition />
+                                    <ColumnDefinition />
+                                    <ColumnDefinition />
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <Button Grid.Row="1" Grid.Column="0"  x:Name="FetchBtn"
+                                    Command="{Binding RefreshCommand, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}}" 
+                                    Style="{StaticResource ButtonFetch}" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"  Margin="1"
+                        ToolTipService.ShowOnDisabled="True" ToolTip="{x:Static properties:Resources.Fetch}">
+                                    <StackPanel>
+                                        <TextBlock x:Name="Fetch" Text="{x:Static properties:Resources.Fetch}" Background="{x:Null}" Foreground="{Binding ControlForeground, RelativeSource={RelativeSource AncestorType=UserControl, Mode=FindAncestor}}"
+                                                FontSize="10"
+                                                FontFamily="Segoe UI"
+                                                FontWeight="Normal"
+                                                FontStyle="Normal" 
+                                                Visibility="{Binding UseIcon, Converter={StaticResource BooleanToInvertionVisibilityConverter}, Mode=OneWay, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}}"/>
+                                        <Image Visibility="{Binding UseIcon, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}}" 
+                         x:Name="reloadSmall" Source="{DynamicResource ReloadSmall}" Width="16" Height="16"/>
+                                    </StackPanel>
+                                </Button>
+                                <Button Grid.Row="1" Grid.Column="1"  x:Name="PreviousBtn"
+                                    Command="{Binding GetPrevResults, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}}" 
+                                    Style="{StaticResource ButtonNext}"  Margin="1" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"  
+                        ToolTipService.ShowOnDisabled="True" ToolTip="{x:Static properties:Resources.Previous}">
+                                    <StackPanel>
+                                        <TextBlock x:Name="Previous" Text="{x:Static properties:Resources.Previous}" Background="{x:Null}" Foreground="{Binding ControlForeground, RelativeSource={RelativeSource AncestorType=UserControl, Mode=FindAncestor}}"
+                                                FontSize="10"
+                                                FontFamily="Segoe UI"
+                                                FontWeight="Normal"
+                                                FontStyle="Normal" 
+                                               Visibility="{Binding UseIcon, Converter={StaticResource BooleanToInvertionVisibilityConverter}, Mode=OneWay, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}}"/>
+                                        <Image Visibility="{Binding UseIcon, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}}" 
+                        Source="{DynamicResource TRENDSUnshelve}" Width="16" Height="16"/>
+                                    </StackPanel>
+                                </Button>
+                                <Button Grid.Row="1" Grid.Column="2"  x:Name="NextBtn"
+                                    Command="{Binding GetNextResults, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}}" 
+                                    Style="{StaticResource ButtonNext}"  Margin="1" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"  
+                        ToolTipService.ShowOnDisabled="True" ToolTip="{x:Static properties:Resources.Next}">
+                                    <StackPanel>
+                                        <TextBlock x:Name="Next" Text="{x:Static properties:Resources.Next}" Background="{x:Null}" Foreground="{Binding ControlForeground, RelativeSource={RelativeSource AncestorType=UserControl, Mode=FindAncestor}}"
+                                                FontSize="10"
+                                                FontFamily="Segoe UI"
+                                                FontWeight="Normal"
+                                                FontStyle="Normal" 
+                                               Visibility="{Binding UseIcon, Converter={StaticResource BooleanToInvertionVisibilityConverter}, Mode=OneWay, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}}"/>
+                                        <Image Visibility="{Binding UseIcon, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}}" 
+                        Source="{DynamicResource TRENDSShelve}" Width="16" Height="16"/>
+                                    </StackPanel>
+                                </Button>
+                                <Button Grid.Row="1" Grid.Column="3"  x:Name="StopBtn"
+                                    Command="{Binding StopResults, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}}" 
+                                    Style="{StaticResource ButtonStop}"  Margin="1" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"  
+                        ToolTipService.ShowOnDisabled="True" ToolTip="{x:Static properties:Resources.Stop}">
+                                    <StackPanel>
+                                        <TextBlock x:Name="Stop" Text="{x:Static properties:Resources.Stop}" Background="{x:Null}" Foreground="{Binding ControlForeground, RelativeSource={RelativeSource AncestorType=UserControl, Mode=FindAncestor}}"
+                                                Visibility="{Binding UseIcon, Converter={StaticResource BooleanToInvertionVisibilityConverter}, Mode=OneWay, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}}"
+                                                FontSize="10"
+                                                FontFamily="Segoe UI"
+                                                FontWeight="Normal"
+                                                FontStyle="Normal" />
+                                        <Image Visibility="{Binding UseIcon, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}}" 
+                        Source="{DynamicResource TRENDSConfirm}" Width="16" Height="16"/>
+                                    </StackPanel>
+                                </Button>
+                            </Grid>
+                            <dxg:GridControl AllowDrop="False" Grid.Row="0" Grid.ColumnSpan="3" Width="Auto" Visibility="Collapsed"  
+                                         Padding="0,0,0,2" Margin="10,0,0,0"
+                                         ItemsSource="{Binding Values,Mode=OneWay, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}}"
+                             MinHeight="40" MinWidth="20" Name="listView1">
+                                <dxg:GridControl.Columns>
+                                    <dxg:GridColumn AllowEditing="False" ReadOnly="True" BestFitMaxRowCount="15" AllowBestFit="True" x:Name="Col1" Header="{x:Static properties:Resources.Value}" Tag="Value" DisplayMemberBinding="{Binding Value}"  />
+                                    <dxg:GridColumn AllowEditing="False" ReadOnly="True" BestFitMaxRowCount="15" AllowBestFit="True" x:Name="Col2" Header="{x:Static properties:Resources.StatusCode}" Tag="StatusCode" DisplayMemberBinding="{Binding StatusCode}"  />
+                                    <dxg:GridColumn AllowEditing="False" ReadOnly="True" BestFitMaxRowCount="15" AllowBestFit="True" x:Name="Col3" Header="{x:Static properties:Resources.SourceTimestamp}" Tag="SourceTimestamp" FieldName="SourceTimestamp">
+                                        <dxg:GridColumn.EditSettings>
+                                            <dxe:TextEditSettings MaskType="DateTime" MaskUseAsDisplayFormat="True" MaskCulture="{Binding CurrentCulture,RelativeSource={RelativeSource Mode=FindAncestor,AncestorType=UserControl}}"/>
+                                        </dxg:GridColumn.EditSettings>
+                                    </dxg:GridColumn>
+                                    <dxg:GridColumn AllowEditing="False" ReadOnly="True" BestFitMaxRowCount="15" AllowBestFit="True" x:Name="Col4"  Header="{x:Static properties:Resources.SourcePicoseconds}"  Tag="SourcePicoseconds" DisplayMemberBinding="{Binding SourcePicoseconds}" />
+                                    <dxg:GridColumn AllowEditing="False" ReadOnly="True" BestFitMaxRowCount="15" AllowBestFit="True" x:Name="Col5" Header="{x:Static properties:Resources.ServerTimestamp}" Tag="ServerTimestamp" FieldName="ServerTimestamp"  >
+                                        <dxg:GridColumn.EditSettings>
+                                            <dxe:TextEditSettings MaskType="DateTime" MaskUseAsDisplayFormat="True" MaskCulture="{Binding CurrentCulture,RelativeSource={RelativeSource Mode=FindAncestor,AncestorType=UserControl}}"/>
+                                        </dxg:GridColumn.EditSettings>
+                                    </dxg:GridColumn>
+                                    <dxg:GridColumn AllowEditing="False" ReadOnly="True" BestFitMaxRowCount="15" AllowBestFit="True" x:Name="Col6" Header="{x:Static properties:Resources.ServerPicoseconds}" Tag="ServerPicoseconds" DisplayMemberBinding="{Binding ServerPicoseconds}"  />
+                                </dxg:GridControl.Columns>
+                                <dxg:GridControl.View>
+                                    <dxg:TableView AllowFilterEditor="True"  AllowEditing="False"
+                                   AllowBestFit="True" BestFitMaxRowCount="15"
+                                   BestFitArea="All"
+                                   BestFitMode="DistinctValues"
+                                   ScrollViewer.HorizontalScrollBarVisibility="Visible"
+                                   HorizontalScrollbarVisibility="Auto"
+                                   VerticalScrollbarVisibility="Visible"
+                                   AutoWidth="False"
+                                   AutoMoveRowFocus="True"
+                                   AllowResizing="True"
+                                   ShowGroupPanel="False"
+                                   ShowSearchPanelMode="Always" SearchPanelFindMode="Always" ShowSearchPanelMRUButton="True"
+                                   ShowFilterPanelMode="ShowAlways"
+                                   NavigationStyle="Row" 
+                                   MultiSelectMode="None"
+                                   AllowMoveColumnToDropArea="True" 
+                                   Name="tableView" ShowTotalSummary="False" 
+                                   ShowSearchPanelFindButton="True" ShowSearchPanelCloseButton="True">
+                                    </dxg:TableView>
+                                </dxg:GridControl.View>
+                            </dxg:GridControl>
+
+                            <dxc:ChartControl  Visibility="Visible"  Grid.ColumnSpan="3"  x:Name="chart" Padding="0,0,0,2" Margin="2,0,0,0" Grid.Row="0" 
+                              Tag="DataSourceChecker" IsManipulationEnabled="True"
+                              EnableAnimation="False">
+                                <!--<dxc:ChartControl.CacheMode>
+                                    <BitmapCache SnapsToDevicePixels="True" EnableClearType="True"/>
+                                </dxc:ChartControl.CacheMode>-->
+                                <dxc:ChartControl.CrosshairOptions>
+                                    <dxc:CrosshairOptions  
+                                                      CrosshairLabelMode="ShowForNearestSeries"   ShowArgumentLine="{Binding ShowCrosshairLine, RelativeSource={RelativeSource AncestorType=UserControl,Mode=FindAncestor}}" ShowValueLine="{Binding ShowCrosshairLine, RelativeSource={RelativeSource AncestorType=UserControl,Mode=FindAncestor}}"
+                                              ShowArgumentLabels="{Binding ShowArgumentLabelValue, RelativeSource={RelativeSource AncestorType=UserControl,Mode=FindAncestor}}" ShowValueLabels="{Binding ShowArgumentLabelValue, RelativeSource={RelativeSource AncestorType=UserControl,Mode=FindAncestor}}"
+                                              ShowCrosshairLabels="{Binding ShowCrosshairLabel, RelativeSource={RelativeSource AncestorType=UserControl,Mode=FindAncestor}}"
+                                              SnapMode="NearestArgument"/>
+                                </dxc:ChartControl.CrosshairOptions>
+                                <dxc:ChartControl.Diagram>
+                                    <dxc:XYDiagram2D x:Name="diagram" AllowSeriesBitmapCaching="False"
+                                                 Margin="10,0,0,0"
+                                    LabelsResolveOverlappingMinIndent="2" 
+                                    EnableAxisYNavigation="True" 
+                                    EnableAxisXNavigation="True">
+                                        <dxc:XYDiagram2D.NavigationOptions>
+                                            <dxc:NavigationOptions/>
+                                        </dxc:XYDiagram2D.NavigationOptions>
+
+                                        <dxc:XYDiagram2D.AxisY>
+                                            <dxc:AxisY2D Name="axisY" 
+                                            FontSize="10"
+                                            FontFamily="Segoe UI"
+                                            FontWeight="Normal"
+                                            FontStyle="Normal"
+                                         GridLinesMinorVisible="{Binding YGridLineMinorVisible, RelativeSource={RelativeSource AncestorType=UserControl, Mode=FindAncestor}}" 
+                                         GridLinesVisible="{Binding YGridLineVisible, RelativeSource={RelativeSource AncestorType=UserControl, Mode=FindAncestor}}">
+                                                <dxc:AxisY2D.CrosshairLabelTemplate>
+                                                    <DataTemplate>
+                                                        <Grid Margin="-15,0">
+                                                            <Border BorderThickness="0.9">
+                                                                <Border.Background>
+                                                                    <SolidColorBrush Color="Fuchsia" />
+                                                                </Border.Background>
+                                                                <Label Content="{Binding Path=Text}" x:Name="_crosshairLabelTemplate"
+                                                                 FontSize="10"
+                                                                FontFamily="Segoe UI"
+                                                                FontWeight="Normal"
+                                                                FontStyle="Normal"
+                                                                Foreground="White"/>
+                                                                <!--FontSize="{Binding YAxsisFontSettings.FontSize, RelativeSource={RelativeSource AncestorType=UserControl, Mode=FindAncestor}}"
+                                                                 FontFamily="{Binding YAxsisFontSettings.FontFamily, RelativeSource={RelativeSource AncestorType=UserControl, Mode=FindAncestor}}"
+                                                                 FontWeight="{Binding YAxsisFontSettings.FontWeight, RelativeSource={RelativeSource AncestorType=UserControl, Mode=FindAncestor}}"
+                                                                 FontStyle="{Binding YAxsisFontSettings.FontStyle, RelativeSource={RelativeSource AncestorType=UserControl, Mode=FindAncestor}}"-->
+                                                            </Border>
+                                                        </Grid>
+                                                    </DataTemplate>
+                                                </dxc:AxisY2D.CrosshairLabelTemplate>
+                                                <dxc:AxisY2D.CrosshairAxisLabelOptions>
+                                                    <dxc:CrosshairAxisLabelOptions  Pattern="{Binding AxisYTextPattern, RelativeSource={RelativeSource AncestorType={x:Type UserControl}, Mode=FindAncestor}}"/>
+                                                </dxc:AxisY2D.CrosshairAxisLabelOptions>
+                                                <dxc:AxisY2D.WholeRange>
+                                                    <dxc:Range dxc:AxisY2D.AlwaysShowZeroLevel="False" AutoSideMargins="False" SideMarginsValue="0"/>
+                                                </dxc:AxisY2D.WholeRange>
+                                                <dxc:AxisY2D.Label>
+                                                    <dxc:AxisLabel x:Name="axisYLabel" TextPattern="{Binding AxisYTextPattern, RelativeSource={RelativeSource AncestorType={x:Type UserControl}, Mode=FindAncestor}}" BeginText="{Binding YAxisLabelPrefix, RelativeSource={RelativeSource AncestorType=UserControl, Mode=FindAncestor}}" FontSize="10" />
+                                                </dxc:AxisY2D.Label>
+                                            </dxc:AxisY2D>
+                                        </dxc:XYDiagram2D.AxisY>
+                                        <dxc:XYDiagram2D.AxisX>
+                                            <dxc:AxisX2D Name="axisX" 
+                                         GridLinesMinorVisible="{Binding XGridLineMinorVisible, RelativeSource={RelativeSource AncestorType=UserControl, Mode=FindAncestor}}" 
+                                         GridLinesVisible="{Binding XGridLineVisible, RelativeSource={RelativeSource AncestorType=UserControl, Mode=FindAncestor}}"
+                                         DateTimeMeasureUnit="Second" 
+                                         DateTimeGridAlignment="Second" 
+                                         FontSize="10"
+                                            FontFamily="Segoe UI"
+                                            FontWeight="Normal"
+                                            FontStyle="Normal">
+                                                <dxc:AxisX2D.DateTimeScaleOptions>
+                                                    <dxc:ContinuousDateTimeScaleOptions GridAlignment="Millisecond"/>
+                                                </dxc:AxisX2D.DateTimeScaleOptions>
+                                                <!--<dxc:AxisX2D.DateTimeOptions>
+                                                <dxc:DateTimeOptions Format="Custom" FormatString="dd/MM/yyyy  HH:mm:ss"/>
+                                            </dxc:AxisX2D.DateTimeOptions>-->
+                                                <!--<dxc:AxisX2D.Range>
+                                                <dxc:AxisRange SideMarginsEnabled="True" x:Name="timeRange"/>
+                                            </dxc:AxisX2D.Range>-->
+                                                <dxc:AxisX2D.CrosshairAxisLabelOptions>
+                                                    <dxc:CrosshairAxisLabelOptions Pattern=" {A:G}" />
+                                                </dxc:AxisX2D.CrosshairAxisLabelOptions>
+                                                <dxc:AxisX2D.Label>
+                                                    <dxc:AxisLabel x:Name="axisXLabel" TextPattern=" {A:G}">
+                                                        <dxc:Axis2D.ResolveOverlappingOptions>
+                                                            <dxc:AxisLabelResolveOverlappingOptions AllowHide="True"
+                                                                                        AllowRotate="True"
+                                                                                        AllowStagger="True"
+                                                                                        MinIndent="5"/>
+                                                        </dxc:Axis2D.ResolveOverlappingOptions>
+                                                    </dxc:AxisLabel>
+                                                </dxc:AxisX2D.Label>
+                                            </dxc:AxisX2D>
+                                        </dxc:XYDiagram2D.AxisX>
+                                        <dxc:XYDiagram2D.Series>
+                                            <dxc:AreaSeries2D DisplayName="" x:Name="xSeries"
+                                              CrosshairLabelPattern="{Binding TextPattern, RelativeSource={RelativeSource AncestorType={x:Type UserControl}, Mode=FindAncestor}}"
+                                              DataSource="{Binding Values,Mode=OneWay, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}}" 
+                                              ArgumentScaleType="DateTime" 
+                                              ArgumentDataMember="SourceTimestamp" 
+                                              ValueScaleType="Numerical" 
+                                              Transparency="{Binding Transparency,Mode=OneWay, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}}" 
+                                              ValueDataMember="Value"
+                                              MarkerVisible ="{Binding ChartMarkersVisible,Mode=OneWay, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}}" 
+                                              MarkerSize="{Binding MarkerSize,Mode=OneWay, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}}" 
+                                              LabelsVisibility="{Binding ChartShowLabels,Mode=OneWay, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}}" 
+                                              ToolTipPointPattern="{}{A:F2}: {V:F2}"
+                                              Tag="DataSourceStyle" >
+                                                <dxc:AreaSeries2D.MarkerModel>
+                                                    <dxc:CircleMarker2DModel/>
+                                                </dxc:AreaSeries2D.MarkerModel>
+                                                <dxc:AreaSeries2D.PointOptions>
+                                                    <dxc:PointOptions PointView="ArgumentAndValues">
+                                                        <dxc:PointOptions.ValueNumericOptions>
+                                                            <dxc:NumericOptions Format="FixedPoint" Precision="{Binding PointPrecision, RelativeSource={RelativeSource AncestorType={x:Type UserControl}, Mode=FindAncestor}}"/>
+                                                        </dxc:PointOptions.ValueNumericOptions>
+                                                        <dxc:PointOptions.ValueDateTimeOptions>
+                                                            <dxc:DateTimeOptions Format="LongDate"/>
+                                                        </dxc:PointOptions.ValueDateTimeOptions>
+                                                    </dxc:PointOptions>
+                                                </dxc:AreaSeries2D.PointOptions>
+                                                <dxc:AreaSeries2D.Label>
+                                                    <dxc:SeriesLabel ConnectorVisible="True" ResolveOverlappingMode="Default"/>
+                                                </dxc:AreaSeries2D.Label>
+                                            </dxc:AreaSeries2D>
+                                        </dxc:XYDiagram2D.Series>
+                                    </dxc:XYDiagram2D>
+                                </dxc:ChartControl.Diagram>
+                                <dxc:ChartControl.Titles>
+                                    <dxc:Title x:Name="title1" Dock="Top"  Content=""
+                               Visibility="Collapsed" 
+                                FontSize="10"
+                                FontFamily="Segoe UI"
+                                FontWeight="Normal"
+                                FontStyle="Normal"
+                               HorizontalAlignment="Center"/>
+                                </dxc:ChartControl.Titles>
+                            </dxc:ChartControl>
+                        </Grid>
+                    </dxd:LayoutPanel>
+
+                </dxd:LayoutGroup>
+
+                <dxd:DockLayoutManager.AutoHideGroups>
+                    <dxd:AutoHideGroup DockType="Left" ItemWidth="200" x:Name="autoHideLeft">
+                        <dxd:LayoutPanel ScrollViewer.HorizontalScrollBarVisibility="Auto" ScrollViewer.VerticalScrollBarVisibility="Auto"  ItemWidth="200" ShowCaption="True" Caption="{x:Static properties:Resources.Options}" x:Name="paramPanel">
+                            <ScrollViewer>
+                                <Grid Grid.Row="2" x:Name="paramGrid" Grid.ColumnSpan="3" Visibility="{Binding ShowCommandPanel, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}}">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+                                    <Grid Grid.Row="1" >
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition/>
+                                            <RowDefinition/>
+                                        </Grid.RowDefinitions>
+                                        <CheckBox x:Name="enStartTime" Grid.Row="0" Margin="1" HorizontalAlignment="Left"  
+                                    FontSize="10"
+                                    FontFamily="Segoe UI"
+                                    FontWeight="Normal"
+                                    FontStyle="Normal"
+                                    Content="{x:Static properties:Resources.StartTime}" IsChecked="{Binding UseStartTime, RelativeSource={RelativeSource AncestorType=UserControl, Mode=FindAncestor}}" FlowDirection="LeftToRight"/>
+                                        <dxe:DateEdit x:Name="startTime"  Grid.Row="1"  Margin="1" HorizontalAlignment="Stretch"
+                                      MaskType="DateTime"
+                                    FontSize="10"
+                                    FontFamily="Segoe UI"
+                                    FontWeight="Normal"
+                                    FontStyle="Normal"
+                                      MinWidth="133" MinHeight="30"   
+                                      EditValue="{Binding StartTime, RelativeSource={RelativeSource AncestorType=UserControl, Mode=FindAncestor}, UpdateSourceTrigger=PropertyChanged, Mode=TwoWay, ValidatesOnDataErrors=True}"
+                                      IsEnabled="{Binding ElementName=enStartTime, Path=IsChecked}"              
+                                      VerticalAlignment="Bottom"
+                                      Mask="G"
+                                      MaskUseAsDisplayFormat="True"
+                                      ShowClearButton="False"
+                                      ShowToday="True"
+                                      MaskCulture="{Binding CurrentCulture,RelativeSource={RelativeSource Mode=FindAncestor,AncestorType=UserControl}}"
+                                      ShowWeekNumbers="True"
+                                       />
+                                    </Grid>
+
+                                    <Grid Grid.Row="2">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition/>
+                                            <RowDefinition/>
+                                        </Grid.RowDefinitions>
+                                        <CheckBox x:Name="enEndTime" Grid.Row="0" Margin="1" 
+                                    FontSize="10"
+                                    FontFamily="Segoe UI"
+                                    FontWeight="Normal"
+                                    FontStyle="Normal"
+                                      Content="{x:Static properties:Resources.EndTime}" 
+                                      IsChecked="{Binding UseEndTime, RelativeSource={RelativeSource AncestorType=UserControl, Mode=FindAncestor}}" HorizontalAlignment="Left" FlowDirection="LeftToRight"/>
+                                        <dxe:DateEdit  x:Name="endTime"   Grid.Row="1" HorizontalAlignment="Stretch"
+                                          MaskType="DateTime" Margin="1"  
+                                        FontSize="10"
+                                        FontFamily="Segoe UI"
+                                        FontWeight="Normal"
+                                        FontStyle="Normal"
+                                          MinWidth="133" MinHeight="30"   
+                                          EditValue="{Binding EndTime, RelativeSource={RelativeSource AncestorType=UserControl, Mode=FindAncestor}, UpdateSourceTrigger=PropertyChanged, Mode=TwoWay, ValidatesOnDataErrors=True}"
+                                          IsEnabled="{Binding ElementName=enEndTime, Path=IsChecked}"              
+                                          VerticalAlignment="Bottom" 
+                                          Mask="G"
+                                          MaskUseAsDisplayFormat="True"
+                                          ShowClearButton="False"
+                                          ShowToday="True"
+                                          MaskCulture="{Binding CurrentCulture,RelativeSource={RelativeSource Mode=FindAncestor,AncestorType=UserControl}}"
+                                          ShowWeekNumbers="True"
+                                          />
+
+                                    </Grid>
+                                    <Grid Grid.Row="3" >
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition/>
+                                            <RowDefinition/>
+                                        </Grid.RowDefinitions>
+                                        <CheckBox Grid.Row="0" Margin="1" x:Name="_maxReturnValues"
+                                        FontSize="10"
+                                        FontFamily="Segoe UI"
+                                        FontWeight="Normal"
+                                        FontStyle="Normal"
+                                      Content="{x:Static properties:Resources.MaxReturnValues}" IsChecked="{Binding UseMaxReturnValues,RelativeSource={RelativeSource AncestorType=UserControl, Mode=FindAncestor}, 
+                                                UpdateSourceTrigger=PropertyChanged, Mode=TwoWay}" HorizontalAlignment="Left" FlowDirection="LeftToRight"/>
+                                        <dxe:SpinEdit Margin="1" Grid.Row="1" HorizontalAlignment="Stretch" Background="{Binding ElementName=dateEdit, Path=Background}"
+                                        FontSize="10" MaskType="Numeric" Mask="######0"
+                                        FontFamily="Segoe UI"
+                                        FontWeight="Normal"
+                                        FontStyle="Normal"
+                                    MinWidth="133" MinHeight="30"   
+                                    MinValue="0"
+                                    MaxValue="4294967295"
+                                    x:Name="maxReturnValues"          
+                                    IsEnabled="{Binding ElementName=enMaxRetVal, Path=IsChecked}"              
+                                    converters:SpinProperties.EnterUpdatesValueSource="True"
+                                    Value ="{Binding MaxReturnValues, 
+                                                RelativeSource={RelativeSource AncestorType=UserControl, Mode=FindAncestor}, 
+                                                UpdateSourceTrigger=PropertyChanged, Mode=TwoWay, ValidatesOnDataErrors=True}" >
+                                        </dxe:SpinEdit>
+                                    </Grid>
+                                    <Grid Grid.Row="4" Grid.Column="0">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition/>
+                                            <RowDefinition/>
+                                        </Grid.RowDefinitions>
+                                        <dxe:ComboBoxEdit x:Name="readType" Margin="1" Grid.Row="1" HorizontalAlignment="Stretch" Background="{Binding ElementName=dateEdit, Path=Background}"
+                                    SelectedIndexChanged="readType_SelectedIndexChanged_1"     
+                                        FontSize="10"
+                                        FontFamily="Segoe UI"
+                                        FontWeight="Normal"
+                                        FontStyle="Normal"
+                                    MinWidth="133" MinHeight="30">
+                                        </dxe:ComboBoxEdit>
+                                        <TextBlock Grid.Row="0" Margin="1" x:Name="_ReadType"
+                                        FontSize="10"
+                                        FontFamily="Segoe UI"
+                                        FontWeight="Normal"
+                                        FontStyle="Normal"
+                                    Text="{x:Static properties:Resources.ReadType}"   />
+                                    </Grid>
+                                    <Grid Grid.Row="5" Grid.Column="1" Grid.ColumnSpan="2">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition/>
+                                            <RowDefinition/>
+                                        </Grid.RowDefinitions>
+                                        <dxe:ComboBoxEdit x:Name="aggregationType" Margin="1" Grid.Row="1" HorizontalAlignment="Stretch" 
+                                    Background="{Binding ElementName=dateEdit, Path=Background}" IsEnabled="False"
+                                    SelectedIndexChanged="aggregationType_SelectedIndexChanged_1"      
+                                    Width="{Binding ElementName=readType,Path=ActualWidth}"
+                                        FontSize="10"
+                                        FontFamily="Segoe UI"
+                                        FontWeight="Normal"
+                                        FontStyle="Normal"
+                                    MinWidth="133" MinHeight="30">
+                                        </dxe:ComboBoxEdit>
+                                        <TextBlock Grid.Row="0" Margin="1" x:Name="_AggregationType"
+                                        FontSize="10"
+                                        FontFamily="Segoe UI"
+                                        FontWeight="Normal"
+                                        FontStyle="Normal"
+                                    Text="{x:Static properties:Resources.AggregationType}"   />
+                                    </Grid>
+                                    <Grid Grid.Row="0" Grid.Column="0">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition/>
+                                            <RowDefinition/>
+                                        </Grid.RowDefinitions>
+                                        <dxe:ComboBoxEdit x:Name="controlViewMode" Margin="1" Grid.Row="1" HorizontalAlignment="Stretch" 
+                                    Background="{Binding ElementName=dateEdit, Path=Background}"
+                                    SelectedIndexChanged="controlViewMode_SelectedIndexChanged_1" 
+                                        FontSize="10"
+                                        FontFamily="Segoe UI"
+                                        FontWeight="Normal"
+                                        FontStyle="Normal"
+                                    MinWidth="133" MinHeight="30">
+                                        </dxe:ComboBoxEdit>
+                                        <TextBlock Grid.Row="0" Margin="1" x:Name="_ControlViewModel"
+                                        FontSize="10"
+                                        FontFamily="Segoe UI"
+                                        FontWeight="Normal"
+                                        FontStyle="Normal"
+                                    Text="{x:Static properties:Resources.ControlViewModel}"   />
+                                    </Grid>
+                                </Grid>
+                            </ScrollViewer>
+                        </dxd:LayoutPanel>
+
+                    </dxd:AutoHideGroup>
+                </dxd:DockLayoutManager.AutoHideGroups>
+
+            </dxd:DockLayoutManager>
+        </AdornerDecorator>
+        
+        <dxb:BarContainerControl x:Name="toolbar" ContainerType="Top">
+            <dxb:ToolBarControl IsMultiLine="False" ShowDragWidget="False" UseWholeRow="True" dxb:MergingProperties.Name="mainServerHistoryToolBar"
+                               dxb:MergingProperties.ToolBarMergeStyle="All" dxb:MergingProperties.ElementMergingBehavior="InternalWithExternal"
+                               dxb:MergingProperties.AllowMerging="False"
+                                AllowCustomizationMenu="False" AllowQuickCustomization="False">
+              <dxb:BarLinkContainerItem x:Name="toolbarSettings" IsVisible="{Binding Editable, Mode=OneWay, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}}">
+                  <dxb:BarStaticItem ShowBorder="False" x:Name="configMemoryTitle" Content="{x:Static properties:Resources.ActualSettings}" />
+                  <dxb:BarEditItem x:Name="configMemory" Content="{x:Static properties:Resources.ActualSettings}"
+                                  EditValueChanged="configMemory_EditValueChanged" LostFocus="configMemory_LostFocus" PreviewKeyDown="configMemory_PreviewKeyDown">
+                    <dxb:BarEditItem.EditTemplate>
+                      <DataTemplate>
+                        <dxe:ComboBoxEdit 
+                                        ItemsSource="{Binding RelativeSource={RelativeSource AncestorType={x:Type dxb:IBarEditItemLinkControl}}, Path=DataContext}"
+                                        Name="PART_Editor" MinWidth="{Binding Source={x:Static commonproperties:Settings.Default},Path=RibbonBaseEditMinWidth}" IsTextEditable="True" />
+                      </DataTemplate>
+                    </dxb:BarEditItem.EditTemplate>
+                  </dxb:BarEditItem>
+
+                    <dxb:BarButtonItem x:Name="clearSmall" Glyph="{DynamicResource ClearSmall}" GlyphSize="Custom" CustomGlyphSize="16,16"
+                                       Command="{Binding ResetCommand, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}}" 
+                                       ToolTipService.ShowOnDisabled="True" ToolTip="{x:Static properties:Resources.ResetSettingsTooltip}">
+                    </dxb:BarButtonItem>
+                    <dxb:BarButtonItem x:Name="saveSmall" Glyph="{DynamicResource SaveSmall}" GlyphSize="Custom" CustomGlyphSize="16,16"
+                                       Command="{Binding SaveCommand, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}}" 
+                                       ToolTipService.ShowOnDisabled="True" ToolTip="{x:Static properties:Resources.SaveConfiguration}">
+                    </dxb:BarButtonItem>
+                    <dxb:BarButtonItem x:Name="cancelSmall" Glyph="{DynamicResource CancelSmall}" GlyphSize="Custom" CustomGlyphSize="16,16"
+                                       Command="{Binding RemoveCommand, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}}" 
+                                       ToolTipService.ShowOnDisabled="True" ToolTip="{x:Static properties:Resources.DeleteSettings}">
+                    </dxb:BarButtonItem>
+                </dxb:BarLinkContainerItem>
+
+                <!-- ToolbarOptions -->
+                <dxb:BarButtonItem x:Name="bestFit" Content="{x:Static properties:Resources.BestFit}" 
+                                   ItemClick="Click_BestFit" ToolTipService.ShowOnDisabled="True"/>
+                <dxb:BarItemSeparator/>
+                <dxb:BarCheckItem x:Name="btnExpand" Glyph="{DynamicResource Expand}" GlyphSize="Custom" CustomGlyphSize="16,16"
+                                  ItemClick="ExpandCollapse_Click" ToolTipService.ShowOnDisabled="True" ToolTip="{x:Static properties:Resources.ExpandTitle}">
+                </dxb:BarCheckItem>
+                <dxb:BarItemSeparator/>
+                <dxb:BarButtonItem x:Name="btnPrev" Glyph="{DynamicResource Previous}" GlyphSize="Custom" CustomGlyphSize="16,16"
+                                   IsEnabled="False" ItemClick="Prev_Click" ToolTipService.ShowOnDisabled="True" ToolTip="{x:Static properties:Resources.Previous}">
+                </dxb:BarButtonItem>
+                <dxb:BarEditItem UseLightweightTemplates="False" x:Name="cmbEditTimeRange">
+                    <dxb:BarEditItem.EditSettings>
+                        <dxe:ComboBoxEditSettings x:Name="cmbTimeRange" IsTextEditable="False">
+                            <dxe:ComboBoxEditSettings.Items>
+                                <dxe:ComboBoxEditItem Content="{x:Static properties:Resources.Minute}" Tag="{x:Static utilities:DateSpan.Minute}" />
+                                <dxe:ComboBoxEditItem Content="{x:Static properties:Resources.Hour}" Tag="{x:Static utilities:DateSpan.Hour}" />
+                                <dxe:ComboBoxEditItem Content="{x:Static properties:Resources.Day}" Tag="{x:Static utilities:DateSpan.Day}" />
+                                <dxe:ComboBoxEditItem Content="{x:Static properties:Resources.Week}" Tag="{x:Static utilities:DateSpan.Week}" />
+                                <dxe:ComboBoxEditItem Content="{x:Static properties:Resources.Month}" Tag="{x:Static utilities:DateSpan.Month}" />
+                                <dxe:ComboBoxEditItem Content="{x:Static properties:Resources.Year}" Tag="{x:Static utilities:DateSpan.Year}" />
+                            </dxe:ComboBoxEditSettings.Items>
+                        </dxe:ComboBoxEditSettings>
+                    </dxb:BarEditItem.EditSettings>
+                </dxb:BarEditItem>
+                <dxb:BarButtonItem x:Name="btnNext" Glyph="{DynamicResource Next}" GlyphSize="Custom" CustomGlyphSize="16,16"
+                                   IsEnabled="False" ItemClick="Next_Click" ToolTipService.ShowOnDisabled="True" ToolTip="{x:Static properties:Resources.Next}">
+                </dxb:BarButtonItem>
+                <dxb:BarItemSeparator/>
+                <dxb:BarCheckItem x:Name="btnShowLabels" Glyph="{DynamicResource Tag}" GlyphSize="Custom" CustomGlyphSize="16,16"
+                                  IsChecked="{Binding ShowLabels,UpdateSourceTrigger=PropertyChanged,Mode=TwoWay, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}}" 
+                                  ToolTipService.ShowOnDisabled="True" ToolTip="{x:Static properties:Resources.LabelTitle}">
+                </dxb:BarCheckItem>
+                <dxb:BarItemSeparator/>
+                <dxb:BarButtonItem x:Name="btnAll" Glyph="{DynamicResource All}" GlyphSize="Custom" CustomGlyphSize="16,16"
+                                   ItemClick="All_Click" ToolTipService.ShowOnDisabled="True" ToolTip="{x:Static properties:Resources.AllTitle}">
+                </dxb:BarButtonItem>
+                <dxb:BarButtonItem x:Name="btnMin" Glyph="{DynamicResource Minute}" GlyphSize="Custom" CustomGlyphSize="16,16" 
+                                   ItemClick="Min_Click" ToolTipService.ShowOnDisabled="True" ToolTip="{x:Static properties:Resources.MinTitle}">
+                </dxb:BarButtonItem>
+                <dxb:BarButtonItem x:Name="btnHour" Glyph="{DynamicResource Hour}" GlyphSize="Custom" CustomGlyphSize="16,16" 
+                                   ItemClick="Hour_Click" ToolTipService.ShowOnDisabled="True" ToolTip="{x:Static properties:Resources.HourTitle}">
+                </dxb:BarButtonItem>
+                <dxb:BarButtonItem x:Name="btnDay" Glyph="{DynamicResource Day}" GlyphSize="Custom" CustomGlyphSize="16,16" 
+                                   ItemClick="Day_Click" ToolTipService.ShowOnDisabled="True" ToolTip="{x:Static properties:Resources.DayTitle}">
+                </dxb:BarButtonItem>
+                <dxb:BarButtonItem x:Name="btnWeek" Glyph="{DynamicResource Week}" GlyphSize="Custom" CustomGlyphSize="16,16" 
+                                   ItemClick="Week_Click" ToolTipService.ShowOnDisabled="True" ToolTip="{x:Static properties:Resources.WeekTitle}">
+                </dxb:BarButtonItem>
+                <dxb:BarButtonItem x:Name="btnMonth" Glyph="{DynamicResource Month}" GlyphSize="Custom" CustomGlyphSize="16,16" 
+                                   ItemClick="Month_Click" ToolTipService.ShowOnDisabled="True" ToolTip="{x:Static properties:Resources.MonthTitle}">
+                </dxb:BarButtonItem>
+                <dxb:BarButtonItem x:Name="btnYear" Glyph="{DynamicResource Year}" GlyphSize="Custom" CustomGlyphSize="16,16" 
+                                   ItemClick="Year_Click" ToolTipService.ShowOnDisabled="True" ToolTip="{x:Static properties:Resources.YearTitle}">
+                </dxb:BarButtonItem>
+                <dxb:BarItemSeparator/>
+                <dxb:BarEditItem x:Name="startText" Content="{x:Static properties:Resources.StartTimeTitle}"
+                                 UseLightweightTemplates="False" IsReadOnly="True" EditValue="{Binding StartTime, RelativeSource={RelativeSource AncestorType=UserControl, Mode=FindAncestor}, Mode=OneWay}">
+                    <dxb:BarEditItem.EditSettings>
+                        <dxe:TextEditSettings MaskType="DateTime" MaskUseAsDisplayFormat="True" DisplayFormat=""
+                                              MaskCulture="{Binding CurrentCulture,RelativeSource={RelativeSource Mode=FindAncestor,AncestorType=UserControl}}" />
+                    </dxb:BarEditItem.EditSettings>
+                </dxb:BarEditItem>
+                <dxb:BarEditItem x:Name="endText" Content="{x:Static properties:Resources.EndTimeTitle}"
+                                 UseLightweightTemplates="False" IsReadOnly="True" EditValue="{Binding EndTime, RelativeSource={RelativeSource AncestorType=UserControl, Mode=FindAncestor}, Mode=OneWay}">
+                    <dxb:BarEditItem.EditSettings>
+                        <dxe:TextEditSettings MaskType="DateTime" MaskUseAsDisplayFormat="True" DisplayFormat=""
+                                              MaskCulture="{Binding CurrentCulture,RelativeSource={RelativeSource Mode=FindAncestor,AncestorType=UserControl}}" />
+                    </dxb:BarEditItem.EditSettings>
+                </dxb:BarEditItem>
+            </dxb:ToolBarControl>
+        </dxb:BarContainerControl>
+
+    </Grid>
+</UserControl>

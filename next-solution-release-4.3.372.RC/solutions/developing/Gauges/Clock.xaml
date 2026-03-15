@@ -1,0 +1,200 @@
+﻿<UserControl x:Class="Gauges.Clock"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" 
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:dxga="http://schemas.devexpress.com/winfx/2008/xaml/gauges"
+             xmlns:converters="clr-namespace:Gauges.Converters"
+             mc:Ignorable="d" Foreground="Black" 
+             FontSize="14" FontFamily="Segoe UI" FontWeight="SemiBold" FontStyle="Normal"
+             d:DesignHeight="300" d:DesignWidth="300">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <!--<converters:PredefinedElementKindToNeedleModel x:Key="NeedleModelConverter" />-->
+            <!--<converters:PredefinedElementKindToSpindleCapModel x:Key="SpindleCapModelConverter" />
+            <converters:PredefinedElementKindToTickmarksModel x:Key="TickmarksModelConverter" />-->
+            <!--<converters:PredefinedElementKindToArcScaleModel x:Key="ArcScaleModelConverter" />-->
+            <converters:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />
+
+            <ControlTemplate x:Key="scaleLabelTemplate">
+                <TextBlock RenderTransformOrigin="0.5, 0.5" 
+                       Visibility="{Binding LabelVisible, Converter={StaticResource BoolToVisibilityConverter}, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=UserControl}}"
+                       Foreground="{Binding RelativeSource={RelativeSource TemplatedParent}, Path=Foreground}" 
+                       Text="{Binding Text}" FontSize="{Binding LabelFontSettings.FontSize, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=UserControl}}" />
+                <!--
+            Text="{Binding Text}" FontSize="{Binding RelativeSource={RelativeSource TemplatedParent}, Path=Foreground}" />
+            Text="{Binding Text}" FontSize="{Binding LabelFontSettings.FontSize, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=UserControl}}" />
+            
+            -->
+            </ControlTemplate>
+
+            <Style x:Key="TextBoxStyle1" TargetType="{x:Type TextBox}">
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="{x:Type TextBox}">
+                            <Grid>
+                                <ScrollViewer x:Name="PART_ContentHost" SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}" Margin="2,2,1,1"/>
+                                <Border BorderBrush="#FFBAB7B7" BorderThickness="0,0,1,1" Margin="1,1,0,0"/>
+                                <Border BorderBrush="Black" BorderThickness="1,1,0,0" Width="Auto"/>
+                            </Grid>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+        </ResourceDictionary>
+    </UserControl.Resources>
+    <Viewbox Stretch="Fill" x:Name="view">
+        <dxga:CircularGaugeControl x:Name="circularGauge" Width="280" Height="280"
+            EnableAnimation="True"
+			VerticalAlignment="Center" HorizontalAlignment="Center" 
+                                   FontSize="{Binding LabelFontSettings.FontSize}"
+                                   Foreground="Black"
+                                   FontStyle="{Binding LabelFontSettings.FontStyle}" 
+                                   FontWeight="{Binding LabelFontSettings.FontWeight}" 
+                                   FontFamily="{Binding LabelFontSettings.FontFamily}">
+            <dxga:CircularGaugeControl.Model>
+                <dxga:CircularRedClockModel/>
+            </dxga:CircularGaugeControl.Model>
+            <!--TickmarksPresentation="{Binding TickmarksPresentation, Converter={StaticResource TickmarksModelConverter}}"
+                    SpindleCapPresentation="{Binding SpindleCapPresentation, Converter={StaticResource SpindleCapModelConverter}}"-->
+            <dxga:CircularGaugeControl.Scales>
+                <dxga:ArcScale x:Name="arcScale"
+					StartAngle="{Binding StartAngle}" 
+                    EndAngle="{Binding EndAngle}"  
+					MajorIntervalCount="12"
+                    StartValue="0" 
+                    EndValue="12"
+                    FontSize="{Binding LabelFontSettings.FontSize}"
+                    MinorIntervalCount="5">
+                    <dxga:ArcScale.TickmarksPresentation>
+                        <dxga:FutureTickmarksPresentation/>
+                    </dxga:ArcScale.TickmarksPresentation>
+                    <dxga:ArcScale.SpindleCapPresentation>
+                        <dxga:EcoSpindleCapPresentation/>
+                    </dxga:ArcScale.SpindleCapPresentation>
+                    <dxga:ArcScale.LabelPresentation>
+                        <dxga:CustomScaleLabelPresentation x:Name="arcScaleLabelTemplate"
+                            LabelTemplate="{StaticResource scaleLabelTemplate}" >
+                        </dxga:CustomScaleLabelPresentation>
+                    </dxga:ArcScale.LabelPresentation>
+                    <dxga:ArcScale.SpindleCapOptions>
+                        <dxga:SpindleCapOptions 
+                            FactorHeight="{Binding SpindleFactorHeight}" 
+                            FactorWidth="{Binding SpindleFactorWidth}" 
+                            ZIndex="{Binding SpindleCapZIndex}"/>
+                    </dxga:ArcScale.SpindleCapOptions>
+                    <dxga:ArcScale.MajorTickmarkOptions>
+                        <dxga:MajorTickmarkOptions 
+                            ShowFirst="{Binding MajorTickmarkShowFirst}"
+                            ShowLast="{Binding MajorTickmarkShowLast}"
+                            FactorLength="{Binding MajorTickmarkFactorLength}" 
+                            FactorThickness="{Binding MajorTickmarkFactorThickness}" 
+                            Offset="{Binding MajorTickmarkOffset}" 
+                            ZIndex="{Binding MajorTickmarkZIndex}"/>
+                    </dxga:ArcScale.MajorTickmarkOptions>
+                    <dxga:ArcScale.MinorTickmarkOptions>
+                        <dxga:MinorTickmarkOptions 
+                            ShowTicksForMajor="{Binding MinorTickmarkShowTicksForMajor}"
+                            FactorLength="{Binding MinorTickmarkFactorLength}" 
+                            FactorThickness="{Binding MinorTickmarkFactorThickness}" 
+                            Offset="{Binding MinorTickmarkOffset}"
+                            ZIndex="{Binding MinorTickmarkZIndex}"/>
+                    </dxga:ArcScale.MinorTickmarkOptions>
+                    <dxga:ArcScale.Layers>
+                        <!--<dxga:ArcScaleLayer x:Name="arcLayer" 
+                                            Visible="{Binding EnableBackGroundLayer}">
+                            <dxga:ArcScaleLayer.Presentation>
+                                <MultiBinding Converter="{StaticResource ArcScaleModelConverter}">
+                                    <Binding Path="ArcScalePresentation" />
+                                    <Binding Path="StartAngle"/>
+                                    <Binding Path="EndAngle"/>
+                                </MultiBinding>
+
+                            </dxga:ArcScaleLayer.Presentation>
+                        </dxga:ArcScaleLayer>-->
+                        <dxga:ArcScaleLayer x:Name="arcLayer" />
+                    </dxga:ArcScale.Layers>
+                    <dxga:ArcScale.LabelOptions>
+                        <dxga:ArcScaleLabelOptions 
+                            Orientation="{Binding LabelOrientation}" 
+                            ShowFirst="False" 
+                            ShowLast="True" />
+                    </dxga:ArcScale.LabelOptions>
+                    <dxga:ArcScale.Needles>
+                        <!--Presentation="{Binding NeedleHourPresentation, Converter={StaticResource NeedleModelConverter}}"-->
+                        <dxga:ArcScaleNeedle x:Name="hourIndicator"
+                            IsInteractive="False"
+                            Visible="{Binding NeedleHourVisible}">
+                            <dxga:ArcScaleNeedle.Presentation>
+                                <dxga:DefaultArcScaleNeedlePresentation Fill="Black" x:Name="defaultArcScaleHourIndicatorPresentation"/>
+                            </dxga:ArcScaleNeedle.Presentation>
+                            <dxga:ArcScaleNeedle.Animation>
+                                <dxga:IndicatorAnimation  
+                                    Enable="{Binding NeedleAnimationEnable}"/>
+                            </dxga:ArcScaleNeedle.Animation>
+                            <dxga:ArcScaleNeedle.Options>
+                                <dxga:ArcScaleNeedleOptions 
+                                    EndOffset="60" 
+                                    StartOffset="0" />
+                            </dxga:ArcScaleNeedle.Options>
+                        </dxga:ArcScaleNeedle>
+                        <!--Presentation="{Binding NeedleMinutePresentation, Converter={StaticResource NeedleModelConverter}}"-->
+                        <dxga:ArcScaleNeedle x:Name="minuteIndicator"
+                            IsInteractive="False"
+                            Visible="{Binding NeedleMinuteVisible}">
+                            <dxga:ArcScaleNeedle.Presentation>
+                                <dxga:DefaultArcScaleNeedlePresentation Fill="Black" x:Name="defaultArcScaleMinuteIndicatorPresentation"/>
+                            </dxga:ArcScaleNeedle.Presentation>
+                            <dxga:ArcScaleNeedle.Options>
+                                <dxga:ArcScaleNeedleOptions 
+                                    EndOffset="30" 
+                                    StartOffset="0" />
+                            </dxga:ArcScaleNeedle.Options>
+                            <dxga:ArcScaleNeedle.Animation>
+                                <dxga:IndicatorAnimation  
+                                    Enable="{Binding NeedleAnimationEnable}"/>
+                            </dxga:ArcScaleNeedle.Animation>
+                        </dxga:ArcScaleNeedle>
+                        <!--Presentation="{Binding NeedleSecondPresentation, Converter={StaticResource NeedleModelConverter}}"-->
+                        <dxga:ArcScaleNeedle x:Name="secondIndicator"
+                            IsInteractive="False"
+                            Visible="{Binding NeedleSecondVisible}">
+                            <dxga:ArcScaleNeedle.Presentation>
+                                <dxga:DefaultArcScaleNeedlePresentation Fill="Red" x:Name="defaultArcScaleSecondIndicatorPresentation"/>
+                            </dxga:ArcScaleNeedle.Presentation>
+                            <dxga:ArcScaleNeedle.Animation>
+                                <dxga:IndicatorAnimation  
+                                    Enable="False"/>
+                            </dxga:ArcScaleNeedle.Animation>
+                            <dxga:ArcScaleNeedle.Options>
+                                <dxga:ArcScaleNeedleOptions 
+                                    EndOffset="40" 
+                                    StartOffset="0" />
+                            </dxga:ArcScaleNeedle.Options>
+                        </dxga:ArcScaleNeedle>
+                    </dxga:ArcScale.Needles>
+                    <dxga:ArcScale.CustomElements>
+                        <dxga:ScaleCustomElement VerticalAlignment="Stretch" HorizontalAlignment="Stretch">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition/>
+                                </Grid.RowDefinitions>
+                                <TextBox IsReadOnly="True" Text="hh : mm : ss" x:Name="ClockText" BorderThickness="2"
+                                    Background="{Binding ClockTextBackground}"
+                                    Visibility="{Binding ClockTextVisible, Converter={StaticResource BoolToVisibilityConverter}}"
+                                    FontSize="{Binding ClockFontSettings.FontSize}" 
+                                    FontStyle="{Binding ClockFontSettings.FontStyle}" 
+                                    FontWeight="{Binding ClockFontSettings.FontWeight}" 
+                                    FontFamily="{Binding ClockFontSettings.FontFamily}"
+                                    HorizontalAlignment="Center" 
+                                    VerticalAlignment="Bottom" 
+                                    Foreground="{Binding ClockTextForeground}"
+                                    Margin="97,0,97,74"/>
+                            </Grid>
+                        </dxga:ScaleCustomElement>
+                    </dxga:ArcScale.CustomElements>
+                </dxga:ArcScale>
+            </dxga:CircularGaugeControl.Scales>
+            </dxga:CircularGaugeControl> 
+    </Viewbox>
+</UserControl>

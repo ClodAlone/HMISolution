@@ -1,0 +1,304 @@
+﻿<UserControl x:Class="ReportManager.ReportEditorUI"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+             xmlns:dxp="http://schemas.devexpress.com/winfx/2008/xaml/printing" 
+             xmlns:dxb="http://schemas.devexpress.com/winfx/2008/xaml/bars"
+             xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors" 
+             xmlns:dxr="http://schemas.devexpress.com/winfx/2008/xaml/ribbon"
+             xmlns:dxre="http://schemas.devexpress.com/winfx/2008/xaml/reports/userdesigner"
+             xmlns:System="clr-namespace:System;assembly=mscorlib" 
+             xmlns:dxmvvm="http://schemas.devexpress.com/winfx/2008/xaml/mvvm"
+             xmlns:self="clr-namespace:ReportManager"
+             x:Name="ReportEditorControl" Width="800" Height="600"
+             mc:Ignorable="d" 
+             d:DesignHeight="800" d:DesignWidth="600">
+
+    <UserControl.CommandBindings>
+        
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.OpenDesignForm}" 
+                    Executed="OnOpenDesignForm" 
+                    CanExecute="CanOpenDesignForm" />        
+
+        <CommandBinding Command="ApplicationCommands.Save"
+                    Executed="OnCommandSave" 
+                    CanExecute="CanCommandSave" />
+
+        <CommandBinding Command="ApplicationCommands.Delete"
+                    Executed="OnCommandDelete" 
+                    CanExecute="CanCommandDelete" />
+        
+    </UserControl.CommandBindings>
+
+    <UserControl.Resources>
+      <ResourceDictionary>
+        <ResourceDictionary.MergedDictionaries>
+          <ResourceDictionary Source="/SharedResources;component/Resources/Report.xaml" />
+        </ResourceDictionary.MergedDictionaries>
+        <dxp:DisabledCommand x:Key="disabledCommand"/>
+        <dx:ObjectToBooleanConverter x:Key="objectToBooleanConverter" Invert="False"/>
+        <DataTemplate x:Key="zoomModeItemTemplate">
+          <TextBlock Text="{Binding DisplayedText}"/>
+        </DataTemplate>
+        <DataTemplate x:Key="separatorItemTemplate">
+          <Rectangle Fill="Black" Height="1" Margin="0,1" Width="100"/>
+        </DataTemplate>
+        <Style x:Key="pageNumberEditStyle" TargetType="{x:Type dxe:TextEdit}">
+          <Setter Property="MinWidth" Value="30"/>
+          <Setter Property="Padding" Value="0,-2"/>
+        </Style>
+        <dx:FormatStringConverter x:Key="formatStringConverter" Converter="{x:Null}" FormatString="/ {0}"/>
+        <Style x:Key="progressBarEditStyle" TargetType="{x:Type dxe:ProgressBarEdit}">
+          <Setter Property="MinWidth" Value="150"/>
+          <Setter Property="MinHeight" Value="12"/>
+        </Style>
+        <DataTemplate x:Key="progressBarMarqueeTemplate">
+          <dxe:ProgressBarEdit Height="12" MinWidth="150" MinHeight="12">
+            <dxe:ProgressBarEdit.StyleSettings>
+              <dxe:ProgressBarMarqueeStyleSettings/>
+            </dxe:ProgressBarEdit.StyleSettings>
+          </dxe:ProgressBarEdit>
+        </DataTemplate>
+      </ResourceDictionary>
+    </UserControl.Resources>
+
+    <Grid>
+        <dx:DXTabControl Name="dXTabControl1" SelectionChanged="dXTabControl1_SelectionChanged">
+            <dx:DXTabItem Header="Designer" Name="designerTab">
+                <Grid>
+                    <dxre:ReportDesigner x:Name="reportDesigner" RibbonTemplate="{x:Null}" EnableCustomSql="True" />
+                    <Grid x:Name="viewDesignerInfo" Grid.Row="1" Visibility="Collapsed" >
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="64" />
+                            <ColumnDefinition />
+                        </Grid.ColumnDefinitions>
+                        <Button HorizontalAlignment="Center" VerticalAlignment="Center" Click="ReportDisignerTool_Click" >
+                            <Button.Content>
+                                <Image Source="{StaticResource RMReportDesigner}" Width="32" Height="32" />
+                            </Button.Content>
+                        </Button>
+                        <TextBlock x:Name="txtDesignerInfo" Grid.Column="1"
+                                TextWrapping="Wrap"
+                                VerticalAlignment="Center" 
+                                HorizontalAlignment="Left" 
+                                KeyboardNavigation.IsTabStop="False"
+                                FontSize="24" FontWeight="ExtraBlack" Opacity="0.8">
+                        </TextBlock>
+                    </Grid>
+                </Grid>
+            </dx:DXTabItem>
+            <dx:DXTabItem Header="Preview" Name="previewTab">
+                <Grid>
+                    <dxb:BarManager x:Name="barManager1" ToolbarGlyphSize="Default"
+                                    AllowCustomization="True" AllowHotCustomization="False" AllowQuickCustomization="True" >
+                        <dxb:BarManager.Bars>
+                            <dxb:Bar x:Name="barPreview" Caption="{dxp:PrintingStringId StringId=ToolBarCaption}" UseWholeRow="True">
+                                <dxb:Bar.DockInfo>
+                                    <dxb:BarDockInfo ContainerType="Top"/>
+                                </dxb:Bar.DockInfo>
+                                <dxb:Bar.ItemLinks>
+                                    <dxb:BarCheckItemLink BarItemName="biParameters"/>
+                                    <dxb:BarCheckItemLink BarItemName="biDocumentMap"/>
+                                    <dxb:BarCheckItemLink BarItemName="biFind"/>
+                                    <dxb:BarItemLinkSeparator/>
+                                    <dxb:BarButtonItemLink BarItemName="biOpen"/>
+                                    <dxb:BarButtonItemLink BarItemName="biSave"/>
+                                    <dxb:BarItemLinkSeparator/>
+                                    <dxb:BarButtonItemLink BarItemName="biPrint"/>
+                                    <dxb:BarButtonItemLink BarItemName="biPrintDirect"/>
+                                    <dxb:BarButtonItemLink BarItemName="biPageSetup"/>
+                                    <dxb:BarButtonItemLink BarItemName="biScale"/>
+                                    <dxb:BarItemLinkSeparator/>
+                                    <dxb:BarButtonItemLink BarItemName="biZoomOut"/>
+                                    <dxb:BarEditItemLink BarItemName="biBarsZoomMode"/>
+                                    <dxb:BarButtonItemLink BarItemName="biZoomIn"/>
+                                    <dxb:BarItemLinkSeparator/>
+                                    <dxb:BarButtonItemLink BarItemName="biShowFirstPage"/>
+                                    <dxb:BarButtonItemLink BarItemName="biShowPrevPage"/>
+                                    <dxb:BarButtonItemLink BarItemName="biShowNextPage"/>
+                                    <dxb:BarButtonItemLink BarItemName="biShowLastPage"/>
+                                    <dxb:BarItemLinkSeparator/>
+                                    <dxb:BarSplitButtonItemLink BarItemName="biExportFile"/>
+                                    <dxb:BarSplitButtonItemLink BarItemName="biSendFile"/>
+                                    <dxb:BarItemLinkSeparator/>
+                                    <dxb:BarButtonItemLink BarItemName="biWatermark"/>
+                                </dxb:Bar.ItemLinks>
+                            </dxb:Bar>
+                            <dxb:Bar x:Name="statusBar" Caption="{dxp:PrintingStringId StringId=StatusBarCaption}" IsStatusBar="True" UseWholeRow="True">
+                                <dxb:Bar.DockInfo>
+                                    <dxb:BarDockInfo ContainerType="Bottom"/>
+                                </dxb:Bar.DockInfo>
+                                <dxb:Bar.ItemLinks>
+                                    <dxb:BarEditItemLink BarItemName="biPageNumber"/>
+                                    <dxb:BarEditItemLink BarItemName="biProgress"/>
+                                    <dxb:BarEditItemLink BarItemName="biMarqueeProgress"/>
+                                    <dxb:BarButtonItemLink BarItemName="biStopPageBuilding"/>
+                                    <dxb:BarStaticItemLink BarItemName="biZoomFactor"/>
+                                </dxb:Bar.ItemLinks>
+                            </dxb:Bar>
+                        </dxb:BarManager.Bars>
+                        <dxb:BarManager.Items>
+                            <dxb:BarCheckItem x:Name="biParameters" Content="{dxp:PrintingStringId StringId=Parameters}" Command="{Binding Model.ToggleParametersPanelCommand, ElementName=reportPreview, FallbackValue={StaticResource disabledCommand}}" Glyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/Parameters_16x16.png}" Hint="{dxp:PrintingStringId StringId=Parameters_Hint}" IsChecked="{Binding Model.IsParametersPanelVisible, ElementName=reportPreview, Mode=OneWay}" LargeGlyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/Parameters_32x32.png}"/>
+                            <dxb:BarCheckItem x:Name="biDocumentMap" Content="{dxp:PrintingStringId StringId=DocumentMap}" Command="{Binding Model.ToggleDocumentMapCommand, ElementName=reportPreview, FallbackValue={StaticResource disabledCommand}}" Glyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/DocumentMap_16x16.png}" Hint="{dxp:PrintingStringId StringId=DocumentMap_Hint}" IsChecked="{Binding Model.IsDocumentMapVisible, ElementName=reportPreview, Mode=OneWay}" LargeGlyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/DocumentMap_32x32.png}"/>
+                            <dxb:BarCheckItem x:Name="biFind" Content="{dxp:PrintingStringId StringId=Search}" Command="{Binding Model.ToggleSearchPanelCommand, ElementName=reportPreview, FallbackValue={StaticResource disabledCommand}}" Glyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/Find_16x16.png}" Hint="{dxp:PrintingStringId StringId=Search_Hint}" IsChecked="{Binding Model.IsSearchPanelVisible, ElementName=reportPreview, Mode=OneWay}" LargeGlyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/Find_32x32.png}">
+                                <dxb:BarCheckItem.IsVisible>
+                                    <Binding ElementName="reportPreview" Path="Model.IsSearchVisible">
+                                        <Binding.FallbackValue>
+                                            <System:Boolean>False</System:Boolean>
+                                        </Binding.FallbackValue>
+                                    </Binding>
+                                </dxb:BarCheckItem.IsVisible>
+                            </dxb:BarCheckItem>
+                            <dxb:BarButtonItem x:Name="biOpen" Content="{dxp:PrintingStringId StringId=Open}" Command="{Binding Model.OpenCommand, ElementName=reportPreview, FallbackValue={StaticResource disabledCommand}}" Glyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/Open_16x16.png}" Hint="{dxp:PrintingStringId StringId=Open_Hint}" LargeGlyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/Open_32x32.png}"/>
+                            <dxb:BarButtonItem x:Name="biSave" Content="{dxp:PrintingStringId StringId=Save}" Command="{Binding Model.SaveCommand, ElementName=reportPreview, FallbackValue={StaticResource disabledCommand}}" Glyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/Save_16x16.png}" Hint="{dxp:PrintingStringId StringId=Save_Hint}" LargeGlyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/Save_32x32.png}"/>
+                            <dxb:BarButtonItem x:Name="biPrint" Content="{dxp:PrintingStringId StringId=Print}" Command="{Binding Model.PrintCommand, ElementName=reportPreview, FallbackValue={StaticResource disabledCommand}}" Glyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/PrintDialog_16x16.png}" Hint="{dxp:PrintingStringId StringId=Print_Hint}" LargeGlyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/PrintDialog_32x32.png}"/>
+                            <dxb:BarButtonItem x:Name="biPrintDirect" Content="{dxp:PrintingStringId StringId=PrintDirect}" Command="{Binding Model.PrintDirectCommand, ElementName=reportPreview, FallbackValue={StaticResource disabledCommand}}" Glyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/Print_16x16.png}" Hint="{dxp:PrintingStringId StringId=PrintDirect_Hint}" LargeGlyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/Print_32x32.png}"/>
+                            <dxb:BarButtonItem x:Name="biPageSetup" Content="{dxp:PrintingStringId StringId=PageSetup}" Command="{Binding Model.PageSetupCommand, ElementName=reportPreview, FallbackValue={StaticResource disabledCommand}}" Glyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/PageSetup_16x16.png}" Hint="{dxp:PrintingStringId StringId=PageSetup_Hint}" LargeGlyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/PageSetup_32x32.png}"/>
+                            <dxb:BarButtonItem x:Name="biScale" Content="{dxp:PrintingStringId StringId=Scaling}" Command="{Binding Model.ScaleCommand, ElementName=reportPreview, FallbackValue={StaticResource disabledCommand}}" Glyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/Scaling_16x16.png}" Hint="{dxp:PrintingStringId StringId=Scaling_Hint}" LargeGlyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/Scaling_32x32.png}">
+                                <dxb:BarButtonItem.IsVisible>
+                                    <Binding ElementName="reportPreview" Path="Model.IsScaleVisible">
+                                        <Binding.FallbackValue>
+                                            <System:Boolean>False</System:Boolean>
+                                        </Binding.FallbackValue>
+                                    </Binding>
+                                </dxb:BarButtonItem.IsVisible>
+                            </dxb:BarButtonItem>
+                            <dxb:BarButtonItem x:Name="biZoomOut" Content="{dxp:PrintingStringId StringId=DecreaseZoom}" Command="{Binding Model.ZoomOutCommand, ElementName=reportPreview, FallbackValue={StaticResource disabledCommand}}" Glyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/ZoomOut_16x16.png}" Hint="{dxp:PrintingStringId StringId=DecreaseZoom_Hint}" LargeGlyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/ZoomOut_32x32.png}"/>
+                            <dxb:BarEditItem x:Name="biBarsZoomMode" BarItemDisplayMode="Content" CustomizationContent="{dxp:PrintingStringId StringId=Zoom}" CustomizationGlyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/Zoom_16x16.png}" EditWidth="100" EditValue="{Binding Model.ZoomMode, ElementName=reportPreview, Mode=TwoWay}" Glyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/Zoom_16x16.png}" Hint="{dxp:PrintingStringId StringId=Zoom_Hint}" IsEnabled="{Binding Model, Converter={StaticResource objectToBooleanConverter}, ElementName=reportPreview}" LargeGlyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/Zoom_32x32.png}">
+                                <dxb:BarEditItem.EditSettings>
+                                    <dxe:ComboBoxEditSettings IsTextEditable="False" ItemsSource="{Binding Model.ZoomModes, ElementName=reportPreview}">
+                                        <dxe:ComboBoxEditSettings.ItemTemplateSelector>
+                                            <dxp:ZoomComboBoxTemplateSelector SeparatorItemTemplate="{StaticResource separatorItemTemplate}" ZoomModeItemTemplate="{StaticResource zoomModeItemTemplate}"/>
+                                        </dxe:ComboBoxEditSettings.ItemTemplateSelector>
+                                    </dxe:ComboBoxEditSettings>
+                                </dxb:BarEditItem.EditSettings>
+                            </dxb:BarEditItem>
+                            <dxb:BarButtonItem x:Name="biZoomIn" Content="{dxp:PrintingStringId StringId=IncreaseZoom}" Command="{Binding Model.ZoomInCommand, ElementName=reportPreview, FallbackValue={StaticResource disabledCommand}}" Glyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/ZoomIn_16x16.png}" Hint="{dxp:PrintingStringId StringId=IncreaseZoom_Hint}" LargeGlyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/ZoomIn_32x32.png}"/>
+                            <dxb:BarButtonItem x:Name="biShowFirstPage" Content="{dxp:PrintingStringId StringId=FirstPage}" Command="{Binding Model.FirstPageCommand, ElementName=reportPreview, FallbackValue={StaticResource disabledCommand}}" Glyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/First_16x16.png}" Hint="{dxp:PrintingStringId StringId=FirstPage_Hint}" LargeGlyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/First_32x32.png}"/>
+                            <dxb:BarButtonItem x:Name="biShowPrevPage" Content="{dxp:PrintingStringId StringId=PreviousPage}" Command="{Binding Model.PreviousPageCommand, ElementName=reportPreview, FallbackValue={StaticResource disabledCommand}}" Glyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/Prev_16x16.png}" Hint="{dxp:PrintingStringId StringId=PreviousPage_Hint}" LargeGlyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/Prev_32x32.png}"/>
+                            <dxb:BarButtonItem x:Name="biShowNextPage" Content="{dxp:PrintingStringId StringId=NextPage}" Command="{Binding Model.NextPageCommand, ElementName=reportPreview, FallbackValue={StaticResource disabledCommand}}" Glyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/Next_16x16.png}" Hint="{dxp:PrintingStringId StringId=NextPage_Hint}" LargeGlyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/Next_32x32.png}"/>
+                            <dxb:BarButtonItem x:Name="biShowLastPage" Content="{dxp:PrintingStringId StringId=LastPage}" Command="{Binding Model.LastPageCommand, ElementName=reportPreview, FallbackValue={StaticResource disabledCommand}}" Glyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/Last_16x16.png}" Hint="{dxp:PrintingStringId StringId=LastPage_Hint}" LargeGlyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/Last_32x32.png}"/>
+                            <dxb:BarSplitButtonItem x:Name="biExportFile" Content="{dxp:PrintingStringId StringId=ExportFile}" Command="{Binding Model.ExportCommand, ElementName=reportPreview, FallbackValue={StaticResource disabledCommand}}" Glyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/Export_16x16.png}" Hint="{dxp:PrintingStringId StringId=ExportFile_Hint}" LargeGlyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/Export_32x32.png}">
+                                <dxb:BarSplitButtonItem.PopupControl>
+                                    <dxb:PopupMenu>
+                                        <dxb:PopupMenu.ItemLinks>
+                                            <dxb:BarButtonItemLink BarItemName="biExportPdf"/>
+                                            <dxb:BarButtonItemLink BarItemName="biExportHtm"/>
+                                            <dxb:BarButtonItemLink BarItemName="biExportMht"/>
+                                            <dxb:BarButtonItemLink BarItemName="biExportRtf"/>
+                                            <dxb:BarButtonItemLink BarItemName="biExportXls"/>
+                                            <dxb:BarButtonItemLink BarItemName="biExportXlsx"/>
+                                            <dxb:BarButtonItemLink BarItemName="biExportCsv"/>
+                                            <dxb:BarButtonItemLink BarItemName="biExportTxt"/>
+                                            <dxb:BarButtonItemLink BarItemName="biExportGraphic"/>
+                                            <dxb:BarButtonItemLink BarItemName="biExportXps"/>
+                                        </dxb:PopupMenu.ItemLinks>
+                                    </dxb:PopupMenu>
+                                </dxb:BarSplitButtonItem.PopupControl>
+                            </dxb:BarSplitButtonItem>
+                            <dxb:BarButtonItem x:Name="biExportPdf" Content="{dxp:PrintingStringId StringId=ExportPdf}" CommandParameter="Pdf" Command="{Binding Model.ExportCommand, ElementName=reportPreview, FallbackValue={StaticResource disabledCommand}}" Glyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/ExportToPDF_16x16.png}" Hint="{dxp:PrintingStringId StringId=ExportPdf}" LargeGlyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/ExportToPDF_32x32.png}"/>
+                            <dxb:BarButtonItem x:Name="biExportHtm" Content="{dxp:PrintingStringId StringId=ExportHtm}" CommandParameter="Htm" Command="{Binding Model.ExportCommand, ElementName=reportPreview, FallbackValue={StaticResource disabledCommand}}" Glyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/ExportToHTML_16x16.png}" Hint="{dxp:PrintingStringId StringId=ExportHtm}" LargeGlyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/ExportToHTML_32x32.png}"/>
+                            <dxb:BarButtonItem x:Name="biExportMht" Content="{dxp:PrintingStringId StringId=ExportMht}" CommandParameter="Mht" Command="{Binding Model.ExportCommand, ElementName=reportPreview, FallbackValue={StaticResource disabledCommand}}" Glyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/ExportToMHT_16x16.png}" Hint="{dxp:PrintingStringId StringId=ExportMht}" LargeGlyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/ExportToMHT_32x32.png}"/>
+                            <dxb:BarButtonItem x:Name="biExportRtf" Content="{dxp:PrintingStringId StringId=ExportRtf}" CommandParameter="Rtf" Command="{Binding Model.ExportCommand, ElementName=reportPreview, FallbackValue={StaticResource disabledCommand}}" Glyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/ExportToRTF_16x16.png}" Hint="{dxp:PrintingStringId StringId=ExportRtf}" LargeGlyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/ExportToRTF_32x32.png}"/>
+                            <dxb:BarButtonItem x:Name="biExportXls" Content="{dxp:PrintingStringId StringId=ExportXls}" CommandParameter="Xls" Command="{Binding Model.ExportCommand, ElementName=reportPreview, FallbackValue={StaticResource disabledCommand}}" Glyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/ExportToXLS_16x16.png}" Hint="{dxp:PrintingStringId StringId=ExportXls}" LargeGlyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/ExportToXLS_32x32.png}"/>
+                            <dxb:BarButtonItem x:Name="biExportXlsx" Content="{dxp:PrintingStringId StringId=ExportXlsx}" CommandParameter="Xlsx" Command="{Binding Model.ExportCommand, ElementName=reportPreview, FallbackValue={StaticResource disabledCommand}}" Glyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/ExportToXLSX_16x16.png}" Hint="{dxp:PrintingStringId StringId=ExportXlsx}" LargeGlyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/ExportToXLSX_32x32.png}"/>
+                            <dxb:BarButtonItem x:Name="biExportCsv" Content="{dxp:PrintingStringId StringId=ExportCsv}" CommandParameter="Csv" Command="{Binding Model.ExportCommand, ElementName=reportPreview, FallbackValue={StaticResource disabledCommand}}" Glyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/ExportToCSV_16x16.png}" Hint="{dxp:PrintingStringId StringId=ExportCsv}" LargeGlyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/ExportToCSV_32x32.png}"/>
+                            <dxb:BarButtonItem x:Name="biExportTxt" Content="{dxp:PrintingStringId StringId=ExportTxt}" CommandParameter="Txt" Command="{Binding Model.ExportCommand, ElementName=reportPreview, FallbackValue={StaticResource disabledCommand}}" Glyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/ExportToText_16x16.png}" Hint="{dxp:PrintingStringId StringId=ExportTxt}" LargeGlyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/ExportToText_32x32.png}"/>
+                            <dxb:BarButtonItem x:Name="biExportGraphic" Content="{dxp:PrintingStringId StringId=ExportImage}" CommandParameter="Image" Command="{Binding Model.ExportCommand, ElementName=reportPreview, FallbackValue={StaticResource disabledCommand}}" Glyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/ExportToImage_16x16.png}" Hint="{dxp:PrintingStringId StringId=ExportImage}" LargeGlyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/ExportToImage_32x32.png}"/>
+                            <dxb:BarButtonItem x:Name="biExportXps" Content="{dxp:PrintingStringId StringId=ExportXps}" CommandParameter="Xps" Command="{Binding Model.ExportCommand, ElementName=reportPreview, FallbackValue={StaticResource disabledCommand}}" Glyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/ExportToXPS_16x16.png}" Hint="{dxp:PrintingStringId StringId=ExportXps}" LargeGlyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/ExportToXPS_32x32.png}"/>
+                            <dxb:BarSplitButtonItem x:Name="biSendFile" Content="{dxp:PrintingStringId StringId=SendFile}" Command="{Binding Model.SendCommand, ElementName=reportPreview, FallbackValue={StaticResource disabledCommand}}" Glyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/Mail_16x16.png}" Hint="{dxp:PrintingStringId StringId=ExportFile_Hint}" LargeGlyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/Mail_32x32.png}">
+                                <dxb:BarSplitButtonItem.PopupControl>
+                                    <dxb:PopupMenu>
+                                        <dxb:PopupMenu.ItemLinks>
+                                            <dxb:BarButtonItemLink BarItemName="biSendPdf"/>
+                                            <dxb:BarButtonItemLink BarItemName="biSendMht"/>
+                                            <dxb:BarButtonItemLink BarItemName="biSendRtf"/>
+                                            <dxb:BarButtonItemLink BarItemName="biSendXls"/>
+                                            <dxb:BarButtonItemLink BarItemName="biSendXlsx"/>
+                                            <dxb:BarButtonItemLink BarItemName="biSendCsv"/>
+                                            <dxb:BarButtonItemLink BarItemName="biSendTxt"/>
+                                            <dxb:BarButtonItemLink BarItemName="biSendGraphic"/>
+                                            <dxb:BarButtonItemLink BarItemName="biSendXps"/>
+                                        </dxb:PopupMenu.ItemLinks>
+                                    </dxb:PopupMenu>
+                                </dxb:BarSplitButtonItem.PopupControl>
+                            </dxb:BarSplitButtonItem>
+                            <dxb:BarButtonItem x:Name="biSendPdf" Content="{dxp:PrintingStringId StringId=SendPdf}" CommandParameter="Pdf" Command="{Binding Model.SendCommand, ElementName=reportPreview, FallbackValue={StaticResource disabledCommand}}" Glyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/ExportToPDF_16x16.png}" Hint="{dxp:PrintingStringId StringId=ExportPdf}" LargeGlyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/ExportToPDF_32x32.png}"/>
+                            <dxb:BarButtonItem x:Name="biSendMht" Content="{dxp:PrintingStringId StringId=SendMht}" CommandParameter="Mht" Command="{Binding Model.SendCommand, ElementName=reportPreview, FallbackValue={StaticResource disabledCommand}}" Glyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/ExportToMHT_16x16.png}" Hint="{dxp:PrintingStringId StringId=ExportMht}" LargeGlyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/ExportToMHT_32x32.png}"/>
+                            <dxb:BarButtonItem x:Name="biSendRtf" Content="{dxp:PrintingStringId StringId=SendRtf}" CommandParameter="Rtf" Command="{Binding Model.SendCommand, ElementName=reportPreview, FallbackValue={StaticResource disabledCommand}}" Glyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/ExportToRTF_16x16.png}" Hint="{dxp:PrintingStringId StringId=ExportRtf}" LargeGlyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/ExportToRTF_32x32.png}"/>
+                            <dxb:BarButtonItem x:Name="biSendXls" Content="{dxp:PrintingStringId StringId=SendXls}" CommandParameter="Xls" Command="{Binding Model.SendCommand, ElementName=reportPreview, FallbackValue={StaticResource disabledCommand}}" Glyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/ExportToXLS_16x16.png}" Hint="{dxp:PrintingStringId StringId=ExportXls}" LargeGlyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/ExportToXLS_32x32.png}"/>
+                            <dxb:BarButtonItem x:Name="biSendXlsx" Content="{dxp:PrintingStringId StringId=SendXlsx}" CommandParameter="Xlsx" Command="{Binding Model.SendCommand, ElementName=reportPreview, FallbackValue={StaticResource disabledCommand}}" Glyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/ExportToXLSX_16x16.png}" Hint="{dxp:PrintingStringId StringId=ExportXlsx}" LargeGlyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/ExportToXLSX_32x32.png}"/>
+                            <dxb:BarButtonItem x:Name="biSendCsv" Content="{dxp:PrintingStringId StringId=SendCsv}" CommandParameter="Csv" Command="{Binding Model.SendCommand, ElementName=reportPreview, FallbackValue={StaticResource disabledCommand}}" Glyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/ExportToCSV_16x16.png}" Hint="{dxp:PrintingStringId StringId=ExportCsv}" LargeGlyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/ExportToCSV_32x32.png}"/>
+                            <dxb:BarButtonItem x:Name="biSendTxt" Content="{dxp:PrintingStringId StringId=SendTxt}" CommandParameter="Txt" Command="{Binding Model.SendCommand, ElementName=reportPreview, FallbackValue={StaticResource disabledCommand}}" Glyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/ExportToText_16x16.png}" Hint="{dxp:PrintingStringId StringId=ExportTxt}" LargeGlyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/ExportToText_32x32.png}"/>
+                            <dxb:BarButtonItem x:Name="biSendGraphic" Content="{dxp:PrintingStringId StringId=SendImage}" CommandParameter="Image" Command="{Binding Model.SendCommand, ElementName=reportPreview, FallbackValue={StaticResource disabledCommand}}" Glyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/ExportToImage_16x16.png}" Hint="{dxp:PrintingStringId StringId=ExportImage}" LargeGlyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/ExportToImage_32x32.png}"/>
+                            <dxb:BarButtonItem x:Name="biSendXps" Content="{dxp:PrintingStringId StringId=SendXps}" CommandParameter="Xps" Command="{Binding Model.SendCommand, ElementName=reportPreview, FallbackValue={StaticResource disabledCommand}}" Glyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/ExportToXPS_16x16.png}" Hint="{dxp:PrintingStringId StringId=ExportXps}" LargeGlyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/ExportToXPS_32x32.png}"/>
+                            <dxb:BarButtonItem x:Name="biWatermark" Content="{dxp:PrintingStringId StringId=Watermark}" Command="{Binding Model.WatermarkCommand, ElementName=reportPreview, FallbackValue={StaticResource disabledCommand}}" Glyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/Watermark_16x16.png}" Hint="{dxp:PrintingStringId StringId=Watermark_Hint}" LargeGlyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/Watermark_32x32.png}">
+                                <dxb:BarButtonItem.IsEnabled>
+                                    <Binding ElementName="reportPreview" Path="Model.IsSetWatermarkVisible">
+                                        <Binding.FallbackValue>
+                                            <System:Boolean>False</System:Boolean>
+                                        </Binding.FallbackValue>
+                                    </Binding>
+                                </dxb:BarButtonItem.IsEnabled>
+                            </dxb:BarButtonItem>
+                            <dxb:BarEditItem x:Name="biPageNumber" Content2="{Binding Model.PageCount, Converter={StaticResource formatStringConverter}, ElementName=reportPreview, FallbackValue=' / 0'}" Content="{dxp:PrintingStringId StringId=GoToPage}" EditValue="{Binding Model.CurrentPageNumber, ElementName=reportPreview, Mode=TwoWay, UpdateSourceTrigger=Explicit}" EditStyle="{StaticResource pageNumberEditStyle}" ShowScreenTip="False">
+                                <dxmvvm:Interaction.Behaviors>
+                                    <dxp:PageNumberBehavior FocusTarget="{Binding ElementName=reportPreview}"/>
+                                </dxmvvm:Interaction.Behaviors>
+                                <dxb:BarEditItem.EditSettings>
+                                    <dxe:TextEditSettings AllowNullInput="True" HorizontalContentAlignment="Center" MaskType="RegEx" Mask="\d{0,6}"/>
+                                </dxb:BarEditItem.EditSettings>
+                                <dxb:BarEditItem.IsEnabled>
+                                    <Binding ElementName="reportPreview" Path="Model.PageCount">
+                                        <Binding.FallbackValue>
+                                            <System:Boolean>False</System:Boolean>
+                                        </Binding.FallbackValue>
+                                    </Binding>
+                                </dxb:BarEditItem.IsEnabled>
+                            </dxb:BarEditItem>
+                            <dxb:BarEditItem x:Name="biProgress" EditValue="{Binding Model.ProgressValue, ElementName=reportPreview, Mode=OneWay}" EditStyle="{StaticResource progressBarEditStyle}" ShowScreenTip="False">
+                                <dxb:BarEditItem.EditSettings>
+                                    <dxe:ProgressBarEditSettings Maximum="{Binding Model.ProgressMaximum, ElementName=reportPreview}" Minimum="0"/>
+                                </dxb:BarEditItem.EditSettings>
+                                <dxb:BarEditItem.IsVisible>
+                                    <Binding ElementName="reportPreview" Path="Model.ProgressVisibility">
+                                        <Binding.FallbackValue>
+                                            <System:Boolean>False</System:Boolean>
+                                        </Binding.FallbackValue>
+                                    </Binding>
+                                </dxb:BarEditItem.IsVisible>
+                            </dxb:BarEditItem>
+                            <dxb:BarEditItem x:Name="biMarqueeProgress" EditTemplate="{StaticResource progressBarMarqueeTemplate}" ShowScreenTip="False">
+                                <dxb:BarEditItem.IsVisible>
+                                    <Binding ElementName="reportPreview" Path="Model.ProgressMarqueeVisibility">
+                                        <Binding.FallbackValue>
+                                            <System:Boolean>False</System:Boolean>
+                                        </Binding.FallbackValue>
+                                    </Binding>
+                                </dxb:BarEditItem.IsVisible>
+                            </dxb:BarEditItem>
+                            <dxb:BarButtonItem x:Name="biStopPageBuilding" BarItemDisplayMode="ContentAndGlyph" Content="{dxp:PrintingStringId StringId=StopPageBuilding}" Command="{Binding Model.StopCommand, ElementName=reportPreview, FallbackValue={StaticResource disabledCommand}}" Glyph="{dxp:PrintingResourceImage ResourceName=Images/BarItems/Stop_16x16.png}" IsVisible="{Binding IsEnabled, RelativeSource={RelativeSource Self}}"/>
+                            <dxb:BarStaticItem x:Name="biZoomFactor" AutoSizeMode="Fill" Content="{Binding Model.ZoomDisplayText, ElementName=reportPreview}" ContentAlignment="Right" ShowBorder="False"/>
+                        </dxb:BarManager.Items>
+                        <dxp:DocumentViewer x:Name="reportPreview" />
+                    </dxb:BarManager>
+                    <Viewbox Stretch="Fill" Visibility="Collapsed" x:Name="viewErrorInfo" 
+                             IsHitTestVisible="False"
+                             KeyboardNavigation.IsTabStop="False" 
+                             RenderTransformOrigin="0.5,0.5" 
+                             Width="{Binding ElementName=previewTab, Path=Width}" Height="{Binding ElementName=previewTab, Path=Height}" >
+                        <TextBlock x:Name="txtErrorInfo"
+                                   Margin="20,50,20,50" Width="500" TextWrapping="Wrap"
+                                   VerticalAlignment="Center" 
+                                   HorizontalAlignment="Center" 
+                                   KeyboardNavigation.IsTabStop="False"
+                                   FontSize="12" FontWeight="ExtraBlack" Opacity="0.8">
+                        </TextBlock>
+                    </Viewbox>
+                </Grid>
+            </dx:DXTabItem>
+        </dx:DXTabControl>
+    </Grid>
+</UserControl>

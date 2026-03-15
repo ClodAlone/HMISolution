@@ -1,0 +1,168 @@
+﻿<UserControl x:Class="Mindscape.WpfElements.RecurrenceDialog"
+           xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" 
+           xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" 
+           xmlns:ms="clr-namespace:Mindscape.WpfElements">
+  <UserControl.Resources>
+
+    <ms:BooleanToVisibilityConverter x:Key="bvc" />
+    <ms:IntegerToMonthStringConverter x:Key="MonthConverter" />
+
+    <Style x:Key="PanelStyle" TargetType="Border">
+      <Setter Property="CornerRadius" Value="4" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="BorderBrush" Value="#959FA5" />
+    </Style>
+
+    <DataTemplate x:Key="MonthTemplate">
+      <TextBlock Text="{Binding Converter={StaticResource MonthConverter}}" />
+    </DataTemplate>
+
+  </UserControl.Resources>
+  <StackPanel Margin="10,0,10,0">
+
+    <TextBlock HorizontalAlignment="Left" Margin="0,5,0,5">Appointment time</TextBlock>
+    <Border Style="{StaticResource PanelStyle}" Padding="5">
+      <Grid>
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="70" />
+          <ColumnDefinition Width="10" />
+          <ColumnDefinition Width="100" />
+        </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+          <RowDefinition Height="22" />
+          <RowDefinition Height="10" />
+          <RowDefinition Height="22" />
+          <RowDefinition Height="10" />
+          <RowDefinition Height="22" />
+        </Grid.RowDefinitions>
+        <TextBlock HorizontalAlignment="Right" VerticalAlignment="Center">Start:</TextBlock>
+        <ms:TimePicker Grid.Column="2" Width="100" SelectedTime="{Binding StartTime}" ItemsSource="{Binding TimeList}" />
+        <TextBlock HorizontalAlignment="Right" VerticalAlignment="Center" Grid.Row="2">End:</TextBlock>
+        <ms:TimePicker Grid.Row="2" Grid.Column="2" Width="100" SelectedTime="{Binding EndTime}" ItemsSource="{Binding TimeList}" />
+        <TextBlock HorizontalAlignment="Right" VerticalAlignment="Center" Grid.Row="4">Duration:</TextBlock>
+        <ms:TimeSpanPicker Grid.Row="4" Grid.Column="2" Width="100" SelectedTimeSpan="{Binding Duration}" ItemsSource="{Binding DurationList}" />
+      </Grid>
+    </Border>
+
+    <TextBlock HorizontalAlignment="Left" Margin="0,15,0,5" VerticalAlignment="Bottom">Recurrence pattern</TextBlock>
+    <Border Style="{StaticResource PanelStyle}">
+      <Grid>
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="80" />
+          <ColumnDefinition Width="1" />
+          <ColumnDefinition />
+        </Grid.ColumnDefinitions>
+        <StackPanel>
+          <RadioButton IsChecked="{Binding IsDailyPattern}" Margin="3,9,3,3" Content="Daily" />
+          <RadioButton IsChecked="{Binding IsWeeklyPattern}" Margin="3" Content="Weekly" />
+          <RadioButton IsChecked="{Binding IsMonthlyPattern}" Margin="3" Content="Monthly" />
+          <RadioButton IsChecked="{Binding IsYearlyPattern}" Margin="3,3,3,9" Content="Yearly" />
+        </StackPanel>
+        <Border Grid.Column="1" Width="1" Background="#959FA5" Margin="0,5,0,5" />
+        <Border Padding="5" Grid.Column="2">
+          <Grid>
+
+            <StackPanel Visibility="{Binding IsDailyPattern, Converter={StaticResource bvc}}">
+              <StackPanel Orientation="Horizontal">
+                <RadioButton IsChecked="{Binding IsEveryNDays}" Content="Every" VerticalAlignment="Center" GroupName="DailyPatternType" />
+                <ms:IntegerTextBox Value="{Binding DailyInterval}" Margin="6,0,6,0" Width="34" Height="22" />
+                <TextBlock VerticalAlignment="Center" Margin="0,1,0,0">day(s)</TextBlock>
+              </StackPanel>
+              <RadioButton IsChecked="{Binding IsEveryWeekday}" Content="Every weekday" Margin="0,3,0,0" GroupName="DailyPatternType" />
+            </StackPanel>
+
+            <StackPanel Visibility="{Binding IsWeeklyPattern, Converter={StaticResource bvc}}">
+              <StackPanel Orientation="Horizontal">
+                <TextBlock VerticalAlignment="Center">Recur every</TextBlock>
+                <ms:IntegerTextBox Value="{Binding WeeklyInterval}" Margin="6,0,6,0" Width="34" Height="22" />
+                <TextBlock VerticalAlignment="Center">week(s) on:</TextBlock>
+              </StackPanel>
+              <UniformGrid Rows="1" Margin="0,5,0,0">
+                <StackPanel>
+                  <CheckBox IsChecked="{Binding IsOnMonday}" Content="Monday" />
+                  <CheckBox IsChecked="{Binding IsOnFriday}" Content="Friday" Margin="0,4,0,0" />
+                </StackPanel>
+                <StackPanel>
+                  <CheckBox IsChecked="{Binding IsOnTuesday}" Content="Tuesday" />
+                  <CheckBox IsChecked="{Binding IsOnSaturday}" Content="Saturday" Margin="0,4,0,0" />
+                </StackPanel>
+                <StackPanel>
+                  <CheckBox IsChecked="{Binding IsOnWednesday}" Content="Wednesday" />
+                  <CheckBox IsChecked="{Binding IsOnSunday}" Content="Sunday" Margin="0,4,0,0" />
+                </StackPanel>
+                <CheckBox VerticalAlignment="Top" IsChecked="{Binding IsOnThursday}" Content="Thursday" />
+              </UniformGrid>
+            </StackPanel>
+
+            <StackPanel Visibility="{Binding IsMonthlyPattern, Converter={StaticResource bvc}}">
+              <StackPanel Orientation="Horizontal">
+                <RadioButton IsChecked="{Binding IsNthDayOfMonth}" VerticalAlignment="Center" Content="Day" GroupName="MonthlyPatternType" />
+                <ms:IntegerTextBox Value="{Binding DayOfTheMonth}" Margin="6,0,6,0" Width="34" Height="22" />
+                <TextBlock VerticalAlignment="Center" Margin="0,1,0,0">of every</TextBlock>
+                <ms:IntegerTextBox Value="{Binding MonthlyInterval}" Margin="6,0,6,0" Width="34" Height="22" />
+                <TextBlock VerticalAlignment="Center" Margin="0,1,0,0">month(s)</TextBlock>
+              </StackPanel>
+              <StackPanel Margin="0,5,0,0" Orientation="Horizontal">
+                <RadioButton IsChecked="{Binding IsMonthlyRecurrencePattern}" Content="The" VerticalAlignment="Center" GroupName="MonthlyPatternType" />
+                <ComboBox SelectedItem="{Binding MonthlyOcurrence}" ItemsSource="{Binding OccurrenceList}" Margin="7,0,0,0" Width="70" />
+                <ComboBox SelectedItem="{Binding MonthlyDayOfRecurrence}" ItemsSource="{Binding DayOfRecurrenceList}" Margin="3,0,6,0" Width="104" />
+                <TextBlock VerticalAlignment="Center" Margin="0,1,0,0">of every</TextBlock>
+                <ms:IntegerTextBox Value="{Binding MonthlyRecurrenceInterval}" Margin="6,0,6,0" Width="34" />
+                <TextBlock VerticalAlignment="Center" Margin="0,1,0,0">month(s)</TextBlock>
+              </StackPanel>
+            </StackPanel>
+
+            <StackPanel Visibility="{Binding IsYearlyPattern, Converter={StaticResource bvc}}">
+              <StackPanel Orientation="Horizontal">
+                <TextBlock VerticalAlignment="Center">Recur every</TextBlock>
+                <ms:IntegerTextBox Value="{Binding YearlyInterval}" Margin="5,0,5,0" Width="34" Height="22" />
+                <TextBlock VerticalAlignment="Center">year(s)</TextBlock>
+              </StackPanel>
+              <StackPanel Orientation="Horizontal" Margin="0,5,0,0">
+                <RadioButton IsChecked="{Binding IsSpecificDateOfYear}" VerticalAlignment="Center" Content="On:" GroupName="YearlyPatternType" />
+                <ComboBox SelectedItem="{Binding Month}" ItemsSource="{Binding MonthList}" Margin="33,0,0,0" Width="95" ItemTemplate="{StaticResource MonthTemplate}" />
+                <ms:IntegerTextBox Value="{Binding YearlyDayOfTheMonth}" Margin="3,0,0,0" Width="34" />
+              </StackPanel>
+              <StackPanel Orientation="Horizontal" Margin="0,5,0,0">
+                <RadioButton IsChecked="{Binding IsYearlyRecurrencePattern}" VerticalAlignment="Center" Content="On the:" GroupName="YearlyPatternType" />
+                <ComboBox SelectedItem="{Binding YearlyOccurrence}" ItemsSource="{Binding OccurrenceList}" Margin="12,0,0,0" Width="70" Height="22" />
+                <ComboBox SelectedItem="{Binding YearlyDayOfRecurrence}" ItemsSource="{Binding DayOfRecurrenceList}" Margin="3,0,0,0" Width="104" />
+                <TextBlock VerticalAlignment="Center" Margin="6,1,0,0">of</TextBlock>
+                <ComboBox SelectedItem="{Binding MonthOfRecurrence}" ItemsSource="{Binding MonthList}" Margin="6,0,0,0" Width="95" ItemTemplate="{StaticResource MonthTemplate}" />
+              </StackPanel>
+            </StackPanel>
+
+          </Grid>
+        </Border>
+      </Grid>
+    </Border>
+
+    <TextBlock HorizontalAlignment="Left" Margin="0,15,0,5" VerticalAlignment="Bottom">Range of recurrence</TextBlock>
+    <Border Style="{StaticResource PanelStyle}">
+      <StackPanel Orientation="Horizontal">
+        <StackPanel Orientation="Horizontal" VerticalAlignment="Top" Height="22" Margin="0,3,0,0">
+          <TextBlock TextAlignment="Right" VerticalAlignment="Center" Margin="5,0,5,0">Start:</TextBlock>
+          <ms:DropDownDatePicker Value="{Binding StartDate}" Width="160" Margin="0,0,5,0" Format="Custom" CustomFormat="dd/MM/yyyy" />
+        </StackPanel>
+        <StackPanel>
+          <RadioButton IsChecked="{Binding IsInfinite}" Content="No end date" Margin="0,5,0,5" GroupName="EndType" />
+          <StackPanel Orientation="Horizontal" Margin="0,2,0,2">
+            <RadioButton IsChecked="{Binding IsLimitedByCount}" VerticalAlignment="Center" Content="End after:" GroupName="EndType" />
+            <ms:IntegerTextBox Value="{Binding MaxOccurrences}" Margin="10,0,8,0" Width="34" Height="22" />
+            <TextBlock VerticalAlignment="Center" Margin="0,1,0,0">Occurrences</TextBlock>
+          </StackPanel>
+          <StackPanel Orientation="Horizontal" Margin="0,2,0,2">
+            <RadioButton IsChecked="{Binding IsLimitedByDate}" VerticalAlignment="Center" Margin="0,0,23,0" Content="End by:" GroupName="EndType" />
+            <ms:DropDownDatePicker Value="{Binding EndDate}" Width="160" Format="Custom" CustomFormat="dd/MM/yyyy" Margin="0,0,14,0" />
+          </StackPanel>
+        </StackPanel>
+      </StackPanel>
+    </Border>
+
+    <StackPanel Orientation="Horizontal" Margin="0,10,0,10">
+      <Button Command="{x:Static ms:SchedulerCommands.OkCommand}" Content="OK" Width="75" Height="23" HorizontalAlignment="Left" />
+      <Button Command="{x:Static ms:SchedulerCommands.CancelCommand}" Content="Cancel" Width="75" Height="23" Margin="10,0,0,0" HorizontalAlignment="Left" />
+      <Button Command="{x:Static ms:SchedulerCommands.RemoveRecurrenceCommand}" Content="Remove Recurrence" Width="130" Height="23" Margin="20,0,0,0" HorizontalAlignment="Left" />
+    </StackPanel>
+  </StackPanel>
+</UserControl>

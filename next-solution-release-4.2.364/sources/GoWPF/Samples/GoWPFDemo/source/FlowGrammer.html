@@ -1,0 +1,81 @@
+﻿<html>
+<head>
+  <title></title>
+	<style type="text/css">
+    .style1 {
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 10pt;
+    }
+  </style>
+</head>
+<body class="style1">
+<p>
+The Flowgrammer sample demonstrates the use of interaction between ListBoxes and Palettes, Drag/Drop behavior, and custom classes including an overriden <b>PartManager</b> and an overriden <b>DraggingTool</b>.
+</p>
+<p>
+On the top left side of the sample is a ListBox, allowing for the selection of which type of Nodes should be displayed in the Palette below.
+A ListBox is initialized in XAML in the following code segment.
+</p>
+<pre>
+&lt;ListBox Grid.Row="0" Padding="5" BorderThickness="1" Margin="2" BorderBrush="Black"
+               SelectionChanged="listBox_SelectionChanged"&gt;
+        &lt;ListBoxItem Content="If" /&gt;
+        &lt;ListBoxItem Content="Action" /&gt;
+        &lt;ListBoxItem Content="Effect" /&gt;
+        &lt;ListBoxItem Content="Output" /&gt;
+      &lt;/ListBox&gt;
+</pre>
+<p>
+The SelectionChanged event is raised whenever the user selects a different item in the ListBox. The following code is used to 
+handle these events and accordingly change the type of Node displayed in the Palette below.
+</p>
+<pre>
+private void listBox_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e) {
+      ListBoxItem lbi = (sender as ListBox).SelectedItem as ListBoxItem;
+      switch (lbi.Content as String) {
+        case "If":
+          myPalette.Model.NodesSource = paletteOptions[0];
+          break;
+        case "Action":
+          myPalette.Model.NodesSource = paletteOptions[1];
+          break;
+        case "Effect":
+          myPalette.Model.NodesSource = paletteOptions[2];
+          break;
+        case "Output":
+          myPalette.Model.NodesSource = paletteOptions[3];
+          break;
+      }
+    }
+</pre>
+<p>
+One of the key features of the Flowgrammer sample is the use of a custom DraggingTool. Creating a custom DraggingTool allows the
+developer to change how the Drag/Drop behavior of the Palette and Diagram will work. In this case, the <b>DragOver</b> method is overriden
+to allow for changes in opacity of the Node being dragged, as well as highlighting of the Part that the Node is currently dragged over.
+There is also an overriden <b>DropOnto</b> method to prevent drops onto the background. Another function of the overriden DropOnto method is 
+that when the dragged Node is dropped on a Link or another Node, the methods InsertNodeOnLink or InsertNodeBeforeNode can be invoked.
+Simple overrides of methods like this allow the developer lots of customization in the way they want their tools to work.   
+</p>
+<p>
+The other GoXam class overriden is the <b>PartManager</b>. The only change to the PartManager is a modified way of removing Nodes from the Model.
+When a Node is removed from Flowgrammer, depending on what type of Node it is, a different action will occur. One of the more interesting 
+actions to take place is the removal of an "If" Node. To remove an "If" Node, all the Nodes within its subgraph must be removed as well.
+GetOtherEnd() is used recursively until the Node where the two branches come back together is found. 
+</p>
+<pre>public Node GetOtherEnd(Node node, String portid) {
+      if (node.FindPort(portid, true) != null)
+        if (portid == "TopPort")
+          foreach (Node n in node.FindNodesIntoPort(portid))
+            return n;
+        else
+          foreach (Node n in node.FindNodesOutOfPort(portid))
+            return n;
+      return null;
+    }
+</pre>
+<p>
+GetOtherEnd makes extensive use of the <b>Node.FindNodesIntoPort</b> and <b>Node.FindNodesOutOfPort</b> methods to determine the Node on the opposite end
+of a given Port and allows Node-by-Node navigation of a Model even without Links. 
+</p>
+</body>
+</html>

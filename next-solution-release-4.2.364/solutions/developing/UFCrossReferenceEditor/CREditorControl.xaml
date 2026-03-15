@@ -1,0 +1,761 @@
+﻿<UserControl x:Class="UFCrossReferenceEditor.CREditorControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:self="clr-namespace:UFCrossReferenceEditor"
+             xmlns:properties="clr-namespace:UFCrossReferenceEditor.Properties"
+             xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+             xmlns:dxg="http://schemas.devexpress.com/winfx/2008/xaml/grid"
+             xmlns:dxgt="http://schemas.devexpress.com/winfx/2008/xaml/grid/themekeys"
+             xmlns:dxi="http://schemas.devexpress.com/winfx/2008/xaml/core/internal"
+             xmlns:dxb="http://schemas.devexpress.com/winfx/2008/xaml/bars"
+             xmlns:utilities="clr-namespace:WPFUtilities.Converters;assembly=WPFUtilities"
+             mc:Ignorable="d" PreviewKeyDown="UserControl_PreviewKeyDown"
+             Height="300" Width="300"
+             d:DesignHeight="300" d:DesignWidth="300">
+
+    <UserControl.CommandBindings>
+
+        <CommandBinding Command="ApplicationCommands.Save"
+                    Executed="OnCommandSave" 
+                    CanExecute="CanCommandSave" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.UpdateCRDoc}" 
+                    Executed="OnUpdateCRDoc" 
+                    CanExecute="CanUpdateCRDoc" />
+
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.ClearCRDoc}" 
+                    Executed="OnClearCRDoc" 
+                    CanExecute="CanClearCRDoc" />
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.RenameReferences}"
+                  Executed="OnRenameReferences"
+                  CanExecute="CanRenameReferences" />
+      <CommandBinding Command="{x:Static self:UIGeneralCommands.AddStringId}"
+          Executed="OnAddStringId"
+          CanExecute="CanAddStringId" />
+      <CommandBinding Command="{x:Static self:UIGeneralCommands.RemoveStringId}"
+          Executed="OnRemoveStringId"
+          CanExecute="CanRemoveStringId" />
+      <CommandBinding Command="{x:Static self:UIGeneralCommands.RemoveTags}"
+          Executed="OnRemoveTag"
+          CanExecute="CanRemoveTag" />
+      
+    </UserControl.CommandBindings>
+    <UserControl.Resources>
+        <ResourceDictionary>
+          <ResourceDictionary.MergedDictionaries>
+            <ResourceDictionary Source="/SharedResources;component/Resources/UFCrossReference.xaml" />
+            <ResourceDictionary Source="/SharedResources;component/Resources/SharedImages.xaml" />
+          </ResourceDictionary.MergedDictionaries>
+          <utilities:FontToMinRowHeightConverter x:Key="fontToMinRowHeightConverter" x:Shared="True" />
+            <self:BoolToColorConverter x:Key="BoolToColorConverter" />
+        </ResourceDictionary>
+    </UserControl.Resources>
+  <dxb:BarManager.DXContextMenu>
+    <dxb:PopupMenu x:Name="contextMenu">
+      <dxb:PopupMenu.Items>
+        <dxb:BarButtonItem x:Name="updateCR" Command="{x:Static self:UIGeneralCommands.UpdateCRDoc}" Content="{x:Static properties:UICommandResource.UpdateCRDocText}"/>
+        <dxb:BarButtonItem x:Name="clearCRDoc" Command="{x:Static self:UIGeneralCommands.ClearCRDoc}" Content="{x:Static properties:UICommandResource.ClearCRDocText}"/>
+        <dxb:BarItemLinkSeparator />
+        <dxb:BarButtonItem x:Name="renameReferences" Command="{x:Static self:UIGeneralCommands.RenameReferences}" Content="{x:Static properties:UICommandResource.RenameReferencesText}"/>
+        <dxb:BarItemLinkSeparator  x:Name="separator"/>
+        <dxb:BarButtonItem  x:Name="addStringId" RibbonStyle="SmallWithText" Command="{x:Static self:UIGeneralCommands.AddStringId}" Content="{x:Static properties:UICommandResource.AddStringIdText}"/>
+        <dxb:BarButtonItem  x:Name="removeStringId" RibbonStyle="SmallWithText" Command="{x:Static self:UIGeneralCommands.RemoveStringId}" Content="{x:Static properties:UICommandResource.RemoveStringIdText}"/>
+        <dxb:BarItemLinkSeparator  x:Name="separator1"/>
+        <dxb:BarButtonItem  x:Name="removeTags" RibbonStyle="SmallWithText" Command="{x:Static self:UIGeneralCommands.RemoveTags}" Content="{x:Static properties:UICommandResource.RemoveTagsText}"/>
+      </dxb:PopupMenu.Items>
+    </dxb:PopupMenu>
+  </dxb:BarManager.DXContextMenu>
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition />
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <dx:DXTabControl x:Name="tabControlExt" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=UserControl, Mode=FindAncestor}}">
+            <dx:DXTabControl.View>
+                <dx:TabControlMultiLineView />
+            </dx:DXTabControl.View>
+            <dx:DXTabItem x:Name="tabTags">
+                <dx:DXTabItem.Header>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock x:Name="tabTagsTxt"
+                            Text="{x:Static properties:Resources.TabTagsTitle}" Margin="2"/>
+                        <Image x:Name="tagTabImage" Height="16" Width="16" Margin="2"/>
+                    </StackPanel>
+                </dx:DXTabItem.Header>
+                <Grid x:Name="tagsGrid" >
+                    <dx:DXTabControl x:Name="tabAddressSpaceSplitter" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=UserControl, Mode=FindAncestor}}">
+                        <dx:DXTabControl.View>
+                            <dx:TabControlMultiLineView HeaderLocation="Bottom" />
+                        </dx:DXTabControl.View>
+                        <dx:DXTabItem x:Name="tabSplitterTree">
+                            <dx:DXTabItem.Header>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{x:Static properties:Resources.Hierarchical}" />
+                                </StackPanel>
+                            </dx:DXTabItem.Header>
+
+                            <dxg:TreeListControl Name="treeListControl" SelectionMode="Row">
+                                <dxg:TreeListControl.Columns>
+                                    <dxg:TreeListColumn FieldName="ItemHeader" ReadOnly="True" FilterPopupMode="Excel" SortIndex="0" SortOrder="Ascending" Header="{x:Static properties:Resources.DescriptionHeader}" />
+                                    <dxg:TreeListColumn FieldName="ReadablePath" ReadOnly="True" FilterPopupMode="Excel" SortIndex="1" SortOrder="Ascending" Header="{x:Static properties:Resources.PathHeader}" />
+                                    <dxg:TreeListColumn FieldName="EndpointUrl" ReadOnly="True" FilterPopupMode="Excel" SortIndex="1" SortOrder="Ascending" Header="{x:Static properties:Resources.EndpointUrlHeader}" />
+                                    <dxg:TreeListColumn FieldName="IsNotValid" ReadOnly="True" FilterPopupMode="Excel" SortIndex="2" SortOrder="Ascending" Header="{x:Static properties:Resources.IsNotValidHeader}">
+                                        <dxg:TreeListColumn.CellTemplate>
+                                            <DataTemplate>
+                                              <Ellipse HorizontalAlignment="Left" Fill="{Binding RowData.Row.IsNotValid, Converter={StaticResource BoolToColorConverter}, Mode=OneWay}"
+                                                                   Width="10" Height="10">
+                                                <Ellipse.ToolTip>
+                                                  <TextBlock Text="{x:Static properties:Resources.TagHasBeenRemoved}" 
+                                                             Width="250" TextWrapping="Wrap"/>
+                                                </Ellipse.ToolTip>
+                                              </Ellipse>
+                                              </DataTemplate>
+                                        </dxg:TreeListColumn.CellTemplate>
+                                    </dxg:TreeListColumn>
+                                    <dxg:TreeListColumn FieldName="IsNotInUse" ReadOnly="True" FilterPopupMode="Excel" SortIndex="2" SortOrder="Ascending" Header="{x:Static properties:Resources.IsNotUsedHeader}">
+                                      <dxg:TreeListColumn.CellTemplate>
+                                        <DataTemplate>
+                                          <Ellipse HorizontalAlignment="Left" Fill="{Binding RowData.Row.IsNotInUse, Converter={StaticResource BoolToColorConverter}, Mode=OneWay, ConverterParameter='1'}"
+                                                               ToolTip="{x:Static properties:Resources.TagIsNotInUse}"
+                                                               Width="10" Height="10"/>
+                                        </DataTemplate>
+                                      </dxg:TreeListColumn.CellTemplate>
+                                    </dxg:TreeListColumn>
+                                    <dxg:TreeListColumn FieldName="Container" ReadOnly="True" FilterPopupMode="Excel" SortIndex="3" SortOrder="Ascending" Header="{x:Static properties:Resources.ContainerHeader}" />
+                                    
+                                </dxg:TreeListControl.Columns>
+                                <dxg:TreeListControl.View>
+                                    <dxg:TreeListView NavigationStyle="Row" AllowTreeIndentScrolling="True" ShowFixedTotalSummary="True"
+                                        CustomSummary="treeListControl_CustomSummary"
+                                        ImageFieldName="ResourceIcon" ShowNodeImages="True" VerticalScrollbarVisibility="Auto"
+                                        AllowEditing="False" IsColumnChooserVisible="False" IsColumnMenuEnabled="False"
+                                        ShowColumnHeaders="True" ShowDragDropHint="True" ShowVerticalLines="False" ShowHorizontalLines="False" ShowIndicator="False"
+                                        IsSynchronizedWithCurrentItem="True" AllowDragDrop="True" NodeExpanding="OnTreeNodeExpanding"
+                                        RowDoubleClick="OnRowDoubleClick" AutoWidth="True" NodeCollapsing="OnTreeNodeCollapsing">
+                                        <!--PreviewDragOver="treeListControl_PreviewDragOver"  CompleteRecordDragDrop="TreeListControl_CompletedDragDrop"
+                                            PreviewQueryContinueDrag="addressSpaceTree_PreviewQueryContinueDrag"
+                                            DropRecord="TreeListControl_DragEnd"-->
+                                        <dxg:TreeListView.RowStyle>
+                                            <Style TargetType="{x:Type dxg:RowControl}">
+                                                <Style.Triggers>
+                                                    <MultiDataTrigger>
+                                                        <MultiDataTrigger.Conditions>
+                                                            <Condition Binding="{Binding RelativeSource={RelativeSource Mode=Self}, Path=SelectionState}" Value="None"/>
+                                                            <Condition Binding="{Binding RelativeSource={RelativeSource Mode=Self}, Path=IsMouseOver}" Value="True" />
+                                                        </MultiDataTrigger.Conditions>
+                                                        <Setter Property="Background" Value="{dxi:ThemeResource {dxgt:GridRowThemeKey ResourceKey=CellBorderFocusedBrush}}" />
+                                                    </MultiDataTrigger>
+                                                </Style.Triggers>
+                                                <!--<Setter Property="ContextMenu" Value="{Binding Path=Row.TreeItemInnerObject, Converter={StaticResource TagToContextMenuConverter}}" />-->
+                                            </Style>
+                                        </dxg:TreeListView.RowStyle>
+                                        <dxg:TreeListView.CellStyle>
+                                            <Style TargetType="{x:Type dxg:LightweightCellEditor}">
+                                              <Setter Property="MinHeight" Value="{Binding FontSize, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}, Converter={StaticResource fontToMinRowHeightConverter}, Mode=OneWay}" />
+                                            </Style>
+                                        </dxg:TreeListView.CellStyle>
+
+                                        <dxg:TreeListView.TotalSummaryMenuCustomizations>
+                                            <dxb:RemoveAction ElementName="{x:Static dxg:DefaultSummaryMenuItemNames.Count}"/>
+                                            <dxb:RemoveAction ElementName="{x:Static dxg:DefaultSummaryMenuItemNames.Customize}"/>
+                                        </dxg:TreeListView.TotalSummaryMenuCustomizations>
+                                    </dxg:TreeListView>
+                                </dxg:TreeListControl.View>
+                              <dxg:TreeListControl.TotalSummary>
+                                <dxg:TreeListSummaryItem SummaryType="Custom" Alignment="Left" Visible="True" x:Name="summaryRemovedTags"
+                                                DisplayFormat="{x:Static properties:Resources.TotalRemovedRenamedTags}" FieldName="IsNotRefValid"/>
+                                <dxg:TreeListSummaryItem SummaryType="Custom" Alignment="Right" Visible="True" x:Name="summaryNotInUseTags"
+                                                DisplayFormat="{x:Static properties:Resources.TotalNotInUseTags}" FieldName="IsNotRefUsed"/>
+                              </dxg:TreeListControl.TotalSummary>
+                                <dxg:TreeListControl.CommandBindings>
+                                    <CommandBinding Command="ApplicationCommands.Cut"
+                                        Executed="OnCommandCut" 
+                                        CanExecute="CanCommandCut" />
+                                    <!--<CommandBinding Command="ApplicationCommands.Delete"
+                                        Executed="OnDeleteEvent" 
+                                        CanExecute="CanExecuteDelete" />-->
+                                    <CommandBinding Command="ApplicationCommands.Paste"
+                                        Executed="OnCommandPaste" 
+                                        CanExecute="CanCommandPaste" />
+                                    <CommandBinding Command="ApplicationCommands.Copy"
+                                        Executed="OnCommandCopy" 
+                                        CanExecute="CanCommandCopy" />
+                                </dxg:TreeListControl.CommandBindings>
+                            </dxg:TreeListControl>
+
+                        </dx:DXTabItem>
+
+                        <dx:DXTabItem x:Name="tabSplitterFlat">
+                            <dx:DXTabItem.Header>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock x:Name="tabFlatTxt" Text="{x:Static properties:Resources.Flat}" />
+                                </StackPanel>
+                            </dx:DXTabItem.Header>
+                            <dxg:GridControl MinHeight="10" MinWidth="10" Visibility="Visible" CustomSummary="gridDataControl_CustomSummary"
+                                AutoExpandAllGroups="True"
+                                AutoGenerateColumns="AddNew"
+                                Name="gridDataControl" 
+                                AutoPopulateColumns="False" 
+                                AllowDrop="True" 
+                                AllowLiveDataShaping="False" 
+                                dx:DXSerializer.SerializationID="gridDataControl" 
+                                dx:DXSerializer.StoreLayoutMode="All" 
+                                dxg:DataControlSerializationOptions.AddNewColumns="False" 
+                                dxg:DataControlSerializationOptions.RemoveOldColumns="False">
+                                <dxg:GridControl.Columns>
+                                    <!--<dxg:GridColumn ReadOnly="True" AllowEditing="False" AllowGrouping="True" DisplayMemberBinding="{Binding Path=TagName, Mode=OneWay}" FieldName="TagName" Header="{x:Static properties:Resources.CrossReferenceHeader}"/>
+                                    <dxg:GridColumn ReadOnly="True" AllowEditing="False" AllowGrouping="True" DisplayMemberBinding="{Binding Path=Name, Mode=OneWay}" FieldName="Name" Header="{x:Static properties:Resources.DescriptionHeader}"/>
+                                    <dxg:GridColumn ReadOnly="True" AllowEditing="False" AllowGrouping="True" DisplayMemberBinding="{Binding Path=EntityReadablePath, Mode=OneWay}" FieldName="EntityReadablePath" Header="{x:Static properties:Resources.PathHeader}"/>
+                                    <dxg:GridColumn ReadOnly="True" AllowEditing="False" AllowGrouping="True" DisplayMemberBinding="{Binding Path=EndpointUrl, Mode=OneWay}" FieldName="EndpointUrl" Header="{x:Static properties:Resources.EndpointUrlHeader}"/>
+                                    <dxg:GridColumn ReadOnly="True" AllowEditing="False" AllowGrouping="True" DisplayMemberBinding="{Binding Path=IsNotRefValid, Mode=OneWay}" FieldName="IsNotRefValid" Header="{x:Static properties:Resources.IsNotValidHeader}"/>
+                                    <dxg:GridColumn ReadOnly="True" AllowEditing="False" AllowGrouping="True" DisplayMemberBinding="{Binding Path=IsNotRefUsed, Mode=OneWay}" FieldName="IsNotRefUsed" Header="{x:Static properties:Resources.IsNotUsedHeader}"/>
+                                    <dxg:GridColumn ReadOnly="True" AllowEditing="False" AllowGrouping="True" DisplayMemberBinding="{Binding Path=Container, Mode=OneWay}" FieldName="Container" Header="{x:Static properties:Resources.ContainerHeader}"/>-->
+                                    <dxg:GridColumn ReadOnly="True" AllowEditing="False" AllowGrouping="True" DisplayMemberBinding="{Binding Path=Name, Mode=OneWay}" FieldName="Name" Header="{x:Static properties:Resources.CrossReferenceHeader}"/>
+                                    <dxg:GridColumn ReadOnly="True" AllowEditing="False" AllowGrouping="True" DisplayMemberBinding="{Binding Path=ReadablePath, Mode=OneWay}" FieldName="ReadablePath" Header="{x:Static properties:Resources.PathHeader}"/>
+                                    <dxg:GridColumn ReadOnly="True" AllowEditing="False" AllowGrouping="True" DisplayMemberBinding="{Binding Path=EndpointUrl, Mode=OneWay}" FieldName="EndpointUrl" Header="{x:Static properties:Resources.EndpointUrlHeader}"/>
+                                    <dxg:GridColumn ReadOnly="True" AllowEditing="False" AllowGrouping="True" DisplayMemberBinding="{Binding Path=IsNotValid, Mode=OneWay}" FieldName="IsNotValid" Header="{x:Static properties:Resources.IsNotValidHeader}"/>
+                                    <dxg:GridColumn ReadOnly="True" AllowEditing="False" AllowGrouping="True" DisplayMemberBinding="{Binding Path=IsNotInUse, Mode=OneWay}" FieldName="IsNotInUse" Header="{x:Static properties:Resources.IsNotUsedHeader}"/>
+                                </dxg:GridControl.Columns>
+                                <dxg:GridControl.TotalSummary>
+                                    <dxg:GridSummaryItem SummaryType="Custom" Alignment="Left" Visible="True" x:Name="summaryRemovedTagsFlat"
+                                                  DisplayFormat="{x:Static properties:Resources.TotalRemovedRenamedTags}" FieldName="IsNotRefValid"/>
+                                    <dxg:GridSummaryItem SummaryType="Custom" Alignment="Right" Visible="True" x:Name="summaryNotInUseTagsFlat"
+                                                  DisplayFormat="{x:Static properties:Resources.TotalNotInUseTags}" FieldName="IsNotRefUsed"/>
+                                </dxg:GridControl.TotalSummary>
+                                <dxg:GridControl.View>
+
+                                    <dxg:TableView AllowEditing="False" ShowFixedTotalSummary="True"
+                                        RowDoubleClick="OnRowDoubleClick"
+                                        FadeSelectionOnLostFocus="False" 
+                                        BestFitMode="VisibleRows"
+                                        AllowBestFit="True" 
+                                        AllowResizing="True"
+                                        ShowGroupPanel="True"
+                                        ShowSearchPanelMode="Always" SearchPanelFindMode="Always" 
+                                        ShowSearchPanelMRUButton="True"
+                                        ShowFilterPanelMode="ShowAlways" 
+                                        NavigationStyle="Row" 
+                                        MultiSelectMode="Row">
+                                        <!--<dxg:TableView.RowStyle>
+                                            <Style TargetType="{x:Type dxg:RowControl}">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding Path=IsSelected}" Value="True">
+                                                        <Setter Property="Background" Value="LightGray" />
+                                                        <Setter Property="Foreground" Value="Black" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </dxg:TableView.RowStyle>-->
+                                        <dxg:TableView.TotalSummaryMenuCustomizations>
+                                            <dxb:RemoveAction ElementName="{x:Static dxg:DefaultSummaryMenuItemNames.Count}"/>
+                                            <dxb:RemoveAction ElementName="{x:Static dxg:DefaultSummaryMenuItemNames.Customize}"/>
+                                        </dxg:TableView.TotalSummaryMenuCustomizations>
+                                    </dxg:TableView>
+                                </dxg:GridControl.View>
+                              <dxg:GridControl.DetailDescriptor>
+                                <dxg:DataControlDetailDescriptor ItemsSourceBinding="{Binding Entities}">
+                                  <dxg:DataControlDetailDescriptor.DataControl>
+                                    <dxg:GridControl x:Name="gridDetailsControl" AutoGenerateColumns="None">
+                                      <dxg:GridControl.Columns>
+                                        <!--<dxg:GridColumn ReadOnly="True" AllowEditing="False" AllowGrouping="True" DisplayMemberBinding="{Binding Path=TagName, Mode=OneWay}" FieldName="TagName" Header="{x:Static properties:Resources.CrossReferenceHeader}"/>-->
+                                        <dxg:GridColumn ReadOnly="True" AllowEditing="False" AllowGrouping="True" DisplayMemberBinding="{Binding Path=Name, Mode=OneWay}" FieldName="Name" Header="{x:Static properties:Resources.DescriptionTypeHeader}"/>
+                                        <!--<dxg:GridColumn ReadOnly="True" AllowEditing="False" AllowGrouping="True" DisplayMemberBinding="{Binding Path=EntityReadablePath, Mode=OneWay}" FieldName="EntityReadablePath" Header="{x:Static properties:Resources.PathHeader}"/>
+                                        <dxg:GridColumn ReadOnly="True" AllowEditing="False" AllowGrouping="True" DisplayMemberBinding="{Binding Path=EndpointUrl, Mode=OneWay}" FieldName="EndpointUrl" Header="{x:Static properties:Resources.EndpointUrlHeader}"/>
+                                        <dxg:GridColumn ReadOnly="True" AllowEditing="False" AllowGrouping="True" DisplayMemberBinding="{Binding Path=IsNotRefValid, Mode=OneWay}" FieldName="IsNotRefValid" Header="{x:Static properties:Resources.IsNotValidHeader}"/>
+                                        <dxg:GridColumn ReadOnly="True" AllowEditing="False" AllowGrouping="True" DisplayMemberBinding="{Binding Path=IsNotRefUsed, Mode=OneWay}" FieldName="IsNotRefUsed" Header="{x:Static properties:Resources.IsNotUsedHeader}"/>-->
+                                        <dxg:GridColumn ReadOnly="True" AllowEditing="False" AllowGrouping="True" DisplayMemberBinding="{Binding Path=Container, Mode=OneWay}" FieldName="Container" Header="{x:Static properties:Resources.ContainerHeader}"/>
+                                      </dxg:GridControl.Columns>
+                                      <dxg:GridControl.View>
+                                        <dxg:TableView />
+                                      </dxg:GridControl.View>
+                                    </dxg:GridControl>
+                                  </dxg:DataControlDetailDescriptor.DataControl>
+                                </dxg:DataControlDetailDescriptor>
+                              </dxg:GridControl.DetailDescriptor>
+                            </dxg:GridControl>
+                        </dx:DXTabItem>
+                        
+                    </dx:DXTabControl>
+                </Grid>
+            </dx:DXTabItem>
+            <dx:DXTabItem x:Name="tabScreens">
+                <dx:DXTabItem.Header>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock x:Name="tabScreensTxt"
+                            Text="{x:Static properties:Resources.TabScreensTitle}" Margin="2"/>
+                        <Image x:Name="screenTabImage" Height="16" Width="16" Margin="2"/>
+                    </StackPanel>
+                </dx:DXTabItem.Header>
+                <Grid x:Name="screenGrid" 
+>
+                    <dx:DXTabControl x:Name="tabScreenSplitter" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=UserControl, Mode=FindAncestor}}">
+                        <dx:DXTabControl.View>
+                            <dx:TabControlMultiLineView HeaderLocation="Bottom" />
+                        </dx:DXTabControl.View>
+                        <dx:DXTabItem x:Name="tabScreenSplitterTree">
+                            <dx:DXTabItem.Header>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{x:Static properties:Resources.Hierarchical}" />
+                                </StackPanel>
+                            </dx:DXTabItem.Header>
+
+                            <dxg:TreeListControl Name="treeListControlScreen" SelectionMode="Row">
+                                <dxg:TreeListControl.Columns>
+                                    <dxg:TreeListColumn FieldName="ItemHeader" FilterPopupMode="Excel" SortIndex="0" SortOrder="Ascending" Header="{x:Static properties:Resources.DescriptionHeader}" />
+                                    <dxg:TreeListColumn FieldName="ReadablePath" FilterPopupMode="Excel" SortIndex="1" SortOrder="Ascending" Header="{x:Static properties:Resources.PathScreenHeader}" />
+                                    <dxg:TreeListColumn FieldName="IsNotValid" FilterPopupMode="Excel" SortIndex="2" SortOrder="Ascending" Header="{x:Static properties:Resources.IsNotValidHeader}">
+                                        <dxg:TreeListColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <Ellipse HorizontalAlignment="Left" Fill="{Binding RowData.Row.IsNotValid, Converter={StaticResource BoolToColorConverter}, Mode=OneWay}" 
+                                                                     ToolTip="{x:Static properties:Resources.ScreenHasBeenRemoved}"
+                                                                     Width="10" Height="10"/>
+                                            </DataTemplate>
+                                        </dxg:TreeListColumn.CellTemplate>
+                                    </dxg:TreeListColumn>
+                                    <dxg:TreeListColumn FieldName="Container" FilterPopupMode="Excel" SortIndex="3" SortOrder="Ascending" Header="{x:Static properties:Resources.ContainerHeader}" />
+                                </dxg:TreeListControl.Columns>
+                                <dxg:TreeListControl.View>
+                                    <dxg:TreeListView NavigationStyle="Row" AllowTreeIndentScrolling="True" ShowFixedTotalSummary="True"
+                                        CustomSummary="treeListControl_CustomSummary"
+                                        ImageFieldName="ResourceIcon" ShowNodeImages="True" VerticalScrollbarVisibility="Auto"
+                                        AllowEditing="False" IsColumnChooserVisible="False" IsColumnMenuEnabled="False"
+                                        ShowColumnHeaders="True" ShowDragDropHint="True" ShowVerticalLines="False" ShowHorizontalLines="False" ShowIndicator="False"
+                                        IsSynchronizedWithCurrentItem="True" AllowDragDrop="True" NodeExpanding="OnTreeNodeExpanding"
+                                        RowDoubleClick="OnRowDoubleClick" AutoWidth="True" NodeCollapsing="OnTreeNodeCollapsing">
+                                        <!--PreviewDragOver="treeListControl_PreviewDragOver"  CompleteRecordDragDrop="TreeListControl_CompletedDragDrop"
+                                            PreviewQueryContinueDrag="addressSpaceTree_PreviewQueryContinueDrag"
+                                            DropRecord="TreeListControl_DragEnd"-->
+                                        <dxg:TreeListView.RowStyle>
+                                            <Style TargetType="{x:Type dxg:RowControl}">
+                                                <Style.Triggers>
+                                                    <MultiDataTrigger>
+                                                        <MultiDataTrigger.Conditions>
+                                                            <Condition Binding="{Binding RelativeSource={RelativeSource Mode=Self}, Path=SelectionState}" Value="None"/>
+                                                            <Condition Binding="{Binding RelativeSource={RelativeSource Mode=Self}, Path=IsMouseOver}" Value="True" />
+                                                        </MultiDataTrigger.Conditions>
+                                                        <Setter Property="Background" Value="{dxi:ThemeResource {dxgt:GridRowThemeKey ResourceKey=CellBorderFocusedBrush}}" />
+                                                    </MultiDataTrigger>
+                                                </Style.Triggers>
+                                                <!--<Setter Property="ContextMenu" Value="{Binding Path=Row.TreeItemInnerObject, Converter={StaticResource TagToContextMenuConverter}}" />-->
+                                            </Style>
+                                        </dxg:TreeListView.RowStyle>
+                                        <dxg:TreeListView.CellStyle>
+                                            <Style TargetType="{x:Type dxg:LightweightCellEditor}">
+                                              <Setter Property="MinHeight" Value="{Binding FontSize, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}, Converter={StaticResource fontToMinRowHeightConverter}, Mode=OneWay}" />
+                                            </Style>
+                                        </dxg:TreeListView.CellStyle>
+
+                                        <dxg:TreeListView.TotalSummaryMenuCustomizations>
+                                            <dxb:RemoveAction ElementName="{x:Static dxg:DefaultSummaryMenuItemNames.Count}"/>
+                                            <dxb:RemoveAction ElementName="{x:Static dxg:DefaultSummaryMenuItemNames.Customize}"/>
+                                        </dxg:TreeListView.TotalSummaryMenuCustomizations>
+
+                                    </dxg:TreeListView>
+                                </dxg:TreeListControl.View>
+                              <dxg:TreeListControl.TotalSummary>
+                                <dxg:TreeListSummaryItem SummaryType="Custom" Alignment="Left" Visible="True" x:Name="summaryRemovedScreens"
+                                                DisplayFormat="{x:Static properties:Resources.TotalRemovedRenamedScreens}" FieldName="IsNotRefValid"/>
+                              </dxg:TreeListControl.TotalSummary>
+                                <dxg:TreeListControl.CommandBindings>
+                                    <CommandBinding Command="ApplicationCommands.Cut"
+                                        Executed="OnCommandCut" 
+                                        CanExecute="CanCommandCut" />
+                                    <!--<CommandBinding Command="ApplicationCommands.Delete"
+                                        Executed="OnDeleteEvent" 
+                                        CanExecute="CanExecuteDelete" />-->
+                                    <CommandBinding Command="ApplicationCommands.Paste"
+                                        Executed="OnCommandPaste" 
+                                        CanExecute="CanCommandPaste" />
+                                    <CommandBinding Command="ApplicationCommands.Copy"
+                                        Executed="OnCommandCopy" 
+                                        CanExecute="CanCommandCopy" />
+                                </dxg:TreeListControl.CommandBindings>
+                            </dxg:TreeListControl>
+                        </dx:DXTabItem>
+
+                        <dx:DXTabItem x:Name="tabScreenSplitterFlat">
+                            <dx:DXTabItem.Header>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{x:Static properties:Resources.Flat}" />
+                                </StackPanel>
+                            </dx:DXTabItem.Header>
+                            <dxg:GridControl MinHeight="10" MinWidth="10" Visibility="Visible" CustomSummary="gridDataControl_CustomSummary"
+                                AutoExpandAllGroups="True"
+                                AutoGenerateColumns="AddNew"
+                                Name="gridScreenDataControl" 
+                                AutoPopulateColumns="False" 
+                                AllowDrop="True" 
+                                AllowLiveDataShaping="False" 
+                                dx:DXSerializer.SerializationID="gridScreenDataControl" 
+                                dx:DXSerializer.StoreLayoutMode="All" 
+                                dxg:DataControlSerializationOptions.AddNewColumns="False" 
+                                dxg:DataControlSerializationOptions.RemoveOldColumns="False">
+                                <dxg:GridControl.Columns>
+                                    <dxg:GridColumn ReadOnly="True" AllowEditing="False" AllowGrouping="True" DisplayMemberBinding="{Binding Path=TagName, Mode=OneWay}" FieldName="TagName" Header="{x:Static properties:Resources.ScreenCrossReferenceHeader}"/>
+                                    <dxg:GridColumn ReadOnly="True" AllowEditing="False" AllowGrouping="True" DisplayMemberBinding="{Binding Path=Name, Mode=OneWay}" FieldName="Name" Header="{x:Static properties:Resources.DescriptionHeader}"/>
+                                    <dxg:GridColumn ReadOnly="True" AllowEditing="False" AllowGrouping="True" DisplayMemberBinding="{Binding Path=EntityReadablePath, Mode=OneWay}" FieldName="EntityReadablePath" Header="{x:Static properties:Resources.PathHeader}"/>
+                                    <dxg:GridColumn ReadOnly="True" AllowEditing="False" AllowGrouping="True" DisplayMemberBinding="{Binding Path=IsNotRefValid, Mode=OneWay}" FieldName="IsNotRefValid" Header="{x:Static properties:Resources.IsNotValidHeader}"/>
+                                    <dxg:GridColumn ReadOnly="True" AllowEditing="False" AllowGrouping="True" DisplayMemberBinding="{Binding Path=Container, Mode=OneWay}" FieldName="Container" Header="{x:Static properties:Resources.ContainerHeader}"/>
+                                </dxg:GridControl.Columns>
+                              <dxg:GridControl.TotalSummary>
+                                        <dxg:GridSummaryItem SummaryType="Custom" Alignment="Left" Visible="True" x:Name="summaryRemovedScreensFlat"
+                                                DisplayFormat="{x:Static properties:Resources.TotalRemovedRenamedScreens}" FieldName="IsNotRefValid"/>
+                              </dxg:GridControl.TotalSummary>
+                                <dxg:GridControl.View>
+
+                                    <dxg:TableView AllowEditing="True" ShowFixedTotalSummary="True"
+                                        RowDoubleClick="OnRowDoubleClick"
+                                        FadeSelectionOnLostFocus="False" 
+                                        BestFitMode="VisibleRows"
+                                        AllowBestFit="True" 
+                                        AllowResizing="True"
+                                        ShowGroupPanel="True"
+                                        ShowSearchPanelMode="Always" SearchPanelFindMode="Always" 
+                                        ShowSearchPanelMRUButton="True"
+                                        ShowFilterPanelMode="ShowAlways" 
+                                        NavigationStyle="Row" 
+                                        MultiSelectMode="Row">
+                                        <!--<dxg:TableView.RowStyle>
+                                            <Style TargetType="{x:Type dxg:RowControl}">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding Path=IsSelected}" Value="True">
+                                                        <Setter Property="Background" Value="LightGray" />
+                                                        <Setter Property="Foreground" Value="Black" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </dxg:TableView.RowStyle>-->
+                                        <dxg:TableView.TotalSummaryMenuCustomizations>
+                                            <dxb:RemoveAction ElementName="{x:Static dxg:DefaultSummaryMenuItemNames.Count}"/>
+                                            <dxb:RemoveAction ElementName="{x:Static dxg:DefaultSummaryMenuItemNames.Customize}"/>
+                                        </dxg:TableView.TotalSummaryMenuCustomizations>
+                                    </dxg:TableView>
+                                </dxg:GridControl.View>
+                            </dxg:GridControl>    
+                        </dx:DXTabItem>
+                        
+                    </dx:DXTabControl>
+                </Grid>
+            </dx:DXTabItem>
+            
+            <dx:DXTabItem x:Name="tabConnections">
+                <dx:DXTabItem.Header>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock x:Name="tabConnectionsTxt"
+                            Text="{x:Static properties:Resources.TabConnectionsTitle}" Margin="2"/>
+                        <Image x:Name="connectionTabImage" Height="16" Width="16" Margin="2"/>
+                    </StackPanel>
+                </dx:DXTabItem.Header>
+                
+                <Grid x:Name="connectionGrid">
+                    <dx:DXTabControl x:Name="tabConnectionSplitter" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=UserControl, Mode=FindAncestor}}">
+                        <dx:DXTabControl.View>
+                            <dx:TabControlMultiLineView HeaderLocation="Bottom" />
+                        </dx:DXTabControl.View>
+                        <dx:DXTabItem x:Name="tabConnectionSplitterTree">
+                            <dx:DXTabItem.Header>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{x:Static properties:Resources.Hierarchical}" />
+                                </StackPanel>
+                            </dx:DXTabItem.Header>
+                            
+                            <dxg:TreeListControl Name="treeListControlConnection" SelectionMode="Row">
+                                <dxg:TreeListControl.Columns>
+                                    <dxg:TreeListColumn FieldName="ItemHeader" FilterPopupMode="Excel" SortIndex="0" SortOrder="Ascending" Header="{x:Static properties:Resources.ConnectionDescriptionHeader}" />
+                                    <!--<dxg:TreeListColumn FieldName="EntityReadablePath" FilterPopupMode="Excel" SortIndex="1" SortOrder="Ascending" Header="{x:Static properties:Resources.DescriptionHeader}" />-->
+                                    <dxg:TreeListColumn FieldName="Container" FilterPopupMode="Excel" SortIndex="2" SortOrder="Ascending" Header="{x:Static properties:Resources.ContainerHeader}"/>
+                                </dxg:TreeListControl.Columns>
+                                <dxg:TreeListControl.View>
+                                    <dxg:TreeListView NavigationStyle="Row" AllowTreeIndentScrolling="True"
+                                        ImageFieldName="ResourceIcon" ShowNodeImages="True" VerticalScrollbarVisibility="Auto"
+                                        AllowEditing="False" IsColumnChooserVisible="False" IsColumnMenuEnabled="False"
+                                        ShowColumnHeaders="True" ShowDragDropHint="True" ShowVerticalLines="False" ShowHorizontalLines="False" ShowIndicator="False"
+                                        IsSynchronizedWithCurrentItem="True" AllowDragDrop="True" NodeExpanding="OnTreeNodeExpanding"
+                                        RowDoubleClick="OnRowDoubleClick" AutoWidth="True" NodeCollapsing="OnTreeNodeCollapsing">
+                                        <!--PreviewDragOver="treeListControl_PreviewDragOver"  CompleteRecordDragDrop="TreeListControl_CompletedDragDrop"
+                                            PreviewQueryContinueDrag="addressSpaceTree_PreviewQueryContinueDrag"
+                                            DropRecord="TreeListControl_DragEnd"-->
+                                        <dxg:TreeListView.RowStyle>
+                                            <Style TargetType="{x:Type dxg:RowControl}">
+                                                <Style.Triggers>
+                                                    <MultiDataTrigger>
+                                                        <MultiDataTrigger.Conditions>
+                                                            <Condition Binding="{Binding RelativeSource={RelativeSource Mode=Self}, Path=SelectionState}" Value="None"/>
+                                                            <Condition Binding="{Binding RelativeSource={RelativeSource Mode=Self}, Path=IsMouseOver}" Value="True" />
+                                                        </MultiDataTrigger.Conditions>
+                                                        <Setter Property="Background" Value="{dxi:ThemeResource {dxgt:GridRowThemeKey ResourceKey=CellBorderFocusedBrush}}" />
+                                                    </MultiDataTrigger>
+                                                </Style.Triggers>
+                                                <!--<Setter Property="ContextMenu" Value="{Binding Path=Row.TreeItemInnerObject, Converter={StaticResource TagToContextMenuConverter}}" />-->
+                                            </Style>
+                                        </dxg:TreeListView.RowStyle>
+                                        <dxg:TreeListView.CellStyle>
+                                            <Style TargetType="{x:Type dxg:LightweightCellEditor}">
+                                              <Setter Property="MinHeight" Value="{Binding FontSize, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}, Converter={StaticResource fontToMinRowHeightConverter}, Mode=OneWay}" />
+                                            </Style>
+                                        </dxg:TreeListView.CellStyle>
+                                        <dxg:TreeListView.TotalSummaryMenuCustomizations>
+                                            <dxb:RemoveAction ElementName="{x:Static dxg:DefaultSummaryMenuItemNames.Count}"/>
+                                            <dxb:RemoveAction ElementName="{x:Static dxg:DefaultSummaryMenuItemNames.Customize}"/>
+                                        </dxg:TreeListView.TotalSummaryMenuCustomizations>
+                                    </dxg:TreeListView>
+                                </dxg:TreeListControl.View>
+                                <dxg:TreeListControl.CommandBindings>
+                                    <CommandBinding Command="ApplicationCommands.Cut"
+                                        Executed="OnCommandCut" 
+                                        CanExecute="CanCommandCut" />
+                                    <!--<CommandBinding Command="ApplicationCommands.Delete"
+                                        Executed="OnDeleteEvent" 
+                                        CanExecute="CanExecuteDelete" />-->
+                                    <CommandBinding Command="ApplicationCommands.Paste"
+                                        Executed="OnCommandPaste" 
+                                        CanExecute="CanCommandPaste" />
+                                    <CommandBinding Command="ApplicationCommands.Copy"
+                                        Executed="OnCommandCopy" 
+                                        CanExecute="CanCommandCopy" />
+                                </dxg:TreeListControl.CommandBindings>
+                            </dxg:TreeListControl>
+                        </dx:DXTabItem>
+
+                        <dx:DXTabItem x:Name="tabConnectionSplitterFlat">
+                            <dx:DXTabItem.Header>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{x:Static properties:Resources.Flat}" />
+                                </StackPanel>
+                            </dx:DXTabItem.Header>
+                            <dxg:GridControl MinHeight="10" MinWidth="10" Visibility="Visible"
+                                AutoExpandAllGroups="True"
+                                AutoGenerateColumns="AddNew"
+                                Name="gridConnectionDataControl" 
+                                AutoPopulateColumns="False" 
+                                AllowDrop="True" 
+                                AllowLiveDataShaping="False" 
+                                dx:DXSerializer.SerializationID="gridConnectionDataControl" 
+                                dx:DXSerializer.StoreLayoutMode="All" 
+                                dxg:DataControlSerializationOptions.AddNewColumns="False" 
+                                dxg:DataControlSerializationOptions.RemoveOldColumns="False">
+                                <dxg:GridControl.Columns>
+                                    <dxg:GridColumn ReadOnly="True" AllowEditing="False" AllowGrouping="True" DisplayMemberBinding="{Binding Path=Name, Mode=OneWay}" FieldName="Name" Header="{x:Static properties:Resources.DescriptionHeader}"/>
+                                    <dxg:GridColumn ReadOnly="True" AllowEditing="False" AllowGrouping="True" DisplayMemberBinding="{Binding Path=EntityReadablePath, Mode=OneWay}" FieldName="EntityReadablePath" Header="{x:Static properties:Resources.ConnectionDescriptionHeader}"/>
+                                    <dxg:GridColumn ReadOnly="True" AllowEditing="False" AllowGrouping="True" DisplayMemberBinding="{Binding Path=Container, Mode=OneWay}" FieldName="Container" Header="{x:Static properties:Resources.ContainerHeader}"/>
+                                </dxg:GridControl.Columns>
+                                <dxg:GridControl.View>
+
+                                    <dxg:TableView AllowEditing="True"
+                                        RowDoubleClick="OnRowDoubleClick"
+                                        FadeSelectionOnLostFocus="False" 
+                                        BestFitMode="VisibleRows"
+                                        AllowBestFit="True" 
+                                        AllowResizing="True"
+                                        ShowGroupPanel="True"
+                                        ShowSearchPanelMode="Always" SearchPanelFindMode="Always" 
+                                        ShowSearchPanelMRUButton="True"
+                                        ShowFilterPanelMode="ShowAlways" 
+                                        NavigationStyle="Row" 
+                                        MultiSelectMode="Row">
+                                        <!--<dxg:TableView.RowStyle>
+                                            <Style TargetType="{x:Type dxg:RowControl}">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding Path=IsSelected}" Value="True">
+                                                        <Setter Property="Background" Value="LightGray" />
+                                                        <Setter Property="Foreground" Value="Black" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </dxg:TableView.RowStyle>-->
+
+                                        <dxg:TableView.TotalSummaryMenuCustomizations>
+                                            <dxb:RemoveAction ElementName="{x:Static dxg:DefaultSummaryMenuItemNames.Count}"/>
+                                            <dxb:RemoveAction ElementName="{x:Static dxg:DefaultSummaryMenuItemNames.Customize}"/>
+                                        </dxg:TableView.TotalSummaryMenuCustomizations>
+                                    </dxg:TableView>
+                                </dxg:GridControl.View>
+                            </dxg:GridControl>
+                        </dx:DXTabItem>
+                        
+                    </dx:DXTabControl>
+                </Grid>
+            </dx:DXTabItem>
+          <dx:DXTabItem x:Name="tabStringIDs">
+            <dx:DXTabItem.Header>
+              <StackPanel Orientation="Horizontal">
+                <TextBlock x:Name="tabStringIDsTxt"
+                    Text="{x:Static properties:Resources.TabStringIDsTitle}" Margin="2"/>
+                <Image x:Name="stringIDsTabImage" Height="16" Width="16" Margin="2"/>
+              </StackPanel>
+            </dx:DXTabItem.Header>
+
+            <Grid x:Name="stringIDsGrid">
+              <dx:DXTabControl x:Name="tabStringIDsSplitter" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=UserControl, Mode=FindAncestor}}">
+                <dx:DXTabControl.View>
+                  <dx:TabControlMultiLineView HeaderLocation="Bottom" />
+                </dx:DXTabControl.View>
+                <dx:DXTabItem x:Name="tabStringIDsSplitterTree">
+                  <dx:DXTabItem.Header>
+                    <StackPanel Orientation="Horizontal">
+                      <TextBlock Text="{x:Static properties:Resources.Hierarchical}" />
+                    </StackPanel>
+                  </dx:DXTabItem.Header>
+
+                  <dxg:TreeListControl Name="treeListControlStringIDs" SelectionMode="Row">
+                    <dxg:TreeListControl.Columns>
+                      <dxg:TreeListColumn FieldName="ItemHeader" FilterPopupMode="Excel" SortIndex="0" SortOrder="Ascending" Header="{x:Static properties:Resources.StringIDsDescriptionHeader}" />
+                      <dxg:TreeListColumn FieldName="Container" FilterPopupMode="Excel" SortIndex="2" SortOrder="Ascending" Header="{x:Static properties:Resources.ContainerHeader}"/>
+                      <dxg:TreeListColumn FieldName="IsNotValid" FilterPopupMode="Excel" SortIndex="2" SortOrder="Ascending" Header="{x:Static properties:Resources.IsNotValidHeader}">
+                        <dxg:TreeListColumn.CellTemplate>
+                          <DataTemplate>
+                            <Ellipse HorizontalAlignment="Left" Fill="{Binding RowData.Row.IsNotValid, Converter={StaticResource BoolToColorConverter}, Mode=OneWay}"
+                                                 Width="10" Height="10">
+                              <Ellipse.ToolTip>
+                                <TextBlock Text="{x:Static properties:Resources.StringHasBeenRemoved}"
+                                           Width="250" TextWrapping="Wrap"/>
+                              </Ellipse.ToolTip>
+                            </Ellipse>
+                          </DataTemplate>
+                        </dxg:TreeListColumn.CellTemplate>
+                      </dxg:TreeListColumn>
+                      <dxg:TreeListColumn FieldName="IsNotInUse" FilterPopupMode="Excel" SortIndex="2" SortOrder="Ascending" Header="{x:Static properties:Resources.IsNotUsedHeader}">
+                        <dxg:TreeListColumn.CellTemplate>
+                          <DataTemplate>
+                            <Ellipse HorizontalAlignment="Left" Fill="{Binding RowData.Row.IsNotInUse, Converter={StaticResource BoolToColorConverter}, Mode=OneWay, ConverterParameter='1'}"
+                                                 ToolTip="{x:Static properties:Resources.StringIsNotInUse}"
+                                                 Width="10" Height="10"/>
+                          </DataTemplate>
+                        </dxg:TreeListColumn.CellTemplate>
+                      </dxg:TreeListColumn>
+                    </dxg:TreeListControl.Columns>
+                    <dxg:TreeListControl.View>
+                      <dxg:TreeListView NavigationStyle="Row" AllowTreeIndentScrolling="True" ShowFixedTotalSummary="True"
+                          CustomSummary="treeListControl_CustomSummary"
+                          ImageFieldName="ResourceIcon" ShowNodeImages="True" VerticalScrollbarVisibility="Auto"
+                          AllowEditing="False" IsColumnChooserVisible="False" IsColumnMenuEnabled="False"
+                          ShowColumnHeaders="True" ShowDragDropHint="True" ShowVerticalLines="False" ShowHorizontalLines="False" ShowIndicator="False"
+                          IsSynchronizedWithCurrentItem="True" AllowDragDrop="True" NodeExpanding="OnTreeNodeExpanding"
+                          RowDoubleClick="OnRowDoubleClick" AutoWidth="True" NodeCollapsing="OnTreeNodeCollapsing">
+                        <!--PreviewDragOver="treeListControl_PreviewDragOver"  CompleteRecordDragDrop="TreeListControl_CompletedDragDrop"
+                                            PreviewQueryContinueDrag="addressSpaceTree_PreviewQueryContinueDrag"
+                                            DropRecord="TreeListControl_DragEnd"-->
+                        <dxg:TreeListView.RowStyle>
+                          <Style TargetType="{x:Type dxg:RowControl}">
+                            <Style.Triggers>
+                              <MultiDataTrigger>
+                                <MultiDataTrigger.Conditions>
+                                  <Condition Binding="{Binding RelativeSource={RelativeSource Mode=Self}, Path=SelectionState}" Value="None"/>
+                                  <Condition Binding="{Binding RelativeSource={RelativeSource Mode=Self}, Path=IsMouseOver}" Value="True" />
+                                </MultiDataTrigger.Conditions>
+                                <Setter Property="Background" Value="{dxi:ThemeResource {dxgt:GridRowThemeKey ResourceKey=CellBorderFocusedBrush}}" />
+                              </MultiDataTrigger>
+                            </Style.Triggers>
+                            <!--<Setter Property="ContextMenu" Value="{Binding Path=Row.TreeItemInnerObject, Converter={StaticResource TagToContextMenuConverter}}" />-->
+                          </Style>
+                        </dxg:TreeListView.RowStyle>
+                        <dxg:TreeListView.CellStyle>
+                          <Style TargetType="{x:Type dxg:LightweightCellEditor}">
+                             <Setter Property="MinHeight" Value="{Binding FontSize, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}, Converter={StaticResource fontToMinRowHeightConverter}, Mode=OneWay}" />
+                          </Style>
+                        </dxg:TreeListView.CellStyle>
+
+                        <dxg:TreeListView.TotalSummaryMenuCustomizations>
+                            <dxb:RemoveAction ElementName="{x:Static dxg:DefaultSummaryMenuItemNames.Count}"/>
+                            <dxb:RemoveAction ElementName="{x:Static dxg:DefaultSummaryMenuItemNames.Customize}"/>
+                        </dxg:TreeListView.TotalSummaryMenuCustomizations>
+
+                    </dxg:TreeListView>
+                    </dxg:TreeListControl.View>
+                    <dxg:TreeListControl.TotalSummary>
+                        <dxg:TreeListSummaryItem SummaryType="Custom" Alignment="Left" Visible="True" x:Name="summaryRenamedStrings"
+                                      DisplayFormat="{x:Static properties:Resources.TotalRemovedRenamedStrings}" FieldName="IsNotRefValid"/>
+                        <dxg:TreeListSummaryItem SummaryType="Custom" Alignment="Right" Visible="True" x:Name="summaryNotInUseStrings"
+                                      DisplayFormat="{x:Static properties:Resources.TotalNotInUseStrings}" FieldName="IsNotRefUsed"/>
+                    </dxg:TreeListControl.TotalSummary>
+                    <dxg:TreeListControl.CommandBindings>
+                      <CommandBinding Command="ApplicationCommands.Cut"
+                          Executed="OnCommandCut"
+                          CanExecute="CanCommandCut" />
+                      <!--<CommandBinding Command="ApplicationCommands.Delete"
+                                        Executed="OnDeleteEvent" 
+                                        CanExecute="CanExecuteDelete" />-->
+                      <CommandBinding Command="ApplicationCommands.Paste"
+                          Executed="OnCommandPaste"
+                          CanExecute="CanCommandPaste" />
+                      <CommandBinding Command="ApplicationCommands.Copy"
+                          Executed="OnCommandCopy"
+                          CanExecute="CanCommandCopy" />
+                    </dxg:TreeListControl.CommandBindings>
+                  </dxg:TreeListControl>
+                </dx:DXTabItem>
+
+                <dx:DXTabItem x:Name="tabStringIDsSplitterFlat">
+                  <dx:DXTabItem.Header>
+                    <StackPanel Orientation="Horizontal">
+                      <TextBlock Text="{x:Static properties:Resources.Flat}" />
+                    </StackPanel>
+                  </dx:DXTabItem.Header>
+                  <dxg:GridControl MinHeight="10" MinWidth="10" Visibility="Visible" CustomSummary="gridDataControl_CustomSummary"
+                      AutoExpandAllGroups="True"
+                      AutoGenerateColumns="AddNew"
+                      Name="gridStringIDsDataControl"
+                      AutoPopulateColumns="False"
+                      AllowDrop="True"
+                      AllowLiveDataShaping="False"
+                      dx:DXSerializer.SerializationID="gridStringIDsDataControl"
+                      dx:DXSerializer.StoreLayoutMode="All"
+                      dxg:DataControlSerializationOptions.AddNewColumns="False"
+                      dxg:DataControlSerializationOptions.RemoveOldColumns="False">
+                    <dxg:GridControl.Columns>
+                      <dxg:GridColumn ReadOnly="True" AllowEditing="False" AllowGrouping="True" DisplayMemberBinding="{Binding Path=EntityReadablePath, Mode=OneWay}" FieldName="Name" Header="{x:Static properties:Resources.StringIDsDescriptionHeader}"/>
+                      <dxg:GridColumn ReadOnly="True" AllowEditing="False" AllowGrouping="True" DisplayMemberBinding="{Binding Path=Name, Mode=OneWay}" FieldName="EntityReadablePath" Header="{x:Static properties:Resources.DescriptionHeader}"/>
+                      <dxg:GridColumn ReadOnly="True" AllowEditing="False" AllowGrouping="True" DisplayMemberBinding="{Binding Path=IsNotRefValid, Mode=OneWay}" FieldName="IsNotRefValid" Header="{x:Static properties:Resources.IsNotValidHeader}"/>
+                      <dxg:GridColumn ReadOnly="True" AllowEditing="False" AllowGrouping="True" DisplayMemberBinding="{Binding Path=IsNotRefUsed, Mode=OneWay}" FieldName="IsNotRefUsed" Header="{x:Static properties:Resources.IsNotUsedHeader}"/>
+                      <dxg:GridColumn ReadOnly="True" AllowEditing="False" AllowGrouping="True" DisplayMemberBinding="{Binding Path=Container, Mode=OneWay}" FieldName="Container" Header="{x:Static properties:Resources.ContainerHeader}"/>
+                    </dxg:GridControl.Columns>
+                    <dxg:GridControl.TotalSummary>
+                      <dxg:GridSummaryItem SummaryType="Custom" Alignment="Left" Visible="True" x:Name="summaryRenamedStringsFlat"
+                                      DisplayFormat="{x:Static properties:Resources.TotalRemovedRenamedStrings}" FieldName="IsNotRefValid"/>
+                      <dxg:GridSummaryItem SummaryType="Custom" Alignment="Right" Visible="True" x:Name="summaryNotInUseStringsFlat"
+                                      DisplayFormat="{x:Static properties:Resources.TotalNotInUseStrings}" FieldName="IsNotRefUsed"/>
+                    </dxg:GridControl.TotalSummary>
+                    <dxg:GridControl.View>
+
+                      <dxg:TableView AllowEditing="True" ShowFixedTotalSummary="True"
+                          RowDoubleClick="OnRowDoubleClick"
+                          FadeSelectionOnLostFocus="False"
+                          BestFitMode="VisibleRows"
+                          AllowBestFit="True"
+                          AllowResizing="True"
+                          ShowGroupPanel="True"
+                          ShowSearchPanelMode="Always" SearchPanelFindMode="Always"
+                          ShowSearchPanelMRUButton="True"
+                          ShowFilterPanelMode="ShowAlways"
+                          NavigationStyle="Row"
+                          MultiSelectMode="Row">
+                        <!--<dxg:TableView.RowStyle>
+                                            <Style TargetType="{x:Type dxg:RowControl}">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding Path=IsSelected}" Value="True">
+                                                        <Setter Property="Background" Value="LightGray" />
+                                                        <Setter Property="Foreground" Value="Black" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </dxg:TableView.RowStyle>-->
+
+                                        <dxg:TableView.TotalSummaryMenuCustomizations>
+                                            <dxb:RemoveAction ElementName="{x:Static dxg:DefaultSummaryMenuItemNames.Count}"/>
+                                            <dxb:RemoveAction ElementName="{x:Static dxg:DefaultSummaryMenuItemNames.Customize}"/>
+                                        </dxg:TableView.TotalSummaryMenuCustomizations>
+                      </dxg:TableView>
+                    </dxg:GridControl.View>
+                  </dxg:GridControl>
+                </dx:DXTabItem>
+
+              </dx:DXTabControl>
+            </Grid>
+          </dx:DXTabItem>
+
+        </dx:DXTabControl>
+    </Grid>
+</UserControl>

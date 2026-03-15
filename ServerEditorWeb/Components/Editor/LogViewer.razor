@@ -1,0 +1,48 @@
+@using ServerEditorWeb.Services
+@implements IDisposable
+
+<div class="log-viewer-panel">
+    <div class="d-flex gap-2 mb-2 align-items-center">
+        <h6 class="mb-0">@Title</h6>
+        <input type="text" class="form-control form-control-sm" style="max-width: 250px;"
+               placeholder="Filter..." @bind="FilterText" @bind:after="OnFilterChanged" />
+    </div>
+    <div class="log-list" @ref="_logContainer">
+        @foreach (var entry in Service.FilteredLogs)
+        {
+            <div class="log-entry @entry.CssClass">
+                <span class="log-ts">@entry.Timestamp</span>
+                <span class="log-level">[@entry.Level]</span>
+                <span class="log-msg">@entry.Message</span>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public string Title { get; set; } = "Logs";
+    [Parameter] public LogViewerService Service { get; set; } = default!;
+
+    private string FilterText { get; set; } = "";
+    private ElementReference _logContainer;
+
+    protected override void OnInitialized()
+    {
+        Service.LogsChanged += OnLogsChanged;
+    }
+
+    private void OnLogsChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void OnFilterChanged()
+    {
+        Service.FilterText = FilterText;
+    }
+
+    public void Dispose()
+    {
+        Service.LogsChanged -= OnLogsChanged;
+    }
+}

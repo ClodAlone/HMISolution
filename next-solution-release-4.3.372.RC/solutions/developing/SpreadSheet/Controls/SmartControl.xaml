@@ -1,0 +1,92 @@
+﻿<UserControl x:Class="SpreadSheet.Controls.SmartControl"
+             xmlns:dxg="http://schemas.devexpress.com/winfx/2008/xaml/grid" 
+             xmlns:dxe="http://schemas.devexpress.com/winfx/2008/xaml/editors"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:properties="clr-namespace:SpreadSheet.Properties"
+             xmlns:common="clr-namespace:OPCUAViewModel.Converters;assembly=OPCUAViewModel"
+             mc:Ignorable="d"  Height="960" Width="640">
+
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/SharedResources;component/Resources/SharedImages.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+            <common:UriConverter x:Key="UriConverter" />
+        </ResourceDictionary>
+    </UserControl.Resources>
+    
+    <Grid>
+        <Grid> 
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition/>
+                    <ColumnDefinition/>
+                </Grid.ColumnDefinitions>
+                <Button Click="OnAdd" ToolTip="{x:Static properties:Resources.AddButtonTitle}" Margin="5">
+                    <Button.Content>
+                        <Image Margin="2" Source="{StaticResource AddNewSmall}" Height="16" Width="16" />
+                    </Button.Content>
+                </Button>
+                <Button IsEnabled="False" Grid.Column="1" x:Name="btnDelete" 
+                        ToolTip="{x:Static properties:Resources.DeleteButtonTitle}" Click="OnDelete" Margin="5">
+                    <Button.Content>
+                        <Image Margin="2" Source="{StaticResource RemoveMinusSmall}" Height="16" Width="16" />
+                    </Button.Content>
+                </Button>
+            </Grid>
+
+            <dxg:GridControl Grid.Row="1" Name="gridControl">
+                <dxg:GridControl.Columns>
+                    <dxg:GridColumn AllowDrop="False" AllowEditing="False" Header="{x:Static properties:Resources.TagName}">
+                        <dxg:GridColumn.CellTemplate>
+                            <DataTemplate>
+                                <DockPanel ToolTip="{Binding Data.TagReference.HumanReadable}"  LastChildFill="True" Grid.Column="1" Grid.Row="1" 
+                                           HorizontalAlignment="Stretch" VerticalAlignment="Center">
+                                    <Button DockPanel.Dock="Right" Click="DlgButton_Click_Clear" HorizontalAlignment="Stretch" VerticalAlignment="Center">
+                                        <Button.Content>
+                                            <Image Source="{StaticResource CancelSmall}" Height="16" Width="16" />
+                                        </Button.Content>
+                                    </Button>
+                                    <Button DockPanel.Dock="Right" Click="DlgButton_Click" HorizontalAlignment="Stretch" VerticalAlignment="Center">
+                                        <Button.Content>
+                                            <Image Source="{StaticResource EditGeneralSmall}" Height="16" Width="16" />
+                                        </Button.Content>
+                                    </Button>
+                                    <!--<TextBox IsReadOnly="True" IsHitTestVisible="False" x:Name="text" ToolTip="{Binding Data.TagReference.HumanReadable}" 
+                                             Text="{Binding Data.TagReference.HumanReadable}" HorizontalAlignment="Stretch" VerticalAlignment="Center"/>-->
+                                    <dxe:TextEdit x:Name="uriLabel" Tag="" IsReadOnly="False"
+                                                      EditValue="{Binding Path = RowData.Row.TagReference,Converter={StaticResource UriConverter}, Mode=OneWay,UpdateSourceTrigger=PropertyChanged}"
+                                                     LostFocus="uriLabel_LostFocus" PreviewKeyDown="uriLabel_KeyDown" GotFocus="uriLabel_GotFocus" />
+                                </DockPanel>
+                            </DataTemplate>
+                        </dxg:GridColumn.CellTemplate>
+                    </dxg:GridColumn>
+                    <dxg:GridColumn DisplayMemberBinding="{Binding Path=Sheet, Mode=TwoWay}" Header="{x:Static properties:Resources.Sheet}">
+                        <dxg:GridColumn.EditSettings>
+                            <dxe:TextEditSettings  DisplayFormat="n2"/>
+                        </dxg:GridColumn.EditSettings>
+                    </dxg:GridColumn>
+                    <dxg:GridColumn DisplayMemberBinding="{Binding Path=CellName, Mode=TwoWay}" Header="{x:Static properties:Resources.CellName}">
+                        <dxg:GridColumn.EditSettings>
+                            <dxe:TextEditSettings/>
+                        </dxg:GridColumn.EditSettings>
+                    </dxg:GridColumn>
+
+                </dxg:GridControl.Columns>
+                <dxg:GridControl.View>
+                    <dxg:TableView Name="tableView" ShowTotalSummary="False" AutoWidth="true" ShowGroupPanel="False" 
+                                   CellValueChanging="tableView_CellValueChanging"
+                                   CellValueChanged="tableView_CellValueChanged"
+                                   FocusedRowChanged="tableView_FocusedRowChanged" />
+                </dxg:GridControl.View>
+            </dxg:GridControl>
+        </Grid>
+    </Grid>
+</UserControl>

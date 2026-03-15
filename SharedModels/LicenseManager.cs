@@ -1,0 +1,298 @@
+using System.Net.NetworkInformation;
+using System.Runtime.InteropServices;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+
+namespace SharedModels;
+
+/// <summary>
+/// Manages license validation, hardware fingerprinting, and RSA key generation.
+/// <para>
+/// <b>Workflow:</b>
+/// <list type="number">
+///   <item>You (developer) call <see cref="GenerateKeyPair"/> once to create a private/public key pair.</item>
+///   <item>Embed the <b>public key</b> in the shipped binaries (see <see cref="EmbeddedPublicKey"/>).</item>
+///   <item>Use <see cref="SignLicense"/> with the <b>private key</b> to sign license files you issue to customers.</item>
+///   <item>At runtime, call <see cref="Validate"/> which checks the signature with the embedded public key.</item>
+/// </list>
+/// </para>
+/// </summary>
+public static class LicenseManager
+{
+    // ─── Embedded Public Key ────────────────────────────────────────
+    // Replace this with your actual public key after calling GenerateKeyPair().
+    // This key is safe to ship — it can only VERIFY, not create licenses.
+
+    private const string EmbeddedPublicKey =
+        "REPLACE_WITH_YOUR_PUBLIC_KEY";
+
+    private static LicenseStatus? _cached;
+
+    // ─── Hardware Fingerprint ───────────────────────────────────────
+
+    /// <summary>
+    /// Generates a stable hardware fingerprint for the current machine.
+    /// Combines: machine name, OS, first physical MAC address, processor count.
+    /// </summary>
+    public static string GetMachineId()
+    {
+        var sb = new StringBuilder();
+        sb.Append(Environment.MachineName);
+        sb.Append('|');
+        sb.Append(RuntimeInformation.OSDescription);
+        sb.Append('|');
+        sb.Append(Environment.ProcessorCount);
+        sb.Append('|');
+
+        // First physical (non-loopback) MAC address — stable across reboots
+        try
+        {
+            var nic = NetworkInterface.GetAllNetworkInterfaces()
+                .Where(n => n.NetworkInterfaceType != NetworkInterfaceType.Loopback &&
+                            n.OperationalStatus == OperationalStatus.Up)
+                .OrderBy(n => n.Name)
+                .FirstOrDefault();
+            if (nic != null)
+                sb.Append(nic.GetPhysicalAddress().ToString());
+        }
+        catch
+        {
+            sb.Append("NOMAC");
+        }
+
+        // SHA256 hash for a compact, stable fingerprint
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(sb.ToString()));
+        return Convert.ToHexStringLower(hash)[..32];
+    }
+
+    // ─── Validation ─────────────────────────────────────────────────
+
+    /// <summary>
+    /// Validate a license file and return the current license status.
+    /// Checks: signature, expiration, machine ID.
+    /// </summary>
+    public static LicenseStatus Validate(string? licenseFilePath)
+    {
+        if (string.IsNullOrEmpty(licenseFilePath) || !File.Exists(licenseFilePath))
+        {
+            _cached = new LicenseStatus
+            {
+                IsValid = false,
+                Tier = "Unlicensed",
+                Message = "No license file found. Running in Trial mode.",
+                License = LicenseTiers.CreateTrial("Trial User", "")
+            };
+            _cached.License.Signature = "(trial)";
+            ApplyTrialLimits(_cached);
+            return _cached;
+        }
+
+        try
+        {
+            var json = File.ReadAllText(licenseFilePath);
+            var license = JsonSerializer.Deserialize<License>(json);
+            if (license == null)
+                return Fail("Failed to parse license file.");
+
+            // 1. Verify RSA signature (skip if public key not yet configured)
+            if (!string.Equals(EmbeddedPublicKey, "REPLACE_WITH_YOUR_PUBLIC_KEY", StringComparison.Ordinal))
+            {
+                var payload = GetSignablePayload(license);
+                if (!VerifySignature(payload, license.Signature, EmbeddedPublicKey))
+                    return Fail("License signature is invalid. The file may have been tampered with.");
+            }
+
+            // 2. Check expiration
+            if (license.ExpiresUtc < DateTime.UtcNow)
+            {
+                var status = Fail($"License expired on {license.ExpiresUtc:yyyy-MM-dd}.");
+                status.License = license;
+                status.Tier = license.Tier;
+                status.LicensedTo = license.LicensedTo;
+                status.ExpiresUtc = license.ExpiresUtc;
+                ApplyTrialLimits(status);
+                return status;
+            }
+
+            // 3. Check machine ID (if specified)
+            if (!string.IsNullOrEmpty(license.MachineId))
+            {
+                var currentId = GetMachineId();
+                if (!string.Equals(license.MachineId, currentId, StringComparison.OrdinalIgnoreCase))
+                    return Fail($"License is locked to a different machine (expected: {license.MachineId[..8]}…, got: {currentId[..8]}…).");
+            }
+
+            // Valid!
+            var daysRemaining = license.ExpiresUtc == DateTime.MaxValue
+                ? int.MaxValue
+                : (int)(license.ExpiresUtc - DateTime.UtcNow).TotalDays;
+
+            _cached = new LicenseStatus
+            {
+                IsValid = true,
+                Tier = license.Tier,
+                LicensedTo = license.LicensedTo,
+                ExpiresUtc = license.ExpiresUtc,
+                DaysRemaining = daysRemaining,
+                License = license,
+                Message = daysRemaining < 30 && daysRemaining != int.MaxValue
+                    ? $"License valid — expires in {daysRemaining} day(s)."
+                    : "License valid."
+            };
+            return _cached;
+        }
+        catch (Exception ex)
+        {
+            return Fail($"Error reading license: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Get the cached license status from the last <see cref="Validate"/> call.
+    /// Returns an Unlicensed/Trial status if never validated.
+    /// </summary>
+    public static LicenseStatus Current => _cached ?? new LicenseStatus
+    {
+        IsValid = false,
+        Tier = "Unlicensed",
+        Message = "License not checked yet."
+    };
+
+    /// <summary>
+    /// Find a license.json file next to the given config file path.
+    /// Searches for: license.json, License.json, *.license.json
+    /// </summary>
+    public static string? FindLicenseFile(string configPath)
+    {
+        var dir = Path.GetDirectoryName(Path.GetFullPath(configPath));
+        if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir))
+            return null;
+
+        // Exact name
+        var exact = Path.Combine(dir, "license.json");
+        if (File.Exists(exact)) return exact;
+
+        // Case-insensitive
+        foreach (var f in Directory.GetFiles(dir, "*.json"))
+        {
+            var name = Path.GetFileName(f);
+            if (name.Equals("license.json", StringComparison.OrdinalIgnoreCase))
+                return f;
+            if (name.EndsWith(".license.json", StringComparison.OrdinalIgnoreCase))
+                return f;
+        }
+
+        return null;
+    }
+
+    // ─── Key Generation & Signing (developer tools) ─────────────────
+
+    /// <summary>
+    /// Generate a new RSA-2048 key pair. Returns (privateKeyPem, publicKeyBase64).
+    /// The private key is used to sign licenses. The public key is embedded in the binaries.
+    /// </summary>
+    public static (string PrivateKeyPem, string PublicKeyBase64) GenerateKeyPair()
+    {
+        using var rsa = RSA.Create(2048);
+        var privateKey = rsa.ExportRSAPrivateKeyPem();
+        var publicKeyBytes = rsa.ExportRSAPublicKey();
+        var publicKeyBase64 = Convert.ToBase64String(publicKeyBytes);
+        return (privateKey, publicKeyBase64);
+    }
+
+    /// <summary>
+    /// Sign a license object with the given RSA private key (PEM format).
+    /// Sets the <see cref="License.Signature"/> property.
+    /// </summary>
+    public static void SignLicense(License license, string privateKeyPem)
+    {
+        var payload = GetSignablePayload(license);
+        using var rsa = RSA.Create();
+        rsa.ImportFromPem(privateKeyPem);
+        var signature = rsa.SignData(
+            Encoding.UTF8.GetBytes(payload),
+            HashAlgorithmName.SHA256,
+            RSASignaturePadding.Pkcs1);
+        license.Signature = Convert.ToBase64String(signature);
+    }
+
+    /// <summary>
+    /// Export a signed license to a JSON file.
+    /// </summary>
+    public static void ExportLicense(License license, string filePath)
+    {
+        var options = new JsonSerializerOptions { WriteIndented = true };
+        var json = JsonSerializer.Serialize(license, options);
+        File.WriteAllText(filePath, json);
+    }
+
+    // ─── Internals ──────────────────────────────────────────────────
+
+    /// <summary>
+    /// Build the canonical JSON payload that is signed/verified.
+    /// All fields except <see cref="License.Signature"/> in a deterministic order.
+    /// </summary>
+    internal static string GetSignablePayload(License license)
+    {
+        // Deterministic: sorted keys, no whitespace
+        var payload = new SortedDictionary<string, object?>
+        {
+            ["Id"] = license.Id,
+            ["Tier"] = license.Tier,
+            ["LicensedTo"] = license.LicensedTo,
+            ["ProjectName"] = license.ProjectName,
+            ["MachineId"] = license.MachineId,
+            ["IssuedUtc"] = license.IssuedUtc.ToString("o"),
+            ["ExpiresUtc"] = license.ExpiresUtc.ToString("o"),
+            ["MaxVariables"] = license.MaxVariables,
+            ["MaxDrivers"] = license.MaxDrivers,
+            ["MaxScripts"] = license.MaxScripts,
+            ["MaxPlcPrograms"] = license.MaxPlcPrograms,
+            ["MaxScreens"] = license.MaxScreens,
+            ["MaxRecipes"] = license.MaxRecipes,
+            ["AllowDataLogging"] = license.AllowDataLogging,
+            ["AllowAi"] = license.AllowAi
+        };
+        return JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = false });
+    }
+
+    private static bool VerifySignature(string payload, string signatureBase64, string publicKeyBase64)
+    {
+        try
+        {
+            using var rsa = RSA.Create();
+            rsa.ImportRSAPublicKey(Convert.FromBase64String(publicKeyBase64), out _);
+            var signatureBytes = Convert.FromBase64String(signatureBase64);
+            return rsa.VerifyData(
+                Encoding.UTF8.GetBytes(payload),
+                signatureBytes,
+                HashAlgorithmName.SHA256,
+                RSASignaturePadding.Pkcs1);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static LicenseStatus Fail(string message)
+    {
+        var status = new LicenseStatus
+        {
+            IsValid = false,
+            Tier = "Trial",
+            Message = message,
+            License = LicenseTiers.CreateTrial("Trial User", "")
+        };
+        ApplyTrialLimits(status);
+        _cached = status;
+        return status;
+    }
+
+    private static void ApplyTrialLimits(LicenseStatus status)
+    {
+        // When license is invalid/expired, fall back to trial limits
+        status.License ??= LicenseTiers.CreateTrial("Trial User", "");
+    }
+}

@@ -1,0 +1,107 @@
+﻿<UserControl x:Class="UFUAEditor.Controls.ListTagEntityReferenceEditor"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:local="clr-namespace:UFUAEditor"
+             xmlns:converters="clr-namespace:CommonControls.Converters;assembly=CommonControls"
+             xmlns:self="clr-namespace:UFUAEditor.Controls"
+             xmlns:properties="clr-namespace:UFUAEditor.Properties"
+             x:Name="listTagsEditor"
+             Height="300" Width="300"
+             mc:Ignorable="d" 
+             d:DesignHeight="300" d:DesignWidth="300">
+
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/SharedResources;component/Resources/SharedImages.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+            <converters:ActualWidthConverter x:Key="ActualWidthConverter" />
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <UserControl.CommandBindings>
+
+        <CommandBinding Command="{x:Static self:ListTagEntityReferenceEditor.EditCommand}"
+                    Executed="OnEditCommandExecuted" 
+                    CanExecute="OnCanExecuteEditCommand" />
+
+        <CommandBinding Command="{x:Static self:ListTagEntityReferenceEditor.RemoveCommand}"
+                    Executed="OnRemoveCommandExecuted" 
+                    CanExecute="OnCanExecuteRemoveCommand" />
+
+        <CommandBinding Command="{x:Static self:ListTagEntityReferenceEditor.MoveUpCommand}"
+                    Executed="OnMoveUpCommandExecuted" 
+                    CanExecute="OnCanExecuteMoveUpCommand" />
+
+        <CommandBinding Command="{x:Static self:ListTagEntityReferenceEditor.MoveDownCommand}"
+                    Executed="OnMoveDownCommandExecuted" 
+                    CanExecute="OnCanExecuteMoveDownCommand" />
+
+    </UserControl.CommandBindings>
+
+    <Grid x:Name="layoutGrid" >
+        <Grid.RowDefinitions>
+            <RowDefinition Height="90*" />
+            <RowDefinition Height="10*" />
+        </Grid.RowDefinitions>
+        
+        <ListBox x:Name="listBoxControl" 
+                 ItemsSource="{Binding}"
+                 IsSynchronizedWithCurrentItem="False" >
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <Grid 
+                        Width="{Binding Path=ActualWidth, 
+                        RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type ScrollContentPresenter}},
+                        Converter={StaticResource ResourceKey=ActualWidthConverter}}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition />
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                            <TextBox x:Name="textEnum" Tag="{Binding}" IsReadOnly="True"
+                                 Text="{Binding Mode=OneWay, UpdateSourceTrigger=PropertyChanged}" />
+                        <Button Grid.Column="1" Tag="{Binding}"
+                                Command="{x:Static self:ListTagEntityReferenceEditor.EditCommand}">
+                            <Button.Content>
+                                <Image Source="{StaticResource EditGeneralSmall}"/>
+                            </Button.Content>
+                        </Button>
+                        <Button Grid.Column="2" Tag="{Binding}"
+                                Command="{x:Static self:ListTagEntityReferenceEditor.RemoveCommand}">
+                            <Button.Content>
+                                <Image Source="{StaticResource RemoveSmall}" Height="16" Width="16"/>
+                            </Button.Content>
+                        </Button>
+                        <Button Grid.Column="3" Tag="{Binding}"
+                                Command="{x:Static self:ListTagEntityReferenceEditor.MoveUpCommand}">
+                            <Button.Content>
+                                <Image Source="{StaticResource MoveUpSmall}"/>
+                            </Button.Content>
+                        </Button>
+                        <Button Grid.Column="4" Tag="{Binding}"
+                                Command="{x:Static self:ListTagEntityReferenceEditor.MoveDownCommand}">
+                            <Button.Content>
+                                <Image Source="{StaticResource MoveDownSmall}"/>
+                            </Button.Content>
+                        </Button>
+                    </Grid>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+        
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="50*" />
+                <ColumnDefinition Width="50*" />
+            </Grid.ColumnDefinitions>
+            <Button Content="{x:Static properties:Resources.NewEnumStringAddNew}" Command="{Binding Path=AddNew, ElementName=listTagsEditor}" />
+            <Button Content="{x:Static properties:Resources.NewEnumStringRemoveAll}" Grid.Column="2" Command="{Binding Path=RemoveAll, ElementName=listTagsEditor}" />
+        </Grid>
+        
+    </Grid>
+</UserControl>

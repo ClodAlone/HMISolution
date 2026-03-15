@@ -1,0 +1,70 @@
+﻿<div id="tileView" class="tileView">
+    <img src="cl.gif" alt="" onload="onTileLoaded(this)" id="loadingImage" />
+    <div id="tileview"></div>
+
+    <script>
+        function onTileLoaded(obj) {
+
+            var thisPage = $(obj).parent();
+            $(obj).remove();
+            thisPage.localize();
+
+            var scope = thisPage.scope();
+            if (!scope)
+                return;
+            var paratt = thisPage.data(dataparameters);
+
+            $(thisPage).bind('destroyed', function () {
+                console.log('tileview unloaded');
+            });
+
+            scope.corehubconnection.invoke("GetListTiles")
+                .then((ret) => {
+                    var tileViewData = [];
+                    thisPage.css("background", undefinedOrNull(ret[0]) ? "indianred" : ret[0]);
+                    jQuery.each(ret[1], function (index, tile) {
+                        tileViewData.push({ text: tile.Name, option: tile.Url, image: tile.ImageUrl, color: tile.Color, viewType: 'screenView' })
+                    });
+
+                    var container = thisPage.children().first();
+
+                    container.dxTileView({
+                        dataSource: tileViewData,
+                        itemTemplate: function (itemData, itemIndex, itemElement) {
+                            // itemElement.append("<div class=\"image\" style=\"background-image: url(" + itemData.ImageSrc + ")\"></div>");
+                            itemElement.append("<div title=\"" + itemData.text + "\" class=\"title\">" + itemData.text +
+                                "</div><div class=\"image\" style=\"background-color: " + (itemData.color ? itemData.color : getRandomColor()) + "\"></div>");
+                            // "</div><div class=\"image\" style=\"background-image: url(" + itemData.image + ")\"></div>");
+                        },
+                        onItemClick: function (e) {
+                            var options = { name: e.itemData.option };
+                            scope.activateView(e.itemData.viewType, JSON.stringify(options));
+                        },
+                        baseItemHeight: 130,
+                        baseItemWidth: 180,
+                        height: "100%",
+                        direction: "vertical",
+                        showScrollbar: true
+                    });
+
+                    scope.busyVisible = false;
+                    scope.$apply();
+
+                }).catch(err => {
+                    console.error(err.toString());
+                    scope.busyVisible = false;
+                    scope.$apply();
+                    scope.$broadcast(onError, { ex: err, value: "Error opening : " + err.toString() });
+                });
+        }
+
+        function getRandomColor() {
+            var letters = '0123456789ABCDEF';
+            var color = '#';
+            for (var i = 0; i < 6; i++) {
+                color += letters[Math.floor(Math.random() * 16)];
+            }
+            return color;
+        }
+    </script>
+</div>

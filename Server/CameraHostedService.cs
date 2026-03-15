@@ -1,0 +1,231 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Net;
+using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using SharedModels;
+
+namespace SimpleOpcFileServer;
+
+/// <summary>
+/// Background service that starts IP camera capture, YOLO detection, and serves MJPEG streams
+/// via a lightweight HTTP listener on port 8088.
+/// </summary>
+public class CameraHostedService : BackgroundService
+{
+    private readonly ServerConfig _serverConfig;
+    private readonly ILogger<CameraHostedService> _logger;
+    private readonly CameraStreamService _cameraService;
+    private HttpListener? _httpListener;
+    private SimpleFileServerNodeManager? _nodeManager;
+
+    /// <summary>Port for the MJPEG streaming HTTP server.</summary>
+    public int StreamPort { get; set; } = 8088;
+
+    public CameraHostedService(
+        ServerConfig serverConfig,
+        ILogger<CameraHostedService> logger,
+        CameraStreamService cameraService)
+    {
+        _serverConfig = serverConfig;
+        _logger = logger;
+        _cameraService = cameraService;
+    }
+
+    /// <summary>Set the node manager reference for writing detection variables.</summary>
+    public void SetNodeManager(SimpleFileServerNodeManager nodeManager)
+    {
+        _nodeManager = nodeManager;
+    }
+
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        // Wait a bit for the OPC server to start and load the config
+        await Task.Delay(3000, stoppingToken);
+
+        // Load camera configs
+        var cameras = LoadCameraConfigs();
+        if (cameras.Count == 0)
+        {
+            _logger.LogInformation("No cameras configured. Camera service idle.");
+            return;
+        }
+
+        // Start cameras
+        foreach (var cam in cameras)
+        {
+            _cameraService.StartCamera(cam, (prefix, label, confidence, count) =>
+            {
+                WriteDetectionVariables(prefix, label, confidence, count);
+            });
+            _logger.LogInformation("Camera started: {Id} ({Protocol}) -> {Url}", cam.CameraId, cam.Protocol, cam.Url);
+        }
+
+        // Start HTTP listener for MJPEG streams
+        try
+        {
+            _httpListener = new HttpListener();
+            _httpListener.Prefixes.Add($"http://+:{StreamPort}/");
+            _httpListener.Start();
+            _logger.LogInformation("Camera MJPEG stream server listening on port {Port}", StreamPort);
+
+            while (!stoppingToken.IsCancellationRequested)
+            {
+                try
+                {
+                    var context = await _httpListener.GetContextAsync().WaitAsync(stoppingToken);
+                    _ = HandleRequestAsync(context, stoppingToken);
+                }
+                catch (OperationCanceledException) { break; }
+                catch (HttpListenerException) when (stoppingToken.IsCancellationRequested) { break; }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "HTTP listener error");
+                }
+            }
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to start camera HTTP listener on port {Port}", StreamPort);
+        }
+    }
+
+    private async Task HandleRequestAsync(HttpListenerContext context, CancellationToken ct)
+    {
+        var path = context.Request.Url?.AbsolutePath?.TrimStart('/') ?? "";
+
+        // Routes:
+        // /camera/{cameraId}/stream  -> MJPEG stream
+        // /camera/{cameraId}/snapshot -> single JPEG frame
+        // /cameras -> JSON list of camera IDs
+
+        if (path == "cameras")
+        {
+            var ids = _cameraService.GetCameraIds().ToList();
+            var json = JsonSerializer.Serialize(ids);
+            var bytes = System.Text.Encoding.UTF8.GetBytes(json);
+            context.Response.ContentType = "application/json";
+            context.Response.Headers.Add("Access-Control-Allow-Origin", "*");
+            context.Response.ContentLength64 = bytes.Length;
+            await context.Response.OutputStream.WriteAsync(bytes, ct);
+            context.Response.Close();
+            return;
+        }
+
+        var segments = path.Split('/');
+        if (segments.Length >= 3 && segments[0] == "camera")
+        {
+            var cameraId = segments[1];
+            var action = segments[2];
+
+            if (action == "stream")
+            {
+                context.Response.ContentType = _cameraService.GetMjpegContentType();
+                context.Response.Headers.Add("Access-Control-Allow-Origin", "*");
+                context.Response.Headers.Add("Cache-Control", "no-cache");
+                context.Response.SendChunked = true;
+
+                try
+                {
+                    await _cameraService.WriteMjpegStreamAsync(cameraId, context.Response.OutputStream, ct);
+                }
+                catch { }
+                finally
+                {
+                    try { context.Response.Close(); } catch { }
+                }
+                return;
+            }
+
+            if (action == "snapshot")
+            {
+                var frame = _cameraService.GetLatestFrame(cameraId);
+                if (frame != null)
+                {
+                    context.Response.ContentType = "image/jpeg";
+                    context.Response.Headers.Add("Access-Control-Allow-Origin", "*");
+                    context.Response.ContentLength64 = frame.Length;
+                    await context.Response.OutputStream.WriteAsync(frame, ct);
+                }
+                else
+                {
+                    context.Response.StatusCode = 404;
+                }
+                context.Response.Close();
+                return;
+            }
+        }
+
+        context.Response.StatusCode = 404;
+        context.Response.Close();
+    }
+
+    private List<CameraConfig> LoadCameraConfigs()
+    {
+        try
+        {
+            if (!File.Exists(_serverConfig.NodesConfigFile)) return [];
+
+            var json = File.ReadAllText(_serverConfig.NodesConfigFile);
+            var model = JsonSerializer.Deserialize(json, ServerJsonContext.Default.NodeModel);
+            if (model?.Cameras != null && model.Cameras.Count > 0)
+                return model.Cameras;
+
+            // Also scan screens for ipcamera symbols with inline camera configs
+            var cameras = new List<CameraConfig>();
+            if (model?.Screens != null)
+            {
+                foreach (var screen in model.Screens)
+                {
+                    foreach (var sym in screen.Symbols)
+                    {
+                        if (sym.Type == "ipcamera" && sym.Camera != null && !string.IsNullOrEmpty(sym.Camera.CameraId))
+                        {
+                            if (!cameras.Any(c => c.CameraId == sym.Camera.CameraId))
+                                cameras.Add(sym.Camera);
+                        }
+                    }
+                }
+            }
+
+            return cameras;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to load camera configs");
+            return [];
+        }
+    }
+
+    private void WriteDetectionVariables(string prefix, string label, double confidence, int count)
+    {
+        if (_nodeManager == null) return;
+
+        try
+        {
+            if (_nodeManager._variables.ContainsKey($"{prefix}.Label"))
+                _nodeManager.WriteVariable($"{prefix}.Label", label);
+            if (_nodeManager._variables.ContainsKey($"{prefix}.Confidence"))
+                _nodeManager.WriteVariable($"{prefix}.Confidence", Math.Round(confidence, 4));
+            if (_nodeManager._variables.ContainsKey($"{prefix}.Count"))
+                _nodeManager.WriteVariable($"{prefix}.Count", count);
+        }
+        catch (Exception)
+        {
+            // Variable might not exist yet — ignore
+        }
+    }
+
+    public override Task StopAsync(CancellationToken cancellationToken)
+    {
+        _httpListener?.Stop();
+        _cameraService.Dispose();
+        return base.StopAsync(cancellationToken);
+    }
+}

@@ -1,0 +1,212 @@
+﻿<div id="reportView" class="reportView">
+
+    <img src="cl.gif" alt="" onload="onReportLoaded(this)" id="loadingImage" />
+    <div id="reportContainer" style="background:#555;">
+        <div id="reportInnerContainer" data-bind="dxReportViewer: viewerOptions"></div>
+    </div>
+    <div id="loadingIndicatorDiv"></div>
+    <div id="loadingIndicatorText" style="display:none;"></div>
+
+
+    <link href="./lib/xtrareportsjs/css/dx-analytics.common.min.css" rel="stylesheet" />
+    <link href="./lib/xtrareportsjs/css/dx-webdocumentviewer.min.css" rel="stylesheet" />
+    <script src="./lib/xtrareportsjs/js/dx-analytics-core.min.js"></script>
+    <script src="./lib/xtrareportsjs/js/dx-webdocumentviewer.min.js"></script>
+
+
+    <script>
+        function onReportLoaded(obj) {
+            var thisPage = $(obj).parent();
+            var foreignObject = thisPage.closest("foreignObject");
+            var reportContainer = thisPage.find("#reportContainer");
+            var reportInnerContainer = thisPage.find("#reportInnerContainer");
+            
+            thisPage.append('<link href="./lib/xtrareportsjs/css/dx-analytics.' + (DevExpress.ui.themes.current().includes("light") ? "light" : "dark") + '.min.css" rel="stylesheet" />');
+            $(obj).remove();
+            thisPage.localize();
+            var scope = thisPage.scope();
+            if (!scope)
+                return;
+
+            var deregisterListener;
+            $(thisPage).bind('destroyed', function () {
+                if (deregisterListener)
+                    deregisterListener();
+                paramListeners.forEach(function (item, index, array) {
+                    item();
+                });
+            });
+
+            var paratt = thisPage.data(dataparameters);
+            var parameters;
+            try {
+                parameters = JSON.parse(paratt);
+            }
+            catch (err) {
+                console.error(err.toString());
+                scope.busyVisible = false;
+                scope.$apply();
+                scope.$broadcast(onError, { ex: err, value: "Error opening : " + err.toString() });
+                return;
+            }
+            
+            if (parameters.webKitRenderCorrection) {
+                reportContainer.addClass("webKitRenderCorrection").css({
+                    "transform": parameters.webKitRenderCorrection,
+                    "overflow": "visible"
+                });
+                reportContainer.css("will-change", "opacity");
+                webkitMoveRotateTransform(foreignObject, thisPage, reportInnerContainer);
+            }
+            else if (scope.biOS && foreignObject.length > 0)
+                reportContainer.css({
+                    "position": "relative",
+                    "width": parseFloat(foreignObject.attr("width")),
+                    "height": parseFloat(foreignObject.attr("height"))
+                });
+
+            var host = window.location.href;
+            var options = {
+                reportUrl: parameters.name,
+                ReportAlarmDoc: parameters.ReportAlarmDoc ? 'ReportAlarmDoc' : '',
+                ReportType: parameters.ReportType,
+                PeriodType: parameters.PeriodType,
+                MaxTake: parameters.MaxTake,
+                CommandTimeout: parameters.CommandTimeout,
+                AlarmsSource: parameters.AlarmsSource,
+                parameters: parameters.parameters
+            };
+            var paramListeners = [];
+            var loadingIndicator;
+            var loadingIndicatorText = thisPage.find("#loadingIndicatorText");
+            var bHasDynamicParameters = parameters.parameters && parameters.parameters.findIndex(function (item) { return item.SVGReferenceId != null; }) !== -1;
+
+            var mutateFunc = function () {
+                if (parameters.SVGReferenceId) {
+                    if (parameters.screenId in scope.dataValues && parameters.SVGReferenceId in scope.dataValues[parameters.screenId]) {
+                        applyTagQualityStyle(parameters.webKitRenderCorrection ? reportContainer : foreignObject, scope, parameters.screenId, parameters.SVGReferenceId);
+                    }
+                    deregisterListener = scope.$on(onDataChanged + parameters.screenId + parameters.SVGReferenceId, function (e, value) {
+                        applyTagQualityStyle(parameters.webKitRenderCorrection ? reportContainer : foreignObject, scope, parameters.screenId, parameters.SVGReferenceId);
+                    });
+                }
+
+                if (!bHasDynamicParameters || !parameters.screenId)
+                    createReport(options);
+                else {
+                    var waitingIconTop = (parseFloat(foreignObject.attr("height")) - 60) / 2;
+                    var loadingIndicatorDiv = thisPage.find("#loadingIndicatorDiv");
+                    loadingIndicatorDiv.css({
+                        position: scope.biOS && !parameters.bFitInWindow && !isInFittedParent(thisPage) ? "fixed" : "absolute",
+                        top: waitingIconTop,
+                        left: (parseFloat(foreignObject.attr("width")) - 60) / 2
+                    });
+                    loadingIndicatorText.css({
+                        "display": "block",
+                        "position": "relative",
+                        "text-align": "center",
+                        "top": waitingIconTop - 30,
+                        "color": "#CCC"
+                    }).text(i18next.t("Loading Report Parameters..."));
+                    loadingIndicator = loadingIndicatorDiv.dxLoadIndicator({
+                        height: 60,
+                        width: 60,
+                        visible: true
+                    }).dxLoadIndicator("instance");
+                    $.each(parameters.parameters, function (index, param) {
+                        if (param.SVGReferenceId) {
+                            if (!undefinedOrNull(scope.dataValues[parameters.screenId]) && scope.dataValues[parameters.screenId][param.SVGReferenceId].isGood) {
+                                options.parameters[index].Value = scope.dataValues[parameters.screenId][param.SVGReferenceId].value;
+                                if (options.parameters.findIndex(function (item) { return undefinedOrNull(item.Value); }) === -1)
+                                    createReport(options);
+                            }
+                            else {
+                                var listener = scope.$on(onDataChanged + parameters.screenId + param.SVGReferenceId, function (e, value) {
+                                    if (scope.dataValues[parameters.screenId][param.SVGReferenceId].isGood) {
+                                        listener();
+                                        paramListeners.splice(paramListeners.indexOf(listener), 1);
+                                        options.parameters[index].Value = scope.dataValues[parameters.screenId][param.SVGReferenceId].value;
+                                        if (options.parameters.findIndex(function (item) { return undefinedOrNull(item.Value); }) === -1)
+                                            createReport(options);
+                                    }
+                                });
+                                paramListeners.push(listener);
+                            }
+                        }
+                    });
+                }
+            };
+            if (typeof (parameters.CommandTimeout) == "undefined")
+                mutateHandler.scheduleMutate(parameters.screenId, mutateFunc);
+            else
+                fastdom.mutate(function () {
+                    mutateFunc();
+                });
+
+            var bTouchDragging;
+            var dragYStart;
+            function createReport(options) {
+                viewerOptions = {
+                    reportUrl: JSON.stringify(options),
+                    requestOptions: {
+                        host: host,
+                        invokeAction: "DXXRDV"/*,
+                                                                                                                            getLocalizationAction: "/WebDocumentViewer/GetLocalization" */
+                    },
+                    callbacks: {
+                        BeforeRender: function (s, e) {
+                            if (loadingIndicator) {
+                                loadingIndicator.option("visible", false);
+                                loadingIndicatorText.css("display", "none");
+                            }
+                            s.previewModel.reportPreview.zoom(1);
+                        },
+                        DocumentReady: function (s, e) {
+                            var elem = thisPage.find(".dxrd-report-preview-holder")[0];
+                            elem.onwheel = function (event) {
+                                event.preventDefault();
+                                elem.scroll({ top: elem.scrollTop + event.deltaY * 0.5 });
+                            };
+                            $(elem).on("touchmove", function (event) {
+                                event.preventDefault();
+                                if (!bTouchDragging) {
+                                    bTouchDragging = true;
+                                    dragYStart = event.pageY + elem.scrollTop;
+                                }
+                                var newTop = 0;
+                                if (dragYStart > event.pageY)
+                                    newTop = parseInt(Math.abs(event.pageY - dragYStart), 10);
+                                if (newTop != elem.scrollTop)
+                                    elem.scroll({ top: newTop });
+                            }).on("touchend", function (event) {
+                                event.preventDefault();
+                                bTouchDragging = false;
+                            }).on("scroll", function (event) {
+                                event.preventDefault();
+                            });
+                            
+                            if (parameters.webKitRenderCorrection) {
+                                reportContainer.css("background", "initial");
+                                //document.styleSheets[2].addRule("::-webkit-scrollbar, ::-webkit-scrollbar-thumb", "visibility: hidden;");
+                            }
+                        }
+                        // For demonstration purposes. Get the "Search" action and hide it.
+                        /*CustomizeMenuActions: function (s, e) {
+                            var searchAction = e.GetById(DevExpress.Reporting.Viewer.ActionId.Search);
+                            if (searchAction)
+                                searchAction.visible = false;
+                        }*/
+                    }
+                }
+
+                try {
+                    ko.applyBindings({ viewerOptions }, reportInnerContainer[0]);
+                }
+                catch { }
+
+                scope.busyVisible = false;
+                scope.$apply();
+            }
+        }
+    </script>
+</div>

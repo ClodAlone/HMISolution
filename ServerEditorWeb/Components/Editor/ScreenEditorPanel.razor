@@ -1,0 +1,2157 @@
+@using ServerEditorWeb.Models
+@using ServerEditorWeb.Services
+@using SharedModels
+@implements IDisposable
+
+<div class="screen-editor-panel">
+    @if (GetScreen() is not ScreenConfig screen)
+    {
+        <p class="text-muted p-2">Select a Screen node in the tree to open the screen editor.</p>
+    }
+    else if (screen.LayoutMode == "responsive")
+    {
+        <ResponsiveScreenEditorPanel Node="Node" OnPropertyChanged="OnPropertyChanged" />
+    }
+    else
+    {
+        @* Toolbar *@
+        <div class="screen-toolbar">
+            <div class="d-flex gap-1 align-items-center flex-wrap">
+                <span class="small fw-bold me-2">@screen.Name</span>
+
+                <button class="btn btn-sm btn-outline-primary" @onclick='() => AddSymbol(screen, "rect")' title="Rectangle">▭ Rect</button>
+                <button class="btn btn-sm btn-outline-primary" @onclick='() => AddSymbol(screen, "circle")' title="Circle">● Circle</button>
+                <button class="btn btn-sm btn-outline-primary" @onclick='() => AddSymbol(screen, "ellipse")' title="Ellipse">⬮ Ellipse</button>
+                <button class="btn btn-sm btn-outline-primary" @onclick='() => AddSymbol(screen, "text")' title="Text Label">T Text</button>
+                <button class="btn btn-sm btn-outline-primary" @onclick='() => AddSymbol(screen, "line")' title="Line">╲ Line</button>
+                <button class="btn btn-sm btn-outline-info" @onclick='() => AddSymbol(screen, "gauge")' title="Gauge">🔘 Gauge</button>
+                <button class="btn btn-sm btn-outline-info" @onclick='() => AddSymbol(screen, "indicator")' title="Indicator">🔴 Indicator</button>
+                <button class="btn btn-sm btn-outline-warning" @onclick='() => AddSymbol(screen, "alarmlist")' title="Alarm List">🔔 Alarms</button>
+                <button class="btn btn-sm btn-outline-success" @onclick='() => AddSymbol(screen, "hdachart")' title="HDA Chart">📊 HDA</button>
+                <button class="btn btn-sm btn-outline-success" @onclick='() => AddSymbol(screen, "hdagrid")' title="HDA Data Grid">📋 HDA Grid</button>
+                <button class="btn btn-sm btn-outline-secondary" @onclick='() => AddSymbol(screen, "eventlog")' title="Event Log Grid">📓 Events</button>
+                <button class="btn btn-sm btn-outline-info" @onclick='() => AddSymbol(screen, "editbox")' title="Edit Box (read/write value)">✏️ EditBox</button>
+                <button class="btn btn-sm btn-outline-danger" @onclick='() => AddSymbol(screen, "ipcamera")' title="IP Camera (RTSP/MJPEG/HTTP + YOLO)">📷 Camera</button>
+                <button class="btn btn-sm btn-outline-info" @onclick='() => AddSymbol(screen, "recipe")' title="Recipe control panel">📦 Recipe</button>
+                <button class="btn btn-sm btn-outline-secondary" @onclick='() => AddSymbol(screen, "screenembed")' title="Embed other screens (tabbed if multiple)">🪟 Screen</button>
+
+                <span class="mx-1">|</span>
+
+                @if (_selectedSymbols.Count > 1)
+                {
+                    <span class="badge bg-primary me-1" style="font-size: 10px;">@_selectedSymbols.Count selected</span>
+                    <button class="btn btn-sm btn-outline-danger" @onclick="DeleteSelected" title="Delete All Selected">🗑</button>
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="CopySelectedSymbols" title="Copy (Ctrl+C)">📋 Copy</button>
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="PasteSymbols" title="Paste (Ctrl+V)" disabled="@(!Clipboard.CanPasteSymbols)">📌 Paste</button>
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="DuplicateSelected" title="Duplicate All">⧉ Dup</button>
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="() => RotateSelected(-90)" title="Rotate Left 90°">↺</button>
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="() => RotateSelected(90)" title="Rotate Right 90°">↻</button>
+                    <span class="mx-1">|</span>
+                    <button class="btn btn-sm btn-outline-success" @onclick="GroupSelected" title="Group selected symbols">🔗 Group</button>
+                    @if (_selectedSymbols.Any(s => !string.IsNullOrEmpty(s.GroupId)))
+                    {
+                        <button class="btn btn-sm btn-outline-warning" @onclick="UngroupSelected" title="Ungroup selected symbols">✂ Ungroup</button>
+                    }
+                }
+                else if (_selectedSymbol != null)
+                {
+                    <button class="btn btn-sm btn-outline-danger" @onclick="DeleteSelected" title="Delete">🗑</button>
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="CopySelectedSymbols" title="Copy (Ctrl+C)">📋 Copy</button>
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="PasteSymbols" title="Paste (Ctrl+V)" disabled="@(!Clipboard.CanPasteSymbols)">📌 Paste</button>
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="DuplicateSelected" title="Duplicate">⧉ Dup</button>
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="() => RotateSelected(-90)" title="Rotate Left 90°">↺</button>
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="() => RotateSelected(90)" title="Rotate Right 90°">↻</button>
+                    @if (!string.IsNullOrEmpty(_selectedSymbol.GroupId))
+                    {
+                        <span class="mx-1">|</span>
+                        <button class="btn btn-sm btn-outline-warning" @onclick="UngroupSelected" title="Ungroup">✂ Ungroup</button>
+                    }
+                    <span class="mx-1">|</span>
+                    <button class="btn btn-sm btn-outline-info" @onclick="ToggleAnimationEditor" title="Animation Editor">
+                        🎬 Anim
+                        @if (_selectedSymbol.Animations.Count > 0)
+                        {
+                            <span class="badge bg-info ms-1" style="font-size: 9px;">@_selectedSymbol.Animations.Count</span>
+                        }
+                    </button>
+                }
+
+                @if (_selectedSymbols.Count == 0 && Clipboard.CanPasteSymbols)
+                {
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="PasteSymbols" title="Paste (Ctrl+V)">📌 Paste</button>
+                }
+
+                <span class="mx-1">|</span>
+
+                <label class="form-label mb-0 small">W:</label>
+                <input type="number" class="form-control form-control-sm" style="width: 60px;" @bind="screen.Width" @bind:after="OnChanged" />
+                <label class="form-label mb-0 small">H:</label>
+                <input type="number" class="form-control form-control-sm" style="width: 60px;" @bind="screen.Height" @bind:after="OnChanged" />
+                <label class="form-label mb-0 small">BG:</label>
+                <input type="color" class="form-control form-control-sm form-control-color" style="width: 35px; height: 28px;"
+                       @bind="screen.Background" @bind:after="OnChanged" />
+
+                <span class="ms-auto small text-muted">Symbols: @screen.Symbols.Count</span>
+
+                <span class="mx-1">|</span>
+                <button class="btn btn-sm btn-outline-secondary" @onclick="() => SwitchToResponsive(screen)" title="Switch to responsive HTML layout">
+                    📐 Responsive
+                </button>
+            </div>
+        </div>
+
+        <div class="screen-editor-body">
+            @* SVG Canvas *@
+            <div class="screen-canvas-wrap">
+                <svg xmlns="http://www.w3.org/2000/svg"
+                     width="@screen.Width" height="@screen.Height"
+                     class="screen-canvas"
+                     style="background: @screen.Background;"
+                     @onmousedown="OnCanvasMouseDown"
+                     @onmousemove="OnCanvasMouseMove"
+                     @onmouseup="OnCanvasMouseUp">
+
+                    @foreach (var sym in screen.Symbols)
+                    {
+                        var isSelected = _selectedSymbols.Contains(sym);
+                        var liveValue = GetLiveValue(sym);
+                        var fillColor = EvalFillBinding(sym, liveValue);
+                        var visible = EvalVisibilityBinding(sym, liveValue);
+                        var rotation = EvalRotationBinding(sym, liveValue);
+                        var labelText = EvalLabelBinding(sym, liveValue);
+
+                        if (!visible) continue;
+
+                        <g transform="translate(@sym.X, @sym.Y) rotate(@rotation.ToString("F1"), @((sym.Width / 2).ToString("F1")), @((sym.Height / 2).ToString("F1")))"
+                           @onmousedown="(e) => OnSymbolMouseDown(e, sym)" @onmousedown:stopPropagation
+                           class="screen-symbol @(isSelected ? "selected" : "")"
+                           style="cursor: move;">
+
+                            @switch (sym.Type)
+                            {
+                                case "rect":
+                                    <rect width="@sym.Width" height="@sym.Height"
+                                          fill="@fillColor" stroke="@sym.Stroke" stroke-width="@sym.StrokeWidth" rx="3" />
+                                    break;
+                                case "circle":
+                                    var r = Math.Min(sym.Width, sym.Height) / 2;
+                                    <circle cx="@(sym.Width / 2)" cy="@(sym.Height / 2)" r="@r"
+                                            fill="@fillColor" stroke="@sym.Stroke" stroke-width="@sym.StrokeWidth" />
+                                    break;
+                                case "ellipse":
+                                    <ellipse cx="@(sym.Width / 2)" cy="@(sym.Height / 2)"
+                                             rx="@(sym.Width / 2)" ry="@(sym.Height / 2)"
+                                             fill="@fillColor" stroke="@sym.Stroke" stroke-width="@sym.StrokeWidth" />
+                                    break;
+                                case "text":
+                                    @RenderSvgText(sym.Width / 2, sym.Height / 2 + 5, "middle", "middle", fillColor, 14, labelText ?? sym.Label)
+                                    break;
+                                case "line":
+                                    <line x1="0" y1="@sym.Height" x2="@sym.Width" y2="0"
+                                          stroke="@sym.Stroke" stroke-width="@sym.StrokeWidth" />
+                                    break;
+                                case "gauge":
+                                    @RenderGauge(sym, fillColor, liveValue)
+                                    break;
+                                case "indicator":
+                                    <circle cx="@(sym.Width / 2)" cy="@(sym.Height / 2)"
+                                            r="@(Math.Min(sym.Width, sym.Height) / 2 - 2)"
+                                            fill="@fillColor" stroke="@sym.Stroke" stroke-width="@sym.StrokeWidth" />
+                                    @RenderSvgText(sym.Width / 2, sym.Height / 2 + 4, "middle", "middle", "white", 10, labelText ?? sym.Label)
+                                    break;
+                                case "svg":
+                                    @if (!string.IsNullOrEmpty(sym.SvgContent))
+                                    {
+                                        @RenderLibrarySvg(sym)
+                                    }
+                                    break;
+                                case "alarmlist":
+                                    <rect width="@sym.Width" height="@sym.Height"
+                                          fill="#1a1a2e" stroke="@sym.Stroke" stroke-width="@sym.StrokeWidth" rx="4" />
+                                    @RenderSvgText(sym.Width / 2, 16, "middle", "middle", "#e0e0e0", 11, "🔔 Alarm List")
+                                    <line x1="4" y1="26" x2="@(sym.Width - 4)" y2="26" stroke="#333" stroke-width="1" />
+                                    @RenderSvgText(sym.Width / 2, 40, "middle", "middle", "#888", 9, "(live alarms displayed at runtime)")
+                                    break;
+                                case "hdachart":
+                                    <rect width="@sym.Width" height="@sym.Height"
+                                          fill="#111827" stroke="@sym.Stroke" stroke-width="@sym.StrokeWidth" rx="4" />
+                                    @RenderSvgText(sym.Width / 2, 16, "middle", "middle", "#e0e0e0", 11, "📊 HDA Chart")
+                                    <line x1="4" y1="26" x2="@(sym.Width - 4)" y2="26" stroke="#374151" stroke-width="1" />
+                                    <line x1="40" y1="32" x2="40" y2="@(sym.Height - 20)" stroke="#374151" stroke-width="1" />
+                                    <line x1="40" y1="@(sym.Height - 20)" x2="@(sym.Width - 10)" y2="@(sym.Height - 20)" stroke="#374151" stroke-width="1" />
+                                    <polyline points="@BuildFakeHdaPolyline(sym)" fill="none" stroke="#3b82f6" stroke-width="1.5" />
+                                    @if (sym.HdaVariablePaths.Count > 0)
+                                    {
+                                        @RenderSvgText(sym.Width / 2, sym.Height - 6, "middle", null, "#6b7280", 8, string.Join(", ", sym.HdaVariablePaths.Take(3)))
+                                    }
+                                    else
+                                    {
+                                        @RenderSvgText(sym.Width / 2, sym.Height - 6, "middle", null, "#6b7280", 8, "(configure variables in properties)")
+                                    }
+                                    break;
+                                case "hdagrid":
+                                    <rect width="@sym.Width" height="@sym.Height"
+                                          fill="#111827" stroke="@sym.Stroke" stroke-width="@sym.StrokeWidth" rx="4" />
+                                    @RenderSvgText(sym.Width / 2, 16, "middle", "middle", "#e0e0e0", 11, "📋 HDA Data Grid")
+                                    <line x1="4" y1="26" x2="@(sym.Width - 4)" y2="26" stroke="#374151" stroke-width="1" />
+                                    @* Fake table header row *@
+                                    <rect x="8" y="32" width="@(sym.Width - 16)" height="14" fill="#0f172a" rx="1" />
+                                    @RenderSvgText(40, 42, "start", "middle", "#9ca3af", 7, "Timestamp")
+                                    @RenderSvgText(sym.Width / 2, 42, "middle", "middle", "#9ca3af", 7, "Variable 1")
+                                    @RenderSvgText(sym.Width - 40, 42, "end", "middle", "#9ca3af", 7, "Variable 2")
+                                    @* Fake data rows *@
+                                    @for (int row = 0; row < 4 && row * 13 + 50 < sym.Height - 20; row++)
+                                    {
+                                        var ry = 50 + row * 13;
+                                        <line x1="8" y1="@ry" x2="@(sym.Width - 8)" y2="@ry" stroke="#1f2937" stroke-width="0.5" />
+                                        @RenderSvgText(40, ry + 9, "start", "middle", "#6b7280", 7, "00:00:00.000")
+                                        @RenderSvgText(sym.Width / 2, ry + 9, "middle", "middle", "#d1d5db", 7, "12.345")
+                                        @RenderSvgText(sym.Width - 40, ry + 9, "end", "middle", "#d1d5db", 7, "67.890")
+                                    }
+                                    @if (sym.HdaVariablePaths.Count > 0)
+                                    {
+                                        @RenderSvgText(sym.Width / 2, sym.Height - 6, "middle", null, "#6b7280", 8, string.Join(", ", sym.HdaVariablePaths.Take(3)))
+                                    }
+                                    else
+                                    {
+                                        @RenderSvgText(sym.Width / 2, sym.Height - 6, "middle", null, "#6b7280", 8, "(configure variables in properties)")
+                                    }
+                                    break;
+                                case "eventlog":
+                                    <rect width="@sym.Width" height="@sym.Height"
+                                          fill="#0f172a" stroke="@sym.Stroke" stroke-width="@sym.StrokeWidth" rx="4" />
+                                    @RenderSvgText(sym.Width / 2, 16, "middle", "middle", "#e2e8f0", 11, "📓 Event Log")
+                                    <line x1="4" y1="26" x2="@(sym.Width - 4)" y2="26" stroke="#334155" stroke-width="1" />
+                                    @* Fake table header *@
+                                    <rect x="8" y="32" width="@(sym.Width - 16)" height="14" fill="#1e293b" rx="1" />
+                                    @RenderSvgText(30, 42, "start", "middle", "#94a3b8", 7, "Time")
+                                    @RenderSvgText(100, 42, "start", "middle", "#94a3b8", 7, "Category")
+                                    @RenderSvgText(160, 42, "start", "middle", "#94a3b8", 7, "Severity")
+                                    @RenderSvgText(220, 42, "start", "middle", "#94a3b8", 7, "Source")
+                                    @RenderSvgText(sym.Width - 40, 42, "end", "middle", "#94a3b8", 7, "Message")
+                                    @* Fake data rows *@
+                                    @RenderEventLogPreviewRows(sym)
+                                    @RenderSvgText(sym.Width / 2, sym.Height - 6, "middle", null, "#6b7280", 8,
+                                        string.IsNullOrEmpty(sym.EventLogCategories) ? "All categories" : sym.EventLogCategories)
+                                    break;
+                                case "editbox":
+                                    <rect width="@sym.Width" height="@sym.Height"
+                                          fill="#1e293b" stroke="@sym.Stroke" stroke-width="@sym.StrokeWidth" rx="4" />
+                                    @* Simulated text input area *@
+                                    <rect x="3" y="3" width="@(sym.Width - (sym.Height > 24 ? 28 : 6))" height="@(sym.Height - 6)"
+                                          fill="#0f172a" rx="2" />
+                                    @RenderSvgText(10, sym.Height / 2 + 1, "start", "middle", "#94a3b8", 10,
+                                        !string.IsNullOrEmpty(sym.VariablePath) ? "42.5" : "—")
+                                    @* Spin buttons *@
+                                    @if (sym.Height > 24)
+                                    {
+                                        var bx = sym.Width - 24;
+                                        <rect x="@bx" y="3" width="21" height="@((sym.Height - 6) / 2 - 1)" fill="#334155" rx="2" />
+                                        @RenderSvgText(bx + 10.5, sym.Height * 0.25 + 1, "middle", "middle", "#94a3b8", 7, "▲")
+                                        <rect x="@bx" y="@(sym.Height / 2 + 1)" width="21" height="@((sym.Height - 6) / 2 - 1)" fill="#334155" rx="2" />
+                                        @RenderSvgText(bx + 10.5, sym.Height * 0.75, "middle", "middle", "#94a3b8", 7, "▼")
+                                    }
+                                    @if (!string.IsNullOrEmpty(sym.VariablePath))
+                                    {
+                                        @RenderSvgText(sym.Width / 2, sym.Height + 12, "middle", null, "#6b7280", 7, sym.VariablePath)
+                                    }
+                                    else
+                                    {
+                                            @RenderSvgText(sym.Width / 2, sym.Height + 12, "middle", null, "#ef4444", 7, "(set VariablePath)")
+                                            }
+                                            break;
+                                        case "ipcamera":
+                                            <rect width="@sym.Width" height="@sym.Height"
+                                                  fill="#0a0a0a" stroke="#475569" stroke-width="@sym.StrokeWidth" rx="4" />
+                                            @* Camera icon *@
+                                            @RenderSvgText(sym.Width / 2, sym.Height / 2 - 8, "middle", "middle", "#4b5563", 28, "📷")
+                                            @if (sym.Camera != null && !string.IsNullOrEmpty(sym.Camera.CameraId))
+                                            {
+                                                @RenderSvgText(sym.Width / 2, sym.Height / 2 + 16, "middle", "middle", "#9ca3af", 10, sym.Camera.CameraId)
+                                                @RenderSvgText(sym.Width / 2, sym.Height / 2 + 28, "middle", "middle", "#6b7280", 8,
+                                                    sym.Camera.Protocol.ToUpperInvariant() + (sym.Camera.EnableYolo ? " + YOLO" : ""))
+                                            }
+                                            else
+                                            {
+                                                @RenderSvgText(sym.Width / 2, sym.Height / 2 + 18, "middle", "middle", "#ef4444", 8, "(configure camera)")
+                                            }
+                                            break;
+                                        case "recipe":
+                                            <rect width="@sym.Width" height="@sym.Height"
+                                                  fill="#1a1a2e" stroke="@sym.Stroke" stroke-width="@sym.StrokeWidth" rx="4" />
+                                            @RenderSvgText(sym.Width / 2, 16, "middle", "middle", "#e0e0e0", 11, "📦 Recipe")
+                                            <line x1="4" y1="26" x2="@(sym.Width - 4)" y2="26" stroke="#334155" stroke-width="1" />
+                                            @if (!string.IsNullOrEmpty(sym.RecipeName))
+                                            {
+                                                @RenderSvgText(sym.Width / 2, 42, "middle", "middle", "#6ee7b7", 10, sym.RecipeName)
+                                                @* Fake action buttons preview *@
+                                                <rect x="8" y="54" width="@((sym.Width - 24) / 4)" height="16" fill="#1e40af" rx="2" />
+                                                @RenderSvgText(8 + (sym.Width - 24) / 8, 63, "middle", "middle", "#e2e8f0", 7, "Load")
+                                                <rect x="@(12 + (sym.Width - 24) / 4)" y="54" width="@((sym.Width - 24) / 4)" height="16" fill="#065f46" rx="2" />
+                                                @RenderSvgText(12 + (sym.Width - 24) * 3 / 8, 63, "middle", "middle", "#e2e8f0", 7, "Save")
+                                                <rect x="@(16 + (sym.Width - 24) / 2)" y="54" width="@((sym.Width - 24) / 4)" height="16" fill="#7c3aed" rx="2" />
+                                                @RenderSvgText(16 + (sym.Width - 24) * 5 / 8, 63, "middle", "middle", "#e2e8f0", 7, "Activate")
+                                                @RenderSvgText(sym.Width / 2, sym.Height - 8, "middle", null, "#475569", 8, "(live recipe control at runtime)")
+                                            }
+                                            else
+                                            {
+                                                @RenderSvgText(sym.Width / 2, sym.Height / 2 + 6, "middle", "middle", "#ef4444", 8, "(set RecipeName)")
+                                            }
+                                            break;
+                                        case "screenembed":
+                                            <rect width="@sym.Width" height="@sym.Height"
+                                                  fill="#0f172a" stroke="@sym.Stroke" stroke-width="@sym.StrokeWidth" rx="4" />
+                                            @RenderSvgText(sym.Width / 2, 16, "middle", "middle", "#e0e0e0", 11, "🪟 Screen Embed")
+                                            <line x1="4" y1="26" x2="@(sym.Width - 4)" y2="26" stroke="#334155" stroke-width="1" />
+                                            @if (sym.EmbeddedScreens.Count > 0)
+                                            {
+                                                @if (sym.EmbeddedScreens.Count == 1)
+                                                {
+                                                    @RenderSvgText(sym.Width / 2, 42, "middle", "middle", "#38bdf8", 10, sym.EmbeddedScreens[0])
+                                                    @RenderSvgText(sym.Width / 2, sym.Height / 2 + 10, "middle", "middle", "#475569", 9, "(embedded at runtime)")
+                                                }
+                                                else
+                                                {
+                                                    @* Preview tabs *@
+                                                    var tabW = Math.Min(80.0, (sym.Width - 8) / sym.EmbeddedScreens.Count);
+                                                    @for (var ti = 0; ti < Math.Min(sym.EmbeddedScreens.Count, 6); ti++)
+                                                    {
+                                                        var tx = 4 + ti * tabW;
+                                                        var isFirst = ti == 0;
+                                                        <rect x="@((int)tx)" y="30" width="@((int)(tabW - 2))" height="16" fill="@(isFirst ? "#1e40af" : "#1e293b")" rx="2" />
+                                                        @RenderSvgText(tx + tabW / 2 - 1, 39, "middle", "middle", isFirst ? "#e2e8f0" : "#64748b", 7, sym.EmbeddedScreens[ti].Length > 10 ? sym.EmbeddedScreens[ti][..10] + "…" : sym.EmbeddedScreens[ti])
+                                                    }
+                                                    @if (sym.EmbeddedScreens.Count > 6)
+                                                    {
+                                                        @RenderSvgText(sym.Width - 10, 39, "end", "middle", "#64748b", 7, $"+{sym.EmbeddedScreens.Count - 6}")
+                                                    }
+                                                    @RenderSvgText(sym.Width / 2, sym.Height / 2 + 14, "middle", "middle", "#475569", 9, $"{sym.EmbeddedScreens.Count} screens — tabbed at runtime")
+                                                }
+                                            }
+                                            else
+                                            {
+                                                @RenderSvgText(sym.Width / 2, sym.Height / 2 + 6, "middle", "middle", "#ef4444", 8, "(add screens in properties)")
+                                            }
+                                            break;
+                            }
+
+                            @if (!string.IsNullOrEmpty(labelText ?? sym.Label) && sym.Type is not "text")
+                            {
+                                @RenderSvgText(sym.Width / 2, sym.Height + 14, "middle", null, "#333", 11, labelText ?? sym.Label)
+                            }
+
+                            @if (sym.Animations.Count > 0)
+                            {
+                                @* Animation indicator badge *@
+                                <circle cx="@(sym.Width - 2)" cy="4" r="5" fill="#17a2b8" stroke="white" stroke-width="1"/>
+                                @RenderSvgText(sym.Width - 2, 7, "middle", "middle", "white", 7, "▶")
+                            }
+
+                            @if (isSelected)
+                            {
+                                <rect x="-2" y="-2" width="@(sym.Width + 4)" height="@(sym.Height + 4)"
+                                      fill="none" stroke="@(sym == _selectedSymbol ? "#0d6efd" : "#6ea8fe")" stroke-width="1.5" stroke-dasharray="4,2" rx="2" />
+
+                                @if (sym == _selectedSymbol)
+                                {
+                                    @* ── Resize handles (8 directions) ── *@
+                                    var hw = 6.0;
+                                    var hh = 6.0;
+                                    var w = sym.Width;
+                                    var h = sym.Height;
+
+                                    @foreach (var handle in _resizeHandles)
+                                    {
+                                        var hName = handle.Name;
+                                        var hx = handle.GetX(w, hw);
+                                        var hy = handle.GetY(h, hh);
+                                        var hCursor = handle.Cursor;
+
+                                        <rect x="@hx" y="@hy" width="@hw" height="@hh" rx="1"
+                                              fill="white" stroke="#0d6efd" stroke-width="1"
+                                              style="cursor: @hCursor;"
+                                              @onmousedown="(e) => OnResizeHandleMouseDown(e, sym, hName)" @onmousedown:stopPropagation />
+                                    }
+
+                                    @if (_selectedSymbols.Count == 1)
+                                    {
+                                        @* Rotation handle — single selection only *@
+                                        <line x1="@(w / 2)" y1="-2" x2="@(w / 2)" y2="-20"
+                                              stroke="#0d6efd" stroke-width="1" />
+                                        <circle cx="@(w / 2)" cy="-24" r="5"
+                                                fill="#0d6efd" stroke="white" stroke-width="1.5"
+                                                style="cursor: grab;"
+                                                @onmousedown="(e) => OnRotateHandleMouseDown(e, sym)" @onmousedown:stopPropagation />
+                                    }
+                                }
+                            }
+                        </g>
+                    }
+
+                    @* Marquee selection rectangle *@
+                    @if (_isMarqueeSelecting)
+                    {
+                        var mx = Math.Min(_marqueeStartX, _marqueeEndX);
+                        var my = Math.Min(_marqueeStartY, _marqueeEndY);
+                        var mw = Math.Abs(_marqueeEndX - _marqueeStartX);
+                        var mh = Math.Abs(_marqueeEndY - _marqueeStartY);
+                        <rect x="@mx" y="@my" width="@mw" height="@mh"
+                              fill="rgba(13,110,253,0.08)" stroke="#0d6efd" stroke-width="1" stroke-dasharray="4,2" />
+                    }
+                </svg>
+            </div>
+        </div>
+
+        @* ─── Animation Editor (below canvas when open) ─────────── *@
+        @if (_showAnimationEditor && _selectedSymbol != null)
+        {
+            <div class="anim-editor">
+                <div class="anim-editor-header">
+                    <span class="fw-bold small">🎬 Animations — @_selectedSymbol.Id</span>
+                    <span class="ms-auto d-flex gap-1 align-items-center">
+                        <button class="btn btn-sm btn-outline-success py-0 px-1" @onclick="AddAnimation" title="Add Animation">＋ Add</button>
+                        <button class="btn btn-sm btn-outline-secondary py-0 px-1" @onclick="ToggleAnimationEditor" title="Close">✕</button>
+                    </span>
+                </div>
+
+                @if (_selectedSymbol.Animations.Count == 0)
+                {
+                    <div class="text-muted small p-3 text-center">
+                        No animations. Click <strong>＋ Add</strong> to create one.
+                    </div>
+                }
+                else
+                {
+                    <div class="anim-list">
+                        @foreach (var anim in _selectedSymbol.Animations)
+                        {
+                            var a = anim;
+                            var isExpanded = _expandedAnimId == a.Id;
+
+                            <div class="anim-item @(isExpanded ? "expanded" : "")">
+                                @* ── Animation row header ── *@
+                                <div class="anim-item-header" @onclick="() => ToggleAnimExpand(a.Id)">
+                                    <span class="anim-expand-icon">@(isExpanded ? "▾" : "▸")</span>
+                                    <input type="checkbox" checked="@a.Enabled" @onchange="(e) => { a.Enabled = (bool)(e.Value ?? false); OnChanged(); }"
+                                           @onclick:stopPropagation title="Enable/Disable" />
+                                    <span class="anim-item-name small fw-bold">@(string.IsNullOrEmpty(a.Name) ? a.Property : a.Name)</span>
+                                    <span class="badge bg-secondary ms-1" style="font-size: 9px;">@a.Property</span>
+                                    <span class="badge bg-info ms-1" style="font-size: 9px;">@(a.DurationMs)ms</span>
+                                    @if (a.Keyframes.Count > 0)
+                                    {
+                                        <span class="badge bg-dark ms-1" style="font-size: 9px;">@a.Keyframes.Count kf</span>
+                                    }
+                                    <button class="btn btn-sm btn-outline-danger py-0 px-1 ms-auto" style="font-size: 10px;"
+                                            @onclick="() => RemoveAnimation(a)" @onclick:stopPropagation title="Remove animation">🗑</button>
+                                </div>
+
+                                @* ── Expanded animation details ── *@
+                                @if (isExpanded)
+                                {
+                                    <div class="anim-item-body">
+                                        <div class="row g-1 mb-2">
+                                            <div class="col-6">
+                                                <label class="form-label mb-0 small">Name</label>
+                                                <input type="text" class="form-control form-control-sm"
+                                                       @bind="a.Name" @bind:after="OnChanged" placeholder="(optional)" />
+                                            </div>
+                                            <div class="col-6">
+                                                <label class="form-label mb-0 small">Property</label>
+                                                <select class="form-select form-select-sm" @bind="a.Property" @bind:after="OnChanged">
+                                                    <option value="Position">Position (X,Y)</option>
+                                                    <option value="Scale">Scale (W,H)</option>
+                                                    <option value="Rotation">Rotation</option>
+                                                    <option value="Opacity">Opacity</option>
+                                                    <option value="Fill">Fill Color</option>
+                                                    <option value="Stroke">Stroke Color</option>
+                                                    <option value="StrokeWidth">Stroke Width</option>
+                                                    <option value="Width">Width</option>
+                                                    <option value="Height">Height</option>
+                                                </select>
+                                            </div>
+                                        </div>
+
+                                        <div class="row g-1 mb-2">
+                                            <div class="col-4">
+                                                <label class="form-label mb-0 small">Duration (ms)</label>
+                                                <input type="number" class="form-control form-control-sm" min="50" step="50"
+                                                       @bind="a.DurationMs" @bind:after="OnChanged" />
+                                            </div>
+                                            <div class="col-4">
+                                                <label class="form-label mb-0 small">Delay (ms)</label>
+                                                <input type="number" class="form-control form-control-sm" min="0" step="50"
+                                                       @bind="a.DelayMs" @bind:after="OnChanged" />
+                                            </div>
+                                            <div class="col-4">
+                                                <label class="form-label mb-0 small">Easing</label>
+                                                <select class="form-select form-select-sm" @bind="a.Easing" @bind:after="OnChanged">
+                                                    <option value="Linear">Linear</option>
+                                                    <option value="EaseIn">Ease In</option>
+                                                    <option value="EaseOut">Ease Out</option>
+                                                    <option value="EaseInOut">Ease In-Out</option>
+                                                    <option value="Bounce">Bounce</option>
+                                                    <option value="Elastic">Elastic</option>
+                                                </select>
+                                            </div>
+                                        </div>
+
+                                        <div class="row g-1 mb-2">
+                                            <div class="col-4">
+                                                <label class="form-label mb-0 small">Repeat</label>
+                                                <input type="number" class="form-control form-control-sm" min="0"
+                                                       @bind="a.RepeatCount" @bind:after="OnChanged"
+                                                       title="0 = infinite" />
+                                                <span class="form-text" style="font-size: 9px;">0 = ∞</span>
+                                            </div>
+                                            <div class="col-4">
+                                                <label class="form-label mb-0 small">Auto-Reverse</label>
+                                                <div class="form-check mt-1">
+                                                    <input type="checkbox" class="form-check-input" id="@($"ar_{a.Id}")"
+                                                           checked="@a.AutoReverse"
+                                                           @onchange="(e) => { a.AutoReverse = (bool)(e.Value ?? false); OnChanged(); }" />
+                                                    <label class="form-check-label small" for="@($"ar_{a.Id}")">Ping-pong</label>
+                                                </div>
+                                            </div>
+                                            <div class="col-4">
+                                                <label class="form-label mb-0 small">Trigger</label>
+                                                <select class="form-select form-select-sm" @bind="a.Trigger" @bind:after="OnChanged">
+                                                    <option value="Always">Always</option>
+                                                    <option value="OnVariable">On Variable</option>
+                                                    <option value="OnClick">On Click</option>
+                                                </select>
+                                            </div>
+                                        </div>
+
+                                        @if (a.Trigger == "OnVariable")
+                                        {
+                                            <div class="row g-1 mb-2">
+                                                <div class="col-6">
+                                                    <label class="form-label mb-0 small">Variable Path</label>
+                                                    <input type="text" class="form-control form-control-sm"
+                                                           @bind="a.TriggerVariable" @bind:after="OnChanged" placeholder="Plant.Temp" />
+                                                </div>
+                                                <div class="col-6">
+                                                    <label class="form-label mb-0 small">Condition</label>
+                                                    <input type="text" class="form-control form-control-sm"
+                                                           @bind="a.TriggerCondition" @bind:after="OnChanged" placeholder="value > 50" />
+                                                </div>
+                                            </div>
+                                        }
+
+                                        @* ── Keyframes ── *@
+                                        <div class="anim-keyframes">
+                                            <div class="d-flex align-items-center mb-1">
+                                                <span class="small fw-bold">Keyframes</span>
+                                                <button class="btn btn-sm btn-outline-success py-0 px-1 ms-auto" style="font-size: 10px;"
+                                                        @onclick="() => AddKeyframe(a)">＋</button>
+                                            </div>
+
+                                            @if (a.Keyframes.Count == 0)
+                                            {
+                                                <div class="text-muted small mb-1">No keyframes. Add at least two (0% and 100%).</div>
+                                                <button class="btn btn-sm btn-outline-secondary py-0 px-1" style="font-size: 10px;"
+                                                        @onclick="() => AddDefaultKeyframes(a)">Auto-fill 0%→100%</button>
+                                            }
+                                            else
+                                            {
+                                                @* Timeline bar *@
+                                                <div class="anim-timeline">
+                                                    <div class="anim-timeline-track">
+                                                        @foreach (var kf in a.Keyframes.OrderBy(k => k.Percent))
+                                                        {
+                                                            <div class="anim-timeline-marker" style="left: @(kf.Percent)%;"
+                                                                 title="@(kf.Percent)% — @kf.Value">
+                                                                <div class="anim-timeline-dot"></div>
+                                                            </div>
+                                                        }
+                                                    </div>
+                                                </div>
+
+                                                @* Keyframe list *@
+                                                @foreach (var kf in a.Keyframes.OrderBy(k => k.Percent).ToList())
+                                                {
+                                                    var k = kf;
+                                                    <div class="anim-kf-row">
+                                                        <div style="width: 50px;">
+                                                            <input type="number" class="form-control form-control-sm" min="0" max="100"
+                                                                   @bind="k.Percent" @bind:after="OnChanged" title="Percent" />
+                                                        </div>
+                                                        <span class="small text-muted">%</span>
+                                                        <div class="flex-grow-1">
+                                                            @if (a.Property is "Fill" or "Stroke")
+                                                            {
+                                                                <input type="color" class="form-control form-control-sm form-control-color"
+                                                                       style="width: 40px; height: 24px;"
+                                                                       @bind="k.Value" @bind:after="OnChanged" />
+                                                            }
+                                                            else
+                                                            {
+                                                                <input type="text" class="form-control form-control-sm"
+                                                                       @bind="k.Value" @bind:after="OnChanged"
+                                                                       placeholder="@GetKeyframePlaceholder(a.Property)" />
+                                                            }
+                                                        </div>
+                                                        <div style="width: 75px;">
+                                                            <select class="form-select form-select-sm" style="font-size: 10px;"
+                                                                    @bind="k.Easing" @bind:after="OnChanged">
+                                                                <option value="">Default</option>
+                                                                <option value="Linear">Linear</option>
+                                                                <option value="EaseIn">Ease In</option>
+                                                                <option value="EaseOut">Ease Out</option>
+                                                                <option value="EaseInOut">Ease I/O</option>
+                                                            </select>
+                                                        </div>
+                                                        <button class="btn btn-sm btn-outline-danger py-0 px-1" style="font-size: 10px;"
+                                                                @onclick="() => RemoveKeyframe(a, k)" title="Remove">✕</button>
+                                                    </div>
+                                                }
+                                            }
+                                        </div>
+
+                                        @* ── Preview ── *@
+                                        <div class="d-flex gap-1 mt-2">
+                                            <button class="btn btn-sm btn-outline-primary py-0 px-2"
+                                                    @onclick="() => PreviewAnimation(a)" title="Preview this animation on the canvas">
+                                                ▶ Preview
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-secondary py-0 px-2"
+                                                    @onclick="StopPreview" title="Stop preview">
+                                                ⏹ Stop
+                                            </button>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public TreeNode? Node { get; set; }
+    [Parameter] public EventCallback OnPropertyChanged { get; set; }
+
+    [Inject] private OpcClientService Opc { get; set; } = default!;
+    [Inject] private ClipboardService Clipboard { get; set; } = default!;
+    [Inject] private NodeEditorService Editor { get; set; } = default!;
+
+    private ScreenSymbol? _selectedSymbol;
+    private HashSet<ScreenSymbol> _selectedSymbols = new();
+    private bool _isDragging;
+    private bool _isRotating;
+    private bool _isResizing;
+    private string _resizeHandle = "";
+    private double _resizeStartWidth, _resizeStartHeight;
+    private double _resizeStartX, _resizeStartY;
+    private Dictionary<ScreenSymbol, (double X, double Y, double W, double H)> _multiResizeStarts = new();
+    private (double X, double Y, double W, double H) _multiBoundsStart;
+    private bool _isMarqueeSelecting;
+    private double _dragStartX, _dragStartY;
+    private double _symStartX, _symStartY;
+    private double _rotateStartAngle;
+    private double _symStartRotation;
+    private Dictionary<ScreenSymbol, (double X, double Y)> _multiDragStarts = new();
+    private double _marqueeStartX, _marqueeStartY, _marqueeEndX, _marqueeEndY;
+    private double _marqueeCanvasOffsetX, _marqueeCanvasOffsetY;
+    private int _nextId = 1;
+    private int _nextGroupId = 1;
+    private int _nextAnimId = 1;
+    private bool _showAnimationEditor;
+    private string? _expandedAnimId;
+    private SymbolAnimation? _previewingAnim;
+    private System.Threading.Timer? _previewTimer;
+    private double _previewElapsed;
+    private Dictionary<string, double>? _previewOriginalValues;
+    private System.Threading.Timer? _refreshTimer;
+    private TreeNode? _previousNode;
+
+    // ─── Resize handle definitions ──────────────────────────
+    private record ResizeHandleDef(string Name, string Cursor,
+        Func<double, double, double> GetX,
+        Func<double, double, double> GetY);
+
+    private static readonly ResizeHandleDef[] _resizeHandles =
+    [
+        new("nw", "nwse-resize", (w, s) => -2 - s / 2,          (h, s) => -2 - s / 2),
+        new("ne", "nesw-resize", (w, s) => w + 2 - s / 2,       (h, s) => -2 - s / 2),
+        new("sw", "nesw-resize", (w, s) => -2 - s / 2,          (h, s) => h + 2 - s / 2),
+        new("se", "nwse-resize", (w, s) => w + 2 - s / 2,       (h, s) => h + 2 - s / 2),
+        new("n",  "ns-resize",   (w, s) => w / 2 - s / 2,       (h, s) => -2 - s / 2),
+        new("s",  "ns-resize",   (w, s) => w / 2 - s / 2,       (h, s) => h + 2 - s / 2),
+        new("w",  "ew-resize",   (w, s) => -2 - s / 2,          (h, s) => h / 2 - s / 2),
+        new("e",  "ew-resize",   (w, s) => w + 2 - s / 2,       (h, s) => h / 2 - s / 2),
+    ];
+
+    protected override void OnInitialized()
+    {
+        Opc.StateChanged += OnOpcChanged;
+        _refreshTimer = new System.Threading.Timer(_ => InvokeAsync(StateHasChanged), null, 1000, 1000);
+    }
+
+    private void OnOpcChanged() => InvokeAsync(StateHasChanged);
+
+    private ScreenConfig? GetScreen()
+    {
+        return (Node as ScreenNode)?.Screen;
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (Node != _previousNode)
+        {
+            _previousNode = Node;
+            _selectedSymbol = null;
+            _selectedSymbols.Clear();
+            _isDragging = false;
+            _isRotating = false;
+            _isMarqueeSelecting = false;
+            _showAnimationEditor = false;
+            StopPreview();
+            NotifySelectionChanged();
+        }
+
+        // Ensure all symbols have unique IDs
+        var screen = GetScreen();
+        if (screen != null)
+        {
+            foreach (var sym in screen.Symbols)
+            {
+                if (string.IsNullOrEmpty(sym.Id))
+                    sym.Id = $"sym_{_nextId++}";
+                else if (int.TryParse(sym.Id.Replace("sym_", ""), out var n) && n >= _nextId)
+                    _nextId = n + 1;
+
+                // Ensure animation IDs
+                foreach (var a in sym.Animations)
+                {
+                    if (string.IsNullOrEmpty(a.Id))
+                        a.Id = $"anim_{_nextAnimId++}";
+                    else if (int.TryParse(a.Id.Replace("anim_", ""), out var an) && an >= _nextAnimId)
+                        _nextAnimId = an + 1;
+                }
+            }
+
+            // Clear selection if the symbol was removed externally
+            _selectedSymbols.RemoveWhere(s => !screen.Symbols.Contains(s));
+            if (_selectedSymbol != null && !screen.Symbols.Contains(_selectedSymbol))
+                _selectedSymbol = null;
+            if (_selectedSymbol == null && _selectedSymbols.Count > 0)
+                _selectedSymbol = _selectedSymbols.First();
+        }
+    }
+
+    private void AddSymbol(ScreenConfig screen, string type)
+    {
+        var sym = new ScreenSymbol
+        {
+            Id = $"sym_{_nextId++}",
+            Type = type,
+            X = 50 + screen.Symbols.Count * 20 % (screen.Width - 100),
+            Y = 50 + screen.Symbols.Count * 20 % (screen.Height - 80),
+            Width = type == "text" ? 120 : type == "line" ? 100 : type is "alarmlist" or "hdachart" or "hdagrid" or "eventlog" ? 500 : type == "editbox" ? 160 : type == "ipcamera" ? 320 : type == "recipe" ? 280 : type == "screenembed" ? 400 : 80,
+            Height = type == "text" ? 30 : type == "line" ? 2 : type == "indicator" ? 30 : type == "alarmlist" ? 250 : type is "hdachart" or "hdagrid" or "eventlog" ? 220 : type == "editbox" ? 32 : type == "ipcamera" ? 240 : type == "recipe" ? 300 : type == "screenembed" ? 300 : 40,
+            Label = type == "text" ? "Label" : type == "alarmlist" ? "Alarm List" : type == "hdachart" ? "HDA Chart" : type == "hdagrid" ? "HDA Grid" : type == "eventlog" ? "Event Log" : type == "editbox" ? "" : type == "ipcamera" ? "" : type == "recipe" ? "" : type == "screenembed" ? "Embedded Screen" : "",
+            Fill = type == "indicator" ? "#44cc44" : type == "alarmlist" ? "#1a1a2e" : type is "hdachart" or "hdagrid" ? "#111827" : type == "eventlog" ? "#0f172a" : type == "editbox" ? "#1e293b" : type == "ipcamera" ? "#0a0a0a" : type == "recipe" ? "#1a1a2e" : type == "screenembed" ? "#0f172a" : "#4a90d9"
+        };
+
+        if (type == "gauge")
+        {
+            sym.Width = 80;
+            sym.Height = 80;
+            sym.MinValue = 0;
+            sym.MaxValue = 100;
+        }
+
+        if (type == "alarmlist")
+        {
+            sym.Stroke = "#333333";
+            sym.StrokeWidth = 1;
+        }
+
+        if (type == "hdachart")
+        {
+            sym.Stroke = "#333333";
+            sym.StrokeWidth = 1;
+            sym.HdaTimeRangeMinutes = 60;
+            sym.HdaMaxPoints = 500;
+        }
+
+        if (type == "hdagrid")
+        {
+            sym.Stroke = "#333333";
+            sym.StrokeWidth = 1;
+            sym.HdaTimeRangeMinutes = 60;
+            sym.HdaMaxPoints = 500;
+        }
+
+        if (type == "eventlog")
+        {
+            sym.Stroke = "#334155";
+            sym.StrokeWidth = 1;
+            sym.EventLogTimeRangeMinutes = 1440;
+            sym.EventLogMaxRows = 200;
+        }
+
+        if (type == "editbox")
+        {
+            sym.Stroke = "#475569";
+            sym.StrokeWidth = 1;
+            sym.EditBoxStep = 1;
+        }
+
+        if (type == "ipcamera")
+        {
+            sym.Stroke = "#475569";
+            sym.StrokeWidth = 1;
+            sym.Camera = new SharedModels.CameraConfig
+            {
+                CameraId = $"cam{screen.Symbols.Count(s => s.Type == "ipcamera") + 1}",
+                Protocol = "mjpeg",
+                Fps = 5,
+                YoloConfidence = 0.5
+            };
+        }
+
+        if (type == "recipe")
+        {
+            sym.Stroke = "#334155";
+            sym.StrokeWidth = 1;
+        }
+
+        if (type == "screenembed")
+        {
+            sym.Stroke = "#334155";
+            sym.StrokeWidth = 1;
+        }
+
+        screen.Symbols.Add(sym);
+        _selectedSymbols.Clear();
+        _selectedSymbol = sym;
+        _selectedSymbols.Add(sym);
+        NotifySelectionChanged();
+        OnChanged();
+    }
+
+    private void DeleteSelected()
+    {
+        var screen = GetScreen();
+        if (screen == null) return;
+
+        if (_selectedSymbols.Count > 0)
+        {
+            foreach (var sym in _selectedSymbols.ToList())
+                screen.Symbols.Remove(sym);
+            _selectedSymbols.Clear();
+            _selectedSymbol = null;
+            NotifySelectionChanged();
+            OnChanged();
+        }
+    }
+
+    private void CopySelectedSymbols()
+    {
+        if (_selectedSymbols.Count == 0) return;
+        Clipboard.CopySymbols(_selectedSymbols.ToList());
+    }
+
+    private void PasteSymbols()
+    {
+        var screen = GetScreen();
+        if (screen == null || !Clipboard.CanPasteSymbols) return;
+
+        var symbols = Clipboard.PasteSymbols();
+        if (symbols == null || symbols.Count == 0) return;
+
+        var newSelection = new List<ScreenSymbol>();
+        var groupMapping = new Dictionary<string, string>();
+
+        foreach (var src in symbols)
+        {
+            string? newGroupId = null;
+            if (!string.IsNullOrEmpty(src.GroupId))
+            {
+                if (!groupMapping.ContainsKey(src.GroupId))
+                    groupMapping[src.GroupId] = $"grp_{_nextGroupId++}";
+                newGroupId = groupMapping[src.GroupId];
+            }
+
+            var pasted = new ScreenSymbol
+            {
+                Id = $"sym_{_nextId++}",
+                Type = src.Type,
+                X = src.X + 20,
+                Y = src.Y + 20,
+                Width = src.Width,
+                Height = src.Height,
+                Fill = src.Fill,
+                Stroke = src.Stroke,
+                StrokeWidth = src.StrokeWidth,
+                Label = src.Label,
+                Rotation = src.Rotation,
+                SvgContent = src.SvgContent,
+                GroupId = newGroupId,
+                Animations = src.Animations.Select(a => new SymbolAnimation
+                {
+                    Id = $"anim_{_nextAnimId++}",
+                    Name = a.Name,
+                    Enabled = a.Enabled,
+                    Property = a.Property,
+                    Trigger = a.Trigger,
+                    TriggerVariable = a.TriggerVariable,
+                    TriggerCondition = a.TriggerCondition,
+                    Keyframes = a.Keyframes.Select(k => new AnimationKeyframe
+                    {
+                        Percent = k.Percent,
+                        Value = k.Value,
+                        Easing = k.Easing
+                    }).ToList(),
+                    DurationMs = a.DurationMs,
+                    DelayMs = a.DelayMs,
+                    Easing = a.Easing,
+                    RepeatCount = a.RepeatCount,
+                    AutoReverse = a.AutoReverse
+                }).ToList(),
+                VariablePath = src.VariablePath,
+                FillBinding = src.FillBinding,
+                VisibilityBinding = src.VisibilityBinding,
+                RotationBinding = src.RotationBinding,
+                LabelBinding = src.LabelBinding,
+                MinValue = src.MinValue,
+                MaxValue = src.MaxValue
+            };
+            screen.Symbols.Add(pasted);
+            newSelection.Add(pasted);
+        }
+
+        _selectedSymbols = new HashSet<ScreenSymbol>(newSelection);
+        _selectedSymbol = newSelection.First();
+        NotifySelectionChanged();
+        OnChanged();
+    }
+
+    private void DuplicateSelected()
+    {
+        var screen = GetScreen();
+        if (screen == null || _selectedSymbols.Count == 0) return;
+
+        var newSelection = new List<ScreenSymbol>();
+        // If duplicating a group, create a new GroupId for the copies
+        var groupMapping = new Dictionary<string, string>();
+
+        foreach (var src in _selectedSymbols.ToList())
+        {
+            string? newGroupId = null;
+            if (!string.IsNullOrEmpty(src.GroupId))
+            {
+                if (!groupMapping.ContainsKey(src.GroupId))
+                    groupMapping[src.GroupId] = $"grp_{_nextGroupId++}";
+                newGroupId = groupMapping[src.GroupId];
+            }
+
+            var dup = new ScreenSymbol
+            {
+                Id = $"sym_{_nextId++}",
+                Type = src.Type,
+                X = src.X + 20,
+                Y = src.Y + 20,
+                Width = src.Width,
+                Height = src.Height,
+                Fill = src.Fill,
+                Stroke = src.Stroke,
+                StrokeWidth = src.StrokeWidth,
+                Label = src.Label,
+                Rotation = src.Rotation,
+                SvgContent = src.SvgContent,
+                GroupId = newGroupId,
+                Animations = src.Animations.Select(a => new SymbolAnimation
+                {
+                    Id = Guid.NewGuid().ToString("N")[..8],
+                    Name = a.Name,
+                    Enabled = a.Enabled,
+                    Property = a.Property,
+                    Trigger = a.Trigger,
+                    TriggerVariable = a.TriggerVariable,
+                    TriggerCondition = a.TriggerCondition,
+                    Keyframes = a.Keyframes.Select(k => new AnimationKeyframe
+                    {
+                        Percent = k.Percent,
+                        Value = k.Value,
+                        Easing = k.Easing
+                    }).ToList(),
+                    DurationMs = a.DurationMs,
+                    DelayMs = a.DelayMs,
+                    Easing = a.Easing,
+                    RepeatCount = a.RepeatCount,
+                    AutoReverse = a.AutoReverse
+                }).ToList(),
+                VariablePath = src.VariablePath,
+                FillBinding = src.FillBinding,
+                VisibilityBinding = src.VisibilityBinding,
+                RotationBinding = src.RotationBinding,
+                LabelBinding = src.LabelBinding,
+                MinValue = src.MinValue,
+                MaxValue = src.MaxValue
+            };
+            screen.Symbols.Add(dup);
+            newSelection.Add(dup);
+        }
+
+        _selectedSymbols = new HashSet<ScreenSymbol>(newSelection);
+        _selectedSymbol = newSelection.First();
+        NotifySelectionChanged();
+        OnChanged();
+    }
+
+    private void RotateSelected(double degrees)
+    {
+        if (_selectedSymbols.Count > 0)
+        {
+            foreach (var sym in _selectedSymbols)
+                sym.Rotation = (sym.Rotation + degrees) % 360;
+            OnChanged();
+        }
+    }
+
+    // ─── Drag symbols ──────────────────────────────────────
+
+    private void OnSymbolMouseDown(MouseEventArgs e, ScreenSymbol sym)
+    {
+        var isCtrl = e.CtrlKey;
+
+        if (isCtrl)
+        {
+            // Ctrl+Click: toggle this symbol in/out of multi-selection
+            if (_selectedSymbols.Contains(sym))
+            {
+                _selectedSymbols.Remove(sym);
+                _selectedSymbol = _selectedSymbols.Count > 0 ? _selectedSymbols.First() : null;
+            }
+            else
+            {
+                _selectedSymbols.Add(sym);
+                _selectedSymbol = sym;
+            }
+            // Also select all group members if clicking a grouped symbol
+            ExpandSelectionToGroups();
+            NotifySelectionChanged();
+            return;
+        }
+
+        // Plain click: if clicking a symbol already in the multi-selection, keep the selection
+        // and start dragging the whole set. Otherwise, start a new single selection.
+        if (!_selectedSymbols.Contains(sym))
+        {
+            _selectedSymbols.Clear();
+            _selectedSymbol = sym;
+            _selectedSymbols.Add(sym);
+
+            // Auto-select group members
+            ExpandSelectionToGroups();
+        }
+        else
+        {
+            _selectedSymbol = sym;
+        }
+        NotifySelectionChanged();
+
+        // Start drag for all selected
+        _isDragging = true;
+        _dragStartX = e.ClientX;
+        _dragStartY = e.ClientY;
+        _multiDragStarts.Clear();
+        foreach (var s in _selectedSymbols)
+            _multiDragStarts[s] = (s.X, s.Y);
+    }
+
+    private void ExpandSelectionToGroups()
+    {
+        var screen = GetScreen();
+        if (screen == null) return;
+
+        var groupIds = _selectedSymbols
+            .Where(s => !string.IsNullOrEmpty(s.GroupId))
+            .Select(s => s.GroupId!)
+            .Distinct()
+            .ToHashSet();
+
+        if (groupIds.Count == 0) return;
+
+        foreach (var sym in screen.Symbols)
+        {
+            if (!string.IsNullOrEmpty(sym.GroupId) && groupIds.Contains(sym.GroupId))
+                _selectedSymbols.Add(sym);
+        }
+    }
+
+    private void OnCanvasMouseDown(MouseEventArgs e)
+    {
+        if (_isDragging || _isRotating || _isResizing) return;
+
+        // Click on empty area — start marquee or clear selection
+        if (!e.CtrlKey)
+        {
+            _selectedSymbol = null;
+            _selectedSymbols.Clear();
+            NotifySelectionChanged();
+        }
+
+        // Start marquee selection
+        _isMarqueeSelecting = true;
+        // We use ClientX/Y relative offsets for the marquee rectangle
+        // Store starting client coords — will compute SVG-local coords in move
+        _dragStartX = e.ClientX;
+        _dragStartY = e.ClientY;
+        _marqueeStartX = e.OffsetX;
+        _marqueeStartY = e.OffsetY;
+        _marqueeEndX = _marqueeStartX;
+        _marqueeEndY = _marqueeStartY;
+    }
+
+    private void OnCanvasMouseMove(MouseEventArgs e)
+    {
+        if (_isDragging && _selectedSymbols.Count > 0)
+        {
+            var dx = e.ClientX - _dragStartX;
+            var dy = e.ClientY - _dragStartY;
+            foreach (var s in _selectedSymbols)
+            {
+                if (_multiDragStarts.TryGetValue(s, out var start))
+                {
+                    s.X = start.X + dx;
+                    s.Y = start.Y + dy;
+                }
+            }
+        }
+        else if (_isResizing)
+        {
+            ApplyResize(e);
+        }
+        else if (_isRotating && _selectedSymbol != null)
+        {
+            var dx = e.ClientX - _dragStartX;
+            var dy = e.ClientY - _dragStartY;
+            var currentAngle = Math.Atan2(dy, dx) * 180.0 / Math.PI;
+            var delta = currentAngle - _rotateStartAngle;
+            _selectedSymbol.Rotation = Math.Round((_symStartRotation + delta) % 360, 1);
+        }
+        else if (_isMarqueeSelecting)
+        {
+            _marqueeEndX = _marqueeStartX + (e.ClientX - _dragStartX);
+            _marqueeEndY = _marqueeStartY + (e.ClientY - _dragStartY);
+        }
+    }
+
+    private void OnCanvasMouseUp(MouseEventArgs e)
+    {
+        if (_isMarqueeSelecting)
+        {
+            _isMarqueeSelecting = false;
+            ApplyMarqueeSelection(e.CtrlKey);
+        }
+
+        if (_isDragging || _isRotating || _isResizing)
+        {
+            _isDragging = false;
+            _isRotating = false;
+            _isResizing = false;
+            _resizeHandle = "";
+            _multiDragStarts.Clear();
+            _multiResizeStarts.Clear();
+            OnChanged();
+        }
+    }
+
+    private void ApplyMarqueeSelection(bool additive)
+    {
+        var screen = GetScreen();
+        if (screen == null) return;
+
+        var x1 = Math.Min(_marqueeStartX, _marqueeEndX);
+        var y1 = Math.Min(_marqueeStartY, _marqueeEndY);
+        var x2 = Math.Max(_marqueeStartX, _marqueeEndX);
+        var y2 = Math.Max(_marqueeStartY, _marqueeEndY);
+
+        // Only apply if the marquee has meaningful size
+        if (x2 - x1 < 3 && y2 - y1 < 3) return;
+
+        if (!additive)
+        {
+            _selectedSymbols.Clear();
+            _selectedSymbol = null;
+        }
+
+        foreach (var sym in screen.Symbols)
+        {
+            // Check if symbol's bounding box intersects the marquee
+            if (sym.X + sym.Width >= x1 && sym.X <= x2 &&
+                sym.Y + sym.Height >= y1 && sym.Y <= y2)
+            {
+                _selectedSymbols.Add(sym);
+            }
+        }
+
+        // Expand to include full groups
+        ExpandSelectionToGroups();
+
+        _selectedSymbol = _selectedSymbols.Count > 0 ? _selectedSymbols.First() : null;
+        NotifySelectionChanged();
+    }
+
+    private void OnRotateHandleMouseDown(MouseEventArgs e, ScreenSymbol sym)
+    {
+        _selectedSymbol = sym;
+        _isRotating = true;
+        _dragStartX = e.ClientX;
+        _dragStartY = e.ClientY;
+        _rotateStartAngle = Math.Atan2(0, 0) * 180.0 / Math.PI;
+        _symStartRotation = sym.Rotation;
+    }
+
+    // ─── Resize handles ─────────────────────────────────────
+
+    private void OnResizeHandleMouseDown(MouseEventArgs e, ScreenSymbol sym, string handle)
+    {
+        _selectedSymbol = sym;
+        _isResizing = true;
+        _resizeHandle = handle;
+        _dragStartX = e.ClientX;
+        _dragStartY = e.ClientY;
+
+        if (_selectedSymbols.Count > 1)
+        {
+            // Multi-selection: compute bounding box and store per-symbol relative positions
+            _multiResizeStarts.Clear();
+            double bx1 = double.MaxValue, by1 = double.MaxValue, bx2 = double.MinValue, by2 = double.MinValue;
+            foreach (var s in _selectedSymbols)
+            {
+                bx1 = Math.Min(bx1, s.X);
+                by1 = Math.Min(by1, s.Y);
+                bx2 = Math.Max(bx2, s.X + s.Width);
+                by2 = Math.Max(by2, s.Y + s.Height);
+                _multiResizeStarts[s] = (s.X, s.Y, s.Width, s.Height);
+            }
+            _multiBoundsStart = (bx1, by1, bx2 - bx1, by2 - by1);
+        }
+        else
+        {
+            // Single selection
+            _resizeStartX = sym.X;
+            _resizeStartY = sym.Y;
+            _resizeStartWidth = sym.Width;
+            _resizeStartHeight = sym.Height;
+        }
+    }
+
+    private void ApplyResize(MouseEventArgs e)
+    {
+        var dx = e.ClientX - _dragStartX;
+        var dy = e.ClientY - _dragStartY;
+        const double minSize = 8;
+
+        if (_selectedSymbols.Count > 1)
+        {
+            ApplyMultiResize(dx, dy, minSize);
+        }
+        else if (_selectedSymbol != null)
+        {
+            ApplySingleResize(_selectedSymbol, dx, dy, minSize);
+        }
+    }
+
+    private void ApplySingleResize(ScreenSymbol sym, double dx, double dy, double minSize)
+    {
+        var x = _resizeStartX;
+        var y = _resizeStartY;
+        var w = _resizeStartWidth;
+        var h = _resizeStartHeight;
+
+        switch (_resizeHandle)
+        {
+            case "se":
+                w += dx; h += dy;
+                break;
+            case "nw":
+                x += dx; y += dy; w -= dx; h -= dy;
+                break;
+            case "ne":
+                y += dy; w += dx; h -= dy;
+                break;
+            case "sw":
+                x += dx; w -= dx; h += dy;
+                break;
+            case "n":
+                y += dy; h -= dy;
+                break;
+            case "s":
+                h += dy;
+                break;
+            case "w":
+                x += dx; w -= dx;
+                break;
+            case "e":
+                w += dx;
+                break;
+        }
+
+        // Enforce minimum size
+        if (w < minSize) { if (_resizeHandle.Contains('w')) x -= (minSize - w); w = minSize; }
+        if (h < minSize) { if (_resizeHandle.Contains('n')) y -= (minSize - h); h = minSize; }
+
+        sym.X = x;
+        sym.Y = y;
+        sym.Width = w;
+        sym.Height = h;
+    }
+
+    private void ApplyMultiResize(double dx, double dy, double minSize)
+    {
+        var (bx, by, bw, bh) = _multiBoundsStart;
+        if (bw < 1) bw = 1;
+        if (bh < 1) bh = 1;
+
+        // Compute the new bounding box dimensions
+        double nbx = bx, nby = by, nbw = bw, nbh = bh;
+
+        switch (_resizeHandle)
+        {
+            case "se": nbw += dx; nbh += dy; break;
+            case "nw": nbx += dx; nby += dy; nbw -= dx; nbh -= dy; break;
+            case "ne": nby += dy; nbw += dx; nbh -= dy; break;
+            case "sw": nbx += dx; nbw -= dx; nbh += dy; break;
+            case "n":  nby += dy; nbh -= dy; break;
+            case "s":  nbh += dy; break;
+            case "w":  nbx += dx; nbw -= dx; break;
+            case "e":  nbw += dx; break;
+        }
+
+        if (nbw < minSize) nbw = minSize;
+        if (nbh < minSize) nbh = minSize;
+
+        var scaleX = nbw / bw;
+        var scaleY = nbh / bh;
+
+        foreach (var s in _selectedSymbols)
+        {
+            if (!_multiResizeStarts.TryGetValue(s, out var orig)) continue;
+
+            // Scale position relative to original bounding box origin
+            var relX = orig.X - bx;
+            var relY = orig.Y - by;
+
+            s.X = nbx + relX * scaleX;
+            s.Y = nby + relY * scaleY;
+            s.Width = Math.Max(orig.W * scaleX, minSize);
+            s.Height = Math.Max(orig.H * scaleY, minSize);
+        }
+    }
+
+    // ─── Group / Ungroup ────────────────────────────────────
+
+    private void GroupSelected()
+    {
+        if (_selectedSymbols.Count < 2) return;
+
+        var groupId = $"grp_{_nextGroupId++}";
+        foreach (var sym in _selectedSymbols)
+            sym.GroupId = groupId;
+        OnChanged();
+    }
+
+    private void UngroupSelected()
+    {
+        var screen = GetScreen();
+        if (screen == null) return;
+
+        // Collect all group IDs from the current selection
+        var groupIds = _selectedSymbols
+            .Where(s => !string.IsNullOrEmpty(s.GroupId))
+            .Select(s => s.GroupId!)
+            .Distinct()
+            .ToHashSet();
+
+        // Clear GroupId from ALL symbols that belong to those groups (not just selected ones)
+        foreach (var sym in screen.Symbols)
+        {
+            if (!string.IsNullOrEmpty(sym.GroupId) && groupIds.Contains(sym.GroupId))
+                sym.GroupId = null;
+        }
+        OnChanged();
+    }
+
+    private void SelectGroup()
+    {
+        if (_selectedSymbol == null || string.IsNullOrEmpty(_selectedSymbol.GroupId)) return;
+
+        var screen = GetScreen();
+        if (screen == null) return;
+
+        var groupId = _selectedSymbol.GroupId;
+        foreach (var sym in screen.Symbols)
+        {
+            if (sym.GroupId == groupId)
+                _selectedSymbols.Add(sym);
+        }
+    }
+
+    // ─── Animation Editor ───────────────────────────────────
+
+    private void ToggleAnimationEditor()
+    {
+        _showAnimationEditor = !_showAnimationEditor;
+        if (!_showAnimationEditor)
+            StopPreview();
+    }
+
+    private void ToggleAnimExpand(string animId)
+    {
+        _expandedAnimId = _expandedAnimId == animId ? null : animId;
+    }
+
+    private void AddAnimation()
+    {
+        if (_selectedSymbol == null) return;
+
+        var anim = new SymbolAnimation
+        {
+            Id = $"anim_{_nextAnimId++}",
+            Name = "",
+            Property = "Position",
+            DurationMs = 1000,
+            Easing = "Linear",
+            Trigger = "Always"
+        };
+        _selectedSymbol.Animations.Add(anim);
+        _expandedAnimId = anim.Id;
+        OnChanged();
+    }
+
+    private void RemoveAnimation(SymbolAnimation anim)
+    {
+        if (_selectedSymbol == null) return;
+        if (_previewingAnim == anim) StopPreview();
+        _selectedSymbol.Animations.Remove(anim);
+        if (_expandedAnimId == anim.Id) _expandedAnimId = null;
+        OnChanged();
+    }
+
+    private static int _nextCommandId = 1;
+
+    private void AddCommand()
+    {
+        if (_selectedSymbol == null) return;
+        _selectedSymbol.Commands.Add(new SymbolCommand
+        {
+            Id = $"cmd_{_nextCommandId++}",
+            Action = "NavigateScreen",
+            Trigger = "Click"
+        });
+        OnChanged();
+    }
+
+    private List<string> GetScreenNames()
+    {
+        if (Node is ScreenNode sn)
+        {
+            // Get screens from the parent editor service
+            return Editor.RootModel?.Screens.Select(s => s.Name).ToList() ?? [];
+        }
+        return [];
+    }
+
+    private void AddKeyframe(SymbolAnimation anim)
+    {
+        // Find a suitable default percent
+        var usedPcts = anim.Keyframes.Select(k => k.Percent).ToHashSet();
+        double pct = 0;
+        if (usedPcts.Contains(0) && usedPcts.Contains(100))
+            pct = 50;
+        else if (usedPcts.Contains(0))
+            pct = 100;
+
+        // Keep incrementing if taken
+        while (usedPcts.Contains(pct) && pct <= 100)
+            pct += 10;
+        if (pct > 100) pct = 100;
+
+        anim.Keyframes.Add(new AnimationKeyframe
+        {
+            Percent = pct,
+            Value = GetDefaultKeyframeValue(anim.Property)
+        });
+        OnChanged();
+    }
+
+    private void AddDefaultKeyframes(SymbolAnimation anim)
+    {
+        if (_selectedSymbol == null) return;
+
+        anim.Keyframes.Clear();
+        var (fromVal, toVal) = GetDefaultFromTo(anim.Property, _selectedSymbol);
+
+        anim.Keyframes.Add(new AnimationKeyframe { Percent = 0, Value = fromVal });
+        anim.Keyframes.Add(new AnimationKeyframe { Percent = 100, Value = toVal });
+        OnChanged();
+    }
+
+    private void RemoveKeyframe(SymbolAnimation anim, AnimationKeyframe kf)
+    {
+        anim.Keyframes.Remove(kf);
+        OnChanged();
+    }
+
+    private string GetDefaultKeyframeValue(string property) => property switch
+    {
+        "Position" => "0,0",
+        "Scale" => "1,1",
+        "Rotation" => "0",
+        "Opacity" => "1",
+        "Fill" => "#4a90d9",
+        "Stroke" => "#333333",
+        "StrokeWidth" => "1",
+        "Width" => "80",
+        "Height" => "40",
+        _ => "0"
+    };
+
+    private (string From, string To) GetDefaultFromTo(string property, ScreenSymbol sym) => property switch
+    {
+        "Position" => ($"{sym.X},{sym.Y}", $"{sym.X + 100},{sym.Y}"),
+        "Scale" => ("1,1", "1.5,1.5"),
+        "Rotation" => ("0", "360"),
+        "Opacity" => ("1", "0"),
+        "Fill" => (sym.Fill, "#ff0000"),
+        "Stroke" => (sym.Stroke, "#0000ff"),
+        "StrokeWidth" => (sym.StrokeWidth.ToString(System.Globalization.CultureInfo.InvariantCulture), "4"),
+        "Width" => (sym.Width.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    (sym.Width * 1.5).ToString(System.Globalization.CultureInfo.InvariantCulture)),
+        "Height" => (sym.Height.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                     (sym.Height * 1.5).ToString(System.Globalization.CultureInfo.InvariantCulture)),
+        _ => ("0", "100")
+    };
+
+    private string GetKeyframePlaceholder(string property) => property switch
+    {
+        "Position" => "x,y",
+        "Scale" => "sx,sy",
+        "Rotation" => "degrees",
+        "Opacity" => "0.0–1.0",
+        "Fill" or "Stroke" => "#rrggbb",
+        "StrokeWidth" => "px",
+        "Width" or "Height" => "px",
+        _ => "value"
+    };
+
+    // ─── Animation Preview ──────────────────────────────────
+
+    private void PreviewAnimation(SymbolAnimation anim)
+    {
+        if (_selectedSymbol == null || anim.Keyframes.Count < 2) return;
+
+        StopPreview();
+        _previewingAnim = anim;
+        _previewElapsed = 0;
+
+        // Store original values
+        _previewOriginalValues = new Dictionary<string, double>
+        {
+            ["X"] = _selectedSymbol.X,
+            ["Y"] = _selectedSymbol.Y,
+            ["Width"] = _selectedSymbol.Width,
+            ["Height"] = _selectedSymbol.Height,
+            ["Rotation"] = _selectedSymbol.Rotation,
+            ["StrokeWidth"] = _selectedSymbol.StrokeWidth,
+            ["Opacity"] = 1.0
+        };
+
+        const int intervalMs = 30;
+        _previewTimer = new System.Threading.Timer(_ =>
+        {
+            if (_previewingAnim == null || _selectedSymbol == null)
+            {
+                StopPreview();
+                return;
+            }
+
+            _previewElapsed += intervalMs;
+            var duration = _previewingAnim.DurationMs;
+            if (duration <= 0) duration = 1000;
+
+            var progress = _previewElapsed / duration;
+
+            if (_previewingAnim.AutoReverse)
+            {
+                var cycle = (int)progress;
+                var frac = progress - cycle;
+                progress = (cycle % 2 == 0) ? frac : 1.0 - frac;
+            }
+            else
+            {
+                progress %= 1.0;
+            }
+
+            if (_previewingAnim.RepeatCount > 0 && _previewElapsed > duration * _previewingAnim.RepeatCount * (_previewingAnim.AutoReverse ? 2 : 1))
+            {
+                InvokeAsync(() => { StopPreview(); StateHasChanged(); });
+                return;
+            }
+
+            ApplyPreviewFrame(_previewingAnim, _selectedSymbol, progress);
+            InvokeAsync(StateHasChanged);
+
+        }, null, (int)anim.DelayMs, intervalMs);
+    }
+
+    private void ApplyPreviewFrame(SymbolAnimation anim, ScreenSymbol sym, double progress)
+    {
+        var kfs = anim.Keyframes.OrderBy(k => k.Percent).ToList();
+        if (kfs.Count < 2) return;
+
+        var pct = progress * 100.0;
+
+        // Find surrounding keyframes
+        AnimationKeyframe? from = kfs[0], to = kfs[^1];
+        for (int i = 0; i < kfs.Count - 1; i++)
+        {
+            if (pct >= kfs[i].Percent && pct <= kfs[i + 1].Percent)
+            {
+                from = kfs[i];
+                to = kfs[i + 1];
+                break;
+            }
+        }
+
+        var segLen = to.Percent - from.Percent;
+        var t = segLen > 0 ? (pct - from.Percent) / segLen : 0;
+        t = Math.Clamp(t, 0, 1);
+
+        switch (anim.Property)
+        {
+            case "Position":
+                var (fx, fy) = ParsePair(from.Value);
+                var (tx, ty) = ParsePair(to.Value);
+                sym.X = Lerp(fx, tx, t);
+                sym.Y = Lerp(fy, ty, t);
+                break;
+            case "Scale":
+                var (fsx, fsy) = ParsePair(from.Value);
+                var (tsx, tsy) = ParsePair(to.Value);
+                var origW = _previewOriginalValues?["Width"] ?? sym.Width;
+                var origH = _previewOriginalValues?["Height"] ?? sym.Height;
+                sym.Width = origW * Lerp(fsx, tsx, t);
+                sym.Height = origH * Lerp(fsy, tsy, t);
+                break;
+            case "Rotation":
+                sym.Rotation = Lerp(ParseDouble(from.Value), ParseDouble(to.Value), t);
+                break;
+            case "Width":
+                sym.Width = Lerp(ParseDouble(from.Value), ParseDouble(to.Value), t);
+                break;
+            case "Height":
+                sym.Height = Lerp(ParseDouble(from.Value), ParseDouble(to.Value), t);
+                break;
+            case "StrokeWidth":
+                sym.StrokeWidth = Lerp(ParseDouble(from.Value), ParseDouble(to.Value), t);
+                break;
+            case "Fill":
+                sym.Fill = LerpColor(from.Value, to.Value, t);
+                break;
+            case "Stroke":
+                sym.Stroke = LerpColor(from.Value, to.Value, t);
+                break;
+            case "Opacity":
+                // Opacity applied via inline style; we track it but there's no property on ScreenSymbol for it
+                break;
+        }
+    }
+
+    private void StopPreview()
+    {
+        _previewTimer?.Dispose();
+        _previewTimer = null;
+
+        // Restore original values
+        if (_previewOriginalValues != null && _selectedSymbol != null)
+        {
+            _selectedSymbol.X = _previewOriginalValues["X"];
+            _selectedSymbol.Y = _previewOriginalValues["Y"];
+            _selectedSymbol.Width = _previewOriginalValues["Width"];
+            _selectedSymbol.Height = _previewOriginalValues["Height"];
+            _selectedSymbol.Rotation = _previewOriginalValues["Rotation"];
+            _selectedSymbol.StrokeWidth = _previewOriginalValues["StrokeWidth"];
+        }
+
+        _previewingAnim = null;
+        _previewOriginalValues = null;
+        _previewElapsed = 0;
+    }
+
+    private static double Lerp(double a, double b, double t) => a + (b - a) * t;
+
+    private static (double, double) ParsePair(string val)
+    {
+        var parts = val.Split(',');
+        double.TryParse(parts.ElementAtOrDefault(0)?.Trim(), System.Globalization.NumberStyles.Any,
+            System.Globalization.CultureInfo.InvariantCulture, out var x);
+        double.TryParse(parts.ElementAtOrDefault(1)?.Trim(), System.Globalization.NumberStyles.Any,
+            System.Globalization.CultureInfo.InvariantCulture, out var y);
+        return (x, y);
+    }
+
+    private static double ParseDouble(string val)
+    {
+        double.TryParse(val?.Trim(), System.Globalization.NumberStyles.Any,
+            System.Globalization.CultureInfo.InvariantCulture, out var v);
+        return v;
+    }
+
+    private static string LerpColor(string fromHex, string toHex, double t)
+    {
+        try
+        {
+            var fc = ParseHexColor(fromHex);
+            var tc = ParseHexColor(toHex);
+            var r = (int)Lerp(fc.r, tc.r, t);
+            var g = (int)Lerp(fc.g, tc.g, t);
+            var b = (int)Lerp(fc.b, tc.b, t);
+            return $"#{Math.Clamp(r, 0, 255):x2}{Math.Clamp(g, 0, 255):x2}{Math.Clamp(b, 0, 255):x2}";
+        }
+        catch { return fromHex; }
+    }
+
+    private static (int r, int g, int b) ParseHexColor(string hex)
+    {
+        hex = hex.TrimStart('#');
+        if (hex.Length == 3)
+            hex = $"{hex[0]}{hex[0]}{hex[1]}{hex[1]}{hex[2]}{hex[2]}";
+        return (Convert.ToInt32(hex[..2], 16),
+                Convert.ToInt32(hex[2..4], 16),
+                Convert.ToInt32(hex[4..6], 16));
+    }
+
+    // ─── OPC live values ────────────────────────────────────
+
+    private string? GetLiveValue(ScreenSymbol sym)
+    {
+        if (string.IsNullOrEmpty(sym.VariablePath)) return null;
+
+        foreach (var item in Opc.MonitoredItems)
+        {
+            if (item.DisplayName == sym.VariablePath ||
+                item.NodeIdString.EndsWith(sym.VariablePath, StringComparison.OrdinalIgnoreCase))
+                return item.Value;
+        }
+        return null;
+    }
+
+    private double? ParseNumericValue(string? val)
+    {
+        if (val == null) return null;
+        if (double.TryParse(val, System.Globalization.NumberStyles.Any,
+            System.Globalization.CultureInfo.InvariantCulture, out var d))
+            return d;
+        if (bool.TryParse(val, out var b))
+            return b ? 1 : 0;
+        return null;
+    }
+
+    // ─── Simple binding evaluations ─────────────────────────
+
+    private string EvalFillBinding(ScreenSymbol sym, string? liveValue)
+    {
+        if (string.IsNullOrEmpty(sym.FillBinding) || liveValue == null)
+            return sym.Fill;
+
+        try
+        {
+            var numVal = ParseNumericValue(liveValue);
+            var binding = sym.FillBinding;
+
+            // Simple pattern: "value > X ? 'colorA' : 'colorB'"
+            if (binding.Contains('?') && binding.Contains(':'))
+            {
+                var condResult = EvalSimpleCondition(binding, liveValue, numVal);
+                if (condResult != null) return condResult;
+            }
+        }
+        catch { }
+        return sym.Fill;
+    }
+
+    private bool EvalVisibilityBinding(ScreenSymbol sym, string? liveValue)
+    {
+        if (string.IsNullOrEmpty(sym.VisibilityBinding) || liveValue == null)
+            return true;
+
+        try
+        {
+            var numVal = ParseNumericValue(liveValue);
+            return EvalSimpleBool(sym.VisibilityBinding, liveValue, numVal);
+        }
+        catch { }
+        return true;
+    }
+
+    private double EvalRotationBinding(ScreenSymbol sym, string? liveValue)
+    {
+        if (string.IsNullOrEmpty(sym.RotationBinding) || liveValue == null)
+            return sym.Rotation;
+
+        try
+        {
+            var numVal = ParseNumericValue(liveValue);
+            if (numVal.HasValue)
+            {
+                var expr = sym.RotationBinding.Replace("value", numVal.Value.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                if (expr.Contains('*'))
+                {
+                    var parts = expr.Split('*');
+                    if (parts.Length == 2 && double.TryParse(parts[0].Trim(), System.Globalization.NumberStyles.Any,
+                            System.Globalization.CultureInfo.InvariantCulture, out var a)
+                        && double.TryParse(parts[1].Trim(), System.Globalization.NumberStyles.Any,
+                            System.Globalization.CultureInfo.InvariantCulture, out var b))
+                        return a * b;
+                }
+                if (double.TryParse(expr.Trim(), System.Globalization.NumberStyles.Any,
+                    System.Globalization.CultureInfo.InvariantCulture, out var d))
+                    return d;
+            }
+        }
+        catch { }
+        return sym.Rotation;
+    }
+
+    private string? EvalLabelBinding(ScreenSymbol sym, string? liveValue)
+    {
+        if (string.IsNullOrEmpty(sym.LabelBinding) || liveValue == null)
+            return null;
+
+        try
+        {
+            var binding = sym.LabelBinding;
+
+            // Simple pattern: "value + ' suffix'"
+            if (binding.Contains("value"))
+            {
+                var result = binding.Replace("value", liveValue);
+                // Clean up simple string concatenation
+                result = result.Replace("+ '", "").Replace("' +", "").Replace("'", "").Replace("+", "").Replace("  ", " ").Trim();
+                if (!string.IsNullOrEmpty(result))
+                    return $"{liveValue} {result.Replace(liveValue, "").Trim()}".Trim();
+                return liveValue;
+            }
+        }
+        catch { }
+        return liveValue;
+    }
+
+    private string? EvalSimpleCondition(string binding, string liveValue, double? numVal)
+    {
+        // Parse: "value > 50 ? '#ff0000' : '#00ff00'"
+        var qIdx = binding.IndexOf('?');
+        var cIdx = binding.IndexOf(':', qIdx + 1);
+        if (qIdx < 0 || cIdx < 0) return null;
+
+        var condition = binding[..qIdx].Trim();
+        var trueVal = binding[(qIdx + 1)..cIdx].Trim().Trim('\'', '"', ' ');
+        var falseVal = binding[(cIdx + 1)..].Trim().Trim('\'', '"', ' ');
+
+        var result = EvalSimpleBool(condition, liveValue, numVal);
+        return result ? trueVal : falseVal;
+    }
+
+    private bool EvalSimpleBool(string condition, string liveValue, double? numVal)
+    {
+        condition = condition.Trim();
+
+        // "value == true" / "value == false"
+        if (condition.Contains("=="))
+        {
+            var parts = condition.Split("==", 2);
+            var right = parts[1].Trim().Trim('\'', '"');
+            if (right.Equals("true", StringComparison.OrdinalIgnoreCase))
+                return liveValue.Equals("True", StringComparison.OrdinalIgnoreCase) || liveValue == "1";
+            if (right.Equals("false", StringComparison.OrdinalIgnoreCase))
+                return liveValue.Equals("False", StringComparison.OrdinalIgnoreCase) || liveValue == "0";
+            if (numVal.HasValue && double.TryParse(right, System.Globalization.NumberStyles.Any,
+                    System.Globalization.CultureInfo.InvariantCulture, out var rn))
+                return Math.Abs(numVal.Value - rn) < 0.0001;
+            return liveValue == right;
+        }
+
+        if (numVal.HasValue)
+        {
+            if (condition.Contains(">="))
+                return TryCompare(condition, ">=", numVal.Value, (a, b) => a >= b);
+            if (condition.Contains("<="))
+                return TryCompare(condition, "<=", numVal.Value, (a, b) => a <= b);
+            if (condition.Contains('>'))
+                return TryCompare(condition, ">", numVal.Value, (a, b) => a > b);
+            if (condition.Contains('<'))
+                return TryCompare(condition, "<", numVal.Value, (a, b) => a < b);
+            if (condition.Contains("!="))
+                return TryCompare(condition, "!=", numVal.Value, (a, b) => Math.Abs(a - b) > 0.0001);
+        }
+
+        return true;
+    }
+
+    private static bool TryCompare(string expr, string op, double value, Func<double, double, bool> compare)
+    {
+        var parts = expr.Split(op, 2);
+        if (parts.Length == 2 &&
+            double.TryParse(parts[1].Trim(), System.Globalization.NumberStyles.Any,
+                System.Globalization.CultureInfo.InvariantCulture, out var threshold))
+            return compare(value, threshold);
+        return true;
+    }
+
+    // ─── HDA chart design-time polyline ──
+
+    private static string BuildFakeHdaPolyline(ScreenSymbol sym)
+    {
+        var w = sym.Width - 50;
+        var h = sym.Height - 55;
+        var b = sym.Height - 22;
+        double[] yFactors = [0.3, 0.5, 0.4, 0.7, 0.55, 0.8, 0.65];
+        double[] xFactors = [0, 0.15, 0.3, 0.5, 0.65, 0.8, 1.0];
+        var sb = new System.Text.StringBuilder();
+        for (int i = 0; i < yFactors.Length; i++)
+        {
+            if (i > 0) sb.Append(' ');
+            sb.Append($"{50 + w * xFactors[i]:F0},{b - h * yFactors[i]:F0}");
+        }
+        return sb.ToString();
+    }
+
+    // ─── Event log design-time preview rows ──
+
+    private RenderFragment RenderEventLogPreviewRows(ScreenSymbol sym) => builder =>
+    {
+        string[] cats = ["Alarm", "Auth", "Driver", "System"];
+        string[] catColors = ["#fca5a5", "#93c5fd", "#fde68a", "#67e8f9"];
+        string[] sevs = ["Error", "Info", "Warning", "Info"];
+        int seq = 0;
+
+        for (int row = 0; row < 4 && row * 13 + 50 < sym.Height - 20; row++)
+        {
+            var ry = 50 + row * 13;
+            // row separator line
+            builder.OpenElement(seq++, "line");
+            builder.AddAttribute(seq++, "x1", "8");
+            builder.AddAttribute(seq++, "y1", ry.ToString());
+            builder.AddAttribute(seq++, "x2", (sym.Width - 8).ToString());
+            builder.AddAttribute(seq++, "y2", ry.ToString());
+            builder.AddAttribute(seq++, "stroke", "#1e293b");
+            builder.AddAttribute(seq++, "stroke-width", "0.5");
+            builder.CloseElement();
+
+            // time
+            builder.OpenElement(seq++, "text");
+            builder.AddAttribute(seq++, "x", "30");
+            builder.AddAttribute(seq++, "y", (ry + 9).ToString());
+            builder.AddAttribute(seq++, "text-anchor", "start");
+            builder.AddAttribute(seq++, "dominant-baseline", "middle");
+            builder.AddAttribute(seq++, "fill", "#64748b");
+            builder.AddAttribute(seq++, "font-size", "7");
+            builder.AddContent(seq++, "00:00:00");
+            builder.CloseElement();
+
+            // category
+            builder.OpenElement(seq++, "text");
+            builder.AddAttribute(seq++, "x", "100");
+            builder.AddAttribute(seq++, "y", (ry + 9).ToString());
+            builder.AddAttribute(seq++, "text-anchor", "start");
+            builder.AddAttribute(seq++, "dominant-baseline", "middle");
+            builder.AddAttribute(seq++, "fill", catColors[row % 4]);
+            builder.AddAttribute(seq++, "font-size", "7");
+            builder.AddContent(seq++, cats[row % 4]);
+            builder.CloseElement();
+
+            // severity
+            builder.OpenElement(seq++, "text");
+            builder.AddAttribute(seq++, "x", "160");
+            builder.AddAttribute(seq++, "y", (ry + 9).ToString());
+            builder.AddAttribute(seq++, "text-anchor", "start");
+            builder.AddAttribute(seq++, "dominant-baseline", "middle");
+            builder.AddAttribute(seq++, "fill", "#94a3b8");
+            builder.AddAttribute(seq++, "font-size", "7");
+            builder.AddContent(seq++, sevs[row % 4]);
+            builder.CloseElement();
+
+            // source
+            builder.OpenElement(seq++, "text");
+            builder.AddAttribute(seq++, "x", "220");
+            builder.AddAttribute(seq++, "y", (ry + 9).ToString());
+            builder.AddAttribute(seq++, "text-anchor", "start");
+            builder.AddAttribute(seq++, "dominant-baseline", "middle");
+            builder.AddAttribute(seq++, "fill", "#cbd5e1");
+            builder.AddAttribute(seq++, "font-size", "7");
+            builder.AddContent(seq++, "device:1");
+            builder.CloseElement();
+
+            // message
+            builder.OpenElement(seq++, "text");
+            builder.AddAttribute(seq++, "x", (sym.Width - 40).ToString());
+            builder.AddAttribute(seq++, "y", (ry + 9).ToString());
+            builder.AddAttribute(seq++, "text-anchor", "end");
+            builder.AddAttribute(seq++, "dominant-baseline", "middle");
+            builder.AddAttribute(seq++, "fill", "#e2e8f0");
+            builder.AddAttribute(seq++, "font-size", "7");
+            builder.AddContent(seq++, "Event message");
+            builder.CloseElement();
+        }
+    };
+
+    // ─── SVG text helper (Razor does not support <text> as an element) ──
+
+    private RenderFragment RenderSvgText(double x, double y, string? anchor, string? baseline,
+        string fill, int fontSize, string content) => builder =>
+    {
+        int seq = 0;
+        builder.OpenElement(seq++, "text");
+        builder.AddAttribute(seq++, "x", x);
+        builder.AddAttribute(seq++, "y", y);
+        if (anchor != null) builder.AddAttribute(seq++, "text-anchor", anchor);
+        if (baseline != null) builder.AddAttribute(seq++, "dominant-baseline", baseline);
+        builder.AddAttribute(seq++, "fill", fill);
+        builder.AddAttribute(seq++, "font-size", fontSize);
+        builder.AddAttribute(seq++, "font-family", "sans-serif");
+        builder.AddContent(seq++, content);
+        builder.CloseElement();
+    };
+
+    // ─── Library SVG symbol renderer ────────────────────────
+
+    private RenderFragment RenderLibrarySvg(ScreenSymbol sym) => builder =>
+    {
+        // Extract inner SVG content (strip outer <svg> wrapper) and render
+        // inside a nested <svg> element with proper viewBox scaling
+        var svg = sym.SvgContent ?? "";
+        var viewBox = "0 0 64 64";
+        var vbMatch = System.Text.RegularExpressions.Regex.Match(svg,
+            @"viewBox\s*=\s*""([^""]+)""");
+        if (vbMatch.Success)
+            viewBox = vbMatch.Groups[1].Value;
+
+        // Extract inner content between <svg...> and </svg>
+        var innerContent = svg;
+        var openTagEnd = svg.IndexOf('>');
+        var closeTag = svg.LastIndexOf("</svg>", StringComparison.OrdinalIgnoreCase);
+        if (openTagEnd > 0 && closeTag > openTagEnd)
+            innerContent = svg[(openTagEnd + 1)..closeTag];
+
+        int seq = 0;
+        builder.OpenElement(seq++, "svg");
+        builder.AddAttribute(seq++, "viewBox", viewBox);
+        builder.AddAttribute(seq++, "width", sym.Width);
+        builder.AddAttribute(seq++, "height", sym.Height);
+        builder.AddAttribute(seq++, "overflow", "visible");
+        builder.AddMarkupContent(seq++, innerContent);
+        builder.CloseElement();
+    };
+
+    // ─── Gauge rendering ────────────────────────────────────
+
+    private RenderFragment RenderGauge(ScreenSymbol sym, string fill, string? liveValue) => builder =>
+    {
+        int seq = 0;
+        var cx = sym.Width / 2;
+        var cy = sym.Height / 2;
+        var r = Math.Min(cx, cy) - 4;
+        var numVal = ParseNumericValue(liveValue);
+        var min = sym.MinValue ?? 0;
+        var max = sym.MaxValue ?? 100;
+        var pct = numVal.HasValue ? Math.Clamp((numVal.Value - min) / (max - min), 0, 1) : 0;
+        var angle = -135 + pct * 270;
+        var radians = angle * Math.PI / 180;
+        var nx = cx + r * 0.7 * Math.Cos(radians);
+        var ny = cy + r * 0.7 * Math.Sin(radians);
+
+        // Background circle
+        builder.OpenElement(seq++, "circle");
+        builder.AddAttribute(seq++, "cx", cx);
+        builder.AddAttribute(seq++, "cy", cy);
+        builder.AddAttribute(seq++, "r", r);
+        builder.AddAttribute(seq++, "fill", "#f0f0f0");
+        builder.AddAttribute(seq++, "stroke", sym.Stroke);
+        builder.AddAttribute(seq++, "stroke-width", sym.StrokeWidth);
+        builder.CloseElement();
+
+        // Arc indicator
+        builder.OpenElement(seq++, "circle");
+        builder.AddAttribute(seq++, "cx", cx);
+        builder.AddAttribute(seq++, "cy", cy);
+        builder.AddAttribute(seq++, "r", r * 0.85);
+        builder.AddAttribute(seq++, "fill", "none");
+        builder.AddAttribute(seq++, "stroke", fill);
+        builder.AddAttribute(seq++, "stroke-width", 4);
+        builder.AddAttribute(seq++, "stroke-dasharray", $"{(pct * 270 / 360 * 2 * Math.PI * r * 0.85).ToString("F1", System.Globalization.CultureInfo.InvariantCulture)} 999");
+        builder.AddAttribute(seq++, "stroke-dashoffset", "0");
+        builder.AddAttribute(seq++, "transform", $"rotate(-225, {cx.ToString("F1", System.Globalization.CultureInfo.InvariantCulture)}, {cy.ToString("F1", System.Globalization.CultureInfo.InvariantCulture)})");
+        builder.CloseElement();
+
+        // Needle
+        builder.OpenElement(seq++, "line");
+        builder.AddAttribute(seq++, "x1", cx);
+        builder.AddAttribute(seq++, "y1", cy);
+        builder.AddAttribute(seq++, "x2", nx.ToString("F1", System.Globalization.CultureInfo.InvariantCulture));
+        builder.AddAttribute(seq++, "y2", ny.ToString("F1", System.Globalization.CultureInfo.InvariantCulture));
+        builder.AddAttribute(seq++, "stroke", "#333");
+        builder.AddAttribute(seq++, "stroke-width", 2);
+        builder.CloseElement();
+
+        // Center dot
+        builder.OpenElement(seq++, "circle");
+        builder.AddAttribute(seq++, "cx", cx);
+        builder.AddAttribute(seq++, "cy", cy);
+        builder.AddAttribute(seq++, "r", 3);
+        builder.AddAttribute(seq++, "fill", "#333");
+        builder.CloseElement();
+
+        // Value text
+        builder.OpenElement(seq++, "text");
+        builder.AddAttribute(seq++, "x", cx);
+        builder.AddAttribute(seq++, "y", cy + r * 0.45);
+        builder.AddAttribute(seq++, "text-anchor", "middle");
+        builder.AddAttribute(seq++, "fill", "#333");
+        builder.AddAttribute(seq++, "font-size", "10");
+        builder.AddAttribute(seq++, "font-family", "sans-serif");
+        builder.AddContent(seq++, liveValue ?? "—");
+        builder.CloseElement();
+    };
+
+    // ─── Selection notifications ─────────────────────────────
+
+    private void NotifySelectionChanged()
+    {
+        Editor.SetScreenSelection(_selectedSymbol, _selectedSymbols);
+    }
+
+    // ─── Change notifications ───────────────────────────────
+
+    private void OnChanged()
+    {
+        OnPropertyChanged.InvokeAsync();
+    }
+
+    private void SwitchToResponsive(ScreenConfig screen)
+    {
+        screen.LayoutMode = "responsive";
+        OnChanged();
+    }
+
+    private void OnBindingChanged()
+    {
+        OnPropertyChanged.InvokeAsync();
+    }
+
+    public void Dispose()
+    {
+        StopPreview();
+        Opc.StateChanged -= OnOpcChanged;
+        _refreshTimer?.Dispose();
+    }
+}

@@ -1,0 +1,1 @@
+IF OBJECT_ID (N'dbo.spModifyTablesWithColName', N'P') IS NOT NULL DROP PROCEDURE [dbo].[spModifyTablesWithColName]

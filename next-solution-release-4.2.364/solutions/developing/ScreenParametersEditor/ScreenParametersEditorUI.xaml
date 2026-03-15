@@ -1,0 +1,136 @@
+﻿<UserControl x:Class="ScreenParametersEditor.ScreenParametersEditorUI"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:self="clr-namespace:ScreenParametersEditor"
+             xmlns:properties="clr-namespace:ScreenParametersEditor.Properties"
+             xmlns:dxg="http://schemas.devexpress.com/winfx/2008/xaml/grid"
+             xmlns:dx="http://schemas.devexpress.com/winfx/2008/xaml/core"
+             xmlns:appproperties="clr-namespace:WPFUtilities.Properties;assembly=WPFUtilities"
+             xmlns:dxb="http://schemas.devexpress.com/winfx/2008/xaml/bars"
+             xmlns:local="clr-namespace:ScreenParametersEditor.Converters"
+             mc:Ignorable="d" 
+             d:DesignHeight="300" d:DesignWidth="300">
+  <UserControl.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries>
+        <ResourceDictionary Source="/SharedResources;component/Resources/SharedImages.xaml" />
+      </ResourceDictionary.MergedDictionaries>
+      <local:ParameterItemConverter x:Key="ParameterItemConverter" />
+    </ResourceDictionary>
+  </UserControl.Resources>
+    
+    <UserControl.CommandBindings>
+        <CommandBinding Command="{x:Static self:UIGeneralCommands.AddNewParameterItem}" 
+                    Executed="OnAddParameter" 
+                    CanExecute="CanAddParameter" />
+
+        <CommandBinding Command="ApplicationCommands.Save"
+                    Executed="OnCommandSave" 
+                    CanExecute="CanCommandSave" />
+        
+        <CommandBinding Command="Cut"
+                    Executed="OnCommandCut" 
+                    CanExecute="CanCommandCut" />
+
+        <CommandBinding Command="Copy"
+                    Executed="OnCommandCopy" 
+                    CanExecute="CanCommandCopy" />
+
+        <CommandBinding Command="Paste"
+                    Executed="OnCommandPaste" 
+                    CanExecute="CanCommandPaste" />
+
+        <CommandBinding Command="ApplicationCommands.Undo"
+                    PreviewExecuted="OnCommandUndo"
+                    CanExecute="CanCommandUndo" />
+
+        <CommandBinding Command="ApplicationCommands.Redo"
+                    PreviewExecuted="OnCommandRedo" 
+                    CanExecute="CanCommandRedo" />
+
+        <CommandBinding Command="ApplicationCommands.Delete" 
+                    Executed="OnRemoveItem" 
+                    CanExecute="CanRemoveItem" />
+
+        <CommandBinding Command="ApplicationCommands.Properties"
+                    Executed="OnCommandProperties" 
+                    CanExecute="CanCommandProperties" />
+    </UserControl.CommandBindings>
+    <dxb:BarManager.DXContextMenu>
+        <dxb:PopupMenu x:Name="contextMenu">
+            <dxb:PopupMenu.Items>
+
+                <dxb:BarButtonItem Command="{x:Static self:UIGeneralCommands.AddNewParameterItem}" Content="{x:Static properties:UICommandResource.AddNewParameterItemText}"/>
+
+                <dxb:BarItemLinkSeparator />
+
+                <dxb:BarSubItem Content="{x:Static properties:UICommandResource.EditMenuText}">
+                    <dxb:BarButtonItem Command="ApplicationCommands.Undo" Content="{x:Static appproperties:ApplicationCommandsResource.Undo}" Glyph="{StaticResource UndoSmall}" />
+                    <dxb:BarButtonItem Command="ApplicationCommands.Redo" Content="{x:Static appproperties:ApplicationCommandsResource.Redo}" Glyph="{StaticResource RedoSmall}" />
+                    <dxb:BarItemLinkSeparator />
+                    <dxb:BarButtonItem Command="ApplicationCommands.Copy" Content="{x:Static appproperties:ApplicationCommandsResource.Copy}" Glyph="{StaticResource CopySmall}" />
+                    <dxb:BarButtonItem Command="ApplicationCommands.Paste" Content="{x:Static appproperties:ApplicationCommandsResource.Paste}" Glyph="{StaticResource PasteSmall}" />
+                    <dxb:BarButtonItem Command="ApplicationCommands.Cut" Content="{x:Static appproperties:ApplicationCommandsResource.Cut}" Glyph="{StaticResource CutSmall}" />
+                    <dxb:BarButtonItem Command="ApplicationCommands.Delete" Content="{x:Static appproperties:ApplicationCommandsResource.Delete}" Glyph="{StaticResource DeleteSmall}" />
+                    <dxb:BarItemLinkSeparator />
+                    <dxb:BarButtonItem Command="Properties" Content="{x:Static appproperties:ApplicationCommandsResource.Properties}" />
+                </dxb:BarSubItem>
+            </dxb:PopupMenu.Items>
+        </dxb:PopupMenu>
+    </dxb:BarManager.DXContextMenu>
+    <Grid>
+        <dxg:GridControl MinHeight="10" MinWidth="10" Visibility="Visible"
+                                PreviewDragOver="OnPreviewDragOver"
+                                PreviewQueryContinueDrag="OnPreviewQueryContinueDrag"
+                                PreviewMouseMove="gridDataControl_PreviewMouseMove"
+                                AutoExpandAllGroups="True" 
+                                AutoGenerateColumns="AddNew"
+                                Name="gridDataControl" 
+                                AutoPopulateColumns="False" 
+                                AllowDrop="True" 
+                                AllowLiveDataShaping="False" 
+                                MouseDoubleClick="gridDataControl_MouseDoubleClick"
+                                dx:DXSerializer.SerializationID="gridDataControl" 
+                                dx:DXSerializer.StoreLayoutMode="All" 
+                                dxg:DataControlSerializationOptions.AddNewColumns="False" 
+                                dxg:DataControlSerializationOptions.RemoveOldColumns="False">
+            <dxg:GridControl.CommandBindings>
+            <CommandBinding Command="ApplicationCommands.Copy" CanExecute="CanCommandCopy" Executed="OnCommandCopy" />
+            <CommandBinding Command="ApplicationCommands.Paste" CanExecute="CanCommandPaste" Executed="OnCommandPaste" />
+          </dxg:GridControl.CommandBindings>
+          <dxg:GridControl.Columns>
+                <dxg:GridColumn AllowEditing="True" AllowBestFit="True" AllowGrouping="True" DisplayMemberBinding="{Binding Path=text, Converter={StaticResource ParameterItemConverter}, Mode=TwoWay}" FieldName="text" Header="{x:Static properties:Resources.text}"/>
+                <dxg:GridColumn AllowEditing="True" AllowBestFit="True" AllowGrouping="True" DisplayMemberBinding="{Binding Path=ID, Converter={StaticResource ParameterItemConverter}, Mode=TwoWay}" FieldName="ID" Header="{x:Static properties:Resources.ID}"/>
+            </dxg:GridControl.Columns>
+            <dxg:GridControl.View>
+
+                <dxg:TableView x:Name="tableView" AllowEditing="True"
+                            AllowDragDrop="True" DropRecord="OnDropRecord" 
+                            FadeSelectionOnLostFocus="False"
+                            BestFitMode="VisibleRows"
+                            BestFitArea="All"
+                            AllowBestFit="True" 
+                            AllowResizing="True"
+                            ShowGroupPanel="True"
+                            ShowSearchPanelMode="Always" SearchPanelFindMode="Always" 
+                            ShowSearchPanelMRUButton="True"
+                            ShowFilterPanelMode="ShowAlways" 
+                            NavigationStyle="Row" 
+                            MultiSelectMode="Row">
+                    <!--<dxg:TableView.RowStyle>
+                        <Style TargetType="{x:Type dxg:RowControl}">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding Path=IsSelected}" Value="True">
+                                    <Setter Property="Background" Value="LightGray" />
+                                    <Setter Property="Foreground" Value="Black" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </dxg:TableView.RowStyle>-->
+                </dxg:TableView>
+            </dxg:GridControl.View>
+        </dxg:GridControl>
+    </Grid>
+</UserControl>

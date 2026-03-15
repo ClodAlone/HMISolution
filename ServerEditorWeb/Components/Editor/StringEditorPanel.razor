@@ -1,0 +1,328 @@
+@using SharedModels
+@using ServerEditorWeb.Services
+
+<div class="string-editor-panel">
+    <div class="d-flex gap-1 mb-2 align-items-center">
+        <h6 class="mb-0 small fw-bold">🌐 String Table</h6>
+        <div class="ms-auto d-flex gap-1">
+            <button class="btn btn-sm btn-outline-primary py-0 px-1" style="font-size: 10px;"
+                    @onclick="AddLanguage" title="Add language column">＋ Language</button>
+            <button class="btn btn-sm btn-outline-success py-0 px-1" style="font-size: 10px;"
+                    @onclick="AddString" title="Add new string entry">＋ String</button>
+        </div>
+    </div>
+
+    @if (_strings.Count == 0)
+    {
+        <div class="text-muted small text-center py-3">
+            No strings defined. Click <strong>＋ String</strong> to add one.
+        </div>
+    }
+    else
+    {
+        <div class="string-table-wrap">
+            <table class="table table-sm table-hover mb-0 string-table">
+                <thead>
+                    <tr>
+                        <th style="min-width: 140px;">String ID</th>
+                        @foreach (var lang in _languages)
+                        {
+                            var l = lang;
+                            <th style="min-width: 140px;">
+                                <div class="d-flex align-items-center gap-1">
+                                    <span>@l.ToUpperInvariant()</span>
+                                    <button class="btn btn-sm btn-outline-danger py-0 px-0" style="font-size: 8px; line-height: 1; width: 14px; height: 14px;"
+                                            @onclick="() => RemoveLanguage(l)" title="Remove language">✕</button>
+                                </div>
+                            </th>
+                        }
+                        <th style="width: 80px;">
+                            @if (_translating)
+                            {
+                                <span class="spinner-border spinner-border-sm" style="width: 12px; height: 12px;"></span>
+                            }
+                        </th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var entry in _strings)
+                    {
+                        var e = entry;
+                        <tr>
+                            <td>
+                                <input type="text" class="form-control form-control-sm" style="font-size: 11px;"
+                                       value="@e.Key" @onchange="(ev) => { e.Key = ev.Value?.ToString() ?? string.Empty; OnChanged(); }" />
+                            </td>
+                            @foreach (var lang in _languages)
+                            {
+                                var l = lang;
+                                var txt = e.Translations.GetValueOrDefault(l, "");
+                                <td>
+                                    <input type="text" class="form-control form-control-sm" style="font-size: 11px;"
+                                           value="@txt"
+                                           @onchange="(ev) => { e.Translations[l] = ev.Value?.ToString() ?? string.Empty; OnChanged(); }" />
+                                </td>
+                            }
+                            <td>
+                                <div class="d-flex gap-1">
+                                    @if (_languages.Count >= 2)
+                                    {
+                                        <button class="btn btn-sm btn-outline-info py-0 px-1" style="font-size: 9px;"
+                                                @onclick="() => AutoTranslate(e)" title="Auto-translate from first non-empty language">🔄</button>
+                                    }
+                                    <button class="btn btn-sm btn-outline-danger py-0 px-1" style="font-size: 9px;"
+                                            @onclick="() => RemoveString(e)" title="Delete string">🗑</button>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    @if (_languages.Count >= 2)
+    {
+        <div class="d-flex gap-1 mt-2 align-items-center">
+            <span class="small text-muted">Translate all from</span>
+            <select class="form-select form-select-sm" style="font-size: 10px; width: 70px;"
+                    @bind="_sourceLanguage">
+                @foreach (var l in _languages)
+                {
+                    <option value="@l">@l.ToUpperInvariant()</option>
+                }
+            </select>
+            <span class="small text-muted">to</span>
+            <select class="form-select form-select-sm" style="font-size: 10px; width: 70px;"
+                    @bind="_targetLanguage">
+                @foreach (var l in _languages)
+                {
+                    <option value="@l">@l.ToUpperInvariant()</option>
+                }
+            </select>
+            <button class="btn btn-sm btn-outline-info py-0 px-1" style="font-size: 10px;"
+                    @onclick="TranslateAll" disabled="@_translating">
+                🌐 Translate All
+            </button>
+        </div>
+    }
+
+    @* Add language dialog *@
+    @if (_showAddLang)
+    {
+        <div class="mt-2 p-2 border rounded" style="font-size: 11px; background: var(--surface-alt, #f8f8f8);">
+            <label class="form-label mb-0 small">Language code (e.g., en, de, fr, es, it, ja, zh):</label>
+            <div class="d-flex gap-1">
+                <input type="text" class="form-control form-control-sm" style="font-size: 11px; width: 80px;"
+                       @bind="_newLangCode" placeholder="de" />
+                <button class="btn btn-sm btn-primary py-0 px-2" style="font-size: 10px;"
+                        @onclick="ConfirmAddLanguage">Add</button>
+                <button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size: 10px;"
+                        @onclick="() => _showAddLang = false">Cancel</button>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public EventCallback OnPropertyChanged { get; set; }
+
+    [Inject] private NodeEditorService Editor { get; set; } = default!;
+
+    private List<LocalizedStringEntry> _strings = new();
+    private List<string> _languages = new();
+    private bool _showAddLang;
+    private string _newLangCode = "";
+    private string _sourceLanguage = "en";
+    private string _targetLanguage = "de";
+    private bool _translating;
+
+    protected override void OnParametersSet()
+    {
+        var model = Editor.RootModel;
+        if (model != null)
+        {
+            _strings = model.Strings;
+            RebuildLanguageList();
+        }
+    }
+
+    private void RebuildLanguageList()
+    {
+        var langs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var entry in _strings)
+        {
+            foreach (var lang in entry.Translations.Keys)
+                langs.Add(lang.ToLowerInvariant());
+        }
+
+        _languages = langs.OrderBy(l => l).ToList();
+
+        if (_languages.Count == 0)
+            _languages.Add("en");
+
+        if (!_languages.Contains(_sourceLanguage))
+            _sourceLanguage = _languages.First();
+        if (!_languages.Contains(_targetLanguage))
+            _targetLanguage = _languages.Last();
+    }
+
+    private void OnChanged()
+    {
+        Editor.MarkChanged();
+        OnPropertyChanged.InvokeAsync();
+    }
+
+    private void AddString()
+    {
+        var entry = new LocalizedStringEntry
+        {
+            Key = $"str_{_strings.Count + 1}"
+        };
+        foreach (var lang in _languages)
+        {
+            entry.Translations[lang] = "";
+        }
+        _strings.Add(entry);
+        OnChanged();
+    }
+
+    private void RemoveString(LocalizedStringEntry entry)
+    {
+        _strings.Remove(entry);
+        OnChanged();
+    }
+
+    private void AddLanguage()
+    {
+        _newLangCode = "";
+        _showAddLang = true;
+    }
+
+    private void ConfirmAddLanguage()
+    {
+        var code = _newLangCode.Trim().ToLowerInvariant();
+        if (string.IsNullOrEmpty(code) || _languages.Contains(code))
+        {
+            _showAddLang = false;
+            return;
+        }
+
+        _languages.Add(code);
+        _languages.Sort();
+
+        // Add the new language key to all existing entries
+        foreach (var entry in _strings)
+        {
+            if (!entry.Translations.ContainsKey(code))
+                entry.Translations[code] = "";
+        }
+
+        _showAddLang = false;
+        OnChanged();
+    }
+
+    private void RemoveLanguage(string lang)
+    {
+        _languages.Remove(lang);
+        foreach (var entry in _strings)
+        {
+            entry.Translations.Remove(lang);
+        }
+        OnChanged();
+    }
+
+    // ─── Translation service ────────────────────────────────
+
+    private async Task AutoTranslate(LocalizedStringEntry entry)
+    {
+        // Find the first non-empty translation as source
+        string? sourceText = null;
+        string? sourceLang = null;
+
+        foreach (var lang in _languages)
+        {
+            if (entry.Translations.TryGetValue(lang, out var txt) && !string.IsNullOrWhiteSpace(txt))
+            {
+                sourceText = txt;
+                sourceLang = lang;
+                break;
+            }
+        }
+
+        if (sourceText == null || sourceLang == null) return;
+
+        _translating = true;
+        StateHasChanged();
+
+        foreach (var lang in _languages)
+        {
+            if (lang == sourceLang) continue;
+            if (entry.Translations.TryGetValue(lang, out var existing) && !string.IsNullOrWhiteSpace(existing))
+                continue; // Don't overwrite existing translations
+
+            var translated = await TranslateTextAsync(sourceText, sourceLang, lang);
+            if (!string.IsNullOrEmpty(translated))
+                entry.Translations[lang] = translated;
+        }
+
+        _translating = false;
+        OnChanged();
+    }
+
+    private async Task TranslateAll()
+    {
+        if (_sourceLanguage == _targetLanguage) return;
+
+        _translating = true;
+        StateHasChanged();
+
+        foreach (var entry in _strings)
+        {
+            if (!entry.Translations.TryGetValue(_sourceLanguage, out var sourceText) ||
+                string.IsNullOrWhiteSpace(sourceText))
+                continue;
+
+            // Skip if target already has a translation
+            if (entry.Translations.TryGetValue(_targetLanguage, out var existing) &&
+                !string.IsNullOrWhiteSpace(existing))
+                continue;
+
+            var translated = await TranslateTextAsync(sourceText, _sourceLanguage, _targetLanguage);
+            if (!string.IsNullOrEmpty(translated))
+                entry.Translations[_targetLanguage] = translated;
+        }
+
+        _translating = false;
+        OnChanged();
+    }
+
+    /// <summary>
+    /// Translate text using MyMemory free translation API.
+    /// Falls back to a simple prefix if the API is unavailable.
+    /// </summary>
+    private static async Task<string?> TranslateTextAsync(string text, string fromLang, string toLang)
+    {
+        try
+        {
+            using var http = new HttpClient();
+            http.Timeout = TimeSpan.FromSeconds(5);
+            var url = $"https://api.mymemory.translated.net/get?q={Uri.EscapeDataString(text)}&langpair={fromLang}|{toLang}";
+            var response = await http.GetStringAsync(url);
+
+            // Parse the JSON response — extract responseData.translatedText
+            using var doc = System.Text.Json.JsonDocument.Parse(response);
+            if (doc.RootElement.TryGetProperty("responseData", out var data) &&
+                data.TryGetProperty("translatedText", out var translated))
+            {
+                var result = translated.GetString();
+                if (!string.IsNullOrEmpty(result) &&
+                    !result.Equals(text, StringComparison.OrdinalIgnoreCase))
+                    return result;
+            }
+        }
+        catch { }
+
+        return null;
+    }
+}
