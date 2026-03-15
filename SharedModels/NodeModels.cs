@@ -235,6 +235,12 @@ namespace SharedModels
         /// <summary>Name of the screen to display on startup in the RuntimeViewer.</summary>
         public string StartupScreen { get; set; } = "";
 
+        /// <summary>
+        /// When true, the runtime viewer shows the screen navigation bar even in kiosk mode.
+        /// In normal mode the bar is always visible; this setting only affects kiosk.
+        /// </summary>
+        public bool ShowNavigationBar { get; set; }
+
         /// <summary>Configuration for the server event log (alarms, auth, driver, system events).</summary>
         public EventLogConfig? EventLog { get; set; }
 
