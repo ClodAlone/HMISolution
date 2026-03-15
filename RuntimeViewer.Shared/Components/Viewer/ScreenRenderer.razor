@@ -728,53 +728,488 @@ else
 
     private RenderFragment RenderGauge(ScreenSymbol sym, string fill, string? liveValue) => builder =>
     {
-        int seq = 0;
-        var cx = sym.Width / 2;
-        var cy = sym.Height / 2;
-        var r = Math.Min(cx, cy) - 4;
-        var numVal = ParseNumericValue(liveValue);
+        var style = sym.GaugeStyle ?? "needle";
+        switch (style)
+        {
+            case "arc": RenderGaugeArc(builder, sym, fill, liveValue); break;
+            case "semicircle": RenderGaugeSemicircle(builder, sym, fill, liveValue); break;
+            case "hbar": RenderGaugeHBar(builder, sym, fill, liveValue); break;
+            case "vbar": RenderGaugeVBar(builder, sym, fill, liveValue); break;
+            case "thermometer": RenderGaugeThermometer(builder, sym, fill, liveValue); break;
+            default: RenderGaugeNeedle(builder, sym, fill, liveValue); break;
+        }
+    };
+
+    private static readonly System.Globalization.CultureInfo _ci = System.Globalization.CultureInfo.InvariantCulture;
+
+    private (double numVal, double min, double max, double pct, string valText) GaugeCalc(ScreenSymbol sym, string? liveValue)
+    {
+        var numVal = ParseNumericValue(liveValue) ?? 0;
         var min = sym.MinValue ?? 0;
         var max = sym.MaxValue ?? 100;
-        var pct = numVal.HasValue ? Math.Clamp((numVal.Value - min) / (max - min), 0, 1) : 0;
-        var angle = -135 + pct * 270;
-        var radians = angle * Math.PI / 180;
-        var nx = cx + r * 0.7 * Math.Cos(radians);
-        var ny = cy + r * 0.7 * Math.Sin(radians);
-        var ci = System.Globalization.CultureInfo.InvariantCulture;
+        var range = max - min;
+        var pct = range > 0 ? Math.Clamp((numVal - min) / range, 0, 1) : 0;
+        var fmt = string.IsNullOrEmpty(sym.GaugeValueFormat) ? "F1" : sym.GaugeValueFormat;
+        var valText = numVal.ToString(fmt, _ci) + (string.IsNullOrEmpty(sym.GaugeUnit) ? "" : " " + sym.GaugeUnit);
+        return (numVal, min, max, pct, valText);
+    }
 
+    // ── Needle (classic dial, 270° sweep) ───────────────────
+    private void RenderGaugeNeedle(Microsoft.AspNetCore.Components.Rendering.RenderTreeBuilder builder, ScreenSymbol sym, string fill, string? liveValue)
+    {
+        int seq = 0;
+        var (numVal, min, max, pct, valText) = GaugeCalc(sym, liveValue);
+        var cx = sym.Width / 2; var cy = sym.Height / 2;
+        var r = Math.Min(cx, cy) - 4;
+        var trackColor = sym.GaugeTrackColor ?? "#e0e0e0";
+        var needleColor = sym.GaugeNeedleColor ?? "#333333";
+        var ticks = sym.GaugeTicks;
+
+        // Background circle
         builder.OpenElement(seq++, "circle");
         builder.AddAttribute(seq++, "cx", cx); builder.AddAttribute(seq++, "cy", cy);
-        builder.AddAttribute(seq++, "r", r); builder.AddAttribute(seq++, "fill", "#f0f0f0");
+        builder.AddAttribute(seq++, "r", r); builder.AddAttribute(seq++, "fill", trackColor);
         builder.AddAttribute(seq++, "stroke", sym.Stroke); builder.AddAttribute(seq++, "stroke-width", sym.StrokeWidth);
         builder.CloseElement();
 
+        // Arc progress
+        var arcR = r * 0.85;
+        var arcLen = pct * 270.0 / 360.0 * 2.0 * Math.PI * arcR;
         builder.OpenElement(seq++, "circle");
         builder.AddAttribute(seq++, "cx", cx); builder.AddAttribute(seq++, "cy", cy);
-        builder.AddAttribute(seq++, "r", r * 0.85); builder.AddAttribute(seq++, "fill", "none");
+        builder.AddAttribute(seq++, "r", arcR); builder.AddAttribute(seq++, "fill", "none");
         builder.AddAttribute(seq++, "stroke", fill); builder.AddAttribute(seq++, "stroke-width", 4);
-        builder.AddAttribute(seq++, "stroke-dasharray", $"{(pct * 270 / 360 * 2 * Math.PI * r * 0.85).ToString("F1", ci)} 999");
-        builder.AddAttribute(seq++, "stroke-dashoffset", "0");
-        builder.AddAttribute(seq++, "transform", $"rotate(-225, {cx.ToString("F1", ci)}, {cy.ToString("F1", ci)})");
+        builder.AddAttribute(seq++, "stroke-dasharray", $"{arcLen.ToString("F1", _ci)} 999");
+        builder.AddAttribute(seq++, "transform", $"rotate(-225, {cx.ToString("F1", _ci)}, {cy.ToString("F1", _ci)})");
         builder.CloseElement();
 
+        // Tick marks
+        if (ticks > 0)
+        {
+            for (int i = 0; i <= ticks; i++)
+            {
+                var t = (double)i / ticks;
+                var a = (-135 + t * 270) * Math.PI / 180;
+                var x1 = cx + r * 0.92 * Math.Cos(a);
+                var y1 = cy + r * 0.92 * Math.Sin(a);
+                var x2 = cx + r * 1.0 * Math.Cos(a);
+                var y2 = cy + r * 1.0 * Math.Sin(a);
+                builder.OpenElement(seq++, "line");
+                builder.AddAttribute(seq++, "x1", x1.ToString("F1", _ci)); builder.AddAttribute(seq++, "y1", y1.ToString("F1", _ci));
+                builder.AddAttribute(seq++, "x2", x2.ToString("F1", _ci)); builder.AddAttribute(seq++, "y2", y2.ToString("F1", _ci));
+                builder.AddAttribute(seq++, "stroke", needleColor); builder.AddAttribute(seq++, "stroke-width", 1);
+                builder.CloseElement();
+
+                if (sym.GaugeShowTickLabels)
+                {
+                    var tv = min + t * (max - min);
+                    var lx = cx + r * 0.75 * Math.Cos(a);
+                    var ly = cy + r * 0.75 * Math.Sin(a);
+                    builder.OpenElement(seq++, "text");
+                    builder.AddAttribute(seq++, "x", lx.ToString("F1", _ci)); builder.AddAttribute(seq++, "y", ly.ToString("F1", _ci));
+                    builder.AddAttribute(seq++, "text-anchor", "middle"); builder.AddAttribute(seq++, "dominant-baseline", "middle");
+                    builder.AddAttribute(seq++, "fill", needleColor); builder.AddAttribute(seq++, "font-size", Math.Max(7, r * 0.13).ToString("F0", _ci));
+                    builder.AddAttribute(seq++, "font-family", "sans-serif");
+                    builder.AddContent(seq++, tv.ToString("F0", _ci));
+                    builder.CloseElement();
+                }
+            }
+        }
+
+        // Needle
+        var angle = -135 + pct * 270;
+        var rad = angle * Math.PI / 180;
+        var nx = cx + r * 0.7 * Math.Cos(rad);
+        var ny = cy + r * 0.7 * Math.Sin(rad);
         builder.OpenElement(seq++, "line");
         builder.AddAttribute(seq++, "x1", cx); builder.AddAttribute(seq++, "y1", cy);
-        builder.AddAttribute(seq++, "x2", nx.ToString("F1", ci)); builder.AddAttribute(seq++, "y2", ny.ToString("F1", ci));
-        builder.AddAttribute(seq++, "stroke", "#333"); builder.AddAttribute(seq++, "stroke-width", 2);
+        builder.AddAttribute(seq++, "x2", nx.ToString("F1", _ci)); builder.AddAttribute(seq++, "y2", ny.ToString("F1", _ci));
+        builder.AddAttribute(seq++, "stroke", needleColor); builder.AddAttribute(seq++, "stroke-width", 2);
         builder.CloseElement();
 
+        // Center dot
         builder.OpenElement(seq++, "circle");
         builder.AddAttribute(seq++, "cx", cx); builder.AddAttribute(seq++, "cy", cy);
-        builder.AddAttribute(seq++, "r", 3); builder.AddAttribute(seq++, "fill", "#333");
+        builder.AddAttribute(seq++, "r", 3); builder.AddAttribute(seq++, "fill", needleColor);
         builder.CloseElement();
 
-        builder.OpenElement(seq++, "text");
-        builder.AddAttribute(seq++, "x", cx); builder.AddAttribute(seq++, "y", cy + r * 0.45);
-        builder.AddAttribute(seq++, "text-anchor", "middle"); builder.AddAttribute(seq++, "fill", "#333");
-        builder.AddAttribute(seq++, "font-size", "10"); builder.AddAttribute(seq++, "font-family", "sans-serif");
-        builder.AddContent(seq++, liveValue ?? "—");
+        // Value text
+        if (sym.GaugeShowValue)
+        {
+            builder.OpenElement(seq++, "text");
+            builder.AddAttribute(seq++, "x", cx); builder.AddAttribute(seq++, "y", cy + r * 0.45);
+            builder.AddAttribute(seq++, "text-anchor", "middle"); builder.AddAttribute(seq++, "fill", needleColor);
+            builder.AddAttribute(seq++, "font-size", "10"); builder.AddAttribute(seq++, "font-family", "sans-serif");
+            builder.AddContent(seq++, valText);
+            builder.CloseElement();
+        }
+    }
+
+    // ── Arc (donut ring, 270° sweep) ────────────────────────
+    private void RenderGaugeArc(Microsoft.AspNetCore.Components.Rendering.RenderTreeBuilder builder, ScreenSymbol sym, string fill, string? liveValue)
+    {
+        int seq = 0;
+        var (numVal, min, max, pct, valText) = GaugeCalc(sym, liveValue);
+        var cx = sym.Width / 2; var cy = sym.Height / 2;
+        var r = Math.Min(cx, cy) - 6;
+        var trackColor = sym.GaugeTrackColor ?? "#e0e0e0";
+        var sw = Math.Max(6, r * 0.18);
+
+        // Track
+        var trackLen = 270.0 / 360.0 * 2.0 * Math.PI * r;
+        builder.OpenElement(seq++, "circle");
+        builder.AddAttribute(seq++, "cx", cx); builder.AddAttribute(seq++, "cy", cy);
+        builder.AddAttribute(seq++, "r", r); builder.AddAttribute(seq++, "fill", "none");
+        builder.AddAttribute(seq++, "stroke", trackColor); builder.AddAttribute(seq++, "stroke-width", sw);
+        builder.AddAttribute(seq++, "stroke-dasharray", $"{trackLen.ToString("F1", _ci)} 999");
+        builder.AddAttribute(seq++, "stroke-linecap", "round");
+        builder.AddAttribute(seq++, "transform", $"rotate(-225, {cx.ToString("F1", _ci)}, {cy.ToString("F1", _ci)})");
         builder.CloseElement();
-    };
+
+        // Fill arc
+        var fillLen = pct * trackLen;
+        builder.OpenElement(seq++, "circle");
+        builder.AddAttribute(seq++, "cx", cx); builder.AddAttribute(seq++, "cy", cy);
+        builder.AddAttribute(seq++, "r", r); builder.AddAttribute(seq++, "fill", "none");
+        builder.AddAttribute(seq++, "stroke", fill); builder.AddAttribute(seq++, "stroke-width", sw);
+        builder.AddAttribute(seq++, "stroke-dasharray", $"{fillLen.ToString("F1", _ci)} 999");
+        builder.AddAttribute(seq++, "stroke-linecap", "round");
+        builder.AddAttribute(seq++, "transform", $"rotate(-225, {cx.ToString("F1", _ci)}, {cy.ToString("F1", _ci)})");
+        builder.CloseElement();
+
+        // Tick marks
+        if (sym.GaugeTicks > 0)
+        {
+            for (int i = 0; i <= sym.GaugeTicks; i++)
+            {
+                var t = (double)i / sym.GaugeTicks;
+                var a = (-135 + t * 270) * Math.PI / 180;
+                var x1 = cx + (r - sw / 2 - 2) * Math.Cos(a);
+                var y1 = cy + (r - sw / 2 - 2) * Math.Sin(a);
+                if (sym.GaugeShowTickLabels)
+                {
+                    var tv = min + t * (max - min);
+                    var lx = cx + (r - sw / 2 - 10) * Math.Cos(a);
+                    var ly = cy + (r - sw / 2 - 10) * Math.Sin(a);
+                    builder.OpenElement(seq++, "text");
+                    builder.AddAttribute(seq++, "x", lx.ToString("F1", _ci)); builder.AddAttribute(seq++, "y", ly.ToString("F1", _ci));
+                    builder.AddAttribute(seq++, "text-anchor", "middle"); builder.AddAttribute(seq++, "dominant-baseline", "middle");
+                    builder.AddAttribute(seq++, "fill", sym.GaugeNeedleColor ?? "#333"); builder.AddAttribute(seq++, "font-size", Math.Max(7, r * 0.12).ToString("F0", _ci));
+                    builder.AddAttribute(seq++, "font-family", "sans-serif");
+                    builder.AddContent(seq++, tv.ToString("F0", _ci));
+                    builder.CloseElement();
+                }
+            }
+        }
+
+        // Center value
+        if (sym.GaugeShowValue)
+        {
+            builder.OpenElement(seq++, "text");
+            builder.AddAttribute(seq++, "x", cx); builder.AddAttribute(seq++, "y", cy + 4);
+            builder.AddAttribute(seq++, "text-anchor", "middle"); builder.AddAttribute(seq++, "dominant-baseline", "middle");
+            builder.AddAttribute(seq++, "fill", sym.GaugeNeedleColor ?? "#333");
+            builder.AddAttribute(seq++, "font-size", Math.Max(10, r * 0.22).ToString("F0", _ci));
+            builder.AddAttribute(seq++, "font-family", "sans-serif"); builder.AddAttribute(seq++, "font-weight", "bold");
+            builder.AddContent(seq++, valText);
+            builder.CloseElement();
+        }
+    }
+
+    // ── Semicircle (180° half-circle) ───────────────────────
+    private void RenderGaugeSemicircle(Microsoft.AspNetCore.Components.Rendering.RenderTreeBuilder builder, ScreenSymbol sym, string fill, string? liveValue)
+    {
+        int seq = 0;
+        var (numVal, min, max, pct, valText) = GaugeCalc(sym, liveValue);
+        var cx = sym.Width / 2; var cy = sym.Height * 0.7;
+        var r = Math.Min(sym.Width / 2, sym.Height * 0.65) - 4;
+        var trackColor = sym.GaugeTrackColor ?? "#e0e0e0";
+        var sw = Math.Max(6, r * 0.18);
+        var halfCirc = Math.PI * r;
+
+        // Track arc (180°)
+        builder.OpenElement(seq++, "circle");
+        builder.AddAttribute(seq++, "cx", cx); builder.AddAttribute(seq++, "cy", cy);
+        builder.AddAttribute(seq++, "r", r); builder.AddAttribute(seq++, "fill", "none");
+        builder.AddAttribute(seq++, "stroke", trackColor); builder.AddAttribute(seq++, "stroke-width", sw);
+        builder.AddAttribute(seq++, "stroke-dasharray", $"{halfCirc.ToString("F1", _ci)} 999");
+        builder.AddAttribute(seq++, "stroke-linecap", "round");
+        builder.AddAttribute(seq++, "transform", $"rotate(-180, {cx.ToString("F1", _ci)}, {cy.ToString("F1", _ci)})");
+        builder.CloseElement();
+
+        // Fill arc
+        var fillLen = pct * halfCirc;
+        builder.OpenElement(seq++, "circle");
+        builder.AddAttribute(seq++, "cx", cx); builder.AddAttribute(seq++, "cy", cy);
+        builder.AddAttribute(seq++, "r", r); builder.AddAttribute(seq++, "fill", "none");
+        builder.AddAttribute(seq++, "stroke", fill); builder.AddAttribute(seq++, "stroke-width", sw);
+        builder.AddAttribute(seq++, "stroke-dasharray", $"{fillLen.ToString("F1", _ci)} 999");
+        builder.AddAttribute(seq++, "stroke-linecap", "round");
+        builder.AddAttribute(seq++, "transform", $"rotate(-180, {cx.ToString("F1", _ci)}, {cy.ToString("F1", _ci)})");
+        builder.CloseElement();
+
+        // Tick marks
+        if (sym.GaugeTicks > 0)
+        {
+            for (int i = 0; i <= sym.GaugeTicks; i++)
+            {
+                var t = (double)i / sym.GaugeTicks;
+                var a = (Math.PI + t * Math.PI);
+                var x1 = cx + (r + sw / 2 + 2) * Math.Cos(a);
+                var y1 = cy + (r + sw / 2 + 2) * Math.Sin(a);
+                var x2 = cx + (r + sw / 2 + 6) * Math.Cos(a);
+                var y2 = cy + (r + sw / 2 + 6) * Math.Sin(a);
+                builder.OpenElement(seq++, "line");
+                builder.AddAttribute(seq++, "x1", x1.ToString("F1", _ci)); builder.AddAttribute(seq++, "y1", y1.ToString("F1", _ci));
+                builder.AddAttribute(seq++, "x2", x2.ToString("F1", _ci)); builder.AddAttribute(seq++, "y2", y2.ToString("F1", _ci));
+                builder.AddAttribute(seq++, "stroke", sym.GaugeNeedleColor ?? "#333"); builder.AddAttribute(seq++, "stroke-width", 1);
+                builder.CloseElement();
+
+                if (sym.GaugeShowTickLabels)
+                {
+                    var tv = min + t * (max - min);
+                    var lx = cx + (r + sw / 2 + 14) * Math.Cos(a);
+                    var ly = cy + (r + sw / 2 + 14) * Math.Sin(a);
+                    builder.OpenElement(seq++, "text");
+                    builder.AddAttribute(seq++, "x", lx.ToString("F1", _ci)); builder.AddAttribute(seq++, "y", ly.ToString("F1", _ci));
+                    builder.AddAttribute(seq++, "text-anchor", "middle"); builder.AddAttribute(seq++, "dominant-baseline", "middle");
+                    builder.AddAttribute(seq++, "fill", sym.GaugeNeedleColor ?? "#333"); builder.AddAttribute(seq++, "font-size", Math.Max(7, r * 0.11).ToString("F0", _ci));
+                    builder.AddAttribute(seq++, "font-family", "sans-serif");
+                    builder.AddContent(seq++, tv.ToString("F0", _ci));
+                    builder.CloseElement();
+                }
+            }
+        }
+
+        // Center value
+        if (sym.GaugeShowValue)
+        {
+            builder.OpenElement(seq++, "text");
+            builder.AddAttribute(seq++, "x", cx); builder.AddAttribute(seq++, "y", cy - r * 0.15);
+            builder.AddAttribute(seq++, "text-anchor", "middle"); builder.AddAttribute(seq++, "dominant-baseline", "middle");
+            builder.AddAttribute(seq++, "fill", sym.GaugeNeedleColor ?? "#333");
+            builder.AddAttribute(seq++, "font-size", Math.Max(10, r * 0.25).ToString("F0", _ci));
+            builder.AddAttribute(seq++, "font-family", "sans-serif"); builder.AddAttribute(seq++, "font-weight", "bold");
+            builder.AddContent(seq++, valText);
+            builder.CloseElement();
+        }
+    }
+
+    // ── Horizontal bar ──────────────────────────────────────
+    private void RenderGaugeHBar(Microsoft.AspNetCore.Components.Rendering.RenderTreeBuilder builder, ScreenSymbol sym, string fill, string? liveValue)
+    {
+        int seq = 0;
+        var (numVal, min, max, pct, valText) = GaugeCalc(sym, liveValue);
+        var w = sym.Width; var h = sym.Height;
+        var trackColor = sym.GaugeTrackColor ?? "#e0e0e0";
+        var barH = h * 0.45;
+        var barY = (h - barH) / 2;
+
+        // Track
+        builder.OpenElement(seq++, "rect");
+        builder.AddAttribute(seq++, "x", 0); builder.AddAttribute(seq++, "y", barY);
+        builder.AddAttribute(seq++, "width", w); builder.AddAttribute(seq++, "height", barH);
+        builder.AddAttribute(seq++, "rx", 3); builder.AddAttribute(seq++, "fill", trackColor);
+        builder.AddAttribute(seq++, "stroke", sym.Stroke); builder.AddAttribute(seq++, "stroke-width", sym.StrokeWidth);
+        builder.CloseElement();
+
+        // Fill
+        builder.OpenElement(seq++, "rect");
+        builder.AddAttribute(seq++, "x", 0); builder.AddAttribute(seq++, "y", barY);
+        builder.AddAttribute(seq++, "width", (pct * w).ToString("F1", _ci)); builder.AddAttribute(seq++, "height", barH);
+        builder.AddAttribute(seq++, "rx", 3); builder.AddAttribute(seq++, "fill", fill);
+        builder.CloseElement();
+
+        // Tick marks
+        if (sym.GaugeTicks > 0)
+        {
+            for (int i = 0; i <= sym.GaugeTicks; i++)
+            {
+                var t = (double)i / sym.GaugeTicks;
+                var tx = t * w;
+                builder.OpenElement(seq++, "line");
+                builder.AddAttribute(seq++, "x1", tx.ToString("F1", _ci)); builder.AddAttribute(seq++, "y1", (barY + barH).ToString("F1", _ci));
+                builder.AddAttribute(seq++, "x2", tx.ToString("F1", _ci)); builder.AddAttribute(seq++, "y2", (barY + barH + 4).ToString("F1", _ci));
+                builder.AddAttribute(seq++, "stroke", sym.GaugeNeedleColor ?? "#333"); builder.AddAttribute(seq++, "stroke-width", 1);
+                builder.CloseElement();
+
+                if (sym.GaugeShowTickLabels)
+                {
+                    var tv = min + t * (max - min);
+                    builder.OpenElement(seq++, "text");
+                    builder.AddAttribute(seq++, "x", tx.ToString("F1", _ci)); builder.AddAttribute(seq++, "y", (barY + barH + 13).ToString("F1", _ci));
+                    builder.AddAttribute(seq++, "text-anchor", "middle");
+                    builder.AddAttribute(seq++, "fill", sym.GaugeNeedleColor ?? "#333"); builder.AddAttribute(seq++, "font-size", "8");
+                    builder.AddAttribute(seq++, "font-family", "sans-serif");
+                    builder.AddContent(seq++, tv.ToString("F0", _ci));
+                    builder.CloseElement();
+                }
+            }
+        }
+
+        // Value
+        if (sym.GaugeShowValue)
+        {
+            builder.OpenElement(seq++, "text");
+            builder.AddAttribute(seq++, "x", (w / 2).ToString("F1", _ci)); builder.AddAttribute(seq++, "y", (barY - 4).ToString("F1", _ci));
+            builder.AddAttribute(seq++, "text-anchor", "middle");
+            builder.AddAttribute(seq++, "fill", sym.GaugeNeedleColor ?? "#333");
+            builder.AddAttribute(seq++, "font-size", "11"); builder.AddAttribute(seq++, "font-family", "sans-serif");
+            builder.AddAttribute(seq++, "font-weight", "bold");
+            builder.AddContent(seq++, valText);
+            builder.CloseElement();
+        }
+    }
+
+    // ── Vertical bar (bottom-up) ────────────────────────────
+    private void RenderGaugeVBar(Microsoft.AspNetCore.Components.Rendering.RenderTreeBuilder builder, ScreenSymbol sym, string fill, string? liveValue)
+    {
+        int seq = 0;
+        var (numVal, min, max, pct, valText) = GaugeCalc(sym, liveValue);
+        var w = sym.Width; var h = sym.Height;
+        var trackColor = sym.GaugeTrackColor ?? "#e0e0e0";
+        var barW = w * 0.45;
+        var barX = (w - barW) / 2;
+        var fillH = pct * h;
+
+        // Track
+        builder.OpenElement(seq++, "rect");
+        builder.AddAttribute(seq++, "x", barX); builder.AddAttribute(seq++, "y", 0);
+        builder.AddAttribute(seq++, "width", barW); builder.AddAttribute(seq++, "height", h);
+        builder.AddAttribute(seq++, "rx", 3); builder.AddAttribute(seq++, "fill", trackColor);
+        builder.AddAttribute(seq++, "stroke", sym.Stroke); builder.AddAttribute(seq++, "stroke-width", sym.StrokeWidth);
+        builder.CloseElement();
+
+        // Fill (bottom-up)
+        builder.OpenElement(seq++, "rect");
+        builder.AddAttribute(seq++, "x", barX); builder.AddAttribute(seq++, "y", (h - fillH).ToString("F1", _ci));
+        builder.AddAttribute(seq++, "width", barW); builder.AddAttribute(seq++, "height", fillH.ToString("F1", _ci));
+        builder.AddAttribute(seq++, "rx", 3); builder.AddAttribute(seq++, "fill", fill);
+        builder.CloseElement();
+
+        // Tick marks (right side)
+        if (sym.GaugeTicks > 0)
+        {
+            for (int i = 0; i <= sym.GaugeTicks; i++)
+            {
+                var t = (double)i / sym.GaugeTicks;
+                var ty = h - t * h;
+                builder.OpenElement(seq++, "line");
+                builder.AddAttribute(seq++, "x1", (barX + barW).ToString("F1", _ci)); builder.AddAttribute(seq++, "y1", ty.ToString("F1", _ci));
+                builder.AddAttribute(seq++, "x2", (barX + barW + 4).ToString("F1", _ci)); builder.AddAttribute(seq++, "y2", ty.ToString("F1", _ci));
+                builder.AddAttribute(seq++, "stroke", sym.GaugeNeedleColor ?? "#333"); builder.AddAttribute(seq++, "stroke-width", 1);
+                builder.CloseElement();
+
+                if (sym.GaugeShowTickLabels)
+                {
+                    var tv = min + t * (max - min);
+                    builder.OpenElement(seq++, "text");
+                    builder.AddAttribute(seq++, "x", (barX + barW + 8).ToString("F1", _ci)); builder.AddAttribute(seq++, "y", (ty + 3).ToString("F1", _ci));
+                    builder.AddAttribute(seq++, "text-anchor", "start");
+                    builder.AddAttribute(seq++, "fill", sym.GaugeNeedleColor ?? "#333"); builder.AddAttribute(seq++, "font-size", "8");
+                    builder.AddAttribute(seq++, "font-family", "sans-serif");
+                    builder.AddContent(seq++, tv.ToString("F0", _ci));
+                    builder.CloseElement();
+                }
+            }
+        }
+
+        // Value text (above)
+        if (sym.GaugeShowValue)
+        {
+            builder.OpenElement(seq++, "text");
+            builder.AddAttribute(seq++, "x", (w / 2).ToString("F1", _ci)); builder.AddAttribute(seq++, "y", (h - fillH - 6).ToString("F1", _ci));
+            builder.AddAttribute(seq++, "text-anchor", "middle");
+            builder.AddAttribute(seq++, "fill", sym.GaugeNeedleColor ?? "#333");
+            builder.AddAttribute(seq++, "font-size", "10"); builder.AddAttribute(seq++, "font-family", "sans-serif");
+            builder.AddAttribute(seq++, "font-weight", "bold");
+            builder.AddContent(seq++, valText);
+            builder.CloseElement();
+        }
+    }
+
+    // ── Thermometer ─────────────────────────────────────────
+    private void RenderGaugeThermometer(Microsoft.AspNetCore.Components.Rendering.RenderTreeBuilder builder, ScreenSymbol sym, string fill, string? liveValue)
+    {
+        int seq = 0;
+        var (numVal, min, max, pct, valText) = GaugeCalc(sym, liveValue);
+        var w = sym.Width; var h = sym.Height;
+        var trackColor = sym.GaugeTrackColor ?? "#e0e0e0";
+        var tubeW = Math.Max(10, w * 0.25);
+        var bulbR = tubeW * 0.9;
+        var tubeX = (w - tubeW) / 2;
+        var tubeTop = 4.0;
+        var tubeBot = h - bulbR * 2 - 4;
+        var tubeH = tubeBot - tubeTop;
+        var fillH = pct * tubeH;
+        var bulbCx = w / 2;
+        var bulbCy = h - bulbR - 2;
+
+        // Tube track
+        builder.OpenElement(seq++, "rect");
+        builder.AddAttribute(seq++, "x", tubeX); builder.AddAttribute(seq++, "y", tubeTop);
+        builder.AddAttribute(seq++, "width", tubeW); builder.AddAttribute(seq++, "height", tubeH);
+        builder.AddAttribute(seq++, "rx", tubeW / 2); builder.AddAttribute(seq++, "fill", trackColor);
+        builder.AddAttribute(seq++, "stroke", sym.Stroke); builder.AddAttribute(seq++, "stroke-width", sym.StrokeWidth);
+        builder.CloseElement();
+
+        // Tube fill (bottom-up)
+        if (fillH > 0)
+        {
+            builder.OpenElement(seq++, "rect");
+            builder.AddAttribute(seq++, "x", tubeX); builder.AddAttribute(seq++, "y", (tubeTop + tubeH - fillH).ToString("F1", _ci));
+            builder.AddAttribute(seq++, "width", tubeW); builder.AddAttribute(seq++, "height", fillH.ToString("F1", _ci));
+            builder.AddAttribute(seq++, "rx", tubeW / 2); builder.AddAttribute(seq++, "fill", fill);
+            builder.CloseElement();
+        }
+
+        // Bulb
+        builder.OpenElement(seq++, "circle");
+        builder.AddAttribute(seq++, "cx", bulbCx); builder.AddAttribute(seq++, "cy", bulbCy);
+        builder.AddAttribute(seq++, "r", bulbR); builder.AddAttribute(seq++, "fill", fill);
+        builder.AddAttribute(seq++, "stroke", sym.Stroke); builder.AddAttribute(seq++, "stroke-width", sym.StrokeWidth);
+        builder.CloseElement();
+
+        // Tick marks (right of tube)
+        if (sym.GaugeTicks > 0)
+        {
+            for (int i = 0; i <= sym.GaugeTicks; i++)
+            {
+                var t = (double)i / sym.GaugeTicks;
+                var ty = tubeTop + tubeH - t * tubeH;
+                builder.OpenElement(seq++, "line");
+                builder.AddAttribute(seq++, "x1", (tubeX + tubeW + 1).ToString("F1", _ci)); builder.AddAttribute(seq++, "y1", ty.ToString("F1", _ci));
+                builder.AddAttribute(seq++, "x2", (tubeX + tubeW + 5).ToString("F1", _ci)); builder.AddAttribute(seq++, "y2", ty.ToString("F1", _ci));
+                builder.AddAttribute(seq++, "stroke", sym.GaugeNeedleColor ?? "#333"); builder.AddAttribute(seq++, "stroke-width", 1);
+                builder.CloseElement();
+
+                if (sym.GaugeShowTickLabels)
+                {
+                    var tv = min + t * (max - min);
+                    builder.OpenElement(seq++, "text");
+                    builder.AddAttribute(seq++, "x", (tubeX + tubeW + 8).ToString("F1", _ci)); builder.AddAttribute(seq++, "y", (ty + 3).ToString("F1", _ci));
+                    builder.AddAttribute(seq++, "text-anchor", "start");
+                    builder.AddAttribute(seq++, "fill", sym.GaugeNeedleColor ?? "#333"); builder.AddAttribute(seq++, "font-size", "8");
+                    builder.AddAttribute(seq++, "font-family", "sans-serif");
+                    builder.AddContent(seq++, tv.ToString("F0", _ci));
+                    builder.CloseElement();
+                }
+            }
+        }
+
+        // Value text inside bulb
+        if (sym.GaugeShowValue)
+        {
+            builder.OpenElement(seq++, "text");
+            builder.AddAttribute(seq++, "x", bulbCx); builder.AddAttribute(seq++, "y", (bulbCy + 3).ToString("F1", _ci));
+            builder.AddAttribute(seq++, "text-anchor", "middle"); builder.AddAttribute(seq++, "dominant-baseline", "middle");
+            builder.AddAttribute(seq++, "fill", "white");
+            builder.AddAttribute(seq++, "font-size", Math.Max(8, bulbR * 0.7).ToString("F0", _ci));
+            builder.AddAttribute(seq++, "font-family", "sans-serif"); builder.AddAttribute(seq++, "font-weight", "bold");
+            builder.AddContent(seq++, valText);
+            builder.CloseElement();
+        }
+    }
 
     private List<RecipeVariable> GetRecipeVariables(string recipeName)
     {

@@ -415,6 +415,39 @@ namespace SharedModels
         public double? MinValue { get; set; }
         public double? MaxValue { get; set; }
 
+        // ─── Gauge style properties (Type == "gauge") ────────────
+        /// <summary>
+        /// Gauge visual style. Supported values:
+        /// "needle" — classic dial with rotating needle (default),
+        /// "arc" — arc/donut with filled progress stroke,
+        /// "semicircle" — 180° half-circle arc gauge,
+        /// "hbar" — horizontal bar fill,
+        /// "vbar" — vertical bar fill (bottom-up),
+        /// "thermometer" — vertical thermometer with bulb.
+        /// </summary>
+        public string GaugeStyle { get; set; } = "needle";
+
+        /// <summary>Number of major tick marks on the gauge scale. 0 = no ticks. Default 5.</summary>
+        public int GaugeTicks { get; set; } = 5;
+
+        /// <summary>Whether to show numeric tick labels on the scale. Default true.</summary>
+        public bool GaugeShowTickLabels { get; set; } = true;
+
+        /// <summary>Whether to show the numeric value readout. Default true.</summary>
+        public bool GaugeShowValue { get; set; } = true;
+
+        /// <summary>Unit suffix shown after the value readout (e.g. "°C", "bar", "%"). Default "".</summary>
+        public string GaugeUnit { get; set; } = "";
+
+        /// <summary>Color of the gauge scale/track background. Default "#e0e0e0".</summary>
+        public string GaugeTrackColor { get; set; } = "#e0e0e0";
+
+        /// <summary>Color of the needle or secondary elements. Default "#333333".</summary>
+        public string GaugeNeedleColor { get; set; } = "#333333";
+
+        /// <summary>Value format string for the readout (e.g. "F1", "F0"). Default "F1".</summary>
+        public string GaugeValueFormat { get; set; } = "F1";
+
         /// <summary>Commands executed at runtime when the user interacts with this symbol.</summary>
         public List<SymbolCommand> Commands { get; set; } = new();
 
