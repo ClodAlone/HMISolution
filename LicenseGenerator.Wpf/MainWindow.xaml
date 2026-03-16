@@ -1,0 +1,191 @@
+<Window x:Class="LicenseGenerator.Wpf.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="🔑 HMISolution License Generator"
+        Width="820" Height="780"
+        MinWidth="700" MinHeight="650"
+        Background="{StaticResource BgBrush}"
+        WindowStartupLocation="CenterScreen">
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- ═══ Header ═══ -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,12">
+            <TextBlock Text="🔑 HMISolution License Generator"
+                       FontSize="22" FontWeight="Bold"
+                       Foreground="{StaticResource FgBrush}" />
+            <TextBlock Text="Create, sign, and export license files for customer deployments"
+                       FontSize="12" Foreground="{StaticResource MutedBrush}" Margin="0,2,0,0" />
+        </StackPanel>
+
+        <!-- ═══ Main Content (ScrollViewer) ═══ -->
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+
+                <!-- ─── Private Key ─── -->
+                <GroupBox Header="🔐 RSA Private Key">
+                    <StackPanel>
+                        <DockPanel>
+                            <Button DockPanel.Dock="Right" Content="Browse…"
+                                    Style="{StaticResource SecondaryButton}"
+                                    Margin="8,0,0,0"
+                                    Click="BrowsePrivateKey_Click" />
+                            <TextBox x:Name="TxtPrivateKeyPath"
+                                     IsReadOnly="True"
+                                     Text="(no key loaded)" />
+                        </DockPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                            <Button Content="Generate New Key Pair"
+                                    Style="{StaticResource SecondaryButton}"
+                                    Click="GenerateKeyPair_Click" />
+                            <TextBlock x:Name="TxtKeyStatus" VerticalAlignment="Center"
+                                       Margin="12,0,0,0" FontSize="12"
+                                       Foreground="{StaticResource MutedBrush}" />
+                        </StackPanel>
+                    </StackPanel>
+                </GroupBox>
+
+                <!-- ─── License Tier ─── -->
+                <GroupBox Header="📋 License Tier">
+                    <StackPanel>
+                        <ComboBox x:Name="CmbTier" SelectedIndex="2"
+                                  SelectionChanged="CmbTier_SelectionChanged">
+                            <ComboBoxItem Content="Trial" />
+                            <ComboBoxItem Content="Starter" />
+                            <ComboBoxItem Content="Professional" />
+                            <ComboBoxItem Content="Enterprise" />
+                        </ComboBox>
+                        <TextBlock x:Name="TxtTierDescription" FontSize="11"
+                                   Foreground="{StaticResource MutedBrush}" Margin="0,4,0,0"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+                </GroupBox>
+
+                <!-- ─── Customer Info ─── -->
+                <GroupBox Header="👤 Customer Information">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="12" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <Label Grid.Row="0" Grid.Column="0" Content="Licensed To *" />
+                        <TextBox x:Name="TxtLicensedTo" Grid.Row="1" Grid.Column="0" />
+
+                        <Label Grid.Row="0" Grid.Column="2" Content="Project Name" />
+                        <TextBox x:Name="TxtProjectName" Grid.Row="1" Grid.Column="2" />
+
+                        <Label Grid.Row="2" Grid.Column="0" Content="Machine ID (leave empty for floating)" />
+                        <DockPanel Grid.Row="3" Grid.Column="0">
+                            <Button DockPanel.Dock="Right" Content="This PC"
+                                    Style="{StaticResource SecondaryButton}"
+                                    Margin="8,0,0,0"
+                                    Click="FillMachineId_Click"
+                                    ToolTip="Fill with this machine's hardware fingerprint" />
+                            <TextBox x:Name="TxtMachineId" />
+                        </DockPanel>
+
+                        <Label Grid.Row="2" Grid.Column="2" Content="Validity (days)" />
+                        <TextBox x:Name="TxtDays" Grid.Row="3" Grid.Column="2" Text="365" />
+                    </Grid>
+                </GroupBox>
+
+                <!-- ─── Feature Limits ─── -->
+                <GroupBox Header="⚙️ Feature Limits">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="12" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="12" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <Label Grid.Row="0" Grid.Column="0" Content="Max Variables (0 = ∞)" />
+                        <TextBox x:Name="TxtMaxVariables" Grid.Row="1" Grid.Column="0" Text="1000" />
+
+                        <Label Grid.Row="0" Grid.Column="2" Content="Max Drivers (0 = ∞)" />
+                        <TextBox x:Name="TxtMaxDrivers" Grid.Row="1" Grid.Column="2" Text="0" />
+
+                        <Label Grid.Row="0" Grid.Column="4" Content="Max Scripts (0 = ∞)" />
+                        <TextBox x:Name="TxtMaxScripts" Grid.Row="1" Grid.Column="4" Text="0" />
+
+                        <Label Grid.Row="2" Grid.Column="0" Content="Max PLC Programs (0 = ∞)" />
+                        <TextBox x:Name="TxtMaxPlcPrograms" Grid.Row="3" Grid.Column="0" Text="0" />
+
+                        <Label Grid.Row="2" Grid.Column="2" Content="Max Screens (0 = ∞)" />
+                        <TextBox x:Name="TxtMaxScreens" Grid.Row="3" Grid.Column="2" Text="0" />
+
+                        <Label Grid.Row="2" Grid.Column="4" Content="Max Recipes (0 = ∞)" />
+                        <TextBox x:Name="TxtMaxRecipes" Grid.Row="3" Grid.Column="4" Text="0" />
+
+                        <StackPanel Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="5"
+                                    Orientation="Horizontal" Margin="0,8,0,0">
+                            <CheckBox x:Name="ChkDataLogging" Content="Allow Data Logging"
+                                      IsChecked="True" Margin="0,0,24,0" />
+                            <CheckBox x:Name="ChkAi" Content="Allow AI Assistant"
+                                      IsChecked="True" />
+                        </StackPanel>
+                    </Grid>
+                </GroupBox>
+
+                <!-- ─── Preview ─── -->
+                <GroupBox Header="📄 License Preview (JSON)">
+                    <TextBox x:Name="TxtPreview"
+                             IsReadOnly="True"
+                             FontFamily="Cascadia Code,Consolas,Courier New"
+                             FontSize="11"
+                             Height="160"
+                             AcceptsReturn="True"
+                             VerticalScrollBarVisibility="Auto"
+                             TextWrapping="NoWrap"
+                             Background="{StaticResource SurfaceBrush}"
+                             Foreground="{StaticResource GreenBrush}"
+                             BorderBrush="{StaticResource BorderBrush}" />
+                </GroupBox>
+
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- ═══ Bottom Actions ═══ -->
+        <DockPanel Grid.Row="2" Margin="0,12,0,0">
+            <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
+                <Button Content="🔍 Validate Existing…"
+                        Style="{StaticResource SecondaryButton}"
+                        Click="ValidateExisting_Click" />
+            </StackPanel>
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal"
+                        HorizontalAlignment="Right">
+                <Button Content="Preview"
+                        Style="{StaticResource SecondaryButton}"
+                        Click="Preview_Click" Margin="0,0,8,0" />
+                <Button Content="Sign &amp; Export license.json"
+                        Style="{StaticResource AccentButton}"
+                        Click="SignAndExport_Click" />
+            </StackPanel>
+            <TextBlock x:Name="TxtStatus" VerticalAlignment="Center"
+                       Margin="12,0" FontSize="12"
+                       Foreground="{StaticResource MutedBrush}" />
+        </DockPanel>
+    </Grid>
+</Window>
