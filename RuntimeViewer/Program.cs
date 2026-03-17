@@ -18,6 +18,7 @@ builder.Services.AddRazorComponents()
 
 builder.Services.AddSingleton<ProjectService>();
 builder.Services.AddScoped<OpcRuntimeClient>();
+builder.Services.AddScoped<CloudRuntimeClient>();
 builder.Services.AddScoped<CommandService>();
 builder.Services.AddScoped<RuntimeAuthService>();
 builder.Services.AddScoped<LocalizationService>();

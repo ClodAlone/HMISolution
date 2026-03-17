@@ -256,6 +256,34 @@ namespace SharedModels
         /// When configured, unhandled exceptions are automatically emailed to the specified recipient.
         /// </summary>
         public CrashEmailConfig? CrashEmail { get; set; }
+
+        /// <summary>
+        /// Cloud relay configuration. When set, the RuntimeViewer connects through the
+        /// cloud SignalR hub instead of directly to the OPC UA server.
+        /// </summary>
+        public CloudRelayConfig? CloudRelay { get; set; }
+    }
+
+    /// <summary>
+    /// Configuration for the cloud relay tunnel.
+    /// Both the CloudBridge and RuntimeViewer use these settings.
+    /// </summary>
+    public class CloudRelayConfig
+    {
+        /// <summary>Whether cloud relay mode is enabled.</summary>
+        public bool Enabled { get; set; }
+
+        /// <summary>
+        /// URL of the cloud SignalR hub (e.g. "https://myrelay.azurewebsites.net/relay").
+        /// Both the bridge and the viewer connect to this URL.
+        /// </summary>
+        public string HubUrl { get; set; } = "";
+
+        /// <summary>
+        /// Shared API key used to authenticate bridge and viewer connections.
+        /// Sent as a query-string parameter (?apiKey=…) during the SignalR handshake.
+        /// </summary>
+        public string ApiKey { get; set; } = "";
     }
 
     /// <summary>
