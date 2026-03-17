@@ -1,9 +1,24 @@
 ﻿@inherits LayoutComponentBase
 
-@Body
+<ErrorBoundary @ref="_errorBoundary">
+    <ChildContent>
+        @Body
+    </ChildContent>
+    <ErrorContent Context="ex">
+        <div style="background:#dc3545;color:white;padding:16px;font-family:monospace;font-size:13px;position:fixed;bottom:0;left:0;right:0;z-index:99999;max-height:40vh;overflow:auto;">
+            <strong>Unhandled error:</strong> @ex.GetType().Name: @ex.Message
+            <pre style="font-size:11px;margin-top:8px;white-space:pre-wrap;">@ex.StackTrace</pre>
+            <button style="margin-top:8px;padding:4px 12px;cursor:pointer;" @onclick="() => _errorBoundary?.Recover()">Recover</button>
+        </div>
+    </ErrorContent>
+</ErrorBoundary>
 
 <div id="blazor-error-ui" data-nosnippet>
     An unhandled error has occurred.
     <a href="." class="reload">Reload</a>
     <span class="dismiss">🗙</span>
 </div>
+
+@code {
+    private ErrorBoundary? _errorBoundary;
+}

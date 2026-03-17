@@ -14,6 +14,7 @@ else if (Screen.LayoutMode == "responsive")
         @foreach (var sym in Screen.Symbols.OrderBy(s => s.Order))
         {
             var liveValue = Opc.GetValue(sym.VariablePath ?? "");
+            var lastError = !string.IsNullOrEmpty(sym.VariablePath) ? Opc.GetLastError(sym.VariablePath) : null;
             var fillColor = EvalFillBinding(sym, liveValue);
             var visible = EvalVisibilityBinding(sym, liveValue);
             var labelText = EvalLabelBinding(sym, liveValue);
@@ -140,6 +141,10 @@ else if (Screen.LayoutMode == "responsive")
                 {
                     <span class="rv-responsive-lock">🔒</span>
                 }
+                @if (lastError != null)
+                {
+                    <span class="rv-error-badge" title="@lastError">⚠</span>
+                }
             </div>
         }
     </div>
@@ -173,6 +178,7 @@ else
         @foreach (var sym in Screen.Symbols)
         {
             var liveValue = Opc.GetValue(sym.VariablePath ?? "");
+            var lastError = !string.IsNullOrEmpty(sym.VariablePath) ? Opc.GetLastError(sym.VariablePath) : null;
             var fillColor = EvalFillBinding(sym, liveValue);
             var visible = EvalVisibilityBinding(sym, liveValue);
             var rotation = EvalRotationBinding(sym, liveValue);
@@ -364,6 +370,16 @@ else
                 @if (isLocked)
                 {
                     @RenderSvgText(sym.Width - 2, 12, "end", null, "#dc3545", 12, "🔒")
+                }
+
+                @* Variable quality error indicator *@
+                @if (lastError != null)
+                {
+                    <g style="pointer-events: all; cursor: help;">
+                        <title>@lastError</title>
+                        @RenderSvgText(2, 12, "start", null, "#f59e0b", 12, "⚠")
+                        @RenderSvgText(14, 12, "start", null, "#f59e0b", 8, "Quality")
+                    </g>
                 }
                 </g>
             </g>

@@ -59,6 +59,10 @@ window.editorShortcuts = {
                     e.preventDefault();
                     ref.invokeMethodAsync('OnKeyboardRedo');
                     break;
+                case 'o':
+                    e.preventDefault();
+                    ref.invokeMethodAsync('OnKeyboardOpen');
+                    break;
             }
         }
 

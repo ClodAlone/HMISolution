@@ -7,6 +7,15 @@
 {
     <div class="dock-context-backdrop" @onclick="Close"></div>
     <div class="dock-context-menu" style="left: @(X)px; top: @(Y)px;">
+        @if (Node is ProjectNode projectNode)
+        {
+            @if (!projectNode.IsActive)
+            {
+                <div class="dock-context-item" @onclick="SetActiveProject">⭐ Set Active Project</div>
+            }
+            <div class="dock-context-item dock-context-danger" @onclick="CloseProject">❌ Close Project</div>
+            <div class="dock-context-separator"></div>
+        }
         @if (Node is FolderNode or VariableGroupNode)
         {
             <div class="dock-context-item" @onclick="AddFolder">📁 Add Folder</div>
@@ -39,17 +48,20 @@
         {
             <div class="dock-context-item" @onclick="AddUser">👤 Add User</div>
         }
-        <div class="dock-context-separator"></div>
-        @if (Node is VariableNode or FolderNode { Parent: not null } or ScriptNode or PlcProgramNode or RecipeNode or ScreenNode or UserNode or UserGroupNode or ResourceFolderNode)
+        @if (Node is not ProjectNode)
         {
-            <div class="dock-context-item" @onclick="Copy">📋 Copy</div>
+            <div class="dock-context-separator"></div>
+            @if (Node is VariableNode or FolderNode { Parent: not null } or ScriptNode or PlcProgramNode or RecipeNode or ScreenNode or UserNode or UserGroupNode or ResourceFolderNode)
+            {
+                <div class="dock-context-item" @onclick="Copy">📋 Copy</div>
+            }
+            @if (Clipboard.CanPasteInto(Node))
+            {
+                <div class="dock-context-item" @onclick="Paste">📌 Paste @(!string.IsNullOrEmpty(Clipboard.Label) ? $"({Clipboard.Label})" : "")</div>
+            }
+            <div class="dock-context-separator"></div>
+            <div class="dock-context-item dock-context-danger" @onclick="Delete">🗑 Delete</div>
         }
-        @if (Clipboard.CanPasteInto(Node))
-        {
-            <div class="dock-context-item" @onclick="Paste">📌 Paste @(!string.IsNullOrEmpty(Clipboard.Label) ? $"({Clipboard.Label})" : "")</div>
-        }
-        <div class="dock-context-separator"></div>
-        <div class="dock-context-item dock-context-danger" @onclick="Delete">🗑 Delete</div>
     </div>
 }
 
@@ -71,6 +83,8 @@
     [Parameter] public EventCallback<TreeNode> OnDelete { get; set; }
     [Parameter] public EventCallback<TreeNode> OnCopy { get; set; }
     [Parameter] public EventCallback<TreeNode> OnPaste { get; set; }
+    [Parameter] public EventCallback<TreeNode> OnSetActiveProject { get; set; }
+    [Parameter] public EventCallback<TreeNode> OnCloseProject { get; set; }
 
     private void Close() => OnClose.InvokeAsync();
     private void AddFolder() { OnAddFolder.InvokeAsync(Node!); Close(); }
@@ -85,4 +99,6 @@
     private void Delete() { OnDelete.InvokeAsync(Node!); Close(); }
     private void Copy() { OnCopy.InvokeAsync(Node!); Close(); }
     private void Paste() { OnPaste.InvokeAsync(Node!); Close(); }
+    private void SetActiveProject() { OnSetActiveProject.InvokeAsync(Node!); Close(); }
+    private void CloseProject() { OnCloseProject.InvokeAsync(Node!); Close(); }
 }

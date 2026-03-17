@@ -1,0 +1,82 @@
+@using SharedModels
+
+<div class="toolbox-panel">
+    @foreach (var category in _categories)
+    {
+        <div class="toolbox-category">
+            <button class="toolbox-category-header" @onclick="() => ToggleCategory(category.Name)">
+                <span class="toolbox-chevron @(IsCategoryExpanded(category.Name) ? "expanded" : "")">▶</span>
+                <span class="fw-semibold small">@category.Icon @category.Name</span>
+                <span class="badge bg-secondary ms-auto" style="font-size: 9px;">@category.Items.Count</span>
+            </button>
+
+            @if (IsCategoryExpanded(category.Name))
+            {
+                <div class="toolbox-items">
+                    @foreach (var item in category.Items)
+                    {
+                        <button class="toolbox-item @item.CssClass" @onclick="() => OnItemClicked(item.Type)" title="@item.Tooltip">
+                            <span class="toolbox-item-icon">@item.Icon</span>
+                            <span class="toolbox-item-label">@item.Label</span>
+                        </button>
+                    }
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public EventCallback<string> OnSymbolTypeSelected { get; set; }
+
+    private HashSet<string> _collapsedCategories = new();
+
+    private bool IsCategoryExpanded(string name) => !_collapsedCategories.Contains(name);
+
+    private void ToggleCategory(string name)
+    {
+        if (!_collapsedCategories.Remove(name))
+            _collapsedCategories.Add(name);
+    }
+
+    private async Task OnItemClicked(string type)
+    {
+        await OnSymbolTypeSelected.InvokeAsync(type);
+    }
+
+    private record ToolboxItem(string Type, string Icon, string Label, string Tooltip, string CssClass);
+    private record ToolboxCategory(string Name, string Icon, List<ToolboxItem> Items);
+
+    private static readonly List<ToolboxCategory> _categories =
+    [
+        new("Shapes", "🔷",
+        [
+            new("rect",    "▭", "Rectangle", "Rectangle shape",    "item-shape"),
+            new("circle",  "●", "Circle",    "Circle shape",       "item-shape"),
+            new("ellipse", "⬮", "Ellipse",   "Ellipse shape",      "item-shape"),
+            new("text",    "T", "Text",      "Text label",         "item-shape"),
+            new("line",    "╲", "Line",      "Line segment",       "item-shape"),
+        ]),
+        new("Instruments", "🔘",
+        [
+            new("gauge",     "🔘", "Gauge",     "Analog gauge display",   "item-instrument"),
+            new("indicator", "🔴", "Indicator", "Status indicator light", "item-instrument"),
+        ]),
+        new("Data Widgets", "📊",
+        [
+            new("alarmlist", "🔔", "Alarm List",  "Live alarm list grid",                            "item-data"),
+            new("hdachart",  "📊", "HDA Chart",   "Historical data archive chart",                   "item-data"),
+            new("hdagrid",   "📋", "HDA Grid",    "Historical data archive grid",                    "item-data"),
+            new("eventlog",  "📓", "Event Log",   "Event log grid with time filtering",              "item-data"),
+            new("editbox",   "✏️", "Edit Box",    "Read/write value input control",                  "item-data"),
+            new("trend",     "📈", "Trend",       "Realtime trend with live variable traces",        "item-data"),
+        ]),
+        new("Media & Navigation", "🪟",
+        [
+            new("ipcamera",    "📷", "Camera",       "IP Camera (RTSP/MJPEG/HTTP + YOLO detection)",  "item-media"),
+            new("recipe",      "📦", "Recipe",       "Recipe control panel",                           "item-media"),
+            new("screenembed", "🪟", "Screen Embed", "Embed other screens (tabbed if multiple)",       "item-media"),
+            new("imagemap",    "🖼️", "Image Map",    "Show raster images based on variable condition", "item-media"),
+        ]),
+    ];
+}

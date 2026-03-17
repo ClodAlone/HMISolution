@@ -76,6 +76,60 @@
             <input type="number" class="form-control form-control-sm" step="any" @bind="_selectedSymbol.Rotation" @bind:after="OnChanged" />
         </div>
 
+        <div class="d-flex gap-1 mb-2 flex-wrap">
+            <div class="flex-grow-1">
+                <label class="form-label mb-0 small">Font</label>
+                <select class="form-select form-select-sm" style="font-size: 10px;"
+                        @bind="_selectedSymbol.FontFamily" @bind:after="OnChanged">
+                    <option value="">(default sans-serif)</option>
+                    <option value="sans-serif">Sans-Serif</option>
+                    <option value="serif">Serif</option>
+                    <option value="monospace">Monospace</option>
+                    <option value="Arial">Arial</option>
+                    <option value="Verdana">Verdana</option>
+                    <option value="Georgia">Georgia</option>
+                    <option value="Courier New">Courier New</option>
+                    <option value="Times New Roman">Times New Roman</option>
+                    <option value="Trebuchet MS">Trebuchet MS</option>
+                </select>
+            </div>
+            <div>
+                <label class="form-label mb-0 small">Size</label>
+                <input type="number" class="form-control form-control-sm" style="width: 50px; font-size: 10px;"
+                       min="0" max="200" placeholder="auto"
+                       @bind="_selectedSymbol.FontSize" @bind:after="OnChanged" />
+            </div>
+        </div>
+        <div class="d-flex gap-1 mb-2">
+            <div>
+                <label class="form-label mb-0 small">Weight</label>
+                <select class="form-select form-select-sm" style="font-size: 10px; width: 80px;"
+                        @bind="_selectedSymbol.FontWeight" @bind:after="OnChanged">
+                    <option value="">Normal</option>
+                    <option value="bold">Bold</option>
+                    <option value="lighter">Lighter</option>
+                    <option value="100">100</option>
+                    <option value="200">200</option>
+                    <option value="300">300</option>
+                    <option value="400">400</option>
+                    <option value="500">500</option>
+                    <option value="600">600</option>
+                    <option value="700">700</option>
+                    <option value="800">800</option>
+                    <option value="900">900</option>
+                </select>
+            </div>
+            <div>
+                <label class="form-label mb-0 small">Style</label>
+                <select class="form-select form-select-sm" style="font-size: 10px; width: 80px;"
+                        @bind="_selectedSymbol.FontStyle" @bind:after="OnChanged">
+                    <option value="">Normal</option>
+                    <option value="italic">Italic</option>
+                    <option value="oblique">Oblique</option>
+                </select>
+            </div>
+        </div>
+
         <div class="d-flex gap-1 mb-2">
             <div>
                 <label class="form-label mb-0 small">Fill</label>
@@ -867,6 +921,218 @@
 
         <button class="btn btn-sm btn-outline-success w-100 py-0" style="font-size: 11px;"
                 @onclick="AddCommand">＋ Add Command</button>
+
+        <hr class="my-2" />
+        <h6 class="mb-2 small text-info">🎬 Animations (@_selectedSymbol.Animations.Count)</h6>
+
+        @if (_selectedSymbol.Animations.Count == 0)
+        {
+            <div class="text-muted small mb-1 text-center">
+                No animations. Click <strong>+ Add</strong> to create one.
+            </div>
+        }
+        else
+        {
+            <div class="anim-list">
+                @foreach (var anim in _selectedSymbol.Animations)
+                {
+                    var a = anim;
+                    var isExpanded = _expandedAnimId == a.Id;
+
+                    <div class="anim-item @(isExpanded ? "expanded" : "")">
+                        <div class="anim-item-header" @onclick="() => ToggleAnimExpand(a.Id)">
+                            <span class="anim-expand-icon">@(isExpanded ? "▾" : "▸")</span>
+                            <input type="checkbox" checked="@a.Enabled" @onchange="(e) => { a.Enabled = (bool)(e.Value ?? false); OnChanged(); }"
+                                   @onclick:stopPropagation title="Enable/Disable" />
+                            <span class="anim-item-name small fw-bold">@(string.IsNullOrEmpty(a.Name) ? a.Property : a.Name)</span>
+                            <span class="badge bg-secondary ms-1" style="font-size: 9px;">@a.Property</span>
+                            <span class="badge bg-info ms-1" style="font-size: 9px;">@(a.DurationMs)ms</span>
+                            @if (a.Keyframes.Count > 0)
+                            {
+                                <span class="badge bg-dark ms-1" style="font-size: 9px;">@a.Keyframes.Count kf</span>
+                            }
+                            <button class="btn btn-sm btn-outline-danger py-0 px-1 ms-auto" style="font-size: 10px;"
+                                    @onclick="() => RemoveAnimation(a)" @onclick:stopPropagation title="Remove animation">🗑</button>
+                        </div>
+
+                        @if (isExpanded)
+                        {
+                            <div class="anim-item-body">
+                                <div class="row g-1 mb-2">
+                                    <div class="col-6">
+                                        <label class="form-label mb-0 small">Name</label>
+                                        <input type="text" class="form-control form-control-sm"
+                                               @bind="a.Name" @bind:after="OnChanged" placeholder="(optional)" />
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label mb-0 small">Property</label>
+                                        <select class="form-select form-select-sm" @bind="a.Property" @bind:after="OnChanged">
+                                            <option value="Position">Position (X,Y)</option>
+                                            <option value="Scale">Scale (W,H)</option>
+                                            <option value="Rotation">Rotation</option>
+                                            <option value="Opacity">Opacity</option>
+                                            <option value="Fill">Fill Color</option>
+                                            <option value="Stroke">Stroke Color</option>
+                                            <option value="StrokeWidth">Stroke Width</option>
+                                            <option value="Width">Width</option>
+                                            <option value="Height">Height</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div class="row g-1 mb-2">
+                                    <div class="col-4">
+                                        <label class="form-label mb-0 small">Duration (ms)</label>
+                                        <input type="number" class="form-control form-control-sm" min="50" step="50"
+                                               @bind="a.DurationMs" @bind:after="OnChanged" />
+                                    </div>
+                                    <div class="col-4">
+                                        <label class="form-label mb-0 small">Delay (ms)</label>
+                                        <input type="number" class="form-control form-control-sm" min="0" step="50"
+                                               @bind="a.DelayMs" @bind:after="OnChanged" />
+                                    </div>
+                                    <div class="col-4">
+                                        <label class="form-label mb-0 small">Easing</label>
+                                        <select class="form-select form-select-sm" @bind="a.Easing" @bind:after="OnChanged">
+                                            <option value="Linear">Linear</option>
+                                            <option value="EaseIn">Ease In</option>
+                                            <option value="EaseOut">Ease Out</option>
+                                            <option value="EaseInOut">Ease In-Out</option>
+                                            <option value="Bounce">Bounce</option>
+                                            <option value="Elastic">Elastic</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div class="row g-1 mb-2">
+                                    <div class="col-4">
+                                        <label class="form-label mb-0 small">Repeat</label>
+                                        <input type="number" class="form-control form-control-sm" min="0"
+                                               @bind="a.RepeatCount" @bind:after="OnChanged"
+                                               title="0 = infinite" />
+                                        <span class="form-text" style="font-size: 9px;">0 = infinite</span>
+                                    </div>
+                                    <div class="col-4">
+                                        <label class="form-label mb-0 small">Auto-Reverse</label>
+                                        <div class="form-check mt-1">
+                                            <input type="checkbox" class="form-check-input" id="@($"ar_{a.Id}")"
+                                                   checked="@a.AutoReverse"
+                                                   @onchange="(e) => { a.AutoReverse = (bool)(e.Value ?? false); OnChanged(); }" />
+                                            <label class="form-check-label small" for="@($"ar_{a.Id}")">Ping-pong</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-4">
+                                        <label class="form-label mb-0 small">Trigger</label>
+                                        <select class="form-select form-select-sm" @bind="a.Trigger" @bind:after="OnChanged">
+                                            <option value="Always">Always</option>
+                                            <option value="OnVariable">On Variable</option>
+                                            <option value="OnClick">On Click</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                @if (a.Trigger == "OnVariable")
+                                {
+                                    <div class="row g-1 mb-2">
+                                        <div class="col-6">
+                                            <label class="form-label mb-0 small">Variable Path</label>
+                                            <input type="text" class="form-control form-control-sm"
+                                                   @bind="a.TriggerVariable" @bind:after="OnChanged" placeholder="Plant.Temp" />
+                                        </div>
+                                        <div class="col-6">
+                                            <label class="form-label mb-0 small">Condition</label>
+                                            <input type="text" class="form-control form-control-sm"
+                                                   @bind="a.TriggerCondition" @bind:after="OnChanged" placeholder="value > 50" />
+                                        </div>
+                                    </div>
+                                }
+
+                                <div class="anim-keyframes">
+                                    <div class="d-flex align-items-center mb-1">
+                                        <span class="small fw-bold">Keyframes</span>
+                                        <button class="btn btn-sm btn-outline-success py-0 px-1 ms-auto" style="font-size: 10px;"
+                                                @onclick="() => AddKeyframe(a)">+</button>
+                                    </div>
+
+                                    @if (a.Keyframes.Count == 0)
+                                    {
+                                        <div class="text-muted small mb-1">No keyframes. Add at least two (0% and 100%).</div>
+                                        <button class="btn btn-sm btn-outline-secondary py-0 px-1" style="font-size: 10px;"
+                                                @onclick="() => AddDefaultKeyframes(a)">Auto-fill 0%->100%</button>
+                                    }
+                                    else
+                                    {
+                                        <div class="anim-timeline">
+                                            <div class="anim-timeline-track">
+                                                @foreach (var kf in a.Keyframes.OrderBy(k => k.Percent))
+                                                {
+                                                    <div class="anim-timeline-marker" style="left: @(kf.Percent)%;"
+                                                         title="@(kf.Percent)% -- @kf.Value">
+                                                        <div class="anim-timeline-dot"></div>
+                                                    </div>
+                                                }
+                                            </div>
+                                        </div>
+
+                                        @foreach (var kf in a.Keyframes.OrderBy(k => k.Percent).ToList())
+                                        {
+                                            var k = kf;
+                                            <div class="anim-kf-row">
+                                                <div style="width: 50px;">
+                                                    <input type="number" class="form-control form-control-sm" min="0" max="100"
+                                                           @bind="k.Percent" @bind:after="OnChanged" title="Percent" />
+                                                </div>
+                                                <span class="small text-muted">%</span>
+                                                <div class="flex-grow-1">
+                                                    @if (a.Property is "Fill" or "Stroke")
+                                                    {
+                                                        <input type="color" class="form-control form-control-sm form-control-color"
+                                                               style="width: 40px; height: 24px;"
+                                                               @bind="k.Value" @bind:after="OnChanged" />
+                                                    }
+                                                    else
+                                                    {
+                                                        <input type="text" class="form-control form-control-sm"
+                                                               @bind="k.Value" @bind:after="OnChanged"
+                                                               placeholder="@GetKeyframePlaceholder(a.Property)" />
+                                                    }
+                                                </div>
+                                                <div style="width: 75px;">
+                                                    <select class="form-select form-select-sm" style="font-size: 10px;"
+                                                            @bind="k.Easing" @bind:after="OnChanged">
+                                                        <option value="">Default</option>
+                                                        <option value="Linear">Linear</option>
+                                                        <option value="EaseIn">Ease In</option>
+                                                        <option value="EaseOut">Ease Out</option>
+                                                        <option value="EaseInOut">Ease I/O</option>
+                                                    </select>
+                                                </div>
+                                                <button class="btn btn-sm btn-outline-danger py-0 px-1" style="font-size: 10px;"
+                                                        @onclick="() => RemoveKeyframe(a, k)" title="Remove">x</button>
+                                            </div>
+                                        }
+                                    }
+                                </div>
+
+                                <div class="d-flex gap-1 mt-2">
+                                    <button class="btn btn-sm btn-outline-primary py-0 px-2"
+                                            @onclick="() => PreviewAnimation(a)" title="Preview this animation on the canvas">
+                                        ▶ Preview
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-secondary py-0 px-2"
+                                            @onclick="StopPreview" title="Stop preview">
+                                        ⏹ Stop
+                                    </button>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+
+        <button class="btn btn-sm btn-outline-info w-100 py-0 mt-1" style="font-size: 11px;"
+                @onclick="AddAnimation">＋ Add Animation</button>
     </div>
 }
 else
@@ -887,6 +1153,13 @@ else
     private IReadOnlyList<ScreenSymbol> _selectedSymbols => Editor.SelectedScreenSymbols;
 
     private static int _nextCmdId = 1;
+    private static int _nextAnimId = 1;
+    private string? _expandedAnimId;
+    private SymbolAnimation? _previewingAnim;
+    private ScreenSymbol? _previewSymbol;
+    private System.Threading.Timer? _previewTimer;
+    private double _previewElapsed;
+    private Dictionary<string, double>? _previewOriginalValues;
 
     // Snapshot-based undo for screen symbol properties
     private string? _symbolSnapshot;
@@ -998,6 +1271,308 @@ else
         }
     }
 
+
+    // ─── Animation Editor ───────────────────────────────────
+
+    private void ToggleAnimExpand(string animId)
+    {
+        _expandedAnimId = _expandedAnimId == animId ? null : animId;
+    }
+
+    private void AddAnimation()
+    {
+        if (_selectedSymbol == null) return;
+
+        var anim = new SymbolAnimation
+        {
+            Id = $"anim_{_nextAnimId++}",
+            Name = "",
+            Property = "Position",
+            DurationMs = 1000,
+            Easing = "Linear",
+            Trigger = "Always"
+        };
+        _selectedSymbol.Animations.Add(anim);
+        _expandedAnimId = anim.Id;
+        OnChanged();
+    }
+
+    private void RemoveAnimation(SymbolAnimation anim)
+    {
+        if (_selectedSymbol == null) return;
+        if (_previewingAnim == anim) StopPreview();
+        _selectedSymbol.Animations.Remove(anim);
+        if (_expandedAnimId == anim.Id) _expandedAnimId = null;
+        OnChanged();
+    }
+
+    private void AddKeyframe(SymbolAnimation anim)
+    {
+        var usedPcts = anim.Keyframes.Select(k => k.Percent).ToHashSet();
+        double pct = 0;
+        if (usedPcts.Contains(0) && usedPcts.Contains(100))
+            pct = 50;
+        else if (usedPcts.Contains(0))
+            pct = 100;
+
+        while (usedPcts.Contains(pct) && pct <= 100)
+            pct += 10;
+        if (pct > 100) pct = 100;
+
+        anim.Keyframes.Add(new AnimationKeyframe
+        {
+            Percent = pct,
+            Value = GetDefaultKeyframeValue(anim.Property)
+        });
+        OnChanged();
+    }
+
+    private void AddDefaultKeyframes(SymbolAnimation anim)
+    {
+        if (_selectedSymbol == null) return;
+
+        anim.Keyframes.Clear();
+        var (fromVal, toVal) = GetDefaultFromTo(anim.Property, _selectedSymbol);
+
+        anim.Keyframes.Add(new AnimationKeyframe { Percent = 0, Value = fromVal });
+        anim.Keyframes.Add(new AnimationKeyframe { Percent = 100, Value = toVal });
+        OnChanged();
+    }
+
+    private void RemoveKeyframe(SymbolAnimation anim, AnimationKeyframe kf)
+    {
+        anim.Keyframes.Remove(kf);
+        OnChanged();
+    }
+
+    private string GetDefaultKeyframeValue(string property) => property switch
+    {
+        "Position" => "0,0",
+        "Scale" => "1,1",
+        "Rotation" => "0",
+        "Opacity" => "1",
+        "Fill" => "#4a90d9",
+        "Stroke" => "#333333",
+        "StrokeWidth" => "1",
+        "Width" => "80",
+        "Height" => "40",
+        _ => "0"
+    };
+
+    private (string From, string To) GetDefaultFromTo(string property, ScreenSymbol sym) => property switch
+    {
+        "Position" => ($"{sym.X},{sym.Y}", $"{sym.X + 100},{sym.Y}"),
+        "Scale" => ("1,1", "1.5,1.5"),
+        "Rotation" => ("0", "360"),
+        "Opacity" => ("1", "0"),
+        "Fill" => (sym.Fill, "#ff0000"),
+        "Stroke" => (sym.Stroke, "#0000ff"),
+        "StrokeWidth" => (sym.StrokeWidth.ToString(System.Globalization.CultureInfo.InvariantCulture), "4"),
+        "Width" => (sym.Width.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    (sym.Width * 1.5).ToString(System.Globalization.CultureInfo.InvariantCulture)),
+        "Height" => (sym.Height.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                     (sym.Height * 1.5).ToString(System.Globalization.CultureInfo.InvariantCulture)),
+        _ => ("0", "100")
+    };
+
+    private string GetKeyframePlaceholder(string property) => property switch
+    {
+        "Position" => "x,y",
+        "Scale" => "sx,sy",
+        "Rotation" => "degrees",
+        "Opacity" => "0.0-1.0",
+        "Fill" or "Stroke" => "#rrggbb",
+        "StrokeWidth" => "px",
+        "Width" or "Height" => "px",
+        _ => "value"
+    };
+
+    // ─── Animation Preview ──────────────────────────────────
+
+    private void PreviewAnimation(SymbolAnimation anim)
+    {
+        if (_selectedSymbol == null || anim.Keyframes.Count < 2) return;
+
+        StopPreview();
+        _previewingAnim = anim;
+        _previewSymbol = _selectedSymbol;
+        _previewElapsed = 0;
+
+        _previewOriginalValues = new Dictionary<string, double>
+        {
+            ["X"] = _selectedSymbol.X,
+            ["Y"] = _selectedSymbol.Y,
+            ["Width"] = _selectedSymbol.Width,
+            ["Height"] = _selectedSymbol.Height,
+            ["Rotation"] = _selectedSymbol.Rotation,
+            ["StrokeWidth"] = _selectedSymbol.StrokeWidth,
+            ["Opacity"] = 1.0
+        };
+
+        const int intervalMs = 30;
+        _previewTimer = new System.Threading.Timer(_ =>
+        {
+            if (_previewingAnim == null || _previewSymbol == null)
+            {
+                StopPreview();
+                return;
+            }
+
+            _previewElapsed += intervalMs;
+            var duration = _previewingAnim.DurationMs;
+            if (duration <= 0) duration = 1000;
+
+            var progress = _previewElapsed / duration;
+
+            if (_previewingAnim.AutoReverse)
+            {
+                var cycle = (int)progress;
+                var frac = progress - cycle;
+                progress = (cycle % 2 == 0) ? frac : 1.0 - frac;
+            }
+            else
+            {
+                progress %= 1.0;
+            }
+
+            if (_previewingAnim.RepeatCount > 0 && _previewElapsed > duration * _previewingAnim.RepeatCount * (_previewingAnim.AutoReverse ? 2 : 1))
+            {
+                InvokeAsync(() => { StopPreview(); StateHasChanged(); });
+                return;
+            }
+
+            ApplyPreviewFrame(_previewingAnim, _previewSymbol, progress);
+            // Notify canvas to re-render
+            Editor.NotifyAnimationPreviewTick();
+            InvokeAsync(StateHasChanged);
+
+        }, null, (int)anim.DelayMs, intervalMs);
+    }
+
+    private void ApplyPreviewFrame(SymbolAnimation anim, ScreenSymbol sym, double progress)
+    {
+        var kfs = anim.Keyframes.OrderBy(k => k.Percent).ToList();
+        if (kfs.Count < 2) return;
+
+        var pct = progress * 100.0;
+
+        AnimationKeyframe? from = kfs[0], to = kfs[^1];
+        for (int i = 0; i < kfs.Count - 1; i++)
+        {
+            if (pct >= kfs[i].Percent && pct <= kfs[i + 1].Percent)
+            {
+                from = kfs[i];
+                to = kfs[i + 1];
+                break;
+            }
+        }
+
+        var segLen = to.Percent - from.Percent;
+        var t = segLen > 0 ? (pct - from.Percent) / segLen : 0;
+        t = Math.Clamp(t, 0, 1);
+
+        switch (anim.Property)
+        {
+            case "Position":
+                var (fx, fy) = ParsePair(from.Value);
+                var (tx, ty) = ParsePair(to.Value);
+                sym.X = Lerp(fx, tx, t);
+                sym.Y = Lerp(fy, ty, t);
+                break;
+            case "Scale":
+                var (fsx, fsy) = ParsePair(from.Value);
+                var (tsx, tsy) = ParsePair(to.Value);
+                var origW = _previewOriginalValues?["Width"] ?? sym.Width;
+                var origH = _previewOriginalValues?["Height"] ?? sym.Height;
+                sym.Width = origW * Lerp(fsx, tsx, t);
+                sym.Height = origH * Lerp(fsy, tsy, t);
+                break;
+            case "Rotation":
+                sym.Rotation = Lerp(ParseDouble(from.Value), ParseDouble(to.Value), t);
+                break;
+            case "Width":
+                sym.Width = Lerp(ParseDouble(from.Value), ParseDouble(to.Value), t);
+                break;
+            case "Height":
+                sym.Height = Lerp(ParseDouble(from.Value), ParseDouble(to.Value), t);
+                break;
+            case "StrokeWidth":
+                sym.StrokeWidth = Lerp(ParseDouble(from.Value), ParseDouble(to.Value), t);
+                break;
+            case "Fill":
+                sym.Fill = LerpColor(from.Value, to.Value, t);
+                break;
+            case "Stroke":
+                sym.Stroke = LerpColor(from.Value, to.Value, t);
+                break;
+            case "Opacity":
+                break;
+        }
+    }
+
+    private void StopPreview()
+    {
+        _previewTimer?.Dispose();
+        _previewTimer = null;
+
+        if (_previewOriginalValues != null && _previewSymbol != null)
+        {
+            _previewSymbol.X = _previewOriginalValues["X"];
+            _previewSymbol.Y = _previewOriginalValues["Y"];
+            _previewSymbol.Width = _previewOriginalValues["Width"];
+            _previewSymbol.Height = _previewOriginalValues["Height"];
+            _previewSymbol.Rotation = _previewOriginalValues["Rotation"];
+            _previewSymbol.StrokeWidth = _previewOriginalValues["StrokeWidth"];
+        }
+
+        _previewSymbol = null;
+        _previewingAnim = null;
+        _previewOriginalValues = null;
+        _previewElapsed = 0;
+    }
+
+    private static double Lerp(double a, double b, double t) => a + (b - a) * t;
+
+    private static (double, double) ParsePair(string val)
+    {
+        var parts = val.Split(',');
+        double.TryParse(parts.ElementAtOrDefault(0)?.Trim(), System.Globalization.NumberStyles.Any,
+            System.Globalization.CultureInfo.InvariantCulture, out var x);
+        double.TryParse(parts.ElementAtOrDefault(1)?.Trim(), System.Globalization.NumberStyles.Any,
+            System.Globalization.CultureInfo.InvariantCulture, out var y);
+        return (x, y);
+    }
+
+    private static double ParseDouble(string val)
+    {
+        double.TryParse(val?.Trim(), System.Globalization.NumberStyles.Any,
+            System.Globalization.CultureInfo.InvariantCulture, out var v);
+        return v;
+    }
+
+    private static string LerpColor(string fromHex, string toHex, double t)
+    {
+        try
+        {
+            var fc = ParseHexColor(fromHex);
+            var tc = ParseHexColor(toHex);
+            var r = (int)Lerp(fc.r, tc.r, t);
+            var g = (int)Lerp(fc.g, tc.g, t);
+            var b = (int)Lerp(fc.b, tc.b, t);
+            return $"#{Math.Clamp(r, 0, 255):x2}{Math.Clamp(g, 0, 255):x2}{Math.Clamp(b, 0, 255):x2}";
+        }
+        catch { return fromHex; }
+    }
+
+    private static (int r, int g, int b) ParseHexColor(string hex)
+    {
+        hex = hex.TrimStart('#');
+        if (hex.Length == 3)
+            hex = $"{hex[0]}{hex[0]}{hex[1]}{hex[1]}{hex[2]}{hex[2]}";
+        return (Convert.ToInt32(hex[..2], 16),
+                Convert.ToInt32(hex[2..4], 16),
+                Convert.ToInt32(hex[4..6], 16));
+    }
     public void Dispose()
     {
         Editor.ScreenSelectionChanged -= OnSelectionChanged;
