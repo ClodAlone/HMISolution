@@ -330,6 +330,18 @@ else if (Node is ScreenNode screen)
             <label class="form-label">Background</label>
             <input type="color" class="form-control form-control-color" @bind="screen.Screen.Background" @bind:after="OnChanged" @onfocus="() => CaptureForUndo(screen.Screen, nameof(screen.Screen.Background))" />
         </div>
+        <div class="mb-3">
+            <label class="form-label">Background Image</label>
+            <select class="form-select form-select-sm"
+                    value="@screen.Screen.BackgroundImageId"
+                    @onchange="(e) => { screen.Screen.BackgroundImageId = e.Value?.ToString() ?? string.Empty; OnChanged(); }">
+                <option value="">(none)</option>
+                @foreach (var img in (Editor.RootModel?.Images ?? []))
+                {
+                    <option value="@img.Id">@img.Id</option>
+                }
+            </select>
+        </div>
         <div class="text-muted">
             Symbols: @screen.Screen.Symbols.Count
         </div>
@@ -411,6 +423,7 @@ else if (Node is UserNode uNode)
 
     [Inject] private SyntaxCheckService SyntaxChecker { get; set; } = default!;
     [Inject] private UndoRedoService UndoRedo { get; set; } = default!;
+    [Inject] private NodeEditorService Editor { get; set; } = default!;
 
     private string _syntaxResult = "";
     private bool _syntaxSuccess;

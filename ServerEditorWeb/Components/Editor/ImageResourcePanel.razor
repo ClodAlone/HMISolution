@@ -1,0 +1,180 @@
+@using SharedModels
+@using ServerEditorWeb.Services
+
+<div class="image-resource-panel">
+    <div class="d-flex gap-1 mb-2 align-items-center">
+        <h6 class="mb-0 small fw-bold">🖼️ Image Resources</h6>
+        <div class="ms-auto d-flex gap-1">
+            <button class="btn btn-sm btn-outline-success py-0 px-1" style="font-size: 10px;"
+                    @onclick="() => _showAddImage = true" title="Add new image resource">＋ Image</button>
+        </div>
+    </div>
+
+    @if (_images.Count == 0)
+    {
+        <div class="text-muted small text-center py-3">
+            No images defined. Click <strong>＋ Image</strong> to add one.
+        </div>
+    }
+    else
+    {
+        <div class="image-table-wrap" style="max-height: calc(100vh - 200px); overflow-y: auto;">
+            <table class="table table-sm table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th style="min-width: 120px;">Image ID</th>
+                        <th style="width: 80px;">Preview</th>
+                        <th style="width: 80px;">Size</th>
+                        <th style="width: 60px;"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var img in _images)
+                    {
+                        var item = img;
+                        <tr>
+                            <td>
+                                <input type="text" class="form-control form-control-sm" style="font-size: 11px;"
+                                       value="@item.Id" @onchange="(ev) => { item.Id = ev.Value?.ToString() ?? string.Empty; OnChanged(); }" />
+                            </td>
+                            <td>
+                                @if (!string.IsNullOrEmpty(item.Data))
+                                {
+                                    <img src="@item.Data" style="max-width: 60px; max-height: 40px; object-fit: contain;" />
+                                }
+                                else
+                                {
+                                    <span class="text-muted small">—</span>
+                                }
+                            </td>
+                            <td class="small text-muted">
+                                @FormatSize(item.Data)
+                            </td>
+                            <td>
+                                <div class="d-flex gap-1">
+                                    <label class="btn btn-sm btn-outline-primary py-0 px-1" style="font-size: 9px; cursor: pointer;" title="Replace image">
+                                        📂
+                                        <InputFile OnChange="(e) => OnImageSelected(e, item)" accept="image/*" style="display: none;" />
+                                    </label>
+                                    <button class="btn btn-sm btn-outline-danger py-0 px-1" style="font-size: 9px;"
+                                            @onclick="() => RemoveImage(item)" title="Delete image">🗑</button>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    @if (_showAddImage)
+    {
+        <div class="mt-2 p-2 border rounded" style="font-size: 11px; background: var(--surface-alt, #f8f8f8);">
+            <label class="form-label mb-1 small">Image ID:</label>
+            <div class="d-flex gap-1 align-items-center">
+                <input type="text" class="form-control form-control-sm" style="font-size: 11px; width: 140px;"
+                       @bind="_newImageId" placeholder="e.g. logo, bg_main" />
+                <label class="btn btn-sm btn-primary py-0 px-2" style="font-size: 10px; cursor: pointer;">
+                    📂 Choose File
+                    <InputFile OnChange="OnNewImageFileSelected" accept="image/*" style="display: none;" />
+                </label>
+                <button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size: 10px;"
+                        @onclick="() => { _showAddImage = false; _newImageId = string.Empty; }">Cancel</button>
+            </div>
+            @if (!string.IsNullOrEmpty(_addError))
+            {
+                <div class="text-danger small mt-1">@_addError</div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public EventCallback OnPropertyChanged { get; set; }
+
+    [Inject] private NodeEditorService Editor { get; set; } = default!;
+
+    private List<ImageResource> _images = new();
+    private bool _showAddImage;
+    private string _newImageId = "";
+    private string _addError = "";
+
+    protected override void OnParametersSet()
+    {
+        var model = Editor.RootModel;
+        if (model != null)
+        {
+            model.Images ??= new();
+            _images = model.Images;
+        }
+    }
+
+    private void OnChanged()
+    {
+        Editor.MarkChanged();
+        OnPropertyChanged.InvokeAsync();
+    }
+
+    private void RemoveImage(ImageResource img)
+    {
+        _images.Remove(img);
+        OnChanged();
+    }
+
+    private async Task OnImageSelected(InputFileChangeEventArgs e, ImageResource img)
+    {
+        var dataUri = await ReadAsDataUri(e.File);
+        if (dataUri != null)
+        {
+            img.Data = dataUri;
+            OnChanged();
+        }
+    }
+
+    private async Task OnNewImageFileSelected(InputFileChangeEventArgs e)
+    {
+        _addError = "";
+        if (string.IsNullOrWhiteSpace(_newImageId))
+        {
+            _addError = "Please enter an Image ID first.";
+            return;
+        }
+        if (_images.Any(i => i.Id.Equals(_newImageId, StringComparison.OrdinalIgnoreCase)))
+        {
+            _addError = $"An image with ID '{_newImageId}' already exists.";
+            return;
+        }
+
+        var dataUri = await ReadAsDataUri(e.File);
+        if (dataUri != null)
+        {
+            _images.Add(new ImageResource { Id = _newImageId.Trim(), Data = dataUri });
+            _newImageId = "";
+            _showAddImage = false;
+            OnChanged();
+        }
+    }
+
+    private async Task<string?> ReadAsDataUri(IBrowserFile? file)
+    {
+        if (file == null) return null;
+        const long maxSize = 10 * 1024 * 1024; // 10 MB
+        using var stream = file.OpenReadStream(maxSize);
+        using var ms = new System.IO.MemoryStream();
+        await stream.CopyToAsync(ms);
+        var base64 = Convert.ToBase64String(ms.ToArray());
+        return $"data:{file.ContentType};base64,{base64}";
+    }
+
+    private static string FormatSize(string? data)
+    {
+        if (string.IsNullOrEmpty(data)) return "—";
+        var bytes = data.Length * 3 / 4; // rough base64→bytes
+        return bytes switch
+        {
+            < 1024 => $"{bytes} B",
+            < 1024 * 1024 => $"{bytes / 1024} KB",
+            _ => $"{bytes / (1024 * 1024.0):F1} MB"
+        };
+    }
+}

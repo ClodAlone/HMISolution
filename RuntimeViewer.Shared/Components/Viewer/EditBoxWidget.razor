@@ -1,4 +1,4 @@
-﻿@using RuntimeViewer.Shared.Services
+@using RuntimeViewer.Shared.Services
 @implements IDisposable
 
 <div class="editbox-widget" @onclick:stopPropagation @onmousedown:stopPropagation @onmouseup:stopPropagation>
@@ -6,9 +6,9 @@
         @if (_isEditing)
         {
             <input class="editbox-input" type="text"
-                   @bind="_editValue"
+                   @bind="_editValue" @bind:event="oninput"
                    @onkeydown="OnKeyDown"
-                   @onblur="CancelEdit"
+                   @onblur="OnBlur"
                    autofocus />
         }
         else
@@ -25,6 +25,19 @@
             </div>
         }
     </div>
+    @if (ShowStatistics && _isNumeric)
+    {
+        var statsMin = Opc.GetValue(VariablePath + ".Statistics.Min");
+        var statsMax = Opc.GetValue(VariablePath + ".Statistics.Max");
+        var statsAvg = Opc.GetValue(VariablePath + ".Statistics.Average");
+        var statsCnt = Opc.GetValue(VariablePath + ".Statistics.Count");
+        <div class="editbox-stats">
+            <span title="Min">&#x25BC; @FormatStat(statsMin)</span>
+            <span title="Average">&#x2298; @FormatStat(statsAvg)</span>
+            <span title="Max">&#x25B2; @FormatStat(statsMax)</span>
+            <span title="Count"># @(statsCnt ?? "0")</span>
+        </div>
+    }
     @if (!string.IsNullOrEmpty(_statusMessage))
     {
         <div class="editbox-status @(_statusIsError ? "editbox-status-err" : "editbox-status-ok")">@_statusMessage</div>
@@ -71,6 +84,12 @@
     }
     .editbox-status-ok { background: #064e3b; color: #6ee7b7; }
     .editbox-status-err { background: #7f1d1d; color: #fca5a5; }
+    .editbox-stats {
+        display: flex; justify-content: space-between; padding: 2px 6px;
+        font-size: 9px; color: #94a3b8; background: #0f172a;
+        border-top: 1px solid #334155;
+    }
+    .editbox-stats span { white-space: nowrap; }
 </style>
 
 @code {
@@ -79,6 +98,7 @@
     [Parameter] public string Format { get; set; } = "";
     [Parameter] public double? Min { get; set; }
     [Parameter] public double? Max { get; set; }
+    [Parameter] public bool ShowStatistics { get; set; }
 
     [Inject] private OpcRuntimeClient Opc { get; set; } = default!;
 
@@ -88,6 +108,8 @@
     private bool _statusIsError;
     private bool _isNumeric;
     private System.Threading.Timer? _statusTimer;
+    private bool _spinBusy;
+    private bool _isWriting;
 
     private string DisplayValue
     {
@@ -111,7 +133,14 @@
 
     private void OnValuesChanged()
     {
-        InvokeAsync(StateHasChanged);
+        // Re-check numeric status when OPC values arrive (initial value may not have been available)
+        var val = Opc.GetValue(VariablePath ?? "");
+        if (!_isNumeric && val != null && double.TryParse(val, System.Globalization.NumberStyles.Any,
+                System.Globalization.CultureInfo.InvariantCulture, out _))
+        {
+            _isNumeric = true;
+            InvokeAsync(StateHasChanged);
+        }
     }
 
     protected override void OnParametersSet()
@@ -128,6 +157,14 @@
         _isEditing = true;
     }
 
+    private void OnBlur()
+    {
+        // Don't cancel edit while an async write is in progress;
+        // the write handler will clear _isEditing itself.
+        if (!_isWriting)
+            _isEditing = false;
+    }
+
     private void CancelEdit()
     {
         _isEditing = false;
@@ -137,8 +174,16 @@
     {
         if (e.Key == "Enter")
         {
-            await WriteValue(_editValue);
-            _isEditing = false;
+            _isWriting = true;
+            try
+            {
+                await WriteValue(_editValue);
+            }
+            finally
+            {
+                _isWriting = false;
+                _isEditing = false;
+            }
         }
         else if (e.Key == "Escape")
         {
@@ -148,24 +193,36 @@
 
     private async Task SpinUp()
     {
-        var current = GetNumericValue();
-        if (current.HasValue)
+        if (_spinBusy) return;
+        _spinBusy = true;
+        try
         {
-            var newVal = current.Value + Step;
-            if (Max.HasValue && newVal > Max.Value) newVal = Max.Value;
-            await WriteValue(newVal.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            var current = GetNumericValue();
+            if (current.HasValue)
+            {
+                var newVal = current.Value + Step;
+                if (Max.HasValue && newVal > Max.Value) newVal = Max.Value;
+                await WriteValue(newVal.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            }
         }
+        finally { _spinBusy = false; }
     }
 
     private async Task SpinDown()
     {
-        var current = GetNumericValue();
-        if (current.HasValue)
+        if (_spinBusy) return;
+        _spinBusy = true;
+        try
         {
-            var newVal = current.Value - Step;
-            if (Min.HasValue && newVal < Min.Value) newVal = Min.Value;
-            await WriteValue(newVal.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            var current = GetNumericValue();
+            if (current.HasValue)
+            {
+                var newVal = current.Value - Step;
+                if (Min.HasValue && newVal < Min.Value) newVal = Min.Value;
+                await WriteValue(newVal.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            }
         }
+        finally { _spinBusy = false; }
     }
 
     private double? GetNumericValue()
@@ -208,6 +265,15 @@
         {
             InvokeAsync(() => { _statusMessage = ""; StateHasChanged(); });
         }, null, 2000, Timeout.Infinite);
+    }
+
+    private string FormatStat(string? val)
+    {
+        if (val != null && double.TryParse(val, System.Globalization.NumberStyles.Any,
+                System.Globalization.CultureInfo.InvariantCulture, out var d))
+            return d.ToString(!string.IsNullOrEmpty(Format) ? Format : "F1",
+                System.Globalization.CultureInfo.InvariantCulture);
+        return val ?? "--";
     }
 
     public void Dispose()

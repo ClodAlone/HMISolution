@@ -361,6 +361,10 @@ else
                 {
                     <StringEditorPanel OnPropertyChanged="OnPropertyChanged" />
                 }
+                else if (context.Id == "images")
+                {
+                    <ImageResourcePanel OnPropertyChanged="OnPropertyChanged" />
+                }
                 else if (context.Id == "eventlog")
                 {
                     <EventLogSettingsPanel OnPropertyChanged="OnPropertyChanged" />
@@ -403,6 +407,29 @@ else
                 <div class="modal-footer py-2">
                     <button class="btn btn-sm btn-secondary" @onclick="() => _showSaveAsDialog = false">Cancel</button>
                     <button class="btn btn-sm btn-success" @onclick="SaveAs" disabled="@string.IsNullOrEmpty(_saveAsPath)">💾 Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_showUnsavedDialog && _pendingCloseProject != null)
+{
+    <div class="modal-backdrop show" @onclick="UnsavedDialogCancel"></div>
+    <div class="modal show d-block" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header py-2">
+                    <h6 class="modal-title">⚠️ Unsaved Changes</h6>
+                    <button type="button" class="btn-close btn-close-sm" @onclick="UnsavedDialogCancel"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-0">The project <strong>@_pendingCloseProject.Name</strong> has unsaved changes. Do you want to save before closing?</p>
+                </div>
+                <div class="modal-footer py-2">
+                    <button class="btn btn-sm btn-secondary" @onclick="UnsavedDialogCancel">Cancel</button>
+                    <button class="btn btn-sm btn-outline-danger" @onclick="UnsavedDialogDiscard">Discard</button>
+                    <button class="btn btn-sm btn-success" @onclick="UnsavedDialogSave">💾 Save</button>
                 </div>
             </div>
         </div>
@@ -526,6 +553,10 @@ else
     private bool _showSaveAsDialog;
     private string _saveAsPath = "";
 
+    // Unsaved changes dialog state
+    private bool _showUnsavedDialog;
+    private ProjectNode? _pendingCloseProject;
+
     // File browser state
     private bool _showFileBrowser;
     private string _browsePath = "";
@@ -568,6 +599,7 @@ else
         new() { Id = "ai", Title = "AI", Icon = "🤖", Zone = "center" },
         new() { Id = "users", Title = "Users", Icon = "👥", Zone = "center" },
         new() { Id = "strings", Title = "Strings", Icon = "🌐", Zone = "center" },
+        new() { Id = "images", Title = "Images", Icon = "🖼️", Zone = "center" },
         new() { Id = "eventlog", Title = "Event Log", Icon = "📓", Zone = "center" },
         new() { Id = "ladder", Title = "Ladder Editor", Icon = "⚡", Zone = "center" },
         new() { Id = "serverlog", Title = "Server Logs", Icon = "📋", Zone = "bottom" },
@@ -606,7 +638,56 @@ private void OnCopyNode(TreeNode node)
 private void OnPasteNode(TreeNode node) { Editor.SelectNode(node); Editor.PasteFromClipboard(Clipboard); }
 
 private void OnSetActiveProject(TreeNode node) { if (node is ProjectNode pn) Editor.SetActiveProject(pn); }
-private void OnCloseProject(TreeNode node) { if (node is ProjectNode pn) Editor.CloseProject(pn); }
+private void OnCloseProject(TreeNode node)
+{
+    if (node is not ProjectNode pn) return;
+    if (pn.HasUnsavedChanges)
+    {
+        _pendingCloseProject = pn;
+        _showUnsavedDialog = true;
+    }
+    else
+    {
+        Editor.CloseProject(pn);
+    }
+}
+
+private void UnsavedDialogSave()
+{
+    if (_pendingCloseProject is { } proj)
+    {
+        var wasActive = Editor.ActiveProject;
+        if (wasActive != proj)
+            Editor.SetActiveProject(proj);
+
+        var (success, msg) = Editor.Save();
+        ShowToast(success, msg);
+        if (success)
+        {
+            _appLogService.AddLog("INF", msg);
+            Editor.CloseProject(proj);
+        }
+
+        if (wasActive != null && wasActive != proj && Editor.OpenProjects.Contains(wasActive))
+            Editor.SetActiveProject(wasActive);
+    }
+    _showUnsavedDialog = false;
+    _pendingCloseProject = null;
+}
+
+private void UnsavedDialogDiscard()
+{
+    if (_pendingCloseProject is { } proj)
+        Editor.CloseProject(proj);
+    _showUnsavedDialog = false;
+    _pendingCloseProject = null;
+}
+
+private void UnsavedDialogCancel()
+{
+    _showUnsavedDialog = false;
+    _pendingCloseProject = null;
+}
 
     private DotNetObjectReference<Home>? _shortcutRef;
 

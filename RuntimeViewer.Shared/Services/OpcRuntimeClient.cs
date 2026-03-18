@@ -31,6 +31,7 @@ public class OpcRuntimeClient : IDisposable
     public string? ErrorMessage { get; private set; }
 
     public event Action? ValuesChanged;
+    public event Action<string>? ValueChanged;
     public event Action? StateChanged;
 
     // ─── Diagnostic log ─────────────────────────────────────
@@ -255,7 +256,10 @@ public class OpcRuntimeClient : IDisposable
     {
         if (e.NotificationValue is MonitoredItemNotification notification)
         {
-            var val = notification.Value?.WrappedValue.ToString() ?? "";
+            var rawVal = notification.Value?.WrappedValue.Value;
+            var val = rawVal is IFormattable fmt
+                ? fmt.ToString(null, System.Globalization.CultureInfo.InvariantCulture)
+                : rawVal?.ToString() ?? "";
             var statusCode = notification.Value?.StatusCode ?? StatusCodes.Bad;
             lock (_lock)
             {
@@ -268,39 +272,32 @@ public class OpcRuntimeClient : IDisposable
                 Log($"NOTIFY[{_notificationCount}]: \"{item.DisplayName}\" = \"{val}\" (status={statusCode})");
             }
             ValuesChanged?.Invoke();
+            ValueChanged?.Invoke(item.DisplayName);
         }
     }
 
     /// <summary>Write a value to an OPC variable.</summary>
     public async Task<bool> WriteValueAsync(string variablePath, string value, ushort namespaceIndex = 2)
     {
-        if (_session == null || !_session.Connected) return false;
+        if (_session == null || !_session.Connected)
+        {
+            Log("WRITE SKIP: session null or disconnected for " + variablePath);
+            return false;
+        }
 
         try
         {
             var nodeId = new NodeId(variablePath, namespaceIndex);
 
-            // Read data type for correct conversion
-            var nodesToRead = new ReadValueIdCollection
-            {
-                new ReadValueId { NodeId = nodeId, AttributeId = Attributes.DataType }
-            };
-            DataValueCollection readResults = null!;
-            DiagnosticInfoCollection readDiag = null!;
-            await Task.Run(() => _session.Read(null, 0, TimestampsToReturn.Neither, nodesToRead, out readResults, out readDiag));
-
-            var dataTypeId = readResults.Count > 0 && StatusCode.IsGood(readResults[0].StatusCode)
-                ? readResults[0].Value as NodeId : null;
-
-            var typedValue = ConvertValue(dataTypeId, value);
-
+            // Send the value as a string — the server's HandleWriteValue
+            // converts strings to the correct DataType (Double, Int32, etc.).
             var nodesToWrite = new WriteValueCollection
             {
                 new WriteValue
                 {
                     NodeId = nodeId,
                     AttributeId = Attributes.Value,
-                    Value = new DataValue(new Variant(typedValue))
+                    Value = new DataValue(new Variant(value))
                 }
             };
 
@@ -308,31 +305,19 @@ public class OpcRuntimeClient : IDisposable
             DiagnosticInfoCollection? diagnosticInfos = null;
             await Task.Run(() => _session.Write(null, nodesToWrite, out results, out diagnosticInfos));
 
-            return results != null && StatusCode.IsGood(results[0]);
+            var statusCode = results != null ? results[0] : StatusCodes.Bad;
+            var ok = results != null && StatusCode.IsGood(statusCode);
+            if (!ok)
+            {
+                Log("WRITE FAIL: " + variablePath + " = " + value + " status=" + statusCode);
+            }
+            return ok;
         }
-        catch
+        catch (Exception ex)
         {
+            Log("WRITE ERROR: " + variablePath + " = " + value + " " + ex.GetType().Name + ": " + ex.Message);
             return false;
         }
-    }
-
-    private static object ConvertValue(NodeId? dataTypeId, string value)
-    {
-        if (dataTypeId == null) return value;
-        var id = dataTypeId.Identifier is uint uid ? uid : 0u;
-        return id switch
-        {
-            DataTypes.Boolean => bool.Parse(value),
-            DataTypes.Int16 => short.Parse(value),
-            DataTypes.UInt16 => ushort.Parse(value),
-            DataTypes.Int32 => int.Parse(value),
-            DataTypes.UInt32 => uint.Parse(value),
-            DataTypes.Int64 => long.Parse(value),
-            DataTypes.UInt64 => ulong.Parse(value),
-            DataTypes.Float => float.Parse(value, System.Globalization.CultureInfo.InvariantCulture),
-            DataTypes.Double => double.Parse(value, System.Globalization.CultureInfo.InvariantCulture),
-            _ => value
-        };
     }
 
     public void Disconnect()

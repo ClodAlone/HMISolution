@@ -1,6 +1,7 @@
-﻿@using SharedModels
+@using SharedModels
 @using RuntimeViewer.Shared.Services
-@implements IDisposable
+@using Microsoft.JSInterop
+@implements IAsyncDisposable
 
 @if (Screen == null)
 {
@@ -9,8 +10,9 @@
 else if (Screen.LayoutMode == "responsive")
 {
     @* ─── Responsive HTML Grid Layout ─────────────────────── *@
+    var bgDataResp = ResolveImageData(Screen.BackgroundImageId);
     <div class="rv-responsive-grid @(IsKiosk ? "rv-responsive-kiosk" : "")"
-         style="background: @Screen.Background;@(string.IsNullOrEmpty(Screen.BackgroundImage) ? "" : $" background-image: url('{Screen.BackgroundImage}'); background-size: cover; background-position: center;") gap: @(Screen.GridGap)px; grid-template-columns: repeat(@Screen.GridColumns, 1fr);">
+         style="background: @Screen.Background;@(string.IsNullOrEmpty(bgDataResp) ? "" : $" background-image: url('{bgDataResp}'); background-size: cover; background-position: center;") gap: @(Screen.GridGap)px; grid-template-columns: repeat(@Screen.GridColumns, 1fr);">
         @foreach (var sym in Screen.Symbols.OrderBy(s => s.Order))
         {
             var liveValue = Opc.GetValue(sym.VariablePath ?? "");
@@ -260,6 +262,7 @@ else if (Screen.LayoutMode == "responsive")
 }
 else
 {
+    var bgDataSvg = ResolveImageData(Screen.BackgroundImageId);
     <svg xmlns="http://www.w3.org/2000/svg"
          viewBox="0 0 @Screen.Width @Screen.Height"
          width="@(IsKiosk || BestFit ? null : Screen.Width)"
@@ -267,7 +270,7 @@ else
          preserveAspectRatio="xMidYMid meet"
          class="rv-canvas @(IsKiosk ? "rv-canvas-kiosk" : "") @(BestFit && !IsKiosk ? "rv-canvas-bestfit" : "")"
          style="background: @Screen.Background;"
-         @onmouseup="OnGlobalMouseUp">
+         @ref="_svgRef">
 
         @{ var kfCss = BuildAllKeyframesCss(); }
         @if (!string.IsNullOrEmpty(kfCss))
@@ -277,9 +280,9 @@ else
             </defs>
         }
 
-        @if (!string.IsNullOrEmpty(Screen.BackgroundImage))
+        @if (!string.IsNullOrEmpty(bgDataSvg))
         {
-            <image href="@Screen.BackgroundImage" x="0" y="0"
+            <image href="@bgDataSvg" x="0" y="0"
                    width="@Screen.Width" height="@Screen.Height"
                    preserveAspectRatio="xMidYMid slice" />
         }
@@ -303,15 +306,13 @@ else
 
             var hasCmd = sym.Commands.Count > 0;
             var canExecute = hasCmd && Auth.HasWriteAccess(sym.RequiredAccess);
-            var isHovered = _hoveredSymbolId == sym.Id;
+            
             var isPressed = _pressedSymbolId == sym.Id;
             var isLocked = hasCmd && !canExecute && !string.IsNullOrEmpty(sym.RequiredAccess);
 
-            <g @key="sym.Id" transform="translate(@sym.X, @sym.Y) rotate(@F(rotation), @F(sym.Width / 2), @F(sym.Height / 2))"
-               class="@(hasCmd ? "rv-interactive" : "") @(isHovered && hasCmd ? "rv-hovered" : "") @(isPressed ? "rv-pressed" : "") @(isLocked ? "rv-locked" : "")"
+            <LiveSymbol @key="sym.Id" Value="@liveValue"><g transform="translate(@sym.X, @sym.Y) rotate(@F(rotation), @F(sym.Width / 2), @F(sym.Height / 2))"
+               class="@(hasCmd ? "rv-interactive" : "") @(isPressed ? "rv-pressed" : "") @(isLocked ? "rv-locked" : "")"
                style="@(hasCmd ? "cursor: pointer;" : "") @BuildPositionAnimStyle(sym)"
-               @onmouseenter="() => OnSymbolEnter(sym)"
-               @onmouseleave="() => OnSymbolLeave(sym)"
                @onmousedown="(e) => OnSymbolMouseDown(e, sym)" @onmousedown:stopPropagation
                @onmouseup="(e) => OnSymbolMouseUp(e, sym)" @onmouseup:stopPropagation
                @onclick="() => OnSymbolClick(sym)" @onclick:stopPropagation>
@@ -488,12 +489,12 @@ else
                     @RenderSvgText(sym.Width / 2, sym.Height + 14, "middle", null, "#333", 11, resolvedLabel, sym)
                 }
 
-                @* Hover highlight outline *@
-                @if (isHovered && hasCmd)
+                @* Hover highlight outline — shown via CSS :hover *@
+                @if (hasCmd)
                 {
-                    <rect x="-2" y="-2" width="@(sym.Width + 4)" height="@(sym.Height + 4)"
+                    <rect class="rv-hover-outline" x="-2" y="-2" width="@(sym.Width + 4)" height="@(sym.Height + 4)"
                           fill="none" stroke="@(isLocked ? "#dc3545" : "#0d6efd")" stroke-width="2" stroke-dasharray="4,2" rx="4"
-                          opacity="0.7" style="pointer-events: none;" />
+                          style="pointer-events: none;" />
                 }
 
                 @* Lock icon for symbols requiring write access the user doesn't have *@
@@ -502,7 +503,7 @@ else
                     @RenderSvgText(sym.Width - 2, 12, "end", null, "#dc3545", 12, "🔒")
                 }
                 </g>
-            </g>
+            </g></LiveSymbol>
         }
     </svg>
 }
@@ -517,12 +518,34 @@ else
     [Inject] private RuntimeAuthService Auth { get; set; } = default!;
     [Inject] private LocalizationService Localization { get; set; } = default!;
     [Inject] private ProjectService Project { get; set; } = default!;
+    [Inject] private IJSRuntime JS { get; set; } = default!;
 
+    private ElementReference _svgRef;
+    private IJSObjectReference? _jsModule;
     private System.Threading.Timer? _refreshTimer;
-    private string? _hoveredSymbolId;
     private string? _pressedSymbolId;
+
+    private string? ResolveImageData(string? imageId)
+    {
+        if (string.IsNullOrEmpty(imageId)) return null;
+        return Project.Model?.Images?.FirstOrDefault(i => i.Id == imageId)?.Data;
+    }
     private readonly Dictionary<string, double> _gaugeDisplayPct = new();
     private const double _gaugeLerpSpeed = 0.18;
+    private ScreenSymbol? _dragSliderSymbol;
+    private bool _isDraggingSlider;
+    private ScreenSymbol? _dragKnobSymbol;
+    private bool _isDraggingKnob;
+    private double _knobDragStartAngle;
+    private double _knobDragStartValue;
+    private bool _suppressNextClick;
+    private DateTime _lastDragWrite = DateTime.MinValue;
+    private const int DragWriteIntervalMs = 60;
+    private string? _pendingDragPath;
+    private string? _pendingDragValue;
+    private DotNetObjectReference<ScreenRenderer>? _dotnetRef;
+    private bool _jsDragActive;
+    private volatile bool _valuesDirty;
 
     protected override void OnInitialized()
     {
@@ -530,8 +553,12 @@ else
         Localization.LanguageChanged += OnLanguageChanged;
         _refreshTimer = new System.Threading.Timer(_ =>
         {
-            InvokeAsync(StateHasChanged);
-        }, null, 500, 250);
+            if (_valuesDirty)
+            {
+                _valuesDirty = false;
+                InvokeAsync(StateHasChanged);
+            }
+        }, null, 500, 500);
     }
 
     protected override void OnParametersSet()
@@ -569,6 +596,15 @@ else
                         paths.Add(rv.VariablePath);
                 }
 
+                // Monitor statistics sub-variables for editboxes with ShowStatistics
+                if (sym.Type == "editbox" && sym.EditBoxShowStatistics && !string.IsNullOrEmpty(sym.VariablePath))
+                {
+                    paths.Add(sym.VariablePath + ".Statistics.Min");
+                    paths.Add(sym.VariablePath + ".Statistics.Max");
+                    paths.Add(sym.VariablePath + ".Statistics.Average");
+                    paths.Add(sym.VariablePath + ".Statistics.Count");
+                }
+
                 // Monitor realtime trend pen variables
                 if (sym.Type == "trend")
                 {
@@ -585,7 +621,13 @@ else
         }
     }
 
-    private void OnValuesChanged() { }
+    private void OnValuesChanged()
+    {
+        // Signal the timer to re-render on its next tick.
+        // Do NOT call StateHasChanged here — it would fire on every
+        // OPC notification and create a render storm.
+        _valuesDirty = true;
+    }
 
     private void OnLanguageChanged()
     {
@@ -594,14 +636,39 @@ else
 
     // ─── Mouse interaction ──────────────────────────────────
 
-    private void OnSymbolEnter(ScreenSymbol sym) => _hoveredSymbolId = sym.Id;
-    private void OnSymbolLeave(ScreenSymbol sym)
-    {
-        if (_hoveredSymbolId == sym.Id) _hoveredSymbolId = null;
-    }
-
     private async Task OnSymbolMouseDown(MouseEventArgs e, ScreenSymbol sym)
     {
+        // Start slider drag if applicable
+        if (sym.Type is "hslider" or "vslider" && !string.IsNullOrEmpty(sym.VariablePath))
+        {
+            _dragSliderSymbol = sym;
+            _isDraggingSlider = true;
+            await StartJsDrag();
+            await ApplySliderDragFromSvg(await GetSvgPoint(e));
+            return;
+        }
+
+        // Start knob drag if applicable
+        if (sym.Type == "knob" && !string.IsNullOrEmpty(sym.VariablePath))
+        {
+            if (_jsModule != null)
+            {
+                try
+                {
+                    var svgPt = await _jsModule.InvokeAsync<SvgPoint>("clientToSvg", _svgRef, e.ClientX, e.ClientY);
+                    var cx = sym.X + sym.Width / 2.0;
+                    var cy = sym.Y + sym.Height / 2.0;
+                    _knobDragStartAngle = Math.Atan2(svgPt.X - cx, -(svgPt.Y - cy)) * 180.0 / Math.PI;
+                    _knobDragStartValue = ParseDouble(Opc.GetValue(sym.VariablePath) ?? "0");
+                    _dragKnobSymbol = sym;
+                    _isDraggingKnob = true;
+                    await StartJsDrag();
+                }
+                catch { }
+            }
+            return;
+        }
+
         if (sym.Commands.Count > 0 && !Auth.HasWriteAccess(sym.RequiredAccess))
         {
             await OnRequestLogin.InvokeAsync();
@@ -619,6 +686,9 @@ else
 
     private async Task OnSymbolMouseUp(MouseEventArgs e, ScreenSymbol sym)
     {
+        // Drag end is handled by JS pointer-capture (JsDragEnd)
+        if (_isDraggingSlider || _isDraggingKnob) return;
+
         if (sym.Commands.Count > 0 && !Auth.HasWriteAccess(sym.RequiredAccess))
             return;
 
@@ -644,6 +714,13 @@ else
 
     private async Task OnSymbolClick(ScreenSymbol sym)
     {
+        // Suppress click after a drag interaction (slider/knob)
+        if (_suppressNextClick)
+        {
+            _suppressNextClick = false;
+            return;
+        }
+
         if (sym.Commands.Count > 0 && !Auth.HasWriteAccess(sym.RequiredAccess))
         {
             await OnRequestLogin.InvokeAsync();
@@ -657,8 +734,60 @@ else
         }
     }
 
-    private async Task OnGlobalMouseUp(MouseEventArgs e)
+    /// <summary>Helper to convert client mouse coords to SVG space.</summary>
+    private async Task<SvgPoint> GetSvgPoint(MouseEventArgs e)
     {
+        if (_jsModule == null) return default;
+        return await _jsModule.InvokeAsync<SvgPoint>("clientToSvg", _svgRef, e.ClientX, e.ClientY);
+    }
+
+    /// <summary>Begin JS-side pointer capture for smooth drag without SignalR per-pixel traffic.</summary>
+    private async Task StartJsDrag()
+    {
+        if (_jsModule == null) return;
+        try
+        {
+            _dotnetRef ??= DotNetObjectReference.Create(this);
+            await _jsModule.InvokeVoidAsync("startDrag", _svgRef, _dotnetRef, DragWriteIntervalMs);
+            _jsDragActive = true;
+        }
+        catch { _jsDragActive = false; }
+    }
+
+    /// <summary>Called from JS on each throttled pointer-move during drag.</summary>
+    [JSInvokable]
+    public async Task JsDragMove(double svgX, double svgY)
+    {
+        var pt = new SvgPoint(svgX, svgY);
+        if (_isDraggingSlider && _dragSliderSymbol != null)
+            await ApplySliderDragFromSvg(pt);
+        if (_isDraggingKnob && _dragKnobSymbol != null)
+            await ApplyKnobDragFromSvg(pt);
+    }
+
+    /// <summary>Called from JS on pointer-up (end of drag).</summary>
+    [JSInvokable]
+    public async Task JsDragEnd(double svgX, double svgY)
+    {
+        _jsDragActive = false;
+        // Apply final position
+        await JsDragMove(svgX, svgY);
+
+        if (_isDraggingSlider)
+        {
+            _isDraggingSlider = false;
+            _dragSliderSymbol = null;
+            _suppressNextClick = true;
+            await FlushPendingDragWrite();
+        }
+        if (_isDraggingKnob)
+        {
+            _isDraggingKnob = false;
+            _dragKnobSymbol = null;
+            _suppressNextClick = true;
+            await FlushPendingDragWrite();
+        }
+
         // Release WhilePressed if mouse leaves the symbol area
         if (_pressedSymbolId != null && Screen != null)
         {
@@ -672,6 +801,91 @@ else
                 }
             }
             _pressedSymbolId = null;
+        }
+    }
+
+    private async Task ApplySliderDragFromSvg(SvgPoint svgPt)
+    {
+        var sym = _dragSliderSymbol;
+        if (sym == null || string.IsNullOrEmpty(sym.VariablePath)) return;
+        try
+        {
+            var min = sym.MinValue ?? 0;
+            var max = sym.MaxValue ?? 100;
+            double frac;
+            if (sym.Type == "hslider")
+            {
+                var thumbR = Math.Min(sym.Height * 0.35, 14);
+                var pad = thumbR + 2;
+                var trackW = sym.Width - pad * 2;
+                var localX = svgPt.X - sym.X - pad;
+                frac = Math.Clamp(localX / trackW, 0, 1);
+            }
+            else
+            {
+                var thumbR = Math.Min(sym.Width * 0.35, 14);
+                var pad = thumbR + 2;
+                var trackH = sym.Height - pad * 2;
+                var localY = svgPt.Y - sym.Y - pad;
+                frac = Math.Clamp(1.0 - localY / trackH, 0, 1);
+            }
+            var newVal = Math.Clamp(min + frac * (max - min), min, max);
+            await ThrottledDragWrite(sym.VariablePath, newVal.ToString("F2", System.Globalization.CultureInfo.InvariantCulture));
+        }
+        catch { }
+    }
+
+    private async Task ApplyKnobDragFromSvg(SvgPoint svgPt)
+    {
+        var sym = _dragKnobSymbol;
+        if (sym == null || string.IsNullOrEmpty(sym.VariablePath)) return;
+        try
+        {
+            var cx = sym.X + sym.Width / 2.0;
+            var cy = sym.Y + sym.Height / 2.0;
+            var currentAngle = Math.Atan2(svgPt.X - cx, -(svgPt.Y - cy)) * 180.0 / Math.PI;
+            var delta = currentAngle - _knobDragStartAngle;
+            // Normalize delta to -180..180
+            if (delta > 180) delta -= 360;
+            if (delta < -180) delta += 360;
+            var min = sym.MinValue ?? 0;
+            var max = sym.MaxValue ?? 100;
+            // Map 300° rotation range to full value range
+            var valueDelta = delta / 300.0 * (max - min);
+            var newVal = Math.Clamp(_knobDragStartValue + valueDelta, min, max);
+            await ThrottledDragWrite(sym.VariablePath, newVal.ToString("F2", System.Globalization.CultureInfo.InvariantCulture));
+        }
+        catch { }
+    }
+
+    private record struct SvgPoint(double X, double Y);
+
+    /// <summary>
+    /// Throttled write for drag interactions. Writes at most once per DragWriteIntervalMs.
+    /// Stores pending value so the final write can be flushed on mouse-up.
+    /// </summary>
+    private async Task ThrottledDragWrite(string variablePath, string value)
+    {
+        _pendingDragPath = variablePath;
+        _pendingDragValue = value;
+        var now = DateTime.UtcNow;
+        if ((now - _lastDragWrite).TotalMilliseconds >= DragWriteIntervalMs)
+        {
+            _lastDragWrite = now;
+            await Opc.WriteValueAsync(variablePath, value);
+            _pendingDragPath = null;
+            _pendingDragValue = null;
+        }
+    }
+
+    /// <summary>Flush any pending throttled drag value (called on mouse-up).</summary>
+    private async Task FlushPendingDragWrite()
+    {
+        if (_pendingDragPath != null && _pendingDragValue != null)
+        {
+            await Opc.WriteValueAsync(_pendingDragPath, _pendingDragValue);
+            _pendingDragPath = null;
+            _pendingDragValue = null;
         }
     }
 
@@ -2641,11 +2855,32 @@ else
         builder.CloseElement(); // div container
     };
 
-    public void Dispose()
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                // Cache-bust to ensure new JS is loaded after deployment
+                var cacheBuster = DateTime.UtcNow.Ticks;
+                _jsModule = await JS.InvokeAsync<IJSObjectReference>(
+                    "import", $"./_content/RuntimeViewer.Shared/screenrenderer.js?v={cacheBuster}");
+            }
+            catch { /* JS module not available — slider drag disabled */ }
+        }
+    }
+
+    public async ValueTask DisposeAsync()
     {
         Opc.ValuesChanged -= OnValuesChanged;
         Localization.LanguageChanged -= OnLanguageChanged;
         _refreshTimer?.Dispose();
+        _dotnetRef?.Dispose();
+        if (_jsModule != null)
+        {
+            try { await _jsModule.InvokeVoidAsync("stopDrag"); } catch { }
+            await _jsModule.DisposeAsync();
+        }
     }
 }
 

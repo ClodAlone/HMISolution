@@ -16,6 +16,7 @@ namespace SharedModels
         public List<RecipeConfig> Recipes { get; set; } = new();
         public Folder Folder { get; set; } = new();
         public List<LocalizedStringEntry> Strings { get; set; } = new();
+        public List<ImageResource> Images { get; set; } = new();
         public List<CameraConfig> Cameras { get; set; } = new();
 
         [JsonPropertyName("Server")]
@@ -372,10 +373,10 @@ namespace SharedModels
         public string Background { get; set; } = "#ffffff";
 
         /// <summary>
-        /// Optional background raster image stored as a base64 data URI (e.g. "data:image/png;base64,...").
+        /// Optional ID referencing an ImageResource entry whose Data contains the base64 data URI.
         /// When set, the image is rendered behind all symbols, covering the entire screen canvas.
         /// </summary>
-        public string BackgroundImage { get; set; } = "";
+        public string BackgroundImageId { get; set; } = "";
 
         /// <summary>Layout mode: "svg" for fixed SVG canvas, "responsive" for responsive HTML grid.</summary>
         public string LayoutMode { get; set; } = "svg";
@@ -791,6 +792,16 @@ namespace SharedModels
     {
         public string Key { get; set; } = "";
         public Dictionary<string, string> Translations { get; set; } = new();
+    }
+
+    /// <summary>
+    /// A reusable image resource. The Id is used to reference the image from screens and widgets,
+    /// and Data stores the raster image as a base64 data URI (e.g. "data:image/png;base64,...").
+    /// </summary>
+    public class ImageResource
+    {
+        public string Id { get; set; } = "";
+        public string Data { get; set; } = "";
     }
 
     public class SymbolAnimation

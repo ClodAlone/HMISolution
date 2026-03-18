@@ -83,22 +83,32 @@ namespace SimpleOpcFileServer
             for (int i = 0; i < nodesToWrite.Count; i++)
             {
                 var wv = nodesToWrite[i];
-                errors[i] = ServiceResult.Good;
+
+                // Skip items already handled by another node manager.
+                if (wv.Processed)
+                {
+                    continue;
+                }
 
                 try
                 {
                     if (wv.AttributeId != Attributes.Value)
                     {
-                        errors[i] = StatusCodes.BadAttributeIdInvalid;
+                        // Not our concern — leave Processed=false so the
+                        // base node manager or others can handle it.
                         continue;
                     }
 
                     var variable = FindPredefinedNode(wv.NodeId, typeof(BaseDataVariableState)) as BaseDataVariableState;
                     if (variable == null)
                     {
-                        errors[i] = StatusCodes.BadNodeIdUnknown;
+                        // Node doesn't belong to this manager — leave
+                        // Processed=false so MasterNodeManager tries others.
                         continue;
                     }
+
+                    // Mark as processed so MasterNodeManager knows we handled it.
+                    wv.Processed = true;
 
                     if (variable is ServerVariableState serverVar)
                     {
@@ -114,6 +124,7 @@ namespace SimpleOpcFileServer
                 catch (Exception ex)
                 {
                     Utils.Trace(ex, "Write failed for " + wv.NodeId);
+                    wv.Processed = true;
                     errors[i] = StatusCodes.BadUnexpectedError;
                 }
             }
@@ -2087,16 +2098,16 @@ namespace SimpleOpcFileServer
                     if (incoming is string s)
                     {
                         if (DataType == DataTypeIds.Boolean && bool.TryParse(s, out var b)) incoming = b;
-                        else if (DataType == DataTypeIds.SByte && sbyte.TryParse(s, out var sb)) incoming = sb;
-                        else if (DataType == DataTypeIds.Byte && byte.TryParse(s, out var by)) incoming = by;
-                        else if (DataType == DataTypeIds.Int16 && short.TryParse(s, out var i16)) incoming = i16;
-                        else if (DataType == DataTypeIds.UInt16 && ushort.TryParse(s, out var u16)) incoming = u16;
-                        else if (DataType == DataTypeIds.Int32 && int.TryParse(s, out var i32)) incoming = i32;
-                        else if (DataType == DataTypeIds.UInt32 && uint.TryParse(s, out var u32)) incoming = u32;
-                        else if (DataType == DataTypeIds.Int64 && long.TryParse(s, out var i64)) incoming = i64;
-                        else if (DataType == DataTypeIds.UInt64 && ulong.TryParse(s, out var u64)) incoming = u64;
-                        else if (DataType == DataTypeIds.Float && float.TryParse(s, out var f)) incoming = f;
-                        else if (DataType == DataTypeIds.Double && double.TryParse(s, out var d)) incoming = d;
+                        else if (DataType == DataTypeIds.SByte && sbyte.TryParse(s, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var sb)) incoming = sb;
+                        else if (DataType == DataTypeIds.Byte && byte.TryParse(s, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var by)) incoming = by;
+                        else if (DataType == DataTypeIds.Int16 && short.TryParse(s, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var i16)) incoming = i16;
+                        else if (DataType == DataTypeIds.UInt16 && ushort.TryParse(s, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var u16)) incoming = u16;
+                        else if (DataType == DataTypeIds.Int32 && int.TryParse(s, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var i32)) incoming = i32;
+                        else if (DataType == DataTypeIds.UInt32 && uint.TryParse(s, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var u32)) incoming = u32;
+                        else if (DataType == DataTypeIds.Int64 && long.TryParse(s, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var i64)) incoming = i64;
+                        else if (DataType == DataTypeIds.UInt64 && ulong.TryParse(s, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var u64)) incoming = u64;
+                        else if (DataType == DataTypeIds.Float && float.TryParse(s, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var f)) incoming = f;
+                        else if (DataType == DataTypeIds.Double && double.TryParse(s, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var d)) incoming = d;
                         else if (DataType == DataTypeIds.DateTime && DateTime.TryParse(s, out var dt)) incoming = dt;
                     }
 
