@@ -11,9 +11,71 @@
             }
         </select>
     </div>
+
+    <div class="mb-2">
+        <label class="form-label d-flex align-items-center gap-1">
+            <span>Reference File</span>
+            <span class="text-muted" style="font-size: 10px;">(optional — import variables, screens, PLC programs)</span>
+        </label>
+        <div class="d-flex gap-1 align-items-start">
+            <div class="flex-grow-1">
+                <select class="form-select form-select-sm" @bind="_selectedSamplePath">
+                    <option value="">— None —</option>
+                    @foreach (var group in _sampleFiles.GroupBy(f => f.Group))
+                    {
+                        <optgroup label="@group.Key">
+                            @foreach (var (name, path, _) in group)
+                            {
+                                <option value="@path">@name</option>
+                            }
+                        </optgroup>
+                    }
+                    @if (!string.IsNullOrEmpty(_customFilePath))
+                    {
+                        <optgroup label="Custom File">
+                            <option value="@_customFilePath">@System.IO.Path.GetFileName(System.IO.Path.GetDirectoryName(_customFilePath))/@System.IO.Path.GetFileName(_customFilePath)</option>
+                        </optgroup>
+                    }
+                </select>
+            </div>
+            <button class="btn btn-sm btn-outline-secondary" title="Browse for a custom nodes.json file" @onclick="BrowseCustomFile">
+                📁
+            </button>
+        </div>
+        @if (!string.IsNullOrEmpty(_selectedSamplePath))
+        {
+            <div class="mt-1 d-flex align-items-center gap-1">
+                <span class="badge bg-success" style="font-size: 10px;">✓ Reference loaded</span>
+                <button class="btn btn-link btn-sm p-0" style="font-size: 10px;" @onclick="PreviewReference">Preview</button>
+                <button class="btn btn-link btn-sm p-0 text-danger" style="font-size: 10px;" @onclick="ClearReference">Clear</button>
+            </div>
+        }
+    </div>
+
+    @if (_showPreview && !string.IsNullOrEmpty(_referencePreview))
+    {
+        <div class="mb-2 p-2 border rounded" style="max-height: 200px; overflow-y: auto; font-size: 10px; font-family: monospace; background: #1e1e1e; color: #d4d4d4;">
+            <pre class="mb-0" style="white-space: pre-wrap; word-break: break-all;">@_referencePreview</pre>
+        </div>
+    }
+
+    @if (_showBrowse)
+    {
+        <div class="mb-2 p-2 border rounded bg-body-secondary">
+            <label class="form-label small">Custom file path</label>
+            <div class="d-flex gap-1">
+                <input type="text" class="form-control form-control-sm" @bind="_browseInput"
+                       placeholder="C:\path\to\nodes.json" />
+                <button class="btn btn-sm btn-primary" @onclick="ConfirmBrowse">OK</button>
+                <button class="btn btn-sm btn-outline-secondary" @onclick="CancelBrowse">✕</button>
+            </div>
+        </div>
+    }
+
     <div class="mb-2">
         <label class="form-label">Prompt</label>
-        <textarea class="form-control" rows="3" @bind="_prompt" placeholder="Describe the changes you want to make to the JSON..."></textarea>
+        <textarea class="form-control" rows="3" @bind="_prompt"
+                  placeholder="@(_selectedSamplePath != "" ? "e.g. Import all variables from the reference project..." : "Describe the changes you want to make to the JSON...")"></textarea>
     </div>
     <button class="btn btn-sm btn-primary" @onclick="Ask"
             disabled="@(_isProcessing || string.IsNullOrWhiteSpace(_prompt))">
@@ -48,6 +110,68 @@
     private string _error = "";
     private bool _isProcessing;
 
+    // Reference file state
+    private List<(string Name, string Path, string Group)> _sampleFiles = new();
+    private string _selectedSamplePath = "";
+    private string _customFilePath = "";
+    private string _referencePreview = "";
+    private bool _showPreview;
+    private bool _showBrowse;
+    private string _browseInput = "";
+
+    private static readonly string DefaultSamplesPath = Path.Combine("C:", "Work", "samples");
+
+    protected override void OnInitialized()
+    {
+        _sampleFiles = AiService.GetSampleFiles(DefaultSamplesPath);
+    }
+
+    private void PreviewReference()
+    {
+        if (string.IsNullOrEmpty(_selectedSamplePath)) return;
+        var content = AiService.ReadReferenceFile(_selectedSamplePath);
+        if (content != null)
+        {
+            // Show a summary: first 2000 chars
+            _referencePreview = content.Length > 2000
+                ? content[..2000] + "\n... (truncated)"
+                : content;
+            _showPreview = !_showPreview;
+        }
+    }
+
+    private void ClearReference()
+    {
+        _selectedSamplePath = "";
+        _referencePreview = "";
+        _showPreview = false;
+    }
+
+    private void BrowseCustomFile()
+    {
+        _showBrowse = !_showBrowse;
+        _browseInput = _customFilePath;
+    }
+
+    private void ConfirmBrowse()
+    {
+        if (!string.IsNullOrWhiteSpace(_browseInput) && File.Exists(_browseInput))
+        {
+            _customFilePath = _browseInput;
+            _selectedSamplePath = _browseInput;
+            _showBrowse = false;
+        }
+        else
+        {
+            _error = $"File not found: {_browseInput}";
+        }
+    }
+
+    private void CancelBrowse()
+    {
+        _showBrowse = false;
+    }
+
     private async Task Ask()
     {
         if (string.IsNullOrWhiteSpace(_prompt)) return;
@@ -58,7 +182,16 @@
 
         try
         {
-            var (newJson, comments) = await AiService.AskAsync(_selectedEngine, _prompt, CurrentJson);
+            string? referenceJson = null;
+            string? referenceFileName = null;
+
+            if (!string.IsNullOrEmpty(_selectedSamplePath))
+            {
+                referenceJson = AiService.ReadReferenceFile(_selectedSamplePath);
+                referenceFileName = Path.GetFileName(Path.GetDirectoryName(_selectedSamplePath));
+            }
+
+            var (newJson, comments) = await AiService.AskAsync(_selectedEngine, _prompt, CurrentJson, referenceJson, referenceFileName);
             if (!string.IsNullOrEmpty(newJson))
             {
                 _comments = comments;

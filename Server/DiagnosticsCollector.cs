@@ -79,10 +79,10 @@ namespace SimpleOpcFileServer
         /// <summary>
         /// Register a subsystem that doesn't cycle (e.g. a driver or logger that runs in the background).
         /// </summary>
-        public void Register(string category, string name, bool enabled = true)
+        public void Register(string category, string name, bool enabled = true, string status = "Running")
         {
             var key = $"{category}:{name}";
-            _metrics.GetOrAdd(key, _ => new SubsystemMetrics { Category = category, Name = name, Enabled = enabled, Status = "Running" });
+            _metrics.GetOrAdd(key, _ => new SubsystemMetrics { Category = category, Name = name, Enabled = enabled, Status = status });
         }
 
         /// <summary>

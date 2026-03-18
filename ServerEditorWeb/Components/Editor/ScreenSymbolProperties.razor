@@ -1,4 +1,4 @@
-@using ServerEditorWeb.Models
+﻿@using ServerEditorWeb.Models
 @using ServerEditorWeb.Services
 @using SharedModels
 @implements IDisposable
@@ -43,6 +43,13 @@
                 <option value="screenembed">Screen Embed</option>
                 <option value="imagemap">Image Map</option>
                 <option value="trend">Realtime Trend</option>
+                <option value="switch">Toggle Switch</option>
+                <option value="rotaryswitch">Rotary Switch</option>
+                <option value="knob">Knob</option>
+                <option value="hslider">Horizontal Slider</option>
+                <option value="vslider">Vertical Slider</option>
+                <option value="button">Command Button</option>
+                            <option value="animtext">Animated Text</option>
             </select>
         </div>
 
@@ -354,6 +361,12 @@
                 </div>
             </div>
             <div class="form-text" style="font-size: 9px;">Min/Max clamp the spin buttons. Leave empty for no limits.</div>
+
+            <div class="mb-2 form-check">
+                <input class="form-check-input" type="checkbox" @bind="_selectedSymbol.EditBoxShowStatistics" @bind:after="OnChanged" />
+                <label class="form-check-label small">Show Statistics (Min/Max/Avg)</label>
+                <div class="form-text" style="font-size: 9px;">Displays a statistics bar below the value. Requires Statistics enabled on the variable.</div>
+            </div>
         }
 
         @if (_selectedSymbol.Type is "ipcamera")
@@ -715,6 +728,309 @@
             </div>
         }
 
+        @if (_selectedSymbol.Type is "switch")
+        {
+            <hr class="my-2" />
+            <h6 class="mb-2 small" style="color: #34c759;">🔀 Toggle Switch Settings</h6>
+
+            <div class="mb-2">
+                <label class="form-label mb-0 small">Style</label>
+                <select class="form-select form-select-sm" style="font-size: 10px;"
+                        @bind="_selectedSymbol.SwitchStyle" @bind:after="OnChanged">
+                    <option value="apple">Apple (iOS pill)</option>
+                    <option value="flat">Flat (minimal)</option>
+                </select>
+            </div>
+
+            <div class="d-flex gap-1 mb-2">
+                <div>
+                    <label class="form-label mb-0 small">ON Color</label>
+                    <input type="color" class="form-control form-control-sm form-control-color" style="width: 35px; height: 24px;"
+                           @bind="_selectedSymbol.SwitchOnColor" @bind:after="OnChanged" />
+                </div>
+                <div>
+                    <label class="form-label mb-0 small">OFF Color</label>
+                    <input type="color" class="form-control form-control-sm form-control-color" style="width: 35px; height: 24px;"
+                           @bind="_selectedSymbol.SwitchOffColor" @bind:after="OnChanged" />
+                </div>
+            </div>
+            <div class="form-text" style="font-size: 9px;">Bind a boolean variable. The switch toggles on click when a ToggleVariable command is configured.</div>
+        }
+
+        @if (_selectedSymbol.Type is "rotaryswitch")
+        {
+            <hr class="my-2" />
+            <h6 class="mb-2 small" style="color: #f59e0b;">🎛️ Rotary Switch Settings</h6>
+
+            <div class="d-flex gap-1 mb-2">
+                <div>
+                    <label class="form-label mb-0 small">Positions</label>
+                    <input type="number" class="form-control form-control-sm" style="width: 55px; font-size: 10px;"
+                           min="2" max="12"
+                           @bind="_selectedSymbol.SwitchPositions" @bind:after="OnChanged" />
+                </div>
+            </div>
+
+            <div class="mb-2">
+                <label class="form-label mb-0 small">Position Labels</label>
+                <input type="text" class="form-control form-control-sm" style="font-size: 10px;"
+                       placeholder="Off,Low,Med,High"
+                       @bind="_selectedSymbol.SwitchPositionLabels" @bind:after="OnChanged" />
+                <div class="form-text" style="font-size: 9px;">Comma-separated. Fewer labels than positions → indices used.</div>
+            </div>
+
+            <div class="d-flex gap-1 mb-2">
+                <div>
+                    <label class="form-label mb-0 small">Knob</label>
+                    <input type="color" class="form-control form-control-sm form-control-color" style="width: 35px; height: 24px;"
+                           @bind="_selectedSymbol.SwitchKnobColor" @bind:after="OnChanged" />
+                </div>
+                <div>
+                    <label class="form-label mb-0 small">Dial</label>
+                    <input type="color" class="form-control form-control-sm form-control-color" style="width: 35px; height: 24px;"
+                           @bind="_selectedSymbol.SwitchDialColor" @bind:after="OnChanged" />
+                </div>
+            </div>
+            <div class="form-text" style="font-size: 9px;">Bind a numeric variable (0 to N−1). Use IncrementVariable command with wrapping, or WriteVariable per position.</div>
+        }
+
+
+        @if (_selectedSymbol.Type is "knob")
+        {
+            <hr class="my-2" />
+            <h6 class="mb-2 small" style="color: #ff6b35;">🎚️ Knob Settings</h6>
+
+            <div class="d-flex gap-1 mb-2">
+                <div>
+                    <label class="form-label mb-0 small">Min</label>
+                    <input type="number" class="form-control form-control-sm" style="width: 70px;"
+                           @bind="_selectedSymbol.MinValue" @bind:after="OnChanged" />
+                </div>
+                <div>
+                    <label class="form-label mb-0 small">Max</label>
+                    <input type="number" class="form-control form-control-sm" style="width: 70px;"
+                           @bind="_selectedSymbol.MaxValue" @bind:after="OnChanged" />
+                </div>
+            </div>
+
+            <div class="d-flex gap-1 mb-2">
+                <div>
+                    <label class="form-label mb-0 small">Knob</label>
+                    <input type="color" class="form-control form-control-sm form-control-color" style="width: 35px; height: 24px;"
+                           @bind="_selectedSymbol.KnobColor" @bind:after="OnChanged" />
+                </div>
+                <div>
+                    <label class="form-label mb-0 small">Pointer</label>
+                    <input type="color" class="form-control form-control-sm form-control-color" style="width: 35px; height: 24px;"
+                           @bind="_selectedSymbol.KnobPointerColor" @bind:after="OnChanged" />
+                </div>
+            </div>
+
+            <div class="d-flex gap-1 mb-2">
+                <div class="form-check form-check-inline small">
+                    <input class="form-check-input" type="checkbox" @bind="_selectedSymbol.KnobShowScale" @bind:after="OnChanged" />
+                    <label class="form-check-label">Scale</label>
+                </div>
+                <div class="form-check form-check-inline small">
+                    <input class="form-check-input" type="checkbox" @bind="_selectedSymbol.KnobShowValue" @bind:after="OnChanged" />
+                    <label class="form-check-label">Value</label>
+                </div>
+            </div>
+
+            <div class="mb-2">
+                <label class="form-label mb-0 small">Unit</label>
+                <input type="text" class="form-control form-control-sm" style="width: 80px;"
+                       @bind="_selectedSymbol.KnobUnit" @bind:after="OnChanged" placeholder="e.g. %" />
+            </div>
+
+            <div class="form-text" style="font-size: 9px;">Bind a numeric variable. Drag the knob to set the value interactively at runtime. Uses WriteVariable command.</div>
+        }
+
+        @if (_selectedSymbol.Type is "hslider" or "vslider")
+        {
+            <hr class="my-2" />
+            <h6 class="mb-2 small" style="color: #3b82f6;">@(_selectedSymbol.Type == "hslider" ? "↔️" : "↕️") Slider Settings</h6>
+
+            <div class="d-flex gap-1 mb-2">
+                <div>
+                    <label class="form-label mb-0 small">Min</label>
+                    <input type="number" class="form-control form-control-sm" style="width: 70px;"
+                           @bind="_selectedSymbol.MinValue" @bind:after="OnChanged" />
+                </div>
+                <div>
+                    <label class="form-label mb-0 small">Max</label>
+                    <input type="number" class="form-control form-control-sm" style="width: 70px;"
+                           @bind="_selectedSymbol.MaxValue" @bind:after="OnChanged" />
+                </div>
+            </div>
+
+            <div class="d-flex gap-1 mb-2">
+                <div>
+                    <label class="form-label mb-0 small">Track</label>
+                    <input type="color" class="form-control form-control-sm form-control-color" style="width: 35px; height: 24px;"
+                           @bind="_selectedSymbol.SliderTrackColor" @bind:after="OnChanged" />
+                </div>
+                <div>
+                    <label class="form-label mb-0 small">Fill</label>
+                    <input type="color" class="form-control form-control-sm form-control-color" style="width: 35px; height: 24px;"
+                           @bind="_selectedSymbol.SliderFillColor" @bind:after="OnChanged" />
+                </div>
+                <div>
+                    <label class="form-label mb-0 small">Thumb</label>
+                    <input type="color" class="form-control form-control-sm form-control-color" style="width: 35px; height: 24px;"
+                           @bind="_selectedSymbol.SliderThumbColor" @bind:after="OnChanged" />
+                </div>
+            </div>
+
+            <div class="d-flex gap-1 mb-2">
+                <div class="form-check form-check-inline small">
+                    <input class="form-check-input" type="checkbox" @bind="_selectedSymbol.SliderShowValue" @bind:after="OnChanged" />
+                    <label class="form-check-label">Value</label>
+                </div>
+                <div class="form-check form-check-inline small">
+                    <input class="form-check-input" type="checkbox" @bind="_selectedSymbol.SliderShowTicks" @bind:after="OnChanged" />
+                    <label class="form-check-label">Ticks</label>
+                </div>
+            </div>
+
+            <div class="form-text" style="font-size: 9px;">Bind a numeric variable. Drag the thumb to set the value interactively at runtime. Uses WriteVariable command.</div>
+        }
+
+        @if (_selectedSymbol.Type is "button")
+        {
+            <hr class="my-2" />
+            <h6 class="mb-2 small" style="color: #3b82f6;">🔲 Button Settings</h6>
+
+            <div class="mb-2">
+                <label class="form-label mb-0 small">Style</label>
+                <select class="form-select form-select-sm" style="font-size: 10px;"
+                        @bind="_selectedSymbol.ButtonStyle" @bind:after="OnChanged">
+                    <option value="raised">Raised (3D gradient)</option>
+                    <option value="flat">Flat (solid fill)</option>
+                    <option value="outline">Outline (border only)</option>
+                    <option value="pill">Pill (capsule)</option>
+                    <option value="glass">Glass (frosted)</option>
+                    <option value="danger">Danger (red)</option>
+                    <option value="success">Success (green)</option>
+                    <option value="warning">Warning (amber)</option>
+                    <option value="icon">Icon (compact)</option>
+                </select>
+            </div>
+
+            <div class="d-flex gap-1 mb-2">
+                <div>
+                    <label class="form-label mb-0 small">Color</label>
+                    <input type="color" class="form-control form-control-sm form-control-color" style="width: 35px; height: 24px;"
+                           @bind="_selectedSymbol.ButtonColor" @bind:after="OnChanged" />
+                </div>
+                <div>
+                    <label class="form-label mb-0 small">Text</label>
+                    <input type="color" class="form-control form-control-sm form-control-color" style="width: 35px; height: 24px;"
+                           @bind="_selectedSymbol.ButtonTextColor" @bind:after="OnChanged" />
+                </div>
+                <div>
+                    <label class="form-label mb-0 small">Radius</label>
+                    <input type="number" class="form-control form-control-sm" style="width: 55px; font-size: 10px;"
+                           min="0" max="999"
+                           @bind="_selectedSymbol.ButtonBorderRadius" @bind:after="OnChanged" />
+                </div>
+            </div>
+
+            <div class="d-flex gap-1 mb-2">
+                <div class="flex-grow-1">
+                    <label class="form-label mb-0 small">Icon</label>
+                    <input type="text" class="form-control form-control-sm" style="font-size: 10px;"
+                           placeholder="e.g. ▶, ⏹, ⚙️, 🔄"
+                           @bind="_selectedSymbol.ButtonIcon" @bind:after="OnChanged" />
+                </div>
+                <div>
+                    <label class="form-label mb-0 small">Position</label>
+                    <select class="form-select form-select-sm" style="font-size: 10px; width: 80px;"
+                            @bind="_selectedSymbol.ButtonIconPosition" @bind:after="OnChanged">
+                        <option value="left">Left</option>
+                        <option value="right">Right</option>
+                        <option value="top">Top</option>
+                        <option value="center">Center</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-text" style="font-size: 9px;">Add commands (Click, WhilePressed, etc.) to define button actions. Use Label for button text.</div>
+        }
+        @if (_selectedSymbol.Type is "animtext")
+        {
+            <hr class="my-2" />
+            <h6 class="mb-2 small" style="color: #f59e0b;">🎬 Animated Text Settings</h6>
+
+            <div class="mb-2">
+                <label class="form-label mb-0 small">Animation Mode</label>
+                <select class="form-select form-select-sm" style="font-size: 10px;"
+                        @bind="_selectedSymbol.AnimTextMode" @bind:after="OnChanged">
+                    <option value="scroll">Scroll (marquee)</option>
+                    <option value="flash">Flash (color alternation)</option>
+                    <option value="pulse">Pulse (opacity)</option>
+                    <option value="typewriter">Typewriter</option>
+                    <option value="fade">Fade (crossfade messages)</option>
+                </select>
+            </div>
+
+            <div class="d-flex gap-1 mb-2">
+                <div>
+                    <label class="form-label mb-0 small">Speed (sec)</label>
+                    <input type="number" class="form-control form-control-sm" style="width: 65px; font-size: 10px;"
+                           min="0.5" max="60" step="0.5"
+                           @bind="_selectedSymbol.AnimTextSpeed" @bind:after="OnChanged" />
+                </div>
+                <div>
+                    <label class="form-label mb-0 small">Radius</label>
+                    <input type="number" class="form-control form-control-sm" style="width: 55px; font-size: 10px;"
+                           min="0" max="50"
+                           @bind="_selectedSymbol.AnimTextBorderRadius" @bind:after="OnChanged" />
+                </div>
+                <div class="d-flex align-items-end">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="atBorder"
+                               @bind="_selectedSymbol.AnimTextShowBorder" @bind:after="OnChanged" />
+                        <label class="form-check-label small" for="atBorder">Border</label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="d-flex gap-1 mb-2">
+                <div>
+                    <label class="form-label mb-0 small">Text Color 1</label>
+                    <input type="color" class="form-control form-control-sm form-control-color" style="width: 35px; height: 24px;"
+                           @bind="_selectedSymbol.Fill" @bind:after="OnChanged" />
+                </div>
+                <div>
+                    <label class="form-label mb-0 small">Text Color 2</label>
+                    <input type="color" class="form-control form-control-sm form-control-color" style="width: 35px; height: 24px;"
+                           @bind="_selectedSymbol.AnimTextColor2" @bind:after="OnChanged" />
+                </div>
+                <div>
+                    <label class="form-label mb-0 small">BG 1</label>
+                    <input type="color" class="form-control form-control-sm form-control-color" style="width: 35px; height: 24px;"
+                           @bind="_selectedSymbol.AnimTextBackground" @bind:after="OnChanged" />
+                </div>
+                <div>
+                    <label class="form-label mb-0 small">BG 2</label>
+                    <input type="color" class="form-control form-control-sm form-control-color" style="width: 35px; height: 24px;"
+                           @bind="_selectedSymbol.AnimTextBackground2" @bind:after="OnChanged" />
+                </div>
+            </div>
+
+            <div class="mb-2">
+                <label class="form-label mb-0 small">Messages (one per line, use @@StringId for localization)</label>
+                <textarea class="form-control form-control-sm" rows="4"
+                          style="font-size: 10px; font-family: monospace;"
+                          @bind="_selectedSymbol.AnimTextMessages" @bind:after="OnChanged"></textarea>
+            </div>
+
+            <div class="form-text" style="font-size: 9px;">
+                If Messages is empty, the Label is used. Use @@StringId for localized strings.
+                Scroll cycles through messages as a marquee. Flash alternates colors. Fade crossfades between messages.
+            </div>
+        }
         @if (_selectedSymbol.Type is "eventlog")
         {
             <hr class="my-2" />

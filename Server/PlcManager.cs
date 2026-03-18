@@ -656,8 +656,7 @@ namespace SimpleOpcFileServer
                     values.Add(ParseExpression(tokens, ref pos));
                 }
                 Expect(tokens, ref pos, TokenType.Colon);
-                var body = ParseStatementList(tokens, ref pos,
-                    TokenType.EndCase, TokenType.Else, TokenType.Number, TokenType.Identifier);
+                var body = ParseCaseBranchBody(tokens, ref pos);
 
                 caseStmt.Branches.Add((values, body));
             }
@@ -682,6 +681,49 @@ namespace SimpleOpcFileServer
                 if (stmt != null) stmts.Add(stmt);
             }
             return stmts;
+        }
+
+        /// <summary>
+        /// Parses the body of a CASE branch, stopping when the next case label, ELSE, or END_CASE is found.
+        /// A case label is a Number or Identifier followed by ':' (but not ':=').
+        /// </summary>
+        private static List<StStatement> ParseCaseBranchBody(List<Token> tokens, ref int pos)
+        {
+            var stmts = new List<StStatement>();
+            while (Peek(tokens, pos).Type != TokenType.EndCase &&
+                   Peek(tokens, pos).Type != TokenType.Else &&
+                   Peek(tokens, pos).Type != TokenType.Eof)
+            {
+                if (IsCaseLabel(tokens, pos))
+                    break;
+
+                var stmt = ParseStatement(tokens, ref pos);
+                if (stmt != null) stmts.Add(stmt);
+            }
+            return stmts;
+        }
+
+        /// <summary>
+        /// Returns true when the token at <paramref name="pos"/> starts a new CASE label,
+        /// i.e. it is a Number/Identifier followed by ':' (not ':='), or by ',' or '..' (multi-value/range labels).
+        /// </summary>
+        private static bool IsCaseLabel(List<Token> tokens, int pos)
+        {
+            var cur = Peek(tokens, pos);
+            if (cur.Type != TokenType.Number && cur.Type != TokenType.Identifier)
+                return false;
+
+            var next = Peek(tokens, pos + 1);
+            // number/identifier directly followed by ':' is a case label
+            if (next.Type == TokenType.Colon)
+                return true;
+            // comma means multi-value label like "1, 2, 3:"
+            if (next.Type == TokenType.Comma)
+                return true;
+            // range like "1..5:"
+            if (next.Type == TokenType.DotDot)
+                return true;
+            return false;
         }
 
         // ─── Expression parsing (precedence climbing) ──────
@@ -1117,7 +1159,7 @@ namespace SimpleOpcFileServer
                 "ATAN2" => Math.Atan2(ToDouble(evaluated.ElementAtOrDefault(0)), ToDouble(evaluated.ElementAtOrDefault(1))),
                 "EXP" => Math.Exp(ToDouble(evaluated.FirstOrDefault())),
                 "LN" => Math.Log(ToDouble(evaluated.FirstOrDefault())),
-                "LOG" => Math.Log10(ToDouble(evaluated.FirstOrDefault())),
+                "LOG" => EvalLog(name, evaluated),
                 "POW" or "EXPT" => Math.Pow(ToDouble(evaluated.ElementAtOrDefault(0)), ToDouble(evaluated.ElementAtOrDefault(1))),
                 "MIN" => Math.Min(ToDouble(evaluated.ElementAtOrDefault(0)), ToDouble(evaluated.ElementAtOrDefault(1))),
                 "MAX" => Math.Max(ToDouble(evaluated.ElementAtOrDefault(0)), ToDouble(evaluated.ElementAtOrDefault(1))),
@@ -1132,8 +1174,35 @@ namespace SimpleOpcFileServer
                 "BOOL_TO_INT" or "BOOL_TO_REAL" => IsTrue(evaluated.FirstOrDefault()) ? 1.0 : 0.0,
                 "INT_TO_REAL" or "DINT_TO_REAL" => ToDouble(evaluated.FirstOrDefault()),
                 "REAL_TO_INT" or "REAL_TO_DINT" => (double)(long)ToDouble(evaluated.FirstOrDefault()),
+                "READ" or "READDOUBLE" => ToDouble(nodeManager.ReadVariable(evaluated.FirstOrDefault()?.ToString() ?? "")),
+                "READBOOL" => IsTrue(nodeManager.ReadVariable(evaluated.FirstOrDefault()?.ToString() ?? "")),
+                "READINT" => (double)(long)ToDouble(nodeManager.ReadVariable(evaluated.FirstOrDefault()?.ToString() ?? "")),
+                "WRITE" => EvalWrite(evaluated, nodeManager),
+                "RANDOM" => Random.Shared.NextDouble(),
                 _ => throw new InvalidOperationException($"Unknown function: {name}")
             };
+        }
+
+        private static object? EvalWrite(List<object?> evaluated, SimpleFileServerNodeManager nodeManager)
+        {
+            var path = evaluated.ElementAtOrDefault(0)?.ToString() ?? "";
+            var value = evaluated.ElementAtOrDefault(1);
+            nodeManager.WriteVariable(path, value ?? 0.0);
+            return null;
+        }
+
+        /// <summary>
+        /// Handles the LOG/Log ambiguity: case-sensitive 'Log' with a string arg is diagnostic logging;
+        /// otherwise it is the IEC 61131-3 LOG (base-10 logarithm).
+        /// </summary>
+        private static object? EvalLog(string originalName, List<object?> evaluated)
+        {
+            if (originalName == "Log" && evaluated.FirstOrDefault() is string msg)
+            {
+                Serilog.Log.Information("[PLC Script] {Message}", msg);
+                return null;
+            }
+            return Math.Log10(ToDouble(evaluated.FirstOrDefault()));
         }
 
         private static object? MuxSelect(List<object?> args)

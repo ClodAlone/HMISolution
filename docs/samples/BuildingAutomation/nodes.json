@@ -1,0 +1,249 @@
+{
+  "Server": {
+    "EndpointUrl": "opc.tcp://localhost:14840/BuildingAutomation",
+    "EnableAnonymous": false,
+    "EnableEditorLogin": true,
+    "EnableRuntimeLogin": true,
+    "RequireStrongPassword": true,
+    "StartupScreen": "FloorPlan",
+    "ShowNavigationBar": true,
+    "DiagnosticsPort": 14841,
+    "EventLog": {
+      "Enabled": true,
+      "DbPath": "events.db",
+      "MaxAgeDays": 365
+    }
+  },
+  "Database": {
+    "Provider": "TimescaleDb",
+    "ConnectionString": "Host=localhost;Port=5432;Database=building_hda;Username=postgres;Password=secret",
+    "TableName": "variable_data"
+  },
+  "Users": [
+    { "Username": "admin", "PasswordHash": "", "Group": "Administrators", "AutoLogOffSeconds": 0 },
+    { "Username": "facility_mgr", "PasswordHash": "", "Group": "FacilityManagers", "AutoLogOffSeconds": 1800 },
+    { "Username": "operator", "PasswordHash": "", "Group": "Operators", "AutoLogOffSeconds": 600 },
+    { "Username": "viewer", "PasswordHash": "", "Group": "Viewers", "AutoLogOffSeconds": 300 }
+  ],
+  "UserGroups": [
+    { "Name": "Administrators", "AccessLevel": "ReadWrite", "CanAccessEditor": true, "CanAccessRuntime": true },
+    { "Name": "FacilityManagers", "AccessLevel": "ReadWrite", "CanAccessEditor": false, "CanAccessRuntime": true },
+    { "Name": "Operators", "AccessLevel": "ReadWrite", "CanAccessEditor": false, "CanAccessRuntime": true },
+    { "Name": "Viewers", "AccessLevel": "Read", "CanAccessEditor": false, "CanAccessRuntime": true }
+  ],
+  "Folder": {
+    "Name": "Building",
+    "Folders": [
+      {
+        "Name": "HVAC",
+        "Folders": [
+          {
+            "Name": "AHU1",
+            "Variables": [
+              {
+                "Name": "SupplyAirTemp",
+                "Type": "Double",
+                "Access": "Read",
+                "Value": 22.5, "Statistics": { "Enabled": true },
+                "Alarm": {
+                  "TriggerType": "Limit",
+                  "HighHighLimit": 35.0,
+                  "HighLimit": 30.0,
+                  "LowLimit": 16.0,
+                  "LowLowLimit": 10.0,
+                  "Message": "AHU1 Supply Air Temperature out of range",
+                  "Hysteresis": 0.5
+                },
+                "DataLogging": { "Enabled": true, "Hysteresis": 0.2, "MaxAge": "00:01:00" },
+                "Modbus": { "IpAddress": "192.168.1.10", "Port": 502, "UnitId": 1, "Register": 100, "RegisterType": "InputRegister", "PollTime": 2000 }
+              },
+              {
+                "Name": "ReturnAirTemp",
+                "Type": "Double",
+                "Access": "Read",
+                "Value": 24.0, "Statistics": { "Enabled": true },
+                "DataLogging": { "Enabled": true, "Hysteresis": 0.2, "MaxAge": "00:01:00" },
+                "Modbus": { "IpAddress": "192.168.1.10", "Port": 502, "UnitId": 1, "Register": 102, "RegisterType": "InputRegister", "PollTime": 2000 }
+              },
+              {
+                "Name": "SupplyFanSpeed",
+                "Type": "Double",
+                "Access": "ReadWrite",
+                "Value": 75.0, "InitialValue": "75", "Retentive": true,
+                "DataLogging": { "Enabled": true, "Hysteresis": 1.0 },
+                "Modbus": { "IpAddress": "192.168.1.10", "Port": 502, "UnitId": 1, "Register": 200, "RegisterType": "HoldingRegister", "PollTime": 2000 }
+              },
+              {
+                "Name": "DamperPosition",
+                "Type": "Double",
+                "Access": "ReadWrite",
+                "Value": 50.0, "InitialValue": "50", "Retentive": true,
+                "Modbus": { "IpAddress": "192.168.1.10", "Port": 502, "UnitId": 1, "Register": 202, "RegisterType": "HoldingRegister", "PollTime": 2000 }
+              },
+              {
+                "Name": "FilterDiffPressure",
+                "Type": "Double",
+                "Access": "Read",
+                "Value": 120.0,
+                "Alarm": {
+                  "TriggerType": "Limit",
+                  "HighLimit": 250.0,
+                  "LowLimit": 0.0,
+                  "Message": "AHU1 Filter differential pressure high - replace filter",
+                  "Hysteresis": 10.0
+                },
+                "Modbus": { "IpAddress": "192.168.1.10", "Port": 502, "UnitId": 1, "Register": 104, "RegisterType": "InputRegister", "PollTime": 5000 }
+              },
+              {
+                "Name": "Running",
+                "Type": "Boolean",
+                "Access": "ReadWrite",
+                "Value": true,
+                "Modbus": { "IpAddress": "192.168.1.10", "Port": 502, "UnitId": 1, "Register": 0, "RegisterType": "Coil", "PollTime": 1000 }
+              }
+            ]
+          },
+          {
+            "Name": "AHU2",
+            "Variables": [
+              { "Name": "SupplyAirTemp", "Type": "Double", "Access": "Read", "Value": 21.8, "DataLogging": { "Enabled": true, "Hysteresis": 0.2 }, "Modbus": { "IpAddress": "192.168.1.11", "Port": 502, "UnitId": 1, "Register": 100, "RegisterType": "InputRegister", "PollTime": 2000 } },
+              { "Name": "ReturnAirTemp", "Type": "Double", "Access": "Read", "Value": 23.5, "DataLogging": { "Enabled": true, "Hysteresis": 0.2 }, "Modbus": { "IpAddress": "192.168.1.11", "Port": 502, "UnitId": 1, "Register": 102, "RegisterType": "InputRegister", "PollTime": 2000 } },
+              { "Name": "SupplyFanSpeed", "Type": "Double", "Access": "ReadWrite", "Value": 60.0, "Modbus": { "IpAddress": "192.168.1.11", "Port": 502, "UnitId": 1, "Register": 200, "RegisterType": "HoldingRegister", "PollTime": 2000 } },
+              { "Name": "Running", "Type": "Boolean", "Access": "ReadWrite", "Value": true, "Modbus": { "IpAddress": "192.168.1.11", "Port": 502, "UnitId": 1, "Register": 0, "RegisterType": "Coil", "PollTime": 1000 } }
+            ]
+          },
+          {
+            "Name": "Chiller",
+            "Variables": [
+              { "Name": "ChilledWaterSupplyTemp", "Type": "Double", "Access": "Read", "Value": 7.2, "Alarm": { "TriggerType": "Limit", "HighLimit": 12.0, "LowLimit": 4.0, "Message": "Chiller supply temperature out of range", "Hysteresis": 0.5 }, "DataLogging": { "Enabled": true, "Hysteresis": 0.1 }, "Modbus": { "IpAddress": "192.168.1.20", "Port": 502, "UnitId": 1, "Register": 100, "RegisterType": "InputRegister", "PollTime": 2000 } },
+              { "Name": "ChilledWaterReturnTemp", "Type": "Double", "Access": "Read", "Value": 12.5, "DataLogging": { "Enabled": true, "Hysteresis": 0.1 }, "Modbus": { "IpAddress": "192.168.1.20", "Port": 502, "UnitId": 1, "Register": 102, "RegisterType": "InputRegister", "PollTime": 2000 } },
+              { "Name": "CompressorStatus", "Type": "Boolean", "Access": "Read", "Value": true, "Modbus": { "IpAddress": "192.168.1.20", "Port": 502, "UnitId": 1, "Register": 0, "RegisterType": "DiscreteInput", "PollTime": 1000 } },
+              { "Name": "SetpointTemp", "Type": "Double", "Access": "ReadWrite", "Value": 7.0, "InitialValue": "7.0", "Retentive": true, "Statistics": { "Enabled": true }, "Modbus": { "IpAddress": "192.168.1.20", "Port": 502, "UnitId": 1, "Register": 200, "RegisterType": "HoldingRegister", "PollTime": 5000 } },
+              { "Name": "PowerConsumption", "Type": "Double", "Access": "Read", "Value": 85.6, "Statistics": { "Enabled": true }, "DataLogging": { "Enabled": true, "Hysteresis": 0.5 }, "Modbus": { "IpAddress": "192.168.1.20", "Port": 502, "UnitId": 1, "Register": 110, "RegisterType": "InputRegister", "PollTime": 5000 } }
+            ]
+          }
+        ]
+      },
+      {
+        "Name": "Lighting",
+        "Folders": [
+          {
+            "Name": "Floor1",
+            "Variables": [
+              { "Name": "Zone1_Level", "Type": "Double", "Access": "ReadWrite", "Value": 80.0, "Knx": { "IpAddress": "192.168.1.50", "Port": 3671, "GroupAddress": "1/1/1", "DptType": "5.001" } },
+              { "Name": "Zone2_Level", "Type": "Double", "Access": "ReadWrite", "Value": 60.0, "Knx": { "IpAddress": "192.168.1.50", "Port": 3671, "GroupAddress": "1/1/2", "DptType": "5.001" } },
+              { "Name": "Zone3_Level", "Type": "Double", "Access": "ReadWrite", "Value": 100.0, "Knx": { "IpAddress": "192.168.1.50", "Port": 3671, "GroupAddress": "1/1/3", "DptType": "5.001" } },
+              { "Name": "CorridorMotion", "Type": "Boolean", "Access": "Read", "Value": false, "Knx": { "IpAddress": "192.168.1.50", "Port": 3671, "GroupAddress": "1/2/1", "DptType": "1.001" } },
+              { "Name": "LuxSensor", "Type": "Double", "Access": "Read", "Value": 450.0, "DataLogging": { "Enabled": true, "Hysteresis": 10.0 }, "Knx": { "IpAddress": "192.168.1.50", "Port": 3671, "GroupAddress": "1/3/1", "DptType": "9.004" } }
+            ]
+          },
+          {
+            "Name": "Floor2",
+            "Variables": [
+              { "Name": "Zone1_Level", "Type": "Double", "Access": "ReadWrite", "Value": 75.0, "Knx": { "IpAddress": "192.168.1.50", "Port": 3671, "GroupAddress": "2/1/1", "DptType": "5.001" } },
+              { "Name": "Zone2_Level", "Type": "Double", "Access": "ReadWrite", "Value": 50.0, "Knx": { "IpAddress": "192.168.1.50", "Port": 3671, "GroupAddress": "2/1/2", "DptType": "5.001" } },
+              { "Name": "Occupancy", "Type": "Boolean", "Access": "Read", "Value": true, "Knx": { "IpAddress": "192.168.1.50", "Port": 3671, "GroupAddress": "2/2/1", "DptType": "1.001" } }
+            ]
+          }
+        ]
+      },
+      {
+        "Name": "Energy",
+        "Variables": [
+          { "Name": "TotalPower_kW", "Type": "Double", "Access": "Read", "Value": 245.8, "DataLogging": { "Enabled": true, "Hysteresis": 1.0, "MaxAge": "00:05:00" }, "Modbus": { "IpAddress": "192.168.1.30", "Port": 502, "UnitId": 1, "Register": 0, "RegisterType": "InputRegister", "PollTime": 5000 } },
+          { "Name": "TotalEnergy_kWh", "Type": "Double", "Access": "Read", "Value": 156432.0, "DataLogging": { "Enabled": true, "Hysteresis": 10.0 }, "Modbus": { "IpAddress": "192.168.1.30", "Port": 502, "UnitId": 1, "Register": 2, "RegisterType": "InputRegister", "PollTime": 10000 } },
+          { "Name": "PowerFactor", "Type": "Double", "Access": "Read", "Value": 0.95, "DataLogging": { "Enabled": true, "Hysteresis": 0.01 }, "Modbus": { "IpAddress": "192.168.1.30", "Port": 502, "UnitId": 1, "Register": 4, "RegisterType": "InputRegister", "PollTime": 5000 } },
+          { "Name": "Voltage_L1", "Type": "Double", "Access": "Read", "Value": 230.5, "Modbus": { "IpAddress": "192.168.1.30", "Port": 502, "UnitId": 1, "Register": 10, "RegisterType": "InputRegister", "PollTime": 2000 } },
+          { "Name": "Voltage_L2", "Type": "Double", "Access": "Read", "Value": 231.2, "Modbus": { "IpAddress": "192.168.1.30", "Port": 502, "UnitId": 1, "Register": 12, "RegisterType": "InputRegister", "PollTime": 2000 } },
+          { "Name": "Voltage_L3", "Type": "Double", "Access": "Read", "Value": 229.8, "Modbus": { "IpAddress": "192.168.1.30", "Port": 502, "UnitId": 1, "Register": 14, "RegisterType": "InputRegister", "PollTime": 2000 } }
+        ]
+      },
+      {
+        "Name": "Security",
+        "Variables": [
+          { "Name": "MainEntrance_Locked", "Type": "Boolean", "Access": "ReadWrite", "Value": true },
+          { "Name": "FireAlarm_Active", "Type": "Boolean", "Access": "Read", "Value": false, "Alarm": { "TriggerType": "Condition", "Operator": "True", "ConditionSeverity": 1000, "Message": "FIRE ALARM ACTIVE - Evacuate immediately" } },
+          { "Name": "IntrusionAlarm", "Type": "Boolean", "Access": "Read", "Value": false, "Alarm": { "TriggerType": "Condition", "Operator": "True", "ConditionSeverity": 800, "Message": "Intrusion detected" } }
+        ]
+      }
+    ]
+  },
+  "Scripts": [
+    {
+      "Name": "EnergyReport",
+      "Enabled": true,
+      "IntervalMs": 60000,
+      "Language": "CSharp",
+      "Group": "Reports",
+      "Code": "// Calculate and log hourly energy cost\nvar power = ReadDouble(\"Building.Energy.TotalPower_kW\");\nvar cost = power * 0.12; // EUR/kWh\nLog($\"Current power: {power:F1} kW, estimated cost: {cost:F2} EUR/h\");"
+    },
+    {
+      "Name": "NightModeScheduler",
+      "Enabled": true,
+      "IntervalMs": 60000,
+      "Language": "CSharp",
+      "Group": "Scheduling",
+      "Code": "// Reduce lighting and HVAC after hours\nvar hour = DateTime.Now.Hour;\nif (hour >= 22 || hour < 6) {\n    Write(\"Building.Lighting.Floor1.Zone1_Level\", 10.0);\n    Write(\"Building.Lighting.Floor1.Zone2_Level\", 10.0);\n    Write(\"Building.HVAC.AHU1.SupplyFanSpeed\", 30.0);\n}"
+    }
+  ],
+  "Screens": [
+    {
+      "Name": "FloorPlan",
+      "Width": 1920,
+      "Height": 1080,
+      "Background": "#1a1a2e",
+      "Group": "",
+      "Symbols": [
+        { "Id": "title", "Type": "text", "X": 20, "Y": 20, "Width": 400, "Height": 40, "Label": "Building Automation - Floor Plan", "Fill": "#ffffff", "Stroke": "none", "StrokeWidth": 0 },
+        { "Id": "ahu1_temp_gauge", "Type": "gauge", "X": 100, "Y": 100, "Width": 200, "Height": 200, "VariablePath": "Building.HVAC.AHU1.SupplyAirTemp", "MinValue": 0, "MaxValue": 40, "GaugeStyle": "semicircle", "GaugeUnit": "°C", "GaugeTicks": 8, "GaugeTrackColor": "#2a2a4a", "Fill": "#4a90d9", "Label": "AHU1 Supply Air" },
+        { "Id": "ahu1_fan_gauge", "Type": "gauge", "X": 350, "Y": 100, "Width": 200, "Height": 200, "VariablePath": "Building.HVAC.AHU1.SupplyFanSpeed", "MinValue": 0, "MaxValue": 100, "GaugeStyle": "arc", "GaugeUnit": "%", "Fill": "#27ae60", "Label": "AHU1 Fan Speed" },
+        { "Id": "chiller_temp", "Type": "gauge", "X": 600, "Y": 100, "Width": 200, "Height": 200, "VariablePath": "Building.HVAC.Chiller.ChilledWaterSupplyTemp", "MinValue": 0, "MaxValue": 20, "GaugeStyle": "thermometer", "GaugeUnit": "°C", "Fill": "#3498db", "Label": "Chiller Supply" },
+        { "Id": "power_gauge", "Type": "gauge", "X": 850, "Y": 100, "Width": 200, "Height": 200, "VariablePath": "Building.Energy.TotalPower_kW", "MinValue": 0, "MaxValue": 500, "GaugeStyle": "needle", "GaugeUnit": "kW", "Fill": "#e74c3c", "Label": "Total Power" },
+        { "Id": "temp_trend", "Type": "trend", "X": 100, "Y": 350, "Width": 800, "Height": 300, "TrendTimeWindowSeconds": 3600, "TrendShowGrid": true, "TrendShowLegend": true, "TrendBackground": "#1a1a2e", "TrendPens": [ { "VariablePath": "Building.HVAC.AHU1.SupplyAirTemp", "Label": "AHU1 Supply", "Color": "#3498db", "LineWidth": 2 }, { "VariablePath": "Building.HVAC.AHU2.SupplyAirTemp", "Label": "AHU2 Supply", "Color": "#e74c3c", "LineWidth": 2 }, { "VariablePath": "Building.HVAC.Chiller.ChilledWaterSupplyTemp", "Label": "Chiller", "Color": "#27ae60", "LineWidth": 2 } ] },
+        { "Id": "alarm_list", "Type": "alarmlist", "X": 100, "Y": 700, "Width": 800, "Height": 250 },
+        { "Id": "event_log", "Type": "eventlog", "X": 950, "Y": 350, "Width": 900, "Height": 600, "EventLogMaxRows": 100, "EventLogTimeRangeMinutes": 1440 },
+        { "Id": "nav_hvac", "Type": "rect", "X": 1600, "Y": 100, "Width": 250, "Height": 50, "Fill": "#2980b9", "Label": "HVAC Details", "Commands": [ { "Id": "nav1", "Action": "NavigateScreen", "Trigger": "Click", "TargetScreen": "HVACDetail" } ] },
+        { "Id": "nav_lighting", "Type": "rect", "X": 1600, "Y": 170, "Width": 250, "Height": 50, "Fill": "#f39c12", "Label": "Lighting Control", "Commands": [ { "Id": "nav2", "Action": "NavigateScreen", "Trigger": "Click", "TargetScreen": "Lighting" } ] }
+      ]
+    },
+    {
+      "Name": "HVACDetail",
+      "Width": 1920,
+      "Height": 1080,
+      "Background": "#1a1a2e",
+      "Group": "HVAC",
+      "Symbols": [
+        { "Id": "title", "Type": "text", "X": 20, "Y": 20, "Width": 400, "Height": 40, "Label": "HVAC System Detail", "Fill": "#ffffff", "Stroke": "none" },
+        { "Id": "ahu1_supply_sp", "Type": "editbox", "X": 100, "Y": 100, "Width": 200, "Height": 60, "VariablePath": "Building.HVAC.AHU1.SupplyFanSpeed", "Label": "AHU1 Fan Speed %", "EditBoxStep": 5, "EditBoxFormat": "F0", "RequiredAccess": "Write" },
+        { "Id": "ahu1_damper_sp", "Type": "editbox", "X": 350, "Y": 100, "Width": 200, "Height": 60, "VariablePath": "Building.HVAC.AHU1.DamperPosition", "Label": "AHU1 Damper %", "EditBoxStep": 5, "EditBoxFormat": "F0", "RequiredAccess": "Write" },
+        { "Id": "chiller_sp", "Type": "editbox", "X": 600, "Y": 100, "Width": 200, "Height": 60, "VariablePath": "Building.HVAC.Chiller.SetpointTemp", "Label": "Chiller Setpoint °C", "EditBoxStep": 0.5, "EditBoxFormat": "F1", "RequiredAccess": "Write" , "EditBoxShowStatistics": true},
+        { "Id": "ahu1_start", "Type": "rect", "X": 100, "Y": 200, "Width": 150, "Height": 50, "Fill": "#27ae60", "Label": "Start AHU1", "Commands": [ { "Id": "c1", "Action": "SetVariable", "Trigger": "Click", "VariablePath": "Building.HVAC.AHU1.Running", "Value": "true" } ], "RequiredAccess": "Write" },
+        { "Id": "ahu1_stop", "Type": "rect", "X": 270, "Y": 200, "Width": 150, "Height": 50, "Fill": "#e74c3c", "Label": "Stop AHU1", "Commands": [ { "Id": "c2", "Action": "SetVariable", "Trigger": "Click", "VariablePath": "Building.HVAC.AHU1.Running", "Value": "false" } ], "RequiredAccess": "Write" },
+        { "Id": "hda_chart", "Type": "hdachart", "X": 100, "Y": 300, "Width": 1200, "Height": 400, "HdaVariablePaths": [ "Building.HVAC.AHU1.SupplyAirTemp", "Building.HVAC.AHU1.ReturnAirTemp", "Building.HVAC.Chiller.ChilledWaterSupplyTemp", "Building.HVAC.Chiller.PowerConsumption" ], "HdaTimeRangeMinutes": 1440, "HdaMaxPoints": 1000 },
+        { "Id": "nav_back", "Type": "rect", "X": 1650, "Y": 20, "Width": 200, "Height": 40, "Fill": "#7f8c8d", "Label": "← Back", "Commands": [ { "Id": "nav_b", "Action": "NavigateScreen", "Trigger": "Click", "TargetScreen": "FloorPlan" } ] }
+      ]
+    },
+    {
+      "Name": "Lighting",
+      "Width": 1920,
+      "Height": 1080,
+      "Background": "#0d1117",
+      "Group": "Lighting",
+      "Symbols": [
+        { "Id": "title", "Type": "text", "X": 20, "Y": 20, "Width": 400, "Height": 40, "Label": "Lighting Control", "Fill": "#ffffff", "Stroke": "none" },
+        { "Id": "f1z1", "Type": "gauge", "X": 100, "Y": 100, "Width": 180, "Height": 180, "VariablePath": "Building.Lighting.Floor1.Zone1_Level", "GaugeStyle": "vbar", "MinValue": 0, "MaxValue": 100, "GaugeUnit": "%", "Fill": "#f1c40f", "Label": "F1 Zone 1" },
+        { "Id": "f1z2", "Type": "gauge", "X": 320, "Y": 100, "Width": 180, "Height": 180, "VariablePath": "Building.Lighting.Floor1.Zone2_Level", "GaugeStyle": "vbar", "MinValue": 0, "MaxValue": 100, "GaugeUnit": "%", "Fill": "#f1c40f", "Label": "F1 Zone 2" },
+        { "Id": "f1z3", "Type": "gauge", "X": 540, "Y": 100, "Width": 180, "Height": 180, "VariablePath": "Building.Lighting.Floor1.Zone3_Level", "GaugeStyle": "vbar", "MinValue": 0, "MaxValue": 100, "GaugeUnit": "%", "Fill": "#f1c40f", "Label": "F1 Zone 3" },
+        { "Id": "lux", "Type": "gauge", "X": 800, "Y": 100, "Width": 200, "Height": 200, "VariablePath": "Building.Lighting.Floor1.LuxSensor", "GaugeStyle": "needle", "MinValue": 0, "MaxValue": 1000, "GaugeUnit": "lux", "Fill": "#e67e22", "Label": "Ambient Light" },
+        { "Id": "nav_back", "Type": "rect", "X": 1650, "Y": 20, "Width": 200, "Height": 40, "Fill": "#7f8c8d", "Label": "← Back", "Commands": [ { "Id": "nav_b", "Action": "NavigateScreen", "Trigger": "Click", "TargetScreen": "FloorPlan" } ] }
+      ]
+    }
+  ],
+  "Strings": [
+    { "Key": "app_title", "Translations": { "en": "Building Automation System", "de": "Gebäudeautomation", "it": "Automazione degli Edifici", "fr": "Automatisation du Bâtiment" } },
+    { "Key": "alarm_fire", "Translations": { "en": "Fire alarm active!", "de": "Feueralarm aktiv!", "it": "Allarme incendio attivo!", "fr": "Alarme incendie active!" } }
+  ],
+  "PlcPrograms": [],
+  "Recipes": [],
+  "Cameras": []
+}

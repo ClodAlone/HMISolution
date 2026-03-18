@@ -1,0 +1,166 @@
+{
+  "Server": {
+    "EndpointUrl": "opc.tcp://localhost:14840/WaterTreatment",
+    "EnableAnonymous": false,
+    "EnableEditorLogin": true,
+    "EnableRuntimeLogin": true,
+    "RequireStrongPassword": true,
+    "StartupScreen": "PlantOverview",
+    "ShowNavigationBar": true,
+    "DiagnosticsPort": 14844,
+    "EventLog": { "Enabled": true, "DbPath": "events.db", "MaxAgeDays": 365 }
+  },
+  "Database": {
+    "Provider": "TimescaleDb",
+    "ConnectionString": "Host=localhost;Port=5432;Database=water_hda;Username=postgres;Password=secret",
+    "TableName": "variable_data"
+  },
+  "Users": [
+    { "Username": "admin", "PasswordHash": "", "Group": "Admins" },
+    { "Username": "plant_mgr", "PasswordHash": "", "Group": "PlantManagers", "AutoLogOffSeconds": 1800 },
+    { "Username": "operator", "PasswordHash": "", "Group": "Operators", "AutoLogOffSeconds": 600 }
+  ],
+  "UserGroups": [
+    { "Name": "Admins", "AccessLevel": "ReadWrite", "CanAccessEditor": true, "CanAccessRuntime": true },
+    { "Name": "PlantManagers", "AccessLevel": "ReadWrite", "CanAccessEditor": false, "CanAccessRuntime": true },
+    { "Name": "Operators", "AccessLevel": "ReadWrite", "CanAccessEditor": false, "CanAccessRuntime": true }
+  ],
+  "Folder": {
+    "Name": "WaterPlant",
+    "Folders": [
+      {
+        "Name": "Intake",
+        "Variables": [
+          { "Name": "RawWaterFlow_m3h", "Type": "Double", "Access": "Read", "Value": 450.0, "Statistics": { "Enabled": true }, "Alarm": { "TriggerType": "Limit", "HighLimit": 600.0, "LowLimit": 100.0, "Message": "Raw water intake flow abnormal", "Hysteresis": 10.0 }, "DataLogging": { "Enabled": true, "Hysteresis": 1.0, "MaxAge": "00:01:00" }, "Modbus": { "IpAddress": "192.168.2.10", "Port": 502, "UnitId": 1, "Register": 0, "RegisterType": "InputRegister", "PollTime": 2000 } },
+          { "Name": "RawWaterLevel_m", "Type": "Double", "Access": "Read", "Value": 3.2, "Alarm": { "TriggerType": "Limit", "HighHighLimit": 4.5, "HighLimit": 4.0, "LowLimit": 1.0, "LowLowLimit": 0.5, "Message": "Intake reservoir level critical", "Hysteresis": 0.1 }, "DataLogging": { "Enabled": true, "Hysteresis": 0.05 }, "Modbus": { "IpAddress": "192.168.2.10", "Port": 502, "UnitId": 1, "Register": 2, "RegisterType": "InputRegister", "PollTime": 2000 } },
+          { "Name": "Turbidity_NTU", "Type": "Double", "Access": "Read", "Value": 12.5, "Statistics": { "Enabled": true }, "Alarm": { "TriggerType": "Limit", "HighLimit": 50.0, "LowLimit": 0.0, "Message": "High turbidity in raw water", "Hysteresis": 2.0 }, "DataLogging": { "Enabled": true, "Hysteresis": 0.5 }, "Modbus": { "IpAddress": "192.168.2.10", "Port": 502, "UnitId": 1, "Register": 4, "RegisterType": "InputRegister", "PollTime": 5000 } },
+          { "Name": "pH", "Type": "Double", "Access": "Read", "Value": 7.2, "Statistics": { "Enabled": true }, "Alarm": { "TriggerType": "Limit", "HighLimit": 9.0, "LowLimit": 5.5, "Message": "Raw water pH out of range", "Hysteresis": 0.1 }, "DataLogging": { "Enabled": true, "Hysteresis": 0.05 }, "Modbus": { "IpAddress": "192.168.2.10", "Port": 502, "UnitId": 1, "Register": 6, "RegisterType": "InputRegister", "PollTime": 5000 } },
+          { "Name": "IntakePump1_Running", "Type": "Boolean", "Access": "ReadWrite", "Value": true, "Modbus": { "IpAddress": "192.168.2.10", "Port": 502, "UnitId": 1, "Register": 0, "RegisterType": "Coil", "PollTime": 1000 } },
+          { "Name": "IntakePump2_Running", "Type": "Boolean", "Access": "ReadWrite", "Value": false, "Modbus": { "IpAddress": "192.168.2.10", "Port": 502, "UnitId": 1, "Register": 1, "RegisterType": "Coil", "PollTime": 1000 } }
+        ]
+      },
+      {
+        "Name": "Coagulation",
+        "Variables": [
+          { "Name": "CoagulantDose_mgl", "Type": "Double", "Access": "ReadWrite", "Value": 25.0, "InitialValue": "25.0", "Retentive": true, "Statistics": { "Enabled": true }, "DataLogging": { "Enabled": true, "Hysteresis": 0.5 }, "Modbus": { "IpAddress": "192.168.2.20", "Port": 502, "UnitId": 1, "Register": 0, "RegisterType": "HoldingRegister", "PollTime": 2000 } },
+          { "Name": "CoagulantFlow_lh", "Type": "Double", "Access": "Read", "Value": 11.2, "DataLogging": { "Enabled": true, "Hysteresis": 0.1 }, "Modbus": { "IpAddress": "192.168.2.20", "Port": 502, "UnitId": 1, "Register": 2, "RegisterType": "InputRegister", "PollTime": 2000 } },
+          { "Name": "FlocculantDose_mgl", "Type": "Double", "Access": "ReadWrite", "Value": 0.5, "Modbus": { "IpAddress": "192.168.2.20", "Port": 502, "UnitId": 1, "Register": 4, "RegisterType": "HoldingRegister", "PollTime": 2000 } },
+          { "Name": "MixerSpeed_rpm", "Type": "Double", "Access": "ReadWrite", "Value": 120.0, "InitialValue": "120.0", "Retentive": true, "Modbus": { "IpAddress": "192.168.2.20", "Port": 502, "UnitId": 1, "Register": 6, "RegisterType": "HoldingRegister", "PollTime": 2000 } },
+          { "Name": "ChemicalTankLevel_Pct", "Type": "Double", "Access": "Read", "Value": 68.0, "Alarm": { "TriggerType": "Limit", "HighLimit": 95.0, "LowLimit": 15.0, "LowLowLimit": 5.0, "Message": "Coagulant tank level critical", "Hysteresis": 2.0 }, "Modbus": { "IpAddress": "192.168.2.20", "Port": 502, "UnitId": 1, "Register": 8, "RegisterType": "InputRegister", "PollTime": 10000 } }
+        ]
+      },
+      {
+        "Name": "Filtration",
+        "Folders": [
+          {
+            "Name": "Filter1",
+            "Variables": [
+              { "Name": "FlowRate_m3h", "Type": "Double", "Access": "Read", "Value": 120.0, "DataLogging": { "Enabled": true, "Hysteresis": 1.0 }, "Modbus": { "IpAddress": "192.168.2.30", "Port": 502, "UnitId": 1, "Register": 0, "RegisterType": "InputRegister", "PollTime": 2000 } },
+              { "Name": "DiffPressure_kPa", "Type": "Double", "Access": "Read", "Value": 15.0, "Alarm": { "TriggerType": "Limit", "HighLimit": 40.0, "LowLimit": 0.0, "Message": "Filter1 differential pressure high - backwash needed", "Hysteresis": 2.0 }, "DataLogging": { "Enabled": true, "Hysteresis": 0.5 }, "Modbus": { "IpAddress": "192.168.2.30", "Port": 502, "UnitId": 1, "Register": 2, "RegisterType": "InputRegister", "PollTime": 2000 } },
+              { "Name": "Backwashing", "Type": "Boolean", "Access": "Read", "Value": false, "Modbus": { "IpAddress": "192.168.2.30", "Port": 502, "UnitId": 1, "Register": 0, "RegisterType": "DiscreteInput", "PollTime": 1000 } },
+              { "Name": "RunHours", "Type": "Double", "Access": "Read", "Value": 342.5 }
+            ]
+          },
+          {
+            "Name": "Filter2",
+            "Variables": [
+              { "Name": "FlowRate_m3h", "Type": "Double", "Access": "Read", "Value": 115.0, "DataLogging": { "Enabled": true, "Hysteresis": 1.0 }, "Modbus": { "IpAddress": "192.168.2.31", "Port": 502, "UnitId": 1, "Register": 0, "RegisterType": "InputRegister", "PollTime": 2000 } },
+              { "Name": "DiffPressure_kPa", "Type": "Double", "Access": "Read", "Value": 22.0, "Alarm": { "TriggerType": "Limit", "HighLimit": 40.0, "LowLimit": 0.0, "Message": "Filter2 differential pressure high", "Hysteresis": 2.0 }, "DataLogging": { "Enabled": true, "Hysteresis": 0.5 }, "Modbus": { "IpAddress": "192.168.2.31", "Port": 502, "UnitId": 1, "Register": 2, "RegisterType": "InputRegister", "PollTime": 2000 } },
+              { "Name": "Backwashing", "Type": "Boolean", "Access": "Read", "Value": false }
+            ]
+          }
+        ]
+      },
+      {
+        "Name": "Disinfection",
+        "Variables": [
+          { "Name": "ChlorineResidual_mgl", "Type": "Double", "Access": "Read", "Value": 0.8, "Statistics": { "Enabled": true }, "Alarm": { "TriggerType": "Limit", "HighHighLimit": 2.0, "HighLimit": 1.5, "LowLimit": 0.3, "LowLowLimit": 0.1, "Message": "Chlorine residual out of specification", "Hysteresis": 0.05 }, "DataLogging": { "Enabled": true, "Hysteresis": 0.02, "MaxAge": "00:01:00" }, "Modbus": { "IpAddress": "192.168.2.40", "Port": 502, "UnitId": 1, "Register": 0, "RegisterType": "InputRegister", "PollTime": 5000 } },
+          { "Name": "ChlorineDose_mgl", "Type": "Double", "Access": "ReadWrite", "Value": 1.2, "InitialValue": "1.2", "Retentive": true, "DataLogging": { "Enabled": true, "Hysteresis": 0.05 }, "Modbus": { "IpAddress": "192.168.2.40", "Port": 502, "UnitId": 1, "Register": 2, "RegisterType": "HoldingRegister", "PollTime": 2000 } },
+          { "Name": "UVIntensity_mWcm2", "Type": "Double", "Access": "Read", "Value": 40.0, "Alarm": { "TriggerType": "Limit", "HighLimit": 100.0, "LowLimit": 20.0, "Message": "UV lamp intensity low - replace lamp", "Hysteresis": 2.0 }, "DataLogging": { "Enabled": true, "Hysteresis": 1.0 }, "Modbus": { "IpAddress": "192.168.2.40", "Port": 502, "UnitId": 1, "Register": 4, "RegisterType": "InputRegister", "PollTime": 5000 } },
+          { "Name": "UVLamp_Running", "Type": "Boolean", "Access": "ReadWrite", "Value": true, "Alarm": { "TriggerType": "Condition", "Operator": "False", "ConditionSeverity": 700, "Message": "UV disinfection lamp OFF" } },
+          { "Name": "ContactTime_min", "Type": "Double", "Access": "Read", "Value": 30.0, "DataLogging": { "Enabled": true, "Hysteresis": 1.0 } }
+        ]
+      },
+      {
+        "Name": "Distribution",
+        "Variables": [
+          { "Name": "ClearWellLevel_m", "Type": "Double", "Access": "Read", "Value": 4.5, "Alarm": { "TriggerType": "Limit", "HighLimit": 5.5, "LowLimit": 1.5, "LowLowLimit": 0.8, "Message": "Clear well level critical", "Hysteresis": 0.1 }, "DataLogging": { "Enabled": true, "Hysteresis": 0.05 }, "Modbus": { "IpAddress": "192.168.2.50", "Port": 502, "UnitId": 1, "Register": 0, "RegisterType": "InputRegister", "PollTime": 2000 } },
+          { "Name": "DistributionPressure_bar", "Type": "Double", "Access": "Read", "Value": 3.8, "Alarm": { "TriggerType": "Limit", "HighLimit": 6.0, "LowLimit": 2.0, "Message": "Distribution pressure abnormal", "Hysteresis": 0.2 }, "DataLogging": { "Enabled": true, "Hysteresis": 0.05 }, "Modbus": { "IpAddress": "192.168.2.50", "Port": 502, "UnitId": 1, "Register": 2, "RegisterType": "InputRegister", "PollTime": 2000 } },
+          { "Name": "DistPump1_Running", "Type": "Boolean", "Access": "ReadWrite", "Value": true, "Modbus": { "IpAddress": "192.168.2.50", "Port": 502, "UnitId": 1, "Register": 0, "RegisterType": "Coil", "PollTime": 1000 } },
+          { "Name": "DistPump2_Running", "Type": "Boolean", "Access": "ReadWrite", "Value": true, "Modbus": { "IpAddress": "192.168.2.50", "Port": 502, "UnitId": 1, "Register": 1, "RegisterType": "Coil", "PollTime": 1000 } },
+          { "Name": "DistPump3_Running", "Type": "Boolean", "Access": "ReadWrite", "Value": false, "Modbus": { "IpAddress": "192.168.2.50", "Port": 502, "UnitId": 1, "Register": 2, "RegisterType": "Coil", "PollTime": 1000 } },
+          { "Name": "TreatedWaterFlow_m3h", "Type": "Double", "Access": "Read", "Value": 420.0, "Statistics": { "Enabled": true }, "DataLogging": { "Enabled": true, "Hysteresis": 1.0, "MaxAge": "00:01:00" }, "Modbus": { "IpAddress": "192.168.2.50", "Port": 502, "UnitId": 1, "Register": 4, "RegisterType": "InputRegister", "PollTime": 2000 } }
+        ]
+      },
+      {
+        "Name": "Quality",
+        "Variables": [
+          { "Name": "TreatedPH", "Type": "Double", "Access": "Read", "Value": 7.4, "Statistics": { "Enabled": true }, "Alarm": { "TriggerType": "Limit", "HighLimit": 8.5, "LowLimit": 6.5, "Message": "Treated water pH out of range", "Hysteresis": 0.1 }, "DataLogging": { "Enabled": true, "Hysteresis": 0.02 }, "Modbus": { "IpAddress": "192.168.2.60", "Port": 502, "UnitId": 1, "Register": 0, "RegisterType": "InputRegister", "PollTime": 10000 } },
+          { "Name": "TreatedTurbidity_NTU", "Type": "Double", "Access": "Read", "Value": 0.3, "Statistics": { "Enabled": true }, "Alarm": { "TriggerType": "Limit", "HighLimit": 1.0, "LowLimit": 0.0, "Message": "Treated water turbidity exceeds limit", "Hysteresis": 0.05 }, "DataLogging": { "Enabled": true, "Hysteresis": 0.02 }, "Modbus": { "IpAddress": "192.168.2.60", "Port": 502, "UnitId": 1, "Register": 2, "RegisterType": "InputRegister", "PollTime": 10000 } },
+          { "Name": "Conductivity_uScm", "Type": "Double", "Access": "Read", "Value": 350.0, "DataLogging": { "Enabled": true, "Hysteresis": 5.0 }, "Modbus": { "IpAddress": "192.168.2.60", "Port": 502, "UnitId": 1, "Register": 4, "RegisterType": "InputRegister", "PollTime": 10000 } },
+          { "Name": "TotalDailyProduction_m3", "Type": "Double", "Access": "Read", "Value": 8540.0, "DataLogging": { "Enabled": true, "Hysteresis": 10.0 } }
+        ]
+      }
+    ]
+  },
+  "Scripts": [
+    {
+      "Name": "ChlorineDoseControl",
+      "Enabled": true,
+      "IntervalMs": 10000,
+      "Language": "CSharp",
+      "Group": "Control",
+      "Code": "// Automatic chlorine dosing PID-like control\nvar residual = ReadDouble(\"WaterPlant.Disinfection.ChlorineResidual_mgl\");\nvar setpoint = 0.8;\nvar error = setpoint - residual;\nvar currentDose = ReadDouble(\"WaterPlant.Disinfection.ChlorineDose_mgl\");\nvar newDose = currentDose + error * 0.1;\nnewDose = Math.Max(0.5, Math.Min(2.0, newDose));\nWrite(\"WaterPlant.Disinfection.ChlorineDose_mgl\", Math.Round(newDose, 2));"
+    }
+  ],
+  "PlcPrograms": [
+    {
+      "Name": "PumpStandby",
+      "Enabled": true,
+      "IntervalMs": 5000,
+      "Language": "ST",
+      "Group": "Pumps",
+      "Code": "(* Auto-start standby pump when level drops *)\nVAR\n    level : REAL;\nEND_VAR\n\nlevel := Read('WaterPlant.Distribution.ClearWellLevel_m');\nIF level < 2.0 THEN\n    Write('WaterPlant.Distribution.DistPump3_Running', TRUE);\nELSIF level > 4.0 THEN\n    Write('WaterPlant.Distribution.DistPump3_Running', FALSE);\nEND_IF;"
+    }
+  ],
+  "Screens": [
+    {
+      "Name": "PlantOverview",
+      "Width": 1920,
+      "Height": 1080,
+      "Background": "#0a1628",
+      "Symbols": [
+        { "Id": "title", "Type": "text", "X": 20, "Y": 15, "Width": 500, "Height": 40, "Label": "Water Treatment Plant", "Fill": "#ffffff", "Stroke": "none" },
+        { "Id": "intake_flow", "Type": "gauge", "X": 50, "Y": 80, "Width": 200, "Height": 200, "VariablePath": "WaterPlant.Intake.RawWaterFlow_m3h", "MinValue": 0, "MaxValue": 700, "GaugeStyle": "arc", "GaugeUnit": "m³/h", "Fill": "#3498db", "Label": "Intake Flow" },
+        { "Id": "intake_level", "Type": "gauge", "X": 280, "Y": 80, "Width": 200, "Height": 200, "VariablePath": "WaterPlant.Intake.RawWaterLevel_m", "MinValue": 0, "MaxValue": 5, "GaugeStyle": "vbar", "GaugeUnit": "m", "Fill": "#2980b9", "Label": "Reservoir Level" },
+        { "Id": "turbidity_raw", "Type": "gauge", "X": 510, "Y": 80, "Width": 200, "Height": 200, "VariablePath": "WaterPlant.Intake.Turbidity_NTU", "MinValue": 0, "MaxValue": 100, "GaugeStyle": "needle", "GaugeUnit": "NTU", "Fill": "#e67e22", "Label": "Raw Turbidity" },
+        { "Id": "chlorine_gauge", "Type": "gauge", "X": 740, "Y": 80, "Width": 200, "Height": 200, "VariablePath": "WaterPlant.Disinfection.ChlorineResidual_mgl", "MinValue": 0, "MaxValue": 2.5, "GaugeStyle": "semicircle", "GaugeUnit": "mg/L", "GaugeValueFormat": "F2", "Fill": "#27ae60", "Label": "Chlorine Residual" },
+        { "Id": "dist_pressure", "Type": "gauge", "X": 970, "Y": 80, "Width": 200, "Height": 200, "VariablePath": "WaterPlant.Distribution.DistributionPressure_bar", "MinValue": 0, "MaxValue": 8, "GaugeStyle": "needle", "GaugeUnit": "bar", "Fill": "#9b59b6", "Label": "Distribution Pressure" },
+        { "Id": "ph_gauge", "Type": "gauge", "X": 1200, "Y": 80, "Width": 200, "Height": 200, "VariablePath": "WaterPlant.Quality.TreatedPH", "MinValue": 0, "MaxValue": 14, "GaugeStyle": "hbar", "GaugeUnit": "", "Fill": "#1abc9c", "Label": "Treated pH" },
+        { "Id": "water_trend", "Type": "trend", "X": 50, "Y": 320, "Width": 900, "Height": 300, "TrendTimeWindowSeconds": 3600, "TrendShowGrid": true, "TrendBackground": "#0a1628", "TrendPens": [ { "VariablePath": "WaterPlant.Intake.RawWaterFlow_m3h", "Label": "Intake Flow", "Color": "#3498db", "LineWidth": 2 }, { "VariablePath": "WaterPlant.Distribution.TreatedWaterFlow_m3h", "Label": "Output Flow", "Color": "#27ae60", "LineWidth": 2 }, { "VariablePath": "WaterPlant.Disinfection.ChlorineResidual_mgl", "Label": "Cl₂ Residual (×100)", "Color": "#f1c40f", "LineWidth": 2 } ] },
+        { "Id": "pump_p1", "Type": "rect", "X": 1000, "Y": 330, "Width": 120, "Height": 50, "VariablePath": "WaterPlant.Distribution.DistPump1_Running", "Label": "Pump 1", "FillBinding": "value == true ? '#27ae60' : '#e74c3c'" },
+        { "Id": "pump_p2", "Type": "rect", "X": 1140, "Y": 330, "Width": 120, "Height": 50, "VariablePath": "WaterPlant.Distribution.DistPump2_Running", "Label": "Pump 2", "FillBinding": "value == true ? '#27ae60' : '#e74c3c'" },
+        { "Id": "pump_p3", "Type": "rect", "X": 1280, "Y": 330, "Width": 120, "Height": 50, "VariablePath": "WaterPlant.Distribution.DistPump3_Running", "Label": "Pump 3 (Standby)", "FillBinding": "value == true ? '#f39c12' : '#95a5a6'" },
+        { "Id": "alarm_list", "Type": "alarmlist", "X": 50, "Y": 660, "Width": 1350, "Height": 350 },
+        { "Id": "event_log", "Type": "eventlog", "X": 1420, "Y": 80, "Width": 460, "Height": 930, "EventLogMaxRows": 200, "EventLogCategories": "Alarm,System" }
+      ]
+    }
+  ],
+  "Recipes": [
+    {
+      "Name": "WaterTreatmentParams",
+      "Enabled": true,
+      "DbPath": "recipes/treatment.db",
+      "Variables": [
+        { "Index": 1, "VariablePath": "WaterPlant.Coagulation.CoagulantDose_mgl", "DisplayName": "Coagulant Dose (mg/L)" },
+        { "Index": 2, "VariablePath": "WaterPlant.Coagulation.FlocculantDose_mgl", "DisplayName": "Flocculant Dose (mg/L)" },
+        { "Index": 3, "VariablePath": "WaterPlant.Coagulation.MixerSpeed_rpm", "DisplayName": "Mixer Speed (rpm)" },
+        { "Index": 4, "VariablePath": "WaterPlant.Disinfection.ChlorineDose_mgl", "DisplayName": "Chlorine Dose (mg/L)" }
+      ]
+    }
+  ],
+  "Strings": [
+    { "Key": "app_title", "Translations": { "en": "Water Treatment Plant", "de": "Wasseraufbereitungsanlage", "it": "Impianto di Trattamento Acque", "fr": "Station de Traitement des Eaux" } }
+  ],
+  "Cameras": []
+}

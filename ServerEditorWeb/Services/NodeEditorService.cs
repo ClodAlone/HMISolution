@@ -66,13 +66,35 @@ public class NodeEditorService
     public NodeEditorService()
     {
         LoadSettings();
-        if (RecentFiles.Count > 0)
+
+        // Restore all previously open projects
+        if (_pendingOpenPaths.Count > 0)
+        {
+            foreach (var path in _pendingOpenPaths)
+            {
+                if (File.Exists(path))
+                    OpenProject(path);
+            }
+            // Restore active project
+            if (!string.IsNullOrEmpty(_pendingActivePath))
+            {
+                var active = _openProjects.FirstOrDefault(p =>
+                    string.Equals(p.FilePath, _pendingActivePath, StringComparison.OrdinalIgnoreCase));
+                if (active != null)
+                    SetActiveProject(active);
+            }
+        }
+        else if (RecentFiles.Count > 0)
         {
             var first = RecentFiles[0];
             if (File.Exists(first))
                 OpenProject(first);
         }
     }
+
+    // Populated by LoadSettings(), consumed by the constructor
+    private List<string> _pendingOpenPaths = new();
+    private string? _pendingActivePath;
 
     public void NewFile()
     {
@@ -269,6 +291,7 @@ public class NodeEditorService
             SelectedItem = null;
             SelectedItems.Clear();
         }
+        SaveSettings();
         NotifyStateChanged();
     }
 
@@ -1407,8 +1430,11 @@ public class NodeEditorService
                         if (File.Exists(file) && !RecentFiles.Contains(file))
                             RecentFiles.Add(file);
                     }
-
-
+                }
+                if (settings?.OpenProjectPaths != null)
+                {
+                    _pendingOpenPaths = settings.OpenProjectPaths;
+                    _pendingActivePath = settings.ActiveProjectPath;
                 }
             }
         }
@@ -1422,7 +1448,12 @@ public class NodeEditorService
         {
             var dir = Path.GetDirectoryName(settingsPath);
             if (dir != null && !Directory.Exists(dir)) Directory.CreateDirectory(dir);
-            var settings = new EditorSettings { RecentFiles = new List<string>(RecentFiles) };
+            var settings = new EditorSettings
+            {
+                RecentFiles = new List<string>(RecentFiles),
+                OpenProjectPaths = _openProjects.Where(p => !string.IsNullOrEmpty(p.FilePath)).Select(p => p.FilePath).ToList(),
+                ActiveProjectPath = ActiveProject?.FilePath
+            };
             File.WriteAllText(settingsPath, JsonSerializer.Serialize(settings));
         }
         catch { }
@@ -1431,5 +1462,7 @@ public class NodeEditorService
     private class EditorSettings
     {
         public List<string> RecentFiles { get; set; } = new();
+        public List<string> OpenProjectPaths { get; set; } = new();
+        public string? ActiveProjectPath { get; set; }
     }
 }

@@ -1,4 +1,4 @@
-using Opc.Ua;
+﻿using Opc.Ua;
 using Opc.Ua.Server;
 using Serilog;
 using SharedModels;
@@ -43,6 +43,14 @@ namespace SimpleOpcFileServer
         // Event journal
         private EventLogger? _eventLogger;
 
+        // Retentive variable storage
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> _retentiveValues = new();
+        private string? _retentivePath;
+        private System.Threading.Timer? _retentiveSaveTimer;
+
+        // Variable statistics tracking
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<string, VariableStatisticsTracker> _statsTrackers = new();
+
         // Diagnostics OPC UA node
         private BaseDataVariableState<string>? _diagVariable;
         private System.Threading.Timer? _diagTimer;
@@ -61,6 +69,7 @@ namespace SimpleOpcFileServer
 
             InitializeDrivers();
             SetupWatcher();
+            LoadRetentiveValues();
         }
 
         public override void Write(
@@ -117,7 +126,7 @@ namespace SimpleOpcFileServer
             foreach (var d in loaded)
             {
                 _eventLogger?.LogDriver("Info", d.Key, $"Driver '{d.Key}' loaded");
-                DiagnosticsCollector.Instance.Register("Driver", d.Key);
+                DiagnosticsCollector.Instance.Register("Driver", d.Key, status: "Idle");
 
                 // Subscribe to driver error events
                 var driverKey = d.Key;
@@ -303,6 +312,7 @@ namespace SimpleOpcFileServer
             _users.Clear();
             _userGroups.Clear();
             _alarmConditions.Clear();
+            _statsTrackers.Clear();
 
             // Cleanup drivers
             foreach (var d in _drivers) d.Dispose();
@@ -801,6 +811,16 @@ namespace SimpleOpcFileServer
             variableState.BrowseName = new QualifiedName(variable.Name, _namespaceIndex);
             variableState.DisplayName = new LocalizedText(variable.Name);
             variableState.Value = ConvertValue(variable.Value, variable.Type); // Convert JsonElement
+            // Apply initial value or retentive value
+            if (variable.Retentive && _retentiveValues.TryGetValue(currentPath, out var retVal))
+            {
+                variableState.Value = ConvertValue(retVal, variable.Type);
+            }
+            else if (!string.IsNullOrEmpty(variable.InitialValue))
+            {
+                variableState.Value = ConvertValue(variable.InitialValue, variable.Type);
+            }
+
             variableState.DataType = GetDataTypeId(variable.Type);
             variableState.ValueRank = ValueRanks.Scalar;
             variableState.Timestamp = DateTime.UtcNow;
@@ -876,6 +896,120 @@ namespace SimpleOpcFileServer
             if (variable.Alarm != null)
             {
                 CreateAlarmCondition(variableState, variable.Alarm, currentPath, parent);
+            }
+
+            // Create statistics sub-variables if Statistics.Enabled
+            if (variable.Statistics?.Enabled == true)
+            {
+                var statsFolder = new FolderState(variableState);
+                statsFolder.NodeId = new NodeId(currentPath + ".Statistics", _namespaceIndex);
+                statsFolder.BrowseName = new QualifiedName("Statistics", _namespaceIndex);
+                statsFolder.DisplayName = new LocalizedText("Statistics");
+                statsFolder.ReferenceTypeId = ReferenceTypeIds.HasComponent;
+
+                var statsMin = new BaseDataVariableState<double>(statsFolder);
+                statsMin.NodeId = new NodeId(currentPath + ".Statistics.Min", _namespaceIndex);
+                statsMin.BrowseName = new QualifiedName("Min", _namespaceIndex);
+                statsMin.DisplayName = new LocalizedText("Min");
+                statsMin.DataType = DataTypeIds.Double;
+                statsMin.ValueRank = ValueRanks.Scalar;
+                statsMin.Value = 0.0;
+                statsMin.AccessLevel = AccessLevels.CurrentRead;
+                statsMin.UserAccessLevel = AccessLevels.CurrentRead;
+
+                var statsMax = new BaseDataVariableState<double>(statsFolder);
+                statsMax.NodeId = new NodeId(currentPath + ".Statistics.Max", _namespaceIndex);
+                statsMax.BrowseName = new QualifiedName("Max", _namespaceIndex);
+                statsMax.DisplayName = new LocalizedText("Max");
+                statsMax.DataType = DataTypeIds.Double;
+                statsMax.ValueRank = ValueRanks.Scalar;
+                statsMax.Value = 0.0;
+                statsMax.AccessLevel = AccessLevels.CurrentRead;
+                statsMax.UserAccessLevel = AccessLevels.CurrentRead;
+
+                var statsAvg = new BaseDataVariableState<double>(statsFolder);
+                statsAvg.NodeId = new NodeId(currentPath + ".Statistics.Average", _namespaceIndex);
+                statsAvg.BrowseName = new QualifiedName("Average", _namespaceIndex);
+                statsAvg.DisplayName = new LocalizedText("Average");
+                statsAvg.DataType = DataTypeIds.Double;
+                statsAvg.ValueRank = ValueRanks.Scalar;
+                statsAvg.Value = 0.0;
+                statsAvg.AccessLevel = AccessLevels.CurrentRead;
+                statsAvg.UserAccessLevel = AccessLevels.CurrentRead;
+
+                var statsCount = new BaseDataVariableState<long>(statsFolder);
+                statsCount.NodeId = new NodeId(currentPath + ".Statistics.Count", _namespaceIndex);
+                statsCount.BrowseName = new QualifiedName("Count", _namespaceIndex);
+                statsCount.DisplayName = new LocalizedText("Count");
+                statsCount.DataType = DataTypeIds.Int64;
+                statsCount.ValueRank = ValueRanks.Scalar;
+                statsCount.Value = 0L;
+                statsCount.AccessLevel = AccessLevels.CurrentRead;
+                statsCount.UserAccessLevel = AccessLevels.CurrentRead;
+
+                var statsReset = new ServerVariableState(statsFolder, null, null, this);
+                statsReset.NodeId = new NodeId(currentPath + ".Statistics.Reset", _namespaceIndex);
+                statsReset.BrowseName = new QualifiedName("Reset", _namespaceIndex);
+                statsReset.DisplayName = new LocalizedText("Reset");
+                statsReset.DataType = DataTypeIds.Boolean;
+                statsReset.ValueRank = ValueRanks.Scalar;
+                statsReset.Value = false;
+                statsReset.AccessLevel = AccessLevels.CurrentReadOrWrite;
+                statsReset.UserAccessLevel = AccessLevels.CurrentReadOrWrite;
+
+                statsFolder.AddChild(statsMin);
+                statsFolder.AddChild(statsMax);
+                statsFolder.AddChild(statsAvg);
+                statsFolder.AddChild(statsCount);
+                statsFolder.AddChild(statsReset);
+                variableState.AddChild(statsFolder);
+
+                AddPredefinedNode(SystemContext, statsFolder);
+                AddPredefinedNode(SystemContext, statsMin);
+                AddPredefinedNode(SystemContext, statsMax);
+                AddPredefinedNode(SystemContext, statsAvg);
+                AddPredefinedNode(SystemContext, statsCount);
+                AddPredefinedNode(SystemContext, statsReset);
+
+                var tracker = new VariableStatisticsTracker(statsMin, statsMax, statsAvg, statsCount, statsReset, SystemContext);
+                _statsTrackers[currentPath] = tracker;
+
+                // Feed initial value to statistics
+                if (variableState.Value != null && double.TryParse(
+                    Convert.ToString(variableState.Value, System.Globalization.CultureInfo.InvariantCulture),
+                    System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var initVal))
+                {
+                    tracker.Record(initVal);
+                }
+
+                // Track value changes for statistics
+                var statsVarPath = currentPath;
+                variableState.OnStateChanged += (ctx, state, masks) =>
+                {
+                    if ((masks & NodeStateChangeMasks.Value) != 0 && _statsTrackers.TryGetValue(statsVarPath, out var t))
+                    {
+                        if (state is BaseDataVariableState vs && vs.Value != null &&
+                            double.TryParse(Convert.ToString(vs.Value, System.Globalization.CultureInfo.InvariantCulture),
+                                System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var dv))
+                        {
+                            t.Record(dv);
+                        }
+                    }
+                };
+            }
+
+            // Track retentive variable value changes
+            if (variable.Retentive)
+            {
+                var retPath = currentPath;
+                variableState.OnStateChanged += (ctx, state, masks) =>
+                {
+                    if ((masks & NodeStateChangeMasks.Value) != 0 && state is BaseDataVariableState vs)
+                    {
+                        _retentiveValues[retPath] = Convert.ToString(vs.Value, System.Globalization.CultureInfo.InvariantCulture) ?? "";
+                        ScheduleRetentiveSave();
+                    }
+                };
             }
         }
 
@@ -1011,6 +1145,27 @@ namespace SimpleOpcFileServer
                     return null;
                 }
             }
+            // Handle plain string values (e.g. from InitialValue or retentive store)
+            if (value is string str && !string.IsNullOrEmpty(type) && type != "String")
+            {
+                try
+                {
+                    return type switch
+                    {
+                        "Double" when double.TryParse(str, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var d) => d,
+                        "Float" when float.TryParse(str, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var f) => f,
+                        "Int32" when int.TryParse(str, out var i32) => i32,
+                        "Int16" when short.TryParse(str, out var i16) => i16,
+                        "UInt16" when ushort.TryParse(str, out var u16) => u16,
+                        "UInt32" when uint.TryParse(str, out var u32) => u32,
+                        "Boolean" when bool.TryParse(str, out var b) => b,
+                        "DateTime" when DateTime.TryParse(str, out var dt) => dt,
+                        _ => value
+                    };
+                }
+                catch { return value; }
+            }
+
             return value;
         }
 
@@ -1959,5 +2114,155 @@ namespace SimpleOpcFileServer
                 }
             }
         }
+
+        // ─── Retentive variable persistence ─────────────────────────
+        private void LoadRetentiveValues()
+        {
+            try
+            {
+                var dir = Path.GetDirectoryName(Path.GetFullPath(_configPath));
+                _retentivePath = dir != null ? Path.Combine(dir, "retentive.json") : null;
+                if (_retentivePath != null && File.Exists(_retentivePath))
+                {
+                    var json = File.ReadAllText(_retentivePath);
+                    var dict = JsonSerializer.Deserialize<Dictionary<string, string>>(json);
+                    if (dict != null)
+                    {
+                        foreach (var kv in dict)
+                            _retentiveValues[kv.Key] = kv.Value;
+                    }
+                    Utils.Trace($"Loaded {_retentiveValues.Count} retentive values from {_retentivePath}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Utils.Trace(ex, "Failed to load retentive values");
+            }
+        }
+
+        private void ScheduleRetentiveSave()
+        {
+            _retentiveSaveTimer?.Dispose();
+            _retentiveSaveTimer = new System.Threading.Timer(_ => SaveRetentiveValues(), null, 2000, System.Threading.Timeout.Infinite);
+        }
+
+        private void SaveRetentiveValues()
+        {
+            try
+            {
+                if (_retentivePath == null) return;
+                var snapshot = new Dictionary<string, string>(_retentiveValues);
+                var json = JsonSerializer.Serialize(snapshot, new JsonSerializerOptions { WriteIndented = true });
+                File.WriteAllText(_retentivePath, json);
+            }
+            catch (Exception ex)
+            {
+                Utils.Trace(ex, "Failed to save retentive values");
+            }
+        }
+
+        // ─── Variable statistics tracker ─────────────────────────
+        private class VariableStatisticsTracker
+        {
+            private readonly BaseDataVariableState<double> _min;
+            private readonly BaseDataVariableState<double> _max;
+            private readonly BaseDataVariableState<double> _avg;
+            private readonly BaseDataVariableState<long> _count;
+            private readonly ServerVariableState _reset;
+            private readonly ISystemContext _context;
+
+            private double _sum;
+            private double _minVal = double.MaxValue;
+            private double _maxVal = double.MinValue;
+            private long _sampleCount;
+            private readonly object _lock = new();
+
+            public VariableStatisticsTracker(
+                BaseDataVariableState<double> min,
+                BaseDataVariableState<double> max,
+                BaseDataVariableState<double> avg,
+                BaseDataVariableState<long> count,
+                ServerVariableState reset,
+                ISystemContext context)
+            {
+                _min = min;
+                _max = max;
+                _avg = avg;
+                _count = count;
+                _reset = reset;
+                _context = context;
+
+                // Handle reset writes via OnStateChanged
+                _reset.OnStateChanged += (ctx, state, masks) =>
+                {
+                    if ((masks & NodeStateChangeMasks.Value) != 0 && state is BaseDataVariableState vs)
+                    {
+                        var rv = vs.Value;
+                        bool isReset = rv is true;
+                        if (!isReset && rv is string sv)
+                            isReset = sv.Equals("true", StringComparison.OrdinalIgnoreCase);
+                        if (isReset)
+                        {
+                            Reset();
+                            vs.Value = false;
+                            vs.ClearChangeMasks(ctx, false);
+                        }
+                    }
+                };
+            }
+
+            public void Record(double value)
+            {
+                lock (_lock)
+                {
+                    _sampleCount++;
+                    _sum += value;
+                    if (value < _minVal) _minVal = value;
+                    if (value > _maxVal) _maxVal = value;
+
+                    _min.Value = Math.Round(_minVal, 6);
+                    _max.Value = Math.Round(_maxVal, 6);
+                    _avg.Value = Math.Round(_sum / _sampleCount, 6);
+                    _count.Value = _sampleCount;
+
+                    _min.Timestamp = DateTime.UtcNow;
+                    _max.Timestamp = DateTime.UtcNow;
+                    _avg.Timestamp = DateTime.UtcNow;
+                    _count.Timestamp = DateTime.UtcNow;
+
+                    _min.ClearChangeMasks(_context, false);
+                    _max.ClearChangeMasks(_context, false);
+                    _avg.ClearChangeMasks(_context, false);
+                    _count.ClearChangeMasks(_context, false);
+                }
+            }
+
+            public void Reset()
+            {
+                lock (_lock)
+                {
+                    _sum = 0;
+                    _minVal = double.MaxValue;
+                    _maxVal = double.MinValue;
+                    _sampleCount = 0;
+
+                    _min.Value = 0.0;
+                    _max.Value = 0.0;
+                    _avg.Value = 0.0;
+                    _count.Value = 0L;
+
+                    _min.Timestamp = DateTime.UtcNow;
+                    _max.Timestamp = DateTime.UtcNow;
+                    _avg.Timestamp = DateTime.UtcNow;
+                    _count.Timestamp = DateTime.UtcNow;
+
+                    _min.ClearChangeMasks(_context, false);
+                    _max.ClearChangeMasks(_context, false);
+                    _avg.ClearChangeMasks(_context, false);
+                    _count.ClearChangeMasks(_context, false);
+                }
+            }
+        }
+
     }
 }

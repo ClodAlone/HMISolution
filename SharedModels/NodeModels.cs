@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -46,8 +46,24 @@ namespace SharedModels
         public AlarmConfig? Alarm { get; set; }
         public DataLoggingConfig? DataLogging { get; set; }
 
+        /// <summary>Initial value applied when the variable is created. Parsed according to Type.</summary>
+        public string InitialValue { get; set; } = "";
+
+        /// <summary>When true, the variable value is saved to disk and restored on server restart.</summary>
+        public bool Retentive { get; set; }
+
+        /// <summary>Optional runtime statistics configuration (min, max, average tracking).</summary>
+        public VariableStatisticsConfig? Statistics { get; set; }
+
         [JsonExtensionData]
         public Dictionary<string, JsonElement>? DriverConfigs { get; set; }
+    }
+
+    /// <summary>Configuration for runtime variable statistics (min, max, average, count).</summary>
+    public class VariableStatisticsConfig
+    {
+        /// <summary>Whether runtime statistics collection is enabled for this variable.</summary>
+        public bool Enabled { get; set; }
     }
 
     [JsonConverter(typeof(JsonStringEnumConverter))]
@@ -379,7 +395,7 @@ namespace SharedModels
     public class ScreenSymbol
     {
         public string Id { get; set; } = "";
-        public string Type { get; set; } = "rect"; // rect, circle, ellipse, text, line, gauge, indicator, svg, alarmlist, hdachart, hdagrid, eventlog, editbox, ipcamera, recipe, screenembed, imagemap, trend
+        public string Type { get; set; } = "rect"; // rect, circle, ellipse, text, line, gauge, indicator, svg, alarmlist, hdachart, hdagrid, eventlog, editbox, ipcamera, recipe, screenembed, imagemap, trend, switch, rotaryswitch, knob, hslider, vslider, button, animtext
         public double X { get; set; }
         public double Y { get; set; }
         public double Width { get; set; } = 80;
@@ -453,6 +469,9 @@ namespace SharedModels
         /// e.g. "F2" for 2 decimal places. Empty = raw value.
         /// </summary>
         public string EditBoxFormat { get; set; } = "";
+
+        /// <summary>When true, the EditBox widget shows a statistics bar (Min/Max/Avg) read from the variable's .Statistics.* OPC sub-variables.</summary>
+        public bool EditBoxShowStatistics { get; set; }
 
         // Animation bindings — evaluated at runtime
         public string? FillBinding { get; set; }       // e.g., "value > 50 ? '#ff0000' : '#00ff00'"
@@ -560,6 +579,128 @@ namespace SharedModels
 
         /// <summary>Background color of the trend plot area. Default "#111827".</summary>
         public string TrendBackground { get; set; } = "#111827";
+
+        // --- Toggle/Rotary Switch properties ---
+        /// <summary>Switch visual style (Type == "switch"): "apple" (iOS pill toggle, default), "flat" (minimal).</summary>
+        public string SwitchStyle { get; set; } = "apple";
+
+        /// <summary>Color when the toggle switch is ON. Default green.</summary>
+        public string SwitchOnColor { get; set; } = "#34c759";
+
+        /// <summary>Color when the toggle switch is OFF. Default gray.</summary>
+        public string SwitchOffColor { get; set; } = "#787880";
+
+        /// <summary>Number of discrete positions for a rotary switch (Type == "rotaryswitch"). Min 2, max 12. Default 3.</summary>
+        public int SwitchPositions { get; set; } = 3;
+
+        /// <summary>Comma-separated labels for each rotary position, e.g. "Off,Low,Med,High".</summary>
+        public string SwitchPositionLabels { get; set; } = "";
+
+        /// <summary>Color of the rotary switch knob. Default "#e0e0e0".</summary>
+        public string SwitchKnobColor { get; set; } = "#e0e0e0";
+
+        /// <summary>Color of the rotary switch dial/body. Default "#2d2d2d".</summary>
+        public string SwitchDialColor { get; set; } = "#2d2d2d";
+
+        /// <summary>Color of the knob body (Type == "knob"). Default "#3a3a3a".</summary>
+        public string KnobColor { get; set; } = "#3a3a3a";
+
+        /// <summary>Color of the knob pointer/indicator line. Default "#ff6b35".</summary>
+        public string KnobPointerColor { get; set; } = "#ff6b35";
+
+        /// <summary>Whether to display the scale tick marks around the knob. Default true.</summary>
+        public bool KnobShowScale { get; set; } = true;
+
+        /// <summary>Whether to show the numeric value readout below the knob. Default true.</summary>
+        public bool KnobShowValue { get; set; } = true;
+
+        /// <summary>Unit suffix for knob value display (e.g. "%", "rpm"). Default "".</summary>
+        public string KnobUnit { get; set; } = "";
+
+        /// <summary>Color of the slider track (Type == "hslider" or "vslider"). Default "#444".</summary>
+        public string SliderTrackColor { get; set; } = "#444";
+
+        /// <summary>Color of the filled portion of the slider track. Default "#3b82f6".</summary>
+        public string SliderFillColor { get; set; } = "#3b82f6";
+
+        /// <summary>Color of the slider thumb/pointer. Default "#ffffff".</summary>
+        public string SliderThumbColor { get; set; } = "#ffffff";
+
+        /// <summary>Whether to show the numeric value on the slider thumb. Default true.</summary>
+        public bool SliderShowValue { get; set; } = true;
+
+        /// <summary>Whether to show tick marks on the slider scale. Default true.</summary>
+        public bool SliderShowTicks { get; set; } = true;
+
+        // --- Command Button properties (Type == "button") ---
+
+        /// <summary>
+        /// Button visual style. Supported values:
+        /// "raised" - 3D raised button with gradient and shadow (default),
+        /// "flat" - flat filled button with no shadow,
+        /// "outline" - transparent with colored border,
+        /// "pill" - fully rounded ends (capsule shape),
+        /// "glass" - semi-transparent frosted-glass look,
+        /// "danger" - red raised button for destructive actions,
+        /// "success" - green raised button for confirmations,
+        /// "warning" - amber raised button for caution actions,
+        /// "icon" - compact square/circle button for icon-only use.
+        /// </summary>
+        public string ButtonStyle { get; set; } = "raised";
+
+        /// <summary>Primary button color (background for raised/flat/pill, border for outline). Default "#3b82f6".</summary>
+        public string ButtonColor { get; set; } = "#3b82f6";
+
+        /// <summary>Button text/icon color. Default "#ffffff".</summary>
+        public string ButtonTextColor { get; set; } = "#ffffff";
+
+        /// <summary>Optional icon/emoji placed inside the button alongside the label. Default "".</summary>
+        public string ButtonIcon { get; set; } = "";
+
+        /// <summary>Icon position relative to the label: "left" (default), "right", "top", "center" (icon-only).</summary>
+        public string ButtonIconPosition { get; set; } = "left";
+
+        /// <summary>Border radius in pixels. 0 = square, 999 = fully rounded. Default 6.</summary>
+        public int ButtonBorderRadius { get; set; } = 6;
+
+
+        // --- Animated Text properties (Type == "animtext") ---
+
+        /// <summary>
+        /// Animation mode for the animated text widget. Supported values:
+        /// "scroll" — horizontal marquee scrolling (default),
+        /// "flash" — text and/or background color alternates between two colors,
+        /// "pulse" — smooth opacity pulsing,
+        /// "typewriter" — text appears letter-by-letter then resets,
+        /// "fade" — crossfade between messages in the list.
+        /// </summary>
+        public string AnimTextMode { get; set; } = "scroll";
+
+        /// <summary>Animation speed in seconds per cycle. Default 5.</summary>
+        public double AnimTextSpeed { get; set; } = 5;
+
+        /// <summary>Secondary text color used for flash animation alternation. Default "#ff4444".</summary>
+        public string AnimTextColor2 { get; set; } = "#ff4444";
+
+        /// <summary>Background color of the animated text area. Empty = transparent. Default "".</summary>
+        public string AnimTextBackground { get; set; } = "";
+
+        /// <summary>Secondary background color for flash animation. Default "".</summary>
+        public string AnimTextBackground2 { get; set; } = "";
+
+        /// <summary>
+        /// Newline-separated list of messages to cycle through (for scroll/fade modes).
+        /// Each message is localized via @-prefixed string IDs.
+        /// Empty = use the Label property as the single message.
+        /// </summary>
+        public string AnimTextMessages { get; set; } = "";
+
+        /// <summary>Border radius of the animated text background box. Default 4.</summary>
+        public int AnimTextBorderRadius { get; set; } = 4;
+
+        /// <summary>Whether to show a border around the widget. Default false.</summary>
+        public bool AnimTextShowBorder { get; set; }
+
     }
 
     /// <summary>

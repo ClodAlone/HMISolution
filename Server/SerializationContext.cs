@@ -1,4 +1,4 @@
-using System.Text.Json.Serialization;
+﻿using System.Text.Json.Serialization;
 using System.Collections.Generic;
 using System.Text.Json;
 using SharedModels;
@@ -10,6 +10,7 @@ namespace SimpleOpcFileServer
     [JsonSerializable(typeof(Variable))]
     [JsonSerializable(typeof(AlarmConfig))]
     [JsonSerializable(typeof(AlarmTriggerType))]
+    [JsonSerializable(typeof(VariableStatisticsConfig))]
     [JsonSerializable(typeof(Dictionary<string, JsonElement>))]
     [JsonSerializable(typeof(ScriptConfig))]
     [JsonSerializable(typeof(List<ScriptConfig>))]

@@ -1,0 +1,194 @@
+{
+  "Server": {
+    "EndpointUrl": "opc.tcp://localhost:14840/SmartWarehouse",
+    "EnableAnonymous": false,
+    "EnableEditorLogin": true,
+    "EnableRuntimeLogin": true,
+    "StartupScreen": "WarehouseOverview",
+    "ShowNavigationBar": true,
+    "DiagnosticsPort": 14846,
+    "EventLog": { "Enabled": true, "DbPath": "events.db", "MaxAgeDays": 365 }
+  },
+  "Database": {
+    "Provider": "TimescaleDb",
+    "ConnectionString": "Host=localhost;Port=5432;Database=warehouse_hda;Username=postgres;Password=secret",
+    "TableName": "variable_data"
+  },
+  "Users": [
+    { "Username": "admin", "PasswordHash": "", "Group": "Admins" },
+    { "Username": "warehouse_mgr", "PasswordHash": "", "Group": "Managers", "AutoLogOffSeconds": 1800 },
+    { "Username": "operator", "PasswordHash": "", "Group": "Operators", "AutoLogOffSeconds": 600 }
+  ],
+  "UserGroups": [
+    { "Name": "Admins", "AccessLevel": "ReadWrite", "CanAccessEditor": true, "CanAccessRuntime": true },
+    { "Name": "Managers", "AccessLevel": "ReadWrite", "CanAccessEditor": false, "CanAccessRuntime": true },
+    { "Name": "Operators", "AccessLevel": "ReadWrite", "CanAccessEditor": false, "CanAccessRuntime": true }
+  ],
+  "Folder": {
+    "Name": "Warehouse",
+    "Folders": [
+      {
+        "Name": "Conveyors",
+        "Folders": [
+          {
+            "Name": "InboundLine",
+            "Variables": [
+              { "Name": "Speed_mpm", "Type": "Double", "Access": "ReadWrite", "Value": 30.0, "InitialValue": "25", "Retentive": true, "InitialValue": "30", "Retentive": true, "DataLogging": { "Enabled": true, "Hysteresis": 0.5 }, "S7": { "IpAddress": "192.168.4.10", "Rack": 0, "Slot": 1, "Address": "DB1.DBD0", "PollTime": 500 } },
+              { "Name": "Running", "Type": "Boolean", "Access": "ReadWrite", "Value": true, "S7": { "IpAddress": "192.168.4.10", "Rack": 0, "Slot": 1, "Address": "DB1.DBX4.0", "PollTime": 200 } },
+              { "Name": "MotorCurrent_A", "Type": "Double", "Access": "Read", "Value": 8.5, "Alarm": { "TriggerType": "Limit", "HighLimit": 15.0, "LowLimit": 0.0, "Message": "Inbound conveyor motor overload", "Hysteresis": 0.5 }, "DataLogging": { "Enabled": true, "Hysteresis": 0.2 }, "S7": { "IpAddress": "192.168.4.10", "Rack": 0, "Slot": 1, "Address": "DB1.DBD8", "PollTime": 1000 } },
+              { "Name": "PackagesPerHour", "Type": "Int32", "Access": "Read", "Value": 450, "Statistics": { "Enabled": true }, "DataLogging": { "Enabled": true, "Hysteresis": 5 }, "S7": { "IpAddress": "192.168.4.10", "Rack": 0, "Slot": 1, "Address": "DB1.DBD12", "PollTime": 5000 } },
+              { "Name": "JamDetected", "Type": "Boolean", "Access": "Read", "Value": false, "Alarm": { "TriggerType": "Condition", "Operator": "True", "ConditionSeverity": 600, "Message": "Inbound conveyor jam detected" }, "S7": { "IpAddress": "192.168.4.10", "Rack": 0, "Slot": 1, "Address": "DB1.DBX16.0", "PollTime": 200 } },
+              { "Name": "PhotoEye1", "Type": "Boolean", "Access": "Read", "Value": true, "S7": { "IpAddress": "192.168.4.10", "Rack": 0, "Slot": 1, "Address": "DB1.DBX16.1", "PollTime": 100 } }
+            ]
+          },
+          {
+            "Name": "OutboundLine",
+            "Variables": [
+              { "Name": "Speed_mpm", "Type": "Double", "Access": "ReadWrite", "Value": 25.0, "DataLogging": { "Enabled": true, "Hysteresis": 0.5 }, "S7": { "IpAddress": "192.168.4.11", "Rack": 0, "Slot": 1, "Address": "DB1.DBD0", "PollTime": 500 } },
+              { "Name": "Running", "Type": "Boolean", "Access": "ReadWrite", "Value": true, "S7": { "IpAddress": "192.168.4.11", "Rack": 0, "Slot": 1, "Address": "DB1.DBX4.0", "PollTime": 200 } },
+              { "Name": "PackagesPerHour", "Type": "Int32", "Access": "Read", "Value": 380, "DataLogging": { "Enabled": true, "Hysteresis": 5 }, "S7": { "IpAddress": "192.168.4.11", "Rack": 0, "Slot": 1, "Address": "DB1.DBD12", "PollTime": 5000 } },
+              { "Name": "JamDetected", "Type": "Boolean", "Access": "Read", "Value": false, "Alarm": { "TriggerType": "Condition", "Operator": "True", "ConditionSeverity": 600, "Message": "Outbound conveyor jam detected" } }
+            ]
+          },
+          {
+            "Name": "Sorter",
+            "Variables": [
+              { "Name": "Running", "Type": "Boolean", "Access": "ReadWrite", "Value": true, "S7": { "IpAddress": "192.168.4.12", "Rack": 0, "Slot": 1, "Address": "DB2.DBX0.0", "PollTime": 200 } },
+              { "Name": "DivertCount_Lane1", "Type": "Int32", "Access": "Read", "Value": 1250, "DataLogging": { "Enabled": true, "Hysteresis": 1 }, "S7": { "IpAddress": "192.168.4.12", "Rack": 0, "Slot": 1, "Address": "DB2.DBD4", "PollTime": 2000 } },
+              { "Name": "DivertCount_Lane2", "Type": "Int32", "Access": "Read", "Value": 980, "DataLogging": { "Enabled": true, "Hysteresis": 1 }, "S7": { "IpAddress": "192.168.4.12", "Rack": 0, "Slot": 1, "Address": "DB2.DBD8", "PollTime": 2000 } },
+              { "Name": "DivertCount_Lane3", "Type": "Int32", "Access": "Read", "Value": 760, "DataLogging": { "Enabled": true, "Hysteresis": 1 }, "S7": { "IpAddress": "192.168.4.12", "Rack": 0, "Slot": 1, "Address": "DB2.DBD12", "PollTime": 2000 } },
+              { "Name": "NoReadCount", "Type": "Int32", "Access": "Read", "Value": 12, "Alarm": { "TriggerType": "Condition", "Operator": "Changed", "ConditionSeverity": 400, "Message": "Barcode no-read on sorter" }, "DataLogging": { "Enabled": true, "Hysteresis": 1 }, "S7": { "IpAddress": "192.168.4.12", "Rack": 0, "Slot": 1, "Address": "DB2.DBD16", "PollTime": 2000 } },
+              { "Name": "LastBarcode", "Type": "String", "Access": "Read", "Value": "PKG-2024-08542" }
+            ]
+          }
+        ]
+      },
+      {
+        "Name": "ASRS",
+        "Folders": [
+          {
+            "Name": "Crane1",
+            "Variables": [
+              { "Name": "XPosition_m", "Type": "Double", "Access": "Read", "Value": 12.5, "Statistics": { "Enabled": true }, "DataLogging": { "Enabled": true, "Hysteresis": 0.1 }, "OpcUaClient": { "EndpointUrl": "opc.tcp://192.168.4.50:4840", "NodeId": "ns=2;s=Crane1.XPos", "PollTime": 200 } },
+              { "Name": "YPosition_m", "Type": "Double", "Access": "Read", "Value": 8.0, "DataLogging": { "Enabled": true, "Hysteresis": 0.1 }, "OpcUaClient": { "EndpointUrl": "opc.tcp://192.168.4.50:4840", "NodeId": "ns=2;s=Crane1.YPos", "PollTime": 200 } },
+              { "Name": "ZPosition_m", "Type": "Double", "Access": "Read", "Value": 3.2, "OpcUaClient": { "EndpointUrl": "opc.tcp://192.168.4.50:4840", "NodeId": "ns=2;s=Crane1.ZPos", "PollTime": 200 } },
+              { "Name": "CyclesCompleted", "Type": "Int32", "Access": "Read", "Value": 3452, "Statistics": { "Enabled": true }, "DataLogging": { "Enabled": true, "Hysteresis": 1 }, "OpcUaClient": { "EndpointUrl": "opc.tcp://192.168.4.50:4840", "NodeId": "ns=2;s=Crane1.Cycles", "PollTime": 5000 } },
+              { "Name": "FaultCode", "Type": "Int32", "Access": "Read", "Value": 0, "Alarm": { "TriggerType": "Condition", "Operator": "!=", "CompareValue": "0", "ConditionSeverity": 700, "Message": "ASRS Crane1 fault active" }, "OpcUaClient": { "EndpointUrl": "opc.tcp://192.168.4.50:4840", "NodeId": "ns=2;s=Crane1.Fault", "PollTime": 500 } },
+              { "Name": "Busy", "Type": "Boolean", "Access": "Read", "Value": true, "OpcUaClient": { "EndpointUrl": "opc.tcp://192.168.4.50:4840", "NodeId": "ns=2;s=Crane1.Busy", "PollTime": 200 } },
+              { "Name": "CurrentTask", "Type": "String", "Access": "Read", "Value": "Retrieve A-12-03" }
+            ]
+          },
+          {
+            "Name": "Crane2",
+            "Variables": [
+              { "Name": "XPosition_m", "Type": "Double", "Access": "Read", "Value": 25.0, "DataLogging": { "Enabled": true, "Hysteresis": 0.1 }, "OpcUaClient": { "EndpointUrl": "opc.tcp://192.168.4.51:4840", "NodeId": "ns=2;s=Crane2.XPos", "PollTime": 200 } },
+              { "Name": "YPosition_m", "Type": "Double", "Access": "Read", "Value": 4.5, "DataLogging": { "Enabled": true, "Hysteresis": 0.1 }, "OpcUaClient": { "EndpointUrl": "opc.tcp://192.168.4.51:4840", "NodeId": "ns=2;s=Crane2.YPos", "PollTime": 200 } },
+              { "Name": "CyclesCompleted", "Type": "Int32", "Access": "Read", "Value": 2876, "DataLogging": { "Enabled": true, "Hysteresis": 1 }, "OpcUaClient": { "EndpointUrl": "opc.tcp://192.168.4.51:4840", "NodeId": "ns=2;s=Crane2.Cycles", "PollTime": 5000 } },
+              { "Name": "FaultCode", "Type": "Int32", "Access": "Read", "Value": 0, "Alarm": { "TriggerType": "Condition", "Operator": "!=", "CompareValue": "0", "ConditionSeverity": 700, "Message": "ASRS Crane2 fault active" } },
+              { "Name": "Busy", "Type": "Boolean", "Access": "Read", "Value": false }
+            ]
+          }
+        ]
+      },
+      {
+        "Name": "Environment",
+        "Variables": [
+          { "Name": "Temperature", "Type": "Double", "Access": "Read", "Value": 18.5, "Statistics": { "Enabled": true }, "Alarm": { "TriggerType": "Limit", "HighLimit": 30.0, "LowLimit": 5.0, "Message": "Warehouse temperature out of range", "Hysteresis": 1.0 }, "DataLogging": { "Enabled": true, "Hysteresis": 0.2 }, "Mqtt": { "Broker": "192.168.4.100", "Port": 1883, "Topic": "warehouse/env/temp" } },
+          { "Name": "Humidity", "Type": "Double", "Access": "Read", "Value": 45.0, "Statistics": { "Enabled": true }, "Alarm": { "TriggerType": "Limit", "HighLimit": 70.0, "LowLimit": 20.0, "Message": "Warehouse humidity out of range", "Hysteresis": 2.0 }, "DataLogging": { "Enabled": true, "Hysteresis": 0.5 }, "Mqtt": { "Broker": "192.168.4.100", "Port": 1883, "Topic": "warehouse/env/humidity" } },
+          { "Name": "CO2_ppm", "Type": "Double", "Access": "Read", "Value": 420.0, "Alarm": { "TriggerType": "Limit", "HighLimit": 1000.0, "LowLimit": 0.0, "Message": "High CO2 level in warehouse", "Hysteresis": 20.0 }, "DataLogging": { "Enabled": true, "Hysteresis": 5.0 }, "Mqtt": { "Broker": "192.168.4.100", "Port": 1883, "Topic": "warehouse/env/co2" } },
+          { "Name": "LightLevel_lux", "Type": "Double", "Access": "Read", "Value": 350.0, "Mqtt": { "Broker": "192.168.4.100", "Port": 1883, "Topic": "warehouse/env/light" } }
+        ]
+      },
+      {
+        "Name": "Inventory",
+        "Variables": [
+          { "Name": "TotalLocations", "Type": "Int32", "Access": "Read", "Value": 5000 },
+          { "Name": "OccupiedLocations", "Type": "Int32", "Access": "Read", "Value": 3842, "DataLogging": { "Enabled": true, "Hysteresis": 1 } },
+          { "Name": "Utilization_Pct", "Type": "Double", "Access": "Read", "Value": 76.8, "DataLogging": { "Enabled": true, "Hysteresis": 0.1 } },
+          { "Name": "InboundToday", "Type": "Int32", "Access": "Read", "Value": 245, "DataLogging": { "Enabled": true, "Hysteresis": 1 } },
+          { "Name": "OutboundToday", "Type": "Int32", "Access": "Read", "Value": 198, "DataLogging": { "Enabled": true, "Hysteresis": 1 } },
+          { "Name": "OrdersInQueue", "Type": "Int32", "Access": "Read", "Value": 34 },
+          { "Name": "OrdersCompleted", "Type": "Int32", "Access": "Read", "Value": 156, "DataLogging": { "Enabled": true, "Hysteresis": 1 } }
+        ]
+      },
+      {
+        "Name": "WMS",
+        "Variables": [
+          { "Name": "SystemStatus", "Type": "String", "Access": "Read", "Value": "Online" },
+          { "Name": "ActivePickWaves", "Type": "Int32", "Access": "Read", "Value": 3 },
+          { "Name": "PickAccuracy_Pct", "Type": "Double", "Access": "Read", "Value": 99.7, "Statistics": { "Enabled": true }, "Alarm": { "TriggerType": "Limit", "HighLimit": 100.1, "LowLimit": 98.0, "Message": "Pick accuracy below target", "Hysteresis": 0.1 }, "DataLogging": { "Enabled": true, "Hysteresis": 0.05 }, "Rest": { "Url": "http://192.168.4.200:8080/api/wms/metrics", "JsonPath": "$.pickAccuracy", "PollTime": 30000 } },
+          { "Name": "AveragePickTime_sec", "Type": "Double", "Access": "Read", "Value": 45.2, "Statistics": { "Enabled": true }, "DataLogging": { "Enabled": true, "Hysteresis": 1.0 }, "Rest": { "Url": "http://192.168.4.200:8080/api/wms/metrics", "JsonPath": "$.avgPickTime", "PollTime": 30000 } }
+        ]
+      }
+    ]
+  },
+  "Scripts": [
+    {
+      "Name": "UtilizationCalc",
+      "Enabled": true,
+      "IntervalMs": 30000,
+      "Language": "CSharp",
+      "Group": "Inventory",
+      "Code": "var total = ReadInt(\"Warehouse.Inventory.TotalLocations\");\nvar occupied = ReadInt(\"Warehouse.Inventory.OccupiedLocations\");\nif (total > 0) {\n    var util = (double)occupied / total * 100;\n    Write(\"Warehouse.Inventory.Utilization_Pct\", Math.Round(util, 1));\n}"
+    },
+    {
+      "Name": "ConveyorHealthCheck",
+      "Enabled": true,
+      "IntervalMs": 60000,
+      "Language": "CSharp",
+      "Group": "Maintenance",
+      "Code": "// Log conveyor motor current for predictive maintenance\nvar inboundCurrent = ReadDouble(\"Warehouse.Conveyors.InboundLine.MotorCurrent_A\");\nif (inboundCurrent > 12.0) {\n    Log($\"WARNING: Inbound conveyor motor current elevated: {inboundCurrent:F1}A - schedule maintenance\");\n}"
+    }
+  ],
+  "PlcPrograms": [],
+  "Screens": [
+    {
+      "Name": "WarehouseOverview",
+      "Width": 1920,
+      "Height": 1080,
+      "Background": "#0b1222",
+      "Symbols": [
+        { "Id": "title", "Type": "text", "X": 20, "Y": 15, "Width": 500, "Height": 40, "Label": "Smart Warehouse Management", "Fill": "#ffffff", "Stroke": "none" },
+        { "Id": "util_gauge", "Type": "gauge", "X": 50, "Y": 80, "Width": 220, "Height": 220, "VariablePath": "Warehouse.Inventory.Utilization_Pct", "MinValue": 0, "MaxValue": 100, "GaugeStyle": "semicircle", "GaugeUnit": "%", "Fill": "#3498db", "Label": "Storage Utilization" },
+        { "Id": "inbound_gauge", "Type": "gauge", "X": 320, "Y": 80, "Width": 220, "Height": 220, "VariablePath": "Warehouse.Conveyors.InboundLine.PackagesPerHour", "MinValue": 0, "MaxValue": 800, "GaugeStyle": "arc", "GaugeUnit": "pkg/h", "Fill": "#27ae60", "Label": "Inbound Rate" },
+        { "Id": "outbound_gauge", "Type": "gauge", "X": 590, "Y": 80, "Width": 220, "Height": 220, "VariablePath": "Warehouse.Conveyors.OutboundLine.PackagesPerHour", "MinValue": 0, "MaxValue": 800, "GaugeStyle": "arc", "GaugeUnit": "pkg/h", "Fill": "#e67e22", "Label": "Outbound Rate" },
+        { "Id": "pick_accuracy", "Type": "gauge", "X": 860, "Y": 80, "Width": 220, "Height": 220, "VariablePath": "Warehouse.WMS.PickAccuracy_Pct", "MinValue": 95, "MaxValue": 100, "GaugeStyle": "needle", "GaugeUnit": "%", "GaugeValueFormat": "F1", "Fill": "#9b59b6", "Label": "Pick Accuracy" },
+        { "Id": "env_temp", "Type": "gauge", "X": 1130, "Y": 80, "Width": 180, "Height": 180, "VariablePath": "Warehouse.Environment.Temperature", "MinValue": 0, "MaxValue": 40, "GaugeStyle": "thermometer", "GaugeUnit": "°C", "Fill": "#e74c3c", "Label": "Temperature" },
+        { "Id": "env_humidity", "Type": "gauge", "X": 1350, "Y": 80, "Width": 180, "Height": 180, "VariablePath": "Warehouse.Environment.Humidity", "MinValue": 0, "MaxValue": 100, "GaugeStyle": "vbar", "GaugeUnit": "%", "Fill": "#2980b9", "Label": "Humidity" },
+        { "Id": "inbound_status", "Type": "rect", "X": 50, "Y": 330, "Width": 280, "Height": 40, "VariablePath": "Warehouse.Conveyors.InboundLine.Running", "Label": "Inbound Conveyor", "FillBinding": "value == true ? '#27ae60' : '#e74c3c'" },
+        { "Id": "outbound_status", "Type": "rect", "X": 350, "Y": 330, "Width": 280, "Height": 40, "VariablePath": "Warehouse.Conveyors.OutboundLine.Running", "Label": "Outbound Conveyor", "FillBinding": "value == true ? '#27ae60' : '#e74c3c'" },
+        { "Id": "sorter_status", "Type": "rect", "X": 650, "Y": 330, "Width": 280, "Height": 40, "VariablePath": "Warehouse.Conveyors.Sorter.Running", "Label": "Sorter", "FillBinding": "value == true ? '#27ae60' : '#e74c3c'" },
+        { "Id": "crane1_status", "Type": "rect", "X": 950, "Y": 330, "Width": 250, "Height": 40, "VariablePath": "Warehouse.ASRS.Crane1.Busy", "Label": "ASRS Crane 1", "FillBinding": "value == true ? '#f39c12' : '#27ae60'" },
+        { "Id": "crane2_status", "Type": "rect", "X": 1220, "Y": 330, "Width": 250, "Height": 40, "VariablePath": "Warehouse.ASRS.Crane2.Busy", "Label": "ASRS Crane 2", "FillBinding": "value == true ? '#f39c12' : '#27ae60'" },
+        { "Id": "throughput_trend", "Type": "trend", "X": 50, "Y": 400, "Width": 900, "Height": 280, "TrendTimeWindowSeconds": 3600, "TrendShowGrid": true, "TrendShowLegend": true, "TrendBackground": "#0b1222", "TrendPens": [ { "VariablePath": "Warehouse.Conveyors.InboundLine.PackagesPerHour", "Label": "Inbound", "Color": "#27ae60", "LineWidth": 2 }, { "VariablePath": "Warehouse.Conveyors.OutboundLine.PackagesPerHour", "Label": "Outbound", "Color": "#e67e22", "LineWidth": 2 }, { "VariablePath": "Warehouse.Conveyors.InboundLine.MotorCurrent_A", "Label": "Motor Current", "Color": "#e74c3c", "LineWidth": 1.5 } ] },
+        { "Id": "alarm_list", "Type": "alarmlist", "X": 50, "Y": 720, "Width": 1400, "Height": 300 },
+        { "Id": "nav_asrs", "Type": "rect", "X": 1550, "Y": 80, "Width": 300, "Height": 45, "Fill": "#8e44ad", "Label": "ASRS Detail", "Commands": [ { "Id": "n1", "Action": "NavigateScreen", "Trigger": "Click", "TargetScreen": "ASRSDetail" } ] },
+        { "Id": "nav_conveyors", "Type": "rect", "X": 1550, "Y": 140, "Width": 300, "Height": 45, "Fill": "#2c3e50", "Label": "Conveyor Detail", "Commands": [ { "Id": "n2", "Action": "NavigateScreen", "Trigger": "Click", "TargetScreen": "ConveyorDetail" } ] }
+      ]
+    },
+    {
+      "Name": "ASRSDetail",
+      "Width": 1920,
+      "Height": 1080,
+      "Background": "#0b1222",
+      "Group": "ASRS",
+      "Symbols": [
+        { "Id": "title", "Type": "text", "X": 20, "Y": 15, "Width": 400, "Height": 40, "Label": "ASRS Crane Detail", "Fill": "#ffffff", "Stroke": "none" },
+        { "Id": "c1_x", "Type": "gauge", "X": 50, "Y": 80, "Width": 180, "Height": 180, "VariablePath": "Warehouse.ASRS.Crane1.XPosition_m", "MinValue": 0, "MaxValue": 40, "GaugeStyle": "hbar", "GaugeUnit": "m", "Fill": "#3498db", "Label": "C1 X Position" },
+        { "Id": "c1_y", "Type": "gauge", "X": 260, "Y": 80, "Width": 180, "Height": 180, "VariablePath": "Warehouse.ASRS.Crane1.YPosition_m", "MinValue": 0, "MaxValue": 15, "GaugeStyle": "vbar", "GaugeUnit": "m", "Fill": "#27ae60", "Label": "C1 Y Position" },
+        { "Id": "c2_x", "Type": "gauge", "X": 500, "Y": 80, "Width": 180, "Height": 180, "VariablePath": "Warehouse.ASRS.Crane2.XPosition_m", "MinValue": 0, "MaxValue": 40, "GaugeStyle": "hbar", "GaugeUnit": "m", "Fill": "#e67e22", "Label": "C2 X Position" },
+        { "Id": "c2_y", "Type": "gauge", "X": 710, "Y": 80, "Width": 180, "Height": 180, "VariablePath": "Warehouse.ASRS.Crane2.YPosition_m", "MinValue": 0, "MaxValue": 15, "GaugeStyle": "vbar", "GaugeUnit": "m", "Fill": "#f39c12", "Label": "C2 Y Position" },
+        { "Id": "crane_trend", "Type": "trend", "X": 50, "Y": 300, "Width": 1200, "Height": 350, "TrendTimeWindowSeconds": 600, "TrendShowGrid": true, "TrendShowLegend": true, "TrendBackground": "#0b1222", "TrendPens": [ { "VariablePath": "Warehouse.ASRS.Crane1.XPosition_m", "Label": "C1 X", "Color": "#3498db", "LineWidth": 2 }, { "VariablePath": "Warehouse.ASRS.Crane1.YPosition_m", "Label": "C1 Y", "Color": "#27ae60", "LineWidth": 2 }, { "VariablePath": "Warehouse.ASRS.Crane2.XPosition_m", "Label": "C2 X", "Color": "#e67e22", "LineWidth": 2 } ] },
+        { "Id": "hda", "Type": "hdachart", "X": 50, "Y": 680, "Width": 1200, "Height": 300, "HdaVariablePaths": [ "Warehouse.ASRS.Crane1.CyclesCompleted", "Warehouse.ASRS.Crane2.CyclesCompleted" ], "HdaTimeRangeMinutes": 1440, "HdaMaxPoints": 500 },
+        { "Id": "nav_back", "Type": "rect", "X": 1650, "Y": 20, "Width": 200, "Height": 40, "Fill": "#7f8c8d", "Label": "← Overview", "Commands": [ { "Id": "nb", "Action": "NavigateScreen", "Trigger": "Click", "TargetScreen": "WarehouseOverview" } ] }
+      ]
+    }
+  ],
+  "Recipes": [],
+  "Strings": [
+    { "Key": "app_title", "Translations": { "en": "Smart Warehouse", "de": "Intelligentes Lager", "it": "Magazzino Intelligente", "fr": "Entrepôt Intelligent" } }
+  ],
+  "Cameras": [
+    { "CameraId": "dock1", "Url": "rtsp://192.168.4.201:554/stream1", "Protocol": "rtsp", "Fps": 10, "EnableYolo": true, "YoloConfidence": 0.6, "DetectionVariablePrefix": "Warehouse.Cameras.Dock1", "DrawDetections": true }
+  ]
+}

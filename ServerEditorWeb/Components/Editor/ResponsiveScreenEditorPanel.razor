@@ -30,6 +30,8 @@
                 <button class="btn btn-sm btn-outline-info" @onclick='() => AddWidget(screen, "svg")' title="SVG Symbol (from library)">🏭 SVG</button>
                 <button class="btn btn-sm btn-outline-info" @onclick='() => AddWidget(screen, "imagemap")' title="Image Map (show raster images based on variable condition)">🖼️ ImageMap</button>
                 <button class="btn btn-sm btn-outline-success" @onclick='() => AddWidget(screen, "trend")' title="Realtime Trend (live variable traces with pens and cursors)">📈 Trend</button>
+                <button class="btn btn-sm btn-outline-primary" @onclick='() => AddWidget(screen, "button")' title="Command Button">🔲 Button</button>
+                <button class="btn btn-sm btn-outline-info" @onclick='() => AddWidget(screen, "animtext")' title="Animated Text">🎬 AnimText</button>
 
                 <span class="mx-1">|</span>
 
@@ -181,6 +183,52 @@
                                 break;
                             case "trend":
                                 <div class="responsive-placeholder">📈 Trend @(s.TrendPens.Count > 0 ? $"({s.TrendPens.Count} pens · {s.TrendTimeWindowSeconds}s)" : "(configure in properties)")</div>
+                                break;
+                            case "button":
+                                var btnStyle = s.ButtonStyle ?? "raised";
+                                var btnColor = s.ButtonColor ?? "#3b82f6";
+                                var btnTextC = s.ButtonTextColor ?? "#ffffff";
+                                var btnRadius = s.ButtonBorderRadius;
+                                var btnLabel = s.Label ?? "Button";
+                                var btnIcon = s.ButtonIcon ?? "";
+                                var btnCss = btnStyle switch
+                                {
+                                    "flat" => $"background:{btnColor};color:{btnTextC};border:none;border-radius:{btnRadius}px;padding:6px 16px;font-weight:600;",
+                                    "outline" => $"background:transparent;color:{btnColor};border:2px solid {btnColor};border-radius:{btnRadius}px;padding:6px 16px;font-weight:600;",
+                                    "pill" => $"background:{btnColor};color:{btnTextC};border:none;border-radius:999px;padding:6px 20px;font-weight:600;",
+                                    "glass" => $"background:rgba(255,255,255,0.15);color:{btnTextC};border:1px solid rgba(255,255,255,0.3);border-radius:{btnRadius}px;padding:6px 16px;font-weight:600;backdrop-filter:blur(6px);",
+                                    "danger" => $"background:#ef4444;color:#fff;border:none;border-radius:{btnRadius}px;padding:6px 16px;font-weight:700;",
+                                    "success" => $"background:#22c55e;color:#fff;border:none;border-radius:{btnRadius}px;padding:6px 16px;font-weight:700;",
+                                    "warning" => $"background:#f59e0b;color:#1a1a1a;border:none;border-radius:{btnRadius}px;padding:6px 16px;font-weight:700;",
+                                    "icon" => $"background:{btnColor};color:{btnTextC};border:none;border-radius:{btnRadius}px;padding:8px;font-weight:600;min-width:36px;text-align:center;",
+                                    _ => $"background:linear-gradient(180deg,{btnColor},{btnColor}dd);color:{btnTextC};border:none;border-radius:{btnRadius}px;padding:6px 16px;font-weight:600;box-shadow:0 2px 4px rgba(0,0,0,0.3);"
+                                };
+                                <div style="display:flex;align-items:center;justify-content:center;height:100%;">
+                                    <div style="@btnCss cursor:pointer;font-size:13px;display:inline-flex;align-items:center;gap:4px;">
+                                        @if (!string.IsNullOrEmpty(btnIcon))
+                                        {
+                                            <span>@btnIcon</span>
+                                        }
+                                        @if (btnStyle != "icon" || string.IsNullOrEmpty(btnIcon))
+                                        {
+                                            <span>@btnLabel</span>
+                                        }
+                                    </div>
+                                </div>
+                                break;
+                            case "animtext":
+                                var atMode2 = s.AnimTextMode ?? "scroll";
+                                var atBg2 = s.AnimTextBackground ?? "";
+                                var atBr2 = s.AnimTextBorderRadius;
+                                var atLabel2 = s.Label ?? "Animated Text";
+                                var atColor = s.Fill ?? "#00e5ff";
+                                <div style="display:flex;align-items:center;justify-content:center;height:100%;@(string.IsNullOrEmpty(atBg2) ? "" : $"background:{atBg2};")border-radius:{atBr2}px;overflow:hidden;">
+                                    <div style="color:@atColor;font-size:14px;white-space:nowrap;@(atMode2 == "scroll" ? "animation:animtext-scroll 4s linear infinite;" : "")">
+                                        @atLabel2
+                                    </div>
+                                </div>
+                                <style>@@keyframes animtext-scroll { 0% { transform: translateX(100%); } 100% { transform: translateX(-100%); } }</style>
+                                <div style="position:absolute;top:2px;right:6px;font-size:9px;color:#888;">@atMode2</div>
                                 break;
                             default:
                                 <div class="responsive-placeholder">@s.Type</div>
@@ -512,6 +560,39 @@
             sym.MaxValue = 100;
         }
 
+
+        if (type == "button")
+        {
+            sym.Stroke = "none";
+            sym.StrokeWidth = 0;
+            sym.ButtonStyle = "raised";
+            sym.ButtonColor = "#3b82f6";
+            sym.ButtonTextColor = "#ffffff";
+            sym.ButtonBorderRadius = 6;
+            sym.Label = "Button";
+            sym.Commands.Add(new SharedModels.SymbolCommand
+            {
+                Id = $"cmd_{_nextId++}",
+                Action = "WriteVariable",
+                Trigger = "Click",
+                VariablePath = sym.VariablePath ?? "",
+                Value = "1"
+            });
+        }
+
+        if (type == "animtext")
+        {
+            sym.Stroke = "#334155";
+            sym.StrokeWidth = 1;
+            sym.AnimTextMode = "scroll";
+            sym.AnimTextSpeed = 5;
+            sym.AnimTextColor2 = "#ff4444";
+            sym.AnimTextBackground = "#1a1a2e";
+            sym.AnimTextBackground2 = "#2d1a1a";
+            sym.AnimTextBorderRadius = 4;
+            sym.AnimTextShowBorder = false;
+            sym.AnimTextMessages = "";
+        }
         screen.Symbols.Add(sym);
         _selectedSymbol = sym;
         _selectedIndex = screen.Symbols.Count - 1;
@@ -641,6 +722,8 @@
         "svg" => 4,
         "imagemap" => 4,
         "trend" => 12,
+        "button" => 3,
+        "animtext" => 4,
         _ => 4
     };
 
@@ -656,6 +739,8 @@
         "svg" => 150,
         "imagemap" => 200,
         "trend" => 300,
+        "button" => 60,
+        "animtext" => 50,
         _ => 150
     };
 
@@ -670,6 +755,8 @@
         "recipe" => 280,
         "imagemap" => 120,
         "trend" => 500,
+        "button" => 120,
+        "animtext" => 240,
         _ => 80
     };
 
@@ -685,6 +772,8 @@
         "recipe" => 300,
         "imagemap" => 120,
         "trend" => 250,
+        "button" => 36,
+        "animtext" => 40,
         _ => 40
     };
 
@@ -696,6 +785,8 @@
         "hdagrid" => "HDA Grid",
         "eventlog" => "Event Log",
         "trend" => "Trend",
+        "button" => "Button",
+        "animtext" => "Animated Text",
         _ => ""
     };
 
@@ -710,6 +801,8 @@
         "recipe" => "#1a1a2e",
         "imagemap" => "#1e293b",
         "trend" => "#111827",
+        "button" => "#3b82f6",
+        "animtext" => "#00e5ff",
         _ => "#4a90d9"
     };
 
@@ -731,6 +824,8 @@
         "recipe" => "📦",
         "imagemap" => "🖼️",
         "trend" => "📈",
+        "button" => "🔲",
+        "animtext" => "🎬",
         _ => "■"
     };
 
@@ -752,6 +847,8 @@
         "recipe" => "Recipe",
         "imagemap" => "Image Map",
         "trend" => "Realtime Trend",
+        "button" => "Command Button",
+        "animtext" => "Animated Text",
         _ => type
     };
 

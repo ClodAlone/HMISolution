@@ -67,7 +67,7 @@
             {
                 var pen = Pens[p];
                 var buf = GetBuffer(p);
-                if (buf.Count < 2) continue;
+                if (buf.Length < 2) continue;
                 var color = GetPenColor(pen, p);
                 var lw = pen.LineWidth > 0 ? pen.LineWidth : 1.5;
                 var pts = BuildPolyline(buf);
@@ -110,7 +110,7 @@
                 var pen = Pens[p];
                 var color = GetPenColor(pen, p);
                 var buf = GetBuffer(p);
-                var lastVal = buf.Count > 0 ? buf[^1].Value : (double?)null;
+                var lastVal = buf.Length > 0 ? buf[^1].Value : (double?)null;
                 <span>
                     <span style="display:inline-block;width:12px;height:3px;background:@color;vertical-align:middle;margin-right:3px;"></span>
                     @GetPenLabel(pen)
@@ -138,7 +138,9 @@
 
     private record struct Sample(DateTime Time, double Value);
 
-    private readonly List<List<Sample>> _buffers = new();
+    // Each pen's buffer is an immutable array; SampleAll builds new arrays
+    // and swaps them atomically so renders never see a half-modified list.
+    private volatile Sample[][] _buffers = [];
     private System.Threading.Timer? _sampleTimer;
     private bool _paused;
     private int _timeWindowSec = 60;
@@ -171,8 +173,11 @@
         EnsureBuffers();
         _sampleTimer = new System.Threading.Timer(_ =>
         {
-            if (!_paused) SampleAll();
-            InvokeAsync(StateHasChanged);
+            _ = InvokeAsync(() =>
+            {
+                if (!_paused) SampleAll();
+                StateHasChanged();
+            });
         }, null, 500, 250);
     }
 
@@ -184,31 +189,53 @@
 
     private void EnsureBuffers()
     {
-        while (_buffers.Count < Pens.Count)
-            _buffers.Add(new());
-        while (_buffers.Count > Pens.Count)
-            _buffers.RemoveAt(_buffers.Count - 1);
+        var current = _buffers;
+        if (current.Length == Pens.Count) return;
+        var next = new Sample[Pens.Count][];
+        for (int i = 0; i < next.Length; i++)
+            next[i] = i < current.Length ? current[i] : [];
+        _buffers = next;
     }
 
     private void SampleAll()
     {
         var now = DateTime.UtcNow;
         var cutoff = now.AddSeconds(-_timeWindowSec * 1.2);
+        var snap = _buffers;
+        var next = new Sample[snap.Length][];
 
-        for (int i = 0; i < Pens.Count && i < _buffers.Count; i++)
+        for (int i = 0; i < snap.Length && i < Pens.Count; i++)
         {
+            var old = snap[i];
             var path = Pens[i].VariablePath;
-            if (string.IsNullOrEmpty(path)) continue;
-            var raw = Opc.GetValue(path);
-            if (raw != null && double.TryParse(raw, System.Globalization.NumberStyles.Any,
-                    System.Globalization.CultureInfo.InvariantCulture, out var d))
+            Sample? newSample = null;
+            if (!string.IsNullOrEmpty(path))
             {
-                _buffers[i].Add(new Sample(now, d));
+                var raw = Opc.GetValue(path);
+                if (raw != null && double.TryParse(raw, System.Globalization.NumberStyles.Any,
+                        System.Globalization.CultureInfo.InvariantCulture, out var d))
+                {
+                    newSample = new Sample(now, d);
+                }
             }
-            // Trim old samples
-            _buffers[i].RemoveAll(s => s.Time < cutoff);
+
+            // Build new array: keep non-expired samples + optional new sample
+            int keepFrom = 0;
+            for (int j = 0; j < old.Length; j++)
+            {
+                if (old[j].Time >= cutoff) { keepFrom = j; break; }
+                if (j == old.Length - 1) keepFrom = old.Length; // all expired
+            }
+            int keepCount = old.Length - keepFrom;
+            int newLen = keepCount + (newSample.HasValue ? 1 : 0);
+            var arr = new Sample[newLen];
+            if (keepCount > 0) Array.Copy(old, keepFrom, arr, 0, keepCount);
+            if (newSample.HasValue) arr[^1] = newSample.Value;
+            next[i] = arr;
         }
 
+        // Atomic swap — any concurrent render sees either old or new, never partial
+        _buffers = next;
         ComputeYRange();
     }
 
@@ -223,12 +250,14 @@
 
         var lo = double.MaxValue;
         var hi = double.MinValue;
-        foreach (var buf in _buffers)
+        var snap = _buffers;
+        for (int b = 0; b < snap.Length; b++)
         {
-            foreach (var s in buf)
+            var arr = snap[b];
+            for (int j = 0; j < arr.Length; j++)
             {
-                if (s.Value < lo) lo = s.Value;
-                if (s.Value > hi) hi = s.Value;
+                if (arr[j].Value < lo) lo = arr[j].Value;
+                if (arr[j].Value > hi) hi = arr[j].Value;
             }
         }
 
@@ -243,10 +272,13 @@
         _yMax = YMax ?? hi;
     }
 
-    private List<Sample> GetBuffer(int idx) =>
-        idx >= 0 && idx < _buffers.Count ? _buffers[idx] : new();
+    private Sample[] GetBuffer(int idx)
+    {
+        var snap = _buffers;
+        return idx >= 0 && idx < snap.Length ? snap[idx] : [];
+    }
 
-    private string BuildPolyline(List<Sample> buf)
+    private string BuildPolyline(Sample[] buf)
     {
         var sb = new System.Text.StringBuilder();
         var now = DateTime.UtcNow;
@@ -285,13 +317,13 @@
         return DateTime.UtcNow.AddSeconds(-secAgo);
     }
 
-    private double? InterpolateAtTime(List<Sample> buf, DateTime t)
+    private double? InterpolateAtTime(Sample[] buf, DateTime t)
     {
-        if (buf.Count == 0) return null;
+        if (buf.Length == 0) return null;
         if (t <= buf[0].Time) return buf[0].Value;
         if (t >= buf[^1].Time) return buf[^1].Value;
 
-        for (int i = 1; i < buf.Count; i++)
+        for (int i = 1; i < buf.Length; i++)
         {
             if (buf[i].Time >= t)
             {
@@ -326,7 +358,10 @@
 
     private void ClearBuffers()
     {
-        foreach (var b in _buffers) b.Clear();
+        var snap = _buffers;
+        var next = new Sample[snap.Length][];
+        for (int i = 0; i < next.Length; i++) next[i] = [];
+        _buffers = next;
     }
 
     private static string GetPenColor(TrendPen pen, int index) =>

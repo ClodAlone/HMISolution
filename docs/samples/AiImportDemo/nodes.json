@@ -1,0 +1,133 @@
+{
+  "Server": {
+    "EndpointUrl": "opc.tcp://localhost:17840/AiImportDemo",
+    "EnableAnonymous": true,
+    "EnableEditorLogin": true,
+    "EnableRuntimeLogin": false,
+    "StartupScreen": "Overview",
+    "ShowNavigationBar": true,
+    "DiagnosticsPort": 17843,
+    "EventLog": { "Enabled": true, "DbPath": "events.db", "MaxAgeDays": 365 }
+  },
+  "Database": {
+    "Provider": "Sqlite",
+    "ConnectionString": "history.db",
+    "TableName": "variable_data"
+  },
+  "Users": [],
+  "UserGroups": [],
+  "Folder": {
+    "Name": "Demo",
+    "Folders": [
+      {
+        "Name": "Imported",
+        "Folders": [
+          {
+            "Name": "WaterTreatment",
+            "Folders": [
+              {
+                "Name": "Intake",
+                "Variables": [
+                  { "Name": "RawWaterFlow_m3h", "Type": "Double", "Access": "Read", "Value": 450.0, "Statistics": { "Enabled": true }, "DataLogging": { "Enabled": true, "Hysteresis": 1.0 }, "Simulation": { "Function": "Sine", "Period": 60000, "Amplitude": 50, "Offset": 450, "Noise": 5 } },
+                  { "Name": "Turbidity_NTU", "Type": "Double", "Access": "Read", "Value": 12.5, "Statistics": { "Enabled": true }, "DataLogging": { "Enabled": true, "Hysteresis": 0.5 }, "Simulation": { "Function": "Random", "Period": 5000, "Amplitude": 15, "Offset": 10 } },
+                  { "Name": "pH", "Type": "Double", "Access": "Read", "Value": 7.2, "Statistics": { "Enabled": true }, "DataLogging": { "Enabled": true, "Hysteresis": 0.05 }, "Simulation": { "Function": "Sine", "Period": 120000, "Amplitude": 0.5, "Offset": 7.0, "Noise": 0.1 } }
+                ]
+              },
+              {
+                "Name": "Disinfection",
+                "Variables": [
+                  { "Name": "ChlorineResidual_mgl", "Type": "Double", "Access": "Read", "Value": 0.8, "Statistics": { "Enabled": true }, "DataLogging": { "Enabled": true, "Hysteresis": 0.02 }, "Simulation": { "Function": "Sine", "Period": 90000, "Amplitude": 0.3, "Offset": 0.7, "Noise": 0.05 } },
+                  { "Name": "ChlorineDose_mgl", "Type": "Double", "Access": "ReadWrite", "Value": 1.2, "InitialValue": "1.2", "Retentive": true, "Statistics": { "Enabled": true }, "DataLogging": { "Enabled": true, "Hysteresis": 0.01 } }
+                ]
+              }
+            ]
+          },
+          {
+            "Name": "EnergyManagement",
+            "Folders": [
+              {
+                "Name": "Solar",
+                "Variables": [
+                  { "Name": "Power_kW", "Type": "Double", "Access": "Read", "Value": 125.4, "Statistics": { "Enabled": true }, "DataLogging": { "Enabled": true, "Hysteresis": 0.5 }, "Simulation": { "Function": "Sine", "Period": 86400000, "Amplitude": 150, "Offset": 75 } },
+                  { "Name": "DailyEnergy_kWh", "Type": "Double", "Access": "Read", "Value": 580.0, "DataLogging": { "Enabled": true, "Hysteresis": 1.0 }, "Simulation": { "Function": "Ramp", "Period": 86400000, "Amplitude": 1200, "Offset": 0 } }
+                ]
+              },
+              {
+                "Name": "Grid",
+                "Variables": [
+                  { "Name": "Frequency_Hz", "Type": "Double", "Access": "Read", "Value": 50.01, "Statistics": { "Enabled": true }, "DataLogging": { "Enabled": true, "Hysteresis": 0.005 }, "Simulation": { "Function": "Sine", "Period": 30000, "Amplitude": 0.2, "Offset": 50.0, "Noise": 0.02 } },
+                  { "Name": "Import_kW", "Type": "Double", "Access": "Read", "Value": 45.0, "Statistics": { "Enabled": true }, "DataLogging": { "Enabled": true, "Hysteresis": 1.0 }, "Simulation": { "Function": "Sine", "Period": 60000, "Amplitude": 80, "Offset": 50, "Noise": 10 } }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "Name": "Local",
+        "Variables": [
+          { "Name": "Setpoint", "Type": "Double", "Access": "ReadWrite", "Value": 50.0, "InitialValue": "50.0", "Retentive": true },
+          { "Name": "Mode", "Type": "Int32", "Access": "ReadWrite", "Value": 0, "InitialValue": "0", "Retentive": true },
+          { "Name": "AlarmAck", "Type": "Boolean", "Access": "ReadWrite", "Value": false }
+        ]
+      }
+    ]
+  },
+  "Scripts": [
+    {
+      "Name": "CrossDomainMonitor",
+      "Enabled": true,
+      "IntervalMs": 5000,
+      "Language": "CSharp",
+      "Group": "Monitoring",
+      "Code": "// Cross-domain monitoring: alert if water turbidity rises while solar power drops\nvar turbidity = ReadDouble(\"Demo.Imported.WaterTreatment.Intake.Turbidity_NTU\");\nvar solarPower = ReadDouble(\"Demo.Imported.EnergyManagement.Solar.Power_kW\");\nif (turbidity > 20 && solarPower < 50)\n    Log(\"WARNING: High turbidity during low solar — UV disinfection may be insufficient\");"
+    }
+  ],
+  "PlcPrograms": [
+    {
+      "Name": "ChlorineDoseControl",
+      "Enabled": true,
+      "IntervalMs": 1000,
+      "Language": "ST",
+      "Group": "Control",
+      "Code": "// Adjust chlorine dose based on imported turbidity readings\nVAR\n    turbidity : REAL;\n    currentDose : REAL;\n    newDose : REAL;\nEND_VAR\n\nturbidity := ReadReal('Demo.Imported.WaterTreatment.Intake.Turbidity_NTU');\ncurrentDose := ReadReal('Demo.Imported.WaterTreatment.Disinfection.ChlorineDose_mgl');\n\nIF turbidity > 15.0 THEN\n    newDose := currentDose + 0.1;\n    IF newDose > 3.0 THEN\n        newDose := 3.0;\n    END_IF;\nELSIF turbidity < 5.0 THEN\n    newDose := currentDose - 0.05;\n    IF newDose < 0.5 THEN\n        newDose := 0.5;\n    END_IF;\nELSE\n    newDose := currentDose;\nEND_IF;\n\nWriteReal('Demo.Imported.WaterTreatment.Disinfection.ChlorineDose_mgl', newDose);"
+    }
+  ],
+  "Screens": [
+    {
+      "Name": "Overview",
+      "Width": 1920,
+      "Height": 1080,
+      "Group": "Main",
+      "Symbols": [
+        { "Id": "title", "Type": "text", "X": 20, "Y": 15, "Width": 600, "Height": 40, "Label": "AI Import Demo — Cross-Domain Dashboard", "Fill": "#ffffff", "Stroke": "none", "FontSize": 22 },
+        { "Id": "subtitle", "Type": "text", "X": 20, "Y": 50, "Width": 800, "Height": 25, "Label": "Variables imported from WaterTreatment and EnergyManagement samples using the AI Assistant", "Fill": "#94a3b8", "Stroke": "none", "FontSize": 12 },
+
+        { "Id": "water_header", "Type": "text", "X": 40, "Y": 100, "Width": 400, "Height": 30, "Label": "Water Treatment (Imported)", "Fill": "#38bdf8", "Stroke": "none", "FontSize": 16 },
+        { "Id": "gauge_flow", "Type": "gauge", "X": 40, "Y": 140, "Width": 200, "Height": 200, "VariablePath": "Demo.Imported.WaterTreatment.Intake.RawWaterFlow_m3h", "MinValue": 0, "MaxValue": 600, "GaugeStyle": "arc", "GaugeUnit": "m³/h", "GaugeArcColor": "#38bdf8", "Label": "Raw Water Flow" },
+        { "Id": "gauge_turbidity", "Type": "gauge", "X": 280, "Y": 140, "Width": 200, "Height": 200, "VariablePath": "Demo.Imported.WaterTreatment.Intake.Turbidity_NTU", "MinValue": 0, "MaxValue": 30, "GaugeStyle": "arc", "GaugeUnit": "NTU", "GaugeArcColor": "#fbbf24", "Label": "Turbidity" },
+        { "Id": "gauge_ph", "Type": "gauge", "X": 520, "Y": 140, "Width": 200, "Height": 200, "VariablePath": "Demo.Imported.WaterTreatment.Intake.pH", "MinValue": 5, "MaxValue": 9, "GaugeStyle": "arc", "GaugeUnit": "pH", "GaugeArcColor": "#a78bfa", "Label": "pH Level" },
+        { "Id": "gauge_chlorine", "Type": "gauge", "X": 760, "Y": 140, "Width": 200, "Height": 200, "VariablePath": "Demo.Imported.WaterTreatment.Disinfection.ChlorineResidual_mgl", "MinValue": 0, "MaxValue": 2, "GaugeStyle": "arc", "GaugeUnit": "mg/l", "GaugeArcColor": "#4ade80", "Label": "Chlorine Residual" },
+        { "Id": "eb_dose", "Type": "editbox", "X": 520, "Y": 360, "Width": 200, "Height": 55, "VariablePath": "Demo.Imported.WaterTreatment.Disinfection.ChlorineDose_mgl", "Label": "Chlorine Dose (mg/l)", "EditBoxStep": 0.1, "EditBoxFormat": "F2", "EditBoxShowStatistics": true },
+
+        { "Id": "energy_header", "Type": "text", "X": 40, "Y": 450, "Width": 400, "Height": 30, "Label": "Energy Management (Imported)", "Fill": "#fbbf24", "Stroke": "none", "FontSize": 16 },
+        { "Id": "gauge_solar", "Type": "gauge", "X": 40, "Y": 490, "Width": 200, "Height": 200, "VariablePath": "Demo.Imported.EnergyManagement.Solar.Power_kW", "MinValue": 0, "MaxValue": 300, "GaugeStyle": "arc", "GaugeUnit": "kW", "GaugeArcColor": "#fbbf24", "Label": "Solar Power" },
+        { "Id": "gauge_freq", "Type": "gauge", "X": 280, "Y": 490, "Width": 200, "Height": 200, "VariablePath": "Demo.Imported.EnergyManagement.Grid.Frequency_Hz", "MinValue": 49, "MaxValue": 51, "GaugeStyle": "arc", "GaugeUnit": "Hz", "GaugeArcColor": "#f472b6", "Label": "Grid Frequency" },
+        { "Id": "gauge_import", "Type": "gauge", "X": 520, "Y": 490, "Width": 200, "Height": 200, "VariablePath": "Demo.Imported.EnergyManagement.Grid.Import_kW", "MinValue": -100, "MaxValue": 200, "GaugeStyle": "arc", "GaugeUnit": "kW", "GaugeArcColor": "#fb923c", "Label": "Grid Import" },
+
+        { "Id": "local_header", "Type": "text", "X": 40, "Y": 730, "Width": 400, "Height": 30, "Label": "Local Variables", "Fill": "#4ade80", "Stroke": "none", "FontSize": 16 },
+        { "Id": "eb_setpoint", "Type": "editbox", "X": 40, "Y": 770, "Width": 200, "Height": 55, "VariablePath": "Demo.Local.Setpoint", "Label": "Setpoint", "EditBoxStep": 1, "EditBoxFormat": "F1" },
+
+        { "Id": "chart_water", "Type": "hdachart", "X": 1020, "Y": 100, "Width": 860, "Height": 400, "HdaVariablePaths": [ "Demo.Imported.WaterTreatment.Intake.RawWaterFlow_m3h", "Demo.Imported.WaterTreatment.Intake.Turbidity_NTU", "Demo.Imported.WaterTreatment.Disinfection.ChlorineResidual_mgl" ], "HdaTimeRangeMinutes": 60, "HdaMaxPoints": 500, "Label": "Water Treatment Trends" },
+        { "Id": "chart_energy", "Type": "hdachart", "X": 1020, "Y": 530, "Width": 860, "Height": 400, "HdaVariablePaths": [ "Demo.Imported.EnergyManagement.Solar.Power_kW", "Demo.Imported.EnergyManagement.Grid.Import_kW", "Demo.Imported.EnergyManagement.Grid.Frequency_Hz" ], "HdaTimeRangeMinutes": 60, "HdaMaxPoints": 500, "Label": "Energy Trends" }
+      ]
+    }
+  ],
+  "Recipes": [],
+  "Strings": [
+    { "Key": "page.overview", "Values": { "en": "Overview", "de": "Übersicht", "it": "Panoramica" } },
+    { "Key": "water.treatment", "Values": { "en": "Water Treatment", "de": "Wasseraufbereitung", "it": "Trattamento Acqua" } },
+    { "Key": "energy.management", "Values": { "en": "Energy Management", "de": "Energieverwaltung", "it": "Gestione Energia" } }
+  ],
+  "Cameras": []
+}
