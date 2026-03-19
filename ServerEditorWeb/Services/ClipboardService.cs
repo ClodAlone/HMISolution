@@ -78,6 +78,14 @@ public class ClipboardService
         Changed?.Invoke();
     }
 
+    public void CopyScheduler(SchedulerConfig scheduler)
+    {
+        ContentType = "Scheduler";
+        ContentJson = JsonSerializer.Serialize(scheduler, _jsonOpts);
+        Label = scheduler.Name;
+        Changed?.Invoke();
+    }
+
     public void CopySymbols(List<ScreenSymbol> symbols)
     {
         ContentType = "Symbols";
@@ -186,6 +194,14 @@ public class ClipboardService
         return s;
     }
 
+    public SchedulerConfig? PasteScheduler()
+    {
+        if (ContentType != "Scheduler" || ContentJson == null) return null;
+        var s = JsonSerializer.Deserialize<SchedulerConfig>(ContentJson, _jsonOpts);
+        if (s != null) s.Name += " (Copy)";
+        return s;
+    }
+
     public List<ScreenSymbol>? PasteSymbols()
     {
         if (ContentType != "Symbols" || ContentJson == null) return null;
@@ -250,6 +266,7 @@ public class ClipboardService
         "Script" or "Scripts" => target is ScriptGroupNode or ResourceFolderNode { ResourceKind: "Script" },
         "PlcProgram" or "PlcPrograms" => target is PlcGroupNode or ResourceFolderNode { ResourceKind: "PlcProgram" },
         "Recipe" or "Recipes" => target is RecipeGroupNode,
+        "Scheduler" => target is SchedulerGroupNode,
         "Screen" or "Screens" => target is ScreenGroupNode or ResourceFolderNode { ResourceKind: "Screen" },
         _ => false
     };

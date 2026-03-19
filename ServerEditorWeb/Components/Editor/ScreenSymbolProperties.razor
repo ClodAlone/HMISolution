@@ -1,4 +1,4 @@
-﻿@using ServerEditorWeb.Models
+@using ServerEditorWeb.Models
 @using ServerEditorWeb.Services
 @using SharedModels
 @implements IDisposable
@@ -50,6 +50,7 @@
                 <option value="vslider">Vertical Slider</option>
                 <option value="button">Command Button</option>
                             <option value="animtext">Animated Text</option>
+                <option value="weeklyplanner">Weekly Planner</option>
             </select>
         </div>
 
@@ -73,6 +74,32 @@
                 <input type="number" class="form-control form-control-sm" @bind="_selectedSymbol.Height" @bind:after="OnChanged" />
             </div>
         </div>
+
+        @if (IsResponsiveMode())
+        {
+            <div class="d-flex gap-1 mb-2">
+                <div>
+                    <label class="form-label mb-0 small">Col Span</label>
+                    <input type="number" class="form-control form-control-sm" style="width: 70px;" min="1"
+                           @bind="_selectedSymbol.ColSpan" @bind:after="OnChanged" />
+                </div>
+                <div>
+                    <label class="form-label mb-0 small">Row Span</label>
+                    <input type="number" class="form-control form-control-sm" style="width: 70px;" min="1"
+                           @bind="_selectedSymbol.RowSpan" @bind:after="OnChanged" />
+                </div>
+                <div>
+                    <label class="form-label mb-0 small">Row Height</label>
+                    <input type="number" class="form-control form-control-sm" style="width: 80px;" min="30"
+                           @bind="_selectedSymbol.RowHeight" @bind:after="OnChanged" />
+                </div>
+                <div>
+                    <label class="form-label mb-0 small">Order</label>
+                    <input type="number" class="form-control form-control-sm" style="width: 60px;"
+                           @bind="_selectedSymbol.Order" @bind:after="OnChanged" />
+                </div>
+            </div>
+        }
 
         <div class="mb-2">
             <label class="form-label mb-0 small">Label</label>
@@ -517,6 +544,54 @@
                 else
                 {
                     <div class="small text-warning">⚠ No matching recipe definition found for "@_selectedSymbol.RecipeName"</div>
+                }
+            }
+        }
+
+        @if (_selectedSymbol.Type is "weeklyplanner")
+        {
+            <hr class="my-2" />
+            <h6 class="mb-2 small" style="color: #38bdf8;">📅 Weekly Planner Settings</h6>
+
+            <div class="mb-2">
+                <label class="form-label mb-0 small">Scheduler Name</label>
+                @{
+                    var schedulerNames = Editor?.RootModel?.Schedulers?.Select(s => s.Name).ToList() ?? new List<string>();
+                }
+                @if (schedulerNames.Count > 0)
+                {
+                    <select class="form-select form-select-sm" style="font-size: 10px;"
+                            @bind="_selectedSymbol.SchedulerName" @bind:after="OnChanged">
+                        <option value="">(select a scheduler)</option>
+                        @foreach (var sn in schedulerNames)
+                        {
+                            <option value="@sn">@sn</option>
+                        }
+                    </select>
+                }
+                else
+                {
+                    <input type="text" class="form-control form-control-sm" style="font-size: 10px;"
+                           @bind="_selectedSymbol.SchedulerName" @bind:after="OnChanged"
+                           placeholder="e.g. HVAC Schedule" />
+                }
+                <div class="form-text" style="font-size: 9px;">Must match a Scheduler definition name. The widget shows a weekly time-slot grid at runtime.</div>
+            </div>
+
+            @if (!string.IsNullOrEmpty(_selectedSymbol.SchedulerName))
+            {
+                var matchedSched = Editor?.RootModel?.Schedulers?.FirstOrDefault(s =>
+                    s.Name.Equals(_selectedSymbol.SchedulerName, StringComparison.OrdinalIgnoreCase));
+                @if (matchedSched != null)
+                {
+                    <div class="small text-muted mb-1">
+                        <strong>@matchedSched.WeeklySlots.Count</strong> time slot(s) · Granularity: @(matchedSched.SlotMinutes)min ·
+                        Runtime edit: @(matchedSched.AllowRuntimeEdit ? "✅" : "❌")
+                    </div>
+                }
+                else
+                {
+                    <div class="small text-warning">⚠ No matching scheduler definition found for "@_selectedSymbol.SchedulerName"</div>
                 }
             }
         }
@@ -1467,6 +1542,9 @@ else
 
     private ScreenSymbol? _selectedSymbol => Editor.SelectedScreenSymbol;
     private IReadOnlyList<ScreenSymbol> _selectedSymbols => Editor.SelectedScreenSymbols;
+
+    private bool IsResponsiveMode() =>
+        (Editor.SelectedItem as ScreenNode)?.Screen?.LayoutMode == "responsive";
 
     private static int _nextCmdId = 1;
     private static int _nextAnimId = 1;

@@ -1,19 +1,24 @@
 @using SharedModels
 @using ServerEditorWeb.Services
+@using Microsoft.JSInterop
+@implements IAsyncDisposable
 
-<div class="image-resource-panel">
+<div class="image-resource-panel" @ref="_dropZoneRef">
     <div class="d-flex gap-1 mb-2 align-items-center">
-        <h6 class="mb-0 small fw-bold">🖼️ Image Resources</h6>
+        <h6 class="mb-0 small fw-bold">ðŸ–¼ï¸ Image Resources</h6>
         <div class="ms-auto d-flex gap-1">
             <button class="btn btn-sm btn-outline-success py-0 px-1" style="font-size: 10px;"
-                    @onclick="() => _showAddImage = true" title="Add new image resource">＋ Image</button>
+                    @onclick="() => _showAddImage = true" title="Add new image resource">ï¼‹ Image</button>
         </div>
     </div>
 
     @if (_images.Count == 0)
     {
-        <div class="text-muted small text-center py-3">
-            No images defined. Click <strong>＋ Image</strong> to add one.
+        <div class="drop-zone-hint text-muted small text-center py-4"
+             style="border: 2px dashed var(--border-color, #ccc); border-radius: 8px; background: var(--surface-alt, #fafafa);">
+            <div style="font-size: 24px;">ðŸ“</div>
+            <div class="mt-1">No images defined.</div>
+            <div class="mt-1"><strong>Drag &amp; drop</strong> image files here, or click <strong>ï¼‹ Image</strong> to add one.</div>
         </div>
     }
     else
@@ -44,7 +49,7 @@
                                 }
                                 else
                                 {
-                                    <span class="text-muted small">—</span>
+                                    <span class="text-muted small">â€”</span>
                                 }
                             </td>
                             <td class="small text-muted">
@@ -53,17 +58,22 @@
                             <td>
                                 <div class="d-flex gap-1">
                                     <label class="btn btn-sm btn-outline-primary py-0 px-1" style="font-size: 9px; cursor: pointer;" title="Replace image">
-                                        📂
+                                        ðŸ“‚
                                         <InputFile OnChange="(e) => OnImageSelected(e, item)" accept="image/*" style="display: none;" />
                                     </label>
                                     <button class="btn btn-sm btn-outline-danger py-0 px-1" style="font-size: 9px;"
-                                            @onclick="() => RemoveImage(item)" title="Delete image">🗑</button>
+                                            @onclick="() => RemoveImage(item)" title="Delete image">ðŸ—‘</button>
                                 </div>
                             </td>
                         </tr>
                     }
                 </tbody>
             </table>
+        </div>
+
+        <div class="drop-zone-hint text-muted small text-center py-2 mt-2"
+             style="border: 2px dashed var(--border-color, #ddd); border-radius: 6px; font-size: 10px;">
+            ðŸ“ Drag &amp; drop image files here to add them
         </div>
     }
 
@@ -75,7 +85,7 @@
                 <input type="text" class="form-control form-control-sm" style="font-size: 11px; width: 140px;"
                        @bind="_newImageId" placeholder="e.g. logo, bg_main" />
                 <label class="btn btn-sm btn-primary py-0 px-2" style="font-size: 10px; cursor: pointer;">
-                    📂 Choose File
+                    ðŸ“‚ Choose File
                     <InputFile OnChange="OnNewImageFileSelected" accept="image/*" style="display: none;" />
                 </label>
                 <button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size: 10px;"
@@ -87,17 +97,38 @@
             }
         </div>
     }
+
+    @if (_dropCount > 0)
+    {
+        <div class="text-success small mt-1">âœ… Added @_dropCount image(s) via drag &amp; drop.</div>
+    }
 </div>
+
+<style>
+    .image-resource-panel.drag-over {
+        outline: 2px solid #3b82f6;
+        outline-offset: -2px;
+        background: rgba(59, 130, 246, 0.05) !important;
+    }
+    .image-resource-panel.drag-over .drop-zone-hint {
+        border-color: #3b82f6 !important;
+        color: #3b82f6 !important;
+    }
+</style>
 
 @code {
     [Parameter] public EventCallback OnPropertyChanged { get; set; }
 
     [Inject] private NodeEditorService Editor { get; set; } = default!;
+    [Inject] private IJSRuntime JS { get; set; } = default!;
 
     private List<ImageResource> _images = new();
     private bool _showAddImage;
     private string _newImageId = "";
     private string _addError = "";
+    private int _dropCount;
+    private ElementReference _dropZoneRef;
+    private DotNetObjectReference<ImageResourcePanel>? _dotNetRef;
 
     protected override void OnParametersSet()
     {
@@ -108,6 +139,46 @@
             _images = model.Images;
         }
     }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _dotNetRef = DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("imageDropZone.init", _dropZoneRef, _dotNetRef);
+        }
+    }
+
+    [JSInvokable]
+    public async Task OnFilesDropped(DroppedFileInfo[] files)
+    {
+        _dropCount = 0;
+        foreach (var file in files)
+        {
+            if (string.IsNullOrEmpty(file.DataUri)) continue;
+
+            // Generate a unique ID from the filename
+            var id = file.Id ?? "image";
+            var baseId = id;
+            var counter = 1;
+            while (_images.Any(i => i.Id.Equals(id, StringComparison.OrdinalIgnoreCase)))
+            {
+                id = $"{baseId}_{counter}";
+                counter++;
+            }
+
+            _images.Add(new ImageResource { Id = id, Data = file.DataUri });
+            _dropCount++;
+        }
+
+        if (_dropCount > 0)
+        {
+            OnChanged();
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    public record DroppedFileInfo(string Id, string DataUri, string FileName);
 
     private void OnChanged()
     {
@@ -168,13 +239,18 @@
 
     private static string FormatSize(string? data)
     {
-        if (string.IsNullOrEmpty(data)) return "—";
-        var bytes = data.Length * 3 / 4; // rough base64→bytes
+        if (string.IsNullOrEmpty(data)) return "â€”";
+        var bytes = data.Length * 3 / 4; // rough base64â†’bytes
         return bytes switch
         {
             < 1024 => $"{bytes} B",
             < 1024 * 1024 => $"{bytes / 1024} KB",
             _ => $"{bytes / (1024 * 1024.0):F1} MB"
         };
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _dotNetRef?.Dispose();
     }
 }

@@ -1,0 +1,319 @@
+@using SharedModels
+@using RuntimeViewer.Shared.Services
+@implements IDisposable
+
+<div class="wp-widget" @onclick:stopPropagation @onmousedown:stopPropagation @onmouseup:stopPropagation>
+    <div class="wp-header">
+        <span class="wp-title">📅 @SchedulerName</span>
+        <span class="wp-status">@(_isActive ? "🟢 Active" : "⚫ Inactive")</span>
+        @if (AllowEdit)
+        {
+            <button class="wp-btn" @onclick="ToggleEditMode" title="@(_editing ? "Cancel editing" : "Edit schedule")">
+                @(_editing ? "✕ Cancel" : "✏ Edit")
+            </button>
+        }
+    </div>
+
+    <div class="wp-body">
+        @{
+            var slots = _editing ? _editSlots : _displaySlots;
+            var dayNames = new[] { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
+            int totalRows = 24 * (60 / SlotMinutes);
+            double rowH = 14;
+            double headerW = 42;
+            double colW = (double)(100 - 8) / 7; // percentage-ish but we use pixels
+            double svgW = headerW + 7 * 58;
+            double svgH = 22 + totalRows * rowH;
+        }
+        <div class="wp-scroll">
+            <svg xmlns="http://www.w3.org/2000/svg" width="@svgW" height="@svgH"
+                 @onmousedown="OnSvgMouseDown" @onmousemove="OnSvgMouseMove" @onmouseup="OnSvgMouseUp"
+                 @onmouseleave="OnSvgMouseUp"
+                 style="cursor: @(_editing ? "crosshair" : "default");">
+                @* Column headers *@
+                @for (int d = 0; d < 7; d++)
+                {
+                    var dx = headerW + d * 58;
+                    var isWeekend = d == 0 || d == 6;
+                    var hdrColor = isWeekend ? "#f59e0b" : "#94a3b8";
+                    @((MarkupString)$"<text x=\"{dx + 29}\" y=\"14\" text-anchor=\"middle\" font-size=\"10\" fill=\"{hdrColor}\" font-weight=\"bold\" font-family=\"sans-serif\">{dayNames[d]}</text>")
+                }
+
+                @* Time rows *@
+                @for (int r = 0; r < totalRows; r++)
+                {
+                    var ry = 22 + r * rowH;
+                    var minutes = r * SlotMinutes;
+                    var isHour = minutes % 60 == 0;
+                    <line x1="@headerW" y1="@ry" x2="@svgW" y2="@ry"
+                          stroke="@(isHour ? "#334155" : "#1e293b")" stroke-width="@(isHour ? 1 : 0.5)" />
+                    @if (isHour)
+                    {
+                        @((MarkupString)$"<text x=\"{headerW - 4}\" y=\"{ry + 10}\" text-anchor=\"end\" font-size=\"9\" fill=\"#64748b\" font-family=\"sans-serif\">{minutes / 60:D2}:00</text>")
+                    }
+                }
+
+                @* Day column separators *@
+                @for (int d = 0; d <= 7; d++)
+                {
+                    var dx = headerW + d * 58;
+                    <line x1="@dx" y1="20" x2="@dx" y2="@svgH" stroke="#334155" stroke-width="0.5" />
+                }
+
+                @* Active slots *@
+                @foreach (var slot in slots)
+                {
+                    var sx = headerW + slot.DayOfWeek * 58 + 1;
+                    var startRow = slot.StartMinute / SlotMinutes;
+                    var endRow = slot.EndMinute / SlotMinutes;
+                    var sy = 22 + startRow * rowH;
+                    var sh = (endRow - startRow) * rowH;
+                    <rect x="@sx" y="@sy" width="56" height="@sh" rx="2"
+                          fill="#3b82f6" opacity="0.6" />
+                }
+
+                @* Drag preview *@
+                @if (_dragging && _editing)
+                {
+                    var dsx = headerW + _dragDay * 58 + 1;
+                    var dr1 = Math.Min(_dragStartRow, _dragCurrentRow);
+                    var dr2 = Math.Max(_dragStartRow, _dragCurrentRow);
+                    var dsy = 22 + dr1 * rowH;
+                    var dsh = (dr2 - dr1 + 1) * rowH;
+                    <rect x="@dsx" y="@dsy" width="56" height="@dsh" rx="2"
+                          fill="@(_dragRemoving ? "#ef4444" : "#22d3ee")" opacity="0.4" />
+                }
+            </svg>
+        </div>
+    </div>
+
+    @if (_editing)
+    {
+        <div class="wp-footer">
+            <button class="wp-btn wp-btn-save" @onclick="SaveEdits">💾 Save</button>
+            <button class="wp-btn wp-btn-clear" @onclick="ClearAll">🗑 Clear</button>
+        </div>
+    }
+</div>
+
+<style>
+    .wp-widget {
+        width: 100%; height: 100%; display: flex; flex-direction: column;
+        font-family: sans-serif; font-size: 12px;
+        background: #0f172a; color: #e2e8f0;
+        border: 1px solid #334155; border-radius: 4px;
+        overflow: hidden; box-sizing: border-box;
+    }
+    .wp-header {
+        display: flex; align-items: center; gap: 6px;
+        padding: 4px 8px; background: #1e293b; border-bottom: 1px solid #334155;
+        font-size: 11px; flex-shrink: 0;
+    }
+    .wp-title { color: #94a3b8; font-weight: 600; }
+    .wp-status { color: #6ee7b7; font-size: 10px; margin-left: auto; }
+    .wp-btn {
+        padding: 2px 8px; font-size: 10px; border: 1px solid #475569; border-radius: 3px;
+        background: #1e293b; color: #e2e8f0; cursor: pointer;
+    }
+    .wp-btn:hover { background: #334155; }
+    .wp-btn-save { border-color: #22c55e; color: #22c55e; }
+    .wp-btn-clear { border-color: #ef4444; color: #ef4444; }
+    .wp-body { flex: 1; overflow: auto; }
+    .wp-scroll { overflow: auto; }
+    .wp-footer {
+        display: flex; gap: 4px; padding: 4px 8px;
+        border-top: 1px solid #334155; background: #1e293b; flex-shrink: 0;
+    }
+</style>
+
+@code {
+    [Parameter] public string SchedulerName { get; set; } = "";
+    [Parameter] public bool AllowEdit { get; set; }
+    [Parameter] public int SlotMinutes { get; set; } = 60;
+    [Parameter] public List<WeeklyTimeSlot> Slots { get; set; } = new();
+
+    [Inject] private OpcRuntimeClient Opc { get; set; } = default!;
+
+    private List<WeeklyTimeSlot> _displaySlots = new();
+    private List<WeeklyTimeSlot> _editSlots = new();
+    private bool _editing;
+    private bool _isActive;
+    private System.Threading.Timer? _pollTimer;
+
+    // Drag state
+    private bool _dragging;
+    private bool _dragRemoving;
+    private int _dragDay;
+    private int _dragStartRow;
+    private int _dragCurrentRow;
+
+    protected override void OnInitialized()
+    {
+        _displaySlots = Slots.Select(s => new WeeklyTimeSlot
+        {
+            DayOfWeek = s.DayOfWeek,
+            StartMinute = s.StartMinute,
+            EndMinute = s.EndMinute
+        }).ToList();
+
+        _pollTimer = new System.Threading.Timer(_ =>
+        {
+            InvokeAsync(() =>
+            {
+                var val = Opc.GetValue($"Scheduler.{SchedulerName}.Active");
+                _isActive = val is "True" or "true" or "1";
+                StateHasChanged();
+            });
+        }, null, 500, 2000);
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (!_editing)
+        {
+            _displaySlots = Slots.Select(s => new WeeklyTimeSlot
+            {
+                DayOfWeek = s.DayOfWeek,
+                StartMinute = s.StartMinute,
+                EndMinute = s.EndMinute
+            }).ToList();
+        }
+    }
+
+    private void ToggleEditMode()
+    {
+        if (_editing)
+        {
+            _editing = false;
+        }
+        else
+        {
+            _editSlots = _displaySlots.Select(s => new WeeklyTimeSlot
+            {
+                DayOfWeek = s.DayOfWeek,
+                StartMinute = s.StartMinute,
+                EndMinute = s.EndMinute
+            }).ToList();
+            _editing = true;
+        }
+    }
+
+    private void OnSvgMouseDown(Microsoft.AspNetCore.Components.Web.MouseEventArgs e)
+    {
+        if (!_editing) return;
+        var (day, row) = HitTest(e);
+        if (day < 0) return;
+
+        _dragging = true;
+        _dragDay = day;
+        _dragStartRow = row;
+        _dragCurrentRow = row;
+        _dragRemoving = e.ShiftKey || HasSlotAt(day, row * SlotMinutes);
+    }
+
+    private void OnSvgMouseMove(Microsoft.AspNetCore.Components.Web.MouseEventArgs e)
+    {
+        if (!_dragging) return;
+        var (day, row) = HitTest(e);
+        if (day == _dragDay && row >= 0)
+            _dragCurrentRow = row;
+    }
+
+    private void OnSvgMouseUp(Microsoft.AspNetCore.Components.Web.MouseEventArgs e)
+    {
+        if (!_dragging) return;
+        _dragging = false;
+
+        var r1 = Math.Min(_dragStartRow, _dragCurrentRow);
+        var r2 = Math.Max(_dragStartRow, _dragCurrentRow);
+        var startMin = r1 * SlotMinutes;
+        var endMin = (r2 + 1) * SlotMinutes;
+
+        if (_dragRemoving)
+        {
+            _editSlots.RemoveAll(s => s.DayOfWeek == _dragDay &&
+                s.StartMinute < endMin && s.EndMinute > startMin);
+        }
+        else
+        {
+            // Remove overlapping
+            _editSlots.RemoveAll(s => s.DayOfWeek == _dragDay &&
+                s.StartMinute < endMin && s.EndMinute > startMin);
+            _editSlots.Add(new WeeklyTimeSlot
+            {
+                DayOfWeek = _dragDay,
+                StartMinute = startMin,
+                EndMinute = endMin
+            });
+            MergeSlots(_dragDay);
+        }
+    }
+
+    private (int day, int row) HitTest(Microsoft.AspNetCore.Components.Web.MouseEventArgs e)
+    {
+        double headerW = 42;
+        double colW2 = 58;
+        double rowH = 14;
+        var x = e.OffsetX - headerW;
+        var y = e.OffsetY - 22;
+        if (x < 0 || y < 0) return (-1, -1);
+        var day = (int)(x / colW2);
+        var row = (int)(y / rowH);
+        int totalRows = 24 * (60 / SlotMinutes);
+        if (day < 0 || day > 6 || row < 0 || row >= totalRows) return (-1, -1);
+        return (day, row);
+    }
+
+    private bool HasSlotAt(int day, int minute)
+    {
+        return _editSlots.Any(s => s.DayOfWeek == day && minute >= s.StartMinute && minute < s.EndMinute);
+    }
+
+    private void MergeSlots(int day)
+    {
+        var daySlots = _editSlots.Where(s => s.DayOfWeek == day).OrderBy(s => s.StartMinute).ToList();
+        _editSlots.RemoveAll(s => s.DayOfWeek == day);
+        foreach (var slot in daySlots)
+        {
+            var last = _editSlots.LastOrDefault(s => s.DayOfWeek == day);
+            if (last != null && slot.StartMinute <= last.EndMinute)
+            {
+                last.EndMinute = Math.Max(last.EndMinute, slot.EndMinute);
+            }
+            else
+            {
+                _editSlots.Add(new WeeklyTimeSlot
+                {
+                    DayOfWeek = slot.DayOfWeek,
+                    StartMinute = slot.StartMinute,
+                    EndMinute = slot.EndMinute
+                });
+            }
+        }
+    }
+
+    private void ClearAll()
+    {
+        _editSlots.Clear();
+    }
+
+    private async Task SaveEdits()
+    {
+        _displaySlots = _editSlots.Select(s => new WeeklyTimeSlot
+        {
+            DayOfWeek = s.DayOfWeek,
+            StartMinute = s.StartMinute,
+            EndMinute = s.EndMinute
+        }).ToList();
+
+        // Write slots to OPC variable as JSON for server-side persistence
+        var json = System.Text.Json.JsonSerializer.Serialize(_displaySlots);
+        await Opc.WriteValueAsync($"Scheduler.{SchedulerName}.Slots", json);
+        _editing = false;
+    }
+
+    public void Dispose()
+    {
+        _pollTimer?.Dispose();
+    }
+}

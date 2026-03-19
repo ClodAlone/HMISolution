@@ -113,6 +113,15 @@ else if (Screen.LayoutMode == "responsive")
                         var recipeVarsR = GetRecipeVariables(sym.RecipeName);
                         <RecipeWidget RecipeName="@sym.RecipeName" Variables="@recipeVarsR" />
                         break;
+                    case "weeklyplanner":
+                        var wpSlotsR = GetSchedulerSlots(sym.SchedulerName);
+                        var wpAllowEditR = GetSchedulerAllowEdit(sym.SchedulerName);
+                        var wpSlotMinR = GetSchedulerSlotMinutes(sym.SchedulerName);
+                        <WeeklyPlannerWidget SchedulerName="@sym.SchedulerName"
+                                             Slots="@wpSlotsR"
+                                             AllowEdit="@wpAllowEditR"
+                                             SlotMinutes="@wpSlotMinR" />
+                        break;
                     case "screenembed":
                         <ScreenEmbedWidget ScreenNames="@sym.EmbeddedScreens" />
                         break;
@@ -423,6 +432,19 @@ else
                             <div xmlns="http://www.w3.org/1999/xhtml" style="width: @(sym.Width)px; height: @(sym.Height)px;">
                                 <RecipeWidget RecipeName="@sym.RecipeName"
                                               Variables="@recipeVars" />
+                            </div>
+                        </foreignObject>
+                        break;
+                    case "weeklyplanner":
+                        var wpSlots = GetSchedulerSlots(sym.SchedulerName);
+                        var wpAllowEdit = GetSchedulerAllowEdit(sym.SchedulerName);
+                        var wpSlotMin = GetSchedulerSlotMinutes(sym.SchedulerName);
+                        <foreignObject width="@sym.Width" height="@sym.Height">
+                            <div xmlns="http://www.w3.org/1999/xhtml" style="width: @(sym.Width)px; height: @(sym.Height)px;">
+                                <WeeklyPlannerWidget SchedulerName="@sym.SchedulerName"
+                                                     Slots="@wpSlots"
+                                                     AllowEdit="@wpAllowEdit"
+                                                     SlotMinutes="@wpSlotMin" />
                             </div>
                         </foreignObject>
                         break;
@@ -2373,6 +2395,30 @@ else
         var recipe = Project.Model?.Recipes
             .FirstOrDefault(r => r.Name.Equals(recipeName, StringComparison.OrdinalIgnoreCase));
         return recipe?.Variables ?? new();
+    }
+
+    private List<WeeklyTimeSlot> GetSchedulerSlots(string schedulerName)
+    {
+        if (string.IsNullOrEmpty(schedulerName)) return new();
+        var sched = Project.Model?.Schedulers?
+            .FirstOrDefault(s => s.Name.Equals(schedulerName, StringComparison.OrdinalIgnoreCase));
+        return sched?.WeeklySlots ?? new();
+    }
+
+    private bool GetSchedulerAllowEdit(string schedulerName)
+    {
+        if (string.IsNullOrEmpty(schedulerName)) return false;
+        var sched = Project.Model?.Schedulers?
+            .FirstOrDefault(s => s.Name.Equals(schedulerName, StringComparison.OrdinalIgnoreCase));
+        return sched?.AllowRuntimeEdit ?? false;
+    }
+
+    private int GetSchedulerSlotMinutes(string schedulerName)
+    {
+        if (string.IsNullOrEmpty(schedulerName)) return 60;
+        var sched = Project.Model?.Schedulers?
+            .FirstOrDefault(s => s.Name.Equals(schedulerName, StringComparison.OrdinalIgnoreCase));
+        return sched?.SlotMinutes ?? 60;
     }
 
     // ═══════════════════════════════════════════════════════════════════════

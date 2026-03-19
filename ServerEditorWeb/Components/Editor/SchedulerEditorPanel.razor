@@ -1,0 +1,296 @@
+@using SharedModels
+@using ServerEditorWeb.Models
+@using ServerEditorWeb.Services
+
+<div class="scheduler-editor-panel" style="padding: 8px; overflow: auto; height: 100%;">
+    @if (_scheduler == null)
+    {
+        <div class="text-muted text-center py-4">Select a Scheduler node to edit its weekly schedule.</div>
+    }
+    else
+    {
+        <div class="d-flex gap-2 mb-2 align-items-center flex-wrap">
+            <h6 class="mb-0 small fw-bold">📅 @_scheduler.Name — Weekly Planner</h6>
+            <div class="ms-auto d-flex gap-1">
+                @if (_isWeekendView && _scheduler.WeekendMode == "Custom")
+                {
+                    <span class="badge bg-info" style="font-size: 10px;">Weekend Schedule</span>
+                }
+                @if (_scheduler.WeekendMode == "Custom")
+                {
+                    <button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size: 10px;"
+                            @onclick="ToggleWeekendView">
+                        @(_isWeekendView ? "📋 Weekday" : "🌙 Weekend")
+                    </button>
+                }
+                <button class="btn btn-sm btn-outline-danger py-0 px-2" style="font-size: 10px;"
+                        @onclick="ClearAll" title="Clear all slots">🗑 Clear</button>
+            </div>
+        </div>
+
+        <div style="overflow-x: auto;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="@SvgWidth" height="@SvgHeight"
+                 style="cursor: crosshair; user-select: none; display: block;"
+                 @onmousedown="OnMouseDown" @onmousemove="OnMouseMove" @onmouseup="OnMouseUp"
+                 @onmouseleave="OnMouseUp">
+                <defs>
+                    <pattern id="grid-pattern" width="@ColWidth" height="@RowHeight" patternUnits="userSpaceOnUse" x="@HeaderWidth" y="@HeaderHeight">
+                        <rect width="@ColWidth" height="@RowHeight" fill="none" stroke="#e0e0e0" stroke-width="0.5" />
+                    </pattern>
+                </defs>
+
+                <!-- Background grid -->
+                <rect x="@HeaderWidth" y="@HeaderHeight" width="@GridWidth" height="@GridHeight"
+                      fill="url(#grid-pattern)" stroke="#ccc" stroke-width="1" />
+
+                <!-- Column headers (days) -->
+                @for (int d = 0; d < _dayLabels.Length; d++)
+                {
+                    var dx = HeaderWidth + d * ColWidth;
+                    <rect x="@F(dx)" y="0" width="@ColWidth" height="@HeaderHeight" fill="#f0f0f0" stroke="#ccc" stroke-width="0.5" />
+                    @((MarkupString)$"<text x=\"{F(dx + ColWidth / 2)}\" y=\"{F(HeaderHeight / 2 + 4)}\" text-anchor=\"middle\" font-size=\"11\" font-weight=\"bold\" fill=\"#333\">{_dayLabels[d]}</text>")
+                }
+
+                <!-- Row headers (times) -->
+                @for (int t = 0; t < _totalSlots; t++)
+                {
+                    var ty = HeaderHeight + t * RowHeight;
+                    var minutes = t * _slotMinutes;
+                    var label = $"{minutes / 60:D2}:{minutes % 60:D2}";
+                    <rect x="0" y="@F(ty)" width="@HeaderWidth" height="@RowHeight" fill="#f8f8f8" stroke="#ddd" stroke-width="0.5" />
+                    @((MarkupString)$"<text x=\"{F(HeaderWidth - 4)}\" y=\"{F(ty + RowHeight / 2 + 3)}\" text-anchor=\"end\" font-size=\"9\" fill=\"#666\">{label}</text>")
+                }
+
+                <!-- Active slots -->
+                @foreach (var slot in ActiveSlots)
+                {
+                    var dayIdx = GetDayIndex(slot.DayOfWeek);
+                    if (dayIdx < 0) continue;
+                    var sx = HeaderWidth + dayIdx * ColWidth;
+                    var startRow = slot.StartMinute / _slotMinutes;
+                    var endRow = slot.EndMinute / _slotMinutes;
+                    for (int r = startRow; r < endRow && r < _totalSlots; r++)
+                    {
+                        var sy = HeaderHeight + r * RowHeight;
+                        <rect x="@F(sx + 1)" y="@F(sy + 1)" width="@F(ColWidth - 2)" height="@F(RowHeight - 2)"
+                              rx="2" fill="#3b82f6" opacity="0.7" />
+                    }
+                }
+
+                <!-- Drag preview -->
+                @if (_isDragging)
+                {
+                    var sx2 = HeaderWidth + _dragDay * ColWidth;
+                    var startR = Math.Min(_dragStartSlot, _dragEndSlot);
+                    var endR = Math.Max(_dragStartSlot, _dragEndSlot);
+                    for (int r = startR; r <= endR && r < _totalSlots; r++)
+                    {
+                        var sy2 = HeaderHeight + r * RowHeight;
+                        <rect x="@F(sx2 + 1)" y="@F(sy2 + 1)" width="@F(ColWidth - 2)" height="@F(RowHeight - 2)"
+                              rx="2" fill="@(_dragMode == DragMode.Add ? "#22c55e" : "#ef4444")" opacity="0.5" />
+                    }
+                }
+            </svg>
+        </div>
+        <div class="small text-muted mt-1">
+            Click and drag to add slots. Right-click (or Shift+click) and drag to remove slots.
+            Slot size: @_slotMinutes minutes.
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public EventCallback OnPropertyChanged { get; set; }
+    [Parameter] public object? Node { get; set; }
+    [Inject] private NodeEditorService Editor { get; set; } = default!;
+
+    private SchedulerConfig? _scheduler;
+    private bool _isWeekendView;
+    private int _slotMinutes = 60;
+    private int _totalSlots;
+    private string[] _dayLabels = [];
+
+    // Layout constants
+    private const double HeaderWidth = 50;
+    private const double HeaderHeight = 24;
+    private const double ColWidth = 90;
+    private const double RowHeight = 16;
+
+    private double GridWidth => _dayLabels.Length * ColWidth;
+    private double GridHeight => _totalSlots * RowHeight;
+    private double SvgWidth => HeaderWidth + GridWidth + 2;
+    private double SvgHeight => HeaderHeight + GridHeight + 2;
+
+    // Drag state
+    private bool _isDragging;
+    private int _dragDay;
+    private int _dragStartSlot;
+    private int _dragEndSlot;
+    private DragMode _dragMode;
+
+    private enum DragMode { Add, Remove }
+
+    private List<WeeklyTimeSlot> ActiveSlots =>
+        _isWeekendView && _scheduler?.WeekendMode == "Custom"
+            ? _scheduler?.WeekendSlots ?? []
+            : _scheduler?.WeeklySlots ?? [];
+
+    protected override void OnParametersSet()
+    {
+        var node = Editor.SelectedItem;
+        if (node is SchedulerNode sn)
+        {
+            _scheduler = sn.Scheduler;
+            _slotMinutes = _scheduler.SlotMinutes is 15 or 60 ? _scheduler.SlotMinutes : 60;
+            _totalSlots = 1440 / _slotMinutes;
+
+            if (_isWeekendView && _scheduler.WeekendMode == "Custom")
+                _dayLabels = ["Sat", "Sun"];
+            else
+                _dayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+        }
+        else
+        {
+            _scheduler = null;
+        }
+    }
+
+    private void ToggleWeekendView()
+    {
+        _isWeekendView = !_isWeekendView;
+        if (_isWeekendView)
+            _dayLabels = ["Sat", "Sun"];
+        else
+            _dayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+    }
+
+    private int GetDayIndex(int dayOfWeek)
+    {
+        if (_isWeekendView && _scheduler?.WeekendMode == "Custom")
+        {
+            return dayOfWeek switch { 6 => 0, 0 => 1, _ => -1 };
+        }
+        // Mon=0..Sun=6 mapping from DayOfWeek (0=Sun..6=Sat)
+        return dayOfWeek switch
+        {
+            1 => 0, 2 => 1, 3 => 2, 4 => 3, 5 => 4, 6 => 5, 0 => 6,
+            _ => -1
+        };
+    }
+
+    private int DayIndexToDayOfWeek(int idx)
+    {
+        if (_isWeekendView && _scheduler?.WeekendMode == "Custom")
+        {
+            return idx switch { 0 => 6, 1 => 0, _ => -1 };
+        }
+        return idx switch
+        {
+            0 => 1, 1 => 2, 2 => 3, 3 => 4, 4 => 5, 5 => 6, 6 => 0,
+            _ => -1
+        };
+    }
+
+    private (int day, int slot) HitTest(double clientX, double clientY)
+    {
+        var x = clientX - HeaderWidth;
+        var y = clientY - HeaderHeight;
+        var day = (int)(x / ColWidth);
+        var slot = (int)(y / RowHeight);
+        day = Math.Clamp(day, 0, _dayLabels.Length - 1);
+        slot = Math.Clamp(slot, 0, _totalSlots - 1);
+        return (day, slot);
+    }
+
+    private void OnMouseDown(MouseEventArgs e)
+    {
+        if (_scheduler == null) return;
+        var (day, slot) = HitTest(e.OffsetX, e.OffsetY);
+        _isDragging = true;
+        _dragDay = day;
+        _dragStartSlot = slot;
+        _dragEndSlot = slot;
+        _dragMode = (e.ShiftKey || e.Button == 2) ? DragMode.Remove : DragMode.Add;
+    }
+
+    private void OnMouseMove(MouseEventArgs e)
+    {
+        if (!_isDragging) return;
+        var (_, slot) = HitTest(e.OffsetX, e.OffsetY);
+        _dragEndSlot = slot;
+    }
+
+    private async Task OnMouseUp(MouseEventArgs e)
+    {
+        if (!_isDragging || _scheduler == null)
+        {
+            _isDragging = false;
+            return;
+        }
+        _isDragging = false;
+
+        var dayOfWeek = DayIndexToDayOfWeek(_dragDay);
+        if (dayOfWeek < 0) return;
+
+        var startSlot = Math.Min(_dragStartSlot, _dragEndSlot);
+        var endSlot = Math.Max(_dragStartSlot, _dragEndSlot);
+        var startMinute = startSlot * _slotMinutes;
+        var endMinute = (endSlot + 1) * _slotMinutes;
+
+        var slots = ActiveSlots;
+
+        if (_dragMode == DragMode.Add)
+        {
+            // Remove overlapping slots for this day in the range
+            slots.RemoveAll(s => s.DayOfWeek == dayOfWeek && s.StartMinute < endMinute && s.EndMinute > startMinute);
+            slots.Add(new WeeklyTimeSlot { DayOfWeek = dayOfWeek, StartMinute = startMinute, EndMinute = endMinute });
+            MergeSlots(slots, dayOfWeek);
+        }
+        else
+        {
+            // Remove slots in the range
+            var toRemove = slots.Where(s => s.DayOfWeek == dayOfWeek && s.StartMinute < endMinute && s.EndMinute > startMinute).ToList();
+            foreach (var slot in toRemove)
+            {
+                slots.Remove(slot);
+                // Re-add parts outside the removed range
+                if (slot.StartMinute < startMinute)
+                    slots.Add(new WeeklyTimeSlot { DayOfWeek = dayOfWeek, StartMinute = slot.StartMinute, EndMinute = startMinute });
+                if (slot.EndMinute > endMinute)
+                    slots.Add(new WeeklyTimeSlot { DayOfWeek = dayOfWeek, StartMinute = endMinute, EndMinute = slot.EndMinute });
+            }
+        }
+
+        Editor.MarkChanged();
+        await OnPropertyChanged.InvokeAsync();
+    }
+
+    private static void MergeSlots(List<WeeklyTimeSlot> slots, int dayOfWeek)
+    {
+        var daySlots = slots.Where(s => s.DayOfWeek == dayOfWeek).OrderBy(s => s.StartMinute).ToList();
+        var merged = new List<WeeklyTimeSlot>();
+        foreach (var s in daySlots)
+        {
+            if (merged.Count > 0 && merged[^1].EndMinute >= s.StartMinute)
+            {
+                merged[^1].EndMinute = Math.Max(merged[^1].EndMinute, s.EndMinute);
+            }
+            else
+            {
+                merged.Add(new WeeklyTimeSlot { DayOfWeek = dayOfWeek, StartMinute = s.StartMinute, EndMinute = s.EndMinute });
+            }
+        }
+        slots.RemoveAll(s => s.DayOfWeek == dayOfWeek);
+        slots.AddRange(merged);
+    }
+
+    private async Task ClearAll()
+    {
+        if (_scheduler == null) return;
+        ActiveSlots.Clear();
+        Editor.MarkChanged();
+        await OnPropertyChanged.InvokeAsync();
+    }
+
+    private static string F(double v) => v.ToString(System.Globalization.CultureInfo.InvariantCulture);
+}

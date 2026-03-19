@@ -310,6 +310,261 @@ else if (Node is RecipeGroupNode)
         </p>
     </div>
 }
+else if (Node is SchedulerNode schedulerNode)
+{
+    <div class="properties-panel">
+        <h5>📅 Scheduler Properties</h5>
+        <div class="mb-3">
+            <label class="form-label">Name</label>
+            <input type="text" class="form-control" @bind="schedulerNode.Name" @bind:after="OnChanged" @onfocus="() => CaptureForUndo(schedulerNode, nameof(schedulerNode.Name))" />
+        </div>
+        <div class="mb-3 form-check">
+            <input class="form-check-input" type="checkbox" @bind="schedulerNode.Scheduler.Enabled" @bind:after="OnChanged" />
+            <label class="form-check-label">Enabled</label>
+        </div>
+        <div class="mb-3 form-check">
+            <input class="form-check-input" type="checkbox" @bind="schedulerNode.Scheduler.AllowRuntimeEdit" @bind:after="OnChanged" />
+            <label class="form-check-label">Allow Runtime Edit</label>
+            <div class="form-text">When enabled, runtime users can modify the schedule from the Weekly Planner widget.</div>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Slot Granularity (minutes)</label>
+            <select class="form-select" @bind="schedulerNode.Scheduler.SlotMinutes" @bind:after="OnChanged">
+                <option value="15">15 minutes</option>
+                <option value="60">1 hour</option>
+            </select>
+        </div>
+
+        <h6 class="mt-3">Weekend Behavior</h6>
+        <div class="mb-3">
+            <select class="form-select" @bind="schedulerNode.Scheduler.WeekendMode" @bind:after="OnChanged">
+                <option value="Same">Same as weekdays</option>
+                <option value="Off">Off (no execution)</option>
+                <option value="Custom">Custom weekend schedule</option>
+            </select>
+        </div>
+
+        <h6 class="mt-3">Holiday Behavior</h6>
+        <div class="mb-3">
+            <select class="form-select" @bind="schedulerNode.Scheduler.HolidayMode" @bind:after="OnChanged">
+                <option value="Same">Same as normal schedule</option>
+                <option value="Off">Off (no execution)</option>
+                <option value="Weekend">Use weekend schedule</option>
+            </select>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Holiday Locale</label>
+            <select class="form-select" @bind="schedulerNode.Scheduler.HolidayLocale" @bind:after="OnChanged">
+                <option value="">(none)</option>
+                @foreach (var locale in SharedModels.HolidayCalendars.AvailableLocales)
+                {
+                    <option value="@locale">@locale</option>
+                }
+            </select>
+            <div class="form-text">Select a locale to load built-in public holidays.</div>
+        </div>
+
+        @if (!string.IsNullOrEmpty(schedulerNode.Scheduler.HolidayLocale) && SharedModels.HolidayCalendars.BuiltIn.TryGetValue(schedulerNode.Scheduler.HolidayLocale, out var builtInHolidays))
+        {
+            <details class="mb-3">
+                <summary class="small text-muted">Built-in holidays (@schedulerNode.Scheduler.HolidayLocale): @builtInHolidays.Count</summary>
+                <ul class="list-unstyled small ps-3 mt-1">
+                    @foreach (var h in builtInHolidays)
+                    {
+                        <li>@h.Name — @h.Month/@h.Day</li>
+                    }
+                </ul>
+            </details>
+        }
+
+        <h6 class="mt-3">Custom Holidays</h6>
+        <table class="table table-sm table-bordered">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th style="width: 60px;">Month</th>
+                    <th style="width: 60px;">Day</th>
+                    <th style="width: 60px;">Year</th>
+                    <th style="width: 40px;"></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var h in schedulerNode.Scheduler.CustomHolidays)
+                {
+                    var holiday = h;
+                    <tr>
+                        <td><input type="text" class="form-control form-control-sm" @bind="holiday.Name" @bind:after="OnChanged" /></td>
+                        <td><input type="number" class="form-control form-control-sm" @bind="holiday.Month" @bind:after="OnChanged" /></td>
+                        <td><input type="number" class="form-control form-control-sm" @bind="holiday.Day" @bind:after="OnChanged" /></td>
+                        <td><input type="number" class="form-control form-control-sm" @bind="holiday.Year" @bind:after="OnChanged" placeholder="0=all" /></td>
+                        <td><button class="btn btn-sm btn-outline-danger" @onclick="() => { schedulerNode.Scheduler.CustomHolidays.Remove(holiday); OnChanged(); }">✕</button></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        <button class="btn btn-sm btn-outline-primary" @onclick="() => { schedulerNode.Scheduler.CustomHolidays.Add(new SharedModels.HolidayEntry()); OnChanged(); }">➕ Add Holiday</button>
+
+        <h6 class="mt-3">Activate Commands</h6>
+        <p class="text-muted small">Commands executed when a time slot becomes active.</p>
+        @for (int i = 0; i < schedulerNode.Scheduler.Commands.Count; i++)
+        {
+            var idx = i;
+            var cmd = schedulerNode.Scheduler.Commands[idx];
+            <div class="border rounded p-2 mb-2" style="font-size: 11px;">
+                <div class="d-flex gap-1 mb-1">
+                    <select class="form-select form-select-sm" style="font-size: 10px;" @bind="cmd.Action" @bind:after="OnChanged">
+                        <optgroup label="Navigation">
+                            <option value="NavigateScreen">Navigate Screen</option>
+                            <option value="OpenScreenPopup">Open Screen Popup</option>
+                            <option value="OpenScreenModal">Open Screen Modal</option>
+                        </optgroup>
+                        <optgroup label="Variables">
+                            <option value="SetVariable">Set Variable</option>
+                            <option value="WriteVariable">Write Variable</option>
+                            <option value="ResetVariable">Reset Variable</option>
+                            <option value="ToggleVariable">Toggle Variable</option>
+                            <option value="IncrementVariable">Increment Variable</option>
+                            <option value="DecrementVariable">Decrement Variable</option>
+                        </optgroup>
+                        <optgroup label="Scripting">
+                            <option value="ExecuteScript">Execute Script</option>
+                            <option value="ExecuteJavaScript">Execute JavaScript</option>
+                        </optgroup>
+                        <optgroup label="Authentication">
+                            <option value="Login">Login</option>
+                            <option value="Logout">Logout</option>
+                        </optgroup>
+                        <optgroup label="Alarms">
+                            <option value="AcknowledgeAllAlarms">Acknowledge All Alarms</option>
+                            <option value="ResetAllAlarms">Reset All Alarms</option>
+                        </optgroup>
+                        <optgroup label="Other">
+                            <option value="ChangeLanguage">Change Language</option>
+                        </optgroup>
+                    </select>
+                    <button class="btn btn-sm btn-outline-danger py-0 px-1" style="font-size: 9px;" @onclick="() => { schedulerNode.Scheduler.Commands.RemoveAt(idx); OnChanged(); }">✕</button>
+                </div>
+                @if (cmd.Action is "SetVariable" or "WriteVariable" or "ToggleVariable" or "IncrementVariable" or "DecrementVariable")
+                {
+                    <input type="text" class="form-control form-control-sm mb-1" style="font-size: 10px;" placeholder="Variable path" @bind="cmd.VariablePath" @bind:after="OnChanged" />
+                    @if (cmd.Action is not "ToggleVariable")
+                    {
+                        <input type="text" class="form-control form-control-sm" style="font-size: 10px;" placeholder="@(cmd.Action is "IncrementVariable" or "DecrementVariable" ? "Step (default 1)" : "Value")" @bind="cmd.Value" @bind:after="OnChanged" />
+                    }
+                }
+                else if (cmd.Action == "ResetVariable")
+                {
+                    <input type="text" class="form-control form-control-sm" style="font-size: 10px;" placeholder="Variable path" @bind="cmd.VariablePath" @bind:after="OnChanged" />
+                }
+                else if (cmd.Action is "NavigateScreen" or "OpenScreenPopup" or "OpenScreenModal")
+                {
+                    <input type="text" class="form-control form-control-sm" style="font-size: 10px;" placeholder="Screen name" @bind="cmd.TargetScreen" @bind:after="OnChanged" />
+                }
+                else if (cmd.Action is "ExecuteScript" or "ExecuteJavaScript")
+                {
+                    <textarea class="form-control form-control-sm" style="font-size: 10px;" rows="3" placeholder="@(cmd.Action == "ExecuteJavaScript" ? "JavaScript code" : "C# script")" @bind="cmd.Script" @bind:after="OnChanged"></textarea>
+                }
+                else if (cmd.Action is "AcknowledgeAllAlarms" or "ResetAllAlarms")
+                {
+                    <input type="text" class="form-control form-control-sm" style="font-size: 10px;" placeholder="Comment (optional)" @bind="cmd.Value" @bind:after="OnChanged" />
+                }
+                else if (cmd.Action == "ChangeLanguage")
+                {
+                    <input type="text" class="form-control form-control-sm" style="font-size: 10px;" placeholder="Language code (e.g. en, de, it)" @bind="cmd.Value" @bind:after="OnChanged" />
+                }
+            </div>
+        }
+        <button class="btn btn-sm btn-outline-primary" @onclick="() => AddSchedulerCommand(schedulerNode, false)">➕ Add Command</button>
+
+        <h6 class="mt-3">Deactivate Commands</h6>
+        <p class="text-muted small">Commands executed when leaving a time slot (becomes inactive).</p>
+        @for (int i = 0; i < schedulerNode.Scheduler.DeactivateCommands.Count; i++)
+        {
+            var idx = i;
+            var cmd = schedulerNode.Scheduler.DeactivateCommands[idx];
+            <div class="border rounded p-2 mb-2" style="font-size: 11px;">
+                <div class="d-flex gap-1 mb-1">
+                    <select class="form-select form-select-sm" style="font-size: 10px;" @bind="cmd.Action" @bind:after="OnChanged">
+                        <optgroup label="Navigation">
+                            <option value="NavigateScreen">Navigate Screen</option>
+                            <option value="OpenScreenPopup">Open Screen Popup</option>
+                            <option value="OpenScreenModal">Open Screen Modal</option>
+                        </optgroup>
+                        <optgroup label="Variables">
+                            <option value="SetVariable">Set Variable</option>
+                            <option value="WriteVariable">Write Variable</option>
+                            <option value="ResetVariable">Reset Variable</option>
+                            <option value="ToggleVariable">Toggle Variable</option>
+                            <option value="IncrementVariable">Increment Variable</option>
+                            <option value="DecrementVariable">Decrement Variable</option>
+                        </optgroup>
+                        <optgroup label="Scripting">
+                            <option value="ExecuteScript">Execute Script</option>
+                            <option value="ExecuteJavaScript">Execute JavaScript</option>
+                        </optgroup>
+                        <optgroup label="Authentication">
+                            <option value="Login">Login</option>
+                            <option value="Logout">Logout</option>
+                        </optgroup>
+                        <optgroup label="Alarms">
+                            <option value="AcknowledgeAllAlarms">Acknowledge All Alarms</option>
+                            <option value="ResetAllAlarms">Reset All Alarms</option>
+                        </optgroup>
+                        <optgroup label="Other">
+                            <option value="ChangeLanguage">Change Language</option>
+                        </optgroup>
+                    </select>
+                    <button class="btn btn-sm btn-outline-danger py-0 px-1" style="font-size: 9px;" @onclick="() => { schedulerNode.Scheduler.DeactivateCommands.RemoveAt(idx); OnChanged(); }">✕</button>
+                </div>
+                @if (cmd.Action is "SetVariable" or "WriteVariable" or "ToggleVariable" or "IncrementVariable" or "DecrementVariable")
+                {
+                    <input type="text" class="form-control form-control-sm mb-1" style="font-size: 10px;" placeholder="Variable path" @bind="cmd.VariablePath" @bind:after="OnChanged" />
+                    @if (cmd.Action is not "ToggleVariable")
+                    {
+                        <input type="text" class="form-control form-control-sm" style="font-size: 10px;" placeholder="@(cmd.Action is "IncrementVariable" or "DecrementVariable" ? "Step (default 1)" : "Value")" @bind="cmd.Value" @bind:after="OnChanged" />
+                    }
+                }
+                else if (cmd.Action == "ResetVariable")
+                {
+                    <input type="text" class="form-control form-control-sm" style="font-size: 10px;" placeholder="Variable path" @bind="cmd.VariablePath" @bind:after="OnChanged" />
+                }
+                else if (cmd.Action is "NavigateScreen" or "OpenScreenPopup" or "OpenScreenModal")
+                {
+                    <input type="text" class="form-control form-control-sm" style="font-size: 10px;" placeholder="Screen name" @bind="cmd.TargetScreen" @bind:after="OnChanged" />
+                }
+                else if (cmd.Action is "ExecuteScript" or "ExecuteJavaScript")
+                {
+                    <textarea class="form-control form-control-sm" style="font-size: 10px;" rows="3" placeholder="@(cmd.Action == "ExecuteJavaScript" ? "JavaScript code" : "C# script")" @bind="cmd.Script" @bind:after="OnChanged"></textarea>
+                }
+                else if (cmd.Action is "AcknowledgeAllAlarms" or "ResetAllAlarms")
+                {
+                    <input type="text" class="form-control form-control-sm" style="font-size: 10px;" placeholder="Comment (optional)" @bind="cmd.Value" @bind:after="OnChanged" />
+                }
+                else if (cmd.Action == "ChangeLanguage")
+                {
+                    <input type="text" class="form-control form-control-sm" style="font-size: 10px;" placeholder="Language code (e.g. en, de, it)" @bind="cmd.Value" @bind:after="OnChanged" />
+                }
+            </div>
+        }
+        <button class="btn btn-sm btn-outline-primary" @onclick="() => AddSchedulerCommand(schedulerNode, true)">➕ Add Deactivate Command</button>
+
+        <div class="alert alert-info small mt-3">
+            <strong>Usage:</strong> Use the <strong>Scheduler Editor</strong> panel to visually edit the weekly schedule.
+            Add a <strong>Weekly Planner</strong> widget to a screen to let runtime users view/edit the schedule.
+        </div>
+    </div>
+}
+else if (Node is SchedulerGroupNode)
+{
+    <div class="properties-panel">
+        <h5>⏰ Schedulers</h5>
+        <p class="text-muted">Select a scheduler to edit, or add a new one.</p>
+        <p class="text-muted small">
+            Schedulers execute commands at configured times on a weekly recurring basis.<br/>
+            Supports different behaviors for weekdays, weekends, and public holidays.
+        </p>
+    </div>
+}
 else if (Node is ScreenNode screen)
 {
     <div class="properties-panel">
@@ -449,6 +704,19 @@ else if (Node is UserNode uNode)
         await OnPropertyChanged.InvokeAsync();
     }
 
+    private async Task AddSchedulerCommand(SchedulerNode node, bool deactivate)
+    {
+        var cmd = new SharedModels.SymbolCommand
+        {
+            Id = Guid.NewGuid().ToString("N")[..8],
+            Action = "SetVariable"
+        };
+        if (deactivate)
+            node.Scheduler.DeactivateCommands.Add(cmd);
+        else
+            node.Scheduler.Commands.Add(cmd);
+        await OnChanged();
+    }
     private void FlushUndo()
     {
         if (_pendingTarget != null && _pendingProp != null)

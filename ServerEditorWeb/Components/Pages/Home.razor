@@ -258,6 +258,8 @@ else
                 disabled="@(Editor.SelectedItem is not (PlcGroupNode or ResourceFolderNode { ResourceKind: "PlcProgram" }))">⚙️</button>
         <button class="iconbar-btn" title="Add Recipe" @onclick="AddRecipe"
                 disabled="@(Editor.SelectedItem is not RecipeGroupNode)">📦</button>
+        <button class="iconbar-btn" title="Add Scheduler" @onclick="AddScheduler"
+                disabled="@(Editor.SelectedItem is not SchedulerGroupNode)">📅</button>
         <button class="iconbar-btn" title="Add Screen" @onclick="AddScreen"
                 disabled="@(Editor.SelectedItem is not (ScreenGroupNode or ResourceFolderNode { ResourceKind: "Screen" }))">🖼️</button>
 
@@ -280,7 +282,7 @@ else
             <TreeView Nodes="Editor.RootItems" SelectedNode="Editor.SelectedItem" OnSelect="SelectNode"
                     OnDoubleClick="OnNodeDoubleClick"
                     OnAddFolder="OnAddFolder" OnAddVariable="OnAddVariable" OnAddScript="OnAddScript"
-                    OnAddPlcProgram="OnAddPlcProgram" OnAddRecipe="OnAddRecipe"
+                    OnAddPlcProgram="OnAddPlcProgram" OnAddRecipe="OnAddRecipe" OnAddScheduler="OnAddScheduler"
                     OnAddScreen="OnAddScreen" OnAddUserGroup="OnAddUserGroup" OnAddUser="OnAddUser"
                     OnDelete="OnDelete"
                     OnCopy="OnCopyNode" OnPaste="OnPasteNode"
@@ -369,6 +371,10 @@ else
                 else if (context.Id == "ladder")
                 {
                     <LadderEditorPanel Node="Editor.SelectedItem" OnPropertyChanged="OnPropertyChanged" />
+                }
+                else if (context.Id == "scheduler")
+                {
+                    <SchedulerEditorPanel Node="Editor.SelectedItem" OnPropertyChanged="OnPropertyChanged" />
                 }
                 else if (context.Id == "crashes")
                 {
@@ -598,6 +604,7 @@ else
         new() { Id = "images", Title = "Images", Icon = "🖼️", Zone = "center" },
         new() { Id = "eventlog", Title = "Event Log", Icon = "📓", Zone = "center" },
         new() { Id = "ladder", Title = "Ladder Editor", Icon = "⚡", Zone = "center" },
+        new() { Id = "scheduler", Title = "Scheduler Editor", Icon = "📅", Zone = "center" },
         new() { Id = "serverlog", Title = "Server Logs", Icon = "📋", Zone = "bottom" },
         new() { Id = "applog", Title = "App Log", Icon = "📒", Zone = "bottom" },
         new() { Id = "crashes", Title = "Crash Reports", Icon = "🐛", Zone = "bottom" },
@@ -615,6 +622,7 @@ private void OnAddVariable(TreeNode node) { Editor.SelectNode(node); Editor.AddV
 private void OnAddScript(TreeNode node) { Editor.SelectNode(node); Editor.AddScript(); }
 private void OnAddPlcProgram(TreeNode node) { Editor.SelectNode(node); Editor.AddPlcProgram(); }
 private void OnAddRecipe(TreeNode node) { Editor.SelectNode(node); Editor.AddRecipe(); }
+private void OnAddScheduler(TreeNode node) { Editor.SelectNode(node); Editor.AddScheduler(); }
 private void OnAddScreen(TreeNode node) { Editor.SelectNode(node); Editor.AddScreen(); }
 private void OnAddUserGroup(TreeNode node) { Editor.SelectNode(node); Editor.AddUserGroup(); }
 private void OnAddUser(TreeNode node) { Editor.SelectNode(node); Editor.AddUser(); }
@@ -874,6 +882,7 @@ private void UnsavedDialogCancel()
             PlcProgramNode pn when pn.PlcProgram.Language.Equals("LD", StringComparison.OrdinalIgnoreCase) => "ladder",
             PlcProgramNode or PlcGroupNode => "properties",
             RecipeNode or RecipeGroupNode => "properties",
+            SchedulerNode or SchedulerGroupNode => "scheduler",
             _ => "properties"
         };
 
@@ -891,6 +900,7 @@ private void UnsavedDialogCancel()
     private void AddScript() { Editor.AddScript(); }
     private void AddPlcProgram() { Editor.AddPlcProgram(); }
     private void AddRecipe() { Editor.AddRecipe(); }
+    private void AddScheduler() { Editor.AddScheduler(); }
     private void AddScreen() { Editor.AddScreen(); }
     private void Delete() { Editor.DeleteSelected(); }
 
@@ -901,7 +911,7 @@ private void UnsavedDialogCancel()
     {
         if (Editor.SelectedItems.Count == 0) return false;
         return Editor.SelectedItems.All(n => n is VariableNode or FolderNode { Parent: not null }
-            or ScriptNode or PlcProgramNode or ScreenNode or RecipeNode or ResourceFolderNode);
+            or ScriptNode or PlcProgramNode or ScreenNode or RecipeNode or SchedulerNode or ResourceFolderNode);
     }
 
     private bool CanDeleteSelection()

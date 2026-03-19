@@ -365,6 +365,17 @@ public class NodeEditorService
         }
         proj.Children.Add(recipeGroup);
 
+        var schedulerGroup = new SchedulerGroupNode() { Parent = proj };
+        if (proj.Model.Schedulers != null)
+        {
+            foreach (var scheduler in proj.Model.Schedulers)
+            {
+                var sNode = new SchedulerNode(scheduler) { Parent = schedulerGroup };
+                schedulerGroup.Children.Add(sNode);
+            }
+        }
+        proj.Children.Add(schedulerGroup);
+
         var screenGroup = new ScreenGroupNode() { Parent = proj };
         if (proj.Model.Screens != null)
         {
@@ -580,6 +591,27 @@ public class NodeEditorService
                 Variables = new List<RecipeVariable>()
             };
             var newNode = new RecipeNode(newRecipe) { Parent = parent };
+            parent.Children.Add(newNode);
+            parent.IsExpanded = true;
+            SelectedItem = newNode;
+            HasUnsavedChanges = true;
+            NotifyStateChanged();
+        }
+    }
+
+    public void AddScheduler()
+    {
+        if (SelectedItem is SchedulerGroupNode parent)
+        {
+            var newScheduler = new SchedulerConfig
+            {
+                Name = "New Scheduler",
+                Enabled = true,
+                SlotMinutes = 60,
+                WeekendMode = "Same",
+                HolidayMode = "Same"
+            };
+            var newNode = new SchedulerNode(newScheduler) { Parent = parent };
             parent.Children.Add(newNode);
             parent.IsExpanded = true;
             SelectedItem = newNode;
@@ -1311,6 +1343,18 @@ public class NodeEditorService
                     {
                         rNode.SyncName();
                         _rootModel.Recipes.Add(rNode.Recipe);
+                    }
+                }
+            }
+            else if (root is SchedulerGroupNode schGrpNode && _rootModel != null)
+            {
+                _rootModel.Schedulers.Clear();
+                foreach (var child in schGrpNode.Children)
+                {
+                    if (child is SchedulerNode schNode)
+                    {
+                        schNode.SyncName();
+                        _rootModel.Schedulers.Add(schNode.Scheduler);
                     }
                 }
             }

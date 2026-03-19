@@ -29,6 +29,7 @@ namespace SimpleOpcFileServer
         private ScriptManager? _scriptManager;
         private PlcManager? _plcManager;
         private RecipeManager? _recipeManager;
+        private SchedulerManager? _schedulerManager;
 
         private readonly List<NodeId> _rootNodeIds = new();
         private FileSystemWatcher? _watcher;
@@ -571,11 +572,18 @@ namespace SimpleOpcFileServer
                               _recipeManager = new RecipeManager(this, _configPath);
                               _recipeManager.Initialize(nodeModel.Recipes);
 
-                              // Create OPC variables for each recipe under a "Recipe" folder
-                              CreateRecipeVariables(nodeModel.Recipes, references);
-                          }
+                                  // Create OPC variables for each recipe under a "Recipe" folder
+                                  CreateRecipeVariables(nodeModel.Recipes, references);
+                              }
 
-                          // ─── Diagnostics OPC UA node (always created, license-exempt) ───
+                              // Schedulers
+                              if (nodeModel.Schedulers != null && nodeModel.Schedulers.Count > 0)
+                              {
+                                  _schedulerManager = new SchedulerManager(this);
+                                  _schedulerManager.Initialize(nodeModel.Schedulers);
+                              }
+
+                              // ─── Diagnostics OPC UA node (always created, license-exempt) ───
                           CreateDiagnosticsNode(references);
                       }
                  }
@@ -1842,6 +1850,7 @@ namespace SimpleOpcFileServer
                 _scriptManager?.Dispose();
                 _plcManager?.Dispose();
                 _recipeManager?.Dispose();
+                _schedulerManager?.Dispose();
                 _eventLogger?.Dispose();
                 foreach (var rw in _resourceWatchers) rw.Dispose();
                 _resourceWatchers.Clear();

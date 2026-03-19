@@ -1010,6 +1010,15 @@
             sym.AnimTextShowBorder = false;
             sym.AnimTextMessages = "";
         }
+        // Set responsive grid defaults when in responsive mode
+        if (screen.LayoutMode == "responsive")
+        {
+            sym.ColSpan = GetResponsiveColSpan(type);
+            sym.RowSpan = 1;
+            sym.RowHeight = GetResponsiveRowHeight(type);
+            sym.Order = screen.Symbols.Count;
+        }
+
         screen.Symbols.Add(sym);
         _selectedSymbols.Clear();
         _selectedSymbol = sym;
@@ -1017,6 +1026,29 @@
         NotifySelectionChanged();
         OnChanged();
     }
+
+    private static int GetResponsiveColSpan(string type) => type switch
+    {
+        "text" or "indicator" or "editbox" or "button" => 3,
+        "gauge" or "svg" or "imagemap" or "animtext" => 4,
+        "ipcamera" or "recipe" => 6,
+        "alarmlist" or "hdachart" or "hdagrid" or "eventlog" or "trend" => 12,
+        _ => 4
+    };
+
+    private static int GetResponsiveRowHeight(string type) => type switch
+    {
+        "text" or "editbox" or "button" => 60,
+        "indicator" => 80,
+        "gauge" or "svg" => 150,
+        "alarmlist" or "hdachart" or "hdagrid" or "eventlog" => 280,
+        "trend" => 300,
+        "ipcamera" => 260,
+        "recipe" => 320,
+        "imagemap" => 200,
+        "animtext" => 50,
+        _ => 150
+    };
 
     private void DeleteSelected()
     {

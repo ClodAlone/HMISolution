@@ -18,6 +18,7 @@ namespace SharedModels
         public List<LocalizedStringEntry> Strings { get; set; } = new();
         public List<ImageResource> Images { get; set; } = new();
         public List<CameraConfig> Cameras { get; set; } = new();
+        public List<SchedulerConfig> Schedulers { get; set; } = new();
 
         [JsonPropertyName("Server")]
         public ServerSettings Server { get; set; } = new();
@@ -396,7 +397,7 @@ namespace SharedModels
     public class ScreenSymbol
     {
         public string Id { get; set; } = "";
-        public string Type { get; set; } = "rect"; // rect, circle, ellipse, text, line, gauge, indicator, svg, alarmlist, hdachart, hdagrid, eventlog, editbox, ipcamera, recipe, screenembed, imagemap, trend, switch, rotaryswitch, knob, hslider, vslider, button, animtext
+        public string Type { get; set; } = "rect"; // rect, circle, ellipse, text, line, gauge, indicator, svg, alarmlist, hdachart, hdagrid, eventlog, editbox, ipcamera, recipe, weeklyplanner, screenembed, imagemap, trend, switch, rotaryswitch, knob, hslider, vslider, button, animtext
         public double X { get; set; }
         public double Y { get; set; }
         public double Width { get; set; } = 80;
@@ -530,6 +531,9 @@ namespace SharedModels
 
         /// <summary>Recipe name to bind this widget to (Type == "recipe"). Must match a RecipeConfig.Name.</summary>
         public string RecipeName { get; set; } = "";
+
+        /// <summary>Scheduler name to bind this widget to (Type == "weeklyplanner"). Must match a SchedulerConfig.Name.</summary>
+        public string SchedulerName { get; set; } = "";
 
         /// <summary>
         /// Screen names to embed inside this symbol (Type == "screenembed").
@@ -925,5 +929,191 @@ namespace SharedModels
         public double TotalCpuMs { get; set; }
         public string Status { get; set; } = "Running"; // Running, Stopped, Error
         public string? LastError { get; set; }
+    }
+
+    // ─── Scheduler ───────────────────────────────────────────
+
+    /// <summary>
+    /// Configuration for a time-based scheduler that executes commands at scheduled times.
+    /// Supports weekly recurring schedules with different behavior for weekdays, weekends, and holidays.
+    /// </summary>
+    public class SchedulerConfig
+    {
+        public string Name { get; set; } = "";
+        public bool Enabled { get; set; } = true;
+
+        /// <summary>When true, runtime users can edit the schedule from the Weekly Planner widget.</summary>
+        public bool AllowRuntimeEdit { get; set; }
+
+        /// <summary>Time slot granularity in minutes (15 or 60). Default 60.</summary>
+        public int SlotMinutes { get; set; } = 60;
+
+        /// <summary>Commands executed when a scheduled time slot becomes active.</summary>
+        public List<SymbolCommand> Commands { get; set; } = new();
+
+        /// <summary>Optional commands executed when leaving a scheduled time slot (slot becomes inactive).</summary>
+        public List<SymbolCommand> DeactivateCommands { get; set; } = new();
+
+        /// <summary>Weekly time slots where the scheduler is active.</summary>
+        public List<WeeklyTimeSlot> WeeklySlots { get; set; } = new();
+
+        /// <summary>Behavior on weekends: "Same" (use weekday schedule), "Off" (no execution), "Custom" (use WeekendSlots).</summary>
+        public string WeekendMode { get; set; } = "Same";
+
+        /// <summary>Custom weekend time slots (used when WeekendMode == "Custom").</summary>
+        public List<WeeklyTimeSlot> WeekendSlots { get; set; } = new();
+
+        /// <summary>Behavior on holidays: "Same" (use normal schedule), "Off" (no execution), "Weekend" (use weekend schedule).</summary>
+        public string HolidayMode { get; set; } = "Same";
+
+        /// <summary>Locale code for the built-in holiday calendar (e.g. "US", "DE", "IT", "FR", "UK", "ES", "JP"). Empty = none.</summary>
+        public string HolidayLocale { get; set; } = "";
+
+        /// <summary>Additional custom holidays (dates without year recur every year).</summary>
+        public List<HolidayEntry> CustomHolidays { get; set; } = new();
+    }
+
+    /// <summary>
+    /// A weekly time slot defining an active period.
+    /// DayOfWeek 0=Sunday … 6=Saturday.
+    /// StartMinute and EndMinute are minutes from midnight (0–1440).
+    /// </summary>
+    public class WeeklyTimeSlot
+    {
+        public int DayOfWeek { get; set; }
+        public int StartMinute { get; set; }
+        public int EndMinute { get; set; }
+    }
+
+    /// <summary>
+    /// A holiday entry. When Year is 0, the holiday recurs every year.
+    /// </summary>
+    public class HolidayEntry
+    {
+        public string Name { get; set; } = "";
+        public int Month { get; set; }
+        public int Day { get; set; }
+        /// <summary>Specific year. 0 = every year.</summary>
+        public int Year { get; set; }
+    }
+
+    /// <summary>
+    /// Provides built-in holiday lists by locale.
+    /// </summary>
+    public static class HolidayCalendars
+    {
+        public static readonly Dictionary<string, List<HolidayEntry>> BuiltIn = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["US"] = new()
+            {
+                new() { Name = "New Year's Day", Month = 1, Day = 1 },
+                new() { Name = "Independence Day", Month = 7, Day = 4 },
+                new() { Name = "Veterans Day", Month = 11, Day = 11 },
+                new() { Name = "Christmas Day", Month = 12, Day = 25 },
+            },
+            ["DE"] = new()
+            {
+                new() { Name = "Neujahrstag", Month = 1, Day = 1 },
+                new() { Name = "Tag der Arbeit", Month = 5, Day = 1 },
+                new() { Name = "Tag der Deutschen Einheit", Month = 10, Day = 3 },
+                new() { Name = "Weihnachtstag", Month = 12, Day = 25 },
+                new() { Name = "2. Weihnachtstag", Month = 12, Day = 26 },
+            },
+            ["IT"] = new()
+            {
+                new() { Name = "Capodanno", Month = 1, Day = 1 },
+                new() { Name = "Epifania", Month = 1, Day = 6 },
+                new() { Name = "Festa della Liberazione", Month = 4, Day = 25 },
+                new() { Name = "Festa del Lavoro", Month = 5, Day = 1 },
+                new() { Name = "Festa della Repubblica", Month = 6, Day = 2 },
+                new() { Name = "Ferragosto", Month = 8, Day = 15 },
+                new() { Name = "Tutti i Santi", Month = 11, Day = 1 },
+                new() { Name = "Immacolata Concezione", Month = 12, Day = 8 },
+                new() { Name = "Natale", Month = 12, Day = 25 },
+                new() { Name = "Santo Stefano", Month = 12, Day = 26 },
+            },
+            ["FR"] = new()
+            {
+                new() { Name = "Jour de l'An", Month = 1, Day = 1 },
+                new() { Name = "Fête du Travail", Month = 5, Day = 1 },
+                new() { Name = "Victoire 1945", Month = 5, Day = 8 },
+                new() { Name = "Fête nationale", Month = 7, Day = 14 },
+                new() { Name = "Assomption", Month = 8, Day = 15 },
+                new() { Name = "Toussaint", Month = 11, Day = 1 },
+                new() { Name = "Armistice", Month = 11, Day = 11 },
+                new() { Name = "Noël", Month = 12, Day = 25 },
+            },
+            ["UK"] = new()
+            {
+                new() { Name = "New Year's Day", Month = 1, Day = 1 },
+                new() { Name = "Christmas Day", Month = 12, Day = 25 },
+                new() { Name = "Boxing Day", Month = 12, Day = 26 },
+            },
+            ["ES"] = new()
+            {
+                new() { Name = "Año Nuevo", Month = 1, Day = 1 },
+                new() { Name = "Epifanía", Month = 1, Day = 6 },
+                new() { Name = "Día del Trabajo", Month = 5, Day = 1 },
+                new() { Name = "Asunción", Month = 8, Day = 15 },
+                new() { Name = "Fiesta Nacional", Month = 10, Day = 12 },
+                new() { Name = "Todos los Santos", Month = 11, Day = 1 },
+                new() { Name = "Constitución", Month = 12, Day = 6 },
+                new() { Name = "Inmaculada Concepción", Month = 12, Day = 8 },
+                new() { Name = "Navidad", Month = 12, Day = 25 },
+            },
+            ["JP"] = new()
+            {
+                new() { Name = "元日", Month = 1, Day = 1 },
+                new() { Name = "成人の日", Month = 1, Day = 8 },
+                new() { Name = "建国記念の日", Month = 2, Day = 11 },
+                new() { Name = "天皇誕生日", Month = 2, Day = 23 },
+                new() { Name = "昭和の日", Month = 4, Day = 29 },
+                new() { Name = "憲法記念日", Month = 5, Day = 3 },
+                new() { Name = "みどりの日", Month = 5, Day = 4 },
+                new() { Name = "こどもの日", Month = 5, Day = 5 },
+                new() { Name = "文化の日", Month = 11, Day = 3 },
+                new() { Name = "勤労感謝の日", Month = 11, Day = 23 },
+            },
+            ["BR"] = new()
+            {
+                new() { Name = "Confraternização Universal", Month = 1, Day = 1 },
+                new() { Name = "Tiradentes", Month = 4, Day = 21 },
+                new() { Name = "Dia do Trabalho", Month = 5, Day = 1 },
+                new() { Name = "Independência", Month = 9, Day = 7 },
+                new() { Name = "Nossa Sra. Aparecida", Month = 10, Day = 12 },
+                new() { Name = "Finados", Month = 11, Day = 2 },
+                new() { Name = "Proclamação da República", Month = 11, Day = 15 },
+                new() { Name = "Natal", Month = 12, Day = 25 },
+            },
+            ["CA"] = new()
+            {
+                new() { Name = "New Year's Day", Month = 1, Day = 1 },
+                new() { Name = "Canada Day", Month = 7, Day = 1 },
+                new() { Name = "Remembrance Day", Month = 11, Day = 11 },
+                new() { Name = "Christmas Day", Month = 12, Day = 25 },
+            },
+            ["AU"] = new()
+            {
+                new() { Name = "New Year's Day", Month = 1, Day = 1 },
+                new() { Name = "Australia Day", Month = 1, Day = 26 },
+                new() { Name = "Anzac Day", Month = 4, Day = 25 },
+                new() { Name = "Christmas Day", Month = 12, Day = 25 },
+                new() { Name = "Boxing Day", Month = 12, Day = 26 },
+            },
+            ["IN"] = new()
+            {
+                new() { Name = "Republic Day", Month = 1, Day = 26 },
+                new() { Name = "Independence Day", Month = 8, Day = 15 },
+                new() { Name = "Gandhi Jayanti", Month = 10, Day = 2 },
+            },
+            ["CN"] = new()
+            {
+                new() { Name = "元旦", Month = 1, Day = 1 },
+                new() { Name = "劳动节", Month = 5, Day = 1 },
+                new() { Name = "国庆节", Month = 10, Day = 1 },
+            },
+        };
+
+        public static string[] AvailableLocales => [.. BuiltIn.Keys.Order()];
     }
 }

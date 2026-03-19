@@ -268,6 +268,32 @@ public class RecipeNode : TreeNode
     public void SyncName() => Recipe.Name = Name;
 }
 
+public class SchedulerGroupNode : TreeNode
+{
+    public override string TypeName => "SchedulerGroup";
+    public override string Icon => "⏰";
+
+    public SchedulerGroupNode()
+    {
+        Name = "Schedulers";
+    }
+}
+
+public class SchedulerNode : TreeNode
+{
+    public override string TypeName => "Scheduler";
+    public override string Icon => "📅";
+    public SchedulerConfig Scheduler { get; }
+
+    public SchedulerNode(SchedulerConfig scheduler)
+    {
+        Scheduler = scheduler;
+        Name = scheduler.Name;
+    }
+
+    public void SyncName() => Scheduler.Name = Name;
+}
+
 /// <summary>
 /// Root tree node representing an open project (nodes.json file).
 /// Multiple ProjectNodes can exist in the tree; exactly one is "Active" at a time.
