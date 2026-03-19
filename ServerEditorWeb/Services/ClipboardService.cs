@@ -86,6 +86,14 @@ public class ClipboardService
         Changed?.Invoke();
     }
 
+    public void CopyReport(ReportConfig report)
+    {
+        ContentType = "Report";
+        ContentJson = JsonSerializer.Serialize(report, _jsonOpts);
+        Label = report.Name;
+        Changed?.Invoke();
+    }
+
     public void CopySymbols(List<ScreenSymbol> symbols)
     {
         ContentType = "Symbols";
@@ -202,6 +210,14 @@ public class ClipboardService
         return s;
     }
 
+    public ReportConfig? PasteReport()
+    {
+        if (ContentType != "Report" || ContentJson == null) return null;
+        var r = JsonSerializer.Deserialize<ReportConfig>(ContentJson, _jsonOpts);
+        if (r != null) r.Name += " (Copy)";
+        return r;
+    }
+
     public List<ScreenSymbol>? PasteSymbols()
     {
         if (ContentType != "Symbols" || ContentJson == null) return null;
@@ -267,6 +283,7 @@ public class ClipboardService
         "PlcProgram" or "PlcPrograms" => target is PlcGroupNode or ResourceFolderNode { ResourceKind: "PlcProgram" },
         "Recipe" or "Recipes" => target is RecipeGroupNode,
         "Scheduler" => target is SchedulerGroupNode,
+        "Report" => target is ReportGroupNode,
         "Screen" or "Screens" => target is ScreenGroupNode or ResourceFolderNode { ResourceKind: "Screen" },
         _ => false
     };

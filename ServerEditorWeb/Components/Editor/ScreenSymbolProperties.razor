@@ -596,6 +596,53 @@
             }
         }
 
+        @if (_selectedSymbol.Type is "reportviewer")
+        {
+            <hr class="my-2" />
+            <h6 class="mb-2 small" style="color: #f97316;">ðŸ“„ Report Viewer Settings</h6>
+
+            <div class="mb-2">
+                <label class="form-label mb-0 small">Report Name</label>
+                @{
+                    var reportNames = Editor?.RootModel?.Reports?.Select(r => r.Name).ToList() ?? new List<string>();
+                }
+                @if (reportNames.Count > 0)
+                {
+                    <select class="form-select form-select-sm" style="font-size: 10px;"
+                            @bind="_selectedSymbol.ReportName" @bind:after="OnChanged">
+                        <option value="">(select a report)</option>
+                        @foreach (var rn in reportNames)
+                        {
+                            <option value="@rn">@rn</option>
+                        }
+                    </select>
+                }
+                else
+                {
+                    <input type="text" class="form-control form-control-sm" style="font-size: 10px;"
+                           @bind="_selectedSymbol.ReportName" @bind:after="OnChanged"
+                           placeholder="e.g. Daily Production Report" />
+                }
+                <div class="form-text" style="font-size: 9px;">Must match a Report definition name. The widget displays or generates the report at runtime.</div>
+            </div>
+
+            @if (!string.IsNullOrEmpty(_selectedSymbol.ReportName))
+            {
+                var matchedReport = Editor?.RootModel?.Reports?.FirstOrDefault(r =>
+                    r.Name.Equals(_selectedSymbol.ReportName, StringComparison.OrdinalIgnoreCase));
+                @if (matchedReport != null)
+                {
+                    <div class="small text-muted mb-1">
+                        <strong>@matchedReport.Sections.Count</strong> section(s) Â· Format: @matchedReport.Format Â·
+                        Delivery: @matchedReport.Delivery.Method
+                    </div>
+                }
+                else
+                {
+                    <div class="small text-warning">âš  No matching report definition found for "@_selectedSymbol.ReportName"</div>
+                }
+            }
+        }
         @if (_selectedSymbol.Type is "screenembed")
         {
             <hr class="my-2" />

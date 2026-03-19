@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -19,6 +19,7 @@ namespace SharedModels
         public List<ImageResource> Images { get; set; } = new();
         public List<CameraConfig> Cameras { get; set; } = new();
         public List<SchedulerConfig> Schedulers { get; set; } = new();
+        public List<ReportConfig> Reports { get; set; } = new();
 
         [JsonPropertyName("Server")]
         public ServerSettings Server { get; set; } = new();
@@ -706,6 +707,10 @@ namespace SharedModels
         /// <summary>Whether to show a border around the widget. Default false.</summary>
         public bool AnimTextShowBorder { get; set; }
 
+        // --- Report Viewer widget (Type == "reportviewer") --------
+        /// <summary>Report definition name (must match a ReportConfig.Name).</summary>
+        public string ReportName { get; set; } = "";
+
     }
 
     /// <summary>
@@ -763,7 +768,8 @@ namespace SharedModels
         /// ExecuteJavaScript, ExecuteScript,
         /// Login, Logout,
         /// AcknowledgeAllAlarms, ResetAllAlarms,
-        /// ChangeLanguage
+        /// ChangeLanguage,
+        /// GenerateReport
         /// </summary>
         public string Action { get; set; } = "NavigateScreen";
 
@@ -786,6 +792,9 @@ namespace SharedModels
 
         /// <summary>JavaScript or C# script body (for ExecuteJavaScript/ExecuteScript).</summary>
         public string Script { get; set; } = "";
+
+        /// <summary>Target report name (for GenerateReport).</summary>
+        public string TargetReport { get; set; } = "";
     }
 
     /// <summary>
@@ -1115,5 +1124,150 @@ namespace SharedModels
         };
 
         public static string[] AvailableLocales => [.. BuiltIn.Keys.Order()];
+    }
+    // â”€â”€â”€ Report Configuration â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+    /// <summary>
+    /// Configuration for a report definition that can be generated on demand or on schedule.
+    /// Reports can include charts (historical data), real-time OPC values, tables, and text.
+    /// </summary>
+    public class ReportConfig
+    {
+        public string Name { get; set; } = "";
+        public bool Enabled { get; set; } = true;
+
+        /// <summary>Output format: "PDF" or "HTML". Default "HTML".</summary>
+        public string Format { get; set; } = "HTML";
+
+        /// <summary>Report title shown in the header.</summary>
+        public string Title { get; set; } = "";
+
+        /// <summary>Optional description or subtitle.</summary>
+        public string Description { get; set; } = "";
+
+        /// <summary>Page size for PDF: "A4", "Letter", "A3". Default "A4".</summary>
+        public string PageSize { get; set; } = "A4";
+
+        /// <summary>Page orientation: "Portrait" or "Landscape". Default "Portrait".</summary>
+        public string Orientation { get; set; } = "Portrait";
+
+        /// <summary>Ordered list of report sections (charts, tables, text, values, headers, page breaks).</summary>
+        public List<ReportSection> Sections { get; set; } = new();
+
+        /// <summary>Delivery configuration: email, disk, or both.</summary>
+        public ReportDeliveryConfig Delivery { get; set; } = new();
+
+        /// <summary>Optional folder path for editor organization.</summary>
+        public string Group { get; set; } = "";
+    }
+
+    /// <summary>
+    /// A section within a report. The Type determines which properties are relevant.
+    /// </summary>
+    public class ReportSection
+    {
+        /// <summary>Unique ID for this section.</summary>
+        public string Id { get; set; } = "";
+
+        /// <summary>
+        /// Section type: "Header", "Text", "Chart", "Table", "Value", "PageBreak".
+        /// </summary>
+        public string Type { get; set; } = "Text";
+
+        /// <summary>Section title (for Header, Chart, Table).</summary>
+        public string Title { get; set; } = "";
+
+        /// <summary>Text content or HTML (for Text sections).</summary>
+        public string Content { get; set; } = "";
+
+        // â”€â”€â”€ Chart properties (Type == "Chart") â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+        /// <summary>Chart type: "Line", "Bar", "Area", "Pie". Default "Line".</summary>
+        public string ChartType { get; set; } = "Line";
+
+        /// <summary>Variable paths for chart data series (historical data).</summary>
+        public List<string> ChartVariablePaths { get; set; } = new();
+
+        /// <summary>Time range in minutes for historical data query. Default 60.</summary>
+        public int ChartTimeRangeMinutes { get; set; } = 60;
+
+        /// <summary>Maximum data points per series. Default 500.</summary>
+        public int ChartMaxPoints { get; set; } = 500;
+
+        /// <summary>Chart width in pixels (for HTML rendering). Default 600.</summary>
+        public int ChartWidth { get; set; } = 600;
+
+        /// <summary>Chart height in pixels. Default 300.</summary>
+        public int ChartHeight { get; set; } = 300;
+
+        /// <summary>Show chart legend. Default true.</summary>
+        public bool ChartShowLegend { get; set; } = true;
+
+        /// <summary>Show chart grid lines. Default true.</summary>
+        public bool ChartShowGrid { get; set; } = true;
+
+        // â”€â”€â”€ Table properties (Type == "Table") â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+        /// <summary>Variable paths for table rows (each path becomes a row with name + current value).</summary>
+        public List<string> TableVariablePaths { get; set; } = new();
+
+        /// <summary>Whether to show historical data in table (min/max/avg). Default false.</summary>
+        public bool TableShowStatistics { get; set; }
+
+        /// <summary>Time range for table statistics in minutes. Default 60.</summary>
+        public int TableTimeRangeMinutes { get; set; } = 60;
+
+        // â”€â”€â”€ Value properties (Type == "Value") â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+        /// <summary>Variable path for a single real-time value display.</summary>
+        public string ValueVariablePath { get; set; } = "";
+
+        /// <summary>Label shown next to the value.</summary>
+        public string ValueLabel { get; set; } = "";
+
+        /// <summary>Format string for the value (e.g. "F2"). Default "".</summary>
+        public string ValueFormat { get; set; } = "";
+
+        /// <summary>Engineering unit (e.g. "Â°C", "bar"). Default "".</summary>
+        public string ValueUnit { get; set; } = "";
+    }
+
+    /// <summary>
+    /// Delivery configuration for generated reports.
+    /// </summary>
+    public class ReportDeliveryConfig
+    {
+        /// <summary>Delivery method: "Email", "Disk", "Both". Default "Disk".</summary>
+        public string Method { get; set; } = "Disk";
+
+        /// <summary>Comma-separated email addresses for delivery.</summary>
+        public string EmailRecipients { get; set; } = "";
+
+        /// <summary>Email subject line. Supports {ReportName} and {DateTime} placeholders.</summary>
+        public string EmailSubject { get; set; } = "Report: {ReportName} - {DateTime}";
+
+        /// <summary>SMTP server address.</summary>
+        public string SmtpServer { get; set; } = "";
+
+        /// <summary>SMTP server port. Default 587.</summary>
+        public int SmtpPort { get; set; } = 587;
+
+        /// <summary>SMTP username.</summary>
+        public string SmtpUser { get; set; } = "";
+
+        /// <summary>SMTP password.</summary>
+        public string SmtpPassword { get; set; } = "";
+
+        /// <summary>Use SSL/TLS for SMTP. Default true.</summary>
+        public bool SmtpUseSsl { get; set; } = true;
+
+        /// <summary>Sender email address.</summary>
+        public string SmtpFromAddress { get; set; } = "";
+
+        /// <summary>Disk output directory path. Default "Reports".</summary>
+        public string DiskPath { get; set; } = "Reports";
+
+        /// <summary>File name pattern. Supports {ReportName}, {DateTime}, {Date}. Default "{ReportName}_{DateTime}".</summary>
+        public string FileNamePattern { get; set; } = "{ReportName}_{DateTime}";
     }
 }

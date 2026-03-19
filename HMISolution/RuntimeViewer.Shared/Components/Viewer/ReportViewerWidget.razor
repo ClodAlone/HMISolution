@@ -1,0 +1,79 @@
+@using SharedModels
+@using RuntimeViewer.Shared.Services
+@inject OpcRuntimeClient Opc
+
+<div class="rv-report-viewer" style="width: 100%; height: 100%; overflow: auto; background: #0f172a; border-radius: 4px; padding: 8px;"
+     @onclick:stopPropagation @onmousedown:stopPropagation>
+    <div class="d-flex align-items-center gap-2 mb-2" style="font-size: 12px;">
+        <span style="color: #94a3b8;">📄 @ReportName</span>
+        <button class="btn btn-sm btn-outline-primary py-0 px-2" style="font-size: 10px;"
+                @onclick="GenerateReport" disabled="@_generating">
+            @if (_generating)
+            {
+                <span>⏳ Generating...</span>
+            }
+            else
+            {
+                <span>▶ Generate</span>
+            }
+        </button>
+        @if (!string.IsNullOrEmpty(_lastGenerated))
+        {
+            <span style="color: #64748b; font-size: 9px;">Last: @_lastGenerated</span>
+        }
+    </div>
+
+    @if (!string.IsNullOrEmpty(_reportHtml))
+    {
+        <div class="rv-report-content" style="background: #1e293b; border-radius: 4px; padding: 4px; overflow: auto; max-height: calc(100% - 40px);">
+            @((MarkupString)_reportHtml)
+        </div>
+    }
+    else if (!string.IsNullOrEmpty(_error))
+    {
+        <div class="alert alert-danger small py-1 px-2">@_error</div>
+    }
+    else
+    {
+        <div style="color: #475569; font-size: 11px; text-align: center; padding: 20px;">
+            Click <strong>Generate</strong> to create the report.
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string ReportName { get; set; } = "";
+
+    private string? _reportHtml;
+    private string? _error;
+    private string? _lastGenerated;
+    private bool _generating;
+
+    private async Task GenerateReport()
+    {
+        if (string.IsNullOrWhiteSpace(ReportName) || _generating) return;
+        _generating = true;
+        _error = null;
+        StateHasChanged();
+
+        try
+        {
+            _reportHtml = await Opc.GenerateReportAsync(ReportName);
+            if (string.IsNullOrEmpty(_reportHtml))
+            {
+                _error = $"Report '{ReportName}' not found or generation failed.";
+            }
+            _lastGenerated = DateTime.Now.ToString("HH:mm:ss");
+        }
+        catch (Exception ex)
+        {
+            _error = $"Error: {ex.Message}";
+            _reportHtml = null;
+        }
+        finally
+        {
+            _generating = false;
+            StateHasChanged();
+        }
+    }
+}

@@ -29,6 +29,9 @@ public class CommandService
     /// <summary>Raised when a ChangeLanguage command fires.</summary>
     public event Action<string>? ChangeLanguage;
 
+    /// <summary>Raised when a GenerateReport command fires with the report name.</summary>
+    public event Action<string>? GenerateReport;
+
     public CommandService(OpcRuntimeClient opc, IJSRuntime js)
     {
         _opc = opc;
@@ -118,6 +121,11 @@ public class CommandService
             case "ChangeLanguage":
                 if (!string.IsNullOrEmpty(cmd.Value))
                     ChangeLanguage?.Invoke(cmd.Value);
+                break;
+
+            case "GenerateReport":
+                if (!string.IsNullOrEmpty(cmd.TargetReport))
+                    GenerateReport?.Invoke(cmd.TargetReport);
                 break;
         }
     }

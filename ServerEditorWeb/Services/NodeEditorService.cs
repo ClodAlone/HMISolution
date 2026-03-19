@@ -376,6 +376,17 @@ public class NodeEditorService
         }
         proj.Children.Add(schedulerGroup);
 
+        var reportGroup = new ReportGroupNode() { Parent = proj };
+        if (proj.Model.Reports != null)
+        {
+            foreach (var report in proj.Model.Reports)
+            {
+                var rptNode = new ReportNode(report) { Parent = reportGroup };
+                reportGroup.Children.Add(rptNode);
+            }
+        }
+        proj.Children.Add(reportGroup);
+
         var screenGroup = new ScreenGroupNode() { Parent = proj };
         if (proj.Model.Screens != null)
         {
@@ -612,6 +623,26 @@ public class NodeEditorService
                 HolidayMode = "Same"
             };
             var newNode = new SchedulerNode(newScheduler) { Parent = parent };
+            parent.Children.Add(newNode);
+            parent.IsExpanded = true;
+            SelectedItem = newNode;
+            HasUnsavedChanges = true;
+            NotifyStateChanged();
+        }
+    }
+
+    public void AddReport()
+    {
+        if (SelectedItem is ReportGroupNode parent)
+        {
+            var newReport = new ReportConfig
+            {
+                Name = "New Report",
+                Enabled = true,
+                Format = "HTML",
+                Title = "New Report"
+            };
+            var newNode = new ReportNode(newReport) { Parent = parent };
             parent.Children.Add(newNode);
             parent.IsExpanded = true;
             SelectedItem = newNode;
@@ -1355,6 +1386,18 @@ public class NodeEditorService
                     {
                         schNode.SyncName();
                         _rootModel.Schedulers.Add(schNode.Scheduler);
+                    }
+                }
+            }
+            else if (root is ReportGroupNode rptGrpNode && _rootModel != null)
+            {
+                _rootModel.Reports.Clear();
+                foreach (var child in rptGrpNode.Children)
+                {
+                    if (child is ReportNode rptNode)
+                    {
+                        rptNode.SyncName();
+                        _rootModel.Reports.Add(rptNode.Report);
                     }
                 }
             }

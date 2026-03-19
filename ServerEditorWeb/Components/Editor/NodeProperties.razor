@@ -472,6 +472,10 @@ else if (Node is SchedulerNode schedulerNode)
                 {
                     <input type="text" class="form-control form-control-sm" style="font-size: 10px;" placeholder="Language code (e.g. en, de, it)" @bind="cmd.Value" @bind:after="OnChanged" />
                 }
+                else if (cmd.Action == "GenerateReport")
+                {
+                    <input type="text" class="form-control form-control-sm" style="font-size: 10px;" placeholder="Report name" @bind="cmd.TargetReport" @bind:after="OnChanged" />
+                }
             </div>
         }
         <button class="btn btn-sm btn-outline-primary" @onclick="() => AddSchedulerCommand(schedulerNode, false)">➕ Add Command</button>
@@ -544,6 +548,10 @@ else if (Node is SchedulerNode schedulerNode)
                 {
                     <input type="text" class="form-control form-control-sm" style="font-size: 10px;" placeholder="Language code (e.g. en, de, it)" @bind="cmd.Value" @bind:after="OnChanged" />
                 }
+                else if (cmd.Action == "GenerateReport")
+                {
+                    <input type="text" class="form-control form-control-sm" style="font-size: 10px;" placeholder="Report name" @bind="cmd.TargetReport" @bind:after="OnChanged" />
+                }
             </div>
         }
         <button class="btn btn-sm btn-outline-primary" @onclick="() => AddSchedulerCommand(schedulerNode, true)">➕ Add Deactivate Command</button>
@@ -562,6 +570,126 @@ else if (Node is SchedulerGroupNode)
         <p class="text-muted small">
             Schedulers execute commands at configured times on a weekly recurring basis.<br/>
             Supports different behaviors for weekdays, weekends, and public holidays.
+        </p>
+    </div>
+}
+else if (Node is ReportNode reportNode)
+{
+    <div class="properties-panel">
+        <h5>ðŸ“„ Report Properties</h5>
+        <div class="mb-3">
+            <label class="form-label">Name</label>
+            <input type="text" class="form-control" @bind="reportNode.Name" @bind:after="OnChanged" />
+        </div>
+        <div class="mb-3 form-check">
+            <input class="form-check-input" type="checkbox" @bind="reportNode.Report.Enabled" @bind:after="OnChanged" />
+            <label class="form-check-label">Enabled</label>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Title</label>
+            <input type="text" class="form-control" @bind="reportNode.Report.Title" @bind:after="OnChanged" placeholder="Report title in header" />
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Description</label>
+            <textarea class="form-control" rows="2" @bind="reportNode.Report.Description" @bind:after="OnChanged" placeholder="Optional subtitle"></textarea>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Format</label>
+            <select class="form-select" @bind="reportNode.Report.Format" @bind:after="OnChanged">
+                <option value="HTML">HTML</option>
+                <option value="PDF">PDF</option>
+            </select>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Page Size</label>
+            <select class="form-select" @bind="reportNode.Report.PageSize" @bind:after="OnChanged">
+                <option value="A4">A4</option>
+                <option value="Letter">Letter</option>
+                <option value="A3">A3</option>
+            </select>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Orientation</label>
+            <select class="form-select" @bind="reportNode.Report.Orientation" @bind:after="OnChanged">
+                <option value="Portrait">Portrait</option>
+                <option value="Landscape">Landscape</option>
+            </select>
+        </div>
+
+        <h6 class="mt-3">Delivery</h6>
+        <div class="mb-3">
+            <label class="form-label">Delivery Method</label>
+            <select class="form-select" @bind="reportNode.Report.Delivery.Method" @bind:after="OnChanged">
+                <option value="Disk">Save to Disk</option>
+                <option value="Email">Send via Email</option>
+                <option value="Both">Both (Disk + Email)</option>
+            </select>
+        </div>
+
+        @if (reportNode.Report.Delivery.Method is "Disk" or "Both")
+        {
+            <div class="mb-3">
+                <label class="form-label">Output Directory</label>
+                <input type="text" class="form-control" @bind="reportNode.Report.Delivery.DiskPath" @bind:after="OnChanged" placeholder="Reports" />
+            </div>
+            <div class="mb-3">
+                <label class="form-label">File Name Pattern</label>
+                <input type="text" class="form-control" @bind="reportNode.Report.Delivery.FileNamePattern" @bind:after="OnChanged" placeholder="{ReportName}_{DateTime}" />
+                <div class="form-text">Placeholders: {ReportName}, {DateTime}, {Date}</div>
+            </div>
+        }
+
+        @if (reportNode.Report.Delivery.Method is "Email" or "Both")
+        {
+            <div class="mb-3">
+                <label class="form-label">Recipients (comma-separated)</label>
+                <input type="text" class="form-control" @bind="reportNode.Report.Delivery.EmailRecipients" @bind:after="OnChanged" placeholder="user@example.com" />
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Email Subject</label>
+                <input type="text" class="form-control" @bind="reportNode.Report.Delivery.EmailSubject" @bind:after="OnChanged" />
+            </div>
+            <div class="mb-3">
+                <label class="form-label">SMTP Server</label>
+                <input type="text" class="form-control" @bind="reportNode.Report.Delivery.SmtpServer" @bind:after="OnChanged" placeholder="smtp.example.com" />
+            </div>
+            <div class="mb-3">
+                <label class="form-label">SMTP Port</label>
+                <input type="number" class="form-control" @bind="reportNode.Report.Delivery.SmtpPort" @bind:after="OnChanged" />
+            </div>
+            <div class="mb-3">
+                <label class="form-label">SMTP Username</label>
+                <input type="text" class="form-control" @bind="reportNode.Report.Delivery.SmtpUser" @bind:after="OnChanged" />
+            </div>
+            <div class="mb-3">
+                <label class="form-label">SMTP Password</label>
+                <input type="password" class="form-control" @bind="reportNode.Report.Delivery.SmtpPassword" @bind:after="OnChanged" />
+            </div>
+            <div class="mb-3 form-check">
+                <input class="form-check-input" type="checkbox" @bind="reportNode.Report.Delivery.SmtpUseSsl" @bind:after="OnChanged" />
+                <label class="form-check-label">Use SSL/TLS</label>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">From Address</label>
+                <input type="text" class="form-control" @bind="reportNode.Report.Delivery.SmtpFromAddress" @bind:after="OnChanged" placeholder="noreply@example.com" />
+            </div>
+        }
+
+        <div class="alert alert-info small mt-3">
+            <strong>Sections:</strong> @reportNode.Report.Sections.Count section(s).<br/>
+            Open the <strong>Report Designer</strong> panel (double-click) to add charts, tables, text and value sections.
+        </div>
+    </div>
+}
+else if (Node is ReportGroupNode)
+{
+    <div class="properties-panel">
+        <h5>ðŸ“Š Reports</h5>
+        <p class="text-muted">Select a report to edit, or add a new one.</p>
+        <p class="text-muted small">
+            Reports can include charts from historical data, real-time OPC values, tables, and text.<br/>
+            Generate reports on demand or bind them to a <strong>GenerateReport</strong> command action.<br/>
+            Add a <strong>Report Viewer</strong> widget to a screen to display generated reports at runtime.
         </p>
     </div>
 }

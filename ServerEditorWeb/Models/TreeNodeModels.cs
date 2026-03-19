@@ -294,6 +294,32 @@ public class SchedulerNode : TreeNode
     public void SyncName() => Scheduler.Name = Name;
 }
 
+public class ReportGroupNode : TreeNode
+{
+    public override string TypeName => "ReportGroup";
+    public override string Icon => "📊";
+
+    public ReportGroupNode()
+    {
+        Name = "Reports";
+    }
+}
+
+public class ReportNode : TreeNode
+{
+    public override string TypeName => "Report";
+    public override string Icon => "📄";
+    public ReportConfig Report { get; }
+
+    public ReportNode(ReportConfig report)
+    {
+        Report = report;
+        Name = report.Name;
+    }
+
+    public void SyncName() => Report.Name = Name;
+}
+
 /// <summary>
 /// Root tree node representing an open project (nodes.json file).
 /// Multiple ProjectNodes can exist in the tree; exactly one is "Active" at a time.

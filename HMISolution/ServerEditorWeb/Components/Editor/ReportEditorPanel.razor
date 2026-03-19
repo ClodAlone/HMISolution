@@ -1,0 +1,299 @@
+@using SharedModels
+@using ServerEditorWeb.Models
+@using ServerEditorWeb.Services
+
+<div class="report-editor-panel" style="padding: 8px; overflow: auto; height: 100%;">
+    @if (_report == null)
+    {
+        <div class="text-muted text-center py-4">Select a Report node to design its sections.</div>
+    }
+    else
+    {
+        <div class="d-flex gap-2 mb-2 align-items-center flex-wrap">
+            <h6 class="mb-0 small fw-bold">📄 @_report.Name — Report Designer</h6>
+            <div class="ms-auto d-flex gap-1">
+                <span class="badge bg-secondary" style="font-size: 10px;">@_report.Format</span>
+                <span class="badge bg-info" style="font-size: 10px;">@_report.Sections.Count section(s)</span>
+            </div>
+        </div>
+
+        <div class="mb-2 d-flex gap-1 flex-wrap">
+            <button class="btn btn-sm btn-outline-primary py-0 px-2" style="font-size: 10px;" @onclick='() => AddSection("Header")'>📝 Header</button>
+            <button class="btn btn-sm btn-outline-primary py-0 px-2" style="font-size: 10px;" @onclick='() => AddSection("Text")'>📃 Text</button>
+            <button class="btn btn-sm btn-outline-success py-0 px-2" style="font-size: 10px;" @onclick='() => AddSection("Chart")'>📊 Chart</button>
+            <button class="btn btn-sm btn-outline-info py-0 px-2" style="font-size: 10px;" @onclick='() => AddSection("Table")'>📋 Table</button>
+            <button class="btn btn-sm btn-outline-warning py-0 px-2" style="font-size: 10px;" @onclick='() => AddSection("Value")'>🔢 Value</button>
+            <button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size: 10px;" @onclick='() => AddSection("PageBreak")'>📄 Page Break</button>
+        </div>
+
+        @if (_report.Sections.Count == 0)
+        {
+            <div class="alert alert-secondary small">
+                No sections yet. Use the buttons above to add report sections.<br />
+                <strong>Chart</strong> sections read historical data from variables.<br />
+                <strong>Table</strong> sections show real-time or historical variable values.<br />
+                <strong>Value</strong> sections display a single real-time OPC value.
+            </div>
+        }
+
+        @for (int i = 0; i < _report.Sections.Count; i++)
+        {
+            var idx = i;
+            var section = _report.Sections[idx];
+            <div class="card mb-2" style="background: #1e293b; border: 1px solid #334155;">
+                <div class="card-header py-1 px-2 d-flex align-items-center" style="background: #0f172a; font-size: 11px;">
+                    <span class="fw-bold">
+                        @GetSectionIcon(section.Type) @section.Type
+                        @if (!string.IsNullOrEmpty(section.Title))
+                        {
+                            <span class="text-muted ms-1">— @section.Title</span>
+                        }
+                    </span>
+                    <div class="ms-auto d-flex gap-1">
+                        @if (idx > 0)
+                        {
+                            <button class="btn btn-sm btn-outline-secondary py-0 px-1" style="font-size: 9px;"
+                                    @onclick="() => MoveSection(idx, -1)">▲</button>
+                        }
+                        @if (idx < _report.Sections.Count - 1)
+                        {
+                            <button class="btn btn-sm btn-outline-secondary py-0 px-1" style="font-size: 9px;"
+                                    @onclick="() => MoveSection(idx, 1)">▼</button>
+                        }
+                        <button class="btn btn-sm btn-outline-danger py-0 px-1" style="font-size: 9px;"
+                                @onclick="() => RemoveSection(idx)">✕</button>
+                    </div>
+                </div>
+                <div class="card-body py-2 px-2" style="font-size: 11px;">
+                    @if (section.Type == "Header")
+                    {
+                        <div class="mb-1">
+                            <label class="form-label mb-0 small">Title</label>
+                            <input type="text" class="form-control form-control-sm" style="font-size: 10px;"
+                                   @bind="section.Title" @bind:after="OnChanged" placeholder="Section heading" />
+                        </div>
+                    }
+                    else if (section.Type == "Text")
+                    {
+                        <div class="mb-1">
+                            <label class="form-label mb-0 small">Title (optional)</label>
+                            <input type="text" class="form-control form-control-sm" style="font-size: 10px;"
+                                   @bind="section.Title" @bind:after="OnChanged" />
+                        </div>
+                        <div class="mb-1">
+                            <label class="form-label mb-0 small">Content (HTML supported)</label>
+                            <textarea class="form-control form-control-sm" style="font-size: 10px;" rows="3"
+                                      @bind="section.Content" @bind:after="OnChanged"></textarea>
+                        </div>
+                    }
+                    else if (section.Type == "Chart")
+                    {
+                        <div class="mb-1">
+                            <label class="form-label mb-0 small">Chart Title</label>
+                            <input type="text" class="form-control form-control-sm" style="font-size: 10px;"
+                                   @bind="section.Title" @bind:after="OnChanged" placeholder="e.g. Temperature History" />
+                        </div>
+                        <div class="mb-1">
+                            <label class="form-label mb-0 small">Chart Type</label>
+                            <select class="form-select form-select-sm" style="font-size: 10px;"
+                                    @bind="section.ChartType" @bind:after="OnChanged">
+                                <option value="Line">Line</option>
+                                <option value="Bar">Bar</option>
+                                <option value="Area">Area</option>
+                                <option value="Pie">Pie</option>
+                            </select>
+                        </div>
+                        <div class="row g-1 mb-1">
+                            <div class="col-6">
+                                <label class="form-label mb-0 small">Time Range (min)</label>
+                                <input type="number" class="form-control form-control-sm" style="font-size: 10px;"
+                                       @bind="section.ChartTimeRangeMinutes" @bind:after="OnChanged" />
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label mb-0 small">Max Points</label>
+                                <input type="number" class="form-control form-control-sm" style="font-size: 10px;"
+                                       @bind="section.ChartMaxPoints" @bind:after="OnChanged" />
+                            </div>
+                        </div>
+                        <div class="row g-1 mb-1">
+                            <div class="col-4">
+                                <label class="form-label mb-0 small">Width</label>
+                                <input type="number" class="form-control form-control-sm" style="font-size: 10px;"
+                                       @bind="section.ChartWidth" @bind:after="OnChanged" />
+                            </div>
+                            <div class="col-4">
+                                <label class="form-label mb-0 small">Height</label>
+                                <input type="number" class="form-control form-control-sm" style="font-size: 10px;"
+                                       @bind="section.ChartHeight" @bind:after="OnChanged" />
+                            </div>
+                            <div class="col-4 d-flex align-items-end gap-2">
+                                <div class="form-check form-check-inline" style="font-size: 10px;">
+                                    <input class="form-check-input" type="checkbox"
+                                           @bind="section.ChartShowLegend" @bind:after="OnChanged" />
+                                    <label class="form-check-label">Legend</label>
+                                </div>
+                                <div class="form-check form-check-inline" style="font-size: 10px;">
+                                    <input class="form-check-input" type="checkbox"
+                                           @bind="section.ChartShowGrid" @bind:after="OnChanged" />
+                                    <label class="form-check-label">Grid</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mb-1">
+                            <label class="form-label mb-0 small">Variable Paths (historical data series)</label>
+                            @for (int vi = 0; vi < section.ChartVariablePaths.Count; vi++)
+                            {
+                                var vIdx = vi;
+                                <div class="d-flex gap-1 mb-1">
+                                    <input type="text" class="form-control form-control-sm" style="font-size: 10px;"
+                                           value="@section.ChartVariablePaths[vIdx]"
+                                           @onchange="e => { section.ChartVariablePaths[vIdx] = e.Value?.ToString() ?? string.Empty; OnChanged(); }"
+                                           placeholder="e.g. Folder1.Temperature" />
+                                    <button class="btn btn-sm btn-outline-danger py-0 px-1" style="font-size: 9px;"
+                                            @onclick="() => { section.ChartVariablePaths.RemoveAt(vIdx); OnChanged(); }">✕</button>
+                                </div>
+                            }
+                            <button class="btn btn-sm btn-outline-primary py-0 px-2" style="font-size: 9px;"
+                                    @onclick="() => { section.ChartVariablePaths.Add(string.Empty); OnChanged(); }">+ Add Variable</button>
+                        </div>
+                    }
+                    else if (section.Type == "Table")
+                    {
+                        <div class="mb-1">
+                            <label class="form-label mb-0 small">Table Title</label>
+                            <input type="text" class="form-control form-control-sm" style="font-size: 10px;"
+                                   @bind="section.Title" @bind:after="OnChanged" placeholder="e.g. Current Values" />
+                        </div>
+                        <div class="mb-1 form-check" style="font-size: 10px;">
+                            <input class="form-check-input" type="checkbox"
+                                   @bind="section.TableShowStatistics" @bind:after="OnChanged" />
+                            <label class="form-check-label">Show Statistics (Min/Max/Avg)</label>
+                        </div>
+                        @if (section.TableShowStatistics)
+                        {
+                            <div class="mb-1">
+                                <label class="form-label mb-0 small">Statistics Time Range (min)</label>
+                                <input type="number" class="form-control form-control-sm" style="font-size: 10px;"
+                                       @bind="section.TableTimeRangeMinutes" @bind:after="OnChanged" />
+                            </div>
+                        }
+                        <div class="mb-1">
+                            <label class="form-label mb-0 small">Variable Paths</label>
+                            @for (int ti = 0; ti < section.TableVariablePaths.Count; ti++)
+                            {
+                                var tIdx = ti;
+                                <div class="d-flex gap-1 mb-1">
+                                    <input type="text" class="form-control form-control-sm" style="font-size: 10px;"
+                                           value="@section.TableVariablePaths[tIdx]"
+                                           @onchange="e => { section.TableVariablePaths[tIdx] = e.Value?.ToString() ?? string.Empty; OnChanged(); }"
+                                           placeholder="e.g. Folder1.Pressure" />
+                                    <button class="btn btn-sm btn-outline-danger py-0 px-1" style="font-size: 9px;"
+                                            @onclick="() => { section.TableVariablePaths.RemoveAt(tIdx); OnChanged(); }">✕</button>
+                                </div>
+                            }
+                            <button class="btn btn-sm btn-outline-primary py-0 px-2" style="font-size: 9px;"
+                                    @onclick="() => { section.TableVariablePaths.Add(string.Empty); OnChanged(); }">+ Add Variable</button>
+                        </div>
+                    }
+                    else if (section.Type == "Value")
+                    {
+                        <div class="mb-1">
+                            <label class="form-label mb-0 small">Label</label>
+                            <input type="text" class="form-control form-control-sm" style="font-size: 10px;"
+                                   @bind="section.ValueLabel" @bind:after="OnChanged" placeholder="e.g. Current Temperature" />
+                        </div>
+                        <div class="mb-1">
+                            <label class="form-label mb-0 small">Variable Path (real-time OPC value)</label>
+                            <input type="text" class="form-control form-control-sm" style="font-size: 10px;"
+                                   @bind="section.ValueVariablePath" @bind:after="OnChanged" placeholder="e.g. Folder1.Temperature" />
+                        </div>
+                        <div class="row g-1">
+                            <div class="col-6">
+                                <label class="form-label mb-0 small">Format</label>
+                                <input type="text" class="form-control form-control-sm" style="font-size: 10px;"
+                                       @bind="section.ValueFormat" @bind:after="OnChanged" placeholder="e.g. F2" />
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label mb-0 small">Unit</label>
+                                <input type="text" class="form-control form-control-sm" style="font-size: 10px;"
+                                       @bind="section.ValueUnit" @bind:after="OnChanged" placeholder="e.g. °C" />
+                            </div>
+                        </div>
+                    }
+                    else if (section.Type == "PageBreak")
+                    {
+                        <div class="text-muted small">Page break (PDF only). No additional settings.</div>
+                    }
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public object? Node { get; set; }
+    [Parameter] public EventCallback OnPropertyChanged { get; set; }
+
+    private ReportConfig? _report;
+
+    protected override void OnParametersSet()
+    {
+        _report = (Node is ReportNode rn) ? rn.Report : null;
+    }
+
+    private void OnChanged()
+    {
+        OnPropertyChanged.InvokeAsync();
+        StateHasChanged();
+    }
+
+    private void AddSection(string type)
+    {
+        if (_report == null) return;
+        var section = new ReportSection
+        {
+            Id = Guid.NewGuid().ToString("N")[..8],
+            Type = type,
+            Title = type == "Header" ? "Section Title" : "",
+        };
+        if (type == "Chart")
+        {
+            section.ChartVariablePaths.Add("");
+        }
+        else if (type == "Table")
+        {
+            section.TableVariablePaths.Add("");
+        }
+        _report.Sections.Add(section);
+        OnChanged();
+    }
+
+    private void RemoveSection(int index)
+    {
+        if (_report == null || index < 0 || index >= _report.Sections.Count) return;
+        _report.Sections.RemoveAt(index);
+        OnChanged();
+    }
+
+    private void MoveSection(int index, int direction)
+    {
+        if (_report == null) return;
+        var newIndex = index + direction;
+        if (newIndex < 0 || newIndex >= _report.Sections.Count) return;
+        var item = _report.Sections[index];
+        _report.Sections.RemoveAt(index);
+        _report.Sections.Insert(newIndex, item);
+        OnChanged();
+    }
+
+    private static string GetSectionIcon(string type) => type switch
+    {
+        "Header" => "📝",
+        "Text" => "📃",
+        "Chart" => "📊",
+        "Table" => "📋",
+        "Value" => "🔢",
+        "PageBreak" => "📄",
+        _ => "❓"
+    };
+}

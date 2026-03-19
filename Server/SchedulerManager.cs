@@ -206,6 +206,13 @@ namespace SimpleOpcFileServer
                                 }
                             }
                             break;
+
+                        case "GenerateReport":
+                            if (!string.IsNullOrEmpty(cmd.TargetReport))
+                            {
+                                _ = _nodeManager.GenerateReportAsync(cmd.TargetReport);
+                            }
+                            break;
                     }
                 }
                 catch (Exception ex)

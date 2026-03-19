@@ -1,4 +1,4 @@
-﻿using Opc.Ua;
+using Opc.Ua;
 using Opc.Ua.Server;
 using Serilog;
 using SharedModels;
@@ -30,6 +30,7 @@ namespace SimpleOpcFileServer
         private PlcManager? _plcManager;
         private RecipeManager? _recipeManager;
         private SchedulerManager? _schedulerManager;
+        private ReportManager? _reportManager;
 
         private readonly List<NodeId> _rootNodeIds = new();
         private FileSystemWatcher? _watcher;
@@ -583,6 +584,13 @@ namespace SimpleOpcFileServer
                                   _schedulerManager.Initialize(nodeModel.Schedulers);
                               }
 
+// Reports
+if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
+{
+    _reportManager = new ReportManager(this);
+    _reportManager.Initialize(nodeModel.Reports);
+                              }
+
                               // ─── Diagnostics OPC UA node (always created, license-exempt) ───
                           CreateDiagnosticsNode(references);
                       }
@@ -1111,6 +1119,32 @@ namespace SimpleOpcFileServer
             // variableName matches variable.Name property from json.
             throw new InvalidOperationException("Variable not found: " + variableName);
             //return null;
+        }
+
+        public async Task<string?> GenerateReportAsync(string reportName)
+        {
+            return _reportManager != null ? await _reportManager.GenerateReportAsync(reportName) : null;
+        }
+
+        public List<(DateTime Timestamp, double Value)>? ReadHistoricalValues(string variablePath, DateTime startTime, DateTime endTime, int maxPoints)
+        {
+            if (_logger == null) return null;
+            try
+            {
+                var nodeId = variablePath;
+                if (_variables.TryGetValue(variablePath, out var vs))
+                    nodeId = vs.NodeId?.ToString() ?? variablePath;
+                var dataValues = _logger.ReadHistory(nodeId, startTime, endTime);
+                var result = new List<(DateTime, double)>();
+                foreach (var dv in dataValues)
+                {
+                    if (dv?.Value != null && double.TryParse(dv.Value.ToString(), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var d))
+                        result.Add((dv.SourceTimestamp, d));
+                    if (result.Count >= maxPoints) break;
+                }
+                return result.Count > 0 ? result : null;
+            }
+            catch { return null; }
         }
 
         public void WriteVariable(string variableName, object value)
@@ -1851,6 +1885,7 @@ namespace SimpleOpcFileServer
                 _plcManager?.Dispose();
                 _recipeManager?.Dispose();
                 _schedulerManager?.Dispose();
+                _reportManager?.Dispose();
                 _eventLogger?.Dispose();
                 foreach (var rw in _resourceWatchers) rw.Dispose();
                 _resourceWatchers.Clear();
