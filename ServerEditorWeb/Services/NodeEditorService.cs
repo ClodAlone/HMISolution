@@ -1220,7 +1220,7 @@ public class NodeEditorService
             }
             else
             {
-                // Not siblings ÔÇö just select the new node
+                // Not siblings — just select the new node
                 SetSingleSelection(node);
             }
         }
@@ -1343,7 +1343,7 @@ public class NodeEditorService
     private static void BuildResourceTree<T>(TreeNode parent, List<T> items, string resourceKind,
         Func<T, string> getGroup, Func<T, TreeNode> createNode)
     {
-        // Cache of group-path ÔåÆ folder node
+        // Cache of group-path → folder node
         var folderCache = new Dictionary<string, ResourceFolderNode>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var item in items)

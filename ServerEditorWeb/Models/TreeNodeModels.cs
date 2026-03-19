@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using SharedModels;
 
 namespace ServerEditorWeb.Models;
@@ -20,7 +20,7 @@ public abstract class TreeNode
 public class FolderNode : TreeNode
 {
     public override string TypeName => "Folder";
-    public override string Icon => "­ƒôü";
+    public override string Icon => "📁";
     public Folder Folder { get; }
 
     public FolderNode(Folder folder)
@@ -35,7 +35,7 @@ public class FolderNode : TreeNode
 public class VariableGroupNode : TreeNode
 {
     public override string TypeName => "VariableGroup";
-    public override string Icon => "­ƒùä´©Å";
+    public override string Icon => "🧮";
 
     public VariableGroupNode()
     {
@@ -46,7 +46,7 @@ public class VariableGroupNode : TreeNode
 public class VariableNode : TreeNode
 {
     public override string TypeName => "Variable";
-    public override string Icon => "­ƒÅÀ´©Å";
+    public override string Icon => "🏷️";
     public Variable Variable { get; }
 
     public static readonly string[] AvailableTypes = ["Double", "Int32", "Boolean", "String", "DateTime", "Float", "Int16", "UInt16", "UInt32"];
@@ -85,7 +85,7 @@ public class VariableNode : TreeNode
             }
             catch
             {
-                // Invalid JSON ÔÇö keep model as-is
+                // Invalid JSON — keep model as-is
             }
         }
     }
@@ -94,7 +94,7 @@ public class VariableNode : TreeNode
 public class ScriptGroupNode : TreeNode
 {
     public override string TypeName => "ScriptGroup";
-    public override string Icon => "­ƒô£";
+    public override string Icon => "📜";
 
     public ScriptGroupNode()
     {
@@ -105,7 +105,7 @@ public class ScriptGroupNode : TreeNode
 public class ScriptNode : TreeNode
 {
     public override string TypeName => "Script";
-    public override string Icon => "ÔÜí";
+    public override string Icon => "⚡";
     public ScriptConfig Script { get; }
 
     public ScriptNode(ScriptConfig script)
@@ -120,7 +120,7 @@ public class ScriptNode : TreeNode
 public class ScreenGroupNode : TreeNode
 {
     public override string TypeName => "ScreenGroup";
-    public override string Icon => "­ƒûÑ´©Å";
+    public override string Icon => "🖥️";
 
     public ScreenGroupNode()
     {
@@ -131,7 +131,7 @@ public class ScreenGroupNode : TreeNode
 public class ScreenNode : TreeNode
 {
     public override string TypeName => "Screen";
-    public override string Icon => "­ƒû╝´©Å";
+    public override string Icon => "🖼️";
     public ScreenConfig Screen { get; }
 
     public ScreenNode(ScreenConfig screen)
@@ -146,7 +146,7 @@ public class ScreenNode : TreeNode
 public class UserGroupListNode : TreeNode
 {
     public override string TypeName => "UserGroupList";
-    public override string Icon => "­ƒæÑ";
+    public override string Icon => "👥";
 
     public UserGroupListNode()
     {
@@ -157,7 +157,7 @@ public class UserGroupListNode : TreeNode
 public class UserGroupNode : TreeNode
 {
     public override string TypeName => "UserGroup";
-    public override string Icon => "­ƒøí´©Å";
+    public override string Icon => "🛡️";
     public UserGroupConfig UserGroup { get; }
 
     public UserGroupNode(UserGroupConfig group)
@@ -172,7 +172,7 @@ public class UserGroupNode : TreeNode
 public class UserNode : TreeNode
 {
     public override string TypeName => "User";
-    public override string Icon => "­ƒæñ";
+    public override string Icon => "👤";
     public UserConfig User { get; }
 
     public UserNode(UserConfig user)
@@ -187,7 +187,7 @@ public class UserNode : TreeNode
 public class PlcGroupNode : TreeNode
 {
     public override string TypeName => "PlcGroup";
-    public override string Icon => "­ƒöº";
+    public override string Icon => "🔧";
 
     public PlcGroupNode()
     {
@@ -198,7 +198,7 @@ public class PlcGroupNode : TreeNode
 public class PlcProgramNode : TreeNode
 {
     public override string TypeName => "PlcProgram";
-    public override string Icon => "ÔÜÖ´©Å";
+    public override string Icon => "⚙️";
     public PlcProgramConfig PlcProgram { get; }
 
     public PlcProgramNode(PlcProgramConfig plc)
@@ -212,12 +212,12 @@ public class PlcProgramNode : TreeNode
 
 /// <summary>
 /// A folder node for organizing scripts, screens, or PLC programs within their group.
-/// The folder itself has no model counterpart ÔÇö it derives the Group path from its position in the tree.
+/// The folder itself has no model counterpart — it derives the Group path from its position in the tree.
 /// </summary>
 public class ResourceFolderNode : TreeNode
 {
     public override string TypeName => "ResourceFolder";
-    public override string Icon => "­ƒôü";
+    public override string Icon => "📁";
 
     /// <summary>Which resource type this folder contains.</summary>
     public string ResourceKind { get; }
@@ -245,7 +245,7 @@ public class ResourceFolderNode : TreeNode
 public class RecipeGroupNode : TreeNode
 {
     public override string TypeName => "RecipeGroup";
-    public override string Icon => "­ƒì│";
+    public override string Icon => "🍳";
 
     public RecipeGroupNode()
     {
@@ -256,7 +256,7 @@ public class RecipeGroupNode : TreeNode
 public class RecipeNode : TreeNode
 {
     public override string TypeName => "Recipe";
-    public override string Icon => "­ƒôª";
+    public override string Icon => "📦";
     public RecipeConfig Recipe { get; }
 
     public RecipeNode(RecipeConfig recipe)
@@ -271,7 +271,7 @@ public class RecipeNode : TreeNode
 public class SchedulerGroupNode : TreeNode
 {
     public override string TypeName => "SchedulerGroup";
-    public override string Icon => "ÔÅ░";
+    public override string Icon => "⏰";
 
     public SchedulerGroupNode()
     {
@@ -282,7 +282,7 @@ public class SchedulerGroupNode : TreeNode
 public class SchedulerNode : TreeNode
 {
     public override string TypeName => "Scheduler";
-    public override string Icon => "­ƒôà";
+    public override string Icon => "📅";
     public SchedulerConfig Scheduler { get; }
 
     public SchedulerNode(SchedulerConfig scheduler)
@@ -297,7 +297,7 @@ public class SchedulerNode : TreeNode
 public class ReportGroupNode : TreeNode
 {
     public override string TypeName => "ReportGroup";
-    public override string Icon => "­ƒôè";
+    public override string Icon => "📊";
 
     public ReportGroupNode()
     {
@@ -308,7 +308,7 @@ public class ReportGroupNode : TreeNode
 public class ReportNode : TreeNode
 {
     public override string TypeName => "Report";
-    public override string Icon => "­ƒôä";
+    public override string Icon => "📄";
     public ReportConfig Report { get; }
 
     public ReportNode(ReportConfig report)
@@ -327,7 +327,7 @@ public class ReportNode : TreeNode
 public class ProjectNode : TreeNode
 {
     public override string TypeName => "Project";
-    public override string Icon => "­ƒôé";
+    public override string Icon => "📂";
 
     /// <summary>The deserialized model for this project.</summary>
     public NodeModel Model { get; set; }

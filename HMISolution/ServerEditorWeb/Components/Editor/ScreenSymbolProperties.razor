@@ -1,0 +1,2021 @@
+@using ServerEditorWeb.Models
+@using ServerEditorWeb.Services
+@using SharedModels
+@implements IDisposable
+
+@if (_selectedSymbol != null)
+{
+    <div class="properties-panel">
+        <div class="d-flex align-items-center gap-2 mb-2">
+            <h6 class="mb-0">Symbol Properties</h6>
+            @if (_selectedSymbols.Count > 1)
+            {
+                <span class="badge bg-primary" style="font-size: 9px;">@_selectedSymbols.Count selected</span>
+            }
+        </div>
+
+        @if (!string.IsNullOrEmpty(_selectedSymbol.GroupId))
+        {
+            <div class="small mb-2">
+                <span class="text-muted">Group:</span>
+                <span class="badge bg-secondary ms-1" style="font-size: 9px;">@_selectedSymbol.GroupId</span>
+            </div>
+        }
+
+        <div class="mb-2">
+            <label class="form-label mb-0 small">Type</label>
+            <select class="form-select form-select-sm" @bind="_selectedSymbol.Type" @bind:after="OnChanged">
+                <option value="rect">Rectangle</option>
+                <option value="circle">Circle</option>
+                <option value="ellipse">Ellipse</option>
+                <option value="text">Text</option>
+                <option value="line">Line</option>
+                <option value="gauge">Gauge</option>
+                <option value="indicator">Indicator</option>
+                <option value="svg">SVG Symbol</option>
+                <option value="alarmlist">Alarm List</option>
+                <option value="hdachart">HDA Chart</option>
+                <option value="hdagrid">HDA Grid</option>
+                <option value="eventlog">Event Log</option>
+                <option value="editbox">EditBox</option>
+                <option value="ipcamera">Camera</option>
+                <option value="recipe">Recipe</option>
+                <option value="screenembed">Screen Embed</option>
+                <option value="imagemap">Image Map</option>
+                <option value="trend">Realtime Trend</option>
+                <option value="switch">Toggle Switch</option>
+                <option value="rotaryswitch">Rotary Switch</option>
+                <option value="knob">Knob</option>
+                <option value="hslider">Horizontal Slider</option>
+                <option value="vslider">Vertical Slider</option>
+                <option value="button">Command Button</option>
+                            <option value="animtext">Animated Text</option>
+                <option value="weeklyplanner">Weekly Planner</option>
+            </select>
+        </div>
+
+        <div class="d-flex gap-1 mb-2">
+            <div>
+                <label class="form-label mb-0 small">X</label>
+                <input type="number" class="form-control form-control-sm" @bind="_selectedSymbol.X" @bind:after="OnChanged" />
+            </div>
+            <div>
+                <label class="form-label mb-0 small">Y</label>
+                <input type="number" class="form-control form-control-sm" @bind="_selectedSymbol.Y" @bind:after="OnChanged" />
+            </div>
+        </div>
+        <div class="d-flex gap-1 mb-2">
+            <div>
+                <label class="form-label mb-0 small">Width</label>
+                <input type="number" class="form-control form-control-sm" @bind="_selectedSymbol.Width" @bind:after="OnChanged" />
+            </div>
+            <div>
+                <label class="form-label mb-0 small">Height</label>
+                <input type="number" class="form-control form-control-sm" @bind="_selectedSymbol.Height" @bind:after="OnChanged" />
+            </div>
+        </div>
+
+        @if (IsResponsiveMode())
+        {
+            <div class="d-flex gap-1 mb-2">
+                <div>
+                    <label class="form-label mb-0 small">Col Span</label>
+                    <input type="number" class="form-control form-control-sm" style="width: 70px;" min="1"
+                           @bind="_selectedSymbol.ColSpan" @bind:after="OnChanged" />
+                </div>
+                <div>
+                    <label class="form-label mb-0 small">Row Span</label>
+                    <input type="number" class="form-control form-control-sm" style="width: 70px;" min="1"
+                           @bind="_selectedSymbol.RowSpan" @bind:after="OnChanged" />
+                </div>
+                <div>
+                    <label class="form-label mb-0 small">Row Height</label>
+                    <input type="number" class="form-control form-control-sm" style="width: 80px;" min="30"
+                           @bind="_selectedSymbol.RowHeight" @bind:after="OnChanged" />
+                </div>
+                <div>
+                    <label class="form-label mb-0 small">Order</label>
+                    <input type="number" class="form-control form-control-sm" style="width: 60px;"
+                           @bind="_selectedSymbol.Order" @bind:after="OnChanged" />
+                </div>
+            </div>
+        }
+
+        <div class="mb-2">
+            <label class="form-label mb-0 small">Label</label>
+            <input type="text" class="form-control form-control-sm" @bind="_selectedSymbol.Label" @bind:after="OnChanged" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label mb-0 small">Rotation</label>
+            <input type="number" class="form-control form-control-sm" step="any" @bind="_selectedSymbol.Rotation" @bind:after="OnChanged" />
+        </div>
+
+        <div class="d-flex gap-1 mb-2 flex-wrap">
+            <div class="flex-grow-1">
+                <label class="form-label mb-0 small">Font</label>
+                <select class="form-select form-select-sm" style="font-size: 10px;"
+                        @bind="_selectedSymbol.FontFamily" @bind:after="OnChanged">
+                    <option value="">(default sans-serif)</option>
+                    <option value="sans-serif">Sans-Serif</option>
+                    <option value="serif">Serif</option>
+                    <option value="monospace">Monospace</option>
+                    <option value="Arial">Arial</option>
+                    <option value="Verdana">Verdana</option>
+                    <option value="Georgia">Georgia</option>
+                    <option value="Courier New">Courier New</option>
+                    <option value="Times New Roman">Times New Roman</option>
+                    <option value="Trebuchet MS">Trebuchet MS</option>
+                </select>
+            </div>
+            <div>
+                <label class="form-label mb-0 small">Size</label>
+                <input type="number" class="form-control form-control-sm" style="width: 50px; font-size: 10px;"
+                       min="0" max="200" placeholder="auto"
+                       @bind="_selectedSymbol.FontSize" @bind:after="OnChanged" />
+            </div>
+        </div>
+        <div class="d-flex gap-1 mb-2">
+            <div>
+                <label class="form-label mb-0 small">Weight</label>
+                <select class="form-select form-select-sm" style="font-size: 10px; width: 80px;"
+                        @bind="_selectedSymbol.FontWeight" @bind:after="OnChanged">
+                    <option value="">Normal</option>
+                    <option value="bold">Bold</option>
+                    <option value="lighter">Lighter</option>
+                    <option value="100">100</option>
+                    <option value="200">200</option>
+                    <option value="300">300</option>
+                    <option value="400">400</option>
+                    <option value="500">500</option>
+                    <option value="600">600</option>
+                    <option value="700">700</option>
+                    <option value="800">800</option>
+                    <option value="900">900</option>
+                </select>
+            </div>
+            <div>
+                <label class="form-label mb-0 small">Style</label>
+                <select class="form-select form-select-sm" style="font-size: 10px; width: 80px;"
+                        @bind="_selectedSymbol.FontStyle" @bind:after="OnChanged">
+                    <option value="">Normal</option>
+                    <option value="italic">Italic</option>
+                    <option value="oblique">Oblique</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="d-flex gap-1 mb-2">
+            <div>
+                <label class="form-label mb-0 small">Fill</label>
+                <input type="color" class="form-control form-control-sm form-control-color" style="width: 35px; height: 28px;"
+                       @bind="_selectedSymbol.Fill" @bind:after="OnChanged" />
+            </div>
+            <div>
+                <label class="form-label mb-0 small">Stroke</label>
+                <input type="color" class="form-control form-control-sm form-control-color" style="width: 35px; height: 28px;"
+                       @bind="_selectedSymbol.Stroke" @bind:after="OnChanged" />
+            </div>
+            <div>
+                <label class="form-label mb-0 small">StrokeW</label>
+                <input type="number" class="form-control form-control-sm" step="0.5" style="width: 55px;"
+                       @bind="_selectedSymbol.StrokeWidth" @bind:after="OnChanged" />
+            </div>
+        </div>
+
+        <hr class="my-2" />
+        <h6 class="mb-2 small text-primary">OPC Variable Binding</h6>
+
+        <div class="mb-2">
+            <label class="form-label mb-0 small">Variable Path</label>
+            <VariablePathPicker Value="@_selectedSymbol.VariablePath"
+                                ValueChanged="(v) => { _selectedSymbol.VariablePath = v; }"
+                                OnChanged="OnChanged"
+                                Placeholder="Select or type variable…" />
+            @if (!string.IsNullOrEmpty(_selectedSymbol.VariablePath))
+            {
+                var lv = GetLiveValue(_selectedSymbol);
+                <span class="small text-muted">Live: <strong>@(lv ?? "—")</strong></span>
+            }
+        </div>
+
+        <div class="mb-2">
+            <label class="form-label mb-0 small">Fill Binding</label>
+            <input type="text" class="form-control form-control-sm"
+                   placeholder="value > 50 ? '#ff0000' : '#00ff00'"
+                   @bind="_selectedSymbol.FillBinding" @bind:after="OnChanged" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label mb-0 small">Label Binding</label>
+            <input type="text" class="form-control form-control-sm"
+                   placeholder="value + ' °C'"
+                   @bind="_selectedSymbol.LabelBinding" @bind:after="OnChanged" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label mb-0 small">Visibility Binding</label>
+            <input type="text" class="form-control form-control-sm"
+                   placeholder="value == true"
+                   @bind="_selectedSymbol.VisibilityBinding" @bind:after="OnChanged" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label mb-0 small">Rotation Binding</label>
+            <input type="text" class="form-control form-control-sm"
+                   placeholder="value * 3.6"
+                   @bind="_selectedSymbol.RotationBinding" @bind:after="OnChanged" />
+        </div>
+        <div class="d-flex gap-1 mb-2">
+            <div>
+                <label class="form-label mb-0 small">Min</label>
+                <input type="number" step="any" class="form-control form-control-sm"
+                       @bind="_selectedSymbol.MinValue" @bind:after="OnChanged" />
+            </div>
+            <div>
+                <label class="form-label mb-0 small">Max</label>
+                <input type="number" step="any" class="form-control form-control-sm"
+                       @bind="_selectedSymbol.MaxValue" @bind:after="OnChanged" />
+            </div>
+        </div>
+
+        @if (_selectedSymbol.Type is "gauge")
+        {
+            <hr class="my-2" />
+            <h6 class="mb-2 small" style="color: #f59e0b;">🔘 Gauge Settings</h6>
+
+            <div class="mb-2">
+                <label class="form-label mb-0 small">Style</label>
+                <select class="form-select form-select-sm" style="font-size: 10px;"
+                        @bind="_selectedSymbol.GaugeStyle" @bind:after="OnChanged">
+                    <option value="needle">🔘 Needle (classic dial)</option>
+                    <option value="arc">◑ Arc (donut ring)</option>
+                    <option value="semicircle">◓ Semicircle (180°)</option>
+                    <option value="hbar">▬ Horizontal Bar</option>
+                    <option value="vbar">▮ Vertical Bar</option>
+                    <option value="thermometer">🌡️ Thermometer</option>
+                </select>
+            </div>
+
+            <div class="d-flex gap-1 mb-2 flex-wrap">
+                <div>
+                    <label class="form-label mb-0 small">Ticks</label>
+                    <input type="number" class="form-control form-control-sm" style="width: 50px; font-size: 10px;"
+                           min="0" max="20" @bind="_selectedSymbol.GaugeTicks" @bind:after="OnChanged" />
+                </div>
+                <div>
+                    <label class="form-label mb-0 small">Unit</label>
+                    <input type="text" class="form-control form-control-sm" style="width: 55px; font-size: 10px;"
+                           placeholder="°C"
+                           @bind="_selectedSymbol.GaugeUnit" @bind:after="OnChanged" />
+                </div>
+                <div>
+                    <label class="form-label mb-0 small">Format</label>
+                    <select class="form-select form-select-sm" style="width: 65px; font-size: 10px;"
+                            @bind="_selectedSymbol.GaugeValueFormat" @bind:after="OnChanged">
+                        <option value="F0">F0</option>
+                        <option value="F1">F1</option>
+                        <option value="F2">F2</option>
+                        <option value="F3">F3</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="d-flex gap-1 mb-2 flex-wrap">
+                <div>
+                    <label class="form-label mb-0 small">Track</label>
+                    <input type="color" class="form-control form-control-sm form-control-color" style="width: 35px; height: 24px;"
+                           @bind="_selectedSymbol.GaugeTrackColor" @bind:after="OnChanged" />
+                </div>
+                <div>
+                    <label class="form-label mb-0 small">Needle</label>
+                    <input type="color" class="form-control form-control-sm form-control-color" style="width: 35px; height: 24px;"
+                           @bind="_selectedSymbol.GaugeNeedleColor" @bind:after="OnChanged" />
+                </div>
+            </div>
+
+            <div class="d-flex gap-1 mb-2">
+                <div class="form-check" style="font-size: 10px;">
+                    <input type="checkbox" class="form-check-input" id="@($"gtl_{_selectedSymbol.Id}")"
+                           checked="@_selectedSymbol.GaugeShowTickLabels"
+                           @onchange="(e) => { _selectedSymbol.GaugeShowTickLabels = (bool)(e.Value ?? false); OnChanged(); }" />
+                    <label class="form-check-label" for="@($"gtl_{_selectedSymbol.Id}")">Tick Labels</label>
+                </div>
+                <div class="form-check" style="font-size: 10px;">
+                    <input type="checkbox" class="form-check-input" id="@($"gsv_{_selectedSymbol.Id}")"
+                           checked="@_selectedSymbol.GaugeShowValue"
+                           @onchange="(e) => { _selectedSymbol.GaugeShowValue = (bool)(e.Value ?? false); OnChanged(); }" />
+                    <label class="form-check-label" for="@($"gsv_{_selectedSymbol.Id}")">Show Value</label>
+                </div>
+            </div>
+        }
+
+        @if (_selectedSymbol.Type is "hdachart" or "hdagrid")
+        {
+            <hr class="my-2" />
+            <h6 class="mb-2 small text-success">@(_selectedSymbol.Type == "hdachart" ? "📊 HDA Chart Settings" : "📋 HDA Grid Settings")</h6>
+
+            <div class="mb-2">
+                <label class="form-label mb-0 small">Variables (@_selectedSymbol.HdaVariablePaths.Count series)</label>
+                @for (int i = 0; i < _selectedSymbol.HdaVariablePaths.Count; i++)
+                {
+                    var idx = i;
+                    <div class="d-flex gap-1 mb-1 align-items-center">
+                        <VariablePathPicker Value="@_selectedSymbol.HdaVariablePaths[idx]"
+                                            ValueChanged="(v) => { _selectedSymbol.HdaVariablePaths[idx] = v ?? string.Empty; }"
+                                            OnChanged="OnChanged"
+                                            Placeholder="Variable path…"
+                                            InputStyle="font-size: 10px;" />
+                        <button class="btn btn-sm btn-outline-danger py-0 px-1" style="font-size: 9px;"
+                                @onclick="() => { _selectedSymbol.HdaVariablePaths.RemoveAt(idx); OnChanged(); }">✕</button>
+                    </div>
+                }
+                <button class="btn btn-sm btn-outline-success w-100 py-0" style="font-size: 10px;"
+                        @onclick="() => { _selectedSymbol.HdaVariablePaths.Add(string.Empty); OnChanged(); }">＋ Add Variable</button>
+            </div>
+
+            <div class="d-flex gap-1 mb-2">
+                <div>
+                    <label class="form-label mb-0 small">Time Range (min)</label>
+                    <select class="form-select form-select-sm" style="font-size: 10px;"
+                            @bind="_selectedSymbol.HdaTimeRangeMinutes" @bind:after="OnChanged">
+                        <option value="5">5 min</option>
+                        <option value="15">15 min</option>
+                        <option value="60">1 hour</option>
+                        <option value="360">6 hours</option>
+                        <option value="1440">24 hours</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label mb-0 small">Max Points</label>
+                    <input type="number" class="form-control form-control-sm" style="font-size: 10px; width: 80px;"
+                           @bind="_selectedSymbol.HdaMaxPoints" @bind:after="OnChanged" />
+                </div>
+            </div>
+        }
+
+        @if (_selectedSymbol.Type is "editbox")
+        {
+            <hr class="my-2" />
+            <h6 class="mb-2 small" style="color: #60a5fa;">✏️ EditBox Settings</h6>
+
+            <div class="mb-2">
+                <label class="form-label mb-0 small">Spin Step</label>
+                <input type="number" step="any" class="form-control form-control-sm" style="font-size: 10px; width: 100px;"
+                       @bind="_selectedSymbol.EditBoxStep" @bind:after="OnChanged" />
+                <div class="form-text" style="font-size: 9px;">Increment/decrement per spin click. Spin buttons appear only for numeric values.</div>
+            </div>
+
+            <div class="mb-2">
+                <label class="form-label mb-0 small">Display Format</label>
+                <select class="form-select form-select-sm" style="font-size: 10px;"
+                        @bind="_selectedSymbol.EditBoxFormat" @bind:after="OnChanged">
+                    <option value="">(raw value)</option>
+                    <option value="F0">Integer (F0)</option>
+                    <option value="F1">1 decimal (F1)</option>
+                    <option value="F2">2 decimals (F2)</option>
+                    <option value="F3">3 decimals (F3)</option>
+                    <option value="F4">4 decimals (F4)</option>
+                </select>
+            </div>
+
+            <div class="d-flex gap-1 mb-2">
+                <div>
+                    <label class="form-label mb-0 small">Min Value</label>
+                    <input type="number" step="any" class="form-control form-control-sm" style="font-size: 10px; width: 80px;"
+                           @bind="_selectedSymbol.MinValue" @bind:after="OnChanged" />
+                </div>
+                <div>
+                    <label class="form-label mb-0 small">Max Value</label>
+                    <input type="number" step="any" class="form-control form-control-sm" style="font-size: 10px; width: 80px;"
+                           @bind="_selectedSymbol.MaxValue" @bind:after="OnChanged" />
+                </div>
+            </div>
+            <div class="form-text" style="font-size: 9px;">Min/Max clamp the spin buttons. Leave empty for no limits.</div>
+
+            <div class="mb-2 form-check">
+                <input class="form-check-input" type="checkbox" @bind="_selectedSymbol.EditBoxShowStatistics" @bind:after="OnChanged" />
+                <label class="form-check-label small">Show Statistics (Min/Max/Avg)</label>
+                <div class="form-text" style="font-size: 9px;">Displays a statistics bar below the value. Requires Statistics enabled on the variable.</div>
+            </div>
+        }
+
+        @if (_selectedSymbol.Type is "ipcamera")
+        {
+            _selectedSymbol.Camera ??= new CameraConfig();
+
+            <hr class="my-2" />
+            <h6 class="mb-2 small" style="color: #ef4444;">📷 IP Camera Settings</h6>
+
+            <div class="mb-2">
+                <label class="form-label mb-0 small">Camera ID</label>
+                <input type="text" class="form-control form-control-sm" style="font-size: 10px;"
+                       @bind="_selectedSymbol.Camera.CameraId" @bind:after="OnChanged" placeholder="cam1" />
+                <div class="form-text" style="font-size: 9px;">Unique identifier. Used in the stream URL.</div>
+            </div>
+
+            <div class="mb-2">
+                <label class="form-label mb-0 small">Protocol</label>
+                <select class="form-select form-select-sm" style="font-size: 10px;"
+                        @bind="_selectedSymbol.Camera.Protocol" @bind:after="OnChanged">
+                    <option value="mjpeg">Motion JPEG (MJPEG stream)</option>
+                    <option value="rtsp">RTSP (via FFmpeg)</option>
+                    <option value="http">HTTP Snapshot (polling)</option>
+                </select>
+            </div>
+
+            <div class="mb-2">
+                <label class="form-label mb-0 small">Camera URL</label>
+                <input type="text" class="form-control form-control-sm" style="font-size: 10px;"
+                       @bind="_selectedSymbol.Camera.Url" @bind:after="OnChanged"
+                       placeholder="@(_selectedSymbol.Camera.Protocol == "rtsp" ? "rtsp://192.168.1.100:554/stream" : _selectedSymbol.Camera.Protocol == "mjpeg" ? "http://192.168.1.100/mjpeg" : "http://192.168.1.100/snapshot.jpg")" />
+            </div>
+
+            <div class="d-flex gap-1 mb-2">
+                <div>
+                    <label class="form-label mb-0 small">FPS</label>
+                    <input type="number" class="form-control form-control-sm" style="font-size: 10px; width: 60px;"
+                           min="1" max="30" @bind="_selectedSymbol.Camera.Fps" @bind:after="OnChanged" />
+                </div>
+                <div>
+                    <label class="form-label mb-0 small">Username</label>
+                    <input type="text" class="form-control form-control-sm" style="font-size: 10px; width: 100px;"
+                           @bind="_selectedSymbol.Camera.Username" @bind:after="OnChanged" placeholder="(optional)" />
+                </div>
+                <div>
+                    <label class="form-label mb-0 small">Password</label>
+                    <input type="password" class="form-control form-control-sm" style="font-size: 10px; width: 100px;"
+                           @bind="_selectedSymbol.Camera.Password" @bind:after="OnChanged" placeholder="(optional)" />
+                </div>
+            </div>
+
+            <hr class="my-2" />
+            <h6 class="mb-2 small" style="color: #facc15;">🤖 YOLO Object Detection</h6>
+
+            <div class="form-check mb-2">
+                <input type="checkbox" class="form-check-input" id="@($"yolo_{_selectedSymbol.Id}")"
+                       checked="@_selectedSymbol.Camera.EnableYolo"
+                       @onchange="(e) => { _selectedSymbol.Camera!.EnableYolo = (bool)(e.Value ?? false); OnChanged(); }" />
+                <label class="form-check-label small" for="@($"yolo_{_selectedSymbol.Id}")">
+                    Enable YOLO object detection
+                </label>
+            </div>
+
+            @if (_selectedSymbol.Camera.EnableYolo)
+            {
+                <div class="mb-2">
+                    <label class="form-label mb-0 small">ONNX Model Path</label>
+                    <input type="text" class="form-control form-control-sm" style="font-size: 10px;"
+                           @bind="_selectedSymbol.Camera.YoloModelPath" @bind:after="OnChanged"
+                           placeholder="yolov8n.onnx (default)" />
+                    <div class="form-text" style="font-size: 9px;">Path to YOLOv8 ONNX model. Leave empty for default.</div>
+                </div>
+
+                <div class="mb-2">
+                    <label class="form-label mb-0 small">Confidence Threshold</label>
+                    <input type="number" step="0.05" min="0.1" max="1.0"
+                           class="form-control form-control-sm" style="font-size: 10px; width: 80px;"
+                           @bind="_selectedSymbol.Camera.YoloConfidence" @bind:after="OnChanged" />
+                </div>
+
+                <div class="mb-2">
+                    <label class="form-label mb-0 small">Detection Variable Prefix</label>
+                    <input type="text" class="form-control form-control-sm" style="font-size: 10px;"
+                           @bind="_selectedSymbol.Camera.DetectionVariablePrefix" @bind:after="OnChanged"
+                           placeholder="e.g. Camera1.Detection" />
+                    <div class="form-text" style="font-size: 9px;">
+                        Server writes: <code>Prefix.Label</code>, <code>Prefix.Confidence</code>, <code>Prefix.Count</code>
+                    </div>
+                </div>
+
+                <div class="form-check mb-2">
+                    <input type="checkbox" class="form-check-input" id="@($"drawdet_{_selectedSymbol.Id}")"
+                           checked="@_selectedSymbol.Camera.DrawDetections"
+                           @onchange="(e) => { _selectedSymbol.Camera!.DrawDetections = (bool)(e.Value ?? false); OnChanged(); }" />
+                    <label class="form-check-label small" for="@($"drawdet_{_selectedSymbol.Id}")">
+                        Draw bounding boxes on stream
+                    </label>
+                </div>
+            }
+        }
+
+        @if (_selectedSymbol.Type is "recipe")
+        {
+            <hr class="my-2" />
+            <h6 class="mb-2 small" style="color: #a78bfa;">📦 Recipe Settings</h6>
+
+            <div class="mb-2">
+                <label class="form-label mb-0 small">Recipe Name</label>
+                @{
+                    var recipeNames = Editor?.RootModel?.Recipes?.Select(r => r.Name).ToList() ?? new List<string>();
+                }
+                @if (recipeNames.Count > 0)
+                {
+                    <select class="form-select form-select-sm" style="font-size: 10px;"
+                            @bind="_selectedSymbol.RecipeName" @bind:after="OnChanged">
+                        <option value="">(select a recipe)</option>
+                        @foreach (var rn in recipeNames)
+                        {
+                            <option value="@rn">@rn</option>
+                        }
+                    </select>
+                }
+                else
+                {
+                    <input type="text" class="form-control form-control-sm" style="font-size: 10px;"
+                           @bind="_selectedSymbol.RecipeName" @bind:after="OnChanged"
+                           placeholder="e.g. Furnace Setup" />
+                }
+                <div class="form-text" style="font-size: 9px;">Must match a Recipe definition name. The widget will show Load/Save/Activate/Delete controls at runtime.</div>
+            </div>
+
+            @if (!string.IsNullOrEmpty(_selectedSymbol.RecipeName))
+            {
+                var matchedRecipe = Editor?.RootModel?.Recipes?.FirstOrDefault(r =>
+                    r.Name.Equals(_selectedSymbol.RecipeName, StringComparison.OrdinalIgnoreCase));
+                @if (matchedRecipe != null)
+                {
+                    <div class="small text-muted mb-1">
+                        <strong>@matchedRecipe.Variables.Count</strong> variable(s) in recipe:
+                    </div>
+                    <div style="max-height: 80px; overflow-y: auto; font-size: 9px; background: #1e293b; border-radius: 3px; padding: 4px;">
+                        @foreach (var rv in matchedRecipe.Variables)
+                        {
+                            <div style="color: #94a3b8;">[@rv.Index] @(!string.IsNullOrEmpty(rv.DisplayName) ? rv.DisplayName : rv.VariablePath)</div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="small text-warning">⚠ No matching recipe definition found for "@_selectedSymbol.RecipeName"</div>
+                }
+            }
+        }
+
+        @if (_selectedSymbol.Type is "weeklyplanner")
+        {
+            <hr class="my-2" />
+            <h6 class="mb-2 small" style="color: #38bdf8;">📅 Weekly Planner Settings</h6>
+
+            <div class="mb-2">
+                <label class="form-label mb-0 small">Scheduler Name</label>
+                @{
+                    var schedulerNames = Editor?.RootModel?.Schedulers?.Select(s => s.Name).ToList() ?? new List<string>();
+                }
+                @if (schedulerNames.Count > 0)
+                {
+                    <select class="form-select form-select-sm" style="font-size: 10px;"
+                            @bind="_selectedSymbol.SchedulerName" @bind:after="OnChanged">
+                        <option value="">(select a scheduler)</option>
+                        @foreach (var sn in schedulerNames)
+                        {
+                            <option value="@sn">@sn</option>
+                        }
+                    </select>
+                }
+                else
+                {
+                    <input type="text" class="form-control form-control-sm" style="font-size: 10px;"
+                           @bind="_selectedSymbol.SchedulerName" @bind:after="OnChanged"
+                           placeholder="e.g. HVAC Schedule" />
+                }
+                <div class="form-text" style="font-size: 9px;">Must match a Scheduler definition name. The widget shows a weekly time-slot grid at runtime.</div>
+            </div>
+
+            @if (!string.IsNullOrEmpty(_selectedSymbol.SchedulerName))
+            {
+                var matchedSched = Editor?.RootModel?.Schedulers?.FirstOrDefault(s =>
+                    s.Name.Equals(_selectedSymbol.SchedulerName, StringComparison.OrdinalIgnoreCase));
+                @if (matchedSched != null)
+                {
+                    <div class="small text-muted mb-1">
+                        <strong>@matchedSched.WeeklySlots.Count</strong> time slot(s) · Granularity: @(matchedSched.SlotMinutes)min ·
+                        Runtime edit: @(matchedSched.AllowRuntimeEdit ? "✅" : "❌")
+                    </div>
+                }
+                else
+                {
+                    <div class="small text-warning">⚠ No matching scheduler definition found for "@_selectedSymbol.SchedulerName"</div>
+                }
+            }
+        }
+
+        @if (_selectedSymbol.Type is "reportviewer")
+        {
+            <hr class="my-2" />
+            <h6 class="mb-2 small" style="color: #f97316;">📄 Report Viewer Settings</h6>
+
+            <div class="mb-2">
+                <label class="form-label mb-0 small">Report Name</label>
+                @{
+                    var reportNames = Editor?.RootModel?.Reports?.Select(r => r.Name).ToList() ?? new List<string>();
+                }
+                @if (reportNames.Count > 0)
+                {
+                    <select class="form-select form-select-sm" style="font-size: 10px;"
+                            @bind="_selectedSymbol.ReportName" @bind:after="OnChanged">
+                        <option value="">(select a report)</option>
+                        @foreach (var rn in reportNames)
+                        {
+                            <option value="@rn">@rn</option>
+                        }
+                    </select>
+                }
+                else
+                {
+                    <input type="text" class="form-control form-control-sm" style="font-size: 10px;"
+                           @bind="_selectedSymbol.ReportName" @bind:after="OnChanged"
+                           placeholder="e.g. Daily Production Report" />
+                }
+                <div class="form-text" style="font-size: 9px;">Must match a Report definition name. The widget displays or generates the report at runtime.</div>
+            </div>
+
+            @if (!string.IsNullOrEmpty(_selectedSymbol.ReportName))
+            {
+                var matchedReport = Editor?.RootModel?.Reports?.FirstOrDefault(r =>
+                    r.Name.Equals(_selectedSymbol.ReportName, StringComparison.OrdinalIgnoreCase));
+                @if (matchedReport != null)
+                {
+                    <div class="small text-muted mb-1">
+                        <strong>@matchedReport.Sections.Count</strong> section(s) Â· Format: @matchedReport.Format Â·
+                        Delivery: @matchedReport.Delivery.Method
+                    </div>
+                }
+                else
+                {
+                    <div class="small text-warning">âš  No matching report definition found for "@_selectedSymbol.ReportName"</div>
+                }
+            }
+        }
+        @if (_selectedSymbol.Type is "screenembed")
+        {
+            <hr class="my-2" />
+            <h6 class="mb-2 small" style="color: #38bdf8;">🪟 Screen Embed Settings</h6>
+
+            <div class="mb-2">
+                <label class="form-label mb-0 small">Embedded Screens</label>
+                <div class="form-text mb-1" style="font-size: 9px;">
+                    Select screens to embed. If more than one is selected, a tab bar appears at runtime with lazy loading.
+                </div>
+
+                @for (var i = 0; i < _selectedSymbol.EmbeddedScreens.Count; i++)
+                {
+                    var index = i;
+                    var screenNames = Editor?.RootModel?.Screens?.Select(s => s.Name).ToList() ?? new List<string>();
+                    <div class="d-flex gap-1 mb-1 align-items-center">
+                        @if (screenNames.Count > 0)
+                        {
+                            <select class="form-select form-select-sm flex-grow-1" style="font-size: 10px;"
+                                    value="@_selectedSymbol.EmbeddedScreens[index]"
+                                    @onchange="(e) => UpdateEmbeddedScreen(index, e)">
+                                <option value="">(select a screen)</option>
+                                @foreach (var sn in screenNames)
+                                {
+                                    <option value="@sn">@sn</option>
+                                }
+                            </select>
+                        }
+                        else
+                        {
+                            <input type="text" class="form-control form-control-sm flex-grow-1" style="font-size: 10px;"
+                                   value="@_selectedSymbol.EmbeddedScreens[index]"
+                                   @onchange="(e) => UpdateEmbeddedScreen(index, e)"
+                                   placeholder="Screen name" />
+                        }
+                        <button class="btn btn-sm btn-outline-danger" style="font-size: 9px; padding: 1px 4px;"
+                                @onclick="() => RemoveEmbeddedScreen(index)"
+                                title="Remove">✕</button>
+                    </div>
+                }
+
+                <button class="btn btn-sm btn-outline-primary mt-1" style="font-size: 10px;"
+                        @onclick="AddEmbeddedScreen">
+                    + Add Screen
+                </button>
+            </div>
+
+            @if (_selectedSymbol.EmbeddedScreens.Count > 1)
+            {
+                <div class="small text-muted" style="font-size: 9px;">
+                    💡 @_selectedSymbol.EmbeddedScreens.Count screens → tab bar with lazy loading at runtime.
+                </div>
+            }
+            else if (_selectedSymbol.EmbeddedScreens.Count == 1)
+            {
+                <div class="small text-muted" style="font-size: 9px;">
+                    Single screen → rendered directly (no tabs).
+                </div>
+            }
+        }
+
+        @if (_selectedSymbol.Type is "imagemap")
+        {
+            <hr class="my-2" />
+            <h6 class="mb-2 small" style="color: #38bdf8;">🖼️ Image Map Settings</h6>
+            <div class="form-text mb-2" style="font-size: 9px;">
+                Define images and conditions. The first matching condition wins at runtime.
+                Use <code>*</code> as a default/fallback. Condition syntax: <code>value == 1</code>, <code>value &gt; 50</code>, <code>value == true</code>.
+            </div>
+
+            @for (var i = 0; i < _selectedSymbol.ImageMapEntries.Count; i++)
+            {
+                var idx = i;
+                var entry = _selectedSymbol.ImageMapEntries[idx];
+                <div class="border rounded p-1 mb-2" style="font-size: 11px; background: #0f172a;">
+                    <div class="d-flex gap-1 mb-1 align-items-center">
+                        <div class="flex-grow-1">
+                            <label class="form-label mb-0" style="font-size: 9px; color: #94a3b8;">Condition</label>
+                            <input type="text" class="form-control form-control-sm" style="font-size: 10px;"
+                                   placeholder="value == @idx  or  *  (default)"
+                                   @bind="entry.Condition" @bind:after="OnChanged" />
+                        </div>
+                        <div style="width: 80px;">
+                            <label class="form-label mb-0" style="font-size: 9px; color: #94a3b8;">Label</label>
+                            <input type="text" class="form-control form-control-sm" style="font-size: 10px;"
+                                   placeholder="(optional)"
+                                   @bind="entry.Label" @bind:after="OnChanged" />
+                        </div>
+                        <div class="d-flex flex-column align-items-center">
+                            <button class="btn btn-sm btn-outline-danger py-0 px-1" style="font-size: 9px; margin-top: 14px;"
+                                    @onclick="() => { _selectedSymbol.ImageMapEntries.RemoveAt(idx); OnChanged(); }"
+                                    title="Remove entry">✕</button>
+                        </div>
+                    </div>
+                    <div class="mb-1">
+                        @if (!string.IsNullOrEmpty(entry.ImageData))
+                        {
+                            <div class="d-flex align-items-center gap-1">
+                                <img src="@entry.ImageData" style="max-width: 60px; max-height: 40px; border: 1px solid #334155; border-radius: 3px;" />
+                                <button class="btn btn-sm btn-outline-warning py-0 px-1" style="font-size: 9px;"
+                                        @onclick="() => { entry.ImageData = string.Empty; OnChanged(); }">Clear</button>
+                                <InputFile OnChange="(e) => OnImageMapFileSelected(e, entry)" accept="image/*"
+                                           class="form-control form-control-sm" style="width: 120px; font-size: 9px;" />
+                            </div>
+                        }
+                        else
+                        {
+                            <label class="form-label mb-0" style="font-size: 9px; color: #94a3b8;">Image</label>
+                            <InputFile OnChange="(e) => OnImageMapFileSelected(e, entry)" accept="image/*"
+                                       class="form-control form-control-sm" style="font-size: 9px;" />
+                        }
+                    </div>
+                </div>
+            }
+
+            <button class="btn btn-sm btn-outline-success w-100 py-0" style="font-size: 10px;"
+                    @onclick="() => { _selectedSymbol.ImageMapEntries.Add(new ImageMapEntry()); OnChanged(); }">＋ Add Image</button>
+        }
+
+        @if (_selectedSymbol.Type is "trend")
+        {
+            <hr class="my-2" />
+            <h6 class="mb-2 small" style="color: #10b981;">📈 Realtime Trend Settings</h6>
+
+            <div class="mb-2">
+                <label class="form-label mb-0 small">Pens (@_selectedSymbol.TrendPens.Count traces)</label>
+                @for (int i = 0; i < _selectedSymbol.TrendPens.Count; i++)
+                {
+                    var idx = i;
+                    var pen = _selectedSymbol.TrendPens[idx];
+                    <div class="d-flex gap-1 mb-1 align-items-center">
+                        <VariablePathPicker Value="@pen.VariablePath"
+                                            ValueChanged="(v) => { pen.VariablePath = v ?? string.Empty; }"
+                                            OnChanged="OnChanged"
+                                            Placeholder="Variable path…"
+                                            InputStyle="font-size: 10px;" />
+                        <input type="text" class="form-control form-control-sm" style="width: 55px; font-size: 10px;"
+                               placeholder="Label"
+                               @bind="pen.Label" @bind:after="OnChanged" />
+                        <input type="color" class="form-control form-control-sm form-control-color" style="width: 28px; height: 22px;"
+                               @bind="pen.Color" @bind:after="OnChanged" />
+                        <input type="number" class="form-control form-control-sm" style="width: 40px; font-size: 9px;"
+                               step="0.5" min="0.5" max="5" placeholder="W"
+                               @bind="pen.LineWidth" @bind:after="OnChanged" title="Line width" />
+                        <button class="btn btn-sm btn-outline-danger py-0 px-1" style="font-size: 9px;"
+                                @onclick="() => { _selectedSymbol.TrendPens.RemoveAt(idx); OnChanged(); }">✕</button>
+                    </div>
+                }
+                <button class="btn btn-sm btn-outline-success w-100 py-0" style="font-size: 10px;"
+                        @onclick="() => { _selectedSymbol.TrendPens.Add(new TrendPen()); OnChanged(); }">＋ Add Pen</button>
+            </div>
+
+            <div class="d-flex gap-1 mb-2 flex-wrap">
+                <div>
+                    <label class="form-label mb-0 small">Time Window</label>
+                    <select class="form-select form-select-sm" style="font-size: 10px;"
+                            @bind="_selectedSymbol.TrendTimeWindowSeconds" @bind:after="OnChanged">
+                        <option value="10">10 sec</option>
+                        <option value="30">30 sec</option>
+                        <option value="60">1 min</option>
+                        <option value="120">2 min</option>
+                        <option value="300">5 min</option>
+                        <option value="600">10 min</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label mb-0 small">Y Min</label>
+                    <input type="number" step="any" class="form-control form-control-sm" style="width: 60px; font-size: 10px;"
+                           @bind="_selectedSymbol.TrendYMin" @bind:after="OnChanged" placeholder="auto" />
+                </div>
+                <div>
+                    <label class="form-label mb-0 small">Y Max</label>
+                    <input type="number" step="any" class="form-control form-control-sm" style="width: 60px; font-size: 10px;"
+                           @bind="_selectedSymbol.TrendYMax" @bind:after="OnChanged" placeholder="auto" />
+                </div>
+            </div>
+
+            <div class="d-flex gap-1 mb-2 flex-wrap">
+                <div>
+                    <label class="form-label mb-0 small">Background</label>
+                    <input type="color" class="form-control form-control-sm form-control-color" style="width: 35px; height: 24px;"
+                           @bind="_selectedSymbol.TrendBackground" @bind:after="OnChanged" />
+                </div>
+            </div>
+
+            <div class="d-flex gap-1 mb-2">
+                <div class="form-check" style="font-size: 10px;">
+                    <input type="checkbox" class="form-check-input" id="@($"tgrid_{_selectedSymbol.Id}")"
+                           checked="@_selectedSymbol.TrendShowGrid"
+                           @onchange="(e) => { _selectedSymbol.TrendShowGrid = (bool)(e.Value ?? false); OnChanged(); }" />
+                    <label class="form-check-label" for="@($"tgrid_{_selectedSymbol.Id}")">Grid</label>
+                </div>
+                <div class="form-check" style="font-size: 10px;">
+                    <input type="checkbox" class="form-check-input" id="@($"tcur_{_selectedSymbol.Id}")"
+                           checked="@_selectedSymbol.TrendShowCursor"
+                           @onchange="(e) => { _selectedSymbol.TrendShowCursor = (bool)(e.Value ?? false); OnChanged(); }" />
+                    <label class="form-check-label" for="@($"tcur_{_selectedSymbol.Id}")">Cursor</label>
+                </div>
+                <div class="form-check" style="font-size: 10px;">
+                    <input type="checkbox" class="form-check-input" id="@($"tleg_{_selectedSymbol.Id}")"
+                           checked="@_selectedSymbol.TrendShowLegend"
+                           @onchange="(e) => { _selectedSymbol.TrendShowLegend = (bool)(e.Value ?? false); OnChanged(); }" />
+                    <label class="form-check-label" for="@($"tleg_{_selectedSymbol.Id}")">Legend</label>
+                </div>
+            </div>
+        }
+
+        @if (_selectedSymbol.Type is "switch")
+        {
+            <hr class="my-2" />
+            <h6 class="mb-2 small" style="color: #34c759;">🔀 Toggle Switch Settings</h6>
+
+            <div class="mb-2">
+                <label class="form-label mb-0 small">Style</label>
+                <select class="form-select form-select-sm" style="font-size: 10px;"
+                        @bind="_selectedSymbol.SwitchStyle" @bind:after="OnChanged">
+                    <option value="apple">Apple (iOS pill)</option>
+                    <option value="flat">Flat (minimal)</option>
+                </select>
+            </div>
+
+            <div class="d-flex gap-1 mb-2">
+                <div>
+                    <label class="form-label mb-0 small">ON Color</label>
+                    <input type="color" class="form-control form-control-sm form-control-color" style="width: 35px; height: 24px;"
+                           @bind="_selectedSymbol.SwitchOnColor" @bind:after="OnChanged" />
+                </div>
+                <div>
+                    <label class="form-label mb-0 small">OFF Color</label>
+                    <input type="color" class="form-control form-control-sm form-control-color" style="width: 35px; height: 24px;"
+                           @bind="_selectedSymbol.SwitchOffColor" @bind:after="OnChanged" />
+                </div>
+            </div>
+            <div class="form-text" style="font-size: 9px;">Bind a boolean variable. The switch toggles on click when a ToggleVariable command is configured.</div>
+        }
+
+        @if (_selectedSymbol.Type is "rotaryswitch")
+        {
+            <hr class="my-2" />
+            <h6 class="mb-2 small" style="color: #f59e0b;">🎛️ Rotary Switch Settings</h6>
+
+            <div class="d-flex gap-1 mb-2">
+                <div>
+                    <label class="form-label mb-0 small">Positions</label>
+                    <input type="number" class="form-control form-control-sm" style="width: 55px; font-size: 10px;"
+                           min="2" max="12"
+                           @bind="_selectedSymbol.SwitchPositions" @bind:after="OnChanged" />
+                </div>
+            </div>
+
+            <div class="mb-2">
+                <label class="form-label mb-0 small">Position Labels</label>
+                <input type="text" class="form-control form-control-sm" style="font-size: 10px;"
+                       placeholder="Off,Low,Med,High"
+                       @bind="_selectedSymbol.SwitchPositionLabels" @bind:after="OnChanged" />
+                <div class="form-text" style="font-size: 9px;">Comma-separated. Fewer labels than positions → indices used.</div>
+            </div>
+
+            <div class="d-flex gap-1 mb-2">
+                <div>
+                    <label class="form-label mb-0 small">Knob</label>
+                    <input type="color" class="form-control form-control-sm form-control-color" style="width: 35px; height: 24px;"
+                           @bind="_selectedSymbol.SwitchKnobColor" @bind:after="OnChanged" />
+                </div>
+                <div>
+                    <label class="form-label mb-0 small">Dial</label>
+                    <input type="color" class="form-control form-control-sm form-control-color" style="width: 35px; height: 24px;"
+                           @bind="_selectedSymbol.SwitchDialColor" @bind:after="OnChanged" />
+                </div>
+            </div>
+            <div class="form-text" style="font-size: 9px;">Bind a numeric variable (0 to N−1). Use IncrementVariable command with wrapping, or WriteVariable per position.</div>
+        }
+
+
+        @if (_selectedSymbol.Type is "knob")
+        {
+            <hr class="my-2" />
+            <h6 class="mb-2 small" style="color: #ff6b35;">🎚️ Knob Settings</h6>
+
+            <div class="d-flex gap-1 mb-2">
+                <div>
+                    <label class="form-label mb-0 small">Min</label>
+                    <input type="number" class="form-control form-control-sm" style="width: 70px;"
+                           @bind="_selectedSymbol.MinValue" @bind:after="OnChanged" />
+                </div>
+                <div>
+                    <label class="form-label mb-0 small">Max</label>
+                    <input type="number" class="form-control form-control-sm" style="width: 70px;"
+                           @bind="_selectedSymbol.MaxValue" @bind:after="OnChanged" />
+                </div>
+            </div>
+
+            <div class="d-flex gap-1 mb-2">
+                <div>
+                    <label class="form-label mb-0 small">Knob</label>
+                    <input type="color" class="form-control form-control-sm form-control-color" style="width: 35px; height: 24px;"
+                           @bind="_selectedSymbol.KnobColor" @bind:after="OnChanged" />
+                </div>
+                <div>
+                    <label class="form-label mb-0 small">Pointer</label>
+                    <input type="color" class="form-control form-control-sm form-control-color" style="width: 35px; height: 24px;"
+                           @bind="_selectedSymbol.KnobPointerColor" @bind:after="OnChanged" />
+                </div>
+            </div>
+
+            <div class="d-flex gap-1 mb-2">
+                <div class="form-check form-check-inline small">
+                    <input class="form-check-input" type="checkbox" @bind="_selectedSymbol.KnobShowScale" @bind:after="OnChanged" />
+                    <label class="form-check-label">Scale</label>
+                </div>
+                <div class="form-check form-check-inline small">
+                    <input class="form-check-input" type="checkbox" @bind="_selectedSymbol.KnobShowValue" @bind:after="OnChanged" />
+                    <label class="form-check-label">Value</label>
+                </div>
+            </div>
+
+            <div class="mb-2">
+                <label class="form-label mb-0 small">Unit</label>
+                <input type="text" class="form-control form-control-sm" style="width: 80px;"
+                       @bind="_selectedSymbol.KnobUnit" @bind:after="OnChanged" placeholder="e.g. %" />
+            </div>
+
+            <div class="form-text" style="font-size: 9px;">Bind a numeric variable. Drag the knob to set the value interactively at runtime. Uses WriteVariable command.</div>
+        }
+
+        @if (_selectedSymbol.Type is "hslider" or "vslider")
+        {
+            <hr class="my-2" />
+            <h6 class="mb-2 small" style="color: #3b82f6;">@(_selectedSymbol.Type == "hslider" ? "↔️" : "↕️") Slider Settings</h6>
+
+            <div class="d-flex gap-1 mb-2">
+                <div>
+                    <label class="form-label mb-0 small">Min</label>
+                    <input type="number" class="form-control form-control-sm" style="width: 70px;"
+                           @bind="_selectedSymbol.MinValue" @bind:after="OnChanged" />
+                </div>
+                <div>
+                    <label class="form-label mb-0 small">Max</label>
+                    <input type="number" class="form-control form-control-sm" style="width: 70px;"
+                           @bind="_selectedSymbol.MaxValue" @bind:after="OnChanged" />
+                </div>
+            </div>
+
+            <div class="d-flex gap-1 mb-2">
+                <div>
+                    <label class="form-label mb-0 small">Track</label>
+                    <input type="color" class="form-control form-control-sm form-control-color" style="width: 35px; height: 24px;"
+                           @bind="_selectedSymbol.SliderTrackColor" @bind:after="OnChanged" />
+                </div>
+                <div>
+                    <label class="form-label mb-0 small">Fill</label>
+                    <input type="color" class="form-control form-control-sm form-control-color" style="width: 35px; height: 24px;"
+                           @bind="_selectedSymbol.SliderFillColor" @bind:after="OnChanged" />
+                </div>
+                <div>
+                    <label class="form-label mb-0 small">Thumb</label>
+                    <input type="color" class="form-control form-control-sm form-control-color" style="width: 35px; height: 24px;"
+                           @bind="_selectedSymbol.SliderThumbColor" @bind:after="OnChanged" />
+                </div>
+            </div>
+
+            <div class="d-flex gap-1 mb-2">
+                <div class="form-check form-check-inline small">
+                    <input class="form-check-input" type="checkbox" @bind="_selectedSymbol.SliderShowValue" @bind:after="OnChanged" />
+                    <label class="form-check-label">Value</label>
+                </div>
+                <div class="form-check form-check-inline small">
+                    <input class="form-check-input" type="checkbox" @bind="_selectedSymbol.SliderShowTicks" @bind:after="OnChanged" />
+                    <label class="form-check-label">Ticks</label>
+                </div>
+            </div>
+
+            <div class="form-text" style="font-size: 9px;">Bind a numeric variable. Drag the thumb to set the value interactively at runtime. Uses WriteVariable command.</div>
+        }
+
+        @if (_selectedSymbol.Type is "button")
+        {
+            <hr class="my-2" />
+            <h6 class="mb-2 small" style="color: #3b82f6;">🔲 Button Settings</h6>
+
+            <div class="mb-2">
+                <label class="form-label mb-0 small">Style</label>
+                <select class="form-select form-select-sm" style="font-size: 10px;"
+                        @bind="_selectedSymbol.ButtonStyle" @bind:after="OnChanged">
+                    <option value="raised">Raised (3D gradient)</option>
+                    <option value="flat">Flat (solid fill)</option>
+                    <option value="outline">Outline (border only)</option>
+                    <option value="pill">Pill (capsule)</option>
+                    <option value="glass">Glass (frosted)</option>
+                    <option value="danger">Danger (red)</option>
+                    <option value="success">Success (green)</option>
+                    <option value="warning">Warning (amber)</option>
+                    <option value="icon">Icon (compact)</option>
+                </select>
+            </div>
+
+            <div class="d-flex gap-1 mb-2">
+                <div>
+                    <label class="form-label mb-0 small">Color</label>
+                    <input type="color" class="form-control form-control-sm form-control-color" style="width: 35px; height: 24px;"
+                           @bind="_selectedSymbol.ButtonColor" @bind:after="OnChanged" />
+                </div>
+                <div>
+                    <label class="form-label mb-0 small">Text</label>
+                    <input type="color" class="form-control form-control-sm form-control-color" style="width: 35px; height: 24px;"
+                           @bind="_selectedSymbol.ButtonTextColor" @bind:after="OnChanged" />
+                </div>
+                <div>
+                    <label class="form-label mb-0 small">Radius</label>
+                    <input type="number" class="form-control form-control-sm" style="width: 55px; font-size: 10px;"
+                           min="0" max="999"
+                           @bind="_selectedSymbol.ButtonBorderRadius" @bind:after="OnChanged" />
+                </div>
+            </div>
+
+            <div class="d-flex gap-1 mb-2">
+                <div class="flex-grow-1">
+                    <label class="form-label mb-0 small">Icon</label>
+                    <input type="text" class="form-control form-control-sm" style="font-size: 10px;"
+                           placeholder="e.g. ▶, ⏹, ⚙️, 🔄"
+                           @bind="_selectedSymbol.ButtonIcon" @bind:after="OnChanged" />
+                </div>
+                <div>
+                    <label class="form-label mb-0 small">Position</label>
+                    <select class="form-select form-select-sm" style="font-size: 10px; width: 80px;"
+                            @bind="_selectedSymbol.ButtonIconPosition" @bind:after="OnChanged">
+                        <option value="left">Left</option>
+                        <option value="right">Right</option>
+                        <option value="top">Top</option>
+                        <option value="center">Center</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-text" style="font-size: 9px;">Add commands (Click, WhilePressed, etc.) to define button actions. Use Label for button text.</div>
+        }
+        @if (_selectedSymbol.Type is "animtext")
+        {
+            <hr class="my-2" />
+            <h6 class="mb-2 small" style="color: #f59e0b;">🎬 Animated Text Settings</h6>
+
+            <div class="mb-2">
+                <label class="form-label mb-0 small">Animation Mode</label>
+                <select class="form-select form-select-sm" style="font-size: 10px;"
+                        @bind="_selectedSymbol.AnimTextMode" @bind:after="OnChanged">
+                    <option value="scroll">Scroll (marquee)</option>
+                    <option value="flash">Flash (color alternation)</option>
+                    <option value="pulse">Pulse (opacity)</option>
+                    <option value="typewriter">Typewriter</option>
+                    <option value="fade">Fade (crossfade messages)</option>
+                </select>
+            </div>
+
+            <div class="d-flex gap-1 mb-2">
+                <div>
+                    <label class="form-label mb-0 small">Speed (sec)</label>
+                    <input type="number" class="form-control form-control-sm" style="width: 65px; font-size: 10px;"
+                           min="0.5" max="60" step="0.5"
+                           @bind="_selectedSymbol.AnimTextSpeed" @bind:after="OnChanged" />
+                </div>
+                <div>
+                    <label class="form-label mb-0 small">Radius</label>
+                    <input type="number" class="form-control form-control-sm" style="width: 55px; font-size: 10px;"
+                           min="0" max="50"
+                           @bind="_selectedSymbol.AnimTextBorderRadius" @bind:after="OnChanged" />
+                </div>
+                <div class="d-flex align-items-end">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="atBorder"
+                               @bind="_selectedSymbol.AnimTextShowBorder" @bind:after="OnChanged" />
+                        <label class="form-check-label small" for="atBorder">Border</label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="d-flex gap-1 mb-2">
+                <div>
+                    <label class="form-label mb-0 small">Text Color 1</label>
+                    <input type="color" class="form-control form-control-sm form-control-color" style="width: 35px; height: 24px;"
+                           @bind="_selectedSymbol.Fill" @bind:after="OnChanged" />
+                </div>
+                <div>
+                    <label class="form-label mb-0 small">Text Color 2</label>
+                    <input type="color" class="form-control form-control-sm form-control-color" style="width: 35px; height: 24px;"
+                           @bind="_selectedSymbol.AnimTextColor2" @bind:after="OnChanged" />
+                </div>
+                <div>
+                    <label class="form-label mb-0 small">BG 1</label>
+                    <input type="color" class="form-control form-control-sm form-control-color" style="width: 35px; height: 24px;"
+                           @bind="_selectedSymbol.AnimTextBackground" @bind:after="OnChanged" />
+                </div>
+                <div>
+                    <label class="form-label mb-0 small">BG 2</label>
+                    <input type="color" class="form-control form-control-sm form-control-color" style="width: 35px; height: 24px;"
+                           @bind="_selectedSymbol.AnimTextBackground2" @bind:after="OnChanged" />
+                </div>
+            </div>
+
+            <div class="mb-2">
+                <label class="form-label mb-0 small">Messages (one per line, use @@StringId for localization)</label>
+                <textarea class="form-control form-control-sm" rows="4"
+                          style="font-size: 10px; font-family: monospace;"
+                          @bind="_selectedSymbol.AnimTextMessages" @bind:after="OnChanged"></textarea>
+            </div>
+
+            <div class="form-text" style="font-size: 9px;">
+                If Messages is empty, the Label is used. Use @@StringId for localized strings.
+                Scroll cycles through messages as a marquee. Flash alternates colors. Fade crossfades between messages.
+            </div>
+        }
+        @if (_selectedSymbol.Type is "eventlog")
+        {
+            <hr class="my-2" />
+            <h6 class="mb-2 small" style="color: #94a3b8;">📓 Event Log Settings</h6>
+
+            <div class="d-flex gap-1 mb-2">
+                <div>
+                    <label class="form-label mb-0 small">Time Range</label>
+                    <select class="form-select form-select-sm" style="font-size: 10px;"
+                            @bind="_selectedSymbol.EventLogTimeRangeMinutes" @bind:after="OnChanged">
+                        <option value="5">5 min</option>
+                        <option value="15">15 min</option>
+                        <option value="60">1 hour</option>
+                        <option value="360">6 hours</option>
+                        <option value="1440">24 hours</option>
+                        <option value="10080">7 days</option>
+                        <option value="0">All</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label mb-0 small">Max Rows</label>
+                    <input type="number" class="form-control form-control-sm" style="font-size: 10px; width: 80px;"
+                           @bind="_selectedSymbol.EventLogMaxRows" @bind:after="OnChanged" />
+                </div>
+            </div>
+
+            <div class="mb-2">
+                <label class="form-label mb-0 small">Category Filter</label>
+                <select class="form-select form-select-sm" style="font-size: 10px;"
+                        @bind="_selectedSymbol.EventLogCategories" @bind:after="OnChanged">
+                    <option value="">All Categories</option>
+                    <option value="Alarm">Alarm only</option>
+                    <option value="Auth">Auth only</option>
+                    <option value="Driver">Driver only</option>
+                    <option value="System">System only</option>
+                    <option value="Alarm,Auth">Alarm + Auth</option>
+                    <option value="Alarm,Driver">Alarm + Driver</option>
+                    <option value="Alarm,Auth,Driver">Alarm + Auth + Driver</option>
+                    <option value="Driver,System">Driver + System</option>
+                </select>
+            </div>
+        }
+
+        <hr class="my-2" />
+        <h6 class="mb-2 small text-warning">🔒 Access Control</h6>
+        <div class="mb-2">
+            <label class="form-label mb-0 small">Required Access Level</label>
+            <select class="form-select form-select-sm" style="font-size: 11px;"
+                    @bind="_selectedSymbol.RequiredAccess" @bind:after="OnChanged">
+                <option value="">(none — always visible)</option>
+                <option value="Read">Read — hidden if user has no read access</option>
+                <option value="Write">Write — commands require write access</option>
+                <option value="ReadWrite">ReadWrite — read to see, write to interact</option>
+            </select>
+        </div>
+
+        <hr class="my-2" />
+        <h6 class="mb-2 small text-success">⚡ Commands (@_selectedSymbol.Commands.Count)</h6>
+
+        @foreach (var cmd in _selectedSymbol.Commands)
+        {
+            var c = cmd;
+            <div class="border rounded p-1 mb-2" style="font-size: 11px; background: var(--surface-alt, #f8f8f8);">
+                <div class="d-flex gap-1 mb-1 align-items-center">
+                    <select class="form-select form-select-sm" style="font-size: 10px;"
+                            @bind="c.Action" @bind:after="OnChanged">
+                        <optgroup label="Navigation">
+                            <option value="NavigateScreen">Navigate Screen</option>
+                            <option value="OpenScreenPopup">Open Screen Popup</option>
+                            <option value="OpenScreenModal">Open Screen Modal</option>
+                        </optgroup>
+                        <optgroup label="Variable">
+                            <option value="SetVariable">Set Variable</option>
+                            <option value="ResetVariable">Reset Variable (→ 0)</option>
+                            <option value="ToggleVariable">Toggle Variable</option>
+                            <option value="IncrementVariable">Increment Variable</option>
+                            <option value="DecrementVariable">Decrement Variable</option>
+                            <option value="WriteVariable">Write Variable</option>
+                        </optgroup>
+                        <optgroup label="Scripting">
+                            <option value="ExecuteJavaScript">Execute JavaScript</option>
+                            <option value="ExecuteScript">Execute Script</option>
+                        </optgroup>
+                        <optgroup label="Authentication">
+                            <option value="Login">Show Login</option>
+                            <option value="Logout">Logout</option>
+                        </optgroup>
+                        <optgroup label="Alarms">
+                            <option value="AcknowledgeAllAlarms">Acknowledge All Alarms</option>
+                            <option value="ResetAllAlarms">Reset All Alarms</option>
+                        </optgroup>
+                        <optgroup label="Localization">
+                            <option value="ChangeLanguage">Change Language</option>
+                        </optgroup>
+                    </select>
+                    <select class="form-select form-select-sm" style="font-size: 10px; width: 100px; flex-shrink: 0;"
+                            @bind="c.Trigger" @bind:after="OnChanged">
+                        <option value="Click">Click</option>
+                        <option value="MouseDown">Mouse Down</option>
+                        <option value="MouseUp">Mouse Up</option>
+                        <option value="WhilePressed">While Pressed</option>
+                    </select>
+                    <button class="btn btn-sm btn-outline-danger py-0 px-1" style="font-size: 9px;"
+                            @onclick="() => { _selectedSymbol.Commands.Remove(c); OnChanged(); }">✕</button>
+                </div>
+
+                @if (c.Action is "NavigateScreen" or "OpenScreenPopup" or "OpenScreenModal")
+                {
+                    <div class="mb-1">
+                        <label class="form-label mb-0" style="font-size: 10px;">Target Screen</label>
+                        <select class="form-select form-select-sm" style="font-size: 10px;"
+                                @bind="c.TargetScreen" @bind:after="OnChanged">
+                            <option value="">(select)</option>
+                            @foreach (var scr in GetScreenNames())
+                            {
+                                <option value="@scr">@scr</option>
+                            }
+                        </select>
+                    </div>
+                }
+
+                @if (c.Action is "SetVariable" or "ResetVariable" or "ToggleVariable"
+                    or "IncrementVariable" or "DecrementVariable" or "WriteVariable")
+                {
+                    <div class="mb-1">
+                        <label class="form-label mb-0" style="font-size: 10px;">Variable Path</label>
+                        <VariablePathPicker Value="@c.VariablePath"
+                                            ValueChanged="(v) => { c.VariablePath = v ?? string.Empty; }"
+                                            OnChanged="OnChanged"
+                                            Placeholder="Select variable…"
+                                            InputStyle="font-size: 10px;" />
+                    </div>
+                }
+
+                @if (c.Action is "SetVariable" or "WriteVariable" or "IncrementVariable" or "DecrementVariable")
+                {
+                    <div class="mb-1">
+                        <label class="form-label mb-0" style="font-size: 10px;">
+                            @(c.Action is "IncrementVariable" or "DecrementVariable" ? "Step" : "Value")
+                        </label>
+                        <input type="text" class="form-control form-control-sm" style="font-size: 10px;"
+                               placeholder="@(c.Action is "IncrementVariable" or "DecrementVariable" ? "1" : "true")"
+                               @bind="c.Value" @bind:after="OnChanged" />
+                    </div>
+                }
+
+                @if (c.Trigger == "WhilePressed")
+                {
+                    <div class="mb-1">
+                        <label class="form-label mb-0" style="font-size: 10px;">Release Value</label>
+                        <input type="text" class="form-control form-control-sm" style="font-size: 10px;"
+                               placeholder="0 or false" @bind="c.ReleaseValue" @bind:after="OnChanged" />
+                    </div>
+                }
+
+                @if (c.Action is "ExecuteJavaScript")
+                {
+                    <div class="mb-1">
+                        <label class="form-label mb-0" style="font-size: 10px;">JavaScript Code</label>
+                        <textarea class="form-control form-control-sm" style="font-size: 10px; font-family: monospace; min-height: 60px;"
+                                  placeholder="document.querySelector('.rv-canvas').style.background = 'red';"
+                                  @bind="c.Script" @bind:after="OnChanged"></textarea>
+                        <span class="text-muted" style="font-size: 9px;">Full browser DOM access including SVG elements.</span>
+                    </div>
+                }
+
+                @if (c.Action is "ExecuteScript")
+                {
+                    <div class="mb-1">
+                        <label class="form-label mb-0" style="font-size: 10px;">Script</label>
+                        <textarea class="form-control form-control-sm" style="font-size: 10px; font-family: monospace; min-height: 80px;"
+                                  placeholder="write(Root.Plant.Motor1, true)&#10;set(.rv-canvas rect, fill, #ff0000)&#10;delay(500)&#10;toggle(Root.Plant.Motor1)"
+                                  @bind="c.Script" @bind:after="OnChanged"></textarea>
+                        <span class="text-muted" style="font-size: 9px;">
+                            Commands: write(path, value) · toggle(path) · js(code) · set(selector, attr, value) · css(selector, prop, value) · log(msg) · alert(msg) · delay(ms)
+                        </span>
+                    </div>
+                }
+
+                @if (c.Action is "AcknowledgeAllAlarms" or "ResetAllAlarms")
+                {
+                    <div class="mb-1">
+                        <label class="form-label mb-0" style="font-size: 10px;">Comment (optional)</label>
+                        <input type="text" class="form-control form-control-sm" style="font-size: 10px;"
+                               placeholder="Acknowledged from RuntimeViewer"
+                               @bind="c.Value" @bind:after="OnChanged" />
+                    </div>
+                }
+
+                @if (c.Action is "ChangeLanguage")
+                {
+                    <div class="mb-1">
+                        <label class="form-label mb-0" style="font-size: 10px;">Language Code</label>
+                        <input type="text" class="form-control form-control-sm" style="font-size: 10px;"
+                               placeholder="en, de, fr, es, it, ja…"
+                               @bind="c.Value" @bind:after="OnChanged" />
+                        <span class="text-muted" style="font-size: 9px;">
+                            Set active language at runtime. Labels prefixed with @@ are resolved from the String Table.
+                        </span>
+                    </div>
+                }
+            </div>
+        }
+
+        <button class="btn btn-sm btn-outline-success w-100 py-0" style="font-size: 11px;"
+                @onclick="AddCommand">＋ Add Command</button>
+
+        <hr class="my-2" />
+        <h6 class="mb-2 small text-info">🎬 Animations (@_selectedSymbol.Animations.Count)</h6>
+
+        @if (_selectedSymbol.Animations.Count == 0)
+        {
+            <div class="text-muted small mb-1 text-center">
+                No animations. Click <strong>+ Add</strong> to create one.
+            </div>
+        }
+        else
+        {
+            <div class="anim-list">
+                @foreach (var anim in _selectedSymbol.Animations)
+                {
+                    var a = anim;
+                    var isExpanded = _expandedAnimId == a.Id;
+
+                    <div class="anim-item @(isExpanded ? "expanded" : "")">
+                        <div class="anim-item-header" @onclick="() => ToggleAnimExpand(a.Id)">
+                            <span class="anim-expand-icon">@(isExpanded ? "▾" : "▸")</span>
+                            <input type="checkbox" checked="@a.Enabled" @onchange="(e) => { a.Enabled = (bool)(e.Value ?? false); OnChanged(); }"
+                                   @onclick:stopPropagation title="Enable/Disable" />
+                            <span class="anim-item-name small fw-bold">@(string.IsNullOrEmpty(a.Name) ? a.Property : a.Name)</span>
+                            <span class="badge bg-secondary ms-1" style="font-size: 9px;">@a.Property</span>
+                            <span class="badge bg-info ms-1" style="font-size: 9px;">@(a.DurationMs)ms</span>
+                            @if (a.Keyframes.Count > 0)
+                            {
+                                <span class="badge bg-dark ms-1" style="font-size: 9px;">@a.Keyframes.Count kf</span>
+                            }
+                            <button class="btn btn-sm btn-outline-danger py-0 px-1 ms-auto" style="font-size: 10px;"
+                                    @onclick="() => RemoveAnimation(a)" @onclick:stopPropagation title="Remove animation">🗑</button>
+                        </div>
+
+                        @if (isExpanded)
+                        {
+                            <div class="anim-item-body">
+                                <div class="row g-1 mb-2">
+                                    <div class="col-6">
+                                        <label class="form-label mb-0 small">Name</label>
+                                        <input type="text" class="form-control form-control-sm"
+                                               @bind="a.Name" @bind:after="OnChanged" placeholder="(optional)" />
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label mb-0 small">Property</label>
+                                        <select class="form-select form-select-sm" @bind="a.Property" @bind:after="OnChanged">
+                                            <option value="Position">Position (X,Y)</option>
+                                            <option value="Scale">Scale (W,H)</option>
+                                            <option value="Rotation">Rotation</option>
+                                            <option value="Opacity">Opacity</option>
+                                            <option value="Fill">Fill Color</option>
+                                            <option value="Stroke">Stroke Color</option>
+                                            <option value="StrokeWidth">Stroke Width</option>
+                                            <option value="Width">Width</option>
+                                            <option value="Height">Height</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div class="row g-1 mb-2">
+                                    <div class="col-4">
+                                        <label class="form-label mb-0 small">Duration (ms)</label>
+                                        <input type="number" class="form-control form-control-sm" min="50" step="50"
+                                               @bind="a.DurationMs" @bind:after="OnChanged" />
+                                    </div>
+                                    <div class="col-4">
+                                        <label class="form-label mb-0 small">Delay (ms)</label>
+                                        <input type="number" class="form-control form-control-sm" min="0" step="50"
+                                               @bind="a.DelayMs" @bind:after="OnChanged" />
+                                    </div>
+                                    <div class="col-4">
+                                        <label class="form-label mb-0 small">Easing</label>
+                                        <select class="form-select form-select-sm" @bind="a.Easing" @bind:after="OnChanged">
+                                            <option value="Linear">Linear</option>
+                                            <option value="EaseIn">Ease In</option>
+                                            <option value="EaseOut">Ease Out</option>
+                                            <option value="EaseInOut">Ease In-Out</option>
+                                            <option value="Bounce">Bounce</option>
+                                            <option value="Elastic">Elastic</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div class="row g-1 mb-2">
+                                    <div class="col-4">
+                                        <label class="form-label mb-0 small">Repeat</label>
+                                        <input type="number" class="form-control form-control-sm" min="0"
+                                               @bind="a.RepeatCount" @bind:after="OnChanged"
+                                               title="0 = infinite" />
+                                        <span class="form-text" style="font-size: 9px;">0 = infinite</span>
+                                    </div>
+                                    <div class="col-4">
+                                        <label class="form-label mb-0 small">Auto-Reverse</label>
+                                        <div class="form-check mt-1">
+                                            <input type="checkbox" class="form-check-input" id="@($"ar_{a.Id}")"
+                                                   checked="@a.AutoReverse"
+                                                   @onchange="(e) => { a.AutoReverse = (bool)(e.Value ?? false); OnChanged(); }" />
+                                            <label class="form-check-label small" for="@($"ar_{a.Id}")">Ping-pong</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-4">
+                                        <label class="form-label mb-0 small">Trigger</label>
+                                        <select class="form-select form-select-sm" @bind="a.Trigger" @bind:after="OnChanged">
+                                            <option value="Always">Always</option>
+                                            <option value="OnVariable">On Variable</option>
+                                            <option value="OnClick">On Click</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                @if (a.Trigger == "OnVariable")
+                                {
+                                    <div class="row g-1 mb-2">
+                                        <div class="col-6">
+                                            <label class="form-label mb-0 small">Variable Path</label>
+                                            <input type="text" class="form-control form-control-sm"
+                                                   @bind="a.TriggerVariable" @bind:after="OnChanged" placeholder="Plant.Temp" />
+                                        </div>
+                                        <div class="col-6">
+                                            <label class="form-label mb-0 small">Condition</label>
+                                            <input type="text" class="form-control form-control-sm"
+                                                   @bind="a.TriggerCondition" @bind:after="OnChanged" placeholder="value > 50" />
+                                        </div>
+                                    </div>
+                                }
+
+                                <div class="anim-keyframes">
+                                    <div class="d-flex align-items-center mb-1">
+                                        <span class="small fw-bold">Keyframes</span>
+                                        <button class="btn btn-sm btn-outline-success py-0 px-1 ms-auto" style="font-size: 10px;"
+                                                @onclick="() => AddKeyframe(a)">+</button>
+                                    </div>
+
+                                    @if (a.Keyframes.Count == 0)
+                                    {
+                                        <div class="text-muted small mb-1">No keyframes. Add at least two (0% and 100%).</div>
+                                        <button class="btn btn-sm btn-outline-secondary py-0 px-1" style="font-size: 10px;"
+                                                @onclick="() => AddDefaultKeyframes(a)">Auto-fill 0%->100%</button>
+                                    }
+                                    else
+                                    {
+                                        <div class="anim-timeline">
+                                            <div class="anim-timeline-track">
+                                                @foreach (var kf in a.Keyframes.OrderBy(k => k.Percent))
+                                                {
+                                                    <div class="anim-timeline-marker" style="left: @(kf.Percent)%;"
+                                                         title="@(kf.Percent)% -- @kf.Value">
+                                                        <div class="anim-timeline-dot"></div>
+                                                    </div>
+                                                }
+                                            </div>
+                                        </div>
+
+                                        @foreach (var kf in a.Keyframes.OrderBy(k => k.Percent).ToList())
+                                        {
+                                            var k = kf;
+                                            <div class="anim-kf-row">
+                                                <div style="width: 50px;">
+                                                    <input type="number" class="form-control form-control-sm" min="0" max="100"
+                                                           @bind="k.Percent" @bind:after="OnChanged" title="Percent" />
+                                                </div>
+                                                <span class="small text-muted">%</span>
+                                                <div class="flex-grow-1">
+                                                    @if (a.Property is "Fill" or "Stroke")
+                                                    {
+                                                        <input type="color" class="form-control form-control-sm form-control-color"
+                                                               style="width: 40px; height: 24px;"
+                                                               @bind="k.Value" @bind:after="OnChanged" />
+                                                    }
+                                                    else
+                                                    {
+                                                        <input type="text" class="form-control form-control-sm"
+                                                               @bind="k.Value" @bind:after="OnChanged"
+                                                               placeholder="@GetKeyframePlaceholder(a.Property)" />
+                                                    }
+                                                </div>
+                                                <div style="width: 75px;">
+                                                    <select class="form-select form-select-sm" style="font-size: 10px;"
+                                                            @bind="k.Easing" @bind:after="OnChanged">
+                                                        <option value="">Default</option>
+                                                        <option value="Linear">Linear</option>
+                                                        <option value="EaseIn">Ease In</option>
+                                                        <option value="EaseOut">Ease Out</option>
+                                                        <option value="EaseInOut">Ease I/O</option>
+                                                    </select>
+                                                </div>
+                                                <button class="btn btn-sm btn-outline-danger py-0 px-1" style="font-size: 10px;"
+                                                        @onclick="() => RemoveKeyframe(a, k)" title="Remove">x</button>
+                                            </div>
+                                        }
+                                    }
+                                </div>
+
+                                <div class="d-flex gap-1 mt-2">
+                                    <button class="btn btn-sm btn-outline-primary py-0 px-2"
+                                            @onclick="() => PreviewAnimation(a)" title="Preview this animation on the canvas">
+                                        ▶ Preview
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-secondary py-0 px-2"
+                                            @onclick="StopPreview" title="Stop preview">
+                                        ⏹ Stop
+                                    </button>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+
+        <button class="btn btn-sm btn-outline-info w-100 py-0 mt-1" style="font-size: 11px;"
+                @onclick="AddAnimation">＋ Add Animation</button>
+    </div>
+}
+else
+{
+    <div class="properties-panel">
+        <p class="text-muted p-2">Select a symbol on the canvas to edit its properties.</p>
+    </div>
+}
+
+@code {
+    [Inject] private NodeEditorService Editor { get; set; } = default!;
+    [Inject] private OpcClientService Opc { get; set; } = default!;
+    [Inject] private UndoRedoService UndoRedo { get; set; } = default!;
+
+    [Parameter] public EventCallback OnPropertyChanged { get; set; }
+
+    private ScreenSymbol? _selectedSymbol => Editor.SelectedScreenSymbol;
+    private IReadOnlyList<ScreenSymbol> _selectedSymbols => Editor.SelectedScreenSymbols;
+
+    private bool IsResponsiveMode() =>
+        (Editor.SelectedItem as ScreenNode)?.Screen?.LayoutMode == "responsive";
+
+    private static int _nextCmdId = 1;
+    private static int _nextAnimId = 1;
+    private string? _expandedAnimId;
+    private SymbolAnimation? _previewingAnim;
+    private ScreenSymbol? _previewSymbol;
+    private System.Threading.Timer? _previewTimer;
+    private double _previewElapsed;
+    private Dictionary<string, double>? _previewOriginalValues;
+
+    // Snapshot-based undo for screen symbol properties
+    private string? _symbolSnapshot;
+
+    protected override void OnInitialized()
+    {
+        Editor.ScreenSelectionChanged += OnSelectionChanged;
+    }
+
+    private void OnSelectionChanged()
+    {
+        // Take a snapshot when a new symbol is selected
+        CaptureSymbolSnapshot();
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void CaptureSymbolSnapshot()
+    {
+        if (_selectedSymbol != null)
+            _symbolSnapshot = System.Text.Json.JsonSerializer.Serialize(_selectedSymbol);
+        else
+            _symbolSnapshot = null;
+    }
+
+    private void OnChanged()
+    {
+        // Record undo from snapshot
+        if (_selectedSymbol != null && _symbolSnapshot != null)
+        {
+            var newJson = System.Text.Json.JsonSerializer.Serialize(_selectedSymbol);
+            if (newJson != _symbolSnapshot)
+            {
+                UndoRedo.RecordSnapshot(_selectedSymbol, _symbolSnapshot, newJson, "Change symbol property");
+                _symbolSnapshot = newJson; // Update snapshot for next change
+            }
+        }
+        OnPropertyChanged.InvokeAsync();
+    }
+
+    private string? GetLiveValue(ScreenSymbol sym)
+    {
+        if (string.IsNullOrEmpty(sym.VariablePath)) return null;
+
+        foreach (var item in Opc.MonitoredItems)
+        {
+            if (item.DisplayName == sym.VariablePath ||
+                item.NodeIdString.EndsWith(sym.VariablePath, StringComparison.OrdinalIgnoreCase))
+                return item.Value;
+        }
+        return null;
+    }
+
+    private void AddCommand()
+    {
+        if (_selectedSymbol == null) return;
+        _selectedSymbol.Commands.Add(new SymbolCommand
+        {
+            Id = $"cmd_{_nextCmdId++}",
+            Action = "NavigateScreen",
+            Trigger = "Click"
+        });
+        OnChanged();
+    }
+
+    private List<string> GetScreenNames()
+    {
+        return Editor.RootModel?.Screens.Select(s => s.Name).ToList() ?? [];
+    }
+
+    // ─── Screen Embed helpers ───────────────────────────────
+
+    private void AddEmbeddedScreen()
+    {
+        _selectedSymbol?.EmbeddedScreens.Add("");
+        OnChanged();
+    }
+
+    // ─── Image Map helpers ──────────────────────────────────
+
+    private async Task OnImageMapFileSelected(InputFileChangeEventArgs e, ImageMapEntry entry)
+    {
+        var file = e.File;
+        if (file == null) return;
+
+        const long maxSize = 10 * 1024 * 1024; // 10 MB
+        using var stream = file.OpenReadStream(maxSize);
+        using var ms = new System.IO.MemoryStream();
+        await stream.CopyToAsync(ms);
+        var base64 = Convert.ToBase64String(ms.ToArray());
+        entry.ImageData = $"data:{file.ContentType};base64,{base64}";
+        OnChanged();
+    }
+
+    private void RemoveEmbeddedScreen(int index)
+    {
+        if (_selectedSymbol != null && index >= 0 && index < _selectedSymbol.EmbeddedScreens.Count)
+        {
+            _selectedSymbol.EmbeddedScreens.RemoveAt(index);
+            OnChanged();
+        }
+    }
+
+    private void UpdateEmbeddedScreen(int index, ChangeEventArgs e)
+    {
+        if (_selectedSymbol != null && index >= 0 && index < _selectedSymbol.EmbeddedScreens.Count)
+        {
+            _selectedSymbol.EmbeddedScreens[index] = e.Value?.ToString() ?? "";
+            OnChanged();
+        }
+    }
+
+
+    // ─── Animation Editor ───────────────────────────────────
+
+    private void ToggleAnimExpand(string animId)
+    {
+        _expandedAnimId = _expandedAnimId == animId ? null : animId;
+    }
+
+    private void AddAnimation()
+    {
+        if (_selectedSymbol == null) return;
+
+        var anim = new SymbolAnimation
+        {
+            Id = $"anim_{_nextAnimId++}",
+            Name = "",
+            Property = "Position",
+            DurationMs = 1000,
+            Easing = "Linear",
+            Trigger = "Always"
+        };
+        _selectedSymbol.Animations.Add(anim);
+        _expandedAnimId = anim.Id;
+        OnChanged();
+    }
+
+    private void RemoveAnimation(SymbolAnimation anim)
+    {
+        if (_selectedSymbol == null) return;
+        if (_previewingAnim == anim) StopPreview();
+        _selectedSymbol.Animations.Remove(anim);
+        if (_expandedAnimId == anim.Id) _expandedAnimId = null;
+        OnChanged();
+    }
+
+    private void AddKeyframe(SymbolAnimation anim)
+    {
+        var usedPcts = anim.Keyframes.Select(k => k.Percent).ToHashSet();
+        double pct = 0;
+        if (usedPcts.Contains(0) && usedPcts.Contains(100))
+            pct = 50;
+        else if (usedPcts.Contains(0))
+            pct = 100;
+
+        while (usedPcts.Contains(pct) && pct <= 100)
+            pct += 10;
+        if (pct > 100) pct = 100;
+
+        anim.Keyframes.Add(new AnimationKeyframe
+        {
+            Percent = pct,
+            Value = GetDefaultKeyframeValue(anim.Property)
+        });
+        OnChanged();
+    }
+
+    private void AddDefaultKeyframes(SymbolAnimation anim)
+    {
+        if (_selectedSymbol == null) return;
+
+        anim.Keyframes.Clear();
+        var (fromVal, toVal) = GetDefaultFromTo(anim.Property, _selectedSymbol);
+
+        anim.Keyframes.Add(new AnimationKeyframe { Percent = 0, Value = fromVal });
+        anim.Keyframes.Add(new AnimationKeyframe { Percent = 100, Value = toVal });
+        OnChanged();
+    }
+
+    private void RemoveKeyframe(SymbolAnimation anim, AnimationKeyframe kf)
+    {
+        anim.Keyframes.Remove(kf);
+        OnChanged();
+    }
+
+    private string GetDefaultKeyframeValue(string property) => property switch
+    {
+        "Position" => "0,0",
+        "Scale" => "1,1",
+        "Rotation" => "0",
+        "Opacity" => "1",
+        "Fill" => "#4a90d9",
+        "Stroke" => "#333333",
+        "StrokeWidth" => "1",
+        "Width" => "80",
+        "Height" => "40",
+        _ => "0"
+    };
+
+    private (string From, string To) GetDefaultFromTo(string property, ScreenSymbol sym) => property switch
+    {
+        "Position" => ($"{sym.X},{sym.Y}", $"{sym.X + 100},{sym.Y}"),
+        "Scale" => ("1,1", "1.5,1.5"),
+        "Rotation" => ("0", "360"),
+        "Opacity" => ("1", "0"),
+        "Fill" => (sym.Fill, "#ff0000"),
+        "Stroke" => (sym.Stroke, "#0000ff"),
+        "StrokeWidth" => (sym.StrokeWidth.ToString(System.Globalization.CultureInfo.InvariantCulture), "4"),
+        "Width" => (sym.Width.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    (sym.Width * 1.5).ToString(System.Globalization.CultureInfo.InvariantCulture)),
+        "Height" => (sym.Height.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                     (sym.Height * 1.5).ToString(System.Globalization.CultureInfo.InvariantCulture)),
+        _ => ("0", "100")
+    };
+
+    private string GetKeyframePlaceholder(string property) => property switch
+    {
+        "Position" => "x,y",
+        "Scale" => "sx,sy",
+        "Rotation" => "degrees",
+        "Opacity" => "0.0-1.0",
+        "Fill" or "Stroke" => "#rrggbb",
+        "StrokeWidth" => "px",
+        "Width" or "Height" => "px",
+        _ => "value"
+    };
+
+    // ─── Animation Preview ──────────────────────────────────
+
+    private void PreviewAnimation(SymbolAnimation anim)
+    {
+        if (_selectedSymbol == null || anim.Keyframes.Count < 2) return;
+
+        StopPreview();
+        _previewingAnim = anim;
+        _previewSymbol = _selectedSymbol;
+        _previewElapsed = 0;
+
+        _previewOriginalValues = new Dictionary<string, double>
+        {
+            ["X"] = _selectedSymbol.X,
+            ["Y"] = _selectedSymbol.Y,
+            ["Width"] = _selectedSymbol.Width,
+            ["Height"] = _selectedSymbol.Height,
+            ["Rotation"] = _selectedSymbol.Rotation,
+            ["StrokeWidth"] = _selectedSymbol.StrokeWidth,
+            ["Opacity"] = 1.0
+        };
+
+        const int intervalMs = 30;
+        _previewTimer = new System.Threading.Timer(_ =>
+        {
+            if (_previewingAnim == null || _previewSymbol == null)
+            {
+                StopPreview();
+                return;
+            }
+
+            _previewElapsed += intervalMs;
+            var duration = _previewingAnim.DurationMs;
+            if (duration <= 0) duration = 1000;
+
+            var progress = _previewElapsed / duration;
+
+            if (_previewingAnim.AutoReverse)
+            {
+                var cycle = (int)progress;
+                var frac = progress - cycle;
+                progress = (cycle % 2 == 0) ? frac : 1.0 - frac;
+            }
+            else
+            {
+                progress %= 1.0;
+            }
+
+            if (_previewingAnim.RepeatCount > 0 && _previewElapsed > duration * _previewingAnim.RepeatCount * (_previewingAnim.AutoReverse ? 2 : 1))
+            {
+                InvokeAsync(() => { StopPreview(); StateHasChanged(); });
+                return;
+            }
+
+            ApplyPreviewFrame(_previewingAnim, _previewSymbol, progress);
+            // Notify canvas to re-render
+            Editor.NotifyAnimationPreviewTick();
+            InvokeAsync(StateHasChanged);
+
+        }, null, (int)anim.DelayMs, intervalMs);
+    }
+
+    private void ApplyPreviewFrame(SymbolAnimation anim, ScreenSymbol sym, double progress)
+    {
+        var kfs = anim.Keyframes.OrderBy(k => k.Percent).ToList();
+        if (kfs.Count < 2) return;
+
+        var pct = progress * 100.0;
+
+        AnimationKeyframe? from = kfs[0], to = kfs[^1];
+        for (int i = 0; i < kfs.Count - 1; i++)
+        {
+            if (pct >= kfs[i].Percent && pct <= kfs[i + 1].Percent)
+            {
+                from = kfs[i];
+                to = kfs[i + 1];
+                break;
+            }
+        }
+
+        var segLen = to.Percent - from.Percent;
+        var t = segLen > 0 ? (pct - from.Percent) / segLen : 0;
+        t = Math.Clamp(t, 0, 1);
+
+        switch (anim.Property)
+        {
+            case "Position":
+                var (fx, fy) = ParsePair(from.Value);
+                var (tx, ty) = ParsePair(to.Value);
+                sym.X = Lerp(fx, tx, t);
+                sym.Y = Lerp(fy, ty, t);
+                break;
+            case "Scale":
+                var (fsx, fsy) = ParsePair(from.Value);
+                var (tsx, tsy) = ParsePair(to.Value);
+                var origW = _previewOriginalValues?["Width"] ?? sym.Width;
+                var origH = _previewOriginalValues?["Height"] ?? sym.Height;
+                sym.Width = origW * Lerp(fsx, tsx, t);
+                sym.Height = origH * Lerp(fsy, tsy, t);
+                break;
+            case "Rotation":
+                sym.Rotation = Lerp(ParseDouble(from.Value), ParseDouble(to.Value), t);
+                break;
+            case "Width":
+                sym.Width = Lerp(ParseDouble(from.Value), ParseDouble(to.Value), t);
+                break;
+            case "Height":
+                sym.Height = Lerp(ParseDouble(from.Value), ParseDouble(to.Value), t);
+                break;
+            case "StrokeWidth":
+                sym.StrokeWidth = Lerp(ParseDouble(from.Value), ParseDouble(to.Value), t);
+                break;
+            case "Fill":
+                sym.Fill = LerpColor(from.Value, to.Value, t);
+                break;
+            case "Stroke":
+                sym.Stroke = LerpColor(from.Value, to.Value, t);
+                break;
+            case "Opacity":
+                break;
+        }
+    }
+
+    private void StopPreview()
+    {
+        _previewTimer?.Dispose();
+        _previewTimer = null;
+
+        if (_previewOriginalValues != null && _previewSymbol != null)
+        {
+            _previewSymbol.X = _previewOriginalValues["X"];
+            _previewSymbol.Y = _previewOriginalValues["Y"];
+            _previewSymbol.Width = _previewOriginalValues["Width"];
+            _previewSymbol.Height = _previewOriginalValues["Height"];
+            _previewSymbol.Rotation = _previewOriginalValues["Rotation"];
+            _previewSymbol.StrokeWidth = _previewOriginalValues["StrokeWidth"];
+        }
+
+        _previewSymbol = null;
+        _previewingAnim = null;
+        _previewOriginalValues = null;
+        _previewElapsed = 0;
+    }
+
+    private static double Lerp(double a, double b, double t) => a + (b - a) * t;
+
+    private static (double, double) ParsePair(string val)
+    {
+        var parts = val.Split(',');
+        double.TryParse(parts.ElementAtOrDefault(0)?.Trim(), System.Globalization.NumberStyles.Any,
+            System.Globalization.CultureInfo.InvariantCulture, out var x);
+        double.TryParse(parts.ElementAtOrDefault(1)?.Trim(), System.Globalization.NumberStyles.Any,
+            System.Globalization.CultureInfo.InvariantCulture, out var y);
+        return (x, y);
+    }
+
+    private static double ParseDouble(string val)
+    {
+        double.TryParse(val?.Trim(), System.Globalization.NumberStyles.Any,
+            System.Globalization.CultureInfo.InvariantCulture, out var v);
+        return v;
+    }
+
+    private static string LerpColor(string fromHex, string toHex, double t)
+    {
+        try
+        {
+            var fc = ParseHexColor(fromHex);
+            var tc = ParseHexColor(toHex);
+            var r = (int)Lerp(fc.r, tc.r, t);
+            var g = (int)Lerp(fc.g, tc.g, t);
+            var b = (int)Lerp(fc.b, tc.b, t);
+            return $"#{Math.Clamp(r, 0, 255):x2}{Math.Clamp(g, 0, 255):x2}{Math.Clamp(b, 0, 255):x2}";
+        }
+        catch { return fromHex; }
+    }
+
+    private static (int r, int g, int b) ParseHexColor(string hex)
+    {
+        hex = hex.TrimStart('#');
+        if (hex.Length == 3)
+            hex = $"{hex[0]}{hex[0]}{hex[1]}{hex[1]}{hex[2]}{hex[2]}";
+        return (Convert.ToInt32(hex[..2], 16),
+                Convert.ToInt32(hex[2..4], 16),
+                Convert.ToInt32(hex[4..6], 16));
+    }
+    public void Dispose()
+    {
+        Editor.ScreenSelectionChanged -= OnSelectionChanged;
+    }
+}
