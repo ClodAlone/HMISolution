@@ -14,7 +14,7 @@
     @* -- AI Assistant (inline below editor) -- *@
     <div class="mt-2 border-top pt-2">
         <div class="d-flex align-items-center gap-2" @onclick="() => _aiExpanded = !_aiExpanded" style="cursor:pointer;">
-            <span style="font-size: 12px;">@(_aiExpanded ? "&#x25BC;" : "&#x25B6;")</span>
+            <span style="font-size: 12px;">@(_aiExpanded ? "▼" : "▶")</span>
             <strong style="font-size: 13px;">&#x1F916; AI Assistant</strong>
         </div>
 
@@ -50,49 +50,12 @@
                                     </optgroup>
                                 }
                             </select>
-                            <button class="btn btn-sm btn-outline-secondary" title="Browse for a custom file" @onclick="BrowseCustomFile">
+                            <button class="btn btn-sm btn-outline-secondary" title="Browse server for a file" @onclick="OpenRefFileBrowser">
                                 &#x1F4C1;
                             </button>
                         </div>
                     </div>
                 </div>
-
-                @if (_selectedEngine == "Ollama")
-                {
-                    <div class="mb-2 p-2 border rounded bg-body-secondary" style="font-size: 12px;">
-                        <div class="d-flex align-items-center gap-2 mb-1">
-                            <label class="text-nowrap"><strong>Model:</strong></label>
-                            <select class="form-select form-select-sm" style="width:160px;" @bind="_ollamaModel">
-                                @if (_ollamaModels.Length == 0)
-                                {
-                                    <option value="@_ollamaModel">@_ollamaModel</option>
-                                }
-                                @foreach (var m in _ollamaModels)
-                                {
-                                    <option value="@m">@m</option>
-                                }
-                            </select>
-                            <button class="btn btn-sm btn-outline-secondary px-2" title="Refresh model list" @onclick="RefreshOllamaModels">&#x27F3;</button>
-                            <label class="text-nowrap ms-2"><strong>URL:</strong></label>
-                            <input type="text" class="form-control form-control-sm" style="width:200px;" @bind="_ollamaUrl" placeholder="http://localhost:11434" />
-                        </div>
-                        <div class="d-flex align-items-center gap-2">
-                            <label class="text-nowrap"><strong>Train folder:</strong></label>
-                            <input type="text" class="form-control form-control-sm" @bind="_trainFolder" placeholder="C:\Work\samples" />
-                            <button class="btn btn-sm btn-warning px-2" @onclick="TrainOllama" disabled="@(AiService.IsTraining)">
-                                @if (AiService.IsTraining)
-                                {
-                                    <span class="spinner-border spinner-border-sm me-1"></span>
-                                }
-                                &#x1F9E0; Train
-                            </button>
-                        </div>
-                        @if (!string.IsNullOrEmpty(AiService.TrainingStatus))
-                        {
-                            <div class="mt-1 small text-muted"><em>@AiService.TrainingStatus</em></div>
-                        }
-                    </div>
-                }
 
                 @if (!string.IsNullOrEmpty(_selectedSamplePath))
                 {
@@ -107,18 +70,6 @@
                 {
                     <div class="mb-2 p-2 border rounded" style="max-height: 150px; overflow-y: auto; font-size: 10px; font-family: monospace; background: #1e1e1e; color: #d4d4d4;">
                         <pre class="mb-0" style="white-space: pre-wrap; word-break: break-all;">@_referencePreview</pre>
-                    </div>
-                }
-
-                @if (_showBrowse)
-                {
-                    <div class="mb-2 p-2 border rounded bg-body-secondary">
-                        <div class="d-flex gap-1">
-                            <input type="text" class="form-control form-control-sm" @bind="_browseInput"
-                                   placeholder="C:\path\to\file" />
-                            <button class="btn btn-sm btn-primary" @onclick="ConfirmBrowse">OK</button>
-                            <button class="btn btn-sm btn-outline-secondary" @onclick="() => _showBrowse = false">X</button>
-                        </div>
                     </div>
                 }
 
@@ -152,6 +103,93 @@
     </div>
 </div>
 
+@* ── Server File Browser Modal ── *@
+@if (_showRefBrowser)
+{
+    <div class="modal show d-block" tabindex="-1" style="z-index: 1060;">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content">
+                <div class="modal-header py-2">
+                    <h6 class="modal-title">&#x1F4C2; Browse Server — Select Reference File</h6>
+                    <button type="button" class="btn-close btn-close-sm" @onclick="() => _showRefBrowser = false"></button>
+                </div>
+                <div class="modal-body p-0" style="max-height: 400px; display: flex; flex-direction: column;">
+                    @* Address bar *@
+                    <div class="d-flex align-items-center gap-1 px-3 py-2 border-bottom" style="background: var(--bg-secondary, #f8f9fa);">
+                        <button class="btn btn-sm btn-outline-secondary px-2" title="Up"
+                                disabled="@(string.IsNullOrEmpty(_refBrowsePath) || Path.GetDirectoryName(_refBrowsePath) == null)"
+                                @onclick="RefBrowseUp">&#x2B06;</button>
+                        <input type="text" class="form-control form-control-sm" value="@_refBrowsePath"
+                               @onchange="OnRefBrowsePathChanged" placeholder="Enter path…" />
+                        <div class="dropdown">
+                            <button class="btn btn-sm btn-outline-secondary px-2 dropdown-toggle" title="Drives"
+                                    @onclick="() => _refShowDriveList = !_refShowDriveList" @onclick:stopPropagation>&#x1F4BB;</button>
+                            @if (_refShowDriveList)
+                            {
+                                <div class="dropdown-menu show" style="min-width: 80px;">
+                                    @foreach (var drive in _refBrowseDrives)
+                                    {
+                                        var d = drive;
+                                        <button class="dropdown-item small" @onclick="() => RefBrowseTo(d)" @onclick:stopPropagation>@d</button>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+                    @* File list *@
+                    <div style="overflow-y: auto; flex: 1; min-height: 200px;" @onclick="() => _refShowDriveList = false">
+                        <table class="table table-sm table-hover mb-0" style="font-size: 13px;">
+                            <thead>
+                                <tr><th style="width: 30px;"></th><th>Name</th><th style="width: 100px;">Size</th></tr>
+                            </thead>
+                            <tbody>
+                                @if (_refBrowseDirs.Length == 0 && _refBrowseFiles.Length == 0)
+                                {
+                                    <tr><td colspan="3" class="text-center text-muted py-3">
+                                        @(string.IsNullOrEmpty(_refBrowsePath) ? "Select a drive or enter a path" : "Empty folder or access denied")
+                                    </td></tr>
+                                }
+                                @foreach (var dir in _refBrowseDirs)
+                                {
+                                    var d = dir;
+                                    var name = Path.GetFileName(d);
+                                    <tr style="cursor: pointer;" @ondblclick="() => RefBrowseTo(d)">
+                                        <td>&#x1F4C1;</td><td>@name</td><td></td>
+                                    </tr>
+                                }
+                                @foreach (var file in _refBrowseFiles)
+                                {
+                                    var f = file;
+                                    var name = Path.GetFileName(f);
+                                    var size = "";
+                                    try { var fi = new FileInfo(f); size = fi.Length < 1024 ? $"{fi.Length} B" : $"{fi.Length / 1024} KB"; } catch { }
+                                    var isSelected = f == _refBrowseSelectedFile;
+                                    <tr class="@(isSelected ? "table-primary" : "")" style="cursor: pointer;"
+                                        @onclick="() => _refBrowseSelectedFile = f"
+                                        @ondblclick="() => RefBrowseSelectFile(f)">
+                                        <td>&#x1F4C4;</td><td>@name</td><td class="text-muted">@size</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    @if (!string.IsNullOrEmpty(_refBrowseSelectedFile))
+                    {
+                        <div class="px-3 py-1 border-top small text-muted" style="background: var(--bg-secondary, #f8f9fa);">
+                            <code>@_refBrowseSelectedFile</code>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer py-2">
+                    <button class="btn btn-sm btn-secondary" @onclick="() => _showRefBrowser = false">Cancel</button>
+                    <button class="btn btn-sm btn-primary" @onclick="() => RefBrowseSelectFile(_refBrowseSelectedFile)"
+                            disabled="@string.IsNullOrEmpty(_refBrowseSelectedFile)">&#x1F4C2; Select</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     [Parameter] public string JsonText { get; set; } = "";
     [Parameter] public EventCallback<string> JsonTextChanged { get; set; }
@@ -160,6 +198,7 @@
     [Parameter] public EventCallback<string> OnAiJsonResult { get; set; }
 
     [Inject] private AiService AiService { get; set; } = default!;
+    [Inject] private NodeEditorService Editor { get; set; } = default!;
 
     private string _message = "";
     private bool _success;
@@ -176,14 +215,15 @@
     private string _customFilePath = "";
     private string _referencePreview = "";
     private bool _showPreview;
-    private bool _showBrowse;
-    private string _browseInput = "";
 
-    // Ollama state
-    private string _ollamaModel = "mistral";
-    private string _ollamaUrl = "http://localhost:11434";
-    private string[] _ollamaModels = [];
-    private string _trainFolder = Path.Combine("C:", "Work", "samples");
+    // Server file browser state
+    private bool _showRefBrowser;
+    private string _refBrowsePath = "";
+    private string[] _refBrowseDirs = [];
+    private string[] _refBrowseFiles = [];
+    private string _refBrowseSelectedFile = "";
+    private string[] _refBrowseDrives = [];
+    private bool _refShowDriveList;
 
     private static readonly string DefaultSamplesPath = Path.Combine("C:", "Work", "samples");
 
@@ -236,39 +276,51 @@
         _showPreview = false;
     }
 
-    private void BrowseCustomFile()
+    // ── Server file browser methods ──
+
+    private void OpenRefFileBrowser()
     {
-        _showBrowse = !_showBrowse;
-        _browseInput = _customFilePath;
+        _refBrowseDrives = Editor.GetDrives();
+        _refBrowsePath = Editor.GetBrowseStartPath();
+        _refBrowseSelectedFile = "";
+        _refShowDriveList = false;
+        RefreshRefBrowseList();
+        _showRefBrowser = true;
     }
 
-    private void ConfirmBrowse()
+    private void RefBrowseTo(string path)
     {
-        if (!string.IsNullOrWhiteSpace(_browseInput) && File.Exists(_browseInput))
-        {
-            _customFilePath = _browseInput;
-            _selectedSamplePath = _browseInput;
-            _showBrowse = false;
-        }
-        else
-        {
-            _aiError = $"File not found: {_browseInput}";
-        }
+        _refBrowsePath = path;
+        _refBrowseSelectedFile = "";
+        _refShowDriveList = false;
+        RefreshRefBrowseList();
     }
 
-    private async Task RefreshOllamaModels()
+    private void RefBrowseUp()
     {
-        AiService.OllamaBaseUrl = _ollamaUrl;
-        _ollamaModels = await AiService.GetOllamaModelsAsync();
-        if (_ollamaModels.Length > 0 && !_ollamaModels.Contains(_ollamaModel))
-            _ollamaModel = _ollamaModels[0];
+        var parent = Path.GetDirectoryName(_refBrowsePath);
+        if (!string.IsNullOrEmpty(parent))
+            RefBrowseTo(parent);
     }
 
-    private async Task TrainOllama()
+    private void OnRefBrowsePathChanged(ChangeEventArgs e)
     {
-        AiService.OllamaModel = _ollamaModel;
-        AiService.OllamaBaseUrl = _ollamaUrl;
-        await AiService.TrainOllamaAsync(_trainFolder, _ => InvokeAsync(StateHasChanged));
+        var path = e.Value?.ToString() ?? "";
+        if (Directory.Exists(path))
+            RefBrowseTo(path);
+    }
+
+    private void RefreshRefBrowseList()
+    {
+        (_refBrowseDirs, _refBrowseFiles) = Editor.ListDirectoryAllFiles(_refBrowsePath);
+    }
+
+    private void RefBrowseSelectFile(string path)
+    {
+        if (string.IsNullOrEmpty(path)) return;
+        _customFilePath = path;
+        _selectedSamplePath = path;
+        _showRefBrowser = false;
     }
 
     private async Task OnPromptKeyDown(KeyboardEventArgs e)

@@ -18,6 +18,10 @@ window.editorShortcuts = {
         this._hasUnsavedChanges = hasChanges;
     },
 
+    scrollIntoView: function (element) {
+        if (element) element.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    },
+
     _onBeforeUnload: function (e) {
         if (window.editorShortcuts._hasUnsavedChanges) {
             e.preventDefault();

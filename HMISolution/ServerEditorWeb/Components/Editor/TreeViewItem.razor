@@ -1,7 +1,8 @@
 @using ServerEditorWeb.Models
+@inject Microsoft.JSInterop.IJSRuntime JS
 
 <div class="tree-item">
-    <div class="tree-item-header @(Node.IsSelected ? "selected" : "") @(Node is ProjectNode pn && pn.IsActive ? "active-project" : "")"
+    <div @ref="_headerRef" class="tree-item-header @(Node.IsSelected ? "selected" : "") @(Node is ProjectNode pn && pn.IsActive ? "active-project" : "")"
          @onclick="OnClick"
          @onclick:stopPropagation="true"
          @ondblclick="() => OnDoubleClick.InvokeAsync(Node)"
@@ -89,6 +90,10 @@
     [Parameter] public EventCallback<TreeNode> OnSetActiveProject { get; set; }
     [Parameter] public EventCallback<TreeNode> OnCloseProject { get; set; }
 
+    private ElementReference _headerRef;
+    private bool _wasSelected;
+    private ElementReference _headerRef;
+    private bool _wasSelected;
     private bool _contextMenuVisible;
     private double _contextMenuX, _contextMenuY;
 
@@ -113,5 +118,14 @@
     private void ToggleExpand()
     {
         Node.IsExpanded = !Node.IsExpanded;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (Node.IsSelected && !_wasSelected)
+        {
+            try { await JS.InvokeVoidAsync("editorShortcuts.scrollIntoView", _headerRef); } catch { }
+        }
+        _wasSelected = Node.IsSelected;
     }
 }

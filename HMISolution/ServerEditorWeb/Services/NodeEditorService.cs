@@ -84,6 +84,8 @@ public class NodeEditorService
         };
         var proj = new ProjectNode(model, "") { Name = "New Project" };
         AddProjectNode(proj);
+        proj.IsExpanded = true;
+        SetSingleSelection(proj);
         ServerEndpointUrl = model.Server.EndpointUrl;
         HasUnsavedChanges = true;
         NotifyStateChanged();
@@ -158,6 +160,43 @@ public class NodeEditorService
                 .ToArray();
 
             var files = Directory.GetFiles(path, "*.json", SearchOption.TopDirectoryOnly)
+                .OrderBy(f => Path.GetFileName(f), StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            return (dirs, files);
+        }
+        catch
+        {
+            return ([], []);
+        }
+    }
+
+    /// <summary>
+    /// Lists directories and all files in the given path (no extension filter).
+    /// Returns (directories, files) as full paths.
+    /// </summary>
+    public (string[] directories, string[] files) ListDirectoryAllFiles(string path)
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(path) || !Directory.Exists(path))
+                return ([], []);
+
+            var dirs = Directory.GetDirectories(path)
+                .Where(d =>
+                {
+                    try { var info = new DirectoryInfo(d); return !info.Attributes.HasFlag(FileAttributes.Hidden) && !info.Attributes.HasFlag(FileAttributes.System); }
+                    catch { return false; }
+                })
+                .OrderBy(d => Path.GetFileName(d), StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            var files = Directory.GetFiles(path)
+                .Where(f =>
+                {
+                    try { return !new FileInfo(f).Attributes.HasFlag(FileAttributes.Hidden); }
+                    catch { return false; }
+                })
                 .OrderBy(f => Path.GetFileName(f), StringComparer.OrdinalIgnoreCase)
                 .ToArray();
 
