@@ -21,6 +21,12 @@ namespace SharedModels
         public List<SchedulerConfig> Schedulers { get; set; } = new();
         public List<ReportConfig> Reports { get; set; } = new();
 
+        /// <summary>
+        /// PBKDF2-SHA256 hash of the project protection password.
+        /// When set, the project is locked and cannot be edited without entering the correct password.
+        /// </summary>
+        public string ProjectPasswordHash { get; set; } = "";
+
         [JsonPropertyName("Server")]
         public ServerSettings Server { get; set; } = new();
     }

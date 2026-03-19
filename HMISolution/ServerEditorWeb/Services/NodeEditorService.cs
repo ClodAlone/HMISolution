@@ -66,13 +66,35 @@ public class NodeEditorService
     public NodeEditorService()
     {
         LoadSettings();
-        if (RecentFiles.Count > 0)
+
+        // Restore all previously open projects
+        if (_pendingOpenPaths.Count > 0)
+        {
+            foreach (var path in _pendingOpenPaths)
+            {
+                if (File.Exists(path))
+                    OpenProject(path);
+            }
+            // Restore active project
+            if (!string.IsNullOrEmpty(_pendingActivePath))
+            {
+                var active = _openProjects.FirstOrDefault(p =>
+                    string.Equals(p.FilePath, _pendingActivePath, StringComparison.OrdinalIgnoreCase));
+                if (active != null)
+                    SetActiveProject(active);
+            }
+        }
+        else if (RecentFiles.Count > 0)
         {
             var first = RecentFiles[0];
             if (File.Exists(first))
                 OpenProject(first);
         }
     }
+
+    // Populated by LoadSettings(), consumed by the constructor
+    private List<string> _pendingOpenPaths = new();
+    private string? _pendingActivePath;
 
     public void NewFile()
     {
@@ -84,8 +106,6 @@ public class NodeEditorService
         };
         var proj = new ProjectNode(model, "") { Name = "New Project" };
         AddProjectNode(proj);
-        proj.IsExpanded = true;
-        SetSingleSelection(proj);
         ServerEndpointUrl = model.Server.EndpointUrl;
         HasUnsavedChanges = true;
         NotifyStateChanged();
@@ -160,43 +180,6 @@ public class NodeEditorService
                 .ToArray();
 
             var files = Directory.GetFiles(path, "*.json", SearchOption.TopDirectoryOnly)
-                .OrderBy(f => Path.GetFileName(f), StringComparer.OrdinalIgnoreCase)
-                .ToArray();
-
-            return (dirs, files);
-        }
-        catch
-        {
-            return ([], []);
-        }
-    }
-
-    /// <summary>
-    /// Lists directories and all files in the given path (no extension filter).
-    /// Returns (directories, files) as full paths.
-    /// </summary>
-    public (string[] directories, string[] files) ListDirectoryAllFiles(string path)
-    {
-        try
-        {
-            if (string.IsNullOrEmpty(path) || !Directory.Exists(path))
-                return ([], []);
-
-            var dirs = Directory.GetDirectories(path)
-                .Where(d =>
-                {
-                    try { var info = new DirectoryInfo(d); return !info.Attributes.HasFlag(FileAttributes.Hidden) && !info.Attributes.HasFlag(FileAttributes.System); }
-                    catch { return false; }
-                })
-                .OrderBy(d => Path.GetFileName(d), StringComparer.OrdinalIgnoreCase)
-                .ToArray();
-
-            var files = Directory.GetFiles(path)
-                .Where(f =>
-                {
-                    try { return !new FileInfo(f).Attributes.HasFlag(FileAttributes.Hidden); }
-                    catch { return false; }
-                })
                 .OrderBy(f => Path.GetFileName(f), StringComparer.OrdinalIgnoreCase)
                 .ToArray();
 
@@ -308,6 +291,7 @@ public class NodeEditorService
             SelectedItem = null;
             SelectedItems.Clear();
         }
+        SaveSettings();
         NotifyStateChanged();
     }
 
@@ -380,6 +364,28 @@ public class NodeEditorService
             }
         }
         proj.Children.Add(recipeGroup);
+
+        var schedulerGroup = new SchedulerGroupNode() { Parent = proj };
+        if (proj.Model.Schedulers != null)
+        {
+            foreach (var scheduler in proj.Model.Schedulers)
+            {
+                var sNode = new SchedulerNode(scheduler) { Parent = schedulerGroup };
+                schedulerGroup.Children.Add(sNode);
+            }
+        }
+        proj.Children.Add(schedulerGroup);
+
+        var reportGroup = new ReportGroupNode() { Parent = proj };
+        if (proj.Model.Reports != null)
+        {
+            foreach (var report in proj.Model.Reports)
+            {
+                var rptNode = new ReportNode(report) { Parent = reportGroup };
+                reportGroup.Children.Add(rptNode);
+            }
+        }
+        proj.Children.Add(reportGroup);
 
         var screenGroup = new ScreenGroupNode() { Parent = proj };
         if (proj.Model.Screens != null)
@@ -496,6 +502,87 @@ public class NodeEditorService
         }
     }
 
+    // --- Project Lock / Unlock ----------------------------------
+
+    /// <summary>Whether the active project is currently locked.</summary>
+    public bool IsActiveProjectLocked => ActiveProject?.IsLocked ?? false;
+
+    /// <summary>Whether the active project has a password set (even if currently unlocked).</summary>
+    public bool ActiveProjectHasPassword => !string.IsNullOrEmpty(_rootModel?.ProjectPasswordHash);
+
+    /// <summary>
+    /// Sets (or changes) the project protection password.
+    /// If <paramref name="password"/> is empty, the protection is removed.
+    /// </summary>
+    public (bool success, string message) SetProjectPassword(string password, string? currentPassword = null)
+    {
+        if (_rootModel == null || ActiveProject == null)
+            return (false, "No project loaded.");
+
+        // If a password is already set, verify the current password first
+        if (!string.IsNullOrEmpty(_rootModel.ProjectPasswordHash))
+        {
+            if (string.IsNullOrEmpty(currentPassword) || !PasswordHasher.Verify(currentPassword, _rootModel.ProjectPasswordHash))
+                return (false, "Current password is incorrect.");
+        }
+
+        if (string.IsNullOrEmpty(password))
+        {
+            // Remove protection
+            _rootModel.ProjectPasswordHash = "";
+            ActiveProject.IsLocked = false;
+            HasUnsavedChanges = true;
+            NotifyStateChanged();
+            return (true, "Project protection removed.");
+        }
+
+        _rootModel.ProjectPasswordHash = PasswordHasher.Hash(password);
+        ActiveProject.IsLocked = false; // Keep unlocked after setting
+        HasUnsavedChanges = true;
+        NotifyStateChanged();
+        return (true, "Project password set. The project will be locked when reopened.");
+    }
+
+    /// <summary>
+    /// Attempts to unlock the active project with the given password.
+    /// </summary>
+    public (bool success, string message) UnlockProject(string password)
+    {
+        if (_rootModel == null || ActiveProject == null)
+            return (false, "No project loaded.");
+
+        if (!ActiveProject.IsLocked)
+            return (true, "Project is already unlocked.");
+
+        if (string.IsNullOrEmpty(_rootModel.ProjectPasswordHash))
+        {
+            ActiveProject.IsLocked = false;
+            NotifyStateChanged();
+            return (true, "Project unlocked.");
+        }
+
+        if (PasswordHasher.Verify(password, _rootModel.ProjectPasswordHash))
+        {
+            ActiveProject.IsLocked = false;
+            NotifyStateChanged();
+            return (true, "Project unlocked.");
+        }
+
+        return (false, "Incorrect password.");
+    }
+
+    /// <summary>
+    /// Re-locks the active project (requires it to have a password set).
+    /// </summary>
+    public void LockProject()
+    {
+        if (ActiveProject != null && !string.IsNullOrEmpty(_rootModel?.ProjectPasswordHash))
+        {
+            ActiveProject.IsLocked = true;
+            NotifyStateChanged();
+        }
+    }
+
     public void AddFolder()
     {
         var parent = SelectedItem as FolderNode
@@ -596,6 +683,47 @@ public class NodeEditorService
                 Variables = new List<RecipeVariable>()
             };
             var newNode = new RecipeNode(newRecipe) { Parent = parent };
+            parent.Children.Add(newNode);
+            parent.IsExpanded = true;
+            SelectedItem = newNode;
+            HasUnsavedChanges = true;
+            NotifyStateChanged();
+        }
+    }
+
+    public void AddScheduler()
+    {
+        if (SelectedItem is SchedulerGroupNode parent)
+        {
+            var newScheduler = new SchedulerConfig
+            {
+                Name = "New Scheduler",
+                Enabled = true,
+                SlotMinutes = 60,
+                WeekendMode = "Same",
+                HolidayMode = "Same"
+            };
+            var newNode = new SchedulerNode(newScheduler) { Parent = parent };
+            parent.Children.Add(newNode);
+            parent.IsExpanded = true;
+            SelectedItem = newNode;
+            HasUnsavedChanges = true;
+            NotifyStateChanged();
+        }
+    }
+
+    public void AddReport()
+    {
+        if (SelectedItem is ReportGroupNode parent)
+        {
+            var newReport = new ReportConfig
+            {
+                Name = "New Report",
+                Enabled = true,
+                Format = "HTML",
+                Title = "New Report"
+            };
+            var newNode = new ReportNode(newReport) { Parent = parent };
             parent.Children.Add(newNode);
             parent.IsExpanded = true;
             SelectedItem = newNode;
@@ -968,7 +1096,7 @@ public class NodeEditorService
                 break;
             }
 
-            // ─── Multi-paste cases ──────────────────────────────
+            // ÔöÇÔöÇÔöÇ Multi-paste cases ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
             case "Variables" when target is FolderNode pf:
             {
                 var items = clipboard.PasteVariables();
@@ -1092,7 +1220,7 @@ public class NodeEditorService
             }
             else
             {
-                // Not siblings — just select the new node
+                // Not siblings ÔÇö just select the new node
                 SetSingleSelection(node);
             }
         }
@@ -1215,7 +1343,7 @@ public class NodeEditorService
     private static void BuildResourceTree<T>(TreeNode parent, List<T> items, string resourceKind,
         Func<T, string> getGroup, Func<T, TreeNode> createNode)
     {
-        // Cache of group-path → folder node
+        // Cache of group-path ÔåÆ folder node
         var folderCache = new Dictionary<string, ResourceFolderNode>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var item in items)
@@ -1327,6 +1455,30 @@ public class NodeEditorService
                     {
                         rNode.SyncName();
                         _rootModel.Recipes.Add(rNode.Recipe);
+                    }
+                }
+            }
+            else if (root is SchedulerGroupNode schGrpNode && _rootModel != null)
+            {
+                _rootModel.Schedulers.Clear();
+                foreach (var child in schGrpNode.Children)
+                {
+                    if (child is SchedulerNode schNode)
+                    {
+                        schNode.SyncName();
+                        _rootModel.Schedulers.Add(schNode.Scheduler);
+                    }
+                }
+            }
+            else if (root is ReportGroupNode rptGrpNode && _rootModel != null)
+            {
+                _rootModel.Reports.Clear();
+                foreach (var child in rptGrpNode.Children)
+                {
+                    if (child is ReportNode rptNode)
+                    {
+                        rptNode.SyncName();
+                        _rootModel.Reports.Add(rptNode.Report);
                     }
                 }
             }
@@ -1446,8 +1598,11 @@ public class NodeEditorService
                         if (File.Exists(file) && !RecentFiles.Contains(file))
                             RecentFiles.Add(file);
                     }
-
-
+                }
+                if (settings?.OpenProjectPaths != null)
+                {
+                    _pendingOpenPaths = settings.OpenProjectPaths;
+                    _pendingActivePath = settings.ActiveProjectPath;
                 }
             }
         }
@@ -1461,7 +1616,12 @@ public class NodeEditorService
         {
             var dir = Path.GetDirectoryName(settingsPath);
             if (dir != null && !Directory.Exists(dir)) Directory.CreateDirectory(dir);
-            var settings = new EditorSettings { RecentFiles = new List<string>(RecentFiles) };
+            var settings = new EditorSettings
+            {
+                RecentFiles = new List<string>(RecentFiles),
+                OpenProjectPaths = _openProjects.Where(p => !string.IsNullOrEmpty(p.FilePath)).Select(p => p.FilePath).ToList(),
+                ActiveProjectPath = ActiveProject?.FilePath
+            };
             File.WriteAllText(settingsPath, JsonSerializer.Serialize(settings));
         }
         catch { }
@@ -1470,5 +1630,7 @@ public class NodeEditorService
     private class EditorSettings
     {
         public List<string> RecentFiles { get; set; } = new();
+        public List<string> OpenProjectPaths { get; set; } = new();
+        public string? ActiveProjectPath { get; set; }
     }
 }

@@ -195,6 +195,32 @@ else
                                    @onclick:stopPropagation
                                    @onchange="e => { Editor.SetServerEndpointUrl(e.Value?.ToString() ?? string.Empty); }" />
                         </div>
+                        <div class="menu-separator"></div>
+                        <div class="menu-section-label">Project Protection</div>
+                        @if (Editor.IsActiveProjectLocked)
+                        {
+                            <div class="menu-item" @onclick="OpenUnlockDialog" @onclick:stopPropagation>
+                                <span class="menu-icon">🔓</span><span class="menu-label">Unlock Project…</span>
+                            </div>
+                        }
+                        else if (Editor.ActiveProjectHasPassword)
+                        {
+                            <div class="menu-item" @onclick="LockProjectMenu" @onclick:stopPropagation>
+                                <span class="menu-icon">🔒</span><span class="menu-label">Lock Project</span>
+                            </div>
+                            <div class="menu-item" @onclick="OpenSetPasswordDialog" @onclick:stopPropagation>
+                                <span class="menu-icon">🔑</span><span class="menu-label">Change Password…</span>
+                            </div>
+                            <div class="menu-item danger" @onclick="OpenRemovePasswordDialog" @onclick:stopPropagation>
+                                <span class="menu-icon">🗑</span><span class="menu-label">Remove Password…</span>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="menu-item @(Editor.RootModel == null ? "disabled" : "")" @onclick="OpenSetPasswordDialog" @onclick:stopPropagation>
+                                <span class="menu-icon">🔒</span><span class="menu-label">Set Password…</span>
+                            </div>
+                        }
                     </div>
                 }
             </div>
@@ -207,6 +233,14 @@ else
                 {
                     <span class="badge bg-info text-dark" style="font-size: 10px;" title="@Auth.AccessLevel access">👤 @Auth.Username</span>
                     <button class="dock-btn" title="Logout" @onclick="Logout" @onclick:stopPropagation>🔓</button>
+                }
+                @if (Editor.IsActiveProjectLocked)
+                {
+                    <span class="badge bg-danger" style="font-size: 10px; cursor: pointer;" title="Project is locked — click to unlock" @onclick="OpenUnlockDialog" @onclick:stopPropagation>🔒 Locked</span>
+                }
+                else if (Editor.ActiveProjectHasPassword)
+                {
+                    <span class="badge bg-success" style="font-size: 10px;" title="Project is unlocked">🔓 Unlocked</span>
                 }
                 @if (Editor.HasUnsavedChanges)
                 {
@@ -540,6 +574,94 @@ else
     </div>
 }
 
+
+@if (_showUnlockDialog)
+{
+    <div class="modal-backdrop show" @onclick="() => { _showUnlockDialog = false; _unlockError = string.Empty; }"></div>
+    <div class="modal show d-block" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header py-2">
+                    <h6 class="modal-title">&#x1F512; Unlock Project</h6>
+                    <button type="button" class="btn-close btn-close-sm" @onclick="() => { _showUnlockDialog = false; _unlockError = string.Empty; }"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted small">This project is password-protected. Enter the password to unlock it for editing.</p>
+                    @if (!string.IsNullOrEmpty(_unlockError))
+                    {
+                        <div class="alert alert-danger py-1 small mb-2">@_unlockError</div>
+                    }
+                    <div class="mb-2">
+                        <label class="form-label small">Password</label>
+                        <input type="password" class="form-control" @bind="_unlockPassword"
+                               @onkeydown="OnUnlockKeyDown" placeholder="Project password" />
+                    </div>
+                </div>
+                <div class="modal-footer py-2">
+                    <button class="btn btn-sm btn-secondary" @onclick="() => { _showUnlockDialog = false; _unlockError = string.Empty; }">Cancel</button>
+                    <button class="btn btn-sm btn-primary" @onclick="DoUnlockProject">&#x1F513; Unlock</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_showSetPasswordDialog)
+{
+    <div class="modal-backdrop show" @onclick="CloseSetPasswordDialog"></div>
+    <div class="modal show d-block" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header py-2">
+                    <h6 class="modal-title">&#x1F511; @(Editor.ActiveProjectHasPassword ? "Change" : "Set") Project Password</h6>
+                    <button type="button" class="btn-close btn-close-sm" @onclick="CloseSetPasswordDialog"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted small">
+                        @if (Editor.ActiveProjectHasPassword)
+                        {
+                            <text>Change or remove the project protection password.</text>
+                        }
+                        else
+                        {
+                            <text>Set a password to protect this project. When locked, the project cannot be edited without the correct password.</text>
+                        }
+                    </p>
+                    @if (!string.IsNullOrEmpty(_setPwError))
+                    {
+                        <div class="alert alert-danger py-1 small mb-2">@_setPwError</div>
+                    }
+                    @if (!string.IsNullOrEmpty(_setPwSuccess))
+                    {
+                        <div class="alert alert-success py-1 small mb-2">@_setPwSuccess</div>
+                    }
+                    @if (Editor.ActiveProjectHasPassword)
+                    {
+                        <div class="mb-2">
+                            <label class="form-label small">Current Password</label>
+                            <input type="password" class="form-control" @bind="_setPwCurrent" placeholder="Current password" />
+                        </div>
+                    }
+                    <div class="mb-2">
+                        <label class="form-label small">New Password</label>
+                        <input type="password" class="form-control" @bind="_setPwNew" placeholder="New password" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small">Confirm Password</label>
+                        <input type="password" class="form-control" @bind="_setPwConfirm" placeholder="Confirm password"
+                               @onkeydown="OnSetPwKeyDown" />
+                    </div>
+                </div>
+                <div class="modal-footer py-2">
+                    <button class="btn btn-sm btn-secondary" @onclick="CloseSetPasswordDialog">Cancel</button>
+                    <button class="btn btn-sm btn-success" @onclick="DoSetProjectPassword">
+                        &#x1F512; @(Editor.ActiveProjectHasPassword ? "Change" : "Set") Password
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
 @code {
     [Inject] private NodeEditorService Editor { get; set; } = default!;
     [Inject] private ClipboardService Clipboard { get; set; } = default!;
@@ -590,6 +712,17 @@ else
     private DateTime _lastActivity = DateTime.UtcNow;
     private System.Threading.Timer? _idleTimer;
     private DotNetObjectReference<Home>? _idleRef;
+
+    // Project lock dialog state
+    private bool _showUnlockDialog;
+    private string _unlockPassword = "";
+    private string _unlockError = "";
+    private bool _showSetPasswordDialog;
+    private string _setPwCurrent = "";
+    private string _setPwNew = "";
+    private string _setPwConfirm = "";
+    private string _setPwError = "";
+    private string _setPwSuccess = "";
 
     // Tracks the last value synced to JS to avoid redundant interop calls
     private bool _lastSyncedUnsaved;
@@ -821,6 +954,7 @@ private void UnsavedDialogCancel()
 
     private void Save()
     {
+        if (GuardLocked()) return;
         if (string.IsNullOrEmpty(Editor.CurrentFilePath))
         {
             // No file path yet — redirect to Save As
@@ -836,6 +970,7 @@ private void UnsavedDialogCancel()
 
     private void SaveAs()
     {
+        if (GuardLocked()) return;
         if (string.IsNullOrEmpty(_saveAsPath)) return;
         var (success, msg) = Editor.SaveAs(_saveAsPath);
         ShowToast(success, msg);
@@ -900,19 +1035,20 @@ private void UnsavedDialogCancel()
 
     private void AddFolder()
     {
+        if (GuardLocked()) return;
         if (Editor.SelectedItem is FolderNode or VariableGroupNode)
             Editor.AddFolder();
         else
             Editor.AddResourceFolder();
     }
-    private void AddVariable() { Editor.AddVariable(); }
-    private void AddScript() { Editor.AddScript(); }
-    private void AddPlcProgram() { Editor.AddPlcProgram(); }
-    private void AddRecipe() { Editor.AddRecipe(); }
-    private void AddScheduler() { Editor.AddScheduler(); }
-    private void AddReport() { Editor.AddReport(); }
-    private void AddScreen() { Editor.AddScreen(); }
-    private void Delete() { Editor.DeleteSelected(); }
+    private void AddVariable() { if (GuardLocked()) return; Editor.AddVariable(); }
+    private void AddScript() { if (GuardLocked()) return; Editor.AddScript(); }
+    private void AddPlcProgram() { if (GuardLocked()) return; Editor.AddPlcProgram(); }
+    private void AddRecipe() { if (GuardLocked()) return; Editor.AddRecipe(); }
+    private void AddScheduler() { if (GuardLocked()) return; Editor.AddScheduler(); }
+    private void AddReport() { if (GuardLocked()) return; Editor.AddReport(); }
+    private void AddScreen() { if (GuardLocked()) return; Editor.AddScreen(); }
+    private void Delete() { if (GuardLocked()) return; Editor.DeleteSelected(); }
 
     private bool CanAddFolder() => Editor.SelectedItem is FolderNode or VariableGroupNode
         or ScriptGroupNode or PlcGroupNode or ScreenGroupNode or ResourceFolderNode;
@@ -1035,6 +1171,7 @@ private void UnsavedDialogCancel()
 
     private void OnPropertyChanged()
     {
+        if (GuardLocked()) return;
         Editor.MarkChanged();
     }
 
@@ -1118,6 +1255,130 @@ private void UnsavedDialogCancel()
         return Task.CompletedTask;
     }
 
+    // --- Project Lock / Unlock helpers --------------------------
+
+    private void OpenUnlockDialog()
+    {
+        CloseMenus();
+        _unlockPassword = "";
+        _unlockError = "";
+        _showUnlockDialog = true;
+    }
+
+    private async Task OnUnlockKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            DoUnlockProject();
+    }
+
+    private void DoUnlockProject()
+    {
+        var (success, msg) = Editor.UnlockProject(_unlockPassword);
+        if (success)
+        {
+            _showUnlockDialog = false;
+            _unlockPassword = "";
+            _unlockError = "";
+            _appLogService.AddLog("INF", "Project unlocked.");
+            ShowToast(true, "Project unlocked.");
+        }
+        else
+        {
+            _unlockError = msg;
+        }
+    }
+
+    private void LockProjectMenu()
+    {
+        CloseMenus();
+        Editor.LockProject();
+        _appLogService.AddLog("INF", "Project locked.");
+        ShowToast(true, "Project locked.");
+    }
+
+    private void OpenSetPasswordDialog()
+    {
+        CloseMenus();
+        _setPwCurrent = "";
+        _setPwNew = "";
+        _setPwConfirm = "";
+        _setPwError = "";
+        _setPwSuccess = "";
+        _showSetPasswordDialog = true;
+    }
+
+    private void OpenRemovePasswordDialog()
+    {
+        CloseMenus();
+        _setPwCurrent = "";
+        _setPwNew = "";
+        _setPwConfirm = "";
+        _setPwError = "";
+        _setPwSuccess = "";
+        _showSetPasswordDialog = true;
+        // The dialog handles removal when new password is left empty
+    }
+
+    private void CloseSetPasswordDialog()
+    {
+        _showSetPasswordDialog = false;
+        _setPwError = "";
+        _setPwSuccess = "";
+    }
+
+    private async Task OnSetPwKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            DoSetProjectPassword();
+    }
+
+    private void DoSetProjectPassword()
+    {
+        _setPwError = "";
+        _setPwSuccess = "";
+
+        if (!string.IsNullOrEmpty(_setPwNew) && _setPwNew != _setPwConfirm)
+        {
+            _setPwError = "Passwords do not match.";
+            return;
+        }
+
+        if (!string.IsNullOrEmpty(_setPwNew) && _setPwNew.Length < 4)
+        {
+            _setPwError = "Password must be at least 4 characters.";
+            return;
+        }
+
+        var (success, msg) = Editor.SetProjectPassword(_setPwNew, _setPwCurrent);
+        if (success)
+        {
+            _setPwSuccess = msg;
+            _setPwCurrent = "";
+            _setPwNew = "";
+            _setPwConfirm = "";
+            _appLogService.AddLog("INF", msg);
+            Editor.Save();
+            ShowToast(true, msg);
+            // Close after a brief moment so the user sees the success message
+            _showSetPasswordDialog = false;
+        }
+        else
+        {
+            _setPwError = msg;
+        }
+    }
+
+    /// <summary>Returns true if the active project is locked and shows a toast warning.</summary>
+    private bool GuardLocked()
+    {
+        if (Editor.IsActiveProjectLocked)
+        {
+            ShowToast(false, "Project is locked. Unlock it first to make changes.");
+            return true;
+        }
+        return false;
+    }
+
     private void OnLibrarySymbolSelected(SymbolLibraryItem item)
     {
         // Find the active screen from the selected node, or the screen editor panel context
@@ -1169,6 +1430,7 @@ private void UnsavedDialogCancel()
 
     private void ApplyJson()
     {
+        if (GuardLocked()) return;
         var (success, msg) = Editor.ApplyJsonToTree();
         _jsonEditor?.ShowMessage(success, msg);
     }

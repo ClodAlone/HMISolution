@@ -502,6 +502,87 @@ public class NodeEditorService
         }
     }
 
+    // --- Project Lock / Unlock ----------------------------------
+
+    /// <summary>Whether the active project is currently locked.</summary>
+    public bool IsActiveProjectLocked => ActiveProject?.IsLocked ?? false;
+
+    /// <summary>Whether the active project has a password set (even if currently unlocked).</summary>
+    public bool ActiveProjectHasPassword => !string.IsNullOrEmpty(_rootModel?.ProjectPasswordHash);
+
+    /// <summary>
+    /// Sets (or changes) the project protection password.
+    /// If <paramref name="password"/> is empty, the protection is removed.
+    /// </summary>
+    public (bool success, string message) SetProjectPassword(string password, string? currentPassword = null)
+    {
+        if (_rootModel == null || ActiveProject == null)
+            return (false, "No project loaded.");
+
+        // If a password is already set, verify the current password first
+        if (!string.IsNullOrEmpty(_rootModel.ProjectPasswordHash))
+        {
+            if (string.IsNullOrEmpty(currentPassword) || !PasswordHasher.Verify(currentPassword, _rootModel.ProjectPasswordHash))
+                return (false, "Current password is incorrect.");
+        }
+
+        if (string.IsNullOrEmpty(password))
+        {
+            // Remove protection
+            _rootModel.ProjectPasswordHash = "";
+            ActiveProject.IsLocked = false;
+            HasUnsavedChanges = true;
+            NotifyStateChanged();
+            return (true, "Project protection removed.");
+        }
+
+        _rootModel.ProjectPasswordHash = PasswordHasher.Hash(password);
+        ActiveProject.IsLocked = false; // Keep unlocked after setting
+        HasUnsavedChanges = true;
+        NotifyStateChanged();
+        return (true, "Project password set. The project will be locked when reopened.");
+    }
+
+    /// <summary>
+    /// Attempts to unlock the active project with the given password.
+    /// </summary>
+    public (bool success, string message) UnlockProject(string password)
+    {
+        if (_rootModel == null || ActiveProject == null)
+            return (false, "No project loaded.");
+
+        if (!ActiveProject.IsLocked)
+            return (true, "Project is already unlocked.");
+
+        if (string.IsNullOrEmpty(_rootModel.ProjectPasswordHash))
+        {
+            ActiveProject.IsLocked = false;
+            NotifyStateChanged();
+            return (true, "Project unlocked.");
+        }
+
+        if (PasswordHasher.Verify(password, _rootModel.ProjectPasswordHash))
+        {
+            ActiveProject.IsLocked = false;
+            NotifyStateChanged();
+            return (true, "Project unlocked.");
+        }
+
+        return (false, "Incorrect password.");
+    }
+
+    /// <summary>
+    /// Re-locks the active project (requires it to have a password set).
+    /// </summary>
+    public void LockProject()
+    {
+        if (ActiveProject != null && !string.IsNullOrEmpty(_rootModel?.ProjectPasswordHash))
+        {
+            ActiveProject.IsLocked = true;
+            NotifyStateChanged();
+        }
+    }
+
     public void AddFolder()
     {
         var parent = SelectedItem as FolderNode
@@ -1015,7 +1096,7 @@ public class NodeEditorService
                 break;
             }
 
-            // ─── Multi-paste cases ──────────────────────────────
+            // ÔöÇÔöÇÔöÇ Multi-paste cases ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
             case "Variables" when target is FolderNode pf:
             {
                 var items = clipboard.PasteVariables();
@@ -1139,7 +1220,7 @@ public class NodeEditorService
             }
             else
             {
-                // Not siblings — just select the new node
+                // Not siblings ÔÇö just select the new node
                 SetSingleSelection(node);
             }
         }
@@ -1262,7 +1343,7 @@ public class NodeEditorService
     private static void BuildResourceTree<T>(TreeNode parent, List<T> items, string resourceKind,
         Func<T, string> getGroup, Func<T, TreeNode> createNode)
     {
-        // Cache of group-path → folder node
+        // Cache of group-path ÔåÆ folder node
         var folderCache = new Dictionary<string, ResourceFolderNode>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var item in items)
