@@ -90,7 +90,7 @@
                 <svg xmlns="http://www.w3.org/2000/svg"
                      width="@screen.Width" height="@screen.Height"
                      class="screen-canvas"
-                     style="background: @screen.Background;"
+                     style="background: @screen.Background; font-family: sans-serif;"
                      @onmousedown="OnCanvasMouseDown"
                      @onmousemove="OnCanvasMouseMove"
                      @onmouseup="OnCanvasMouseUp">
@@ -116,7 +116,7 @@
                         <g transform="translate(@sym.X, @sym.Y) rotate(@rotation.ToString("F1"), @((sym.Width / 2).ToString("F1")), @((sym.Height / 2).ToString("F1")))"
                            @onmousedown="(e) => OnSymbolMouseDown(e, sym)" @onmousedown:stopPropagation
                            class="screen-symbol @(isSelected ? "selected" : "")"
-                           style="cursor: move;">
+                           style="cursor: move; @SymbolFontStyle(sym)">
 
                             @switch (sym.Type)
                             {
@@ -211,18 +211,18 @@
                                 case "eventlog":
                                     <rect width="@sym.Width" height="@sym.Height"
                                           fill="#0f172a" stroke="@sym.Stroke" stroke-width="@sym.StrokeWidth" rx="4" />
-                                    @RenderSvgText(sym.Width / 2, 16, "middle", "middle", "#e2e8f0", 11, "📓 Event Log")
+                                    @RenderSvgText(sym.Width / 2, 16, "middle", "middle", "#e2e8f0", ScaledFontSize(11, sym), "📓 Event Log")
                                     <line x1="4" y1="26" x2="@(sym.Width - 4)" y2="26" stroke="#334155" stroke-width="1" />
                                     @* Fake table header *@
                                     <rect x="8" y="32" width="@(sym.Width - 16)" height="14" fill="#1e293b" rx="1" />
-                                    @RenderSvgText(30, 42, "start", "middle", "#94a3b8", 7, "Time")
-                                    @RenderSvgText(100, 42, "start", "middle", "#94a3b8", 7, "Category")
-                                    @RenderSvgText(160, 42, "start", "middle", "#94a3b8", 7, "Severity")
-                                    @RenderSvgText(220, 42, "start", "middle", "#94a3b8", 7, "Source")
-                                    @RenderSvgText(sym.Width - 40, 42, "end", "middle", "#94a3b8", 7, "Message")
+                                    @RenderSvgText(30, 42, "start", "middle", "#94a3b8", ScaledFontSize(7, sym), "Time")
+                                    @RenderSvgText(100, 42, "start", "middle", "#94a3b8", ScaledFontSize(7, sym), "Category")
+                                    @RenderSvgText(160, 42, "start", "middle", "#94a3b8", ScaledFontSize(7, sym), "Severity")
+                                    @RenderSvgText(220, 42, "start", "middle", "#94a3b8", ScaledFontSize(7, sym), "Source")
+                                    @RenderSvgText(sym.Width - 40, 42, "end", "middle", "#94a3b8", ScaledFontSize(7, sym), "Message")
                                     @* Fake data rows *@
                                     @RenderEventLogPreviewRows(sym)
-                                    @RenderSvgText(sym.Width / 2, sym.Height - 6, "middle", null, "#6b7280", 8,
+                                    @RenderSvgText(sym.Width / 2, sym.Height - 6, "middle", null, "#6b7280", ScaledFontSize(8, sym),
                                         string.IsNullOrEmpty(sym.EventLogCategories) ? "All categories" : sym.EventLogCategories)
                                     break;
                                 case "editbox":
@@ -1482,6 +1482,19 @@
         }
     };
 
+    /// <summary>Returns font CSS properties for the symbol's &lt;g&gt; wrapper style attribute.</summary>
+    private static string SymbolFontStyle(ScreenSymbol sym)
+    {
+        var sb = new System.Text.StringBuilder();
+        if (!string.IsNullOrEmpty(sym.FontFamily))
+            sb.Append($"font-family: {sym.FontFamily}; ");
+        if (!string.IsNullOrEmpty(sym.FontWeight))
+            sb.Append($"font-weight: {sym.FontWeight}; ");
+        if (!string.IsNullOrEmpty(sym.FontStyle))
+            sb.Append($"font-style: {sym.FontStyle}; ");
+        return sb.ToString();
+    }
+
     // ─── SVG text helper (Razor does not support <text> as an element) ──
 
     private RenderFragment RenderSvgText(double x, double y, string? anchor, string? baseline,
@@ -1495,7 +1508,6 @@
         if (baseline != null) builder.AddAttribute(seq++, "dominant-baseline", baseline);
         builder.AddAttribute(seq++, "fill", fill);
         builder.AddAttribute(seq++, "font-size", fontSize);
-        builder.AddAttribute(seq++, "font-family", "sans-serif");
         builder.AddContent(seq++, content);
         builder.CloseElement();
     };
