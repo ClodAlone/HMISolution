@@ -1,4 +1,4 @@
-@using RuntimeViewer.Shared.Services
+﻿@using RuntimeViewer.Shared.Services
 @implements IDisposable
 
 <div class="eventlog-widget">
@@ -166,6 +166,7 @@
 
     private List<EventLogEntry> _events = new();
     private bool _loading;
+    private bool _initialLoadDone;
     private bool _autoRefresh = true;
     private int _timeRangeMinutes = 1440;
     private string _categoryFilter = "";
@@ -187,14 +188,17 @@
 
     private async Task Reload()
     {
-        _loading = true;
-        StateHasChanged();
+        if (!_initialLoadDone)
+        {
+            _loading = true;
+            StateHasChanged();
+        }
 
         var effectiveCategories = _categoryFilter;
         _events = await Reader.ReadEventsAsync(_timeRangeMinutes, MaxRows, effectiveCategories);
 
         _loading = false;
-        StateHasChanged();
+        _initialLoadDone = true;
     }
 
     private void StartAutoRefresh()

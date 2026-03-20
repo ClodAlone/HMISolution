@@ -1,4 +1,4 @@
-@using SharedModels
+﻿@using SharedModels
 @using RuntimeViewer.Shared.Services
 @using Microsoft.JSInterop
 @implements IAsyncDisposable
@@ -704,7 +704,7 @@ else
             _dragSliderSymbol = sym;
             _isDraggingSlider = true;
             await StartJsDrag();
-            await ApplySliderDragFromSvg(await GetSvgPoint(e));
+            ApplySliderDragFromSvg(await GetSvgPoint(e));
             return;
         }
 
@@ -816,13 +816,14 @@ else
 
     /// <summary>Called from JS on each throttled pointer-move during drag.</summary>
     [JSInvokable]
-    public async Task JsDragMove(double svgX, double svgY)
+    public void JsDragMove(double svgX, double svgY)
     {
         var pt = new SvgPoint(svgX, svgY);
         if (_isDraggingSlider && _dragSliderSymbol != null)
-            await ApplySliderDragFromSvg(pt);
+            ApplySliderDragFromSvg(pt);
         if (_isDraggingKnob && _dragKnobSymbol != null)
-            await ApplyKnobDragFromSvg(pt);
+            ApplyKnobDragFromSvg(pt);
+        InvokeAsync(StateHasChanged);
     }
 
     /// <summary>Called from JS on pointer-up (end of drag).</summary>
@@ -831,7 +832,7 @@ else
     {
         _jsDragActive = false;
         // Apply final position
-        await JsDragMove(svgX, svgY);
+        JsDragMove(svgX, svgY);
 
         if (_isDraggingSlider)
         {
@@ -864,7 +865,7 @@ else
         }
     }
 
-    private async Task ApplySliderDragFromSvg(SvgPoint svgPt)
+    private void ApplySliderDragFromSvg(SvgPoint svgPt)
     {
         var sym = _dragSliderSymbol;
         if (sym == null || string.IsNullOrEmpty(sym.VariablePath)) return;
@@ -890,12 +891,12 @@ else
                 frac = Math.Clamp(1.0 - localY / trackH, 0, 1);
             }
             var newVal = Math.Clamp(min + frac * (max - min), min, max);
-            await ThrottledDragWrite(sym.VariablePath, newVal.ToString("F2", System.Globalization.CultureInfo.InvariantCulture));
+            ThrottledDragWrite(sym.VariablePath, newVal.ToString("F2", System.Globalization.CultureInfo.InvariantCulture));
         }
         catch { }
     }
 
-    private async Task ApplyKnobDragFromSvg(SvgPoint svgPt)
+    private void ApplyKnobDragFromSvg(SvgPoint svgPt)
     {
         var sym = _dragKnobSymbol;
         if (sym == null || string.IsNullOrEmpty(sym.VariablePath)) return;
@@ -913,34 +914,40 @@ else
             // Map 300° rotation range to full value range
             var valueDelta = delta / 300.0 * (max - min);
             var newVal = Math.Clamp(_knobDragStartValue + valueDelta, min, max);
-            await ThrottledDragWrite(sym.VariablePath, newVal.ToString("F2", System.Globalization.CultureInfo.InvariantCulture));
+            ThrottledDragWrite(sym.VariablePath, newVal.ToString("F2", System.Globalization.CultureInfo.InvariantCulture));
         }
         catch { }
     }
 
     private record struct SvgPoint(double X, double Y);
 
-    /// <summary>
-    /// Throttled write for drag interactions. Writes at most once per DragWriteIntervalMs.
-    /// Stores pending value so the final write can be flushed on mouse-up.
-    /// </summary>
-    private async Task ThrottledDragWrite(string variablePath, string value)
+    private Task? _inFlightWrite;
+
+    private void ThrottledDragWrite(string variablePath, string value)
     {
+        // Optimistic local update so the UI refreshes instantly
+        Opc.UpdateLocalValue(variablePath, value);
+
         _pendingDragPath = variablePath;
         _pendingDragValue = value;
         var now = DateTime.UtcNow;
         if ((now - _lastDragWrite).TotalMilliseconds >= DragWriteIntervalMs)
         {
             _lastDragWrite = now;
-            await Opc.WriteValueAsync(variablePath, value);
             _pendingDragPath = null;
             _pendingDragValue = null;
+            _inFlightWrite = Opc.WriteValueAsync(variablePath, value);
         }
     }
 
     /// <summary>Flush any pending throttled drag value (called on mouse-up).</summary>
     private async Task FlushPendingDragWrite()
     {
+        if (_inFlightWrite != null)
+        {
+            try { await _inFlightWrite; } catch { }
+            _inFlightWrite = null;
+        }
         if (_pendingDragPath != null && _pendingDragValue != null)
         {
             await Opc.WriteValueAsync(_pendingDragPath, _pendingDragValue);
@@ -948,6 +955,7 @@ else
             _pendingDragValue = null;
         }
     }
+
 
     // ─── Formatting ─────────────────────────────────────────
 

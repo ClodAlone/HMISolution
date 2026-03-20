@@ -1,4 +1,4 @@
-@using RuntimeViewer.Shared.Services
+﻿@using RuntimeViewer.Shared.Services
 @implements IDisposable
 
 <div class="editbox-widget" @onclick:stopPropagation @onmousedown:stopPropagation @onmouseup:stopPropagation>
@@ -128,19 +128,22 @@
 
     protected override void OnInitialized()
     {
-        Opc.ValuesChanged += OnValuesChanged;
+        Opc.ValueChanged += OnValueChanged;
     }
 
-    private void OnValuesChanged()
+    private void OnValueChanged(string path)
     {
+        // Only re-render when our specific variable changes
+        if (!string.Equals(path, VariablePath, StringComparison.Ordinal)) return;
+
         // Re-check numeric status when OPC values arrive (initial value may not have been available)
         var val = Opc.GetValue(VariablePath ?? "");
         if (!_isNumeric && val != null && double.TryParse(val, System.Globalization.NumberStyles.Any,
                 System.Globalization.CultureInfo.InvariantCulture, out _))
         {
             _isNumeric = true;
-            InvokeAsync(StateHasChanged);
         }
+        InvokeAsync(StateHasChanged);
     }
 
     protected override void OnParametersSet()
@@ -278,7 +281,7 @@
 
     public void Dispose()
     {
-        Opc.ValuesChanged -= OnValuesChanged;
+        Opc.ValueChanged -= OnValueChanged;
         _statusTimer?.Dispose();
     }
 }

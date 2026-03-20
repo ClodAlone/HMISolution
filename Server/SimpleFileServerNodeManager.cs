@@ -1,4 +1,4 @@
-using Opc.Ua;
+﻿using Opc.Ua;
 using Opc.Ua.Server;
 using Serilog;
 using SharedModels;
@@ -109,16 +109,20 @@ namespace SimpleOpcFileServer
                         continue;
                     }
 
-                    // Mark as processed so MasterNodeManager knows we handled it.
-                    wv.Processed = true;
-
                     if (variable is ServerVariableState serverVar)
                     {
+                        // Mark as processed so MasterNodeManager knows we handled it.
+                        wv.Processed = true;
                         object v = wv.Value?.Value ?? wv.Value;
+                        Utils.Trace("WRITE-OVERRIDE: nodeId={0} value={1} (type={2})",
+                            wv.NodeId, v, v?.GetType().Name ?? "null");
                         errors[i] = serverVar.InvokeWrite(SystemContext, variable, ref v) ?? ServiceResult.Good;
                         continue;
                     }
 
+                    // For non-ServerVariableState nodes (recipes, etc.), delegate to the base
+                    // Write which handles OnWriteValue/WriteAttribute pipeline.
+                    // Do NOT set Processed=true before calling base — base checks that flag.
                     var singleErrors = new ServiceResult[1];
                     base.Write(context, new[] { wv }, singleErrors);
                     errors[i] = singleErrors[0] ?? StatusCodes.BadInternalError;
@@ -1370,15 +1374,31 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 IsActive = false
             };
             _alarmConditions[variablePath] = info;
+            Utils.Trace("ALARM-CREATE: {0} HighLimit={1} LowLimit={2} HH={3} LL={4} Hyst={5} InitialValue={6}",
+                variablePath, alarmConfig.HighLimit, alarmConfig.LowLimit,
+                alarmConfig.HighHighLimit, alarmConfig.LowLowLimit, alarmConfig.Hysteresis,
+                variableState.Value);
 
             // Monitor value changes to activate/deactivate the alarm
             variableState.OnStateChanged += (context, state, masks) =>
             {
                 if ((masks & NodeStateChangeMasks.Value) != 0)
-                    EvaluateAlarmCondition(info);
+                {
+                    try
+                    {
+                        Utils.Trace("ALARM-STATECHANGED: {0} masks={1} value={2}",
+                            info.VariablePath, masks, info.SourceVariable.Value);
+                        EvaluateAlarmCondition(info);
+                    }
+                    catch (Exception ex)
+                    {
+                        Utils.Trace(ex, "ALARM-STATECHANGED-ERROR: {0}", info.VariablePath);
+                    }
+                }
             };
 
             // Evaluate once with the initial value
+            Utils.Trace("ALARM-INIT-EVAL: {0} value={1}", variablePath, variableState.Value);
             EvaluateAlarmCondition(info);
         }
 
@@ -1486,61 +1506,54 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
 
         private void EvaluateAlarmCondition(AlarmConditionInfo info)
         {
-            if (info.Config.TriggerType == AlarmTriggerType.Condition)
-                EvaluateConditionAlarm(info);
-            else
-                EvaluateLimitAlarm(info);
+            try
+            {
+                Utils.Trace("ALARM-EVAL: {0} type={1} value={2} (type={3}) isActive={4}",
+                    info.VariablePath, info.Config.TriggerType,
+                    info.SourceVariable.Value, info.SourceVariable.Value?.GetType().Name ?? "null", info.IsActive);
+                if (info.Config.TriggerType == AlarmTriggerType.Condition)
+                    EvaluateConditionAlarm(info);
+                else
+                    EvaluateLimitAlarm(info);
+            }
+            catch (Exception ex)
+            {
+                Utils.Trace(ex, "ALARM-EVAL-ERROR: {0}", info.VariablePath);
+            }
         }
 
         private void EvaluateLimitAlarm(AlarmConditionInfo info)
         {
-            double? numericValue = GetNumericValue(info.SourceVariable.Value);
-            if (numericValue == null) return;
+            var result = AlarmEvaluator.EvaluateLimitAlarm(info.SourceVariable.Value, info.Config, info.IsActive);
+            Utils.Trace("ALARM-LIMIT: {0} result={1} activate={2} deactivate={3}",
+                info.VariablePath, result != null ? "ok" : "null",
+                result?.ShouldActivate, result?.ShouldDeactivate);
+            if (result == null) return;
 
-            double val = numericValue.Value;
+            double val = AlarmEvaluator.GetNumericValue(info.SourceVariable.Value)!.Value;
             var cfg = info.Config;
             double highHigh = cfg.HighHighLimit ?? cfg.HighLimit;
             double lowLow = cfg.LowLowLimit ?? cfg.LowLimit;
             double hyst = cfg.Hysteresis;
 
-            // Activation: value crosses the limit
-            bool shouldActivate = val > cfg.HighLimit || val < cfg.LowLimit;
-            // Deactivation: value must return past the limit by the hysteresis amount
-            bool shouldDeactivate = val <= (cfg.HighLimit - hyst) && val >= (cfg.LowLimit + hyst);
+            bool shouldActivate = result.ShouldActivate;
+            bool shouldDeactivate = result.ShouldDeactivate;
 
-            if (shouldActivate && !info.IsActive)
+            if (shouldActivate)
             {
                 info.IsActive = true;
                 var alarm = info.AlarmState;
+                Utils.Trace("ALARM-ACTIVATE: {0} severity={1} limitState={2}", info.VariablePath, result.Severity, result.LimitState);
 
-                ushort severity;
-                LimitAlarmStates limitState;
-                string limitText;
-
-                if (val >= highHigh)
+                ushort severity = result.Severity;
+                LimitAlarmStates limitState = result.LimitState switch
                 {
-                    severity = 900;
-                    limitState = LimitAlarmStates.HighHigh;
-                    limitText = $"High-High limit ({highHigh}) exceeded";
-                }
-                else if (val > cfg.HighLimit)
-                {
-                    severity = 700;
-                    limitState = LimitAlarmStates.High;
-                    limitText = $"High limit ({cfg.HighLimit}) exceeded";
-                }
-                else if (val <= lowLow)
-                {
-                    severity = 900;
-                    limitState = LimitAlarmStates.LowLow;
-                    limitText = $"Low-Low limit ({lowLow}) violated";
-                }
-                else
-                {
-                    severity = 500;
-                    limitState = LimitAlarmStates.Low;
-                    limitText = $"Low limit ({cfg.LowLimit}) violated";
-                }
+                    "HighHigh" => LimitAlarmStates.HighHigh,
+                    "High" => LimitAlarmStates.High,
+                    "LowLow" => LimitAlarmStates.LowLow,
+                    _ => LimitAlarmStates.Low
+                };
+                string limitText = result.LimitText;
 
                 string message = string.IsNullOrEmpty(cfg.Message)
                     ? $"{info.VariablePath}: {limitText} — value={val:G6}"
@@ -1564,10 +1577,11 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 alarm.EventType.Value = ObjectTypeIds.ExclusiveLimitAlarmType;
 
                 ReportAlarmEvent(alarm);
+                Utils.Trace("ALARM-REPORTED: {0} message={1}", info.VariablePath, message);
                 _eventLogger?.LogAlarm(severity >= 800 ? "Critical" : "Warning", info.VariablePath, message,
                     $"Value={val:G6} HH={highHigh} H={cfg.HighLimit} L={cfg.LowLimit} LL={lowLow} Hyst={hyst}");
             }
-            else if (shouldDeactivate && info.IsActive)
+            else if (shouldDeactivate)
             {
                 info.IsActive = false;
                 var alarm = info.AlarmState;
@@ -1594,14 +1608,14 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
         {
             var value = info.SourceVariable.Value;
             var cfg = info.Config;
-            bool shouldActivate = EvaluateConditionExpression(cfg.Operator, cfg.CompareValue, value);
+            bool shouldActivate = AlarmEvaluator.EvaluateConditionActivation(cfg.Operator, cfg.CompareValue, value);
 
             // Determine deactivation with hysteresis for numeric operators
             bool shouldDeactivate;
-            if (info.IsActive && cfg.Hysteresis > 0 && IsNumericOperator(cfg.Operator))
+            if (info.IsActive && cfg.Hysteresis > 0 && (cfg.Operator is ">" or ">=" or "<" or "<=" or "==" or "!="))
             {
                 // Apply hysteresis: use the inverse condition shifted by hysteresis
-                shouldDeactivate = EvaluateConditionDeactivation(cfg.Operator, cfg.CompareValue, cfg.Hysteresis, value);
+                shouldDeactivate = AlarmEvaluator.EvaluateConditionDeactivation(cfg.Operator, cfg.CompareValue, cfg.Hysteresis, value);
             }
             else
             {
@@ -1636,7 +1650,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 _eventLogger?.LogAlarm(cfg.ConditionSeverity >= 800 ? "Critical" : "Warning",
                     info.VariablePath, message, $"Operator={cfg.Operator} Compare={cfg.CompareValue} Value={valueStr} Hyst={cfg.Hysteresis}");
             }
-            else if (shouldDeactivate && info.IsActive)
+            else if (shouldDeactivate)
             {
                 info.IsActive = false;
                 var alarm = info.AlarmState;
@@ -1660,99 +1674,15 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             }
         }
 
-        private static bool IsNumericOperator(string op) => op is ">" or ">=" or "<" or "<=" or "==" or "!=";
-
-        /// <summary>
-        /// Evaluates whether a condition alarm should deactivate, applying hysteresis.
-        /// For ">" activation (value > X): deactivate when value &lt;= X − hysteresis.
-        /// For "&lt;" activation (value &lt; X): deactivate when value >= X + hysteresis.
-        /// For "==" activation: deactivate when |value − X| > hysteresis.
-        /// For "!=" activation: deactivate when |value − X| &lt;= hysteresis (back within deadband of target).
-        /// </summary>
-        private static bool EvaluateConditionDeactivation(string op, string compareValue, double hysteresis, object? value)
-        {
-            double? numericValue = GetNumericValue(value);
-            if (!numericValue.HasValue || !double.TryParse(compareValue, System.Globalization.NumberStyles.Any,
-                    System.Globalization.CultureInfo.InvariantCulture, out var target))
-                return !EvaluateConditionExpression(op, compareValue, value); // fallback: no hysteresis
-
-            double v = numericValue.Value;
-            return op switch
-            {
-                ">"  => v <= target - hysteresis,
-                ">=" => v <  target - hysteresis,
-                "<"  => v >= target + hysteresis,
-                "<=" => v >  target + hysteresis,
-                "==" => Math.Abs(v - target) > hysteresis,
-                "!=" => Math.Abs(v - target) <= hysteresis,
-                _ => !EvaluateConditionExpression(op, compareValue, value)
-            };
-        }
-
-        /// <summary>
-        /// Evaluates a condition expression against a variable value.
-        /// Supports operators: ==, !=, &gt;, &gt;=, &lt;, &lt;=, True, False, Changed.
-        /// </summary>
-        private static bool EvaluateConditionExpression(string op, string compareValue, object? value)
-        {
-            if (string.Equals(op, "True", StringComparison.OrdinalIgnoreCase))
-            {
-                return value switch
-                {
-                    bool b => b,
-                    int i => i != 0,
-                    double d => d != 0,
-                    string s => string.Equals(s, "true", StringComparison.OrdinalIgnoreCase) || s == "1",
-                    _ => false
-                };
-            }
-
-            if (string.Equals(op, "False", StringComparison.OrdinalIgnoreCase))
-            {
-                return value switch
-                {
-                    bool b => !b,
-                    int i => i == 0,
-                    double d => d == 0,
-                    string s => string.Equals(s, "false", StringComparison.OrdinalIgnoreCase) || s == "0" || string.IsNullOrEmpty(s),
-                    _ => true
-                };
-            }
-
-            // For numeric comparisons, try to get numeric values for both sides
-            double? numericValue = GetNumericValue(value);
-            if (numericValue.HasValue && double.TryParse(compareValue, System.Globalization.NumberStyles.Any,
-                    System.Globalization.CultureInfo.InvariantCulture, out var numericCompare))
-            {
-                double v = numericValue.Value;
-                return op switch
-                {
-                    "==" => Math.Abs(v - numericCompare) < 1e-10,
-                    "!=" => Math.Abs(v - numericCompare) >= 1e-10,
-                    ">" => v > numericCompare,
-                    ">=" => v >= numericCompare,
-                    "<" => v < numericCompare,
-                    "<=" => v <= numericCompare,
-                    _ => false
-                };
-            }
-
-            // Fall back to string comparison
-            string strValue = value?.ToString() ?? "";
-            return op switch
-            {
-                "==" => string.Equals(strValue, compareValue, StringComparison.OrdinalIgnoreCase),
-                "!=" => !string.Equals(strValue, compareValue, StringComparison.OrdinalIgnoreCase),
-                _ => false
-            };
-        }
-
         private void ReportAlarmEvent(AlarmConditionState alarm)
         {
             try
             {
                 var e = new InstanceStateSnapshot();
                 e.Initialize(SystemContext, alarm);
+                // Ensure ConditionType.NodeId is included in the event so clients
+                // can identify which condition instance raised the event.
+                e.SetChildValue(BrowseNames.NodeId, NodeClass.Variable, alarm.NodeId);
                 alarm.ReportEvent(SystemContext, e);
 
                 // Also report on the Server object so subscribers to Server events see it
@@ -1846,32 +1776,12 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                     {
                         var e = new InstanceStateSnapshot();
                         e.Initialize(SystemContext, info.AlarmState);
+                        e.SetChildValue(BrowseNames.NodeId, NodeClass.Variable, info.AlarmState.NodeId);
                         item.QueueEvent(e);
                     }
                 }
             }
             return ServiceResult.Good;
-        }
-
-        private static double? GetNumericValue(object? value)
-        {
-            return value switch
-            {
-                double d => d,
-                float f => f,
-                int i => i,
-                short s => s,
-                ushort us => us,
-                uint ui => ui,
-                long l => l,
-                ulong ul => ul,
-                decimal m => (double)m,
-                byte b => b,
-                sbyte sb => sb,
-                string str when double.TryParse(str, System.Globalization.NumberStyles.Any,
-                    System.Globalization.CultureInfo.InvariantCulture, out var parsed) => parsed,
-                _ => null
-            };
         }
 
         protected override void Dispose(bool disposing)
@@ -2082,7 +1992,10 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 _config = config;
                 _manager = manager;
 
-                OnSimpleWriteValue = HandleWriteValue;
+                // Use OnWriteValue (not OnSimpleWriteValue) so the handler runs BEFORE
+                // the SDK's type validation. This allows string-to-typed conversions
+                // from editor/runtime inputs to succeed.
+                OnWriteValue = HandleWriteValue;
 
                 // Ensure default values for monitoring
                 MinimumSamplingInterval = 1000;
@@ -2114,10 +2027,12 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
 
             internal ServiceResult InvokeWrite(ISystemContext context, NodeState node, ref object value)
             {
-                return HandleWriteValue(context, node, ref value);
+                StatusCode sc = StatusCodes.Good;
+                var ts = DateTime.UtcNow;
+                return HandleWriteValue(context, node, NumericRange.Empty, null, ref value, ref sc, ref ts);
             }
 
-            private ServiceResult HandleWriteValue(ISystemContext context, NodeState node, ref object value)
+            private ServiceResult HandleWriteValue(ISystemContext context, NodeState node, NumericRange indexRange, QualifiedName dataEncoding, ref object value, ref StatusCode statusCode, ref DateTime timestamp)
             {
                 // Enforce access.
                 var access = (byte)(AccessLevel | UserAccessLevel);
@@ -2155,6 +2070,8 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                         else if (DataType == DataTypeIds.DateTime && DateTime.TryParse(s, out var dt)) incoming = dt;
                     }
 
+                    Utils.Trace("WRITE-HANDLER: nodeId={0} incoming={1} (type={2}) DataType={3}",
+                        NodeId, incoming, incoming?.GetType().Name ?? "null", DataType);
                     Value = incoming;
                     StatusCode = StatusCodes.Good;
                     Timestamp = DateTime.UtcNow;

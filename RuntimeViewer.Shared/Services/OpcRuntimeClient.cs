@@ -1,4 +1,4 @@
-using Opc.Ua;
+﻿using Opc.Ua;
 using Opc.Ua.Client;
 using Opc.Ua.Configuration;
 
@@ -53,7 +53,6 @@ public class OpcRuntimeClient : IDisposable
             if (_diagnosticLog.Count > MaxLogEntries)
                 _diagnosticLog.RemoveAt(0);
         }
-        StateChanged?.Invoke();
     }
 
     public string? GetValue(string variablePath)
@@ -64,7 +63,7 @@ public class OpcRuntimeClient : IDisposable
         }
     }
 
-    public async Task ConnectAsync(string endpointUrl)
+    public async Task ConnectAsync(string endpointUrl, string? username = null, string? password = null)
     {
         try
         {
@@ -169,11 +168,27 @@ public class OpcRuntimeClient : IDisposable
             var endpointConfiguration = EndpointConfiguration.Create(_appConfig);
             var endpoint = new ConfiguredEndpoint(null, endpointDescription, endpointConfiguration);
 
-            Log($"CONNECT: Creating session...");
+            UserIdentity identity;
+            if (!string.IsNullOrEmpty(username))
+            {
+                var token = new UserNameIdentityToken
+                {
+                    UserName = username,
+                    DecryptedPassword = System.Text.Encoding.UTF8.GetBytes(password ?? "")
+                };
+                identity = new UserIdentity(token);
+                Log($"CONNECT: Creating session with user '{username}'...");
+            }
+            else
+            {
+                identity = new UserIdentity(new AnonymousIdentityToken());
+                Log("CONNECT: Creating session (anonymous)...");
+            }
+
             _session = await Session.Create(
                 _appConfig, endpoint, false,
                 "RuntimeViewerSession", 60000,
-                new UserIdentity(new AnonymousIdentityToken()), null);
+                identity, null);
 
             Log($"CONNECT: Session created. Connected={_session.Connected}, SessionId={_session.SessionId}");
             Log($"CONNECT: Server namespaces: [{string.Join(", ", _session.NamespaceUris.ToArray())}]");
@@ -193,11 +208,13 @@ public class OpcRuntimeClient : IDisposable
 
             ErrorMessage = null;
             Log("CONNECT: ✓ Connected successfully");
+            StateChanged?.Invoke();
         }
         catch (Exception ex)
         {
             ErrorMessage = ex.Message;
             Log($"CONNECT: ✗ FAILED — {ex.GetType().Name}: {ex.Message}");
+            StateChanged?.Invoke();
         }
     }
 
@@ -276,6 +293,14 @@ public class OpcRuntimeClient : IDisposable
         }
     }
 
+    /// <summary>Update the local value cache without writing to the server. Fires change events so the UI refreshes immediately.</summary>
+    public void UpdateLocalValue(string variablePath, string value)
+    {
+        lock (_lock) { _values[variablePath] = value; }
+        ValuesChanged?.Invoke();
+        ValueChanged?.Invoke(variablePath);
+    }
+
     /// <summary>Write a value to an OPC variable.</summary>
     public async Task<bool> WriteValueAsync(string variablePath, string value, ushort namespaceIndex = 2)
     {
@@ -307,7 +332,15 @@ public class OpcRuntimeClient : IDisposable
 
             var statusCode = results != null ? results[0] : StatusCodes.Bad;
             var ok = results != null && StatusCode.IsGood(statusCode);
-            if (!ok)
+            if (ok)
+            {
+                // Immediately reflect the written value in the local cache
+                // so the UI updates without waiting for a subscription round-trip.
+                lock (_lock) { _values[variablePath] = value; }
+                ValuesChanged?.Invoke();
+                ValueChanged?.Invoke(variablePath);
+            }
+            else
             {
                 Log("WRITE FAIL: " + variablePath + " = " + value + " status=" + statusCode);
             }
@@ -338,6 +371,7 @@ public class OpcRuntimeClient : IDisposable
             _session = null;
         }
         Log("DISCONNECT: Done");
+        StateChanged?.Invoke();
     }
 
     /// <summary>
@@ -450,6 +484,10 @@ public class OpcRuntimeClient : IDisposable
                     foreach (var evt in enl.Events)
                         events.Add(evt);
                 }
+                else if (e.NotificationValue is EventFieldList efl)
+                {
+                    events.Add(efl);
+                }
             };
 
             sub.AddItem(monitoredItem);
@@ -462,7 +500,7 @@ public class OpcRuntimeClient : IDisposable
                     new object[] { sub.Id }));
 
             // Wait briefly for events to arrive
-            await Task.Delay(500);
+            await Task.Delay(1000);
 
             foreach (var evt in events)
             {
@@ -543,6 +581,8 @@ public class OpcRuntimeClient : IDisposable
             {
                 if (e.NotificationValue is EventNotificationList enl)
                     foreach (var evt in enl.Events) events.Add(evt);
+                else if (e.NotificationValue is EventFieldList efl)
+                    events.Add(efl);
             };
 
             sub.AddItem(mi);
@@ -553,7 +593,7 @@ public class OpcRuntimeClient : IDisposable
                     MethodIds.ConditionType_ConditionRefresh,
                     new object[] { sub.Id }));
 
-            await Task.Delay(500);
+            await Task.Delay(1000);
 
             int idx = 0;
             foreach (var evt in events)
@@ -565,7 +605,7 @@ public class OpcRuntimeClient : IDisposable
 
                 var eventId = evt.EventFields[0].Value as byte[];
                 var conditionId = evt.EventFields[3].Value as NodeId;
-                if (conditionId == null || eventId == null) continue;
+                if (eventId == null) continue;
 
                 var sourceName = evt.EventFields[2].Value?.ToString() ?? "";
                 var message = evt.EventFields[4].Value is LocalizedText lt ? lt.Text : evt.EventFields[4].Value?.ToString() ?? "";
@@ -577,7 +617,7 @@ public class OpcRuntimeClient : IDisposable
                 result.Add(new AlarmEntry
                 {
                     Id = $"alarm_{idx++}",
-                    ConditionId = conditionId,
+                    ConditionId = conditionId ?? NodeId.Null,
                     EventId = eventId,
                     SourceName = sourceName,
                     Message = message,

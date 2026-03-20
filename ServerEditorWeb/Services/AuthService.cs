@@ -13,6 +13,9 @@ public class AuthService
     public string? AccessLevel { get; private set; }
     public bool CanAccessEditor { get; private set; }
 
+    /// <summary>Plain-text password kept in memory for OPC UA connections when anonymous is disabled.</summary>
+    public string? OpcPassword { get; private set; }
+
     /// <summary>True when the user must change their password before using the app.</summary>
     public bool MustChangePassword { get; private set; }
 
@@ -64,6 +67,7 @@ public class AuthService
             return (false, "Your user group does not have editor access.");
 
         IsAuthenticated = true;
+        OpcPassword = password;
         Username = user.Username;
         Group = user.Group;
         AccessLevel = group.AccessLevel;
@@ -122,6 +126,7 @@ public class AuthService
             return (false, "Current password is incorrect.");
 
         _currentUserConfig.PasswordHash = PasswordHasher.Hash(newPassword);
+        OpcPassword = newPassword;
         _currentUserConfig.Password = "";
         _currentUserConfig.PasswordChangedDate = DateTime.UtcNow;
         MustChangePassword = false;
@@ -133,6 +138,7 @@ public class AuthService
     public void Logout()
     {
         IsAuthenticated = false;
+        OpcPassword = null;
         Username = null;
         Group = null;
         AccessLevel = null;

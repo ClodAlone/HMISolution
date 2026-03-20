@@ -18,6 +18,7 @@ public class ServerDiagnosticsClient : IDisposable
     private Session? _session;
     private ApplicationConfiguration? _appConfig;
     private string? _lastEndpoint;
+    private string? _lastUsername;
     private NodeId? _diagNodeId;
     private int _polling;               // 0 = idle, 1 = busy (interlocked guard)
     private DateTime _nextConnectAttempt = DateTime.MinValue;
@@ -30,7 +31,7 @@ public class ServerDiagnosticsClient : IDisposable
     public ServerDiagnostics? Latest { get; private set; }
     public string? Error { get; private set; }
 
-    public async Task PollAsync(string endpointUrl)
+    public async Task PollAsync(string endpointUrl, string? username = null, string? password = null)
     {
         if (string.IsNullOrEmpty(endpointUrl))
         {
@@ -46,7 +47,7 @@ public class ServerDiagnosticsClient : IDisposable
         try
         {
             // Run all OPC UA work off the calling (Blazor) thread
-            await Task.Run(async () => await PollCoreAsync(endpointUrl));
+            await Task.Run(async () => await PollCoreAsync(endpointUrl, username, password));
         }
         finally
         {
@@ -54,7 +55,7 @@ public class ServerDiagnosticsClient : IDisposable
         }
     }
 
-    private async Task PollCoreAsync(string endpointUrl)
+    private async Task PollCoreAsync(string endpointUrl, string? username, string? password)
     {
         try
         {
@@ -65,7 +66,7 @@ public class ServerDiagnosticsClient : IDisposable
                     return; // keep existing Latest/Error, skip this cycle
             }
 
-            await EnsureConnectedAsync(endpointUrl);
+            await EnsureConnectedAsync(endpointUrl, username, password);
 
             if (_session == null || !_session.Connected)
             {
@@ -112,10 +113,10 @@ public class ServerDiagnosticsClient : IDisposable
         }
     }
 
-    private async Task EnsureConnectedAsync(string endpointUrl)
+    private async Task EnsureConnectedAsync(string endpointUrl, string? username, string? password)
     {
         // Already connected to the same endpoint
-        if (_session?.Connected == true && _lastEndpoint == endpointUrl)
+        if (_session?.Connected == true && _lastEndpoint == endpointUrl && _lastUsername == username)
             return;
 
         // Disconnect from previous
@@ -194,10 +195,25 @@ public class ServerDiagnosticsClient : IDisposable
         _session = await Session.Create(
             _appConfig, endpoint, false,
             "DiagSession", 30000,
-            new UserIdentity(new AnonymousIdentityToken()), null);
+            CreateIdentity(username, password), null);
 
         _lastEndpoint = endpointUrl;
+        _lastUsername = username;
         _nextConnectAttempt = DateTime.MinValue; // reset backoff on success
+    }
+
+    private static UserIdentity CreateIdentity(string? username, string? password)
+    {
+        if (!string.IsNullOrEmpty(username))
+        {
+            var token = new UserNameIdentityToken
+            {
+                UserName = username,
+                DecryptedPassword = System.Text.Encoding.UTF8.GetBytes(password ?? "")
+            };
+            return new UserIdentity(token);
+        }
+        return new UserIdentity(new AnonymousIdentityToken());
     }
 
     public void Dispose()

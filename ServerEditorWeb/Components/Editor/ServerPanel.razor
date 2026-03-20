@@ -478,6 +478,7 @@
     [Inject] private RuntimeViewerProcessService ViewerProcess { get; set; } = default!;
     [Inject] private NodeEditorService Editor { get; set; } = default!;
     [Inject] private ServerDiagnosticsClient DiagClient { get; set; } = default!;
+    [Inject] private AuthService Auth { get; set; } = default!;
 
     // Windows service state
     private bool _isWinServiceInstalled;
@@ -855,7 +856,15 @@
         var model = Editor.RootModel;
         var endpointUrl = model?.Server?.EndpointUrl ?? "opc.tcp://localhost:14840/SimpleOpcFileServer";
 
-        await DiagClient.PollAsync(endpointUrl);
+        // When anonymous OPC is disabled, pass editor user credentials
+        string? diagUser = null, diagPass = null;
+        if (model?.Server?.EnableAnonymous == false && Auth.IsAuthenticated)
+        {
+            diagUser = Auth.Username;
+            diagPass = Auth.OpcPassword;
+        }
+
+        await DiagClient.PollAsync(endpointUrl, diagUser, diagPass);
         _serverDiag = DiagClient.Latest;
         _serverDiagError = DiagClient.Error;
         MergeDiagnosticsWithProject();

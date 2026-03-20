@@ -1,4 +1,4 @@
-@using SharedModels
+﻿@using SharedModels
 @using RuntimeViewer.Shared.Services
 @implements IDisposable
 
@@ -52,7 +52,7 @@
                     {
                         var a = alarm;
                         var severityClass = GetSeverityClass(a.Severity);
-                        <tr class="@severityClass @(a.IsSelected ? "alarm-selected" : "")" @onclick="() => ToggleSelection(a)">
+                        <tr class="@severityClass @(a.IsSelected ? "alarm-selected" : "") @(!a.IsAcked ? "alarm-unacked" : "")" @onclick="() => ToggleSelection(a)">
                             <td @onclick:stopPropagation>
                                 <input type="checkbox" checked="@a.IsSelected" @onchange="() => ToggleSelection(a)" />
                             </td>
@@ -94,11 +94,12 @@
         }, null, 5000, 5000);
     }
 
+    private bool _initialLoadDone;
+
     private async Task RefreshAlarms()
     {
         if (!Opc.IsConnected) return;
-        _loading = true;
-        StateHasChanged();
+        if (!_initialLoadDone) { _loading = true; StateHasChanged(); }
 
         var fresh = await Opc.CollectDetailedAlarmsAsync();
 
@@ -112,6 +113,7 @@
 
         _alarms = fresh;
         _loading = false;
+        _initialLoadDone = true;
     }
 
     private void ToggleSelection(AlarmEntry alarm)
