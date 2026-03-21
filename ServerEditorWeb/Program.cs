@@ -27,6 +27,7 @@ builder.Services.AddSingleton<ClipboardService>();
 builder.Services.AddSingleton<UndoRedoService>();
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<OpcClientService>();
+builder.Services.AddSingleton<CrossReferenceService>();
 
 var app = builder.Build();
 

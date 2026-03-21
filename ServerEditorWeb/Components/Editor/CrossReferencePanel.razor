@@ -1,0 +1,502 @@
+@using SharedModels
+@using ServerEditorWeb.Services
+@using ServerEditorWeb.Models
+
+<div class="xref-panel">
+    @* ── Search Bar ── *@
+    <div class="xref-toolbar">
+        <div class="xref-combo-row">
+            <div class="xref-combo" @onfocusout="OnComboFocusOut">
+                <div class="xref-combo-input">
+                    <span class="xref-combo-icon">🔍</span>
+                    <input type="text" class="xref-combo-text" placeholder="Select or type a variable path..."
+                           @bind="_searchText" @bind:event="oninput" @bind:after="OnSearchChanged"
+                           @onkeydown="OnSearchKeyDown" @onfocus="OnComboInputFocus" autocomplete="off" />
+                    <button class="xref-combo-toggle" @onclick="ToggleDropdown" tabindex="-1" title="Show variable list">▾</button>
+                </div>
+                @if (_dropdownOpen && _filteredPaths.Count > 0)
+                {
+                    <div class="xref-combo-dropdown">
+                        @foreach (var path in _filteredPaths)
+                        {
+                            <div class="xref-combo-option @(path == _searchText ? "selected" : "")"
+                                 @onmousedown="() => SelectPath(path)" @onmousedown:preventDefault>
+                                @path
+                            </div>
+                        }
+                        @if (_allPaths.Count > _filteredPaths.Count)
+                        {
+                            <div class="xref-combo-more">@(_allPaths.Count - _filteredPaths.Count) more — keep typing to filter</div>
+                        }
+                    </div>
+                }
+            </div>
+            <button class="btn btn-sm btn-outline-secondary xref-find-btn" @onclick="RunSearch" title="Search"
+                    disabled="@(string.IsNullOrWhiteSpace(_searchText))">
+                Find
+            </button>
+        </div>
+        <div class="d-flex gap-2 align-items-center mt-1">
+            <div class="form-check form-check-inline mb-0">
+                <input class="form-check-input" type="checkbox" id="xref-prefix" @bind="_prefixMatch" />
+                <label class="form-check-label small" for="xref-prefix">Prefix match</label>
+            </div>
+            @if (_lastSearchPath != null)
+            {
+                <span class="small text-muted ms-auto">
+                    @_results.Count reference@(_results.Count != 1 ? "s" : "") found
+                </span>
+            }
+        </div>
+    </div>
+
+    @* ── Results ── *@
+    <div class="xref-results">
+        @if (_lastSearchPath == null)
+        {
+            <div class="xref-empty">
+                <div class="text-muted small p-3 text-center">
+                    <div style="font-size: 2rem; opacity: 0.3;">🔗</div>
+                    <div class="mt-1">Search for a variable path to see where it is used across screens, scripts, PLC programs, alarms, recipes, reports, and more.</div>
+                    @if (Editor.SelectedItem is VariableNode vn)
+                    {
+                        <button class="btn btn-sm btn-outline-primary mt-2" @onclick="() => SearchFromSelection(vn)">
+                            Find references to @vn.Name
+                        </button>
+                    }
+                </div>
+            </div>
+        }
+        else if (_results.Count == 0)
+        {
+            <div class="text-muted small p-3 text-center">
+                <div style="font-size: 2rem; opacity: 0.3;">✅</div>
+                <div class="mt-1">No references found for <strong>@_lastSearchPath</strong></div>
+                @if (_prefixMatch)
+                {
+                    <div class="small">Prefix matching was enabled.</div>
+                }
+            </div>
+        }
+        else
+        {
+            @foreach (var group in _results.GroupBy(r => r.Category))
+            {
+                <div class="xref-group">
+                    <div class="xref-group-header" @onclick="() => ToggleGroup(group.Key)">
+                        <span class="xref-chevron @(IsGroupExpanded(group.Key) ? "expanded" : "")">▶</span>
+                        <span class="fw-semibold">@GetCategoryIcon(group.Key) @group.Key</span>
+                        <span class="badge bg-secondary ms-auto">@group.Count()</span>
+                    </div>
+                    @if (IsGroupExpanded(group.Key))
+                    {
+                        <div class="xref-group-items">
+                            @foreach (var xref in group)
+                            {
+                                <div class="xref-item" @onclick="() => NavigateTo(xref)" title="@xref.Detail">
+                                    <span class="xref-location">@xref.Location</span>
+                                    <span class="xref-detail text-muted">@xref.Detail</span>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        }
+    </div>
+</div>
+
+<style>
+    .xref-panel {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        overflow: hidden;
+    }
+    .xref-toolbar {
+        padding: 6px 8px;
+        border-bottom: 1px solid var(--bs-border-color);
+        background: #f8f9fa;
+        flex-shrink: 0;
+    }
+    .xref-combo-row {
+        display: flex;
+        gap: 4px;
+        align-items: stretch;
+    }
+    .xref-combo {
+        position: relative;
+        flex: 1;
+    }
+    .xref-combo-input {
+        display: flex;
+        align-items: center;
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+        background: #fff;
+        height: 30px;
+    }
+    .xref-combo-input:focus-within {
+        border-color: #86b7fe;
+        box-shadow: 0 0 0 2px rgba(13,110,253,.15);
+    }
+    .xref-combo-icon {
+        padding: 0 6px;
+        font-size: 12px;
+        opacity: 0.5;
+    }
+    .xref-combo-text {
+        flex: 1;
+        border: none;
+        outline: none;
+        font-size: 12px;
+        min-width: 0;
+        background: transparent;
+        padding: 2px 0;
+    }
+    .xref-combo-toggle {
+        border: none;
+        background: transparent;
+        padding: 0 8px;
+        cursor: pointer;
+        font-size: 14px;
+        color: #666;
+        border-left: 1px solid #ced4da;
+        height: 100%;
+    }
+    .xref-combo-toggle:hover {
+        background: #e9ecef;
+    }
+    .xref-combo-dropdown {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        max-height: 250px;
+        overflow-y: auto;
+        background: #fff;
+        border: 1px solid #ced4da;
+        border-top: none;
+        border-radius: 0 0 4px 4px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 1000;
+    }
+    .xref-combo-option {
+        padding: 4px 10px;
+        font-size: 12px;
+        cursor: pointer;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .xref-combo-option:hover {
+        background: #e9f0ff;
+    }
+    .xref-combo-option.selected {
+        background: #cce5ff;
+        font-weight: 600;
+    }
+    .xref-combo-more {
+        padding: 4px 10px;
+        font-size: 11px;
+        color: #888;
+        font-style: italic;
+        border-top: 1px solid #eee;
+    }
+    .xref-find-btn {
+        height: 30px;
+        white-space: nowrap;
+    }
+    .xref-results {
+        flex: 1;
+        overflow-y: auto;
+        font-size: 12px;
+    }
+    .xref-group-header {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 8px;
+        cursor: pointer;
+        background: #f0f0f0;
+        border-bottom: 1px solid var(--bs-border-color);
+        font-size: 12px;
+        user-select: none;
+    }
+    .xref-group-header:hover {
+        background: #e8e8e8;
+    }
+    .xref-chevron {
+        display: inline-block;
+        font-size: 8px;
+        transition: transform 0.15s;
+    }
+    .xref-chevron.expanded {
+        transform: rotate(90deg);
+    }
+    .xref-group-items {
+        border-bottom: 1px solid var(--bs-border-color);
+    }
+    .xref-item {
+        display: flex;
+        flex-direction: column;
+        padding: 4px 8px 4px 22px;
+        cursor: pointer;
+        border-bottom: 1px solid rgba(0,0,0,0.04);
+    }
+    .xref-item:hover {
+        background: #e9f0ff;
+    }
+    .xref-location {
+        font-weight: 600;
+        color: #1a73e8;
+    }
+    .xref-detail {
+        font-size: 11px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .xref-empty {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+</style>
+
+@code {
+    [Inject] private CrossReferenceService XRef { get; set; } = default!;
+    [Inject] private NodeEditorService Editor { get; set; } = default!;
+
+    private string _searchText = "";
+    private bool _prefixMatch;
+    private string? _lastSearchPath;
+    private List<CrossReference> _results = new();
+    private HashSet<string> _collapsedGroups = new();
+
+    private bool _dropdownOpen;
+    private List<string> _allPaths = new();
+    private List<string> _filteredPaths = new();
+    private const int MaxDropdownItems = 100;
+
+    protected override void OnParametersSet()
+    {
+        // Auto-populate when a variable is selected
+        if (string.IsNullOrEmpty(_searchText) && _lastSearchPath == null && Editor.SelectedItem is VariableNode vn)
+        {
+            var path = GetVariablePath(vn);
+            if (!string.IsNullOrEmpty(path))
+            {
+                _searchText = path;
+            }
+        }
+    }
+
+    private void RefreshAllPaths()
+    {
+        if (Editor.RootModel != null)
+            _allPaths = XRef.GetAllVariablePaths(Editor.RootModel);
+        else
+            _allPaths = new();
+    }
+
+    private void FilterPaths()
+    {
+        if (_allPaths.Count == 0) RefreshAllPaths();
+
+        if (string.IsNullOrEmpty(_searchText))
+        {
+            _filteredPaths = _allPaths.Take(MaxDropdownItems).ToList();
+        }
+        else
+        {
+            _filteredPaths = _allPaths
+                .Where(p => p.Contains(_searchText, StringComparison.OrdinalIgnoreCase))
+                .Take(MaxDropdownItems)
+                .ToList();
+        }
+    }
+
+    private void OnSearchChanged()
+    {
+        FilterPaths();
+        _dropdownOpen = _filteredPaths.Count > 0;
+    }
+
+    private void OnComboInputFocus()
+    {
+        FilterPaths();
+        _dropdownOpen = _filteredPaths.Count > 0;
+    }
+
+    private void ToggleDropdown()
+    {
+        if (_dropdownOpen)
+        {
+            _dropdownOpen = false;
+        }
+        else
+        {
+            FilterPaths();
+            _dropdownOpen = _filteredPaths.Count > 0;
+        }
+    }
+
+    private void SelectPath(string path)
+    {
+        _searchText = path;
+        _dropdownOpen = false;
+        RunSearch();
+    }
+
+    private void OnComboFocusOut()
+    {
+        // Small delay not needed — @onmousedown:preventDefault on options keeps focus
+        _dropdownOpen = false;
+    }
+
+    private void OnSearchKeyDown(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            _dropdownOpen = false;
+            RunSearch();
+        }
+        else if (e.Key == "Escape")
+        {
+            _dropdownOpen = false;
+        }
+    }
+
+    private void RunSearch()
+    {
+        if (string.IsNullOrWhiteSpace(_searchText) || Editor.RootModel == null)
+            return;
+
+        _lastSearchPath = _searchText.Trim();
+        _results = XRef.FindReferences(Editor.RootModel, _lastSearchPath, _prefixMatch);
+        _collapsedGroups.Clear();
+    }
+
+    /// <summary>
+    /// Public method for external callers (e.g. context menu "Find References").
+    /// Sets the search text, runs the search, and triggers a re-render.
+    /// </summary>
+    public void SearchVariable(string variablePath)
+    {
+        if (string.IsNullOrWhiteSpace(variablePath)) return;
+        _searchText = variablePath;
+        _dropdownOpen = false;
+        RefreshAllPaths();
+        RunSearch();
+        StateHasChanged();
+    }
+
+    private void SearchFromSelection(VariableNode vn)
+    {
+        var path = GetVariablePath(vn);
+        if (string.IsNullOrEmpty(path)) return;
+
+        _searchText = path;
+        RunSearch();
+    }
+
+    private string? GetVariablePath(VariableNode vn)
+    {
+        // Walk up the tree to build the full dotted path
+        var parts = new List<string> { vn.Name };
+        TreeNode? current = vn.Parent;
+        while (current != null)
+        {
+            if (current is FolderNode fn)
+                parts.Add(fn.Name);
+            else if (current is VariableGroupNode)
+                break; // stop at the VariableGroup root
+            current = current.Parent;
+        }
+        parts.Reverse();
+        return parts.Count > 0 ? string.Join(".", parts) : null;
+    }
+
+    private void NavigateTo(CrossReference xref)
+    {
+        // Navigate to the referenced item in the tree
+        var targetNode = FindNodeByReference(xref);
+        if (targetNode != null)
+        {
+            Editor.SelectNode(targetNode);
+            ExpandToNode(targetNode);
+        }
+    }
+
+    private TreeNode? FindNodeByReference(CrossReference xref)
+    {
+        if (Editor.RootItems == null) return null;
+
+        return xref.Category switch
+        {
+            "Screen" => FindNode<ScreenNode>(n => n.Name == xref.Location),
+            "Script" => FindNode<ScriptNode>(n => n.Name == xref.Location),
+            "PLC Program" => FindNode<PlcProgramNode>(n => n.Name == xref.Location),
+            "Recipe" => FindNode<RecipeNode>(n => n.Name == xref.Location),
+            "Report" => FindNode<ReportNode>(n => n.Name == xref.Location),
+            "Scheduler" => FindNode<SchedulerNode>(n => n.Name == xref.Location),
+            "Alarm" or "Data Logging" => FindVariableNodeByPath(xref.Location),
+            _ => null
+        };
+    }
+
+    private TreeNode? FindNode<T>(Func<T, bool> predicate) where T : TreeNode
+    {
+        return FindInTree(Editor.RootItems, n => n is T typed && predicate(typed));
+    }
+
+    private TreeNode? FindVariableNodeByPath(string variablePath)
+    {
+        return FindInTree(Editor.RootItems, n => n is VariableNode vn && GetVariablePath(vn) == variablePath);
+    }
+
+    private static TreeNode? FindInTree(IEnumerable<TreeNode> nodes, Func<TreeNode, bool> predicate)
+    {
+        foreach (var node in nodes)
+        {
+            if (predicate(node)) return node;
+            var found = FindInTree(node.Children, predicate);
+            if (found != null) return found;
+        }
+        return null;
+    }
+
+    private static void ExpandToNode(TreeNode node)
+    {
+        var parent = node.Parent;
+        while (parent != null)
+        {
+            parent.IsExpanded = true;
+            parent = parent.Parent;
+        }
+    }
+
+    private bool IsGroupExpanded(string group) => !_collapsedGroups.Contains(group);
+
+    private void ToggleGroup(string group)
+    {
+        if (!_collapsedGroups.Remove(group))
+            _collapsedGroups.Add(group);
+    }
+
+    private static string GetCategoryIcon(string category) => category switch
+    {
+        "Screen" => "🖼️",
+        "Script" => "⚡",
+        "PLC Program" => "🔧",
+        "Alarm" => "🔔",
+        "Data Logging" => "📊",
+        "Recipe" => "📦",
+        "Report" => "📄",
+        "Camera" => "📷",
+        "Scheduler" => "📅",
+        _ => "📎"
+    };
+}

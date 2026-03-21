@@ -313,7 +313,8 @@ else
                     OnAddScreen="OnAddScreen" OnAddUserGroup="OnAddUserGroup" OnAddUser="OnAddUser"
                     OnDelete="OnDelete"
                     OnCopy="OnCopyNode" OnPaste="OnPasteNode"
-                    OnSetActiveProject="OnSetActiveProject" OnCloseProject="OnCloseProject" />
+                    OnSetActiveProject="OnSetActiveProject" OnCloseProject="OnCloseProject"
+                    OnFindReferences="OnFindReferences" />
         </div>
         }
 
@@ -418,6 +419,10 @@ else
                 else if (context.Id == "crashes")
                 {
                     <CrashReportsPanel />
+                }
+                else if (context.Id == "xref")
+                {
+                    <CrossReferencePanel @ref="_crossRefPanel" />
                 }
             </PanelContent>
         </DockContainer>
@@ -675,6 +680,7 @@ else
     private JsonEditor? _jsonEditor;
     private DockContainer? _dockContainer;
     private ScreenEditorPanel? _screenEditorPanel;
+    private CrossReferencePanel? _crossRefPanel;
 
     private string _selectedFile = "";
     private string[] _availableFiles = [];
@@ -749,6 +755,7 @@ else
         new() { Id = "serverlog", Title = "Server Logs", Icon = "📋", Zone = "bottom" },
         new() { Id = "applog", Title = "App Log", Icon = "📒", Zone = "bottom" },
         new() { Id = "crashes", Title = "Crash Reports", Icon = "🐛", Zone = "bottom" },
+        new() { Id = "xref", Title = "Cross Reference", Icon = "🔗", Zone = "bottom" },
     ];
 
 private void OnAddFolder(TreeNode node)
@@ -796,6 +803,30 @@ private void OnCloseProject(TreeNode node)
     {
         Editor.CloseProject(pn);
     }
+}
+
+private void OnFindReferences(TreeNode node)
+{
+    if (node is not VariableNode vn) return;
+    _dockContainer?.ActivatePanel("xref");
+    // Build the variable path and trigger search in the panel
+    _crossRefPanel?.SearchVariable(BuildVariablePath(vn));
+}
+
+private static string BuildVariablePath(VariableNode vn)
+{
+    var parts = new List<string> { vn.Name };
+    TreeNode? current = vn.Parent;
+    while (current != null)
+    {
+        if (current is FolderNode fn)
+            parts.Add(fn.Name);
+        else if (current is VariableGroupNode)
+            break;
+        current = current.Parent;
+    }
+    parts.Reverse();
+    return string.Join(".", parts);
 }
 
 private void UnsavedDialogSave()
