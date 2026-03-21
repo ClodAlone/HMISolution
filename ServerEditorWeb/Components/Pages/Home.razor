@@ -314,7 +314,8 @@ else
                     OnDelete="OnDelete"
                     OnCopy="OnCopyNode" OnPaste="OnPasteNode"
                     OnSetActiveProject="OnSetActiveProject" OnCloseProject="OnCloseProject"
-                    OnFindReferences="OnFindReferences" />
+                    OnFindReferences="OnFindReferences"
+                    OnAddToWatch="OnAddToWatch" />
         </div>
         }
 
@@ -423,6 +424,10 @@ else
                 else if (context.Id == "xref")
                 {
                     <CrossReferencePanel @ref="_crossRefPanel" />
+                }
+                else if (context.Id == "watch")
+                {
+                    <WatchTablePanel @ref="_watchTablePanel" />
                 }
             </PanelContent>
         </DockContainer>
@@ -681,6 +686,7 @@ else
     private DockContainer? _dockContainer;
     private ScreenEditorPanel? _screenEditorPanel;
     private CrossReferencePanel? _crossRefPanel;
+    private WatchTablePanel? _watchTablePanel;
 
     private string _selectedFile = "";
     private string[] _availableFiles = [];
@@ -756,6 +762,7 @@ else
         new() { Id = "applog", Title = "App Log", Icon = "📒", Zone = "bottom" },
         new() { Id = "crashes", Title = "Crash Reports", Icon = "🐛", Zone = "bottom" },
         new() { Id = "xref", Title = "Cross Reference", Icon = "🔗", Zone = "bottom" },
+        new() { Id = "watch", Title = "Watch Table", Icon = "👁️", Zone = "bottom" },
     ];
 
 private void OnAddFolder(TreeNode node)
@@ -827,6 +834,15 @@ private static string BuildVariablePath(VariableNode vn)
     }
     parts.Reverse();
     return string.Join(".", parts);
+}
+
+private async Task OnAddToWatch(TreeNode node)
+{
+    if (node is not VariableNode vn) return;
+    _dockContainer?.ActivatePanel("watch");
+    var path = BuildVariablePath(vn);
+    if (_watchTablePanel != null)
+        await _watchTablePanel.AddVariableExternal(path);
 }
 
 private void UnsavedDialogSave()

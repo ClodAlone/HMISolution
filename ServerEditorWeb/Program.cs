@@ -28,6 +28,7 @@ builder.Services.AddSingleton<UndoRedoService>();
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<OpcClientService>();
 builder.Services.AddSingleton<CrossReferenceService>();
+builder.Services.AddSingleton<WatchTableService>();
 
 var app = builder.Build();
 
