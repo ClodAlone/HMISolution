@@ -187,15 +187,6 @@ else
                             <span class="menu-label">🌙 Dark</span>
                         </div>
                         <div class="menu-separator"></div>
-                        <div class="menu-section-label">Server Endpoint</div>
-                        <div class="menu-item" style="pointer-events: none; padding: 4px 14px;">
-                            <input type="text" class="form-control form-control-sm"
-                                   style="width: 280px; pointer-events: all;"
-                                   value="@Editor.ServerEndpointUrl"
-                                   @onclick:stopPropagation
-                                   @onchange="e => { Editor.SetServerEndpointUrl(e.Value?.ToString() ?? string.Empty); }" />
-                        </div>
-                        <div class="menu-separator"></div>
                         <div class="menu-section-label">Project Protection</div>
                         @if (Editor.IsActiveProjectLocked)
                         {
@@ -407,6 +398,14 @@ else
                 else if (context.Id == "ladder")
                 {
                     <LadderEditorPanel Node="Editor.SelectedItem" OnPropertyChanged="OnPropertyChanged" />
+                }
+                else if (context.Id == "scripteditor")
+                {
+                    <ScriptEditorPanel Node="Editor.SelectedItem" OnPropertyChanged="OnPropertyChanged" />
+                }
+                else if (context.Id == "plceditor")
+                {
+                    <PlcEditorPanel Node="Editor.SelectedItem" OnPropertyChanged="OnPropertyChanged" />
                 }
                 else if (context.Id == "scheduler")
                 {
@@ -743,6 +742,8 @@ else
         new() { Id = "images", Title = "Images", Icon = "🖼️", Zone = "center" },
         new() { Id = "eventlog", Title = "Event Log", Icon = "📓", Zone = "center" },
         new() { Id = "ladder", Title = "Ladder Editor", Icon = "⚡", Zone = "center" },
+        new() { Id = "scripteditor", Title = "Script Editor", Icon = "📝", Zone = "center" },
+        new() { Id = "plceditor", Title = "PLC Editor", Icon = "⚙", Zone = "center" },
         new() { Id = "scheduler", Title = "Scheduler Editor", Icon = "📅", Zone = "center" },
         new() { Id = "report", Title = "Report Designer", Icon = "📄", Zone = "center" },
         new() { Id = "serverlog", Title = "Server Logs", Icon = "📋", Zone = "bottom" },
@@ -1021,9 +1022,11 @@ private void UnsavedDialogCancel()
         {
             ScreenNode or ScreenGroupNode => "screen",
             UserNode or UserGroupNode or UserGroupListNode => "users",
-            ScriptNode or ScriptGroupNode => "json",
+            ScriptNode => "scripteditor",
+            ScriptGroupNode => "json",
             PlcProgramNode pn when pn.PlcProgram.Language.Equals("LD", StringComparison.OrdinalIgnoreCase) => "ladder",
-            PlcProgramNode or PlcGroupNode => "properties",
+            PlcProgramNode => "plceditor",
+            PlcGroupNode => "properties",
             RecipeNode or RecipeGroupNode => "properties",
             SchedulerNode or SchedulerGroupNode => "scheduler",
             ReportNode or ReportGroupNode => "report",

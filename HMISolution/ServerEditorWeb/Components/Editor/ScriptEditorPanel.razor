@@ -1,0 +1,144 @@
+@using Microsoft.JSInterop
+@using SharedModels
+@using ServerEditorWeb.Services
+@implements IDisposable
+
+<div class="script-editor-panel">
+    @if (GetScript() is not ScriptConfig script)
+    {
+        <p class="text-muted p-2">Select a Script node to open the code editor.</p>
+    }
+    else
+    {
+        @* Toolbar *@
+        <div class="script-editor-toolbar">
+            <div class="d-flex gap-2 align-items-center flex-wrap">
+                <span class="small fw-bold me-2">@_scriptNode!.Name</span>
+                <span class="badge bg-secondary">@script.Language</span>
+                <button class="btn btn-sm btn-outline-primary" @onclick="CheckSyntax" disabled="@_checkingSyntax">
+                    @if (_checkingSyntax)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1"></span>
+                    }
+                    Check Syntax
+                </button>
+                @if (!string.IsNullOrEmpty(_syntaxResult))
+                {
+                    <span class="small @(_syntaxSuccess ? "text-success" : "text-danger")">@_syntaxResult</span>
+                }
+            </div>
+        </div>
+
+        @* Code Editor + Debug *@
+        <div class="script-editor-body">
+            <CodeEditor @ref="_editor" @bind-Value="script.Code" @bind-Value:after="OnCodeChanged"
+                        Language="@GetEditorLanguage(script.Language)" Height="100%"
+                        Initialized="StateHasChanged" />
+            <ProgramDebugPanel Category="Script" ProgramName="@script.Name"
+                              ServerRunning="ServerProcess.IsServerRunning"
+                              SourceCode="@script.Code" Height="100%"
+                              EditorElement="@(_editor?.EditorElement ?? default)" />
+        </div>
+    }
+</div>
+
+<style>
+    .script-editor-panel {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        overflow: hidden;
+    }
+    .script-editor-toolbar {
+        padding: 4px 8px;
+        border-bottom: 1px solid var(--bs-border-color);
+        background: #f8f9fa;
+        flex-shrink: 0;
+    }
+    .script-editor-body {
+        flex: 1;
+        min-height: 0;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+    }
+    .script-editor-body .CodeMirror {
+        flex: 1;
+        height: auto !important;
+    }
+</style>
+
+@code {
+    [Parameter] public TreeNode? Node { get; set; }
+    [Parameter] public EventCallback OnPropertyChanged { get; set; }
+
+    [Inject] private SyntaxCheckService SyntaxChecker { get; set; } = default!;
+    [Inject] private ServerProcessService ServerProcess { get; set; } = default!;
+    [Inject] private NodeEditorService Editor { get; set; } = default!;
+
+    private CodeEditor? _editor;
+    private ScriptNode? _scriptNode;
+    private ScriptConfig? _lastScript;
+    private string _syntaxResult = "";
+    private bool _syntaxSuccess;
+    private bool _checkingSyntax;
+
+    private ScriptConfig? GetScript()
+    {
+        _scriptNode = Node as ScriptNode;
+        return _scriptNode?.Script;
+    }
+
+    protected override void OnParametersSet()
+    {
+        var script = GetScript();
+        if (script != _lastScript)
+        {
+            _lastScript = script;
+            _syntaxResult = "";
+        }
+    }
+
+    private async Task OnCodeChanged()
+    {
+        await OnPropertyChanged.InvokeAsync();
+    }
+
+    private async Task CheckSyntax()
+    {
+        var script = GetScript();
+        if (script == null) return;
+
+        _syntaxResult = "";
+        _checkingSyntax = true;
+        StateHasChanged();
+
+        try
+        {
+            var code = script.Code;
+            var language = script.Language;
+            var (success, message) = await Task.Run(() => SyntaxChecker.CheckSyntax(code, language));
+            _syntaxSuccess = success;
+            _syntaxResult = message;
+        }
+        catch (Exception ex)
+        {
+            _syntaxSuccess = false;
+            _syntaxResult = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            _checkingSyntax = false;
+        }
+    }
+
+    private static string GetEditorLanguage(string language)
+    {
+        return language.Equals("VB", StringComparison.OrdinalIgnoreCase)
+            || language.Equals("VB.NET", StringComparison.OrdinalIgnoreCase)
+            || language.Equals("VisualBasic", StringComparison.OrdinalIgnoreCase)
+            ? "vb" : "csharp";
+    }
+
+    public void Dispose() { }
+}

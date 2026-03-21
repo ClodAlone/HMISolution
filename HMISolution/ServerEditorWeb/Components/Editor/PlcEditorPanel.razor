@@ -1,0 +1,152 @@
+@using Microsoft.JSInterop
+@using SharedModels
+@using ServerEditorWeb.Services
+@implements IDisposable
+
+<div class="plc-editor-panel">
+    @if (GetPlcProgram() is not PlcProgramConfig plc)
+    {
+        <p class="text-muted p-2">Select a PLC program with ST or IL language to open the code editor.</p>
+    }
+    else
+    {
+        @* Toolbar *@
+        <div class="plc-editor-toolbar">
+            <div class="d-flex gap-2 align-items-center flex-wrap">
+                <span class="small fw-bold me-2">@_plcNode!.Name</span>
+                <span class="badge bg-secondary">@GetPlcLanguageLabel(plc.Language)</span>
+                <button class="btn btn-sm btn-outline-primary" @onclick="CheckSyntax" disabled="@_checkingSyntax">
+                    @if (_checkingSyntax)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1"></span>
+                    }
+                    Check Syntax
+                </button>
+                @if (!string.IsNullOrEmpty(_syntaxResult))
+                {
+                    <span class="small @(_syntaxSuccess ? "text-success" : "text-danger")">@_syntaxResult</span>
+                }
+            </div>
+        </div>
+
+        @* Code Editor + Debug *@
+        <div class="plc-editor-body">
+            <CodeEditor @ref="_editor" @bind-Value="plc.Code" @bind-Value:after="OnCodeChanged"
+                        Language="@GetPlcEditorLanguage(plc.Language)" Height="100%"
+                        Initialized="StateHasChanged" />
+            <ProgramDebugPanel Category="PlcProgram" ProgramName="@plc.Name"
+                              ServerRunning="ServerProcess.IsServerRunning"
+                              SourceCode="@plc.Code" Height="100%"
+                              EditorElement="@(_editor?.EditorElement ?? default)" />
+        </div>
+    }
+</div>
+
+<style>
+    .plc-editor-panel {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        overflow: hidden;
+    }
+    .plc-editor-toolbar {
+        padding: 4px 8px;
+        border-bottom: 1px solid var(--bs-border-color);
+        background: #f8f9fa;
+        flex-shrink: 0;
+    }
+    .plc-editor-body {
+        flex: 1;
+        min-height: 0;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+    }
+    .plc-editor-body .CodeMirror {
+        flex: 1;
+        height: auto !important;
+    }
+</style>
+
+@code {
+    [Parameter] public TreeNode? Node { get; set; }
+    [Parameter] public EventCallback OnPropertyChanged { get; set; }
+
+    [Inject] private SyntaxCheckService SyntaxChecker { get; set; } = default!;
+    [Inject] private ServerProcessService ServerProcess { get; set; } = default!;
+    [Inject] private NodeEditorService Editor { get; set; } = default!;
+
+    private CodeEditor? _editor;
+    private PlcProgramNode? _plcNode;
+    private PlcProgramConfig? _lastPlc;
+    private string _syntaxResult = "";
+    private bool _syntaxSuccess;
+    private bool _checkingSyntax;
+
+    private PlcProgramConfig? GetPlcProgram()
+    {
+        _plcNode = Node as PlcProgramNode;
+        if (_plcNode != null && !_plcNode.PlcProgram.Language.Equals("LD", StringComparison.OrdinalIgnoreCase))
+            return _plcNode.PlcProgram;
+        return null;
+    }
+
+    protected override void OnParametersSet()
+    {
+        var plc = GetPlcProgram();
+        if (plc != _lastPlc)
+        {
+            _lastPlc = plc;
+            _syntaxResult = "";
+        }
+    }
+
+    private async Task OnCodeChanged()
+    {
+        await OnPropertyChanged.InvokeAsync();
+    }
+
+    private async Task CheckSyntax()
+    {
+        var plc = GetPlcProgram();
+        if (plc == null) return;
+
+        _syntaxResult = "";
+        _checkingSyntax = true;
+        StateHasChanged();
+
+        try
+        {
+            var code = plc.Code;
+            var language = plc.Language;
+            var (success, message) = await Task.Run(() => SyntaxChecker.CheckPlcSyntax(code, language));
+            _syntaxSuccess = success;
+            _syntaxResult = message;
+        }
+        catch (Exception ex)
+        {
+            _syntaxSuccess = false;
+            _syntaxResult = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            _checkingSyntax = false;
+        }
+    }
+
+    private static string GetPlcEditorLanguage(string language) => language?.ToUpperInvariant() switch
+    {
+        "IL" => "text",
+        "LD" => "text",
+        _ => "st"
+    };
+
+    private static string GetPlcLanguageLabel(string language) => language?.ToUpperInvariant() switch
+    {
+        "IL" => "Instruction List",
+        "LD" => "Ladder Diagram",
+        _ => "Structured Text"
+    };
+
+    public void Dispose() { }
+}

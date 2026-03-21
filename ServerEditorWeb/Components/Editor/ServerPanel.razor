@@ -19,6 +19,17 @@
         }
     </div>
 
+    <div class="mb-3">
+        <label class="form-label small text-muted mb-1">OPC UA Endpoint</label>
+        <div class="input-group input-group-sm">
+            <span class="input-group-text" style="font-size: 10px;">🔗</span>
+            <input type="text" class="form-control form-control-sm font-monospace"
+                   style="font-size: 11px;"
+                   value="@Editor.ServerEndpointUrl"
+                   @onchange="OnEndpointChanged" />
+        </div>
+    </div>
+
     @if (ServerProcessService.IsWindows)
     {
         <h6>🪟 Windows Service</h6>
@@ -317,6 +328,7 @@
     @* ─── Subsystem Performance (from Server diagnostics endpoint) ── *@
     @if (_serverDiag != null && _serverDiag.Subsystems.Count > 0)
     {
+        var diag = _serverDiag;
         var isLive = DiagClient.Latest != null;
         <h6 class="mt-2">⚡ Subsystem Performance
             <span class="text-muted" style="font-size: 9px;">
@@ -324,7 +336,7 @@
             </span>
         </h6>
 
-        @if (_serverDiag.Subsystems.Any(s => !string.IsNullOrEmpty(s.LastError)))
+        @if (diag.Subsystems.Any(s => !string.IsNullOrEmpty(s.LastError)))
         {
             <button class="btn btn-sm btn-outline-danger mb-1" style="font-size: 9px; padding: 1px 6px;" @onclick="CopyAllDiagErrors" title="Copy all error messages to clipboard">📋 Copy All Errors</button>
         }
@@ -336,7 +348,7 @@
             </div>
         }
 
-        @foreach (var category in _serverDiag.Subsystems.GroupBy(s => s.Category).OrderBy(g => g.Key))
+        @foreach (var category in diag.Subsystems.GroupBy(s => s.Category).OrderBy(g => g.Key))
         {
             <div class="perf-subsystem-group mb-2">
                 <div class="perf-subsystem-cat">@CategoryIcon(category.Key) @category.Key</div>
@@ -356,8 +368,8 @@
                     <tbody>
                         @foreach (var sub in category)
                         {
-                            var loadPct = _serverDiag.Subsystems.Sum(s => s.TotalCpuMs) > 0
-                                ? sub.TotalCpuMs / _serverDiag.Subsystems.Sum(s => s.TotalCpuMs) * 100
+                            var loadPct = diag.Subsystems.Sum(s => s.TotalCpuMs) > 0
+                                ? sub.TotalCpuMs / diag.Subsystems.Sum(s => s.TotalCpuMs) * 100
                                 : 0;
                             <tr class="@(sub.Status == "Error" ? "table-danger" : "")">
                                 <td class="text-truncate" style="max-width: 140px;" title="@sub.Name">@sub.Name</td>
@@ -850,6 +862,11 @@
         }
     }
 
+    private void OnEndpointChanged(ChangeEventArgs e)
+    {
+        Editor.SetServerEndpointUrl(e.Value?.ToString() ?? string.Empty);
+    }
+
     private async Task PollDiagnosticsAsync()
     {
         // Read diagnostics from the OPC UA server's _Diagnostics.Json variable
@@ -969,6 +986,10 @@
                 });
             }
         }
+
+        // Filter out drivers that are not used by any variable in the current project
+        var usedDrivers = new HashSet<string>(CollectDriverBindings(model.Folder).Distinct(), StringComparer.OrdinalIgnoreCase);
+        _serverDiag.Subsystems.RemoveAll(s => s.Category == "Driver" && !usedDrivers.Contains(s.Name));
 
         // If nothing was added and there are no subsystems, clear _serverDiag so the UI doesn't show an empty section
         if (_serverDiag.Subsystems.Count == 0)

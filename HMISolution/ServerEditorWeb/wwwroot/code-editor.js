@@ -84,7 +84,7 @@ window.codeEditor = {
             }
         }
 
-        // Add inline annotation text after each line's content
+        // Add inline annotation text markers after each line's content
         if (annotations) {
             for (var lineStr in annotations) {
                 var line = parseInt(lineStr);
@@ -94,7 +94,8 @@ window.codeEditor = {
                 var lineContent = editor.getLine(line);
                 var endCh = lineContent.length;
 
-                var span = document.createElement("span");
+                // Create a bookmark widget at end of line
+                var span = document.createElement('span');
                 span.className = 'debug-inline-annotation';
                 span.textContent = '  \u00AB ' + text + ' \u00BB';
                 span.title = text;

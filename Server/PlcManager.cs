@@ -1,4 +1,4 @@
-﻿﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
@@ -89,8 +89,11 @@ namespace SimpleOpcFileServer
                     return;
                 }
 
+                long cycleCount = 0;
                 while (!_token.IsCancellationRequested)
                 {
+                    cycleCount++;
+                    var debug = new PlcDebugContext();
                     var sw = System.Diagnostics.Stopwatch.StartNew();
                     try
                     {
@@ -99,15 +102,17 @@ namespace SimpleOpcFileServer
                         else if (IsLd)
                             LdInterpreter.Execute(_compiledLd!, _nodeManager);
                         else
-                            StInterpreter.Execute(_compiledSt!, _nodeManager);
+                            StInterpreter.Execute(_compiledSt!, _nodeManager, debug);
 
                         sw.Stop();
                         DiagnosticsCollector.Instance.RecordCycle("PlcProgram", _config.Name, sw.Elapsed.TotalMilliseconds);
+                        RecordDebugSnapshot(debug, cycleCount, "Running", null);
                     }
                     catch (Exception ex)
                     {
                         sw.Stop();
                         DiagnosticsCollector.Instance.RecordCycle("PlcProgram", _config.Name, sw.Elapsed.TotalMilliseconds, error: ex.Message);
+                        RecordDebugSnapshot(debug, cycleCount, "Error", ex.Message);
                         Log.Error(ex, "PLC '{Name}': execution error: {Message}", _config.Name, ex.Message);
                     }
 
@@ -120,7 +125,83 @@ namespace SimpleOpcFileServer
             }, _token);
         }
 
+        private void RecordDebugSnapshot(PlcDebugContext debug, long cycleCount, string status, string? error)
+        {
+            var info = new SharedModels.ProgramDebugInfo
+            {
+                Category = "PlcProgram",
+                Name = _config.Name,
+                CycleCount = cycleCount,
+                Status = status,
+                LastError = error
+            };
+            // Merge reads (OPC inputs) and writes (OPC outputs) plus locals
+            foreach (var kvp in debug.OpcReads)
+                info.Variables[kvp.Key] = kvp.Value;
+            foreach (var kvp in debug.OpcWrites)
+                info.Variables[kvp.Key] = kvp.Value;
+            info.ExecutedLines.AddRange(debug.ExecutedLines);
+            info.WriteLines.AddRange(debug.WriteLines);
+            foreach (var kvp in debug.LineAnnotations)
+                info.LineAnnotations[kvp.Key] = string.Join(", ", kvp.Value);
+            DiagnosticsCollector.Instance.RecordDebug(info);
+        }
+
         public void Stop() { }
+    }
+
+    /// <summary>
+    /// Tracks OPC variable reads/writes during a PLC execution cycle for debug visualization.
+    /// </summary>
+    internal class PlcDebugContext
+    {
+        public Dictionary<string, string> OpcReads { get; } = new(StringComparer.OrdinalIgnoreCase);
+        public Dictionary<string, string> OpcWrites { get; } = new(StringComparer.OrdinalIgnoreCase);
+        public HashSet<int> ExecutedLines { get; } = new();
+        public List<int> WriteLines { get; } = new();
+        /// <summary>Per-line annotations: 0-based line -> list of "name=value" strings.</summary>
+        public Dictionary<int, List<string>> LineAnnotations { get; } = new();
+
+        public void RecordRead(string varName, object? value)
+        {
+            OpcReads[varName] = value?.ToString() ?? "null";
+        }
+
+        public void RecordWrite(string varName, object? value)
+        {
+            OpcWrites[varName] = value?.ToString() ?? "null";
+        }
+
+        public void RecordExecutedLine(int line)
+        {
+            if (line >= 0) ExecutedLines.Add(line);
+        }
+
+        public void RecordWriteLine(int line)
+        {
+            if (line >= 0) WriteLines.Add(line);
+        }
+
+        public void Annotate(int line, string name, object? value)
+        {
+            if (line < 0) return;
+            if (!LineAnnotations.TryGetValue(line, out var list))
+            {
+                list = new List<string>();
+                LineAnnotations[line] = list;
+            }
+            var text = name + " = " + (value?.ToString() ?? "null");
+            // Replace existing annotation for same variable name
+            for (int i = 0; i < list.Count; i++)
+            {
+                if (list[i].StartsWith(name + " = ", StringComparison.OrdinalIgnoreCase))
+                {
+                    list[i] = text;
+                    return;
+                }
+            }
+            list.Add(text);
+        }
     }
 
     // ─── IEC 61131-3 Structured Text AST ────────────────────
@@ -131,7 +212,7 @@ namespace SimpleOpcFileServer
         VarDeclaration, FunctionCall, Comment
     }
 
-    internal abstract class StStatement { }
+    internal abstract class StStatement { public int SourceLine { get; set; } }
 
     internal class StAssignment : StStatement
     {
@@ -874,7 +955,7 @@ namespace SimpleOpcFileServer
 
     internal static class StInterpreter
     {
-        public static void Execute(StProgram program, SimpleFileServerNodeManager nodeManager)
+        public static void Execute(StProgram program, SimpleFileServerNodeManager nodeManager, PlcDebugContext? debug = null)
         {
             var locals = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
 
@@ -893,37 +974,49 @@ namespace SimpleOpcFileServer
                 };
 
                 if (decl.InitialValue != null)
-                    initVal = EvalExpression(decl.InitialValue, locals, nodeManager);
+                    initVal = EvalExpression(decl.InitialValue, locals, nodeManager, debug);
 
                 locals[decl.Name] = initVal;
             }
 
             try
             {
-                ExecuteBlock(program.Statements, locals, nodeManager);
+                ExecuteBlock(program.Statements, locals, nodeManager, debug);
             }
             catch (ReturnException) { }
+
+            // Capture local variable values for debug visualization
+            if (debug != null)
+            {
+                foreach (var kvp in locals)
+                    debug.OpcReads["[local] " + kvp.Key] = kvp.Value?.ToString() ?? "null";
+            }
         }
 
-        private static void ExecuteBlock(List<StStatement> statements, Dictionary<string, object?> locals, SimpleFileServerNodeManager nodeManager)
+        private static void ExecuteBlock(List<StStatement> statements, Dictionary<string, object?> locals, SimpleFileServerNodeManager nodeManager, PlcDebugContext? debug)
         {
             foreach (var stmt in statements)
             {
-                ExecuteStatement(stmt, locals, nodeManager);
+                ExecuteStatement(stmt, locals, nodeManager, debug);
             }
         }
 
-        private static void ExecuteStatement(StStatement stmt, Dictionary<string, object?> locals, SimpleFileServerNodeManager nodeManager)
+        private static void ExecuteStatement(StStatement stmt, Dictionary<string, object?> locals, SimpleFileServerNodeManager nodeManager, PlcDebugContext? debug)
         {
+            debug?.RecordExecutedLine(stmt.SourceLine);
+
             switch (stmt)
             {
                 case StAssignment assign:
                 {
-                    var value = EvalExpression(assign.Value, locals, nodeManager);
+                    var value = EvalExpression(assign.Value, locals, nodeManager, debug);
+                    debug?.Annotate(assign.SourceLine, assign.Variable, value);
                     // If the variable name contains a dot, it's an OPC variable path
                     if (assign.Variable.Contains('.'))
                     {
                         nodeManager.WriteVariable(assign.Variable, value ?? 0);
+                        debug?.RecordWrite(assign.Variable, value);
+                        debug?.RecordWriteLine(assign.SourceLine);
                     }
                     else if (locals.ContainsKey(assign.Variable))
                     {
@@ -935,6 +1028,8 @@ namespace SimpleOpcFileServer
                         try
                         {
                             nodeManager.WriteVariable(assign.Variable, value ?? 0);
+                            debug?.RecordWrite(assign.Variable, value);
+                            debug?.RecordWriteLine(assign.SourceLine);
                         }
                         catch
                         {
@@ -946,33 +1041,33 @@ namespace SimpleOpcFileServer
 
                 case StIf ifStmt:
                 {
-                    if (IsTrue(EvalExpression(ifStmt.Condition, locals, nodeManager)))
+                    if (IsTrue(EvalExpression(ifStmt.Condition, locals, nodeManager, debug)))
                     {
-                        ExecuteBlock(ifStmt.ThenBlock, locals, nodeManager);
+                        ExecuteBlock(ifStmt.ThenBlock, locals, nodeManager, debug);
                     }
                     else
                     {
                         bool handled = false;
                         foreach (var (cond, block) in ifStmt.ElsifBlocks)
                         {
-                            if (IsTrue(EvalExpression(cond, locals, nodeManager)))
+                            if (IsTrue(EvalExpression(cond, locals, nodeManager, debug)))
                             {
-                                ExecuteBlock(block, locals, nodeManager);
+                                ExecuteBlock(block, locals, nodeManager, debug);
                                 handled = true;
                                 break;
                             }
                         }
                         if (!handled && ifStmt.ElseBlock.Count > 0)
-                            ExecuteBlock(ifStmt.ElseBlock, locals, nodeManager);
+                            ExecuteBlock(ifStmt.ElseBlock, locals, nodeManager, debug);
                     }
                     break;
                 }
 
                 case StFor forStmt:
                 {
-                    var from = ToDouble(EvalExpression(forStmt.From, locals, nodeManager));
-                    var to = ToDouble(EvalExpression(forStmt.To, locals, nodeManager));
-                    var by = forStmt.By != null ? ToDouble(EvalExpression(forStmt.By, locals, nodeManager)) : 1.0;
+                    var from = ToDouble(EvalExpression(forStmt.From, locals, nodeManager, debug));
+                    var to = ToDouble(EvalExpression(forStmt.To, locals, nodeManager, debug));
+                    var by = forStmt.By != null ? ToDouble(EvalExpression(forStmt.By, locals, nodeManager, debug)) : 1.0;
                     if (by == 0) break;
 
                     locals[forStmt.Variable] = from;
@@ -983,7 +1078,7 @@ namespace SimpleOpcFileServer
                             for (double i = from; i <= to; i += by)
                             {
                                 locals[forStmt.Variable] = i;
-                                ExecuteBlock(forStmt.Body, locals, nodeManager);
+                                ExecuteBlock(forStmt.Body, locals, nodeManager, debug);
                             }
                         }
                         else
@@ -991,7 +1086,7 @@ namespace SimpleOpcFileServer
                             for (double i = from; i >= to; i += by)
                             {
                                 locals[forStmt.Variable] = i;
-                                ExecuteBlock(forStmt.Body, locals, nodeManager);
+                                ExecuteBlock(forStmt.Body, locals, nodeManager, debug);
                             }
                         }
                     }
@@ -1004,9 +1099,9 @@ namespace SimpleOpcFileServer
                     int safety = 100_000;
                     try
                     {
-                        while (IsTrue(EvalExpression(whileStmt.Condition, locals, nodeManager)) && safety-- > 0)
+                        while (IsTrue(EvalExpression(whileStmt.Condition, locals, nodeManager, debug)) && safety-- > 0)
                         {
-                            ExecuteBlock(whileStmt.Body, locals, nodeManager);
+                            ExecuteBlock(whileStmt.Body, locals, nodeManager, debug);
                         }
                     }
                     catch (ExitException) { }
@@ -1020,8 +1115,8 @@ namespace SimpleOpcFileServer
                     {
                         do
                         {
-                            ExecuteBlock(repeatStmt.Body, locals, nodeManager);
-                        } while (!IsTrue(EvalExpression(repeatStmt.Condition, locals, nodeManager)) && safety-- > 0);
+                            ExecuteBlock(repeatStmt.Body, locals, nodeManager, debug);
+                        } while (!IsTrue(EvalExpression(repeatStmt.Condition, locals, nodeManager, debug)) && safety-- > 0);
                     }
                     catch (ExitException) { }
                     break;
@@ -1029,16 +1124,16 @@ namespace SimpleOpcFileServer
 
                 case StCase caseStmt:
                 {
-                    var val = EvalExpression(caseStmt.Expression, locals, nodeManager);
+                    var val = EvalExpression(caseStmt.Expression, locals, nodeManager, debug);
                     bool matched = false;
                     foreach (var (values, body) in caseStmt.Branches)
                     {
                         foreach (var v in values)
                         {
-                            var caseVal = EvalExpression(v, locals, nodeManager);
+                            var caseVal = EvalExpression(v, locals, nodeManager, debug);
                             if (AreEqual(val, caseVal))
                             {
-                                ExecuteBlock(body, locals, nodeManager);
+                                ExecuteBlock(body, locals, nodeManager, debug);
                                 matched = true;
                                 break;
                             }
@@ -1046,7 +1141,7 @@ namespace SimpleOpcFileServer
                         if (matched) break;
                     }
                     if (!matched && caseStmt.ElseBlock.Count > 0)
-                        ExecuteBlock(caseStmt.ElseBlock, locals, nodeManager);
+                        ExecuteBlock(caseStmt.ElseBlock, locals, nodeManager, debug);
                     break;
                 }
 
@@ -1057,12 +1152,12 @@ namespace SimpleOpcFileServer
                     throw new ReturnException();
 
                 case StFunctionCallStatement callStmt:
-                    EvalFunctionCall(callStmt.FunctionName, callStmt.Arguments, locals, nodeManager);
+                    EvalFunctionCall(callStmt.FunctionName, callStmt.Arguments, locals, nodeManager, debug);
                     break;
             }
         }
 
-        internal static object? EvalExpression(StExpression expr, Dictionary<string, object?> locals, SimpleFileServerNodeManager nodeManager)
+        internal static object? EvalExpression(StExpression expr, Dictionary<string, object?> locals, SimpleFileServerNodeManager nodeManager, PlcDebugContext? debug = null)
         {
             switch (expr)
             {
@@ -1073,19 +1168,24 @@ namespace SimpleOpcFileServer
                     if (locals.TryGetValue(varRef.Name, out var localVal))
                         return localVal;
                     // Try reading from OPC
-                    try { return nodeManager.ReadVariable(varRef.Name); }
+                    try
+                    {
+                        var opcVal = nodeManager.ReadVariable(varRef.Name);
+                        debug?.RecordRead(varRef.Name, opcVal);
+                        return opcVal;
+                    }
                     catch { return null; }
 
                 case StBinaryOp bin:
                 {
-                    var left = EvalExpression(bin.Left, locals, nodeManager);
-                    var right = EvalExpression(bin.Right, locals, nodeManager);
+                    var left = EvalExpression(bin.Left, locals, nodeManager, debug);
+                    var right = EvalExpression(bin.Right, locals, nodeManager, debug);
                     return EvalBinaryOp(bin.Operator, left, right);
                 }
 
                 case StUnaryOp un:
                 {
-                    var operand = EvalExpression(un.Operand, locals, nodeManager);
+                    var operand = EvalExpression(un.Operand, locals, nodeManager, debug);
                     return un.Operator switch
                     {
                         "NOT" => !IsTrue(operand),
@@ -1095,7 +1195,7 @@ namespace SimpleOpcFileServer
                 }
 
                 case StFunctionCall call:
-                    return EvalFunctionCall(call.FunctionName, call.Arguments, locals, nodeManager);
+                    return EvalFunctionCall(call.FunctionName, call.Arguments, locals, nodeManager, debug);
 
                 default:
                     return null;
@@ -1141,10 +1241,10 @@ namespace SimpleOpcFileServer
         }
 
         private static object? EvalFunctionCall(string name, List<StExpression> args,
-            Dictionary<string, object?> locals, SimpleFileServerNodeManager nodeManager)
+            Dictionary<string, object?> locals, SimpleFileServerNodeManager nodeManager, PlcDebugContext? debug = null)
         {
             var uName = name.ToUpperInvariant();
-            var evaluated = args.Select(a => EvalExpression(a, locals, nodeManager)).ToList();
+            var evaluated = args.Select(a => EvalExpression(a, locals, nodeManager, debug)).ToList();
 
             return uName switch
             {

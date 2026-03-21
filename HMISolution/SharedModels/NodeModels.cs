@@ -927,6 +927,9 @@ namespace SharedModels
         public long MemoryMB { get; set; }
         public int ThreadCount { get; set; }
         public List<SubsystemDiagnostics> Subsystems { get; set; } = new();
+
+        /// <summary>Live debug snapshots for running PLC programs and scripts.</summary>
+        public List<ProgramDebugInfo> ProgramDebug { get; set; } = new();
     }
 
     /// <summary>
@@ -944,6 +947,40 @@ namespace SharedModels
         public double TotalCpuMs { get; set; }
         public string Status { get; set; } = "Running"; // Running, Stopped, Error
         public string? LastError { get; set; }
+    }
+
+    /// <summary>
+    /// Debug snapshot for a running PLC program or script, showing live variable values
+    /// and execution flow information. Captured after each execution cycle.
+    /// </summary>
+    public class ProgramDebugInfo
+    {
+        /// <summary>Category: "PlcProgram" or "Script".</summary>
+        public string Category { get; set; } = "";
+
+        /// <summary>Name of the program or script.</summary>
+        public string Name { get; set; } = "";
+
+        /// <summary>Current local and OPC variable values: name -> string representation.</summary>
+        public Dictionary<string, string> Variables { get; set; } = new();
+
+        /// <summary>Execution flow trace: list of recently executed source line numbers.</summary>
+        public List<int> ExecutedLines { get; set; } = new();
+
+        /// <summary>Zero-based line numbers of OPC Write operations in the last cycle.</summary>
+        public List<int> WriteLines { get; set; } = new();
+
+        /// <summary>Current cycle count.</summary>
+        public long CycleCount { get; set; }
+
+        /// <summary>Status: "Running", "Idle", "Error".</summary>
+        public string Status { get; set; } = "Running";
+
+        /// <summary>Last error message, if any.</summary>
+        public string? LastError { get; set; }
+
+        /// <summary>Per-line debug annotations: 0-based line number -> display text (variable values at that line).</summary>
+        public Dictionary<int, string> LineAnnotations { get; set; } = new();
     }
 
     // ─── Scheduler ───────────────────────────────────────────

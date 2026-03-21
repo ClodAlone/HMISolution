@@ -19,6 +19,7 @@ namespace SimpleOpcFileServer
     public sealed class DiagnosticsCollector : IDisposable
     {
         private readonly ConcurrentDictionary<string, SubsystemMetrics> _metrics = new();
+        private readonly ConcurrentDictionary<string, ProgramDebugInfo> _debugSnapshots = new();
         private TcpListener? _listener;
         private CancellationTokenSource? _cts;
         private Task? _listenerTask;
@@ -98,6 +99,15 @@ namespace SimpleOpcFileServer
             }
         }
 
+        /// <summary>
+        /// Record a debug snapshot for a running PLC program or script.
+        /// </summary>
+        public void RecordDebug(ProgramDebugInfo info)
+        {
+            var key = info.Category + ":" + info.Name;
+            _debugSnapshots[key] = info;
+        }
+
         public ServerDiagnostics BuildSnapshot()
         {
             SampleProcessCpu();
@@ -128,6 +138,9 @@ namespace SimpleOpcFileServer
                     LastError = m.LastError
                 });
             }
+
+            foreach (var kvp2 in _debugSnapshots)
+                diag.ProgramDebug.Add(kvp2.Value);
 
             return diag;
         }
