@@ -1,0 +1,384 @@
+@using ServerEditorWeb.Services
+@using ServerEditorWeb.Models
+@using System.Text.RegularExpressions
+
+<div class="help-panel">
+    <div class="help-toolbar">
+        <button class="help-toc-btn @(_showToc ? "active" : "")" @onclick="ToggleToc" title="Table of Contents">
+            📖
+        </button>
+        <span class="help-breadcrumb">@_currentHelp.Title</span>
+        <button class="btn btn-sm btn-outline-secondary ms-auto" @onclick="GoHome" title="Home">🏠</button>
+    </div>
+
+    <div class="help-body">
+        @if (_showToc)
+        {
+            <div class="help-toc">
+                <div class="help-toc-header">📖 Table of Contents</div>
+                @foreach (var topic in _toc)
+                {
+                    <div class="help-toc-item @(topic.Key == _currentKey ? "active" : "")"
+                         @onclick="() => NavigateTo(topic.Key)">
+                        <span class="help-toc-icon">@topic.Icon</span>
+                        <span>@topic.Title</span>
+                    </div>
+                }
+            </div>
+        }
+
+        <div class="help-content">
+            @((MarkupString)RenderMarkdown(_currentHelp.Body))
+        </div>
+    </div>
+</div>
+
+<style>
+    .help-panel {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        overflow: hidden;
+        font-size: 13px;
+    }
+
+    .help-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 8px;
+        border-bottom: 1px solid var(--border-color, #dee2e6);
+        flex-shrink: 0;
+    }
+
+    .help-toc-btn {
+        background: transparent;
+        border: 1px solid var(--border-color, #dee2e6);
+        border-radius: 4px;
+        padding: 2px 8px;
+        cursor: pointer;
+        font-size: 14px;
+    }
+    .help-toc-btn.active {
+        background: var(--hover-bg, rgba(0, 123, 255, 0.1));
+        border-color: var(--accent-color, #0d6efd);
+    }
+
+    .help-breadcrumb {
+        font-weight: 600;
+        font-size: 12px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .help-body {
+        display: flex;
+        flex: 1;
+        overflow: hidden;
+    }
+
+    .help-toc {
+        width: 200px;
+        min-width: 200px;
+        border-right: 1px solid var(--border-color, #dee2e6);
+        overflow-y: auto;
+        background: var(--bg-secondary, #f8f9fa);
+    }
+
+    .help-toc-header {
+        padding: 6px 10px;
+        font-weight: 600;
+        font-size: 12px;
+        border-bottom: 1px solid var(--border-color, #dee2e6);
+    }
+
+    .help-toc-item {
+        padding: 4px 10px 4px 12px;
+        cursor: pointer;
+        font-size: 12px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        transition: background 0.1s;
+    }
+    .help-toc-item:hover { background: var(--hover-bg, rgba(0, 123, 255, 0.05)); }
+    .help-toc-item.active {
+        background: var(--hover-bg, rgba(0, 123, 255, 0.1));
+        font-weight: 600;
+    }
+    .help-toc-icon { font-size: 13px; flex-shrink: 0; }
+
+    .help-content {
+        flex: 1;
+        overflow-y: auto;
+        padding: 12px 16px;
+        line-height: 1.6;
+    }
+
+    .help-content h2 { font-size: 17px; margin: 0 0 10px; padding-bottom: 4px; border-bottom: 1px solid var(--border-color, #dee2e6); }
+    .help-content h3 { font-size: 14px; margin: 14px 0 6px; }
+    .help-content p { margin: 6px 0; }
+    .help-content ul, .help-content ol { margin: 4px 0; padding-left: 20px; }
+    .help-content li { margin: 2px 0; }
+    .help-content code {
+        background: var(--bg-secondary, #f0f0f0);
+        padding: 1px 4px;
+        border-radius: 3px;
+        font-size: 12px;
+    }
+    .help-content pre {
+        background: var(--bg-secondary, #f0f0f0);
+        padding: 8px 12px;
+        border-radius: 4px;
+        overflow-x: auto;
+        font-size: 12px;
+        line-height: 1.4;
+    }
+    .help-content pre code {
+        background: none;
+        padding: 0;
+    }
+    .help-content table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 8px 0;
+        font-size: 12px;
+    }
+    .help-content th, .help-content td {
+        border: 1px solid var(--border-color, #dee2e6);
+        padding: 4px 8px;
+        text-align: left;
+    }
+    .help-content th {
+        background: var(--bg-secondary, #f8f9fa);
+        font-weight: 600;
+    }
+    .help-content strong { font-weight: 600; }
+    .help-content hr { border: none; border-top: 1px solid var(--border-color, #dee2e6); margin: 12px 0; }
+</style>
+
+@code {
+    [Inject] private HelpService Help { get; set; } = default!;
+
+    private HelpContent _currentHelp = new("", "");
+    private string _currentKey = "welcome";
+    private bool _showToc;
+    private List<(string Key, string Title, string Icon)> _toc = [];
+
+    protected override void OnInitialized()
+    {
+        _toc = Help.GetTableOfContents();
+        _currentHelp = Help.GetHelp("welcome");
+    }
+
+    /// <summary>
+    /// Update the help content based on the currently selected tree node.
+    /// Called externally from Home.razor when selection changes.
+    /// </summary>
+    public void UpdateForNode(TreeNode? node)
+    {
+        var help = Help.GetHelpForNode(node);
+        if (help.Title != _currentHelp.Title)
+        {
+            _currentHelp = help;
+            _currentKey = FindKeyForHelp(help);
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Update the help content based on the active panel.
+    /// </summary>
+    public void UpdateForPanel(string panelId)
+    {
+        var help = Help.GetHelpForPanel(panelId);
+        if (help.Title != _currentHelp.Title)
+        {
+            _currentHelp = help;
+            _currentKey = FindKeyForHelp(help);
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Navigate to a specific help topic by key.
+    /// </summary>
+    public void NavigateTo(string key)
+    {
+        _currentHelp = Help.GetHelp(key);
+        _currentKey = key;
+        StateHasChanged();
+    }
+
+    private void GoHome()
+    {
+        NavigateTo("welcome");
+    }
+
+    private void ToggleToc()
+    {
+        _showToc = !_showToc;
+    }
+
+    private string FindKeyForHelp(HelpContent help)
+    {
+        var match = _toc.FirstOrDefault(t => Help.GetHelp(t.Key).Title == help.Title);
+        return match.Key ?? "welcome";
+    }
+
+    /// <summary>
+    /// Simple Markdown-to-HTML renderer for the help content.
+    /// Supports: headings, bold, code, code blocks, tables, lists, hr, paragraphs, links.
+    /// </summary>
+    private static string RenderMarkdown(string markdown)
+    {
+        if (string.IsNullOrEmpty(markdown)) return "";
+
+        var lines = markdown.Split('\n');
+        var html = new System.Text.StringBuilder();
+        var inCodeBlock = false;
+        var inTable = false;
+        var inList = false;
+        var listType = "ul";
+
+        foreach (var rawLine in lines)
+        {
+            var line = rawLine.TrimEnd('\r');
+
+            // Code blocks
+            if (line.TrimStart().StartsWith("```"))
+            {
+                if (inCodeBlock)
+                {
+                    html.Append("</code></pre>");
+                    inCodeBlock = false;
+                }
+                else
+                {
+                    html.Append("<pre><code>");
+                    inCodeBlock = true;
+                }
+                continue;
+            }
+
+            if (inCodeBlock)
+            {
+                html.Append(System.Net.WebUtility.HtmlEncode(line)).Append('\n');
+                continue;
+            }
+
+            // Close list if line doesn't start with list marker
+            var trimmed = line.TrimStart();
+            if (inList && !trimmed.StartsWith("- ") && !trimmed.StartsWith("* ") && !Regex.IsMatch(trimmed, @"^\d+\. "))
+            {
+                html.Append(listType == "ol" ? "</ol>" : "</ul>");
+                inList = false;
+            }
+
+            // Close table if line doesn't start with |
+            if (inTable && !trimmed.StartsWith("|"))
+            {
+                html.Append("</tbody></table>");
+                inTable = false;
+            }
+
+            // Headings
+            if (trimmed.StartsWith("### "))
+            {
+                html.Append("<h3>").Append(InlineFormat(trimmed[4..])).Append("</h3>");
+                continue;
+            }
+            if (trimmed.StartsWith("## "))
+            {
+                html.Append("<h2>").Append(InlineFormat(trimmed[3..])).Append("</h2>");
+                continue;
+            }
+            if (trimmed.StartsWith("# "))
+            {
+                html.Append("<h1>").Append(InlineFormat(trimmed[2..])).Append("</h1>");
+                continue;
+            }
+
+            // Horizontal rule
+            if (trimmed == "---" || trimmed == "***" || trimmed == "___")
+            {
+                html.Append("<hr/>");
+                continue;
+            }
+
+            // Table
+            if (trimmed.StartsWith("|"))
+            {
+                // Table separator row
+                if (Regex.IsMatch(trimmed, @"^\|[\s\-:|\s]+\|$"))
+                    continue;
+
+                var cells = trimmed.Split('|', StringSplitOptions.RemoveEmptyEntries);
+                if (!inTable)
+                {
+                    html.Append("<table><thead><tr>");
+                    foreach (var cell in cells)
+                        html.Append("<th>").Append(InlineFormat(cell.Trim())).Append("</th>");
+                    html.Append("</tr></thead><tbody>");
+                    inTable = true;
+                }
+                else
+                {
+                    html.Append("<tr>");
+                    foreach (var cell in cells)
+                        html.Append("<td>").Append(InlineFormat(cell.Trim())).Append("</td>");
+                    html.Append("</tr>");
+                }
+                continue;
+            }
+
+            // Unordered list
+            if (trimmed.StartsWith("- ") || trimmed.StartsWith("* "))
+            {
+                if (!inList) { html.Append("<ul>"); inList = true; listType = "ul"; }
+                html.Append("<li>").Append(InlineFormat(trimmed[2..])).Append("</li>");
+                continue;
+            }
+
+            // Ordered list
+            var olMatch = Regex.Match(trimmed, @"^(\d+)\. (.*)");
+            if (olMatch.Success)
+            {
+                if (!inList) { html.Append("<ol>"); inList = true; listType = "ol"; }
+                html.Append("<li>").Append(InlineFormat(olMatch.Groups[2].Value)).Append("</li>");
+                continue;
+            }
+
+            // Empty line
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                continue;
+            }
+
+            // Paragraph
+            html.Append("<p>").Append(InlineFormat(line)).Append("</p>");
+        }
+
+        if (inCodeBlock) html.Append("</code></pre>");
+        if (inList) html.Append(listType == "ol" ? "</ol>" : "</ul>");
+        if (inTable) html.Append("</tbody></table>");
+
+        return html.ToString();
+    }
+
+    /// <summary>Format inline markdown: bold, code, links.</summary>
+    private static string InlineFormat(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return "";
+
+        // Inline code (must be before bold to avoid conflicts)
+        text = Regex.Replace(text, @"`([^`]+)`", "<code>$1</code>");
+        // Bold
+        text = Regex.Replace(text, @"\*\*([^*]+)\*\*", "<strong>$1</strong>");
+        // Links
+        text = Regex.Replace(text, @"\[([^\]]+)\]\(([^)]+)\)", "<a href=\"$2\" target=\"_blank\" rel=\"noopener\">$1</a>");
+
+        return text;
+    }
+}

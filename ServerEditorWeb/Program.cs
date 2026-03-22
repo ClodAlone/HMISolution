@@ -29,6 +29,9 @@ builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<OpcClientService>();
 builder.Services.AddSingleton<CrossReferenceService>();
 builder.Services.AddSingleton<WatchTableService>();
+builder.Services.AddSingleton<ProjectValidationService>();
+builder.Services.AddSingleton<LicenseService>();
+builder.Services.AddSingleton<HelpService>();
 
 var app = builder.Build();
 

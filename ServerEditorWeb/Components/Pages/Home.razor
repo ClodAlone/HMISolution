@@ -216,6 +216,26 @@ else
                 }
             </div>
 
+            @* Help menu *@
+            <div class="menubar-item @(_openMenu == "helpmenu" ? "open" : "")" @onclick='() => ToggleMenu("helpmenu")' @onmouseenter='() => HoverMenu("helpmenu")'>
+                Help
+                @if (_openMenu == "helpmenu")
+                {
+                    <div class="menubar-dropdown">
+                        <div class="menu-item" @onclick="ShowHelpPanel" @onclick:stopPropagation>
+                            <span class="menu-icon">&#x2753;</span><span class="menu-label">Help</span><span class="menu-shortcut">F1</span>
+                        </div>
+                        <div class="menu-item" @onclick="ShowProblemsPanel" @onclick:stopPropagation>
+                            <span class="menu-icon">&#x26A0;&#xFE0F;</span><span class="menu-label">Validate Project</span>
+                        </div>
+                        <div class="menu-separator"></div>
+                        <div class="menu-item" @onclick="ShowAboutDialog" @onclick:stopPropagation>
+                            <span class="menu-icon">&#x2139;&#xFE0F;</span><span class="menu-label">About</span>
+                        </div>
+                    </div>
+                }
+            </div>
+
             <div class="menubar-spacer"></div>
 
             @* Status area *@
@@ -429,6 +449,14 @@ else
                 {
                     <WatchTablePanel @ref="_watchTablePanel" />
                 }
+                else if (context.Id == "problems")
+                {
+                    <ProblemsPanel @ref="_problemsPanel" OnNavigate="OnProblemNavigate" />
+                }
+                else if (context.Id == "help")
+                {
+                    <HelpPanel @ref="_helpPanel" />
+                }
             </PanelContent>
         </DockContainer>
     </div>
@@ -583,6 +611,11 @@ else
     </div>
 }
 
+@if (_showAboutDialog)
+{
+    <AboutDialog OnClose="() => _showAboutDialog = false" />
+}
+
 
 @if (_showUnlockDialog)
 {
@@ -687,6 +720,9 @@ else
     private ScreenEditorPanel? _screenEditorPanel;
     private CrossReferencePanel? _crossRefPanel;
     private WatchTablePanel? _watchTablePanel;
+    private ProblemsPanel? _problemsPanel;
+    private HelpPanel? _helpPanel;
+    private bool _showAboutDialog;
 
     private string _selectedFile = "";
     private string[] _availableFiles = [];
@@ -763,6 +799,8 @@ else
         new() { Id = "crashes", Title = "Crash Reports", Icon = "🐛", Zone = "bottom" },
         new() { Id = "xref", Title = "Cross Reference", Icon = "🔗", Zone = "bottom" },
         new() { Id = "watch", Title = "Watch Table", Icon = "👁️", Zone = "bottom" },
+        new() { Id = "problems", Title = "Problems", Icon = "⚠️", Zone = "bottom" },
+        new() { Id = "help", Title = "Help", Icon = "❓", Zone = "right" },
     ];
 
 private void OnAddFolder(TreeNode node)
@@ -843,6 +881,36 @@ private async Task OnAddToWatch(TreeNode node)
     var path = BuildVariablePath(vn);
     if (_watchTablePanel != null)
         await _watchTablePanel.AddVariableExternal(path);
+}
+
+private void OnProblemNavigate(string target)
+{
+    if (target.StartsWith("screen:"))
+    {
+        var screenName = target[7..];
+        // Find screen node in tree and navigate to it
+        foreach (var root in Editor.RootItems)
+        {
+            var found = FindScreenNode(root, screenName);
+            if (found != null)
+            {
+                Editor.SelectNode(found);
+                _dockContainer?.ActivatePanel("screen");
+                break;
+            }
+        }
+    }
+}
+
+private static TreeNode? FindScreenNode(TreeNode node, string name)
+{
+    if (node is ScreenNode sn && sn.Name.Equals(name, StringComparison.OrdinalIgnoreCase)) return sn;
+    foreach (var child in node.Children)
+    {
+        var found = FindScreenNode(child, name);
+        if (found != null) return found;
+    }
+    return null;
 }
 
 private void UnsavedDialogSave()
@@ -1045,6 +1113,7 @@ private void UnsavedDialogCancel()
         Editor.SelectNode(e.Node, e.CtrlKey, e.ShiftKey);
         if (e.Node is not ScreenNode)
             Editor.SetScreenSelection(null, []);
+        _helpPanel?.UpdateForNode(e.Node);
         // Auto-activate the project that owns the clicked node
         var proj = FindAncestorProject(e.Node);
         if (proj != null && !proj.IsActive)
@@ -1132,6 +1201,10 @@ private void UnsavedDialogCancel()
     private void DeleteMenu() { CloseMenus(); Delete(); }
     private void CopyMenu() { CloseMenus(); Editor.CopySelected(Clipboard); }
     private void PasteMenu() { CloseMenus(); Editor.PasteFromClipboard(Clipboard); }
+
+    private void ShowHelpPanel() { CloseMenus(); _dockContainer?.ShowPanel("help", "right"); _dockContainer?.ActivatePanel("help"); }
+    private async void ShowProblemsPanel() { CloseMenus(); _dockContainer?.ShowPanel("problems", "bottom"); _dockContainer?.ActivatePanel("problems"); if (_problemsPanel != null) await _problemsPanel.RunValidation(); }
+    private void ShowAboutDialog() { CloseMenus(); _showAboutDialog = true; }
 
     private void QuickLoadFile(string path)
     {
