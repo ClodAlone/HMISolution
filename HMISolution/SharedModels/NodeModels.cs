@@ -425,7 +425,7 @@ namespace SharedModels
     public class ScreenSymbol
     {
         public string Id { get; set; } = "";
-        public string Type { get; set; } = "rect"; // rect, circle, ellipse, text, line, gauge, indicator, svg, alarmlist, hdachart, hdagrid, eventlog, editbox, ipcamera, recipe, weeklyplanner, screenembed, imagemap, trend, switch, rotaryswitch, knob, hslider, vslider, button, animtext
+        public string Type { get; set; } = "rect"; // rect, circle, ellipse, text, line, gauge, indicator, svg, alarmlist, hdachart, hdagrid, eventlog, editbox, ipcamera, recipe, weeklyplanner, screenembed, reportviewer, imagemap, trend, switch, rotaryswitch, knob, hslider, vslider, button, animtext
         public double X { get; set; }
         public double Y { get; set; }
         public double Width { get; set; } = 80;

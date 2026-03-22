@@ -297,6 +297,48 @@
                                                 @RenderSvgText(sym.Width / 2, sym.Height / 2 + 6, "middle", "middle", "#ef4444", ScaledFontSize(8, sym), "(set RecipeName)")
                                             }
                                             break;
+                                        case "weeklyplanner":
+                                            <rect width="@sym.Width" height="@sym.Height"
+                                                  fill="#1a1a2e" stroke="@sym.Stroke" stroke-width="@sym.StrokeWidth" rx="4" />
+                                            @RenderSvgText(sym.Width / 2, 16, "middle", "middle", "#e0e0e0", ScaledFontSize(11, sym), "📅 Weekly Planner")
+                                            <line x1="4" y1="26" x2="@(sym.Width - 4)" y2="26" stroke="#334155" stroke-width="1" />
+                                            @if (!string.IsNullOrEmpty(sym.SchedulerName))
+                                            {
+                                                @RenderSvgText(sym.Width / 2, 42, "middle", "middle", "#6ee7b7", ScaledFontSize(10, sym), sym.SchedulerName)
+                                                var wpDayW = (sym.Width - 16) / 7.0;
+                                                string[] wpDays = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
+                                                @for (var di = 0; di < 7; di++)
+                                                {
+                                                    var dx = 8 + di * wpDayW;
+                                                    <rect x="@F(dx)" y="54" width="@F(wpDayW - 2)" height="@(sym.Height - 70)" fill="#0f172a" rx="2" />
+                                                    @RenderSvgText(dx + wpDayW / 2 - 1, 64, "middle", "middle", "#94a3b8", ScaledFontSize(7, sym), wpDays[di])
+                                                }
+                                                @RenderSvgText(sym.Width / 2, sym.Height - 8, "middle", null, "#475569", ScaledFontSize(8, sym), "(live schedule at runtime)")
+                                            }
+                                            else
+                                            {
+                                                @RenderSvgText(sym.Width / 2, sym.Height / 2 + 6, "middle", "middle", "#ef4444", ScaledFontSize(8, sym), "(set SchedulerName)")
+                                            }
+                                            break;
+                                        case "reportviewer":
+                                            <rect width="@sym.Width" height="@sym.Height"
+                                                  fill="#1a1a2e" stroke="@sym.Stroke" stroke-width="@sym.StrokeWidth" rx="4" />
+                                            @RenderSvgText(sym.Width / 2, 16, "middle", "middle", "#e0e0e0", ScaledFontSize(11, sym), "`u{1F4C4} Report Viewer")
+                                            <line x1="4" y1="26" x2="@(sym.Width - 4)" y2="26" stroke="#334155" stroke-width="1" />
+                                            @if (!string.IsNullOrEmpty(sym.ReportName))
+                                            {
+                                                @RenderSvgText(sym.Width / 2, 42, "middle", "middle", "#f97316", ScaledFontSize(10, sym), sym.ReportName)
+                                                <rect x="8" y="54" width="@(sym.Width - 16)" height="14" fill="#1e293b" rx="2" />
+                                                @RenderSvgText(sym.Width / 2, 62, "middle", "middle", "#94a3b8", ScaledFontSize(7, sym), "report data rows")
+                                                <rect x="8" y="70" width="@(sym.Width - 16)" height="14" fill="#0f172a" rx="2" />
+                                                <rect x="8" y="86" width="@(sym.Width - 16)" height="14" fill="#1e293b" rx="2" />
+                                                @RenderSvgText(sym.Width / 2, sym.Height - 8, "middle", null, "#475569", ScaledFontSize(8, sym), "(generated at runtime)")
+                                            }
+                                            else
+                                            {
+                                                @RenderSvgText(sym.Width / 2, sym.Height / 2 + 6, "middle", "middle", "#ef4444", ScaledFontSize(8, sym), "(set ReportName)")
+                                            }
+                                            break;
                                         case "screenembed":
                                             <rect width="@sym.Width" height="@sym.Height"
                                                   fill="#0f172a" stroke="@sym.Stroke" stroke-width="@sym.StrokeWidth" rx="4" />
@@ -827,10 +869,10 @@
             Type = type,
             X = 50 + screen.Symbols.Count * 20 % (screen.Width - 100),
             Y = 50 + screen.Symbols.Count * 20 % (screen.Height - 80),
-            Width = type == "text" ? 120 : type == "line" ? 100 : type is "alarmlist" or "hdachart" or "hdagrid" or "eventlog" ? 500 : type == "editbox" ? 160 : type == "ipcamera" ? 320 : type == "recipe" ? 280 : type == "screenembed" ? 400 : type == "switch" ? 60 : type == "rotaryswitch" ? 80 : type == "knob" ? 100 : type == "hslider" ? 200 : type == "vslider" ? 40 : type == "button" ? 120 : type == "animtext" ? 240 : 80,
-            Height = type == "text" ? 30 : type == "line" ? 2 : type == "indicator" ? 30 : type == "alarmlist" ? 250 : type is "hdachart" or "hdagrid" or "eventlog" ? 220 : type == "editbox" ? 32 : type == "ipcamera" ? 240 : type == "recipe" ? 300 : type == "screenembed" ? 300 : type == "switch" ? 30 : type == "rotaryswitch" ? 80 : type == "knob" ? 100 : type == "hslider" ? 40 : type == "vslider" ? 200 : type == "button" ? 36 : type == "animtext" ? 40 : 40,
-            Label = type == "text" ? "Label" : type == "alarmlist" ? "Alarm List" : type == "hdachart" ? "HDA Chart" : type == "hdagrid" ? "HDA Grid" : type == "eventlog" ? "Event Log" : type == "editbox" ? "" : type == "ipcamera" ? "" : type == "recipe" ? "" : type == "screenembed" ? "Embedded Screen" : type == "switch" ? "" : type == "rotaryswitch" ? "" : type is "knob" or "hslider" or "vslider" ? "" : type == "button" ? "Button" : type == "animtext" ? "Animated Text" : "",
-            Fill = type == "indicator" ? "#44cc44" : type == "alarmlist" ? "#1a1a2e" : type is "hdachart" or "hdagrid" ? "#111827" : type == "eventlog" ? "#0f172a" : type == "editbox" ? "#1e293b" : type == "ipcamera" ? "#0a0a0a" : type == "recipe" ? "#1a1a2e" : type == "screenembed" ? "#0f172a" : type == "switch" ? "#34c759" : type == "rotaryswitch" ? "#2d2d2d" : type == "knob" ? "#3a3a3a" : type is "hslider" or "vslider" ? "#1a1a2e" : type == "button" ? "#3b82f6" : type == "animtext" ? "#00e5ff" : "#4a90d9"
+            Width = type == "text" ? 120 : type == "line" ? 100 : type is "alarmlist" or "hdachart" or "hdagrid" or "eventlog" ? 500 : type == "editbox" ? 160 : type == "ipcamera" ? 320 : type == "recipe" ? 280 : type == "weeklyplanner" ? 500 : type == "reportviewer" ? 360 : type == "screenembed" ? 400 : type == "switch" ? 60 : type == "rotaryswitch" ? 80 : type == "knob" ? 100 : type == "hslider" ? 200 : type == "vslider" ? 40 : type == "button" ? 120 : type == "animtext" ? 240 : 80,
+            Height = type == "text" ? 30 : type == "line" ? 2 : type == "indicator" ? 30 : type == "alarmlist" ? 250 : type is "hdachart" or "hdagrid" or "eventlog" ? 220 : type == "editbox" ? 32 : type == "ipcamera" ? 240 : type == "recipe" ? 300 : type == "weeklyplanner" ? 280 : type == "reportviewer" ? 200 : type == "screenembed" ? 300 : type == "switch" ? 30 : type == "rotaryswitch" ? 80 : type == "knob" ? 100 : type == "hslider" ? 40 : type == "vslider" ? 200 : type == "button" ? 36 : type == "animtext" ? 40 : 40,
+            Label = type == "text" ? "Label" : type == "alarmlist" ? "Alarm List" : type == "hdachart" ? "HDA Chart" : type == "hdagrid" ? "HDA Grid" : type == "eventlog" ? "Event Log" : type == "editbox" ? "" : type == "ipcamera" ? "" : type == "recipe" ? "" : type == "weeklyplanner" ? "" : type == "reportviewer" ? "" : type == "screenembed" ? "Embedded Screen" : type == "switch" ? "" : type == "rotaryswitch" ? "" : type is "knob" or "hslider" or "vslider" ? "" : type == "button" ? "Button" : type == "animtext" ? "Animated Text" : "",
+            Fill = type == "indicator" ? "#44cc44" : type == "alarmlist" ? "#1a1a2e" : type is "hdachart" or "hdagrid" ? "#111827" : type == "eventlog" ? "#0f172a" : type == "editbox" ? "#1e293b" : type == "ipcamera" ? "#0a0a0a" : type == "recipe" ? "#1a1a2e" : type is "weeklyplanner" or "reportviewer" ? "#1a1a2e" : type == "screenembed" ? "#0f172a" : type == "switch" ? "#34c759" : type == "rotaryswitch" ? "#2d2d2d" : type == "knob" ? "#3a3a3a" : type is "hslider" or "vslider" ? "#1a1a2e" : type == "button" ? "#3b82f6" : type == "animtext" ? "#00e5ff" : "#4a90d9"
         };
 
         if (type == "gauge")
@@ -898,6 +940,18 @@
         }
 
         if (type == "screenembed")
+        {
+            sym.Stroke = "#334155";
+            sym.StrokeWidth = 1;
+        }
+
+        if (type == "weeklyplanner")
+        {
+            sym.Stroke = "#334155";
+            sym.StrokeWidth = 1;
+        }
+
+        if (type == "reportviewer")
         {
             sym.Stroke = "#334155";
             sym.StrokeWidth = 1;
@@ -1032,6 +1086,7 @@
         "text" or "indicator" or "editbox" or "button" => 3,
         "gauge" or "svg" or "imagemap" or "animtext" => 4,
         "ipcamera" or "recipe" => 6,
+        "weeklyplanner" or "reportviewer" or "screenembed" => 8,
         "alarmlist" or "hdachart" or "hdagrid" or "eventlog" or "trend" => 12,
         _ => 4
     };
@@ -1045,6 +1100,8 @@
         "trend" => 300,
         "ipcamera" => 260,
         "recipe" => 320,
+        "weeklyplanner" => 300,
+        "reportviewer" or "screenembed" => 260,
         "imagemap" => 200,
         "animtext" => 50,
         _ => 150
