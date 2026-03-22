@@ -5,6 +5,16 @@ using System.Text.Json.Serialization;
 
 namespace SharedModels
 {
+    /// <summary>
+    /// Specifies the allowed string values for a property, enabling dropdown rendering in the property grid.
+    /// </summary>
+    [AttributeUsage(AttributeTargets.Property, AllowMultiple = false)]
+    public class AllowedStringValuesAttribute : Attribute
+    {
+        public string[] Values { get; }
+        public AllowedStringValuesAttribute(params string[] values) => Values = values;
+    }
+
     public class NodeModel
     {
         public DatabaseConfig? Database { get; set; }
@@ -266,6 +276,13 @@ namespace SharedModels
         /// </summary>
         public bool ShowNavigationBar { get; set; }
 
+        /// <summary>
+        /// Navigation style for the runtime viewer: "tabs" (default top tabs), "sidebar" (left sidebar),
+        /// "hamburger" (collapsible hamburger menu), or "bottom" (bottom tab bar).
+        /// </summary>
+        [AllowedStringValues("tabs", "sidebar", "hamburger", "bottom")]
+        public string NavigationStyle { get; set; } = "tabs";
+
         /// <summary>Configuration for the server event log (alarms, auth, driver, system events).</summary>
         public EventLogConfig? EventLog { get; set; }
 
@@ -387,6 +404,7 @@ namespace SharedModels
         public string BackgroundImageId { get; set; } = "";
 
         /// <summary>Layout mode: "svg" for fixed SVG canvas, "responsive" for responsive HTML grid.</summary>
+        [AllowedStringValues("svg", "responsive")]
         public string LayoutMode { get; set; } = "svg";
 
         /// <summary>Number of grid columns for responsive layout.</summary>
@@ -397,6 +415,9 @@ namespace SharedModels
 
         /// <summary>Optional folder path for editor organization (e.g. "Main/Popups"). Ignored by the server.</summary>
         public string Group { get; set; } = "";
+
+        /// <summary>When true (default), this screen appears in the runtime navigation bar/menu.</summary>
+        public bool ShowInNavigation { get; set; } = true;
 
         public List<ScreenSymbol> Symbols { get; set; } = new();
     }

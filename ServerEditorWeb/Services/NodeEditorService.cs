@@ -327,6 +327,10 @@ public class NodeEditorService
     {
         proj.Children.Clear();
 
+        // Server settings node
+        var serverSettingsNode = new ServerSettingsNode(proj.Model.Server) { Parent = proj };
+        proj.Children.Add(serverSettingsNode);
+
         var variableGroup = new VariableGroupNode() { Parent = proj };
         if (proj.Model.Folder != null)
         {

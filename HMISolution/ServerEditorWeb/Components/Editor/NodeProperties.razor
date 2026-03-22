@@ -1,4 +1,4 @@
-﻿@using ServerEditorWeb.Models
+@using ServerEditorWeb.Models
 @using ServerEditorWeb.Services
 @using SharedModels
 
@@ -701,6 +701,12 @@ else if (Node is ScreenNode screen)
                 }
             </select>
         </div>
+        <div class="mb-3 form-check">
+            <input class="form-check-input" type="checkbox" @bind="screen.Screen.ShowInNavigation" @bind:after="OnChanged"
+                   @onfocus="() => CaptureForUndo(screen.Screen, nameof(screen.Screen.ShowInNavigation))" />
+            <label class="form-check-label">Show In Navigation</label>
+            <div class="form-text">When enabled, this screen appears in the runtime navigation bar/menu.</div>
+        </div>
         <div class="text-muted">
             Symbols: @screen.Screen.Symbols.Count
         </div>
@@ -720,6 +726,72 @@ else if (Node is UserGroupListNode)
         <h5>👥 Users & Groups</h5>
         <p class="text-muted">Right-click to add a user group, then add users to groups.</p>
         <p class="text-muted small">Use the Users panel for full management including passwords and access levels.</p>
+    </div>
+}
+else if (Node is ServerSettingsNode ssNode)
+{
+    <div class="properties-panel">
+        <h5>⚙️ Server Settings</h5>
+        <div class="mb-3">
+            <label class="form-label">Endpoint URL</label>
+            <input type="text" class="form-control" @bind="ssNode.Settings.EndpointUrl" @bind:after="OnChanged"
+                   @onfocus="() => CaptureForUndo(ssNode.Settings, nameof(ssNode.Settings.EndpointUrl))" />
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Startup Screen</label>
+            <select class="form-select"
+                    value="@ssNode.Settings.StartupScreen"
+                    @onchange="(e) => { ssNode.Settings.StartupScreen = e.Value?.ToString() ?? string.Empty; OnChanged(); }">
+                <option value="">(none)</option>
+                @foreach (var scr in (Editor.RootModel?.Screens ?? []))
+                {
+                    <option value="@scr.Name">@scr.Name</option>
+                }
+            </select>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Navigation Style</label>
+            <select class="form-select" @bind="ssNode.Settings.NavigationStyle" @bind:after="OnChanged"
+                    @onfocus="() => CaptureForUndo(ssNode.Settings, nameof(ssNode.Settings.NavigationStyle))">
+                <option value="tabs">Tabs (top)</option>
+                <option value="sidebar">Sidebar (left)</option>
+                <option value="hamburger">Hamburger Menu</option>
+                <option value="bottom">Bottom Tab Bar</option>
+            </select>
+            <div class="form-text">Controls how screens are navigated in the RuntimeViewer.</div>
+        </div>
+        <div class="mb-3 form-check">
+            <input class="form-check-input" type="checkbox" @bind="ssNode.Settings.ShowNavigationBar" @bind:after="OnChanged"
+                   @onfocus="() => CaptureForUndo(ssNode.Settings, nameof(ssNode.Settings.ShowNavigationBar))" />
+            <label class="form-check-label">Show Navigation Bar (Kiosk)</label>
+            <div class="form-text">In kiosk mode the navigation bar is hidden by default. Enable this to keep it visible.</div>
+        </div>
+        <div class="mb-3 form-check">
+            <input class="form-check-input" type="checkbox" @bind="ssNode.Settings.EnableAnonymous" @bind:after="OnChanged"
+                   @onfocus="() => CaptureForUndo(ssNode.Settings, nameof(ssNode.Settings.EnableAnonymous))" />
+            <label class="form-check-label">Enable Anonymous Access</label>
+        </div>
+        <div class="mb-3 form-check">
+            <input class="form-check-input" type="checkbox" @bind="ssNode.Settings.EnableEditorLogin" @bind:after="OnChanged"
+                   @onfocus="() => CaptureForUndo(ssNode.Settings, nameof(ssNode.Settings.EnableEditorLogin))" />
+            <label class="form-check-label">Require Editor Login</label>
+        </div>
+        <div class="mb-3 form-check">
+            <input class="form-check-input" type="checkbox" @bind="ssNode.Settings.EnableRuntimeLogin" @bind:after="OnChanged"
+                   @onfocus="() => CaptureForUndo(ssNode.Settings, nameof(ssNode.Settings.EnableRuntimeLogin))" />
+            <label class="form-check-label">Require Runtime Login</label>
+        </div>
+        <div class="mb-3 form-check">
+            <input class="form-check-input" type="checkbox" @bind="ssNode.Settings.RequireStrongPassword" @bind:after="OnChanged"
+                   @onfocus="() => CaptureForUndo(ssNode.Settings, nameof(ssNode.Settings.RequireStrongPassword))" />
+            <label class="form-check-label">Require Strong Passwords</label>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Diagnostics Port</label>
+            <input type="number" class="form-control" @bind="ssNode.Settings.DiagnosticsPort" @bind:after="OnChanged"
+                   @onfocus="() => CaptureForUndo(ssNode.Settings, nameof(ssNode.Settings.DiagnosticsPort))" />
+            <div class="form-text">HTTP port for the diagnostics API. Set to 0 to disable.</div>
+        </div>
     </div>
 }
 else if (Node is UserGroupNode ugNode)

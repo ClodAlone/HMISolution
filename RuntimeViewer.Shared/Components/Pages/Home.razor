@@ -1,4 +1,4 @@
-﻿@page "/"
+@page "/"
 @page "/screen/{ScreenName}"
 @using SharedModels
 @using RuntimeViewer.Shared.Services
@@ -91,17 +91,17 @@ else if (Auth.MustChangePassword)
 else
 {
 
-<div class="rv-app @(Project.IsKiosk ? "rv-kiosk" : "")">
+<div class="rv-app @(Project.IsKiosk ? "rv-kiosk" : "") @(NavStyle == "sidebar" ? "rv-nav-sidebar" : "")">
     @if (!Project.IsKiosk || Project.Settings.ShowNavigationBar)
     {
         @* -- Top bar -- *@
         <div class="rv-topbar">
             <span class="rv-title">Runtime Viewer</span>
 
-            @if (Project.Screens.Count > 1)
+            @if (NavigableScreens.Count > 1 && NavStyle != "bottom" && NavStyle != "hamburger")
             {
                 <div class="rv-screen-tabs">
-                    @foreach (var scr in Project.Screens)
+                    @foreach (var scr in NavigableScreens)
                     {
                         var s = scr;
                         <button class="rv-tab @(s == _currentScreen ? "active" : "")"
@@ -110,6 +110,10 @@ else
                         </button>
                     }
                 </div>
+            }
+            @if (NavStyle == "hamburger" && NavigableScreens.Count > 1)
+            {
+                <button class="rv-hamburger-btn" @onclick="() => _hamburgerOpen = true" title="Navigation">&#x2630;</button>
             }
 
             <div class="rv-status">
@@ -220,7 +224,44 @@ else
             </div>
         }
     </div>
+
+    @* -- Bottom tab navigation -- *@
+    @if (NavStyle == "bottom" && NavigableScreens.Count > 1)
+    {
+        <div class="rv-bottom-nav">
+            @foreach (var scr in NavigableScreens)
+            {
+                var s = scr;
+                <button class="rv-bottom-tab @(s == _currentScreen ? "active" : "")"
+                        @onclick="() => DoNavigateScreen(s.Name)">
+                    <span class="rv-bottom-tab-icon">&#x1F5BC;</span>
+                    <span class="rv-bottom-tab-label">@s.Name</span>
+                </button>
+            }
+        </div>
+    }
 </div>
+
+@* -- Hamburger menu overlay -- *@
+@if (_hamburgerOpen)
+{
+    <div class="rv-hamburger-backdrop" @onclick="() => _hamburgerOpen = false"></div>
+    <div class="rv-hamburger-menu">
+        <div class="rv-hamburger-header">
+            <span>Navigation</span>
+            <button class="rv-hamburger-close" @onclick="() => _hamburgerOpen = false">&#x2715;</button>
+        </div>
+        @foreach (var scr in NavigableScreens)
+        {
+            var s = scr;
+            <div class="rv-hamburger-item @(s == _currentScreen ? "active" : "")"
+                 @onclick="() => { DoNavigateScreen(s.Name); _hamburgerOpen = false; }">
+                <span>&#x1F5BC;</span>
+                <span>@s.Name</span>
+            </div>
+        }
+    </div>
+}
 
 @* -- Kiosk fullscreen prompt -- *@
 @if (Project.IsKiosk && !_isFullscreen)
@@ -305,6 +346,28 @@ else
     </div>
 }
 
+@* -- Toast notifications -- *@
+@if (_toasts.Count > 0)
+{
+    <div class="rv-toast-container">
+        @foreach (var toast in _toasts)
+        {
+            var t = toast;
+            <div class="rv-toast rv-toast-@t.Type @(t.FadeOut ? "rv-toast-fade-out" : "")">
+                <span class="rv-toast-icon">@ToastIcon(t.Type)</span>
+                <div class="rv-toast-body">
+                    <div class="rv-toast-title">@t.Title</div>
+                    @if (!string.IsNullOrEmpty(t.Message))
+                    {
+                        <div class="rv-toast-message">@t.Message</div>
+                    }
+                </div>
+                <button class="rv-toast-close" @onclick="() => DismissToast(t.Id)">&#x2715;</button>
+            </div>
+        }
+    </div>
+}
+
 } @* end else (authenticated) *@
 
 @code {
@@ -344,6 +407,11 @@ else
     private DateTime _lastActivity = DateTime.UtcNow;
     private System.Threading.Timer? _idleTimer;
     private DotNetObjectReference<Home>? _idleRef;
+
+    // Toast notifications
+    private List<ToastItem> _toasts = new();
+    private int _toastId;
+    private bool _hamburgerOpen;
 
     // Diagnostics
     private bool _bestFit = true;
@@ -409,6 +477,7 @@ else
             InvokeAsync(() =>
             {
                 DoLogout();
+                ShowToast("warning", "Session Expired", "You have been logged out due to inactivity.");
                 _loginError = "You have been logged out due to inactivity.";
                 StateHasChanged();
             });
@@ -457,6 +526,10 @@ else
             await Opc.ConnectAsync(Project.Settings.EndpointUrl);
 
         _connecting = false;
+        if (Opc.IsConnected)
+            ShowToast("success", "Connected", "OPC server connection established.");
+        else if (!string.IsNullOrEmpty(Opc.ErrorMessage))
+            ShowToast("error", "Connection Failed", Opc.ErrorMessage);
         StateHasChanged();
     }
 
@@ -464,6 +537,7 @@ else
     {
         InvokeAsync(() =>
         {
+            ShowToast("info", "Navigate", $"Switching to {name}");
             Nav.NavigateTo($"/screen/{Uri.EscapeDataString(name)}");
             StateHasChanged();
         });
@@ -526,6 +600,7 @@ else
             _loginUsername = "";
             _loginPassword = "";
             _lastActivity = DateTime.UtcNow;
+            ShowToast("success", "Signed In", $"Welcome, {Auth.Username}.");
 
             // (Re)connect to OPC with the authenticated credentials
             if (!Opc.IsConnected && !string.IsNullOrEmpty(Project.Settings.EndpointUrl))
@@ -539,6 +614,7 @@ else
 
     private void DoLogout()
     {
+        ShowToast("info", "Signed Out", "You have been logged out.");
         Auth.Logout();
         _opcPassword = null;
         _popupScreen = null;
@@ -645,6 +721,7 @@ else
             _changePwCurrent = "";
             _changePwNew = "";
             _changePwConfirm = "";
+            ShowToast("success", "Password Changed", message);
             // Persist the password change to the nodes.json file
             SaveProjectQuietly();
         }
@@ -717,6 +794,46 @@ else
         }
         return result;
     }
+
+    // ─── Toast helpers ─────────────────────────────────────
+    private record ToastItem(int Id, string Type, string Title, string Message, bool FadeOut = false);
+
+    private void ShowToast(string type, string title, string message = "")
+    {
+        var id = ++_toastId;
+        _toasts.Add(new ToastItem(id, type, title, message));
+        _ = AutoDismissToast(id);
+    }
+
+    private async Task AutoDismissToast(int id)
+    {
+        await Task.Delay(4000);
+        await InvokeAsync(() => { FadeOutToast(id); StateHasChanged(); });
+        await Task.Delay(300);
+        await InvokeAsync(() => { _toasts.RemoveAll(t => t.Id == id); StateHasChanged(); });
+    }
+
+    private void FadeOutToast(int id)
+    {
+        var idx = _toasts.FindIndex(t => t.Id == id);
+        if (idx >= 0) _toasts[idx] = _toasts[idx] with { FadeOut = true };
+    }
+
+    private void DismissToast(int id)
+    {
+        _toasts.RemoveAll(t => t.Id == id);
+    }
+
+    private string ToastIcon(string type) => type switch
+    {
+        "success" => "\u2705",
+        "error" => "\u274C",
+        "warning" => "\u26A0\uFE0F",
+        _ => "\u2139\uFE0F"
+    };
+
+    private List<ScreenConfig> NavigableScreens => Project.Screens.Where(s => s.ShowInNavigation).ToList();
+    private string NavStyle => Project.Settings.NavigationStyle?.ToLowerInvariant() ?? "tabs";
 
     public async void Dispose()
     {

@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using SharedModels;
 
 namespace ServerEditorWeb.Models;
@@ -318,6 +318,22 @@ public class ReportNode : TreeNode
     }
 
     public void SyncName() => Report.Name = Name;
+}
+
+/// <summary>
+/// Tree node for editing the server/runtime settings of a project.
+/// </summary>
+public class ServerSettingsNode : TreeNode
+{
+    public override string TypeName => "ServerSettings";
+    public override string Icon => "⚙️";
+    public ServerSettings Settings { get; }
+
+    public ServerSettingsNode(ServerSettings settings)
+    {
+        Settings = settings;
+        Name = "Server Settings";
+    }
 }
 
 /// <summary>
