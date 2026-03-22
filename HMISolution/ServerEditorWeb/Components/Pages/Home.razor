@@ -7,7 +7,7 @@
 @using ServerEditorWeb.Components.Editor
 @implements IDisposable
 
-<PageTitle>Server Editor</PageTitle>
+<PageTitle>@L["general.serverEditor"]</PageTitle>
 
 @if (_requiresLogin && !Auth.IsAuthenticated)
 {
@@ -20,10 +20,10 @@ else if (Auth.MustChangePassword)
         <div class="login-card">
             <div class="login-header">
                 <span class="login-icon">🔑</span>
-                <h5 class="mb-0">Change Password</h5>
+                <h5 class="mb-0">@L["dialog.changePw.title"]</h5>
             </div>
             <div class="login-body">
-                <p class="text-muted small">You must change your password before continuing.</p>
+                <p class="text-muted small">@L["dialog.changePw.message"]</p>
                 <p class="text-muted small fst-italic" style="font-size: 10px;">
                     @(SharedModels.PasswordValidator.GetRequirementsText(Editor.RootModel?.Server?.RequireStrongPassword ?? false))
                 </p>
@@ -36,11 +36,11 @@ else if (Auth.MustChangePassword)
                     <div class="alert alert-success py-1 small mb-2">@_changePwSuccess</div>
                 }
                 <div class="mb-2">
-                    <label class="form-label small">Current Password</label>
+                    <label class="form-label small">@L["dialog.changePw.currentPw"]</label>
                     <input type="password" class="form-control" @bind="_changePwCurrent" placeholder="Current password" />
                 </div>
                 <div class="mb-2">
-                    <label class="form-label small">New Password</label>
+                    <label class="form-label small">@L["dialog.changePw.newPw"]</label>
                     <input type="password" class="form-control" @bind="_changePwNew" placeholder="New password" />
                 </div>
                 <div class="mb-3">
@@ -48,7 +48,7 @@ else if (Auth.MustChangePassword)
                     <input type="password" class="form-control" @bind="_changePwConfirm" placeholder="Confirm password"
                            @onkeydown="OnChangePwKeyDown" />
                 </div>
-                <button class="btn btn-primary w-100" @onclick="DoChangePassword">Change Password</button>
+                <button class="btn btn-primary w-100" @onclick="DoChangePassword">@L["dialog.changePw.submit"]</button>
             </div>
         </div>
     </div>
@@ -65,17 +65,17 @@ else
         <div class="menubar">
             @* File menu *@
             <div class="menubar-item @(_openMenu == "file" ? "open" : "")" @onclick='() => ToggleMenu("file")' @onmouseenter='() => HoverMenu("file")'>
-                File
+                @L["menu.file"]
                 @if (_openMenu == "file")
                 {
                     <div class="menubar-dropdown">
                         <div class="menu-item" @onclick="NewFileMenu" @onclick:stopPropagation>
-                            <span class="menu-icon">📄</span><span class="menu-label">New</span><span class="menu-shortcut">Ctrl+N</span>
+                            <span class="menu-icon">📄</span><span class="menu-label">@L["menu.file.new"]</span><span class="menu-shortcut">Ctrl+N</span>
                         </div>
                         <div class="menu-separator"></div>
-                        <div class="menu-section-label">Open</div>
+                        <div class="menu-section-label">@L["menu.file.open"]</div>
                         <div class="menu-item" @onclick="OpenFileBrowser" @onclick:stopPropagation>
-                            <span class="menu-icon">🗂️</span><span class="menu-label">Browse Server…</span><span class="menu-shortcut">Ctrl+O</span>
+                            <span class="menu-icon">🗂️</span><span class="menu-label">@L["menu.file.browseServer"]</span><span class="menu-shortcut">Ctrl+O</span>
                         </div>
                         @foreach (var file in _availableFiles.Take(5))
                         {
@@ -88,7 +88,7 @@ else
                         @if (Editor.RecentFiles.Count > 0)
                         {
                             <div class="menu-separator"></div>
-                            <div class="menu-section-label">Recent</div>
+                            <div class="menu-section-label">@L["menu.file.recent"]</div>
                             @foreach (var file in Editor.RecentFiles.Where(f => !_availableFiles.Contains(f)).Take(5))
                             {
                                 var f = file;
@@ -100,10 +100,10 @@ else
                         }
                         <div class="menu-separator"></div>
                         <div class="menu-item @(!Editor.HasUnsavedChanges ? "disabled" : "")" @onclick="SaveMenu" @onclick:stopPropagation>
-                            <span class="menu-icon">💾</span><span class="menu-label">Save</span><span class="menu-shortcut">Ctrl+S</span>
+                            <span class="menu-icon">💾</span><span class="menu-label">@L["menu.file.save"]</span><span class="menu-shortcut">Ctrl+S</span>
                         </div>
                         <div class="menu-item" @onclick="SaveAsMenu" @onclick:stopPropagation>
-                            <span class="menu-icon">💾</span><span class="menu-label">Save As…</span><span class="menu-shortcut">Ctrl+Shift+S</span>
+                            <span class="menu-icon">💾</span><span class="menu-label">@L["menu.file.saveAs"]</span><span class="menu-shortcut">Ctrl+Shift+S</span>
                         </div>
                     </div>
                 }
@@ -111,21 +111,21 @@ else
 
             @* Edit menu *@
             <div class="menubar-item @(_openMenu == "edit" ? "open" : "")" @onclick='() => ToggleMenu("edit")' @onmouseenter='() => HoverMenu("edit")'>
-                Edit
+                @L["menu.edit"]
                 @if (_openMenu == "edit")
                 {
                     <div class="menubar-dropdown">
                         <div class="menu-item @(Editor.SelectedItem is not (FolderNode or VariableGroupNode) ? "disabled" : "")" @onclick="AddFolderMenu" @onclick:stopPropagation>
-                            <span class="menu-icon">📁</span><span class="menu-label">Add Folder</span>
+                            <span class="menu-icon">📁</span><span class="menu-label">@L["menu.edit.addFolder"]</span>
                         </div>
                         <div class="menu-item @(Editor.SelectedItem is not (FolderNode or VariableGroupNode) ? "disabled" : "")" @onclick="AddVariableMenu" @onclick:stopPropagation>
-                            <span class="menu-icon">🏷️</span><span class="menu-label">Add Variable</span>
+                            <span class="menu-icon">🏷️</span><span class="menu-label">@L["menu.edit.addVariable"]</span>
                         </div>
                         <div class="menu-item @(Editor.SelectedItem is not ScriptGroupNode ? "disabled" : "")" @onclick="AddScriptMenu" @onclick:stopPropagation>
-                            <span class="menu-icon">⚡</span><span class="menu-label">Add Script</span>
+                            <span class="menu-icon">⚡</span><span class="menu-label">@L["menu.edit.addScript"]</span>
                         </div>
                         <div class="menu-item @(Editor.SelectedItem is not ScreenGroupNode ? "disabled" : "")" @onclick="AddScreenMenu" @onclick:stopPropagation>
-                            <span class="menu-icon">🖼️</span><span class="menu-label">Add Screen</span>
+                            <span class="menu-icon">🖼️</span><span class="menu-label">@L["menu.edit.addScreen"]</span>
                         </div>
                         <div class="menu-separator"></div>
                         @{
@@ -133,14 +133,14 @@ else
                             var canPaste = Clipboard.CanPasteInto(Editor.SelectedItem);
                         }
                         <div class="menu-item @(!canCopy ? "disabled" : "")" @onclick="CopyMenu" @onclick:stopPropagation>
-                            <span class="menu-icon">📋</span><span class="menu-label">Copy</span><span class="menu-shortcut">Ctrl+C</span>
+                            <span class="menu-icon">📋</span><span class="menu-label">@L["menu.edit.copy"]</span><span class="menu-shortcut">Ctrl+C</span>
                         </div>
                         <div class="menu-item @(!canPaste ? "disabled" : "")" @onclick="PasteMenu" @onclick:stopPropagation>
-                            <span class="menu-icon">📌</span><span class="menu-label">Paste</span><span class="menu-shortcut">Ctrl+V</span>
+                            <span class="menu-icon">📌</span><span class="menu-label">@L["menu.edit.paste"]</span><span class="menu-shortcut">Ctrl+V</span>
                         </div>
                         <div class="menu-separator"></div>
                         <div class="menu-item danger @(Editor.SelectedItem?.Parent == null ? "disabled" : "")" @onclick="DeleteMenu" @onclick:stopPropagation>
-                            <span class="menu-icon">🗑</span><span class="menu-label">Delete</span><span class="menu-shortcut">Del</span>
+                            <span class="menu-icon">🗑</span><span class="menu-label">@L["menu.edit.delete"]</span><span class="menu-shortcut">Del</span>
                         </div>
                     </div>
                 }
@@ -148,11 +148,11 @@ else
 
              @* View menu *@
             <div class="menubar-item @(_openMenu == "view" ? "open" : "")" @onclick='() => ToggleMenu("view")' @onmouseenter='() => HoverMenu("view")'>
-                View
+                @L["menu.view"]
                 @if (_openMenu == "view")
                 {
                     <div class="menubar-dropdown">
-                        <div class="menu-section-label">Panels</div>
+                        <div class="menu-section-label">@L["menu.view.panels"]</div>
                         @foreach (var p in _panels)
                         {
                             var panel = p;
@@ -164,7 +164,7 @@ else
                         <div class="menu-separator"></div>
                         <div class="menu-item" @onclick="ToggleMaximize" @onclick:stopPropagation>
                             <span class="menu-check">@(_dockContainer?.IsMaximized == true ? "✓" : "")</span>
-                            <span class="menu-label">⬜ Maximize Active Panel</span>
+                            <span class="menu-label">⬜ @L["menu.view.maximize"]</span>
                             <span class="menu-shortcut">Esc</span>
                         </div>
                     </div>
@@ -173,54 +173,76 @@ else
 
             @* Settings menu *@
             <div class="menubar-item @(_openMenu == "settings" ? "open" : "")" @onclick='() => ToggleMenu("settings")' @onmouseenter='() => HoverMenu("settings")'>
-                Settings
+                @L["menu.settings"]
                 @if (_openMenu == "settings")
                 {
                     <div class="menubar-dropdown">
-                        <div class="menu-section-label">Theme</div>
+                        <div class="menu-section-label">@L["menu.settings.theme"]</div>
                         <div class="menu-item" @onclick="SetLightTheme" @onclick:stopPropagation>
                             <span class="menu-check">@(Theme.Theme == "light" ? "●" : "")</span>
-                            <span class="menu-label">☀️ Light</span>
+                            <span class="menu-label">☀️ @L["menu.settings.light"]</span>
                         </div>
                         <div class="menu-item" @onclick="SetDarkTheme" @onclick:stopPropagation>
                             <span class="menu-check">@(Theme.Theme == "dark" ? "●" : "")</span>
-                            <span class="menu-label">🌙 Dark</span>
+                            <span class="menu-label">🌙 @L["menu.settings.dark"]</span>
                         </div>
                         <div class="menu-separator"></div>
-                        <div class="menu-section-label">Server Endpoint</div>
-                        <div class="menu-item" style="pointer-events: none; padding: 4px 14px;">
-                            <input type="text" class="form-control form-control-sm"
-                                   style="width: 280px; pointer-events: all;"
-                                   value="@Editor.ServerEndpointUrl"
-                                   @onclick:stopPropagation
-                                   @onchange="e => { Editor.SetServerEndpointUrl(e.Value?.ToString() ?? string.Empty); }" />
-                        </div>
                         <div class="menu-separator"></div>
-                        <div class="menu-section-label">Project Protection</div>
+                        <div class="menu-section-label">@L["menu.settings.language"]</div>
+                        @foreach (var loc in EditorLocalizationService.SupportedLocales)
+                        {
+                            var code = loc.Code;
+                            <div class="menu-item" @onclick="() => SetLocale(code)" @onclick:stopPropagation>
+                                <span class="menu-check">@(L.Locale == code ? "●" : "")</span>
+                                <span class="menu-label">@loc.Flag @loc.Name</span>
+                            </div>
+                        }
+                        <div class="menu-separator"></div>
+                        <div class="menu-section-label">@L["menu.settings.protection"]</div>
                         @if (Editor.IsActiveProjectLocked)
                         {
                             <div class="menu-item" @onclick="OpenUnlockDialog" @onclick:stopPropagation>
-                                <span class="menu-icon">🔓</span><span class="menu-label">Unlock Project…</span>
+                                <span class="menu-icon">🔓</span><span class="menu-label">@L["menu.settings.unlock"]</span>
                             </div>
                         }
                         else if (Editor.ActiveProjectHasPassword)
                         {
                             <div class="menu-item" @onclick="LockProjectMenu" @onclick:stopPropagation>
-                                <span class="menu-icon">🔒</span><span class="menu-label">Lock Project</span>
+                                <span class="menu-icon">🔒</span><span class="menu-label">@L["menu.settings.lock"]</span>
                             </div>
                             <div class="menu-item" @onclick="OpenSetPasswordDialog" @onclick:stopPropagation>
-                                <span class="menu-icon">🔑</span><span class="menu-label">Change Password…</span>
+                                <span class="menu-icon">🔑</span><span class="menu-label">@L["menu.settings.changePw"]</span>
                             </div>
                             <div class="menu-item danger" @onclick="OpenRemovePasswordDialog" @onclick:stopPropagation>
-                                <span class="menu-icon">🗑</span><span class="menu-label">Remove Password…</span>
+                                <span class="menu-icon">🗑</span><span class="menu-label">@L["menu.settings.removePw"]</span>
                             </div>
                         }
                         else
                         {
                             <div class="menu-item @(Editor.RootModel == null ? "disabled" : "")" @onclick="OpenSetPasswordDialog" @onclick:stopPropagation>
-                                <span class="menu-icon">🔒</span><span class="menu-label">Set Password…</span>
+                                <span class="menu-icon">🔒</span><span class="menu-label">@L["menu.settings.setPw"]</span>
                             </div>
                         }
+                    </div>
+                }
+            </div>
+
+            @* Help menu *@
+            <div class="menubar-item @(_openMenu == "helpmenu" ? "open" : "")" @onclick='() => ToggleMenu("helpmenu")' @onmouseenter='() => HoverMenu("helpmenu")'>
+                @L["menu.help"]
+                @if (_openMenu == "helpmenu")
+                {
+                    <div class="menubar-dropdown">
+                        <div class="menu-item" @onclick="ShowHelpPanel" @onclick:stopPropagation>
+                            <span class="menu-icon">&#x2753;</span><span class="menu-label">@L["menu.help.help"]</span><span class="menu-shortcut">F1</span>
+                        </div>
+                        <div class="menu-item" @onclick="ShowProblemsPanel" @onclick:stopPropagation>
+                            <span class="menu-icon">&#x26A0;&#xFE0F;</span><span class="menu-label">@L["menu.help.validate"]</span>
+                        </div>
+                        <div class="menu-separator"></div>
+                        <div class="menu-item" @onclick="ShowAboutDialog" @onclick:stopPropagation>
+                            <span class="menu-icon">&#x2139;&#xFE0F;</span><span class="menu-label">@L["menu.help.about"]</span>
+                        </div>
                     </div>
                 }
             </div>
@@ -232,25 +254,25 @@ else
                 @if (Auth.IsAuthenticated)
                 {
                     <span class="badge bg-info text-dark" style="font-size: 10px;" title="@Auth.AccessLevel access">👤 @Auth.Username</span>
-                    <button class="dock-btn" title="Logout" @onclick="Logout" @onclick:stopPropagation>🔓</button>
+                    <button class="dock-btn" title="@L["toolbar.logout"]" @onclick="Logout" @onclick:stopPropagation>🔓</button>
                 }
                 @if (Editor.IsActiveProjectLocked)
                 {
-                    <span class="badge bg-danger" style="font-size: 10px; cursor: pointer;" title="Project is locked — click to unlock" @onclick="OpenUnlockDialog" @onclick:stopPropagation>🔒 Locked</span>
+                    <span class="badge bg-danger" style="font-size: 10px; cursor: pointer;" title="@L["general.projectLocked"]" @onclick="OpenUnlockDialog" @onclick:stopPropagation>🔒 @L["status.locked"]</span>
                 }
                 else if (Editor.ActiveProjectHasPassword)
                 {
-                    <span class="badge bg-success" style="font-size: 10px;" title="Project is unlocked">🔓 Unlocked</span>
+                    <span class="badge bg-success" style="font-size: 10px;" title="@L["general.projectUnlocked"]">🔓 @L["status.unlocked"]</span>
                 }
                 @if (Editor.HasUnsavedChanges)
                 {
-                    <span class="badge bg-warning text-dark" style="font-size: 10px;">Unsaved</span>
+                    <span class="badge bg-warning text-dark" style="font-size: 10px;">@L["status.unsaved"]</span>
                 }
                 @if (!string.IsNullOrEmpty(Editor.CurrentFilePath))
                 {
                     <span title="@Editor.CurrentFilePath">@Path.GetFileName(Editor.CurrentFilePath)</span>
                 }
-                <button class="dock-btn" title="Toggle theme" @onclick="ToggleTheme" @onclick:stopPropagation>
+                <button class="dock-btn" title="@L["toolbar.toggleTheme"]" @onclick="ToggleTheme" @onclick:stopPropagation>
                     @(Theme.Theme == "dark" ? "☀️" : "🌙")
                 </button>
             </div>
@@ -260,50 +282,50 @@ else
     @* Toolbar *@
     <div class="editor-iconbar">
         @* File operations *@
-        <button class="iconbar-btn" title="New (Ctrl+N)" @onclick="NewFile">📄</button>
-        <button class="iconbar-btn" title="Save (Ctrl+S)" @onclick="Save"
+        <button class="iconbar-btn" title="@($"{L["toolbar.new"]} (Ctrl+N)")" @onclick="NewFile">📄</button>
+        <button class="iconbar-btn" title="@($"{L["toolbar.save"]} (Ctrl+S)")" @onclick="Save"
                 disabled="@(!Editor.HasUnsavedChanges)">💾</button>
-        <button class="iconbar-btn" title="Save As… (Ctrl+Shift+S)" @onclick="() => { _saveAsPath = Editor.CurrentFilePath ?? string.Empty; _showSaveAsDialog = true; }">📥</button>
+        <button class="iconbar-btn" title="@($"{L["toolbar.saveAs"]} (Ctrl+Shift+S)")" @onclick="() => { _saveAsPath = Editor.CurrentFilePath ?? string.Empty; _showSaveAsDialog = true; }">📥</button>
 
         <span class="iconbar-sep"></span>
 
         @* Edit operations *@
-        <button class="iconbar-btn" title="@($"Undo{(UndoRedo.UndoDescription != null ? $" — {UndoRedo.UndoDescription}" : "")} (Ctrl+Z)")" @onclick="PerformUndo"
+        <button class="iconbar-btn" title="@($"{L["toolbar.undo"]}{(UndoRedo.UndoDescription != null ? $" — {UndoRedo.UndoDescription}" : "")} (Ctrl+Z)")" @onclick="PerformUndo"
                 disabled="@(!UndoRedo.CanUndo)">↩️</button>
-        <button class="iconbar-btn" title="@($"Redo{(UndoRedo.RedoDescription != null ? $" — {UndoRedo.RedoDescription}" : "")} (Ctrl+Y)")" @onclick="PerformRedo"
+        <button class="iconbar-btn" title="@($"{L["toolbar.redo"]}{(UndoRedo.RedoDescription != null ? $" — {UndoRedo.RedoDescription}" : "")} (Ctrl+Y)")" @onclick="PerformRedo"
                 disabled="@(!UndoRedo.CanRedo)">↪️</button>
-        <button class="iconbar-btn" title="Copy (Ctrl+C)" @onclick="() => Editor.CopySelected(Clipboard)"
+        <button class="iconbar-btn" title="@($"{L["toolbar.copy"]} (Ctrl+C)")" @onclick="() => Editor.CopySelected(Clipboard)"
                 disabled="@(!CanCopySelection())">📋</button>
-        <button class="iconbar-btn" title="Paste (Ctrl+V)" @onclick="() => Editor.PasteFromClipboard(Clipboard)"
+        <button class="iconbar-btn" title="@($"{L["toolbar.paste"]} (Ctrl+V)")" @onclick="() => Editor.PasteFromClipboard(Clipboard)"
                 disabled="@(!Clipboard.CanPasteInto(Editor.SelectedItem))">📌</button>
-        <button class="iconbar-btn" title="Delete (Del)" @onclick="Delete"
+        <button class="iconbar-btn" title="@($"{L["toolbar.delete"]} (Del)")" @onclick="Delete"
                 disabled="@(!CanDeleteSelection())">🗑️</button>
 
         <span class="iconbar-sep"></span>
 
         @* Add operations *@
-        <button class="iconbar-btn" title="Add Folder" @onclick="AddFolder"
+        <button class="iconbar-btn" title="@L["toolbar.addFolder"]" @onclick="AddFolder"
                 disabled="@(!CanAddFolder())">📁</button>
-        <button class="iconbar-btn" title="Add Variable" @onclick="AddVariable"
+        <button class="iconbar-btn" title="@L["toolbar.addVariable"]" @onclick="AddVariable"
                 disabled="@(Editor.SelectedItem is not (FolderNode or VariableGroupNode))">🏷️</button>
-        <button class="iconbar-btn" title="Add Script" @onclick="AddScript"
+        <button class="iconbar-btn" title="@L["toolbar.addScript"]" @onclick="AddScript"
                 disabled="@(Editor.SelectedItem is not (ScriptGroupNode or ResourceFolderNode { ResourceKind: "Script" }))">⚡</button>
-        <button class="iconbar-btn" title="Add PLC Program" @onclick="AddPlcProgram"
+        <button class="iconbar-btn" title="@L["toolbar.addPlc"]" @onclick="AddPlcProgram"
                 disabled="@(Editor.SelectedItem is not (PlcGroupNode or ResourceFolderNode { ResourceKind: "PlcProgram" }))">⚙️</button>
-        <button class="iconbar-btn" title="Add Recipe" @onclick="AddRecipe"
+        <button class="iconbar-btn" title="@L["toolbar.addRecipe"]" @onclick="AddRecipe"
                 disabled="@(Editor.SelectedItem is not RecipeGroupNode)">📦</button>
-        <button class="iconbar-btn" title="Add Scheduler" @onclick="AddScheduler"
+        <button class="iconbar-btn" title="@L["toolbar.addScheduler"]" @onclick="AddScheduler"
                 disabled="@(Editor.SelectedItem is not SchedulerGroupNode)">📅</button>
-        <button class="iconbar-btn" title="Add Report" @onclick="AddReport"
+        <button class="iconbar-btn" title="@L["toolbar.addReport"]" @onclick="AddReport"
                 disabled="@(Editor.SelectedItem is not ReportGroupNode)">📄</button>
-        <button class="iconbar-btn" title="Add Screen" @onclick="AddScreen"
+        <button class="iconbar-btn" title="@L["toolbar.addScreen"]" @onclick="AddScreen"
                 disabled="@(Editor.SelectedItem is not (ScreenGroupNode or ResourceFolderNode { ResourceKind: "Screen" }))">🖼️</button>
 
         <span class="iconbar-sep"></span>
 
         @* Layout *@
         <button class="iconbar-btn @(_dockContainer?.IsMaximized == true ? "iconbar-btn-active" : "")"
-                title="@(_dockContainer?.IsMaximized == true ? "Restore layout (Esc)" : "Maximize active panel")"
+                title="@(_dockContainer?.IsMaximized == true ? $"{L["toolbar.restore"]} (Esc)" : L["toolbar.maximize"])"
                 @onclick="ToggleMaximize">
             @(_dockContainer?.IsMaximized == true ? "🗗" : "⬜")
         </button>
@@ -322,7 +344,9 @@ else
                     OnAddScreen="OnAddScreen" OnAddUserGroup="OnAddUserGroup" OnAddUser="OnAddUser"
                     OnDelete="OnDelete"
                     OnCopy="OnCopyNode" OnPaste="OnPasteNode"
-                    OnSetActiveProject="OnSetActiveProject" OnCloseProject="OnCloseProject" />
+                    OnSetActiveProject="OnSetActiveProject" OnCloseProject="OnCloseProject"
+                    OnFindReferences="OnFindReferences"
+                    OnAddToWatch="OnAddToWatch" />
         </div>
         }
 
@@ -408,6 +432,14 @@ else
                 {
                     <LadderEditorPanel Node="Editor.SelectedItem" OnPropertyChanged="OnPropertyChanged" />
                 }
+                else if (context.Id == "scripteditor")
+                {
+                    <ScriptEditorPanel Node="Editor.SelectedItem" OnPropertyChanged="OnPropertyChanged" />
+                }
+                else if (context.Id == "plceditor")
+                {
+                    <PlcEditorPanel Node="Editor.SelectedItem" OnPropertyChanged="OnPropertyChanged" />
+                }
                 else if (context.Id == "scheduler")
                 {
                     <SchedulerEditorPanel Node="Editor.SelectedItem" OnPropertyChanged="OnPropertyChanged" />
@@ -419,6 +451,22 @@ else
                 else if (context.Id == "crashes")
                 {
                     <CrashReportsPanel />
+                }
+                else if (context.Id == "xref")
+                {
+                    <CrossReferencePanel @ref="_crossRefPanel" />
+                }
+                else if (context.Id == "watch")
+                {
+                    <WatchTablePanel @ref="_watchTablePanel" />
+                }
+                else if (context.Id == "problems")
+                {
+                    <ProblemsPanel @ref="_problemsPanel" OnNavigate="OnProblemNavigate" />
+                }
+                else if (context.Id == "help")
+                {
+                    <HelpPanel @ref="_helpPanel" />
                 }
             </PanelContent>
         </DockContainer>
@@ -433,23 +481,23 @@ else
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header py-2">
-                    <h6 class="modal-title">💾 Save As</h6>
+                    <h6 class="modal-title">💾 @L["dialog.saveAs.title"]</h6>
                     <button type="button" class="btn-close btn-close-sm" @onclick="() => _showSaveAsDialog = false"></button>
                 </div>
                 <div class="modal-body">
-                    <label class="form-label">File path:</label>
+                    <label class="form-label">@L["dialog.saveAs.filePath"]</label>
                     <input type="text" class="form-control form-control-sm" @bind="_saveAsPath"
                            placeholder="C:\path\to\nodes.json" />
                     @if (!string.IsNullOrEmpty(Editor.CurrentFilePath))
                     {
                         <div class="mt-2 small text-muted">
-                            Current: <code>@Editor.CurrentFilePath</code>
+                            @L["dialog.saveAs.current"] <code>@Editor.CurrentFilePath</code>
                         </div>
                     }
                 </div>
                 <div class="modal-footer py-2">
-                    <button class="btn btn-sm btn-secondary" @onclick="() => _showSaveAsDialog = false">Cancel</button>
-                    <button class="btn btn-sm btn-success" @onclick="SaveAs" disabled="@string.IsNullOrEmpty(_saveAsPath)">💾 Save</button>
+                    <button class="btn btn-sm btn-secondary" @onclick="() => _showSaveAsDialog = false">@L["dialog.saveAs.cancel"]</button>
+                    <button class="btn btn-sm btn-success" @onclick="SaveAs" disabled="@string.IsNullOrEmpty(_saveAsPath)">💾 @L["dialog.saveAs.save"]</button>
                 </div>
             </div>
         </div>
@@ -463,16 +511,16 @@ else
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header py-2">
-                    <h6 class="modal-title">⚠️ Unsaved Changes</h6>
+                    <h6 class="modal-title">⚠️ @L["dialog.unsaved.title"]</h6>
                     <button type="button" class="btn-close btn-close-sm" @onclick="UnsavedDialogCancel"></button>
                 </div>
                 <div class="modal-body">
-                    <p class="mb-0">The project <strong>@_pendingCloseProject.Name</strong> has unsaved changes. Do you want to save before closing?</p>
+                    <p class="mb-0">@string.Format(L["dialog.unsaved.message"], _pendingCloseProject.Name)</p>
                 </div>
                 <div class="modal-footer py-2">
-                    <button class="btn btn-sm btn-secondary" @onclick="UnsavedDialogCancel">Cancel</button>
-                    <button class="btn btn-sm btn-outline-danger" @onclick="UnsavedDialogDiscard">Discard</button>
-                    <button class="btn btn-sm btn-success" @onclick="UnsavedDialogSave">💾 Save</button>
+                    <button class="btn btn-sm btn-secondary" @onclick="UnsavedDialogCancel">@L["dialog.unsaved.cancel"]</button>
+                    <button class="btn btn-sm btn-outline-danger" @onclick="UnsavedDialogDiscard">@L["dialog.unsaved.discard"]</button>
+                    <button class="btn btn-sm btn-success" @onclick="UnsavedDialogSave">💾 @L["dialog.unsaved.save"]</button>
                 </div>
             </div>
         </div>
@@ -486,7 +534,7 @@ else
         <div class="modal-dialog modal-dialog-centered modal-lg">
             <div class="modal-content">
                 <div class="modal-header py-2">
-                    <h6 class="modal-title">📂 Open Project File</h6>
+                    <h6 class="modal-title">📂 @L["dialog.open.title"]</h6>
                     <button type="button" class="btn-close btn-close-sm" @onclick="() => _showFileBrowser = false"></button>
                 </div>
                 <div class="modal-body p-0" style="max-height: 450px; display: flex; flex-direction: column;">
@@ -522,7 +570,7 @@ else
                                 @if (_browseDirs.Length == 0 && _browseFiles.Length == 0)
                                 {
                                     <tr><td colspan="3" class="text-center text-muted py-3">
-                                        @(string.IsNullOrEmpty(_browsePath) ? "Select a drive or enter a path" : "Empty folder or access denied")
+                                        @(string.IsNullOrEmpty(_browsePath) ? L["dialog.open.empty"] : L["dialog.open.emptyFolder"])
                                     </td></tr>
                                 }
                                 @foreach (var dir in _browseDirs)
@@ -558,9 +606,9 @@ else
                     }
                 </div>
                 <div class="modal-footer py-2">
-                    <button class="btn btn-sm btn-secondary" @onclick="() => _showFileBrowser = false">Cancel</button>
+                    <button class="btn btn-sm btn-secondary" @onclick="() => _showFileBrowser = false">@L["dialog.open.cancel"]</button>
                     <button class="btn btn-sm btn-primary" @onclick="() => BrowseLoadFile(_browseSelectedFile)"
-                            disabled="@string.IsNullOrEmpty(_browseSelectedFile)">📂 Open</button>
+                            disabled="@string.IsNullOrEmpty(_browseSelectedFile)">📂 @L["dialog.open.open"]</button>
                 </div>
             </div>
         </div>
@@ -574,6 +622,11 @@ else
     </div>
 }
 
+@if (_showAboutDialog)
+{
+    <AboutDialog OnClose="() => _showAboutDialog = false" />
+}
+
 
 @if (_showUnlockDialog)
 {
@@ -582,24 +635,24 @@ else
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header py-2">
-                    <h6 class="modal-title">&#x1F512; Unlock Project</h6>
+                    <h6 class="modal-title">&#x1F512; @L["dialog.unlock.title"]</h6>
                     <button type="button" class="btn-close btn-close-sm" @onclick="() => { _showUnlockDialog = false; _unlockError = string.Empty; }"></button>
                 </div>
                 <div class="modal-body">
-                    <p class="text-muted small">This project is password-protected. Enter the password to unlock it for editing.</p>
+                    <p class="text-muted small">@L["dialog.unlock.message"]</p>
                     @if (!string.IsNullOrEmpty(_unlockError))
                     {
                         <div class="alert alert-danger py-1 small mb-2">@_unlockError</div>
                     }
                     <div class="mb-2">
-                        <label class="form-label small">Password</label>
+                        <label class="form-label small">@L["dialog.unlock.password"]</label>
                         <input type="password" class="form-control" @bind="_unlockPassword"
                                @onkeydown="OnUnlockKeyDown" placeholder="Project password" />
                     </div>
                 </div>
                 <div class="modal-footer py-2">
-                    <button class="btn btn-sm btn-secondary" @onclick="() => { _showUnlockDialog = false; _unlockError = string.Empty; }">Cancel</button>
-                    <button class="btn btn-sm btn-primary" @onclick="DoUnlockProject">&#x1F513; Unlock</button>
+                    <button class="btn btn-sm btn-secondary" @onclick="() => { _showUnlockDialog = false; _unlockError = string.Empty; }">@L["dialog.unlock.cancel"]</button>
+                    <button class="btn btn-sm btn-primary" @onclick="DoUnlockProject">&#x1F513; @L["dialog.unlock.unlock"]</button>
                 </div>
             </div>
         </div>
@@ -613,18 +666,18 @@ else
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header py-2">
-                    <h6 class="modal-title">&#x1F511; @(Editor.ActiveProjectHasPassword ? "Change" : "Set") Project Password</h6>
+                    <h6 class="modal-title">&#x1F511; @(Editor.ActiveProjectHasPassword ? L["dialog.setPw.title.change"] : L["dialog.setPw.title.set"])</h6>
                     <button type="button" class="btn-close btn-close-sm" @onclick="CloseSetPasswordDialog"></button>
                 </div>
                 <div class="modal-body">
                     <p class="text-muted small">
                         @if (Editor.ActiveProjectHasPassword)
                         {
-                            <text>Change or remove the project protection password.</text>
+                            <text>@L["dialog.setPw.msgChange"]</text>
                         }
                         else
                         {
-                            <text>Set a password to protect this project. When locked, the project cannot be edited without the correct password.</text>
+                            <text>@L["dialog.setPw.msgSet"]</text>
                         }
                     </p>
                     @if (!string.IsNullOrEmpty(_setPwError))
@@ -638,24 +691,24 @@ else
                     @if (Editor.ActiveProjectHasPassword)
                     {
                         <div class="mb-2">
-                            <label class="form-label small">Current Password</label>
+                            <label class="form-label small">@L["dialog.setPw.currentPw"]</label>
                             <input type="password" class="form-control" @bind="_setPwCurrent" placeholder="Current password" />
                         </div>
                     }
                     <div class="mb-2">
-                        <label class="form-label small">New Password</label>
+                        <label class="form-label small">@L["dialog.setPw.newPw"]</label>
                         <input type="password" class="form-control" @bind="_setPwNew" placeholder="New password" />
                     </div>
                     <div class="mb-3">
-                        <label class="form-label small">Confirm Password</label>
+                        <label class="form-label small">@L["dialog.setPw.confirmPw"]</label>
                         <input type="password" class="form-control" @bind="_setPwConfirm" placeholder="Confirm password"
                                @onkeydown="OnSetPwKeyDown" />
                     </div>
                 </div>
                 <div class="modal-footer py-2">
-                    <button class="btn btn-sm btn-secondary" @onclick="CloseSetPasswordDialog">Cancel</button>
+                    <button class="btn btn-sm btn-secondary" @onclick="CloseSetPasswordDialog">@L["dialog.setPw.cancel"]</button>
                     <button class="btn btn-sm btn-success" @onclick="DoSetProjectPassword">
-                        &#x1F512; @(Editor.ActiveProjectHasPassword ? "Change" : "Set") Password
+                        &#x1F512; @(Editor.ActiveProjectHasPassword ? L["dialog.setPw.change"] : L["dialog.setPw.set"])
                     </button>
                 </div>
             </div>
@@ -670,12 +723,18 @@ else
     [Inject] private IJSRuntime JS { get; set; } = default!;
     [Inject] private UndoRedoService UndoRedo { get; set; } = default!;
     [Inject] private PropertyGridService PropertyGrid { get; set; } = default!;
+    [Inject] private EditorLocalizationService L { get; set; } = default!;
 
     private LogViewerService _serverLogService = new();
     private LogViewerService _appLogService = new();
     private JsonEditor? _jsonEditor;
     private DockContainer? _dockContainer;
     private ScreenEditorPanel? _screenEditorPanel;
+    private CrossReferencePanel? _crossRefPanel;
+    private WatchTablePanel? _watchTablePanel;
+    private ProblemsPanel? _problemsPanel;
+    private HelpPanel? _helpPanel;
+    private bool _showAboutDialog;
 
     private string _selectedFile = "";
     private string[] _availableFiles = [];
@@ -743,11 +802,17 @@ else
         new() { Id = "images", Title = "Images", Icon = "🖼️", Zone = "center" },
         new() { Id = "eventlog", Title = "Event Log", Icon = "📓", Zone = "center" },
         new() { Id = "ladder", Title = "Ladder Editor", Icon = "⚡", Zone = "center" },
+        new() { Id = "scripteditor", Title = "Script Editor", Icon = "📝", Zone = "center" },
+        new() { Id = "plceditor", Title = "PLC Editor", Icon = "⚙", Zone = "center" },
         new() { Id = "scheduler", Title = "Scheduler Editor", Icon = "📅", Zone = "center" },
         new() { Id = "report", Title = "Report Designer", Icon = "📄", Zone = "center" },
         new() { Id = "serverlog", Title = "Server Logs", Icon = "📋", Zone = "bottom" },
         new() { Id = "applog", Title = "App Log", Icon = "📒", Zone = "bottom" },
         new() { Id = "crashes", Title = "Crash Reports", Icon = "🐛", Zone = "bottom" },
+        new() { Id = "xref", Title = "Cross Reference", Icon = "🔗", Zone = "bottom" },
+        new() { Id = "watch", Title = "Watch Table", Icon = "👁️", Zone = "bottom" },
+        new() { Id = "problems", Title = "Problems", Icon = "⚠️", Zone = "bottom" },
+        new() { Id = "help", Title = "Help", Icon = "❓", Zone = "right" },
     ];
 
 private void OnAddFolder(TreeNode node)
@@ -797,6 +862,69 @@ private void OnCloseProject(TreeNode node)
     }
 }
 
+private void OnFindReferences(TreeNode node)
+{
+    if (node is not VariableNode vn) return;
+    _dockContainer?.ActivatePanel("xref");
+    // Build the variable path and trigger search in the panel
+    _crossRefPanel?.SearchVariable(BuildVariablePath(vn));
+}
+
+private static string BuildVariablePath(VariableNode vn)
+{
+    var parts = new List<string> { vn.Name };
+    TreeNode? current = vn.Parent;
+    while (current != null)
+    {
+        if (current is FolderNode fn)
+            parts.Add(fn.Name);
+        else if (current is VariableGroupNode)
+            break;
+        current = current.Parent;
+    }
+    parts.Reverse();
+    return string.Join(".", parts);
+}
+
+private async Task OnAddToWatch(TreeNode node)
+{
+    if (node is not VariableNode vn) return;
+    _dockContainer?.ActivatePanel("watch");
+    var path = BuildVariablePath(vn);
+    if (_watchTablePanel != null)
+        await _watchTablePanel.AddVariableExternal(path);
+}
+
+private void OnProblemNavigate(string target)
+{
+    if (target.StartsWith("screen:"))
+    {
+        var screenName = target[7..];
+        // Find screen node in tree and navigate to it
+        foreach (var root in Editor.RootItems)
+        {
+            var found = FindScreenNode(root, screenName);
+            if (found != null)
+            {
+                Editor.SelectNode(found);
+                _dockContainer?.ActivatePanel("screen");
+                break;
+            }
+        }
+    }
+}
+
+private static TreeNode? FindScreenNode(TreeNode node, string name)
+{
+    if (node is ScreenNode sn && sn.Name.Equals(name, StringComparison.OrdinalIgnoreCase)) return sn;
+    foreach (var child in node.Children)
+    {
+        var found = FindScreenNode(child, name);
+        if (found != null) return found;
+    }
+    return null;
+}
+
 private void UnsavedDialogSave()
 {
     if (_pendingCloseProject is { } proj)
@@ -844,6 +972,7 @@ private void UnsavedDialogCancel()
         Theme.ThemeChanged += OnThemeChanged;
         UndoRedo.StateChanged += OnUndoRedoStateChanged;
         PropertyGrid.OnPropertySet += OnPropertyGridValueSet;
+        L.LocaleChanged += OnLocaleChanged;
         _availableFiles = Editor.GetAvailableFiles();
         _serverLogService.Start();
         _appLogService.AddLog("INF", "Server Editor Web started.");
@@ -934,6 +1063,11 @@ private void UnsavedDialogCancel()
         InvokeAsync(StateHasChanged);
     }
 
+    private void OnLocaleChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
     private void OnPropertyGridValueSet(object target, System.Reflection.PropertyInfo property, object? oldValue, object? newValue)
     {
         UndoRedo.RecordPropertyChange(target, property, oldValue, newValue);
@@ -997,6 +1131,7 @@ private void UnsavedDialogCancel()
         Editor.SelectNode(e.Node, e.CtrlKey, e.ShiftKey);
         if (e.Node is not ScreenNode)
             Editor.SetScreenSelection(null, []);
+        _helpPanel?.UpdateForNode(e.Node);
         // Auto-activate the project that owns the clicked node
         var proj = FindAncestorProject(e.Node);
         if (proj != null && !proj.IsActive)
@@ -1021,9 +1156,11 @@ private void UnsavedDialogCancel()
         {
             ScreenNode or ScreenGroupNode => "screen",
             UserNode or UserGroupNode or UserGroupListNode => "users",
-            ScriptNode or ScriptGroupNode => "json",
+            ScriptNode => "scripteditor",
+            ScriptGroupNode => "json",
             PlcProgramNode pn when pn.PlcProgram.Language.Equals("LD", StringComparison.OrdinalIgnoreCase) => "ladder",
-            PlcProgramNode or PlcGroupNode => "properties",
+            PlcProgramNode => "plceditor",
+            PlcGroupNode => "properties",
             RecipeNode or RecipeGroupNode => "properties",
             SchedulerNode or SchedulerGroupNode => "scheduler",
             ReportNode or ReportGroupNode => "report",
@@ -1082,6 +1219,10 @@ private void UnsavedDialogCancel()
     private void DeleteMenu() { CloseMenus(); Delete(); }
     private void CopyMenu() { CloseMenus(); Editor.CopySelected(Clipboard); }
     private void PasteMenu() { CloseMenus(); Editor.PasteFromClipboard(Clipboard); }
+
+    private void ShowHelpPanel() { CloseMenus(); _dockContainer?.ShowPanel("help", "right"); _dockContainer?.ActivatePanel("help"); }
+    private async void ShowProblemsPanel() { CloseMenus(); _dockContainer?.ShowPanel("problems", "bottom"); _dockContainer?.ActivatePanel("problems"); if (_problemsPanel != null) await _problemsPanel.RunValidation(); }
+    private void ShowAboutDialog() { CloseMenus(); _showAboutDialog = true; }
 
     private void QuickLoadFile(string path)
     {
@@ -1162,6 +1303,7 @@ private void UnsavedDialogCancel()
 
     private void SetLightTheme() => SetTheme("light");
     private void SetDarkTheme() => SetTheme("dark");
+    private void SetLocale(string code) => L.SetLocale(code);
 
     private async void ToggleTheme()
     {
@@ -1544,6 +1686,7 @@ private void UnsavedDialogCancel()
         Theme.ThemeChanged -= OnThemeChanged;
         UndoRedo.StateChanged -= OnUndoRedoStateChanged;
         PropertyGrid.OnPropertySet -= OnPropertyGridValueSet;
+        L.LocaleChanged -= OnLocaleChanged;
         _serverLogService.Dispose();
         _appLogService.Dispose();
         _shortcutRef?.Dispose();

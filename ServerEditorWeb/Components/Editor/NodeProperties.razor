@@ -1,36 +1,37 @@
 @using ServerEditorWeb.Models
 @using ServerEditorWeb.Services
 @using SharedModels
+@implements IDisposable
 
 @if (Node == null)
 {
     <div class="properties-panel">
-        <p class="text-muted">Select an item to view its properties.</p>
+        <p class="text-muted">@L["general.selectItem"]</p>
     </div>
 }
 else if (Node is FolderNode folder)
 {
     <div class="properties-panel">
-        <h5>📁 Folder Properties</h5>
+        <h5>📁 @L["section.folder"]</h5>
         <div class="mb-3">
-            <label class="form-label">Name</label>
+            <label class="form-label">@L["prop.name"]</label>
             <input type="text" class="form-control" @bind="folder.Name" @bind:after="OnChanged" @onfocus="() => CaptureForUndo(folder, nameof(folder.Name))" />
         </div>
         <div class="text-muted">
-            Children: @folder.Children.Count (Folders: @(folder.Children.OfType<FolderNode>().Count()), Variables: @(folder.Children.OfType<VariableNode>().Count()))
+            @L["prop.children"]: @folder.Children.Count (@L["prop.folders"]: @(folder.Children.OfType<FolderNode>().Count()), @L["prop.variables"]: @(folder.Children.OfType<VariableNode>().Count()))
         </div>
     </div>
 }
 else if (Node is VariableNode variable)
 {
     <div class="properties-panel">
-        <h5>🏷️ Variable Properties</h5>
+        <h5>🏷️ @L["section.variable"]</h5>
         <div class="mb-3">
-            <label class="form-label">Name</label>
+            <label class="form-label">@L["prop.name"]</label>
             <input type="text" class="form-control" @bind="variable.Name" @bind:after="OnChanged" @onfocus="() => CaptureForUndo(variable, nameof(variable.Name))" />
         </div>
         <div class="mb-3">
-            <label class="form-label">Type</label>
+            <label class="form-label">@L["prop.type"]</label>
             <select class="form-select" @bind="variable.Variable.Type" @bind:after="OnChanged" @onfocus="() => CaptureForUndo(variable.Variable, nameof(variable.Variable.Type))">
                 @foreach (var t in VariableNode.AvailableTypes)
                 {
@@ -39,7 +40,7 @@ else if (Node is VariableNode variable)
             </select>
         </div>
         <div class="mb-3">
-            <label class="form-label">Access</label>
+            <label class="form-label">@L["prop.access"]</label>
             <select class="form-select" @bind="variable.Variable.Access" @bind:after="OnChanged" @onfocus="() => CaptureForUndo(variable.Variable, nameof(variable.Variable.Access))">
                 <option value="Read">Read</option>
                 <option value="Write">Write</option>
@@ -48,18 +49,18 @@ else if (Node is VariableNode variable)
         </div>
 
         <div class="mb-3">
-            <label class="form-label">Initial Value</label>
+            <label class="form-label">@L["prop.initialValue"]</label>
             <input type="text" class="form-control" @bind="variable.Variable.InitialValue" @bind:after="OnChanged"
                    @onfocus="() => CaptureForUndo(variable.Variable, nameof(variable.Variable.InitialValue))"
-                   placeholder="Value applied on server start (e.g. 0, true, Hello)" />
-            <div class="form-text">Parsed according to the variable Type. Leave empty for default.</div>
+                   placeholder="@L["prop.initialValueHint"]" />
+            <div class="form-text">@L["prop.initialValueDesc"]</div>
         </div>
 
         <div class="mb-3 form-check">
             <input class="form-check-input" type="checkbox" @bind="variable.Variable.Retentive" @bind:after="OnChanged"
                    @onfocus="() => CaptureForUndo(variable.Variable, nameof(variable.Variable.Retentive))" />
-            <label class="form-check-label">Retentive</label>
-            <div class="form-text">When enabled, the variable value is saved to disk and restored on server restart.</div>
+            <label class="form-check-label">@L["prop.retentive"]</label>
+            <div class="form-text">@L["prop.retentiveHint"]</div>
         </div>
 
         <div class="mb-3">
@@ -67,9 +68,9 @@ else if (Node is VariableNode variable)
                 <input class="form-check-input" type="checkbox"
                        checked="@(variable.Variable.Statistics?.Enabled == true)"
                        @onchange="e => { variable.Variable.Statistics ??= new SharedModels.VariableStatisticsConfig(); variable.Variable.Statistics.Enabled = (bool)(e.Value ?? false); if (!variable.Variable.Statistics.Enabled) variable.Variable.Statistics = null; OnChanged(); }" />
-                <label class="form-check-label">Enable Statistics</label>
+                <label class="form-check-label">@L["prop.enableStats"]</label>
             </div>
-            <div class="form-text">Publishes Min, Max, Average, and Count as OPC sub-variables. A Reset command is also created.</div>
+            <div class="form-text">@L["prop.enableStatsHint"]</div>
         </div>
 
 
@@ -79,7 +80,7 @@ else if (Node is VariableNode variable)
 
         <div class="mb-3">
             <div class="d-flex align-items-center justify-content-between">
-                <label class="form-label mb-0">Driver Settings (JSON)</label>
+                <label class="form-label mb-0">@L["prop.driverJson"]</label>
                 <button class="btn btn-sm btn-link py-0" style="font-size: 9px;"
                         @onclick="() => _showDriverJson = !_showDriverJson">
                     @(_showDriverJson ? "Ôû╝ Hide" : "ÔûÂ Show")
@@ -95,21 +96,21 @@ else if (Node is VariableNode variable)
 else if (Node is ScriptNode script)
 {
     <div class="properties-panel">
-        <h5>⚡ Script Properties</h5>
+        <h5>⚡ @L["section.script"]</h5>
         <div class="mb-3">
-            <label class="form-label">Name</label>
+            <label class="form-label">@L["prop.name"]</label>
             <input type="text" class="form-control" @bind="script.Name" @bind:after="OnChanged" @onfocus="() => CaptureForUndo(script, nameof(script.Name))" />
         </div>
         <div class="mb-3 form-check">
             <input class="form-check-input" type="checkbox" @bind="script.Script.Enabled" @bind:after="OnChanged" @onfocus="() => CaptureForUndo(script.Script, nameof(script.Script.Enabled))" />
-            <label class="form-check-label">Enabled</label>
+            <label class="form-check-label">@L["prop.enabled"]</label>
         </div>
         <div class="mb-3">
-            <label class="form-label">Interval (ms)</label>
+            <label class="form-label">@L["prop.interval"]</label>
             <input type="number" class="form-control" @bind="script.Script.IntervalMs" @bind:after="OnChanged" @onfocus="() => CaptureForUndo(script.Script, nameof(script.Script.IntervalMs))" />
         </div>
         <div class="mb-3">
-            <label class="form-label">Language</label>
+            <label class="form-label">@L["prop.language"]</label>
             <select class="form-select" @bind="script.Script.Language" @bind:after="OnLanguageChanged">
                 <option value="CSharp">C#</option>
                 <option value="VB">VB.NET</option>
@@ -124,14 +125,14 @@ else if (Node is ScriptNode script)
 else if (Node is ResourceFolderNode resFolder)
 {
     <div class="properties-panel">
-        <h5>📁 Folder Properties</h5>
+        <h5>📁 @L["section.folder"]</h5>
         <div class="mb-3">
-            <label class="form-label">Name</label>
+            <label class="form-label">@L["prop.name"]</label>
             <input type="text" class="form-control" @bind="resFolder.Name" @bind:after="OnChanged" @onfocus="() => CaptureForUndo(resFolder, nameof(resFolder.Name))" />
         </div>
         <div class="text-muted">
-            Type: @resFolder.ResourceKind folder<br/>
-            Children: @resFolder.Children.Count
+            @L["prop.type"]: @resFolder.ResourceKind<br/>
+            @L["prop.children"]: @resFolder.Children.Count
         </div>
     </div>
 }
@@ -145,21 +146,21 @@ else if (Node is ScriptGroupNode)
 else if (Node is PlcProgramNode plcNode)
 {
     <div class="properties-panel">
-        <h5>⚙️ PLC Program Properties</h5>
+        <h5>⚙️ @L["section.plc"]</h5>
         <div class="mb-3">
-            <label class="form-label">Name</label>
+            <label class="form-label">@L["prop.name"]</label>
             <input type="text" class="form-control" @bind="plcNode.Name" @bind:after="OnChanged" @onfocus="() => CaptureForUndo(plcNode, nameof(plcNode.Name))" />
         </div>
         <div class="mb-3 form-check">
             <input class="form-check-input" type="checkbox" @bind="plcNode.PlcProgram.Enabled" @bind:after="OnChanged" @onfocus="() => CaptureForUndo(plcNode.PlcProgram, nameof(plcNode.PlcProgram.Enabled))" />
-            <label class="form-check-label">Enabled</label>
+            <label class="form-check-label">@L["prop.enabled"]</label>
         </div>
         <div class="mb-3">
-            <label class="form-label">Cycle Time (ms)</label>
+            <label class="form-label">@L["prop.cycleTime"]</label>
             <input type="number" class="form-control" @bind="plcNode.PlcProgram.IntervalMs" @bind:after="OnChanged" @onfocus="() => CaptureForUndo(plcNode.PlcProgram, nameof(plcNode.PlcProgram.IntervalMs))" />
         </div>
         <div class="mb-3">
-            <label class="form-label">Language</label>
+            <label class="form-label">@L["prop.language"]</label>
             <select class="form-select" @bind="plcNode.PlcProgram.Language" @bind:after="OnPlcLanguageChanged">
                 <option value="ST">Structured Text (ST)</option>
                 <option value="IL">Instruction List (IL)</option>
@@ -197,17 +198,17 @@ else if (Node is PlcGroupNode)
 else if (Node is RecipeNode recipeNode)
 {
     <div class="properties-panel">
-        <h5>📦 Recipe Properties</h5>
+        <h5>📦 @L["section.recipe"]</h5>
         <div class="mb-3">
-            <label class="form-label">Name</label>
+            <label class="form-label">@L["prop.name"]</label>
             <input type="text" class="form-control" @bind="recipeNode.Name" @bind:after="OnChanged" @onfocus="() => CaptureForUndo(recipeNode, nameof(recipeNode.Name))" />
         </div>
         <div class="mb-3 form-check">
             <input class="form-check-input" type="checkbox" @bind="recipeNode.Recipe.Enabled" @bind:after="OnChanged" @onfocus="() => CaptureForUndo(recipeNode.Recipe, nameof(recipeNode.Recipe.Enabled))" />
-            <label class="form-check-label">Enabled</label>
+            <label class="form-check-label">@L["prop.enabled"]</label>
         </div>
         <div class="mb-3">
-            <label class="form-label">Database Path</label>
+            <label class="form-label">@L["prop.dbPath"]</label>
             <input type="text" class="form-control" @bind="recipeNode.Recipe.DbPath" @bind:after="OnChanged"
                    @onfocus="() => CaptureForUndo(recipeNode.Recipe, nameof(recipeNode.Recipe.DbPath))"
                    placeholder="recipes/{name}.db (relative to config)" />
@@ -289,22 +290,22 @@ else if (Node is RecipeGroupNode)
 else if (Node is SchedulerNode schedulerNode)
 {
     <div class="properties-panel">
-        <h5>📅 Scheduler Properties</h5>
+        <h5>📅 @L["section.scheduler"]</h5>
         <div class="mb-3">
-            <label class="form-label">Name</label>
+            <label class="form-label">@L["prop.name"]</label>
             <input type="text" class="form-control" @bind="schedulerNode.Name" @bind:after="OnChanged" @onfocus="() => CaptureForUndo(schedulerNode, nameof(schedulerNode.Name))" />
         </div>
         <div class="mb-3 form-check">
             <input class="form-check-input" type="checkbox" @bind="schedulerNode.Scheduler.Enabled" @bind:after="OnChanged" />
-            <label class="form-check-label">Enabled</label>
+            <label class="form-check-label">@L["prop.enabled"]</label>
         </div>
         <div class="mb-3 form-check">
             <input class="form-check-input" type="checkbox" @bind="schedulerNode.Scheduler.AllowRuntimeEdit" @bind:after="OnChanged" />
-            <label class="form-check-label">Allow Runtime Edit</label>
-            <div class="form-text">When enabled, runtime users can modify the schedule from the Weekly Planner widget.</div>
+            <label class="form-check-label">@L["prop.allowRuntimeEdit"]</label>
+            <div class="form-text">@L["prop.allowRuntimeEditHint"]</div>
         </div>
         <div class="mb-3">
-            <label class="form-label">Slot Granularity (minutes)</label>
+            <label class="form-label">@L["prop.slotGranularity"]</label>
             <select class="form-select" @bind="schedulerNode.Scheduler.SlotMinutes" @bind:after="OnChanged">
                 <option value="15">15 minutes</option>
                 <option value="60">1 hour</option>
@@ -329,15 +330,15 @@ else if (Node is SchedulerNode schedulerNode)
             </select>
         </div>
         <div class="mb-3">
-            <label class="form-label">Holiday Locale</label>
+            <label class="form-label">@L["prop.holidayLocale"]</label>
             <select class="form-select" @bind="schedulerNode.Scheduler.HolidayLocale" @bind:after="OnChanged">
-                <option value="">(none)</option>
+                <option value="">@L["prop.none"]</option>
                 @foreach (var locale in SharedModels.HolidayCalendars.AvailableLocales)
                 {
                     <option value="@locale">@locale</option>
                 }
             </select>
-            <div class="form-text">Select a locale to load built-in public holidays.</div>
+            <div class="form-text">@L["prop.holidayLocaleHint"]</div>
         </div>
 
         @if (!string.IsNullOrEmpty(schedulerNode.Scheduler.HolidayLocale) && SharedModels.HolidayCalendars.BuiltIn.TryGetValue(schedulerNode.Scheduler.HolidayLocale, out var builtInHolidays))
@@ -552,32 +553,32 @@ else if (Node is SchedulerGroupNode)
 else if (Node is ReportNode reportNode)
 {
     <div class="properties-panel">
-        <h5>📄 Report Properties</h5>
+        <h5>📄 @L["section.report"]</h5>
         <div class="mb-3">
-            <label class="form-label">Name</label>
+            <label class="form-label">@L["prop.name"]</label>
             <input type="text" class="form-control" @bind="reportNode.Name" @bind:after="OnChanged" />
         </div>
         <div class="mb-3 form-check">
             <input class="form-check-input" type="checkbox" @bind="reportNode.Report.Enabled" @bind:after="OnChanged" />
-            <label class="form-check-label">Enabled</label>
+            <label class="form-check-label">@L["prop.enabled"]</label>
         </div>
         <div class="mb-3">
-            <label class="form-label">Title</label>
+            <label class="form-label">@L["prop.title"]</label>
             <input type="text" class="form-control" @bind="reportNode.Report.Title" @bind:after="OnChanged" placeholder="Report title in header" />
         </div>
         <div class="mb-3">
-            <label class="form-label">Description</label>
+            <label class="form-label">@L["prop.description"]</label>
             <textarea class="form-control" rows="2" @bind="reportNode.Report.Description" @bind:after="OnChanged" placeholder="Optional subtitle"></textarea>
         </div>
         <div class="mb-3">
-            <label class="form-label">Format</label>
+            <label class="form-label">@L["prop.format"]</label>
             <select class="form-select" @bind="reportNode.Report.Format" @bind:after="OnChanged">
                 <option value="HTML">HTML</option>
                 <option value="PDF">PDF</option>
             </select>
         </div>
         <div class="mb-3">
-            <label class="form-label">Page Size</label>
+            <label class="form-label">@L["prop.pageSize"]</label>
             <select class="form-select" @bind="reportNode.Report.PageSize" @bind:after="OnChanged">
                 <option value="A4">A4</option>
                 <option value="Letter">Letter</option>
@@ -585,7 +586,7 @@ else if (Node is ReportNode reportNode)
             </select>
         </div>
         <div class="mb-3">
-            <label class="form-label">Orientation</label>
+            <label class="form-label">@L["prop.orientation"]</label>
             <select class="form-select" @bind="reportNode.Report.Orientation" @bind:after="OnChanged">
                 <option value="Portrait">Portrait</option>
                 <option value="Landscape">Landscape</option>
@@ -594,7 +595,7 @@ else if (Node is ReportNode reportNode)
 
         <h6 class="mt-3">Delivery</h6>
         <div class="mb-3">
-            <label class="form-label">Delivery Method</label>
+            <label class="form-label">@L["prop.deliveryMethod"]</label>
             <select class="form-select" @bind="reportNode.Report.Delivery.Method" @bind:after="OnChanged">
                 <option value="Disk">Save to Disk</option>
                 <option value="Email">Send via Email</option>
@@ -605,11 +606,11 @@ else if (Node is ReportNode reportNode)
         @if (reportNode.Report.Delivery.Method is "Disk" or "Both")
         {
             <div class="mb-3">
-                <label class="form-label">Output Directory</label>
+                <label class="form-label">@L["prop.outputDir"]</label>
                 <input type="text" class="form-control" @bind="reportNode.Report.Delivery.DiskPath" @bind:after="OnChanged" placeholder="Reports" />
             </div>
             <div class="mb-3">
-                <label class="form-label">File Name Pattern</label>
+                <label class="form-label">@L["prop.fileNamePattern"]</label>
                 <input type="text" class="form-control" @bind="reportNode.Report.Delivery.FileNamePattern" @bind:after="OnChanged" placeholder="{ReportName}_{DateTime}" />
                 <div class="form-text">Placeholders: {ReportName}, {DateTime}, {Date}</div>
             </div>
@@ -618,35 +619,35 @@ else if (Node is ReportNode reportNode)
         @if (reportNode.Report.Delivery.Method is "Email" or "Both")
         {
             <div class="mb-3">
-                <label class="form-label">Recipients (comma-separated)</label>
+                <label class="form-label">@L["prop.recipients"]</label>
                 <input type="text" class="form-control" @bind="reportNode.Report.Delivery.EmailRecipients" @bind:after="OnChanged" placeholder="user@example.com" />
             </div>
             <div class="mb-3">
-                <label class="form-label">Email Subject</label>
+                <label class="form-label">@L["prop.emailSubject"]</label>
                 <input type="text" class="form-control" @bind="reportNode.Report.Delivery.EmailSubject" @bind:after="OnChanged" />
             </div>
             <div class="mb-3">
-                <label class="form-label">SMTP Server</label>
+                <label class="form-label">@L["prop.smtpServer"]</label>
                 <input type="text" class="form-control" @bind="reportNode.Report.Delivery.SmtpServer" @bind:after="OnChanged" placeholder="smtp.example.com" />
             </div>
             <div class="mb-3">
-                <label class="form-label">SMTP Port</label>
+                <label class="form-label">@L["prop.smtpPort"]</label>
                 <input type="number" class="form-control" @bind="reportNode.Report.Delivery.SmtpPort" @bind:after="OnChanged" />
             </div>
             <div class="mb-3">
-                <label class="form-label">SMTP Username</label>
+                <label class="form-label">@L["prop.smtpUser"]</label>
                 <input type="text" class="form-control" @bind="reportNode.Report.Delivery.SmtpUser" @bind:after="OnChanged" />
             </div>
             <div class="mb-3">
-                <label class="form-label">SMTP Password</label>
+                <label class="form-label">@L["prop.smtpPass"]</label>
                 <input type="password" class="form-control" @bind="reportNode.Report.Delivery.SmtpPassword" @bind:after="OnChanged" />
             </div>
             <div class="mb-3 form-check">
                 <input class="form-check-input" type="checkbox" @bind="reportNode.Report.Delivery.SmtpUseSsl" @bind:after="OnChanged" />
-                <label class="form-check-label">Use SSL/TLS</label>
+                <label class="form-check-label">@L["prop.smtpSsl"]</label>
             </div>
             <div class="mb-3">
-                <label class="form-label">From Address</label>
+                <label class="form-label">@L["prop.fromAddress"]</label>
                 <input type="text" class="form-control" @bind="reportNode.Report.Delivery.SmtpFromAddress" @bind:after="OnChanged" placeholder="noreply@example.com" />
             </div>
         }
@@ -672,29 +673,29 @@ else if (Node is ReportGroupNode)
 else if (Node is ScreenNode screen)
 {
     <div class="properties-panel">
-        <h5>🖼️ Screen Properties</h5>
+        <h5>🖼️ @L["section.screen"]</h5>
         <div class="mb-3">
-            <label class="form-label">Name</label>
+            <label class="form-label">@L["prop.name"]</label>
             <input type="text" class="form-control" @bind="screen.Name" @bind:after="OnChanged" @onfocus="() => CaptureForUndo(screen, nameof(screen.Name))" />
         </div>
         <div class="mb-3">
-            <label class="form-label">Width</label>
+            <label class="form-label">@L["prop.width"]</label>
             <input type="number" class="form-control" @bind="screen.Screen.Width" @bind:after="OnChanged" @onfocus="() => CaptureForUndo(screen.Screen, nameof(screen.Screen.Width))" />
         </div>
         <div class="mb-3">
-            <label class="form-label">Height</label>
+            <label class="form-label">@L["prop.height"]</label>
             <input type="number" class="form-control" @bind="screen.Screen.Height" @bind:after="OnChanged" @onfocus="() => CaptureForUndo(screen.Screen, nameof(screen.Screen.Height))" />
         </div>
         <div class="mb-3">
-            <label class="form-label">Background</label>
+            <label class="form-label">@L["prop.background"]</label>
             <input type="color" class="form-control form-control-color" @bind="screen.Screen.Background" @bind:after="OnChanged" @onfocus="() => CaptureForUndo(screen.Screen, nameof(screen.Screen.Background))" />
         </div>
         <div class="mb-3">
-            <label class="form-label">Background Image</label>
+            <label class="form-label">@L["prop.backgroundImage"]</label>
             <select class="form-select form-select-sm"
                     value="@screen.Screen.BackgroundImageId"
                     @onchange="(e) => { screen.Screen.BackgroundImageId = e.Value?.ToString() ?? string.Empty; OnChanged(); }">
-                <option value="">(none)</option>
+                <option value="">@L["prop.none"]</option>
                 @foreach (var img in (Editor.RootModel?.Images ?? []))
                 {
                     <option value="@img.Id">@img.Id</option>
@@ -704,45 +705,45 @@ else if (Node is ScreenNode screen)
         <div class="mb-3 form-check">
             <input class="form-check-input" type="checkbox" @bind="screen.Screen.ShowInNavigation" @bind:after="OnChanged"
                    @onfocus="() => CaptureForUndo(screen.Screen, nameof(screen.Screen.ShowInNavigation))" />
-            <label class="form-check-label">Show In Navigation</label>
-            <div class="form-text">When enabled, this screen appears in the runtime navigation bar/menu.</div>
+            <label class="form-check-label">@L["prop.showInNav"]</label>
+            <div class="form-text">@L["prop.showInNavHint"]</div>
         </div>
         <div class="text-muted">
-            Symbols: @screen.Screen.Symbols.Count
+            @L["prop.symbols"]: @screen.Screen.Symbols.Count
         </div>
-        <p class="text-muted small mt-2">Use the Screen Editor panel to design the SVG layout and bind OPC variables.</p>
+        <p class="text-muted small mt-2">@L["prop.screenEditorHint"]</p>
     </div>
 }
 else if (Node is ScreenGroupNode)
 {
     <div class="properties-panel">
-        <h5>🖥️ Screen Group</h5>
-        <p class="text-muted">Select a screen to edit, or add a new one.</p>
+        <h5>🖥️ @L["section.screenGroup"]</h5>
+        <p class="text-muted">@L["section.screenGroupHint"]</p>
     </div>
 }
 else if (Node is UserGroupListNode)
 {
     <div class="properties-panel">
-        <h5>👥 Users & Groups</h5>
-        <p class="text-muted">Right-click to add a user group, then add users to groups.</p>
-        <p class="text-muted small">Use the Users panel for full management including passwords and access levels.</p>
+        <h5>👥 @L["section.userGroupList"]</h5>
+        <p class="text-muted">@L["section.userGroupListHint"]</p>
+        <p class="text-muted small">@L["section.userGroupListHint2"]</p>
     </div>
 }
 else if (Node is ServerSettingsNode ssNode)
 {
     <div class="properties-panel">
-        <h5>⚙️ Server Settings</h5>
+        <h5>⚙️ @L["section.serverSettings"]</h5>
         <div class="mb-3">
-            <label class="form-label">Endpoint URL</label>
+            <label class="form-label">@L["prop.endpointUrl"]</label>
             <input type="text" class="form-control" @bind="ssNode.Settings.EndpointUrl" @bind:after="OnChanged"
                    @onfocus="() => CaptureForUndo(ssNode.Settings, nameof(ssNode.Settings.EndpointUrl))" />
         </div>
         <div class="mb-3">
-            <label class="form-label">Startup Screen</label>
+            <label class="form-label">@L["prop.startupScreen"]</label>
             <select class="form-select"
                     value="@ssNode.Settings.StartupScreen"
                     @onchange="(e) => { ssNode.Settings.StartupScreen = e.Value?.ToString() ?? string.Empty; OnChanged(); }">
-                <option value="">(none)</option>
+                <option value="">@L["prop.none"]</option>
                 @foreach (var scr in (Editor.RootModel?.Screens ?? []))
                 {
                     <option value="@scr.Name">@scr.Name</option>
@@ -750,60 +751,60 @@ else if (Node is ServerSettingsNode ssNode)
             </select>
         </div>
         <div class="mb-3">
-            <label class="form-label">Navigation Style</label>
+            <label class="form-label">@L["prop.navStyle"]</label>
             <select class="form-select" @bind="ssNode.Settings.NavigationStyle" @bind:after="OnChanged"
                     @onfocus="() => CaptureForUndo(ssNode.Settings, nameof(ssNode.Settings.NavigationStyle))">
-                <option value="tabs">Tabs (top)</option>
-                <option value="sidebar">Sidebar (left)</option>
-                <option value="hamburger">Hamburger Menu</option>
-                <option value="bottom">Bottom Tab Bar</option>
+                <option value="tabs">@L["prop.navTabs"]</option>
+                <option value="sidebar">@L["prop.navSidebar"]</option>
+                <option value="hamburger">@L["prop.navHamburger"]</option>
+                <option value="bottom">@L["prop.navBottom"]</option>
             </select>
-            <div class="form-text">Controls how screens are navigated in the RuntimeViewer.</div>
+            <div class="form-text">@L["prop.navStyleHint"]</div>
         </div>
         <div class="mb-3 form-check">
             <input class="form-check-input" type="checkbox" @bind="ssNode.Settings.ShowNavigationBar" @bind:after="OnChanged"
                    @onfocus="() => CaptureForUndo(ssNode.Settings, nameof(ssNode.Settings.ShowNavigationBar))" />
-            <label class="form-check-label">Show Navigation Bar (Kiosk)</label>
-            <div class="form-text">In kiosk mode the navigation bar is hidden by default. Enable this to keep it visible.</div>
+            <label class="form-check-label">@L["prop.showNavBar"]</label>
+            <div class="form-text">@L["prop.showNavBarHint"]</div>
         </div>
         <div class="mb-3 form-check">
             <input class="form-check-input" type="checkbox" @bind="ssNode.Settings.EnableAnonymous" @bind:after="OnChanged"
                    @onfocus="() => CaptureForUndo(ssNode.Settings, nameof(ssNode.Settings.EnableAnonymous))" />
-            <label class="form-check-label">Enable Anonymous Access</label>
+            <label class="form-check-label">@L["prop.enableAnon"]</label>
         </div>
         <div class="mb-3 form-check">
             <input class="form-check-input" type="checkbox" @bind="ssNode.Settings.EnableEditorLogin" @bind:after="OnChanged"
                    @onfocus="() => CaptureForUndo(ssNode.Settings, nameof(ssNode.Settings.EnableEditorLogin))" />
-            <label class="form-check-label">Require Editor Login</label>
+            <label class="form-check-label">@L["prop.requireEditorLogin"]</label>
         </div>
         <div class="mb-3 form-check">
             <input class="form-check-input" type="checkbox" @bind="ssNode.Settings.EnableRuntimeLogin" @bind:after="OnChanged"
                    @onfocus="() => CaptureForUndo(ssNode.Settings, nameof(ssNode.Settings.EnableRuntimeLogin))" />
-            <label class="form-check-label">Require Runtime Login</label>
+            <label class="form-check-label">@L["prop.requireRuntimeLogin"]</label>
         </div>
         <div class="mb-3 form-check">
             <input class="form-check-input" type="checkbox" @bind="ssNode.Settings.RequireStrongPassword" @bind:after="OnChanged"
                    @onfocus="() => CaptureForUndo(ssNode.Settings, nameof(ssNode.Settings.RequireStrongPassword))" />
-            <label class="form-check-label">Require Strong Passwords</label>
+            <label class="form-check-label">@L["prop.requireStrongPw"]</label>
         </div>
         <div class="mb-3">
-            <label class="form-label">Diagnostics Port</label>
+            <label class="form-label">@L["prop.diagPort"]</label>
             <input type="number" class="form-control" @bind="ssNode.Settings.DiagnosticsPort" @bind:after="OnChanged"
                    @onfocus="() => CaptureForUndo(ssNode.Settings, nameof(ssNode.Settings.DiagnosticsPort))" />
-            <div class="form-text">HTTP port for the diagnostics API. Set to 0 to disable.</div>
+            <div class="form-text">@L["prop.diagPortHint"]</div>
         </div>
     </div>
 }
 else if (Node is UserGroupNode ugNode)
 {
     <div class="properties-panel">
-        <h5>🛡️ User Group Properties</h5>
+        <h5>🛡️ @L["section.userGroup"]</h5>
         <div class="mb-3">
-            <label class="form-label">Name</label>
+            <label class="form-label">@L["prop.name"]</label>
             <input type="text" class="form-control" @bind="ugNode.Name" @bind:after="OnChanged" @onfocus="() => CaptureForUndo(ugNode, nameof(ugNode.Name))" />
         </div>
         <div class="mb-3">
-            <label class="form-label">Access Level (OPC Variables)</label>
+            <label class="form-label">@L["prop.accessLevel"]</label>
             <select class="form-select" @bind="ugNode.UserGroup.AccessLevel" @bind:after="OnChanged" @onfocus="() => CaptureForUndo(ugNode.UserGroup, nameof(ugNode.UserGroup.AccessLevel))">
                 <option value="Read">Read</option>
                 <option value="Write">Write</option>
@@ -812,37 +813,37 @@ else if (Node is UserGroupNode ugNode)
         </div>
         <div class="mb-3 form-check">
             <input class="form-check-input" type="checkbox" @bind="ugNode.UserGroup.CanAccessEditor" @bind:after="OnChanged" @onfocus="() => CaptureForUndo(ugNode.UserGroup, nameof(ugNode.UserGroup.CanAccessEditor))" />
-            <label class="form-check-label">Can access project editor</label>
+            <label class="form-check-label">@L["prop.canAccessEditor"]</label>
         </div>
         <div class="text-muted">
-            Users: @(ugNode.Children.OfType<UserNode>().Count())
+            @L["section.users"]: @(ugNode.Children.OfType<UserNode>().Count())
         </div>
     </div>
 }
 else if (Node is UserNode uNode)
 {
     <div class="properties-panel">
-        <h5>👤 User Properties</h5>
+        <h5>👤 @L["section.user"]</h5>
         <div class="mb-3">
-            <label class="form-label">Username</label>
+            <label class="form-label">@L["prop.username"]</label>
             <input type="text" class="form-control" @bind="uNode.Name" @bind:after="OnChanged" @onfocus="() => CaptureForUndo(uNode, nameof(uNode.Name))" />
         </div>
         <div class="mb-3">
-            <label class="form-label">Group</label>
+            <label class="form-label">@L["prop.group"]</label>
             <input type="text" class="form-control" value="@uNode.User.Group" readonly />
         </div>
         <div class="mb-3">
-            <label class="form-label">Password</label>
+            <label class="form-label">@L["prop.password"]</label>
             @if (!string.IsNullOrEmpty(uNode.User.PasswordHash))
             {
                 <div>
-                    <span class="badge bg-success">🔐 Encrypted</span>
-                    <small class="text-muted ms-2">Use the Users panel to reset.</small>
+                    <span class="badge bg-success">🔐 @L["prop.pwEncrypted"]</span>
+                    <small class="text-muted ms-2">@L["prop.pwResetHint"]</small>
                 </div>
             }
             else
             {
-                <span class="text-warning small">⚠ No password set. Use the Users panel to set one.</span>
+                <span class="text-warning small">⚠ @L["prop.pwNotSet"]</span>
             }
         </div>
     </div>
@@ -854,8 +855,21 @@ else if (Node is UserNode uNode)
 
     [Inject] private UndoRedoService UndoRedo { get; set; } = default!;
     [Inject] private NodeEditorService Editor { get; set; } = default!;
+    [Inject] private EditorLocalizationService L { get; set; } = default!;
 
     private bool _showDriverJson;
+
+    protected override void OnInitialized()
+    {
+        L.LocaleChanged += OnLocaleChanged;
+    }
+
+    private void OnLocaleChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        L.LocaleChanged -= OnLocaleChanged;
+    }
 
     // Snapshot for undo: captured before a @bind writes its new value
     private object? _pendingTarget;

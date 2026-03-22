@@ -1,21 +1,22 @@
 @using ServerEditorWeb.Services
 @using ServerEditorWeb.Models
 @using System.Text.RegularExpressions
+@implements IDisposable
 
 <div class="help-panel">
     <div class="help-toolbar">
-        <button class="help-toc-btn @(_showToc ? "active" : "")" @onclick="ToggleToc" title="Table of Contents">
+        <button class="help-toc-btn @(_showToc ? "active" : "")" @onclick="ToggleToc" title="@L["help.toc"]">
             📖
         </button>
         <span class="help-breadcrumb">@_currentHelp.Title</span>
-        <button class="btn btn-sm btn-outline-secondary ms-auto" @onclick="GoHome" title="Home">🏠</button>
+        <button class="btn btn-sm btn-outline-secondary ms-auto" @onclick="GoHome" title="@L["help.home"]">🏠</button>
     </div>
 
     <div class="help-body">
         @if (_showToc)
         {
             <div class="help-toc">
-                <div class="help-toc-header">📖 Table of Contents</div>
+                <div class="help-toc-header">📖 @L["help.toc"]</div>
                 @foreach (var topic in _toc)
                 {
                     <div class="help-toc-item @(topic.Key == _currentKey ? "active" : "")"
@@ -160,6 +161,7 @@
 
 @code {
     [Inject] private HelpService Help { get; set; } = default!;
+    [Inject] private EditorLocalizationService L { get; set; } = default!;
 
     private HelpContent _currentHelp = new("", "");
     private string _currentKey = "welcome";
@@ -168,8 +170,24 @@
 
     protected override void OnInitialized()
     {
-        _toc = Help.GetTableOfContents();
-        _currentHelp = Help.GetHelp("welcome");
+        L.LocaleChanged += OnLocaleChanged;
+        _toc = Help.GetTableOfContents(L.Locale);
+        _currentHelp = Help.GetHelp("welcome", L.Locale);
+    }
+
+    private void OnLocaleChanged()
+    {
+        InvokeAsync(() =>
+        {
+            _toc = Help.GetTableOfContents(L.Locale);
+            _currentHelp = Help.GetHelp(_currentKey, L.Locale);
+            StateHasChanged();
+        });
+    }
+
+    public void Dispose()
+    {
+        L.LocaleChanged -= OnLocaleChanged;
     }
 
     /// <summary>
@@ -178,7 +196,7 @@
     /// </summary>
     public void UpdateForNode(TreeNode? node)
     {
-        var help = Help.GetHelpForNode(node);
+        var help = Help.GetHelpForNode(node, L.Locale);
         if (help.Title != _currentHelp.Title)
         {
             _currentHelp = help;
@@ -192,7 +210,7 @@
     /// </summary>
     public void UpdateForPanel(string panelId)
     {
-        var help = Help.GetHelpForPanel(panelId);
+        var help = Help.GetHelpForPanel(panelId, L.Locale);
         if (help.Title != _currentHelp.Title)
         {
             _currentHelp = help;
@@ -206,7 +224,7 @@
     /// </summary>
     public void NavigateTo(string key)
     {
-        _currentHelp = Help.GetHelp(key);
+        _currentHelp = Help.GetHelp(key, L.Locale);
         _currentKey = key;
         StateHasChanged();
     }
@@ -223,7 +241,7 @@
 
     private string FindKeyForHelp(HelpContent help)
     {
-        var match = _toc.FirstOrDefault(t => Help.GetHelp(t.Key).Title == help.Title);
+        var match = _toc.FirstOrDefault(t => Help.GetHelp(t.Key, L.Locale).Title == help.Title);
         return match.Key ?? "welcome";
     }
 
