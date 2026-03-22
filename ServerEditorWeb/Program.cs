@@ -32,6 +32,7 @@ builder.Services.AddSingleton<WatchTableService>();
 builder.Services.AddSingleton<ProjectValidationService>();
 builder.Services.AddSingleton<LicenseService>();
 builder.Services.AddSingleton<HelpService>();
+builder.Services.AddSingleton<EditorLocalizationService>();
 
 var app = builder.Build();
 
