@@ -75,6 +75,33 @@
                             @onclick="() => { screen.BackgroundImage = string.Empty; OnChanged(); }" title="Remove background image">✕</button>
                 }
 
+                <span class="mx-1">|</span>
+                <button class="btn btn-sm @(screen.ShowGrid ? "btn-primary" : "btn-outline-secondary")"
+                        @onclick="() => { screen.ShowGrid = !screen.ShowGrid; OnChanged(); }" title="Toggle Grid">
+                    ⊞ Grid
+                </button>
+                @if (screen.ShowGrid)
+                {
+                    <input type="number" class="form-control form-control-sm" style="width: 50px;" min="5" max="100"
+                           @bind="screen.EditorGridSize" @bind:after="OnChanged" title="Grid size (px)" />
+                }
+                <button class="btn btn-sm @(screen.SnapToGrid ? "btn-primary" : "btn-outline-secondary")"
+                        @onclick="() => { screen.SnapToGrid = !screen.SnapToGrid; OnChanged(); }" title="Snap to Grid">
+                    🧲 Snap
+                </button>
+                <button class="btn btn-sm @(screen.SmartSnap ? "btn-primary" : "btn-outline-secondary")"
+                        @onclick="() => { screen.SmartSnap = !screen.SmartSnap; OnChanged(); }" title="Smart Snap (align to other objects)">
+                    📏 Smart
+                </button>
+
+                @if (_selectedSymbols.Count > 1)
+                {
+                    <span class="mx-1">|</span>
+                    <button class="btn btn-sm btn-outline-info" @onclick="() => _showDistributeDialog = true" title="Distribute selected symbols into columns">
+                        🔲 Distribute
+                    </button>
+                }
+
                 <span class="ms-auto small text-muted">Symbols: @screen.Symbols.Count</span>
 
                 <span class="mx-1">|</span>
@@ -100,6 +127,18 @@
                         <image href="@screen.BackgroundImage" x="0" y="0"
                                width="@screen.Width" height="@screen.Height"
                                preserveAspectRatio="xMidYMid slice" />
+                    }
+
+                    @* ── Editor grid overlay ── *@
+                    @if (screen.ShowGrid)
+                    {
+                        var gs = Math.Max(5, screen.EditorGridSize);
+                        <defs>
+                            <pattern id="editor-grid" width="@gs" height="@gs" patternUnits="userSpaceOnUse">
+                                <path d="M @gs 0 L 0 0 0 @gs" fill="none" stroke="rgba(0,0,0,0.10)" stroke-width="0.5" />
+                            </pattern>
+                        </defs>
+                        <rect width="@screen.Width" height="@screen.Height" fill="url(#editor-grid)" pointer-events="none" />
                     }
 
                     @foreach (var sym in screen.Symbols)
@@ -412,6 +451,16 @@
                         </g>
                     }
 
+                    @* ── Smart snap guide lines ── *@
+                    @if (_snapGuides.Count > 0)
+                    {
+                        @foreach (var guide in _snapGuides)
+                        {
+                            <line x1="@F(guide.X1)" y1="@F(guide.Y1)" x2="@F(guide.X2)" y2="@F(guide.Y2)"
+                                  stroke="#ff4081" stroke-width="0.8" stroke-dasharray="3,2" pointer-events="none" />
+                        }
+                    }
+
                     @* Marquee selection rectangle *@
                     @if (_isMarqueeSelecting)
                     {
@@ -427,6 +476,32 @@
         </div>
     }
 </div>
+
+@if (_showDistributeDialog)
+{
+    <div class="modal d-block" tabindex="-1" style="background: rgba(0,0,0,0.4);">
+        <div class="modal-dialog modal-sm">
+            <div class="modal-content">
+                <div class="modal-header py-2">
+                    <h6 class="modal-title">Distribute to Columns</h6>
+                    <button type="button" class="btn-close" @onclick="() => _showDistributeDialog = false"></button>
+                </div>
+                <div class="modal-body">
+                    <label class="form-label small">Number of columns:</label>
+                    <input type="number" class="form-control form-control-sm" min="1" max="50" @bind="_distributeColumns" />
+                    <label class="form-label small mt-2">Horizontal gap (px):</label>
+                    <input type="number" class="form-control form-control-sm" min="0" max="200" @bind="_distributeGapX" />
+                    <label class="form-label small mt-2">Vertical gap (px):</label>
+                    <input type="number" class="form-control form-control-sm" min="0" max="200" @bind="_distributeGapY" />
+                </div>
+                <div class="modal-footer py-1">
+                    <button class="btn btn-sm btn-secondary" @onclick="() => _showDistributeDialog = false">Cancel</button>
+                    <button class="btn btn-sm btn-primary" @onclick="ApplyDistributeToColumns">Apply</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
 
 @code {
     [Parameter] public TreeNode? Node { get; set; }
@@ -459,6 +534,14 @@
     private int _nextAnimId = 1;
     private System.Threading.Timer? _refreshTimer;
     private TreeNode? _previousNode;
+
+    // ─── Grid / Snap / Distribute state ─────────────────────
+    private List<(double X1, double Y1, double X2, double Y2)> _snapGuides = new();
+    private const double SmartSnapThreshold = 5.0;
+    private bool _showDistributeDialog;
+    private int _distributeColumns = 3;
+    private int _distributeGapX = 10;
+    private int _distributeGapY = 10;
 
     // ─── Resize handle definitions ──────────────────────────
     private record ResizeHandleDef(string Name, string Cursor,
@@ -927,6 +1010,7 @@
     {
         if (_isDragging && _selectedSymbols.Count > 0)
         {
+            var screen = GetScreen();
             var dx = e.ClientX - _dragStartX;
             var dy = e.ClientY - _dragStartY;
             foreach (var s in _selectedSymbols)
@@ -936,6 +1020,28 @@
                     s.X = start.X + dx;
                     s.Y = start.Y + dy;
                 }
+            }
+
+            // Snap to grid
+            if (screen != null && screen.SnapToGrid && screen.EditorGridSize >= 5)
+            {
+                var gs = (double)screen.EditorGridSize;
+                // Compute offset from first selected symbol's desired position to nearest grid
+                var anchor = _selectedSymbol ?? _selectedSymbols.First();
+                var snapDx = Math.Round(anchor.X / gs) * gs - anchor.X;
+                var snapDy = Math.Round(anchor.Y / gs) * gs - anchor.Y;
+                foreach (var s in _selectedSymbols)
+                {
+                    s.X += snapDx;
+                    s.Y += snapDy;
+                }
+            }
+
+            // Smart snap (alignment guides)
+            _snapGuides.Clear();
+            if (screen != null && screen.SmartSnap && _selectedSymbol != null)
+            {
+                ComputeSmartSnapGuides(screen);
             }
         }
         else if (_isResizing)
@@ -973,6 +1079,7 @@
             _resizeHandle = "";
             _multiDragStarts.Clear();
             _multiResizeStarts.Clear();
+            _snapGuides.Clear();
             OnChanged();
         }
     }
@@ -1916,6 +2023,91 @@
     private void OnBindingChanged()
     {
         OnPropertyChanged.InvokeAsync();
+    }
+
+    // ─── Smart Snap: compute alignment guide lines ──────────
+    private void ComputeSmartSnapGuides(ScreenConfig screen)
+    {
+        var sel = _selectedSymbol!;
+        var selLeft = sel.X;
+        var selRight = sel.X + sel.Width;
+        var selTop = sel.Y;
+        var selBottom = sel.Y + sel.Height;
+        var selCx = sel.X + sel.Width / 2.0;
+        var selCy = sel.Y + sel.Height / 2.0;
+
+        foreach (var other in screen.Symbols)
+        {
+            if (_selectedSymbols.Contains(other)) continue;
+            var oLeft = other.X;
+            var oRight = other.X + other.Width;
+            var oTop = other.Y;
+            var oBottom = other.Y + other.Height;
+            var oCx = other.X + other.Width / 2.0;
+            var oCy = other.Y + other.Height / 2.0;
+
+            // Vertical guides (match X positions)
+            TrySnapX(ref selLeft, oLeft, screen.Height, selLeft);
+            TrySnapX(ref selLeft, oRight, screen.Height, selLeft);
+            TrySnapX(ref selRight, oLeft, screen.Height, selRight);
+            TrySnapX(ref selRight, oRight, screen.Height, selRight);
+            TrySnapX(ref selCx, oCx, screen.Height, selCx);
+
+            // Horizontal guides (match Y positions)
+            TrySnapY(ref selTop, oTop, screen.Width, selTop);
+            TrySnapY(ref selTop, oBottom, screen.Width, selTop);
+            TrySnapY(ref selBottom, oTop, screen.Width, selBottom);
+            TrySnapY(ref selBottom, oBottom, screen.Width, selBottom);
+            TrySnapY(ref selCy, oCy, screen.Width, selCy);
+        }
+    }
+
+    private void TrySnapX(ref double selEdge, double targetEdge, double canvasH, double origEdge)
+    {
+        if (Math.Abs(selEdge - targetEdge) < SmartSnapThreshold)
+        {
+            var offset = targetEdge - origEdge;
+            foreach (var s in _selectedSymbols) s.X += offset;
+            _snapGuides.Add((targetEdge, 0, targetEdge, canvasH));
+        }
+    }
+
+    private void TrySnapY(ref double selEdge, double targetEdge, double canvasW, double origEdge)
+    {
+        if (Math.Abs(selEdge - targetEdge) < SmartSnapThreshold)
+        {
+            var offset = targetEdge - origEdge;
+            foreach (var s in _selectedSymbols) s.Y += offset;
+            _snapGuides.Add((0, targetEdge, canvasW, targetEdge));
+        }
+    }
+
+    // ─── Distribute to Columns ──────────────────────────────
+    private void ApplyDistributeToColumns()
+    {
+        _showDistributeDialog = false;
+        var screen = GetScreen();
+        if (screen == null || _selectedSymbols.Count < 2) return;
+
+        var cols = Math.Max(1, _distributeColumns);
+        var sorted = _selectedSymbols.OrderBy(s => s.Y).ThenBy(s => s.X).ToList();
+
+        // Use the top-left of the bounding box as the start position
+        var startX = sorted.Min(s => s.X);
+        var startY = sorted.Min(s => s.Y);
+        var maxW = sorted.Max(s => s.Width);
+        var maxH = sorted.Max(s => s.Height);
+        var cellW = maxW + _distributeGapX;
+        var cellH = maxH + _distributeGapY;
+
+        for (int i = 0; i < sorted.Count; i++)
+        {
+            var col = i % cols;
+            var row = i / cols;
+            sorted[i].X = startX + col * cellW;
+            sorted[i].Y = startY + row * cellH;
+        }
+        OnChanged();
     }
 
     public void Dispose()

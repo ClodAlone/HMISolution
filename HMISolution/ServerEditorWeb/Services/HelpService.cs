@@ -120,6 +120,7 @@ public class HelpService
             ("datalogging", "Data Logging Viewer", "📊"),
             ("symbollibrary", "Symbol Library", "🏭"),
             ("toolbox", "Toolbox", "🧰"),
+            ("widgets", "HMI Widgets Reference", "🔧"),
             ("crossreference", "Cross Reference", "🔗"),
             ("watchtable", "Watch Table", "👁️"),
             ("problems", "Problems Panel", "⚠️"),
@@ -173,6 +174,7 @@ public class HelpService
             ["datalogging"] = "Datenprotokoll-Viewer",
             ["symbollibrary"] = "Symbolbibliothek",
             ["toolbox"] = "Werkzeugkasten",
+            ["widgets"] = "HMI-Widgets Referenz",
             ["crossreference"] = "Querverweise",
             ["watchtable"] = "Beobachtungstabelle",
             ["problems"] = "Probleme-Panel",
@@ -208,6 +210,7 @@ public class HelpService
             ["datalogging"] = "Visualizzatore log dati",
             ["symbollibrary"] = "Libreria simboli",
             ["toolbox"] = "Casella strumenti",
+            ["widgets"] = "Riferimento Widget HMI",
             ["crossreference"] = "Riferimenti incrociati",
             ["watchtable"] = "Tabella osservazione",
             ["problems"] = "Pannello problemi",
@@ -243,6 +246,7 @@ public class HelpService
             ["datalogging"] = "Visionneuse de journaux",
             ["symbollibrary"] = "Bibliothèque de symboles",
             ["toolbox"] = "Boîte à outils",
+            ["widgets"] = "Référence des Widgets HMI",
             ["crossreference"] = "Références croisées",
             ["watchtable"] = "Table de surveillance",
             ["problems"] = "Panneau des problèmes",
@@ -278,6 +282,7 @@ public class HelpService
             ["datalogging"] = "データログビューアー",
             ["symbollibrary"] = "シンボルライブラリ",
             ["toolbox"] = "ツールボックス",
+            ["widgets"] = "HMIウィジェットリファレンス",
             ["crossreference"] = "クロスリファレンス",
             ["watchtable"] = "ウォッチテーブル",
             ["problems"] = "問題パネル",
@@ -313,6 +318,7 @@ public class HelpService
             ["datalogging"] = "数据日志查看器",
             ["symbollibrary"] = "符号库",
             ["toolbox"] = "工具箱",
+            ["widgets"] = "HMI控件参考",
             ["crossreference"] = "交叉引用",
             ["watchtable"] = "监视表",
             ["problems"] = "问题面板",
@@ -788,6 +794,96 @@ Basic shapes and widgets for the Screen Editor.
 - HDA Chart, HDA Grid, Event Log, Trend
 - Recipe, Weekly Planner, IP Camera
 - Screen Embed, Image Map, Animated Text
+
+### New Widgets
+- Progress Bar, Numeric Display, LED Array, Pipe
+- Tank, Dropdown, Data Table, Sparkline
+- Motor Control, Valve, Alarm Banner, Color Zone
+- Conveyor, Pie Chart, Bar Chart, Navigation Button
+- Heat Exchanger, Popup, Setpoint Ramp, Flow Meter
+- XY Plot, PDF Viewer
+
+See **HMI Widgets Reference** for detailed descriptions of each widget.
+"""),
+
+        ["widgets"] = new("🔧 HMI Widgets Reference", """
+## HMI Widgets Reference
+
+Complete reference of all available screen widgets.
+
+### Basic Shapes
+| Widget | Description |
+|--------|------------|
+| **Rectangle** | Basic rectangle shape with fill, stroke, and corner radius |
+| **Circle** | Circle shape with configurable radius |
+| **Ellipse** | Oval shape with independent X/Y radii |
+| **Text** | Static or data-bound text label |
+| **Line** | Straight line between two points |
+
+### Classic Widgets
+| Widget | Description |
+|--------|------------|
+| **Gauge** | Circular gauge with min/max range and colored arcs |
+| **Indicator** | Colored circle that changes based on variable value |
+| **EditBox** | Input field for writing values to OPC variables |
+| **Button** | Clickable button that triggers write commands |
+| **Switch** | Toggle switch bound to a Boolean variable |
+| **Rotary Switch** | Multi-position rotary selector |
+| **Knob** | Rotary knob for analog value input |
+| **Slider (H/V)** | Horizontal or vertical slider for value input |
+
+### Data Visualization
+| Widget | Description |
+|--------|------------|
+| **HDA Chart** | Historical line chart from logged data |
+| **HDA Grid** | Tabular display of historical data |
+| **Event Log** | Scrollable event/alarm log |
+| **Trend** | Real-time scrolling trend chart |
+| **Sparkline** | Compact inline trend line |
+| **XY Plot** | Two-variable scatter/line plot |
+| **Pie Chart** | Proportional data display with configurable slices |
+| **Bar Chart** | Vertical bar chart from multiple variables |
+
+### Process Widgets
+| Widget | Description |
+|--------|------------|
+| **Progress Bar** | Horizontal bar showing value as percentage of range |
+| **Numeric Display** | Formatted numeric readout with unit, low/high limits |
+| **LED Array** | Row of colored LED indicators from bit-mask or multi-variable |
+| **Pipe** | Process piping segment with configurable flow direction and color |
+| **Tank** | Liquid tank with animated fill level |
+| **Motor Control** | Motor status indicator with run/stop/fault states |
+| **Valve** | Valve symbol with open/closed state visualization |
+| **Flow Meter** | Animated flow measurement display |
+| **Heat Exchanger** | Schematic heat exchanger with hot/cold paths |
+| **Conveyor** | Animated conveyor belt showing running state |
+| **Color Zone** | Region that changes color based on variable thresholds |
+| **Alarm Banner** | Scrolling active alarm banner |
+
+### Navigation & Interaction
+| Widget | Description |
+|--------|------------|
+| **Navigation Button** | Button that navigates to another screen |
+| **Popup** | Opens a screen overlay/popup on click |
+| **Dropdown** | Dropdown selector bound to a variable |
+| **Setpoint Ramp** | Ramp profile editor for setpoint programming |
+| **Data Table** | Read-only or editable data grid |
+| **PDF Viewer** | Embedded PDF document viewer |
+
+### Common Properties
+All widgets share these base properties:
+- **Variable Path** — OPC UA variable to bind for data
+- **Fill / Stroke** — Visual appearance colors
+- **Label** — Display text (can use `{value}` for live data)
+- **Animations** — Dynamic color, visibility, rotation rules
+- **Commands** — Click actions (write value, navigate screen, toggle)
+- **Access Control** — Restrict visibility/edit by user group
+
+### Screen Editor Features
+- **Grid Overlay** — Toggle a snap grid on the SVG canvas (⊞ Grid button)
+- **Snap to Grid** — Objects snap to grid intersections while dragging (🧲 Snap button)
+- **Smart Snap** — Alignment guides appear when objects align with others (📏 Smart button)
+- **Distribute to Columns** — Arrange selected objects into a grid layout (🔲 Distribute button)
 """),
 
         ["crossreference"] = new("🔗 Cross Reference", """
@@ -1330,6 +1426,61 @@ Grundformen und Widgets für den Bildschirm-Editor.
 - Rezept, Wochenplaner, IP-Kamera
 - Bildschirm-Einbettung, Bildkarte, Animierter Text
 """),
+            ["widgets"] = new("🔧 HMI-Widgets Referenz", """
+## HMI-Widgets Referenz
+
+Vollständige Referenz aller verfügbaren HMI-Widgets, nach Kategorie gruppiert.
+
+### Grundformen
+| Widget | Beschreibung |
+|--------|--------------|
+| Rechteck | Konfigurierbares Rechteck |
+| Kreis | Kreis-/Ellipsenform |
+| Ellipse | Ellipsenform |
+| Linie | Gerade Linie zwischen zwei Punkten |
+| Text | Statisches oder dynamisches Textlabel |
+
+### Klassische Widgets
+| Widget | Beschreibung |
+|--------|--------------|
+| Anzeige | Analoge Messuhr |
+| Indikator | Statusanzeige |
+| Eingabefeld | Dateneingabefeld |
+| Taste | Klickbare Aktionstaste |
+| Schalter | Kippschalter |
+| Drehknopf | Drehbare Eingabesteuerung |
+| Schieber | Lineare Schiebesteuerung |
+
+### Datenvisualisierung
+| Widget | Beschreibung |
+|--------|--------------|
+| HDA-Diagramm | Historisches Datendiagramm |
+| HDA-Tabelle | Historische Datentabelle |
+| Ereignisprotokoll | Systemereignisliste |
+| Trend | Echtzeit-Trenddiagramm |
+
+### Prozess-Widgets
+| Widget | Beschreibung |
+|--------|--------------|
+| Rezept | Rezeptverwaltung |
+| Wochenplaner | Zeitbasierte Planung |
+| IP-Kamera | Live-Videostream |
+
+### Navigation
+| Widget | Beschreibung |
+|--------|--------------|
+| Bildschirm-Einbettung | Andere Bildschirme einbetten |
+| Bildkarte | Klickbare Bildbereiche |
+| Animierter Text | Dynamischer animierter Text |
+
+### Editor-Funktionen
+| Funktion | Beschreibung |
+|----------|--------------|
+| Raster | Konfigurierbares Editor-Raster |
+| Raster-Einrasten | Automatische Ausrichtung am Raster |
+| Intelligentes Einrasten | Ausrichtungshilfen an anderen Objekten |
+| In Spalten verteilen | Auswahl in N-Spalten-Raster anordnen |
+"""),
             ["crossreference"] = new("🔗 Querverweise", """
 ## Querverweise-Panel
 
@@ -1859,6 +2010,61 @@ Forme base e widget per l'Editor Schermate.
 - Grafico HDA, Griglia HDA, Log Eventi, Trend
 - Ricetta, Pianificatore Settimanale, Telecamera IP
 - Schermata Incorporata, Mappa Immagine, Testo Animato
+"""),
+            ["widgets"] = new("🔧 Riferimento Widget HMI", """
+## Riferimento Widget HMI
+
+Riferimento completo di tutti i widget HMI disponibili, raggruppati per categoria.
+
+### Forme base
+| Widget | Descrizione |
+|--------|-------------|
+| Rettangolo | Forma rettangolare configurabile |
+| Cerchio | Forma circolare/ellittica |
+| Ellisse | Forma ellittica |
+| Linea | Linea retta tra due punti |
+| Testo | Etichetta di testo statico o dinamico |
+
+### Widget classici
+| Widget | Descrizione |
+|--------|-------------|
+| Indicatore analogico | Display a lancetta |
+| Indicatore di stato | Spia di stato |
+| Campo di input | Campo di immissione dati |
+| Pulsante | Pulsante di azione cliccabile |
+| Interruttore | Interruttore a levetta |
+| Manopola | Controllo di input rotativo |
+| Slider | Controllo di scorrimento lineare |
+
+### Visualizzazione dati
+| Widget | Descrizione |
+|--------|-------------|
+| Grafico HDA | Grafico dati storici |
+| Griglia HDA | Tabella dati storici |
+| Registro eventi | Elenco eventi di sistema |
+| Trend | Grafico trend in tempo reale |
+
+### Widget di processo
+| Widget | Descrizione |
+|--------|-------------|
+| Ricetta | Gestione ricette |
+| Pianificatore settimanale | Pianificazione temporale |
+| Telecamera IP | Flusso video in diretta |
+
+### Navigazione
+| Widget | Descrizione |
+|--------|-------------|
+| Incorporamento schermata | Incorpora altre schermate |
+| Mappa immagine | Aree immagine cliccabili |
+| Testo animato | Testo animato dinamico |
+
+### Funzionalità dell'editor
+| Funzionalità | Descrizione |
+|--------------|-------------|
+| Griglia | Sovrapposizione griglia configurabile |
+| Aggancio griglia | Allineamento automatico alla griglia |
+| Aggancio intelligente | Guide di allineamento con altri oggetti |
+| Distribuisci in colonne | Disponi selezione in griglia a N colonne |
 """),
             ["crossreference"] = new("🔗 Riferimenti incrociati", """
 ## Pannello Riferimenti incrociati
@@ -2390,6 +2596,61 @@ Formes de base et widgets pour l'Éditeur d'Écrans.
 - Recette, Planificateur Hebdomadaire, Caméra IP
 - Écran Intégré, Carte Image, Texte Animé
 """),
+            ["widgets"] = new("🔧 Référence des Widgets HMI", """
+## Référence des Widgets HMI
+
+Référence complète de tous les widgets HMI disponibles, classés par catégorie.
+
+### Formes de base
+| Widget | Description |
+|--------|-------------|
+| Rectangle | Forme rectangulaire configurable |
+| Cercle | Forme circulaire/elliptique |
+| Ellipse | Forme elliptique |
+| Ligne | Ligne droite entre deux points |
+| Texte | Étiquette de texte statique ou dynamique |
+
+### Widgets classiques
+| Widget | Description |
+|--------|-------------|
+| Jauge | Affichage de jauge analogique |
+| Indicateur | Indicateur d'état |
+| Champ de saisie | Champ de saisie de données |
+| Bouton | Bouton d'action cliquable |
+| Interrupteur | Commutateur à bascule |
+| Bouton rotatif | Commande d'entrée rotative |
+| Curseur | Commande de glissement linéaire |
+
+### Visualisation de données
+| Widget | Description |
+|--------|-------------|
+| Graphique HDA | Graphique de données historiques |
+| Grille HDA | Tableau de données historiques |
+| Journal d'événements | Liste des événements système |
+| Tendance | Graphique de tendance en temps réel |
+
+### Widgets de processus
+| Widget | Description |
+|--------|-------------|
+| Recette | Gestion des recettes |
+| Planificateur hebdomadaire | Planification temporelle |
+| Caméra IP | Flux vidéo en direct |
+
+### Navigation
+| Widget | Description |
+|--------|-------------|
+| Intégration d'écran | Intégrer d'autres écrans |
+| Carte image | Zones d'image cliquables |
+| Texte animé | Texte dynamique animé |
+
+### Fonctionnalités de l'éditeur
+| Fonctionnalité | Description |
+|----------------|-------------|
+| Grille | Superposition de grille configurable |
+| Accrochage grille | Alignement auto sur la grille |
+| Accrochage intelligent | Guides d'alignement avec d'autres objets |
+| Distribuer en colonnes | Organiser la sélection en grille de N colonnes |
+"""),
             ["crossreference"] = new("🔗 Références croisées", """
 ## Panneau des Références croisées
 
@@ -2920,6 +3181,61 @@ HMI画面用の既製産業用SVGシンボル。
 - レシピ、週間プランナー、IPカメラ
 - 画面埋め込み、イメージマップ、アニメーションテキスト
 """),
+            ["widgets"] = new("🔧 HMIウィジェットリファレンス", """
+## HMIウィジェットリファレンス
+
+利用可能なすべてのHMIウィジェットのリファレンス（カテゴリ別）。
+
+### 基本図形
+| ウィジェット | 説明 |
+|------------|------|
+| 矩形 | 設定可能な矩形 |
+| 円 | 円形/楕円形 |
+| 楕円 | 楕円形状 |
+| 線 | 2点間の直線 |
+| テキスト | 静的/動的テキストラベル |
+
+### クラシックウィジェット
+| ウィジェット | 説明 |
+|------------|------|
+| ゲージ | アナログゲージ表示 |
+| インジケーター | ステータスインジケーター |
+| 入力フィールド | データ入力フィールド |
+| ボタン | クリック可能なアクションボタン |
+| スイッチ | トグルスイッチ |
+| ノブ | 回転入力コントロール |
+| スライダー | リニアスライドコントロール |
+
+### データ可視化
+| ウィジェット | 説明 |
+|------------|------|
+| HDAチャート | 履歴データチャート |
+| HDAグリッド | 履歴データテーブル |
+| イベントログ | システムイベント一覧 |
+| トレンド | リアルタイムトレンドグラフ |
+
+### プロセスウィジェット
+| ウィジェット | 説明 |
+|------------|------|
+| レシピ | レシピ管理 |
+| 週間プランナー | 時間ベースのスケジューリング |
+| IPカメラ | ライブビデオストリーム |
+
+### ナビゲーション
+| ウィジェット | 説明 |
+|------------|------|
+| 画面埋め込み | 他の画面を埋め込む |
+| イメージマップ | クリック可能な画像領域 |
+| アニメーションテキスト | 動的アニメーションテキスト |
+
+### エディター機能
+| 機能 | 説明 |
+|------|------|
+| グリッド | 設定可能なエディターグリッドオーバーレイ |
+| グリッドスナップ | 移動時にグリッドに自動整列 |
+| スマートスナップ | 他のオブジェクトとの整列ガイド |
+| 列に分布 | 選択を N列グリッドに配置 |
+"""),
             ["crossreference"] = new("🔗 クロスリファレンス", """
 ## クロスリファレンスパネル
 
@@ -3449,6 +3765,61 @@ HMI画面的预制工业SVG符号。
 - HDA图表、HDA网格、事件日志、趋势
 - 配方、周计划、IP摄像头
 - 画面嵌入、图像映射、动画文本
+"""),
+            ["widgets"] = new("🔧 HMI控件参考", """
+## HMI控件参考
+
+所有可用HMI控件的完整参考，按类别分组。
+
+### 基本形状
+| 控件 | 说明 |
+|------|------|
+| 矩形 | 可配置的矩形形状 |
+| 圆形 | 圆形/椭圆形形状 |
+| 椭圆 | 椭圆形状 |
+| 线条 | 两点间的直线 |
+| 文本 | 静态或动态文本标签 |
+
+### 经典控件
+| 控件 | 说明 |
+|------|------|
+| 仪表 | 模拟仪表显示 |
+| 指示器 | 状态指示灯 |
+| 输入框 | 数据输入字段 |
+| 按钮 | 可点击的操作按钮 |
+| 开关 | 切换开关控件 |
+| 旋钮 | 旋转输入控件 |
+| 滑块 | 线性滑动控件 |
+
+### 数据可视化
+| 控件 | 说明 |
+|------|------|
+| HDA图表 | 历史数据图表 |
+| HDA网格 | 历史数据表格 |
+| 事件日志 | 系统事件列表 |
+| 趋势 | 实时趋势图 |
+
+### 过程控件
+| 控件 | 说明 |
+|------|------|
+| 配方 | 配方管理控件 |
+| 周计划 | 基于时间的调度 |
+| IP摄像头 | 实时视频流 |
+
+### 导航与交互
+| 控件 | 说明 |
+|------|------|
+| 画面嵌入 | 嵌入其他画面 |
+| 图像映射 | 可点击的图像区域 |
+| 动画文本 | 动态动画文本 |
+
+### 编辑器功能
+| 功能 | 说明 |
+|------|------|
+| 网格 | 可配置的编辑器网格叠加 |
+| 吸附网格 | 移动时自动对齐到网格 |
+| 智能吸附 | 与其他对象的对齐参考线 |
+| 分布到列 | 将选中对象排列为N列网格 |
 """),
             ["crossreference"] = new("🔗 交叉引用", """
 ## 交叉引用面板

@@ -425,7 +425,7 @@ namespace SharedModels
     public class ScreenSymbol
     {
         public string Id { get; set; } = "";
-        public string Type { get; set; } = "rect"; // rect, circle, ellipse, text, line, gauge, indicator, svg, alarmlist, hdachart, hdagrid, eventlog, editbox, ipcamera, recipe, weeklyplanner, screenembed, reportviewer, imagemap, trend, switch, rotaryswitch, knob, hslider, vslider, button, animtext
+        public string Type { get; set; } = "rect"; // rect, circle, ellipse, text, line, gauge, indicator, svg, alarmlist, hdachart, hdagrid, eventlog, editbox, ipcamera, recipe, weeklyplanner, screenembed, reportviewer, imagemap, trend, progressbar, numericdisplay, ledarray, pipe, tank, dropdown, datatable, sparkline, motorcontrol, valve, alarmbanner, colorzone, conveyor, piechart, barchart, navbutton, heatexchanger, popup, setpointramp, flowmeter, xyplot, pdfviewer, switch, rotaryswitch, knob, hslider, vslider, button, animtext
         public double X { get; set; }
         public double Y { get; set; }
         public double Width { get; set; } = 80;
@@ -737,6 +737,342 @@ namespace SharedModels
         // --- Report Viewer widget (Type == "reportviewer") --------
         /// <summary>Report definition name (must match a ReportConfig.Name).</summary>
         public string ReportName { get; set; } = "";
+
+        // ── Progress Bar ──
+        /// <summary>Progress bar orientation: "horizontal" or "vertical".</summary>
+        public string ProgressBarOrientation { get; set; } = "horizontal";
+        /// <summary>Fill color for the progress portion.</summary>
+        public string ProgressBarFillColor { get; set; } = "#22c55e";
+        /// <summary>Background/track color.</summary>
+        public string ProgressBarTrackColor { get; set; } = "#334155";
+        /// <summary>Whether to show percentage text overlay.</summary>
+        public bool ProgressBarShowText { get; set; } = true;
+        /// <summary>Minimum scale value (default 0).</summary>
+        public double ProgressBarMin { get; set; } = 0;
+        /// <summary>Maximum scale value (default 100).</summary>
+        public double ProgressBarMax { get; set; } = 100;
+        /// <summary>Border radius in px.</summary>
+        public int ProgressBarBorderRadius { get; set; } = 4;
+
+        // ── Numeric Display ──
+        /// <summary>Number of decimal places.</summary>
+        public int NumericDisplayDecimals { get; set; } = 1;
+        /// <summary>Engineering unit label (e.g. "°C", "bar").</summary>
+        public string NumericDisplayUnit { get; set; } = "";
+        /// <summary>Text color.</summary>
+        public string NumericDisplayColor { get; set; } = "#e2e8f0";
+        /// <summary>Background color.</summary>
+        public string NumericDisplayBackground { get; set; } = "#1e293b";
+        /// <summary>Low warning threshold; value below this shows warning color.</summary>
+        public double NumericDisplayLowWarn { get; set; } = -1;
+        /// <summary>High warning threshold; value above this shows warning color.</summary>
+        public double NumericDisplayHighWarn { get; set; } = -1;
+        /// <summary>Warning-zone color.</summary>
+        public string NumericDisplayWarnColor { get; set; } = "#f59e0b";
+
+        // ── LED Array ──
+        /// <summary>Number of LEDs in the array.</summary>
+        public int LedArrayCount { get; set; } = 8;
+        /// <summary>Layout: "row" or "column".</summary>
+        public string LedArrayLayout { get; set; } = "row";
+        /// <summary>LED color when bit is ON.</summary>
+        public string LedArrayOnColor { get; set; } = "#22c55e";
+        /// <summary>LED color when bit is OFF.</summary>
+        public string LedArrayOffColor { get; set; } = "#334155";
+        /// <summary>LED shape: "circle" or "square".</summary>
+        public string LedArrayShape { get; set; } = "circle";
+
+        // ── Pipe ──
+        /// <summary>Flow direction: "left-right", "right-left", "top-bottom", "bottom-top".</summary>
+        public string PipeFlowDirection { get; set; } = "left-right";
+        /// <summary>Pipe body color.</summary>
+        public string PipeColor { get; set; } = "#64748b";
+        /// <summary>Fluid/flow indicator color.</summary>
+        public string PipeFluidColor { get; set; } = "#3b82f6";
+        /// <summary>Pipe wall thickness in px.</summary>
+        public double PipeThickness { get; set; } = 6;
+        /// <summary>Animate the flow when value is truthy.</summary>
+        public bool PipeAnimate { get; set; } = true;
+
+        // ── Tank ──
+        /// <summary>Tank fill color.</summary>
+        public string TankFillColor { get; set; } = "#3b82f6";
+        /// <summary>Tank body/shell color.</summary>
+        public string TankBodyColor { get; set; } = "#1e293b";
+        /// <summary>Scale minimum (empty).</summary>
+        public double TankMin { get; set; } = 0;
+        /// <summary>Scale maximum (full).</summary>
+        public double TankMax { get; set; } = 100;
+        /// <summary>Show level percentage text.</summary>
+        public bool TankShowLevel { get; set; } = true;
+        /// <summary>Engineering unit label.</summary>
+        public string TankUnit { get; set; } = "%";
+
+        // ── Dropdown ──
+        /// <summary>Semicolon-separated options: "Label=Value;Label2=Value2".</summary>
+        public string DropdownOptions { get; set; } = "";
+        /// <summary>Background color for the select element.</summary>
+        public string DropdownBackground { get; set; } = "#1e293b";
+        /// <summary>Text color.</summary>
+        public string DropdownTextColor { get; set; } = "#e2e8f0";
+
+        // ── Data Table ──
+        /// <summary>Semicolon-separated column definitions: "Header=VarPath;Header2=VarPath2".</summary>
+        public string DataTableColumns { get; set; } = "";
+        /// <summary>Header background color.</summary>
+        public string DataTableHeaderBg { get; set; } = "#1e293b";
+        /// <summary>Row background color.</summary>
+        public string DataTableRowBg { get; set; } = "#0f172a";
+        /// <summary>Text color.</summary>
+        public string DataTableTextColor { get; set; } = "#e2e8f0";
+        /// <summary>Show grid borders.</summary>
+        public bool DataTableShowBorders { get; set; } = true;
+
+        // ── Sparkline ──
+        /// <summary>Line color.</summary>
+        public string SparklineColor { get; set; } = "#3b82f6";
+        /// <summary>Number of data points to retain.</summary>
+        public int SparklineMaxPoints { get; set; } = 50;
+        /// <summary>Show current value text.</summary>
+        public bool SparklineShowValue { get; set; } = true;
+        /// <summary>Fill area under the line.</summary>
+        public bool SparklineFillArea { get; set; }
+        /// <summary>Line stroke width.</summary>
+        public double SparklineStrokeWidth { get; set; } = 1.5;
+
+        // ── Motor Control ──
+        /// <summary>Motor symbol type: "motor", "pump", "fan".</summary>
+        public string MotorControlStyle { get; set; } = "motor";
+        /// <summary>Color when running.</summary>
+        public string MotorControlRunColor { get; set; } = "#22c55e";
+        /// <summary>Color when stopped.</summary>
+        public string MotorControlStopColor { get; set; } = "#64748b";
+        /// <summary>Color when faulted.</summary>
+        public string MotorControlFaultColor { get; set; } = "#ef4444";
+        /// <summary>Variable path for fault state.</summary>
+        public string MotorControlFaultPath { get; set; } = "";
+        /// <summary>Show RPM or speed value.</summary>
+        public bool MotorControlShowSpeed { get; set; }
+        /// <summary>Variable path for speed/RPM.</summary>
+        public string MotorControlSpeedPath { get; set; } = "";
+
+        // ── Valve ──
+        /// <summary>Valve type: "gate", "ball", "butterfly".</summary>
+        public string ValveStyle { get; set; } = "gate";
+        /// <summary>Color when open.</summary>
+        public string ValveOpenColor { get; set; } = "#22c55e";
+        /// <summary>Color when closed.</summary>
+        public string ValveClosedColor { get; set; } = "#ef4444";
+        /// <summary>Color for intermediate/traveling state.</summary>
+        public string ValveTransitColor { get; set; } = "#f59e0b";
+        /// <summary>Orientation: "horizontal" or "vertical".</summary>
+        public string ValveOrientation { get; set; } = "horizontal";
+        /// <summary>Variable path for position feedback (0-100%).</summary>
+        public string ValvePositionPath { get; set; } = "";
+
+        // ── Alarm Banner ──
+        /// <summary>Banner display style: "compact" or "detailed".</summary>
+        public string AlarmBannerStyle { get; set; } = "compact";
+        /// <summary>Show alarm count badge.</summary>
+        public bool AlarmBannerShowCount { get; set; } = true;
+        /// <summary>Flash on critical alarm.</summary>
+        public bool AlarmBannerFlash { get; set; } = true;
+
+        // ── Color Zone ──
+        /// <summary>Default background color when no rule matches.</summary>
+        public string ColorZoneDefault { get; set; } = "#334155";
+        /// <summary>Border radius in px.</summary>
+        public int ColorZoneBorderRadius { get; set; } = 4;
+        /// <summary>Semicolon-separated color rules: ">80 #ef4444;>=20 #22c55e;>=0 #3b82f6".</summary>
+        public string ColorZoneRules { get; set; } = "";
+        /// <summary>Show value text overlay.</summary>
+        public bool ColorZoneShowValue { get; set; }
+
+        // ── Conveyor ──
+        /// <summary>Conveyor orientation: "horizontal" or "vertical".</summary>
+        public string ConveyorOrientation { get; set; } = "horizontal";
+        /// <summary>Belt/roller color.</summary>
+        public string ConveyorBeltColor { get; set; } = "#475569";
+        /// <summary>Running-state indicator color.</summary>
+        public string ConveyorRunColor { get; set; } = "#22c55e";
+        /// <summary>Fault-state indicator color.</summary>
+        public string ConveyorFaultColor { get; set; } = "#ef4444";
+        /// <summary>Animation speed multiplier (1 = normal).</summary>
+        public double ConveyorSpeed { get; set; } = 1;
+        /// <summary>Variable path for fault state (1/true = fault).</summary>
+        public string ConveyorFaultPath { get; set; } = "";
+
+        // ── Pie Chart ──
+        /// <summary>Pie chart style: "pie" or "doughnut".</summary>
+        public string PieChartStyle { get; set; } = "pie";
+        /// <summary>Inner radius ratio for doughnut (0-0.9).</summary>
+        public double PieChartInnerRadius { get; set; } = 0.5;
+        /// <summary>Show legend alongside chart.</summary>
+        public bool PieChartShowLegend { get; set; } = true;
+        /// <summary>Show percentage labels on slices.</summary>
+        public bool PieChartShowPercentage { get; set; }
+        /// <summary>Slice definitions: "Label=VarPath #color;...".</summary>
+        public string PieChartSlices { get; set; } = "";
+
+        // ── Bar Chart ──
+        /// <summary>Bar orientation: "vertical" or "horizontal".</summary>
+        public string BarChartOrientation { get; set; } = "vertical";
+        /// <summary>Maximum scale value.</summary>
+        public double BarChartMax { get; set; } = 100;
+        /// <summary>Show value labels on bars.</summary>
+        public bool BarChartShowValues { get; set; } = true;
+        /// <summary>Show grid lines.</summary>
+        public bool BarChartShowGrid { get; set; } = true;
+        /// <summary>Bar definitions: "Label=VarPath #color;...".</summary>
+        public string BarChartBars { get; set; } = "";
+
+        // ── Nav Button ──
+        /// <summary>Target screen name/path for navigation.</summary>
+        public string NavButtonTarget { get; set; } = "";
+        /// <summary>Button style: "filled", "outline", "ghost".</summary>
+        public string NavButtonStyle { get; set; } = "filled";
+        /// <summary>Icon character/emoji displayed on button.</summary>
+        public string NavButtonIcon { get; set; } = ">";
+        /// <summary>Icon position: "left", "right", "none".</summary>
+        public string NavButtonIconPosition { get; set; } = "left";
+        /// <summary>Button background color. Default "#3b82f6".</summary>
+        public string NavButtonColor { get; set; } = "#3b82f6";
+        /// <summary>Button text color. Default "#ffffff".</summary>
+        public string NavButtonTextColor { get; set; } = "#ffffff";
+
+        // ── Heat Exchanger ──
+        /// <summary>Hot-side color. Default "#ef4444".</summary>
+        public string HeatExchangerHotColor { get; set; } = "#ef4444";
+        /// <summary>Cold-side color. Default "#3b82f6".</summary>
+        public string HeatExchangerColdColor { get; set; } = "#3b82f6";
+        /// <summary>Shell body color. Default "#64748b".</summary>
+        public string HeatExchangerBodyColor { get; set; } = "#64748b";
+        /// <summary>Show temperature labels on hot/cold sides.</summary>
+        public bool HeatExchangerShowTemps { get; set; } = true;
+        /// <summary>Variable path for hot-side inlet temperature.</summary>
+        public string HeatExchangerHotInPath { get; set; } = "";
+        /// <summary>Variable path for cold-side inlet temperature.</summary>
+        public string HeatExchangerColdInPath { get; set; } = "";
+        /// <summary>Orientation: "horizontal" or "vertical".</summary>
+        public string HeatExchangerOrientation { get; set; } = "horizontal";
+
+        // ── Popup ──
+        /// <summary>Trigger mode: "hover", "click", or "variable".</summary>
+        public string PopupTrigger { get; set; } = "hover";
+        /// <summary>Content text displayed inside the popup.</summary>
+        public string PopupContent { get; set; } = "";
+        /// <summary>Popup width in pixels.</summary>
+        public double PopupWidth { get; set; } = 200;
+        /// <summary>Popup height in pixels.</summary>
+        public double PopupHeight { get; set; } = 120;
+        /// <summary>Popup background color.</summary>
+        public string PopupBackground { get; set; } = "#1e293b";
+        /// <summary>Popup border color.</summary>
+        public string PopupBorderColor { get; set; } = "#475569";
+        /// <summary>Position relative to parent: "top", "bottom", "left", "right".</summary>
+        public string PopupPosition { get; set; } = "top";
+        /// <summary>Semicolon-separated variable paths shown inside popup.</summary>
+        public string PopupVariables { get; set; } = "";
+
+        // ── Setpoint Ramp ──
+        /// <summary>Current-value line color.</summary>
+        public string SetpointColor { get; set; } = "#22c55e";
+        /// <summary>Target-value line color.</summary>
+        public string SetpointTargetColor { get; set; } = "#f97316";
+        /// <summary>Variable path for ramp rate.</summary>
+        public string SetpointRatePath { get; set; } = "";
+        /// <summary>Variable path for target setpoint.</summary>
+        public string SetpointTargetPath { get; set; } = "";
+        /// <summary>Scale minimum.</summary>
+        public double SetpointMin { get; set; } = 0;
+        /// <summary>Scale maximum.</summary>
+        public double SetpointMax { get; set; } = 100;
+        /// <summary>Show ramp rate value.</summary>
+        public bool SetpointShowRate { get; set; } = true;
+        /// <summary>Engineering unit label.</summary>
+        public string SetpointUnit { get; set; } = "";
+
+        // ── Flow Meter ──
+        /// <summary>Visual style: "circular", "digital".</summary>
+        public string FlowMeterStyle { get; set; } = "circular";
+        /// <summary>Body/gauge color.</summary>
+        public string FlowMeterBodyColor { get; set; } = "#334155";
+        /// <summary>Flow indicator color.</summary>
+        public string FlowMeterFlowColor { get; set; } = "#3b82f6";
+        /// <summary>Variable path for totalizer value.</summary>
+        public string FlowMeterTotalizerPath { get; set; } = "";
+        /// <summary>Flow rate engineering unit.</summary>
+        public string FlowMeterUnit { get; set; } = "L/min";
+        /// <summary>Totalizer engineering unit.</summary>
+        public string FlowMeterTotalizerUnit { get; set; } = "L";
+        /// <summary>Show totalizer readout.</summary>
+        public bool FlowMeterShowTotalizer { get; set; } = true;
+        /// <summary>Orientation: "horizontal" or "vertical".</summary>
+        public string FlowMeterOrientation { get; set; } = "horizontal";
+
+        // ── XY Plot ──
+        /// <summary>Variable path for X-axis data.</summary>
+        public string XYPlotXPath { get; set; } = "";
+        /// <summary>Variable path for Y-axis data.</summary>
+        public string XYPlotYPath { get; set; } = "";
+        /// <summary>Trace line color.</summary>
+        public string XYPlotColor { get; set; } = "#3b82f6";
+        /// <summary>Max data points to retain.</summary>
+        public int XYPlotMaxPoints { get; set; } = 200;
+        /// <summary>Show grid lines.</summary>
+        public bool XYPlotShowGrid { get; set; } = true;
+        /// <summary>Show axis lines and labels.</summary>
+        public bool XYPlotShowAxes { get; set; } = true;
+        /// <summary>Plot background color.</summary>
+        public string XYPlotBackground { get; set; } = "#0f172a";
+        /// <summary>Trace stroke width.</summary>
+        public double XYPlotStrokeWidth { get; set; } = 1.5;
+        /// <summary>X-axis label text.</summary>
+        public string XYPlotXLabel { get; set; } = "X";
+        /// <summary>Y-axis label text.</summary>
+        public string XYPlotYLabel { get; set; } = "Y";
+
+        // ── PDF Viewer ──
+        /// <summary>PDF source type: "url" or "embedded".</summary>
+        public string PdfViewerSource { get; set; } = "url";
+        /// <summary>URL of the PDF document.</summary>
+        public string PdfViewerUrl { get; set; } = "";
+        /// <summary>Show the PDF toolbar.</summary>
+        public bool PdfViewerShowToolbar { get; set; } = true;
+        /// <summary>Background color for the viewer frame.</summary>
+        public string PdfViewerBackground { get; set; } = "#1e293b";
+
+        // ── Additional aliases / properties used by prior widget code ──
+        public bool ProgressBarShowValue { get; set; } = true;
+        public string NumericDisplayFormat { get; set; } = "F1";
+        public int NumericDisplayDigits { get; set; } = 5;
+        public string LedArrayOrientation { get; set; } = "horizontal";
+        public string LedArrayLabels { get; set; } = "";
+        public string PipeFlowColor { get; set; } = "#3b82f6";
+        public bool PipeShowFlow { get; set; } = true;
+        public double PipeFlowSpeed { get; set; } = 1;
+        public string PipeOrientation { get; set; } = "horizontal";
+        public string TankLiquidColor { get; set; } = "#3b82f6";
+        public string TankStyle { get; set; } = "rectangular";
+        public string MotorRunColor { get; set; } = "#22c55e";
+        public string MotorStopColor { get; set; } = "#64748b";
+        public string MotorFaultColor { get; set; } = "#ef4444";
+        public string MotorFaultPath { get; set; } = "";
+        public bool MotorAnimateRotation { get; set; } = true;
+        public string MotorStyle { get; set; } = "motor";
+        public int SparklinePoints { get; set; } = 50;
+        public string DropdownValues { get; set; } = "";
+        public string DataTableBackground { get; set; } = "#0f172a";
+        public bool DataTableShowHeader { get; set; } = true;
+        public int DataTableMaxRows { get; set; } = 10;
+        public string ConveyorFrameColor { get; set; } = "#334155";
+        public bool ConveyorAnimate { get; set; } = true;
+        public string PieChartBackground { get; set; } = "#0f172a";
+        public bool PieChartShowLabels { get; set; } = true;
+        public string BarChartBackground { get; set; } = "#0f172a";
+        public double BarChartMaxValue { get; set; } = 100;
+
+
 
     }
 

@@ -419,6 +419,18 @@ namespace SharedModels
         /// <summary>When true (default), this screen appears in the runtime navigation bar/menu.</summary>
         public bool ShowInNavigation { get; set; } = true;
 
+        /// <summary>Show an alignment grid on the SVG editor canvas.</summary>
+        public bool ShowGrid { get; set; }
+
+        /// <summary>Grid spacing in pixels for the SVG editor grid overlay.</summary>
+        public int EditorGridSize { get; set; } = 20;
+
+        /// <summary>When true, objects snap to the grid while being moved.</summary>
+        public bool SnapToGrid { get; set; }
+
+        /// <summary>When true, moving objects snap to other objects' edges/centers (smart alignment guides).</summary>
+        public bool SmartSnap { get; set; }
+
         public List<ScreenSymbol> Symbols { get; set; } = new();
     }
 

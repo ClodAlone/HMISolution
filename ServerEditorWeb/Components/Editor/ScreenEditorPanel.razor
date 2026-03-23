@@ -678,8 +678,275 @@
                                             @RenderSvgText(atW / 2.0, atH / 2.0 + 1, "middle", "middle", sym.Fill ?? "#00e5ff", sym.FontSize > 0 ? sym.FontSize : 14, atLabel, sym)
                                             @RenderSvgText(atW - 6, ScaledFontSize(10, sym), "end", null, "#888", ScaledFontSize(7, sym), atMode)
                                             break;
+                                        case "progressbar":
+                                            var pbTrack = sym.ProgressBarTrackColor ?? "#2d2d2d";
+                                            var pbR = sym.ProgressBarBorderRadius;
+                                            var pbHoriz = (sym.ProgressBarOrientation ?? "horizontal") == "horizontal";
+                                            <rect width="@sym.Width" height="@sym.Height" rx="@pbR" fill="@pbTrack" stroke="@sym.Stroke" stroke-width="@sym.StrokeWidth" />
+                                            @if (pbHoriz)
+                                            {
+                                                <rect width="@(sym.Width * 0.6)" height="@sym.Height" rx="@pbR" fill="@sym.Fill" />
+                                            }
+                                            else
+                                            {
+                                                <rect y="@(sym.Height * 0.4)" width="@sym.Width" height="@(sym.Height * 0.6)" rx="@pbR" fill="@sym.Fill" />
+                                            }
+                                            @RenderSvgText(sym.Width / 2, sym.Height / 2 + 4, "middle", "middle", "#ffffff", ScaledFontSize(11, sym), "60%")
+                                            break;
+                                        case "numericdisplay":
+                                            var ndBg = sym.NumericDisplayBackground ?? "#111827";
+                                            <rect width="@sym.Width" height="@sym.Height" rx="4" fill="@ndBg" stroke="@sym.Stroke" stroke-width="@sym.StrokeWidth" />
+                                            var ndUnit = sym.NumericDisplayUnit ?? "";
+                                            var ndFmt = sym.NumericDisplayFormat ?? "F1";
+                                            @RenderSvgText(sym.Width / 2, sym.Height / 2 - 2, "middle", "middle", sym.Fill ?? "#00e5ff", sym.FontSize > 0 ? sym.FontSize : (int)(sym.Height * 0.45), "42.7", sym)
+                                            @if (!string.IsNullOrEmpty(ndUnit))
+                                            {
+                                                @RenderSvgText(sym.Width / 2, sym.Height - 8, "middle", null, "#94a3b8", ScaledFontSize(9, sym), ndUnit)
+                                            }
+                                            break;
+                                        case "ledarray":
+                                            var ledC = sym.LedArrayCount > 0 ? sym.LedArrayCount : 8;
+                                            var ledOn = sym.LedArrayOnColor ?? "#22c55e";
+                                            var ledOff = sym.LedArrayOffColor ?? "#1e293b";
+                                            var ledH = (sym.LedArrayOrientation ?? "horizontal") == "horizontal";
+                                            <rect width="@sym.Width" height="@sym.Height" rx="3" fill="#0f172a" stroke="@sym.Stroke" stroke-width="@sym.StrokeWidth" />
+                                            @for (var li = 0; li < Math.Min(ledC, 16); li++)
+                                            {
+                                                var isOn = li % 3 == 0;
+                                                @if (ledH)
+                                                {
+                                                    var lx = 4 + li * ((sym.Width - 8) / ledC);
+                                                    var lw = (sym.Width - 8) / ledC - 2;
+                                                    <rect x="@F(lx)" y="4" width="@F(lw)" height="@(sym.Height - 8)" rx="2" fill="@(isOn ? ledOn : ledOff)" />
+                                                }
+                                                else
+                                                {
+                                                    var ly = 4 + li * ((sym.Height - 8) / ledC);
+                                                    var lh = (sym.Height - 8) / ledC - 2;
+                                                    <rect x="4" y="@F(ly)" width="@(sym.Width - 8)" height="@F(lh)" rx="2" fill="@(isOn ? ledOn : ledOff)" />
+                                                }
+                                            }
+                                            break;
+                                        case "pipe":
+                                            var pipeC = sym.PipeColor ?? "#64748b";
+                                            var pipeF = sym.PipeFlowColor ?? "#94a3b8";
+                                            var pipeHz = (sym.PipeOrientation ?? "horizontal") == "horizontal";
+                                            @if (pipeHz)
+                                            {
+                                                var pipeH2 = sym.Height / 2;
+                                                <rect x="0" y="@F(pipeH2 / 2)" width="@sym.Width" height="@F(pipeH2)" rx="3" fill="@pipeC" />
+                                                <line x1="@(sym.Width * 0.2)" y1="@F(pipeH2 * 0.7)" x2="@(sym.Width * 0.35)" y2="@F(pipeH2 * 0.7)" stroke="@pipeF" stroke-width="2" stroke-dasharray="6,4" />
+                                                <line x1="@(sym.Width * 0.45)" y1="@F(pipeH2 * 0.7)" x2="@(sym.Width * 0.6)" y2="@F(pipeH2 * 0.7)" stroke="@pipeF" stroke-width="2" stroke-dasharray="6,4" />
+                                                <line x1="@(sym.Width * 0.7)" y1="@F(pipeH2 * 0.7)" x2="@(sym.Width * 0.85)" y2="@F(pipeH2 * 0.7)" stroke="@pipeF" stroke-width="2" stroke-dasharray="6,4" />
+                                            }
+                                            else
+                                            {
+                                                var pipeW2 = sym.Width / 2;
+                                                <rect x="@F(pipeW2 / 2)" y="0" width="@F(pipeW2)" height="@sym.Height" rx="3" fill="@pipeC" />
+                                                <line x1="@F(pipeW2 * 0.7)" y1="@(sym.Height * 0.15)" x2="@F(pipeW2 * 0.7)" y2="@(sym.Height * 0.3)" stroke="@pipeF" stroke-width="2" stroke-dasharray="6,4" />
+                                                <line x1="@F(pipeW2 * 0.7)" y1="@(sym.Height * 0.4)" x2="@F(pipeW2 * 0.7)" y2="@(sym.Height * 0.55)" stroke="@pipeF" stroke-width="2" stroke-dasharray="6,4" />
+                                                <line x1="@F(pipeW2 * 0.7)" y1="@(sym.Height * 0.65)" x2="@F(pipeW2 * 0.7)" y2="@(sym.Height * 0.8)" stroke="@pipeF" stroke-width="2" stroke-dasharray="6,4" />
+                                            }
+                                            break;
+                                        case "tank":
+                                            var tankLC = sym.TankLiquidColor ?? "#3b82f6";
+                                            var tankBC = sym.TankBodyColor ?? "#64748b";
+                                            var tankFrac = 0.65;
+                                            <rect x="2" y="2" width="@(sym.Width - 4)" height="@(sym.Height - 4)" rx="4" fill="#0f172a" stroke="@tankBC" stroke-width="2" />
+                                            <rect x="4" y="@F((sym.Height - 4) * (1 - tankFrac) + 2)" width="@(sym.Width - 8)" height="@F((sym.Height - 4) * tankFrac)" rx="2" fill="@tankLC" opacity="0.8" />
+                                            @if (sym.TankShowLevel)
+                                            {
+                                                @RenderSvgText(sym.Width / 2, sym.Height / 2, "middle", "middle", "#ffffff", 12, "65%")
+                                            }
+                                            break;
+                                        case "motorcontrol":
+                                            var mcRun = sym.MotorRunColor ?? "#22c55e";
+                                            var mcR = Math.Min(sym.Width, sym.Height) / 2 - 4;
+                                            var mcCx = sym.Width / 2;
+                                            var mcCy = sym.Height / 2;
+                                            <circle cx="@F(mcCx)" cy="@F(mcCy)" r="@F(mcR)" fill="#1e293b" stroke="@mcRun" stroke-width="2" />
+                                            @RenderSvgText(mcCx, mcCy, "middle", "middle", mcRun, (int)(mcR * 0.7), "M")
+                                            <line x1="@F(mcCx + mcR * 0.3)" y1="@F(mcCy - mcR * 0.6)" x2="@F(mcCx + mcR * 0.6)" y2="@F(mcCy - mcR * 0.3)" stroke="@mcRun" stroke-width="1.5" />
+                                            break;
+                                        case "valve":
+                                            var vlvC = sym.ValveOpenColor ?? "#22c55e";
+                                            var vlvHz = (sym.ValveOrientation ?? "horizontal") == "horizontal";
+                                            @if (vlvHz)
+                                            {
+                                                <polygon points="0,0 @F(sym.Width/2),@F(sym.Height/2) 0,@sym.Height" fill="@vlvC" stroke="#334155" stroke-width="1" />
+                                                <polygon points="@sym.Width,0 @F(sym.Width/2),@F(sym.Height/2) @sym.Width,@sym.Height" fill="@vlvC" stroke="#334155" stroke-width="1" />
+                                                <line x1="@F(sym.Width/2)" y1="0" x2="@F(sym.Width/2)" y2="@F(-6)" stroke="#334155" stroke-width="3" />
+                                                <rect x="@F(sym.Width/2-8)" y="@F(-10)" width="16" height="4" rx="1" fill="#64748b" />
+                                            }
+                                            else
+                                            {
+                                                <polygon points="0,0 @F(sym.Width/2),@F(sym.Height/2) @sym.Width,0" fill="@vlvC" stroke="#334155" stroke-width="1" />
+                                                <polygon points="0,@sym.Height @F(sym.Width/2),@F(sym.Height/2) @sym.Width,@sym.Height" fill="@vlvC" stroke="#334155" stroke-width="1" />
+                                                <line x1="0" y1="@F(sym.Height/2)" x2="@F(-6)" y2="@F(sym.Height/2)" stroke="#334155" stroke-width="3" />
+                                                <rect x="@F(-10)" y="@F(sym.Height/2-8)" width="4" height="16" rx="1" fill="#64748b" />
+                                            }
+                                            break;
+                                        case "sparkline":
+                                            var spkC = sym.SparklineColor ?? "#3b82f6";
+                                            <rect width="@sym.Width" height="@sym.Height" rx="3" fill="#111827" stroke="#334155" stroke-width="1" />
+                                            <polyline points="@F(sym.Width*0.05),@F(sym.Height*0.7) @F(sym.Width*0.15),@F(sym.Height*0.5) @F(sym.Width*0.25),@F(sym.Height*0.6) @F(sym.Width*0.35),@F(sym.Height*0.3) @F(sym.Width*0.45),@F(sym.Height*0.4) @F(sym.Width*0.55),@F(sym.Height*0.2) @F(sym.Width*0.65),@F(sym.Height*0.35) @F(sym.Width*0.75),@F(sym.Height*0.25) @F(sym.Width*0.85),@F(sym.Height*0.3) @F(sym.Width*0.95),@F(sym.Height*0.15)"
+                                                      fill="none" stroke="@spkC" stroke-width="@F(sym.SparklineStrokeWidth > 0 ? sym.SparklineStrokeWidth : 2)" />
+                                            @if (sym.SparklineShowValue)
+                                            {
+                                                @RenderSvgText(sym.Width - 4, 12, "end", null, spkC, 10, "42.7")
+                                            }
+                                            break;
+                                        case "colorzone":
+                                            var czC = sym.ColorZoneDefault ?? "#334155";
+                                            var czR = sym.ColorZoneBorderRadius;
+                                            <rect width="@sym.Width" height="@sym.Height" rx="@czR" fill="@czC" stroke="#475569" stroke-width="1" />
+                                            @if (sym.ColorZoneShowValue)
+                                            {
+                                                @RenderSvgText(sym.Width / 2, sym.Height / 2, "middle", "middle", "#ffffff", 14, "---")
+                                            }
+                                            break;
+                                        case "dropdown":
+                                            var ddBg = sym.DropdownBackground ?? "#1e293b";
+                                            <rect width="@sym.Width" height="@sym.Height" rx="4" fill="@ddBg" stroke="#475569" stroke-width="1" />
+                                            @RenderSvgText(8, sym.Height / 2, "start", "middle", "#94a3b8", 11, string.IsNullOrEmpty(sym.DropdownOptions) ? "Select..." : sym.DropdownOptions.Split(',')[0])
+                                            <polygon points="@F(sym.Width - 16),@F(sym.Height/2 - 3) @F(sym.Width - 8),@F(sym.Height/2 - 3) @F(sym.Width - 12),@F(sym.Height/2 + 3)" fill="#94a3b8" />
+                                            break;
+                                        case "datatable":
+                                            var dtBg = sym.DataTableBackground ?? "#111827";
+                                            var dtHdrH = 28;
+                                            <rect width="@sym.Width" height="@sym.Height" rx="4" fill="@dtBg" stroke="#334155" stroke-width="1" />
+                                            @if (sym.DataTableShowHeader)
+                                            {
+                                                <rect width="@sym.Width" height="@dtHdrH" rx="4" fill="#1e293b" />
+                                                @RenderSvgText(8, dtHdrH / 2, "start", "middle", "#94a3b8", 10, string.IsNullOrEmpty(sym.DataTableColumns) ? "Column 1 | Column 2 | Column 3" : sym.DataTableColumns.Replace(",", " | "))
+                                            }
+                                            @for (int ri = 0; ri < 3; ri++)
+                                            {
+                                                var ry = dtHdrH + 4 + ri * 22;
+                                                <line x1="4" y1="@(ry + 20)" x2="@(sym.Width - 4)" y2="@(ry + 20)" stroke="#1e293b" stroke-width="1" />
+                                                @RenderSvgText(8, ry + 10, "start", "middle", "#64748b", 10, ri == 0 ? "value 1  |  value 2  |  value 3" : "...")
+                                            }
+                                            break;
+                                        case "alarmbanner":
+                                            <rect width="@sym.Width" height="@sym.Height" rx="4" fill="#1e293b" stroke="#334155" stroke-width="1" />
+                                            <circle cx="18" cy="@F(sym.Height/2)" r="8" fill="#22c55e" />
+                                            @RenderSvgText(18, sym.Height / 2, "middle", "middle", "#fff", 9, "0")
+                                            @RenderSvgText(36, sym.Height / 2, "start", "middle", "#94a3b8", 11, "No active alarms")
+                                            break;
+                                        case "conveyor":
+                                            var cIsH = sym.ConveyorOrientation == "horizontal";
+                                            <rect width="@sym.Width" height="@sym.Height" rx="4" fill="@sym.ConveyorFrameColor" stroke="#334155" stroke-width="1" />
+                                            @if (cIsH)
+                                            {
+                                                <rect x="4" y="@F(sym.Height*0.2)" width="@F(sym.Width-8)" height="@F(sym.Height*0.6)" rx="2" fill="@sym.ConveyorBeltColor" />
+                                                <circle cx="12" cy="@F(sym.Height/2)" r="@F(sym.Height*0.25)" fill="@sym.ConveyorFrameColor" stroke="#94a3b8" stroke-width="1.5" />
+                                                <circle cx="@F(sym.Width-12)" cy="@F(sym.Height/2)" r="@F(sym.Height*0.25)" fill="@sym.ConveyorFrameColor" stroke="#94a3b8" stroke-width="1.5" />
+                                            }
+                                            else
+                                            {
+                                                <rect x="@F(sym.Width*0.2)" y="4" width="@F(sym.Width*0.6)" height="@F(sym.Height-8)" rx="2" fill="@sym.ConveyorBeltColor" />
+                                                <circle cx="@F(sym.Width/2)" cy="12" r="@F(sym.Width*0.25)" fill="@sym.ConveyorFrameColor" stroke="#94a3b8" stroke-width="1.5" />
+                                                <circle cx="@F(sym.Width/2)" cy="@F(sym.Height-12)" r="@F(sym.Width*0.25)" fill="@sym.ConveyorFrameColor" stroke="#94a3b8" stroke-width="1.5" />
+                                            }
+                                            break;
+                                        case "piechart":
+                                            {
+                                                var pcR = Math.Min(sym.Width, sym.Height) / 2.0 - 8;
+                                                var pcCx = sym.Width / 2.0;
+                                                var pcCy = sym.Height / 2.0;
+                                                <rect width="@sym.Width" height="@sym.Height" rx="4" fill="@sym.PieChartBackground" stroke="#334155" stroke-width="1" />
+                                                <circle cx="@F(pcCx)" cy="@F(pcCy)" r="@F(pcR)" fill="#3b82f6" />
+                                                <path d="M @F(pcCx),@F(pcCy) L @F(pcCx),@F(pcCy-pcR) A @F(pcR),@F(pcR) 0 0,1 @F(pcCx+pcR*0.87),@F(pcCy-pcR*0.5) Z" fill="#22c55e" />
+                                                <path d="M @F(pcCx),@F(pcCy) L @F(pcCx+pcR*0.87),@F(pcCy-pcR*0.5) A @F(pcR),@F(pcR) 0 0,1 @F(pcCx+pcR*0.5),@F(pcCy+pcR*0.87) Z" fill="#f59e0b" />
+                                                @if (sym.PieChartStyle == "doughnut")
+                                                {
+                                                    <circle cx="@F(pcCx)" cy="@F(pcCy)" r="@F(pcR*0.5)" fill="@sym.PieChartBackground" />
+                                                }
+                                            }
+                                            break;
+                                        case "barchart":
+                                            {
+                                                <rect width="@sym.Width" height="@sym.Height" rx="4" fill="@sym.BarChartBackground" stroke="#334155" stroke-width="1" />
+                                                var bcBw = (sym.Width - 24) / 4.0;
+                                                double[] bcH = [0.8, 0.5, 0.9, 0.3];
+                                                string[] bcC = ["#3b82f6", "#22c55e", "#f59e0b", "#ef4444"];
+                                                @for (int bi = 0; bi < 4; bi++)
+                                                {
+                                                    var bx = 12 + bi * bcBw;
+                                                    var bh = (sym.Height - 16) * bcH[bi];
+                                                    var by = sym.Height - 8 - bh;
+                                                    <rect x="@F(bx+1)" y="@F(by)" width="@F(bcBw-2)" height="@F(bh)" rx="2" fill="@bcC[bi]" />
+                                                }
+                                            }
+                                            break;
+                                        case "navbutton":
+                                            {
+                                                var nbBg = sym.NavButtonStyle == "outline" ? "none" : (sym.NavButtonStyle == "ghost" ? "transparent" : sym.NavButtonColor);
+                                                var nbStroke = sym.NavButtonStyle == "outline" ? sym.NavButtonColor : "none";
+                                                <rect width="@sym.Width" height="@sym.Height" rx="6" fill="@nbBg" stroke="@nbStroke" stroke-width="@(sym.NavButtonStyle == "outline" ? 2 : 0)" />
+                                                var nbTxt = !string.IsNullOrEmpty(sym.Label) ? sym.Label : "Navigate";
+                                                @RenderSvgText(sym.Width / 2, sym.Height / 2, "middle", "middle", sym.NavButtonTextColor, ScaledFontSize(12, sym), nbTxt)
+                                            }
+                                            break;
+                                        case "heatexchanger":
+                                            {
+                                                var heIsH = sym.HeatExchangerOrientation == "horizontal";
+                                                <rect width="@sym.Width" height="@sym.Height" rx="4" fill="@sym.HeatExchangerBodyColor" stroke="#334155" stroke-width="1" />
+                                                @if (heIsH)
+                                                {
+                                                    <rect x="4" y="4" width="@F(sym.Width/2-6)" height="@F(sym.Height-8)" rx="2" fill="@sym.HeatExchangerHotColor" opacity="0.3" />
+                                                    <rect x="@F(sym.Width/2+2)" y="4" width="@F(sym.Width/2-6)" height="@F(sym.Height-8)" rx="2" fill="@sym.HeatExchangerColdColor" opacity="0.3" />
+                                                    <line x1="@F(sym.Width/2)" y1="4" x2="@F(sym.Width/2)" y2="@F(sym.Height-4)" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3,2" />
+                                                }
+                                                else
+                                                {
+                                                    <rect x="4" y="4" width="@F(sym.Width-8)" height="@F(sym.Height/2-6)" rx="2" fill="@sym.HeatExchangerHotColor" opacity="0.3" />
+                                                    <rect x="4" y="@F(sym.Height/2+2)" width="@F(sym.Width-8)" height="@F(sym.Height/2-6)" rx="2" fill="@sym.HeatExchangerColdColor" opacity="0.3" />
+                                                    <line x1="4" y1="@F(sym.Height/2)" x2="@F(sym.Width-4)" y2="@F(sym.Height/2)" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3,2" />
+                                                }
+                                            }
+                                            break;
+                                        case "popup":
+                                            <rect width="@sym.Width" height="@sym.Height" rx="4" fill="@sym.PopupBackground" stroke="@sym.PopupBorderColor" stroke-width="1" stroke-dasharray="4,2" />
+                                            @RenderSvgText(sym.Width / 2, sym.Height / 2, "middle", "middle", "#94a3b8", ScaledFontSize(10, sym), "? Popup")
+                                            break;
+                                        case "setpointramp":
+                                            {
+                                                <rect width="@sym.Width" height="@sym.Height" rx="4" fill="#0f172a" stroke="#334155" stroke-width="1" />
+                                                var spY1 = sym.Height * 0.7;
+                                                var spY2 = sym.Height * 0.3;
+                                                <line x1="8" y1="@F(spY1)" x2="@F(sym.Width*0.4)" y2="@F(spY1)" stroke="@sym.SetpointColor" stroke-width="2" />
+                                                <line x1="@F(sym.Width*0.4)" y1="@F(spY1)" x2="@F(sym.Width*0.6)" y2="@F(spY2)" stroke="@sym.SetpointColor" stroke-width="2" stroke-dasharray="4,2" />
+                                                <line x1="@F(sym.Width*0.6)" y1="@F(spY2)" x2="@F(sym.Width-8)" y2="@F(spY2)" stroke="@sym.SetpointTargetColor" stroke-width="2" />
+                                            }
+                                            break;
+                                        case "flowmeter":
+                                            {
+                                                <rect width="@sym.Width" height="@sym.Height" rx="4" fill="@sym.FlowMeterBodyColor" stroke="#475569" stroke-width="1" />
+                                                var fmCx = sym.Width / 2.0;
+                                                var fmCy = sym.Height / 2.0;
+                                                var fmR = Math.Min(sym.Width, sym.Height) * 0.3;
+                                                <circle cx="@F(fmCx)" cy="@F(fmCy)" r="@F(fmR)" fill="none" stroke="@sym.FlowMeterFlowColor" stroke-width="2" />
+                                                <line x1="@F(fmCx)" y1="@F(fmCy)" x2="@F(fmCx+fmR*0.7)" y2="@F(fmCy-fmR*0.7)" stroke="@sym.FlowMeterFlowColor" stroke-width="2" />
+                                                @RenderSvgText(fmCx, sym.Height - 6, "middle", null, "#94a3b8", 8, sym.FlowMeterUnit)
+                                            }
+                                            break;
+                                        case "xyplot":
+                                            {
+                                                <rect width="@sym.Width" height="@sym.Height" rx="4" fill="@sym.XYPlotBackground" stroke="#334155" stroke-width="1" />
+                                                <line x1="30" y1="8" x2="30" y2="@F(sym.Height-20)" stroke="#475569" stroke-width="1" />
+                                                <line x1="30" y1="@F(sym.Height-20)" x2="@F(sym.Width-8)" y2="@F(sym.Height-20)" stroke="#475569" stroke-width="1" />
+                                                <polyline points="35,@F(sym.Height*0.6) @F(sym.Width*0.3),@F(sym.Height*0.3) @F(sym.Width*0.5),@F(sym.Height*0.5) @F(sym.Width*0.7),@F(sym.Height*0.2) @F(sym.Width-12),@F(sym.Height*0.4)" fill="none" stroke="@sym.XYPlotColor" stroke-width="2" />
+                                            }
+                                            break;
+                                        case "pdfviewer":
+                                            <rect width="@sym.Width" height="@sym.Height" rx="4" fill="@sym.PdfViewerBackground" stroke="#475569" stroke-width="1" />
+                                            <rect x="@F(sym.Width*0.2)" y="@F(sym.Height*0.1)" width="@F(sym.Width*0.6)" height="@F(sym.Height*0.7)" rx="2" fill="#1e293b" stroke="#334155" stroke-width="1" />
+                                            @RenderSvgText(sym.Width / 2, sym.Height * 0.45, "middle", "middle", "#64748b", ScaledFontSize(10, sym), "PDF")
+                                            @RenderSvgText(sym.Width / 2, sym.Height * 0.9, "middle", null, "#475569", 8, "PDF Viewer")
+                                            break;
                             }
-                            @if (!string.IsNullOrEmpty(labelText ?? sym.Label) && sym.Type is not "text" and not "button" and not "animtext")
+                            @if (!string.IsNullOrEmpty(labelText ?? sym.Label) && sym.Type is not "text" and not "button" and not "animtext" and not "numericdisplay" and not "progressbar" and not "dropdown" and not "sparkline" and not "colorzone" and not "alarmbanner" and not "conveyor" and not "piechart" and not "barchart" and not "navbutton" and not "heatexchanger" and not "popup" and not "setpointramp" and not "flowmeter" and not "xyplot" and not "pdfviewer")
                             {
                                 @RenderSvgText(sym.Width / 2, sym.Height + 14, "middle", null, "#333", 11, labelText ?? sym.Label, sym)
                             }
@@ -869,10 +1136,10 @@
             Type = type,
             X = 50 + screen.Symbols.Count * 20 % (screen.Width - 100),
             Y = 50 + screen.Symbols.Count * 20 % (screen.Height - 80),
-            Width = type == "text" ? 120 : type == "line" ? 100 : type is "alarmlist" or "hdachart" or "hdagrid" or "eventlog" ? 500 : type == "editbox" ? 160 : type == "ipcamera" ? 320 : type == "recipe" ? 280 : type == "weeklyplanner" ? 500 : type == "reportviewer" ? 360 : type == "screenembed" ? 400 : type == "switch" ? 60 : type == "rotaryswitch" ? 80 : type == "knob" ? 100 : type == "hslider" ? 200 : type == "vslider" ? 40 : type == "button" ? 120 : type == "animtext" ? 240 : 80,
-            Height = type == "text" ? 30 : type == "line" ? 2 : type == "indicator" ? 30 : type == "alarmlist" ? 250 : type is "hdachart" or "hdagrid" or "eventlog" ? 220 : type == "editbox" ? 32 : type == "ipcamera" ? 240 : type == "recipe" ? 300 : type == "weeklyplanner" ? 280 : type == "reportviewer" ? 200 : type == "screenembed" ? 300 : type == "switch" ? 30 : type == "rotaryswitch" ? 80 : type == "knob" ? 100 : type == "hslider" ? 40 : type == "vslider" ? 200 : type == "button" ? 36 : type == "animtext" ? 40 : 40,
-            Label = type == "text" ? "Label" : type == "alarmlist" ? "Alarm List" : type == "hdachart" ? "HDA Chart" : type == "hdagrid" ? "HDA Grid" : type == "eventlog" ? "Event Log" : type == "editbox" ? "" : type == "ipcamera" ? "" : type == "recipe" ? "" : type == "weeklyplanner" ? "" : type == "reportviewer" ? "" : type == "screenembed" ? "Embedded Screen" : type == "switch" ? "" : type == "rotaryswitch" ? "" : type is "knob" or "hslider" or "vslider" ? "" : type == "button" ? "Button" : type == "animtext" ? "Animated Text" : "",
-            Fill = type == "indicator" ? "#44cc44" : type == "alarmlist" ? "#1a1a2e" : type is "hdachart" or "hdagrid" ? "#111827" : type == "eventlog" ? "#0f172a" : type == "editbox" ? "#1e293b" : type == "ipcamera" ? "#0a0a0a" : type == "recipe" ? "#1a1a2e" : type is "weeklyplanner" or "reportviewer" ? "#1a1a2e" : type == "screenembed" ? "#0f172a" : type == "switch" ? "#34c759" : type == "rotaryswitch" ? "#2d2d2d" : type == "knob" ? "#3a3a3a" : type is "hslider" or "vslider" ? "#1a1a2e" : type == "button" ? "#3b82f6" : type == "animtext" ? "#00e5ff" : "#4a90d9"
+            Width = type == "text" ? 120 : type == "line" ? 100 : type is "alarmlist" or "hdachart" or "hdagrid" or "eventlog" ? 500 : type == "editbox" ? 160 : type == "ipcamera" ? 320 : type == "recipe" ? 280 : type == "weeklyplanner" ? 500 : type == "reportviewer" ? 360 : type == "screenembed" ? 400 : type == "switch" ? 60 : type == "rotaryswitch" ? 80 : type == "knob" ? 100 : type == "hslider" ? 200 : type == "vslider" ? 40 : type == "button" ? 120 : type == "animtext" ? 240 : type == "progressbar" ? 200 : type == "numericdisplay" ? 140 : type == "ledarray" ? 240 : type == "pipe" ? 200 : type == "tank" ? 80 : type == "motorcontrol" ? 80 : type == "valve" ? 60 : type == "sparkline" ? 160 : type == "colorzone" ? 120 : type == "dropdown" ? 160 : type == "datatable" ? 400 : type == "alarmbanner" ? 300 : type == "conveyor" ? 200 : type == "piechart" ? 200 : type == "barchart" ? 200 : type == "navbutton" ? 140 : type == "heatexchanger" ? 120 : type == "popup" ? 100 : type == "setpointramp" ? 200 : type == "flowmeter" ? 80 : type == "xyplot" ? 300 : type == "pdfviewer" ? 400 : 80,
+            Height = type == "text" ? 30 : type == "line" ? 2 : type == "indicator" ? 30 : type == "alarmlist" ? 250 : type is "hdachart" or "hdagrid" or "eventlog" ? 220 : type == "editbox" ? 32 : type == "ipcamera" ? 240 : type == "recipe" ? 300 : type == "weeklyplanner" ? 280 : type == "reportviewer" ? 200 : type == "screenembed" ? 300 : type == "switch" ? 30 : type == "rotaryswitch" ? 80 : type == "knob" ? 100 : type == "hslider" ? 40 : type == "vslider" ? 200 : type == "button" ? 36 : type == "animtext" ? 40 : type == "progressbar" ? 28 : type == "numericdisplay" ? 60 : type == "ledarray" ? 32 : type == "pipe" ? 20 : type == "tank" ? 120 : type == "motorcontrol" ? 80 : type == "valve" ? 40 : type == "sparkline" ? 40 : type == "colorzone" ? 60 : type == "dropdown" ? 32 : type == "datatable" ? 200 : type == "alarmbanner" ? 40 : type == "conveyor" ? 50 : type == "piechart" ? 200 : type == "barchart" ? 160 : type == "navbutton" ? 40 : type == "heatexchanger" ? 80 : type == "popup" ? 60 : type == "setpointramp" ? 60 : type == "flowmeter" ? 80 : type == "xyplot" ? 250 : type == "pdfviewer" ? 500 : 40,
+            Label = type == "text" ? "Label" : type == "alarmlist" ? "Alarm List" : type == "hdachart" ? "HDA Chart" : type == "hdagrid" ? "HDA Grid" : type == "eventlog" ? "Event Log" : type == "editbox" ? "" : type == "ipcamera" ? "" : type == "recipe" ? "" : type == "weeklyplanner" ? "" : type == "reportviewer" ? "" : type == "screenembed" ? "Embedded Screen" : type == "switch" ? "" : type == "rotaryswitch" ? "" : type is "knob" or "hslider" or "vslider" ? "" : type == "button" ? "Button" : type == "animtext" ? "Animated Text" : type is "progressbar" or "numericdisplay" or "ledarray" or "pipe" ? "" : "",
+            Fill = type == "indicator" ? "#44cc44" : type == "alarmlist" ? "#1a1a2e" : type is "hdachart" or "hdagrid" ? "#111827" : type == "eventlog" ? "#0f172a" : type == "editbox" ? "#1e293b" : type == "ipcamera" ? "#0a0a0a" : type == "recipe" ? "#1a1a2e" : type is "weeklyplanner" or "reportviewer" ? "#1a1a2e" : type == "screenembed" ? "#0f172a" : type == "switch" ? "#34c759" : type == "rotaryswitch" ? "#2d2d2d" : type == "knob" ? "#3a3a3a" : type is "hslider" or "vslider" ? "#1a1a2e" : type == "button" ? "#3b82f6" : type == "animtext" ? "#00e5ff" : type == "progressbar" ? "#3b82f6" : type == "numericdisplay" ? "#00e5ff" : type == "ledarray" ? "#22c55e" : type == "pipe" ? "#64748b" : type == "tank" ? "#3b82f6" : type == "motorcontrol" ? "#22c55e" : type == "valve" ? "#22c55e" : type == "sparkline" ? "#3b82f6" : type == "colorzone" ? "#334155" : type == "dropdown" ? "#1e293b" : type == "datatable" ? "#111827" : type == "alarmbanner" ? "#1e293b" : type == "conveyor" ? "#475569" : type == "piechart" ? "#0f172a" : type == "barchart" ? "#0f172a" : type == "navbutton" ? "#3b82f6" : type == "heatexchanger" ? "#64748b" : type == "popup" ? "#1e293b" : type == "setpointramp" ? "#0f172a" : type == "flowmeter" ? "#334155" : type == "xyplot" ? "#0f172a" : type == "pdfviewer" ? "#1e293b" : "#4a90d9"
         };
 
         if (type == "gauge")
@@ -1064,6 +1331,197 @@
             sym.AnimTextShowBorder = false;
             sym.AnimTextMessages = "";
         }
+        if (type == "progressbar")
+        {
+            sym.Stroke = "#334155";
+            sym.StrokeWidth = 1;
+            sym.ProgressBarOrientation = "horizontal";
+            sym.ProgressBarTrackColor = "#2d2d2d";
+            sym.ProgressBarShowValue = true;
+            sym.ProgressBarBorderRadius = 4;
+        }
+        if (type == "numericdisplay")
+        {
+            sym.Stroke = "#334155";
+            sym.StrokeWidth = 1;
+            sym.NumericDisplayFormat = "F1";
+            sym.NumericDisplayUnit = "";
+            sym.NumericDisplayBackground = "#111827";
+            sym.NumericDisplayDigits = 0;
+        }
+        if (type == "ledarray")
+        {
+            sym.Stroke = "#334155";
+            sym.StrokeWidth = 1;
+            sym.LedArrayCount = 8;
+            sym.LedArrayOrientation = "horizontal";
+            sym.LedArrayOnColor = "#22c55e";
+            sym.LedArrayOffColor = "#1e293b";
+            sym.LedArrayLabels = "";
+        }
+        if (type == "pipe")
+        {
+            sym.Stroke = "none";
+            sym.StrokeWidth = 0;
+            sym.PipeOrientation = "horizontal";
+            sym.PipeColor = "#64748b";
+            sym.PipeFlowColor = "#94a3b8";
+            sym.PipeShowFlow = true;
+            sym.PipeFlowSpeed = 1;
+        }
+        if (type == "tank")
+        {
+            sym.Stroke = "#64748b";
+            sym.StrokeWidth = 2;
+            sym.TankLiquidColor = "#3b82f6";
+            sym.TankBodyColor = "#64748b";
+            sym.TankShowLevel = true;
+            sym.TankStyle = "rect";
+        }
+        if (type == "motorcontrol")
+        {
+            sym.Stroke = "#334155";
+            sym.StrokeWidth = 1;
+            sym.MotorStyle = "motor";
+            sym.MotorRunColor = "#22c55e";
+            sym.MotorStopColor = "#64748b";
+            sym.MotorFaultColor = "#ef4444";
+            sym.MotorAnimateRotation = true;
+            sym.MotorFaultPath = "";
+        }
+        if (type == "valve")
+        {
+            sym.Stroke = "#334155";
+            sym.StrokeWidth = 1;
+            sym.ValveStyle = "gate";
+            sym.ValveOpenColor = "#22c55e";
+            sym.ValveClosedColor = "#ef4444";
+            sym.ValveOrientation = "horizontal";
+        }
+        if (type == "sparkline")
+        {
+            sym.Stroke = "#334155";
+            sym.StrokeWidth = 1;
+            sym.SparklineColor = "#3b82f6";
+            sym.SparklineFillArea = true;
+            sym.SparklinePoints = 30;
+            sym.SparklineStrokeWidth = 2;
+            sym.SparklineShowValue = true;
+        }
+        if (type == "colorzone")
+        {
+            sym.Stroke = "none";
+            sym.StrokeWidth = 0;
+            sym.ColorZoneRules = "";
+            sym.ColorZoneDefault = "#334155";
+            sym.ColorZoneShowValue = true;
+            sym.ColorZoneBorderRadius = 4;
+        }
+        if (type == "dropdown")
+        {
+            sym.Stroke = "#475569";
+            sym.StrokeWidth = 1;
+            sym.DropdownOptions = "";
+            sym.DropdownValues = "";
+            sym.DropdownBackground = "#1e293b";
+        }
+        if (type == "datatable")
+        {
+            sym.Stroke = "#334155";
+            sym.StrokeWidth = 1;
+            sym.DataTableColumns = "";
+            sym.DataTableShowHeader = true;
+            sym.DataTableMaxRows = 10;
+            sym.DataTableBackground = "#111827";
+        }
+        if (type == "alarmbanner")
+        {
+            sym.Stroke = "#334155";
+            sym.StrokeWidth = 1;
+            sym.AlarmBannerShowCount = true;
+            sym.AlarmBannerFlash = true;
+            sym.AlarmBannerStyle = "compact";
+        }
+        if (type == "conveyor")
+        {
+            sym.Stroke = "#334155";
+            sym.StrokeWidth = 1;
+            sym.ConveyorOrientation = "horizontal";
+            sym.ConveyorAnimate = true;
+            sym.ConveyorSpeed = 2;
+        }
+        if (type == "piechart")
+        {
+            sym.Stroke = "#334155";
+            sym.StrokeWidth = 1;
+            sym.PieChartStyle = "pie";
+            sym.PieChartShowLabels = true;
+            sym.PieChartShowLegend = true;
+        }
+        if (type == "barchart")
+        {
+            sym.Stroke = "#334155";
+            sym.StrokeWidth = 1;
+            sym.BarChartOrientation = "vertical";
+            sym.BarChartShowValues = true;
+            sym.BarChartShowGrid = true;
+        }
+        if (type == "navbutton")
+        {
+            sym.Stroke = "none";
+            sym.StrokeWidth = 0;
+            sym.NavButtonStyle = "solid";
+            sym.NavButtonIconPosition = "left";
+            sym.Label = "Navigate";
+        }
+        if (type == "heatexchanger")
+        {
+            sym.Stroke = "#334155";
+            sym.StrokeWidth = 1;
+            sym.HeatExchangerOrientation = "horizontal";
+            sym.HeatExchangerShowTemps = true;
+        }
+        if (type == "popup")
+        {
+            sym.Stroke = "#475569";
+            sym.StrokeWidth = 1;
+            sym.PopupTrigger = "hover";
+            sym.PopupPosition = "top";
+            sym.PopupWidth = 200;
+        }
+        if (type == "setpointramp")
+        {
+            sym.Stroke = "#334155";
+            sym.StrokeWidth = 1;
+            sym.SetpointMin = 0;
+            sym.SetpointMax = 100;
+            sym.SetpointShowRate = true;
+        }
+        if (type == "flowmeter")
+        {
+            sym.Stroke = "#475569";
+            sym.StrokeWidth = 1;
+            sym.FlowMeterStyle = "inline";
+            sym.FlowMeterShowTotalizer = true;
+            sym.FlowMeterOrientation = "horizontal";
+        }
+        if (type == "xyplot")
+        {
+            sym.Stroke = "#334155";
+            sym.StrokeWidth = 1;
+            sym.XYPlotShowGrid = true;
+            sym.XYPlotShowAxes = true;
+            sym.XYPlotMaxPoints = 100;
+            sym.XYPlotStrokeWidth = 2;
+        }
+        if (type == "pdfviewer")
+        {
+            sym.Stroke = "#475569";
+            sym.StrokeWidth = 1;
+            sym.PdfViewerSource = "url";
+            sym.PdfViewerShowToolbar = true;
+        }
+
         // Set responsive grid defaults when in responsive mode
         if (screen.LayoutMode == "responsive")
         {
@@ -1084,7 +1542,18 @@
     private static int GetResponsiveColSpan(string type) => type switch
     {
         "text" or "indicator" or "editbox" or "button" => 3,
-        "gauge" or "svg" or "imagemap" or "animtext" => 4,
+        "gauge" or "svg" or "imagemap" or "animtext" or "numericdisplay" => 4,
+        "progressbar" or "ledarray" or "pipe" or "sparkline" or "colorzone" => 6,
+        "tank" or "motorcontrol" or "valve" => 3,
+        "dropdown" => 4,
+        "datatable" or "alarmbanner" => 8,
+        "conveyor" => 6,
+        "piechart" or "barchart" => 6,
+        "navbutton" => 3,
+        "heatexchanger" or "flowmeter" or "setpointramp" => 4,
+        "popup" => 3,
+        "xyplot" => 8,
+        "pdfviewer" => 12,
         "ipcamera" or "recipe" => 6,
         "weeklyplanner" or "reportviewer" or "screenembed" => 8,
         "alarmlist" or "hdachart" or "hdagrid" or "eventlog" or "trend" => 12,
@@ -1104,6 +1573,27 @@
         "reportviewer" or "screenembed" => 260,
         "imagemap" => 200,
         "animtext" => 50,
+        "progressbar" => 50,
+        "numericdisplay" => 80,
+        "ledarray" => 50,
+        "pipe" => 40,
+        "tank" => 160,
+        "motorcontrol" => 100,
+        "valve" => 60,
+        "sparkline" => 60,
+        "colorzone" => 80,
+        "dropdown" => 50,
+        "datatable" => 220,
+        "alarmbanner" => 50,
+        "conveyor" => 60,
+        "piechart" or "barchart" => 200,
+        "navbutton" => 50,
+        "heatexchanger" => 100,
+        "popup" => 60,
+        "setpointramp" => 80,
+        "flowmeter" => 100,
+        "xyplot" => 250,
+        "pdfviewer" => 500,
         _ => 150
     };
 
