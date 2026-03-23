@@ -33,6 +33,7 @@
         <div class="plc-editor-body">
             <CodeEditor @ref="_editor" @bind-Value="plc.Code" @bind-Value:after="OnCodeChanged"
                         Language="@GetPlcEditorLanguage(plc.Language)" Height="100%"
+                        Completions="_completions"
                         Initialized="StateHasChanged" />
             <ProgramDebugPanel Category="PlcProgram" ProgramName="@plc.Name"
                               ServerRunning="ServerProcess.IsServerRunning"
@@ -82,6 +83,7 @@
     private string _syntaxResult = "";
     private bool _syntaxSuccess;
     private bool _checkingSyntax;
+    private List<CodeEditor.CompletionItem> _completions = new();
 
     private PlcProgramConfig? GetPlcProgram()
     {
@@ -98,7 +100,83 @@
         {
             _lastPlc = plc;
             _syntaxResult = "";
+            RebuildCompletions();
         }
+    }
+
+    private void RebuildCompletions()
+    {
+        _completions = new List<CodeEditor.CompletionItem>();
+
+        // IEC 61131-3 ST keywords
+        var stKeywords = new[] {
+            "VAR", "END_VAR", "VAR_INPUT", "VAR_OUTPUT", "VAR_IN_OUT", "VAR_GLOBAL",
+            "IF", "THEN", "ELSIF", "ELSE", "END_IF",
+            "CASE", "OF", "END_CASE",
+            "FOR", "TO", "BY", "DO", "END_FOR",
+            "WHILE", "END_WHILE", "REPEAT", "UNTIL", "END_REPEAT",
+            "TRUE", "FALSE", "AND", "OR", "NOT", "XOR", "MOD",
+            "INT", "DINT", "REAL", "LREAL", "BOOL", "STRING", "BYTE", "WORD", "DWORD", "TIME"
+        };
+        foreach (var kw in stKeywords)
+            _completions.Add(new CodeEditor.CompletionItem { Text = kw, DisplayText = kw, ClassName = "cm-hint-keyword" });
+
+        // Built-in ST/PLC functions
+        var stFunctions = new (string Name, string Desc)[] {
+            ("ABS", "ABS(x) \u2192 absolute value"),
+            ("SQRT", "SQRT(x) \u2192 square root"),
+            ("SIN", "SIN(x) \u2192 sine"),
+            ("COS", "COS(x) \u2192 cosine"),
+            ("TAN", "TAN(x) \u2192 tangent"),
+            ("ASIN", "ASIN(x) \u2192 arc sine"),
+            ("ACOS", "ACOS(x) \u2192 arc cosine"),
+            ("ATAN", "ATAN(x) \u2192 arc tangent"),
+            ("ATAN2", "ATAN2(y, x) \u2192 arc tangent 2"),
+            ("EXP", "EXP(x) \u2192 e^x"),
+            ("LN", "LN(x) \u2192 natural log"),
+            ("LOG", "LOG(x) \u2192 log base 10"),
+            ("POW", "POW(base, exp) \u2192 power"),
+            ("EXPT", "EXPT(base, exp) \u2192 power"),
+            ("MIN", "MIN(a, b) \u2192 minimum"),
+            ("MAX", "MAX(a, b) \u2192 maximum"),
+            ("LIMIT", "LIMIT(min, val, max)"),
+            ("SEL", "SEL(cond, val0, val1)"),
+            ("MUX", "MUX(idx, val0, val1, ...)"),
+            ("TRUNC", "TRUNC(x) \u2192 truncate"),
+            ("ROUND", "ROUND(x) \u2192 round"),
+            ("FLOOR", "FLOOR(x) \u2192 floor"),
+            ("CEIL", "CEIL(x) \u2192 ceiling"),
+            ("READ", "READ(\"varPath\") \u2192 read variable"),
+            ("READBOOL", "READBOOL(\"varPath\") \u2192 bool"),
+            ("READINT", "READINT(\"varPath\") \u2192 int"),
+            ("READDOUBLE", "READDOUBLE(\"varPath\") \u2192 double"),
+            ("WRITE", "WRITE(\"varPath\", value)"),
+            ("RANDOM", "RANDOM() \u2192 0.0..1.0")
+        };
+        foreach (var (name, desc) in stFunctions)
+            _completions.Add(new CodeEditor.CompletionItem { Text = name, DisplayText = desc, ClassName = "cm-hint-function" });
+
+        // Variable paths from the project
+        var model = Editor.RootModel;
+        if (model?.Folder != null)
+            CollectVariablePaths(model.Folder, "", _completions);
+    }
+
+    private static void CollectVariablePaths(Folder folder, string prefix, List<CodeEditor.CompletionItem> items)
+    {
+        var folderPath = string.IsNullOrEmpty(prefix) ? folder.Name : $"{prefix}.{folder.Name}";
+        foreach (var v in folder.Variables)
+        {
+            var path = $"{folderPath}.{v.Name}";
+            items.Add(new CodeEditor.CompletionItem
+            {
+                Text = path,
+                DisplayText = $"{path}  ({v.Type})",
+                ClassName = "cm-hint-variable"
+            });
+        }
+        foreach (var sub in folder.Folders)
+            CollectVariablePaths(sub, folderPath, items);
     }
 
     private async Task OnCodeChanged()

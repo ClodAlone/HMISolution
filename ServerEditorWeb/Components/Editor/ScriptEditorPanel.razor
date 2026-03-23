@@ -33,6 +33,7 @@
         <div class="script-editor-body">
             <CodeEditor @ref="_editor" @bind-Value="script.Code" @bind-Value:after="OnCodeChanged"
                         Language="@GetEditorLanguage(script.Language)" Height="100%"
+                        Completions="_completions"
                         Initialized="StateHasChanged" />
             <ProgramDebugPanel Category="Script" ProgramName="@script.Name"
                               ServerRunning="ServerProcess.IsServerRunning"
@@ -82,6 +83,7 @@
     private string _syntaxResult = "";
     private bool _syntaxSuccess;
     private bool _checkingSyntax;
+    private List<CodeEditor.CompletionItem> _completions = new();
 
     private ScriptConfig? GetScript()
     {
@@ -96,7 +98,44 @@
         {
             _lastScript = script;
             _syntaxResult = "";
+            RebuildCompletions();
         }
+    }
+
+    private void RebuildCompletions()
+    {
+        _completions = new List<CodeEditor.CompletionItem>();
+
+        // API functions available in scripts
+        _completions.Add(new() { Text = "Read", DisplayText = "Read(\"varPath\") \u2192 object?", ClassName = "cm-hint-function" });
+        _completions.Add(new() { Text = "ReadDouble", DisplayText = "ReadDouble(\"varPath\") \u2192 double", ClassName = "cm-hint-function" });
+        _completions.Add(new() { Text = "ReadInt", DisplayText = "ReadInt(\"varPath\") \u2192 int", ClassName = "cm-hint-function" });
+        _completions.Add(new() { Text = "ReadBool", DisplayText = "ReadBool(\"varPath\") \u2192 bool", ClassName = "cm-hint-function" });
+        _completions.Add(new() { Text = "Write", DisplayText = "Write(\"varPath\", value)", ClassName = "cm-hint-function" });
+        _completions.Add(new() { Text = "Log", DisplayText = "Log(\"message\")", ClassName = "cm-hint-function" });
+        _completions.Add(new() { Text = "OnChanged", DisplayText = "OnChanged(\"varPath\", handler)", ClassName = "cm-hint-function" });
+
+        // Variable paths from the project
+        var model = Editor.RootModel;
+        if (model?.Folder != null)
+            CollectVariablePaths(model.Folder, "", _completions);
+    }
+
+    private static void CollectVariablePaths(Folder folder, string prefix, List<CodeEditor.CompletionItem> items)
+    {
+        var folderPath = string.IsNullOrEmpty(prefix) ? folder.Name : $"{prefix}.{folder.Name}";
+        foreach (var v in folder.Variables)
+        {
+            var path = $"{folderPath}.{v.Name}";
+            items.Add(new CodeEditor.CompletionItem
+            {
+                Text = path,
+                DisplayText = $"{path}  ({v.Type})",
+                ClassName = "cm-hint-variable"
+            });
+        }
+        foreach (var sub in folder.Folders)
+            CollectVariablePaths(sub, folderPath, items);
     }
 
     private async Task OnCodeChanged()

@@ -6,6 +6,52 @@ window.codeEditor = {
                  : language === 'vb' ? 'text/x-vb'
                  : { name: 'javascript', json: true };
 
+        // Custom hint function that uses stored completions
+        var hintFn = function (cm) {
+            var cur = cm.getCursor();
+            var line = cm.getLine(cur.line);
+            var end = cur.ch;
+            var start = end;
+            // Walk back to find the start of the current token (allows dots in identifiers)
+            while (start > 0 && /[\w.]/.test(line.charAt(start - 1))) start--;
+            var token = line.substring(start, end).toLowerCase();
+
+            var completions = element._completions || [];
+            var filtered;
+            if (token.length === 0) {
+                filtered = completions.slice(0, 50);
+            } else {
+                // Score completions: starts-with first, then contains
+                var starts = [];
+                var contains = [];
+                for (var i = 0; i < completions.length; i++) {
+                    var item = completions[i];
+                    var textLower = item.text.toLowerCase();
+                    if (textLower.indexOf(token) === 0) starts.push(item);
+                    else if (textLower.indexOf(token) >= 0) contains.push(item);
+                }
+                filtered = starts.concat(contains).slice(0, 50);
+            }
+
+            return {
+                list: filtered.map(function (item) {
+                    return {
+                        text: item.text,
+                        displayText: item.displayText || item.text,
+                        className: item.className || ''
+                    };
+                }),
+                from: CodeMirror.Pos(cur.line, start),
+                to: CodeMirror.Pos(cur.line, end)
+            };
+        };
+
+        var extraKeys = {
+            'Ctrl-Space': function (cm) {
+                cm.showHint({ hint: hintFn, completeSingle: false });
+            }
+        };
+
         var editor = CodeMirror(element, {
             value: value || '',
             mode: mode,
@@ -16,10 +62,16 @@ window.codeEditor = {
             indentWithTabs: false,
             indentUnit: 4,
             lineWrapping: false,
-            theme: 'default'
+            theme: 'default',
+            extraKeys: extraKeys,
+            hintOptions: { completeSingle: false }
         });
 
         editor.setSize(null, height);
+
+        // Store hint function for use by inputRead handler
+        element._hintFn = hintFn;
+        element._completions = [];
 
         var suppressed = false;
         editor.on('changes', function () {
@@ -27,8 +79,32 @@ window.codeEditor = {
             dotNetRef.invokeMethodAsync('OnEditorChanged', editor.getValue());
         });
 
+        // Auto-show completions when typing identifier characters (if completions are available)
+        editor.on('inputRead', function (cm, change) {
+            if (suppressed) return;
+            if (!element._completions || element._completions.length === 0) return;
+            if (cm.state.completionActive) return;
+            var ch = change.text[change.text.length - 1];
+            if (ch && /[\w.]/.test(ch)) {
+                // Get current token length
+                var cur = cm.getCursor();
+                var line = cm.getLine(cur.line);
+                var s = cur.ch;
+                while (s > 0 && /[\w.]/.test(line.charAt(s - 1))) s--;
+                var tok = line.substring(s, cur.ch);
+                // Only auto-show after at least 2 chars typed
+                if (tok.length >= 2) {
+                    cm.showHint({ hint: element._hintFn, completeSingle: false });
+                }
+            }
+        });
+
         element._cm = editor;
         element._cmSuppress = function (fn) { suppressed = true; fn(); suppressed = false; };
+    },
+
+    setCompletions: function (element, completions) {
+        element._completions = completions || [];
     },
 
     setValue: function (element, value) {
@@ -84,7 +160,7 @@ window.codeEditor = {
             }
         }
 
-        // Add inline annotation text markers after each line's content
+        // Add inline annotation text after each line's content
         if (annotations) {
             for (var lineStr in annotations) {
                 var line = parseInt(lineStr);
@@ -94,8 +170,7 @@ window.codeEditor = {
                 var lineContent = editor.getLine(line);
                 var endCh = lineContent.length;
 
-                // Create a bookmark widget at end of line
-                var span = document.createElement('span');
+                var span = document.createElement("span");
                 span.className = 'debug-inline-annotation';
                 span.textContent = '  \u00AB ' + text + ' \u00BB';
                 span.title = text;
@@ -132,5 +207,7 @@ window.codeEditor = {
         if (wrapper && wrapper.parentNode) wrapper.parentNode.removeChild(wrapper);
         element._cm = null;
         element._cmSuppress = null;
+        element._completions = null;
+        element._hintFn = null;
     }
 };
