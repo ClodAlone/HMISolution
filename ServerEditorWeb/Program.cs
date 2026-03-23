@@ -33,6 +33,7 @@ builder.Services.AddSingleton<ProjectValidationService>();
 builder.Services.AddSingleton<LicenseService>();
 builder.Services.AddSingleton<HelpService>();
 builder.Services.AddSingleton<EditorLocalizationService>();
+builder.Services.AddSingleton<DriverTestService>();
 
 var app = builder.Build();
 
