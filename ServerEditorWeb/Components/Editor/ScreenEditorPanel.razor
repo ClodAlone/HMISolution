@@ -82,6 +82,33 @@
                             @onclick="() => { screen.BackgroundImageId = string.Empty; OnChanged(); }" title="Remove background image">?</button>
                 }
 
+                <span class="mx-1">|</span>
+                <button class="btn btn-sm @(screen.ShowGrid ? "btn-primary" : "btn-outline-secondary")"
+                        @onclick="() => { screen.ShowGrid = !screen.ShowGrid; OnChanged(); }" title="Toggle Grid">
+                    Grid
+                </button>
+                @if (screen.ShowGrid)
+                {
+                    <input type="number" class="form-control form-control-sm" style="width: 50px;" min="5" max="100"
+                           @bind="screen.EditorGridSize" @bind:after="OnChanged" title="Grid size (px)" />
+                }
+                <button class="btn btn-sm @(screen.SnapToGrid ? "btn-primary" : "btn-outline-secondary")"
+                        @onclick="() => { screen.SnapToGrid = !screen.SnapToGrid; OnChanged(); }" title="Snap to Grid">
+                    Snap
+                </button>
+                <button class="btn btn-sm @(screen.SmartSnap ? "btn-primary" : "btn-outline-secondary")"
+                        @onclick="() => { screen.SmartSnap = !screen.SmartSnap; OnChanged(); }" title="Smart Snap (align to other objects)">
+                    Smart
+                </button>
+
+                @if (_selectedSymbols.Count > 1)
+                {
+                    <span class="mx-1">|</span>
+                    <button class="btn btn-sm btn-outline-info" @onclick="() => _showDistributeDialog = true" title="Distribute selected symbols into columns">
+                        Distribute
+                    </button>
+                }
+
                 <span class="ms-auto small text-muted">Symbols: @screen.Symbols.Count</span>
 
                 <span class="mx-1">|</span>
@@ -108,6 +135,25 @@
                         <image href="@bgData" x="0" y="0"
                                width="@screen.Width" height="@screen.Height"
                                preserveAspectRatio="xMidYMid slice" />
+                    }
+
+                    @* Editor grid *@
+                    @if (screen.ShowGrid && screen.EditorGridSize >= 5)
+                    {
+                        var gs = screen.EditorGridSize;
+                        <defs>
+                            <pattern id="editor-grid" width="@gs" height="@gs" patternUnits="userSpaceOnUse">
+                                <path d="M @gs 0 L 0 0 0 @gs" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="0.5" />
+                            </pattern>
+                        </defs>
+                        <rect width="@screen.Width" height="@screen.Height" fill="url(#editor-grid)" />
+                    }
+
+                    @* Smart-snap alignment guides *@
+                    @foreach (var guide in _snapGuides)
+                    {
+                        <line x1="@guide.X1" y1="@guide.Y1" x2="@guide.X2" y2="@guide.Y2"
+                              stroke="#ff4444" stroke-width="0.5" stroke-dasharray="3,2" />
                     }
 
                     @foreach (var sym in screen.Symbols)
@@ -1013,6 +1059,32 @@
             </div>
         </div>
     }
+
+    @if (_showDistributeDialog)
+    {
+        <div class="modal show d-block" style="background: rgba(0,0,0,0.5);">
+            <div class="modal-dialog modal-sm">
+                <div class="modal-content bg-dark text-light">
+                    <div class="modal-header py-2">
+                        <h6 class="modal-title">Distribute to Columns</h6>
+                        <button class="btn-close btn-close-white" @onclick="() => _showDistributeDialog = false"></button>
+                    </div>
+                    <div class="modal-body">
+                        <label>Columns:</label>
+                        <input type="number" class="form-control form-control-sm" @bind="_distributeColumns" min="1" max="20" />
+                        <label class="mt-2">Gap X:</label>
+                        <input type="number" class="form-control form-control-sm" @bind="_distributeGapX" />
+                        <label class="mt-2">Gap Y:</label>
+                        <input type="number" class="form-control form-control-sm" @bind="_distributeGapY" />
+                    </div>
+                    <div class="modal-footer py-1">
+                        <button class="btn btn-sm btn-primary" @onclick="ApplyDistributeToColumns">Apply</button>
+                        <button class="btn btn-sm btn-secondary" @onclick="() => _showDistributeDialog = false">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
 </div>
 
 @code {
@@ -1022,6 +1094,7 @@
     [Inject] private OpcClientService Opc { get; set; } = default!;
     [Inject] private ClipboardService Clipboard { get; set; } = default!;
     [Inject] private NodeEditorService Editor { get; set; } = default!;
+    [Inject] private UndoRedoService UndoRedo { get; set; } = default!;
 
     private ScreenSymbol? _selectedSymbol;
     private HashSet<ScreenSymbol> _selectedSymbols = new();
@@ -1046,6 +1119,40 @@
     private int _nextAnimId = 1;
     private System.Threading.Timer? _refreshTimer;
     private TreeNode? _previousNode;
+
+    // ─── Grid / Snap / Distribute state ─────────────────────
+    private List<(double X1, double Y1, double X2, double Y2)> _snapGuides = new();
+    private const double SmartSnapThreshold = 5.0;
+    private bool _showDistributeDialog;
+    private int _distributeColumns = 3;
+    private int _distributeGapX = 10;
+    private int _distributeGapY = 10;
+
+    // ─── Undo snapshots ──────────────────────────────────────
+    private Dictionary<ScreenSymbol, string> _operationSnapshots = new();
+
+    private void CaptureSnapshots(IEnumerable<ScreenSymbol> symbols)
+    {
+        _operationSnapshots.Clear();
+        foreach (var s in symbols)
+            _operationSnapshots[s] = System.Text.Json.JsonSerializer.Serialize(s);
+    }
+
+    private void RecordSnapshotUndo(string description)
+    {
+        var actions = new List<UndoAction>();
+        foreach (var (sym, oldJson) in _operationSnapshots)
+        {
+            var newJson = System.Text.Json.JsonSerializer.Serialize(sym);
+            if (newJson != oldJson)
+                actions.Add(new SnapshotAction { Target = sym, OldJson = oldJson, NewJson = newJson, Description = description });
+        }
+        if (actions.Count == 1)
+            UndoRedo.RecordAction(actions[0]);
+        else if (actions.Count > 1)
+            UndoRedo.RecordAction(new CompoundAction { Actions = actions, Description = description });
+        _operationSnapshots.Clear();
+    }
 
     // ─── Resize handle definitions ──────────────────────────
     private record ResizeHandleDef(string Name, string Cursor,
@@ -1532,6 +1639,14 @@
         }
 
         screen.Symbols.Add(sym);
+
+        UndoRedo.RecordAction(new CollectionAction
+        {
+            Description = $"Add {type} symbol",
+            UndoCallback = () => screen.Symbols.Remove(sym),
+            RedoCallback = () => screen.Symbols.Add(sym)
+        });
+
         _selectedSymbols.Clear();
         _selectedSymbol = sym;
         _selectedSymbols.Add(sym);
@@ -1604,8 +1719,29 @@
 
         if (_selectedSymbols.Count > 0)
         {
-            foreach (var sym in _selectedSymbols.ToList())
+            var removed = _selectedSymbols.ToList();
+            var indices = removed.Select(s => screen.Symbols.IndexOf(s)).ToList();
+            foreach (var sym in removed)
                 screen.Symbols.Remove(sym);
+
+            UndoRedo.RecordAction(new CollectionAction
+            {
+                Description = removed.Count == 1 ? "Delete symbol" : $"Delete {removed.Count} symbols",
+                UndoCallback = () =>
+                {
+                    for (int i = 0; i < removed.Count; i++)
+                    {
+                        var idx = Math.Min(indices[i], screen.Symbols.Count);
+                        screen.Symbols.Insert(idx, removed[i]);
+                    }
+                },
+                RedoCallback = () =>
+                {
+                    foreach (var sym in removed)
+                        screen.Symbols.Remove(sym);
+                }
+            });
+
             _selectedSymbols.Clear();
             _selectedSymbol = null;
             NotifySelectionChanged();
@@ -1695,6 +1831,13 @@
             newSelection.Add(pasted);
         }
 
+        UndoRedo.RecordAction(new CollectionAction
+        {
+            Description = $"Paste {newSelection.Count} symbol(s)",
+            UndoCallback = () => { foreach (var s in newSelection) screen.Symbols.Remove(s); },
+            RedoCallback = () => { foreach (var s in newSelection) screen.Symbols.Add(s); }
+        });
+
         _selectedSymbols = new HashSet<ScreenSymbol>(newSelection);
         _selectedSymbol = newSelection.First();
         NotifySelectionChanged();
@@ -1768,6 +1911,13 @@
             newSelection.Add(dup);
         }
 
+        UndoRedo.RecordAction(new CollectionAction
+        {
+            Description = $"Duplicate {newSelection.Count} symbol(s)",
+            UndoCallback = () => { foreach (var s in newSelection) screen.Symbols.Remove(s); },
+            RedoCallback = () => { foreach (var s in newSelection) screen.Symbols.Add(s); }
+        });
+
         _selectedSymbols = new HashSet<ScreenSymbol>(newSelection);
         _selectedSymbol = newSelection.First();
         NotifySelectionChanged();
@@ -1778,8 +1928,10 @@
     {
         if (_selectedSymbols.Count > 0)
         {
+            CaptureSnapshots(_selectedSymbols);
             foreach (var sym in _selectedSymbols)
                 sym.Rotation = (sym.Rotation + degrees) % 360;
+            RecordSnapshotUndo("Rotate symbol(s)");
             OnChanged();
         }
     }
@@ -1825,6 +1977,9 @@
             _selectedSymbol = sym;
         }
         NotifySelectionChanged();
+
+        // Capture undo snapshots before drag
+        CaptureSnapshots(_selectedSymbols);
 
         // Start drag for all selected
         _isDragging = true;
@@ -1883,6 +2038,7 @@
     {
         if (_isDragging && _selectedSymbols.Count > 0)
         {
+            var screen = GetScreen();
             var dx = e.ClientX - _dragStartX;
             var dy = e.ClientY - _dragStartY;
             foreach (var s in _selectedSymbols)
@@ -1892,6 +2048,27 @@
                     s.X = start.X + dx;
                     s.Y = start.Y + dy;
                 }
+            }
+
+            // Snap to grid
+            if (screen != null && screen.SnapToGrid && screen.EditorGridSize >= 5)
+            {
+                var gs = (double)screen.EditorGridSize;
+                var anchor = _selectedSymbol ?? _selectedSymbols.First();
+                var snapDx = Math.Round(anchor.X / gs) * gs - anchor.X;
+                var snapDy = Math.Round(anchor.Y / gs) * gs - anchor.Y;
+                foreach (var s in _selectedSymbols)
+                {
+                    s.X += snapDx;
+                    s.Y += snapDy;
+                }
+            }
+
+            // Smart snap (alignment guides)
+            _snapGuides.Clear();
+            if (screen != null && screen.SmartSnap && _selectedSymbol != null)
+            {
+                ComputeSmartSnapGuides(screen);
             }
         }
         else if (_isResizing)
@@ -1923,12 +2100,22 @@
 
         if (_isDragging || _isRotating || _isResizing)
         {
+            var wasDragging = _isDragging;
+            var wasRotating = _isRotating;
+            var wasResizing = _isResizing;
             _isDragging = false;
             _isRotating = false;
             _isResizing = false;
             _resizeHandle = "";
             _multiDragStarts.Clear();
             _multiResizeStarts.Clear();
+            _snapGuides.Clear();
+
+            // Record undo for the completed operation
+            if (wasDragging) RecordSnapshotUndo("Move symbol(s)");
+            else if (wasResizing) RecordSnapshotUndo("Resize symbol(s)");
+            else if (wasRotating) RecordSnapshotUndo("Rotate symbol");
+
             OnChanged();
         }
     }
@@ -1972,6 +2159,7 @@
     private void OnRotateHandleMouseDown(MouseEventArgs e, ScreenSymbol sym)
     {
         _selectedSymbol = sym;
+        CaptureSnapshots(new[] { sym });
         _isRotating = true;
         _dragStartX = e.ClientX;
         _dragStartY = e.ClientY;
@@ -1984,6 +2172,7 @@
     private void OnResizeHandleMouseDown(MouseEventArgs e, ScreenSymbol sym, string handle)
     {
         _selectedSymbol = sym;
+        CaptureSnapshots(_selectedSymbols);
         _isResizing = true;
         _resizeHandle = handle;
         _dragStartX = e.ClientX;
@@ -2123,9 +2312,11 @@
     {
         if (_selectedSymbols.Count < 2) return;
 
+        CaptureSnapshots(_selectedSymbols);
         var groupId = $"grp_{_nextGroupId++}";
         foreach (var sym in _selectedSymbols)
             sym.GroupId = groupId;
+        RecordSnapshotUndo("Group symbols");
         OnChanged();
     }
 
@@ -2141,12 +2332,13 @@
             .Distinct()
             .ToHashSet();
 
-        // Clear GroupId from ALL symbols that belong to those groups (not just selected ones)
-        foreach (var sym in screen.Symbols)
-        {
-            if (!string.IsNullOrEmpty(sym.GroupId) && groupIds.Contains(sym.GroupId))
-                sym.GroupId = null;
-        }
+        var affected = screen.Symbols.Where(s => !string.IsNullOrEmpty(s.GroupId) && groupIds.Contains(s.GroupId)).ToList();
+        CaptureSnapshots(affected);
+
+        foreach (var sym in affected)
+            sym.GroupId = null;
+
+        RecordSnapshotUndo("Ungroup symbols");
         OnChanged();
     }
 
@@ -2881,6 +3073,92 @@
     private void OnBindingChanged()
     {
         OnPropertyChanged.InvokeAsync();
+    }
+
+    // --- Smart Snap: compute alignment guide lines ---
+    private void ComputeSmartSnapGuides(ScreenConfig screen)
+    {
+        var sel = _selectedSymbol!;
+        var selCx = sel.X + sel.Width / 2;
+        var selCy = sel.Y + sel.Height / 2;
+
+        foreach (var other in screen.Symbols)
+        {
+            if (_selectedSymbols.Contains(other)) continue;
+
+            var oCx = other.X + other.Width / 2;
+            var oCy = other.Y + other.Height / 2;
+
+            // Left edge alignment
+            if (Math.Abs(sel.X - other.X) < SmartSnapThreshold)
+            {
+                sel.X = other.X;
+                _snapGuides.Add((other.X, Math.Min(sel.Y, other.Y), other.X, Math.Max(sel.Y + sel.Height, other.Y + other.Height)));
+            }
+            // Right edge alignment
+            if (Math.Abs((sel.X + sel.Width) - (other.X + other.Width)) < SmartSnapThreshold)
+            {
+                sel.X = other.X + other.Width - sel.Width;
+                var rx = other.X + other.Width;
+                _snapGuides.Add((rx, Math.Min(sel.Y, other.Y), rx, Math.Max(sel.Y + sel.Height, other.Y + other.Height)));
+            }
+            // Center X alignment
+            if (Math.Abs(selCx - oCx) < SmartSnapThreshold)
+            {
+                var offset = oCx - selCx;
+                foreach (var s in _selectedSymbols) s.X += offset;
+                _snapGuides.Add((oCx, Math.Min(sel.Y, other.Y), oCx, Math.Max(sel.Y + sel.Height, other.Y + other.Height)));
+            }
+            // Top edge alignment
+            if (Math.Abs(sel.Y - other.Y) < SmartSnapThreshold)
+            {
+                sel.Y = other.Y;
+                _snapGuides.Add((Math.Min(sel.X, other.X), other.Y, Math.Max(sel.X + sel.Width, other.X + other.Width), other.Y));
+            }
+            // Bottom edge alignment
+            if (Math.Abs((sel.Y + sel.Height) - (other.Y + other.Height)) < SmartSnapThreshold)
+            {
+                sel.Y = other.Y + other.Height - sel.Height;
+                var by = other.Y + other.Height;
+                _snapGuides.Add((Math.Min(sel.X, other.X), by, Math.Max(sel.X + sel.Width, other.X + other.Width), by));
+            }
+            // Center Y alignment
+            if (Math.Abs(selCy - oCy) < SmartSnapThreshold)
+            {
+                var offset = oCy - selCy;
+                foreach (var s in _selectedSymbols) s.Y += offset;
+                _snapGuides.Add((Math.Min(sel.X, other.X), oCy, Math.Max(sel.X + sel.Width, other.X + other.Width), oCy));
+            }
+        }
+    }
+
+    // --- Distribute to Columns ---
+    private void ApplyDistributeToColumns()
+    {
+        _showDistributeDialog = false;
+        var screen = GetScreen();
+        if (screen == null || _selectedSymbols.Count < 2) return;
+
+        CaptureSnapshots(_selectedSymbols);
+        var cols = Math.Max(1, _distributeColumns);
+        var sorted = _selectedSymbols.OrderBy(s => s.Y).ThenBy(s => s.X).ToList();
+
+        var startX = sorted.Min(s => s.X);
+        var startY = sorted.Min(s => s.Y);
+        var maxW = sorted.Max(s => s.Width);
+        var maxH = sorted.Max(s => s.Height);
+        var cellW = maxW + _distributeGapX;
+        var cellH = maxH + _distributeGapY;
+
+        for (int i = 0; i < sorted.Count; i++)
+        {
+            var col = i % cols;
+            var row = i / cols;
+            sorted[i].X = startX + col * cellW;
+            sorted[i].Y = startY + row * cellH;
+        }
+        RecordSnapshotUndo("Distribute symbols");
+        OnChanged();
     }
 
     public void Dispose()

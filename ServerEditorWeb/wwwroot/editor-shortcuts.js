@@ -56,12 +56,16 @@ window.editorShortcuts = {
                     ref.invokeMethodAsync('OnKeyboardSave');
                     break;
                 case 'z':
-                    e.preventDefault();
-                    ref.invokeMethodAsync('OnKeyboardUndo');
+                    if (!isEditable) {
+                        e.preventDefault();
+                        ref.invokeMethodAsync('OnKeyboardUndo');
+                    }
                     break;
                 case 'y':
-                    e.preventDefault();
-                    ref.invokeMethodAsync('OnKeyboardRedo');
+                    if (!isEditable) {
+                        e.preventDefault();
+                        ref.invokeMethodAsync('OnKeyboardRedo');
+                    }
                     break;
                 case 'o':
                     e.preventDefault();

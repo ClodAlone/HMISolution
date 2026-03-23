@@ -26,6 +26,10 @@ export function startDrag(svgElement, dotnetHelper, throttleMs) {
         pointerId: null
     };
 
+    // Force grabbing cursor on the whole page to prevent flicker during drag
+    document.body.style.cursor = 'grabbing';
+    document.body.style.userSelect = 'none';
+
     // Use document-level listeners to catch events even outside the SVG
     document.addEventListener('pointermove', onPointerMove, { passive: true });
     document.addEventListener('pointerup', onPointerUp);
@@ -38,6 +42,10 @@ export function stopDrag() {
     document.removeEventListener('pointerup', onPointerUp);
     document.removeEventListener('pointercancel', onPointerUp);
     _dragState = null;
+
+    // Restore default cursor
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
 }
 
 function toSvgCoords(svg, clientX, clientY) {

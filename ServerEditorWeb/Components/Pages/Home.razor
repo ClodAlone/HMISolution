@@ -291,9 +291,9 @@ else
 
         @* Edit operations *@
         <button class="iconbar-btn" title="@($"{L["toolbar.undo"]}{(UndoRedo.UndoDescription != null ? $" — {UndoRedo.UndoDescription}" : "")} (Ctrl+Z)")" @onclick="PerformUndo"
-                disabled="@(!UndoRedo.CanUndo)">↩️</button>
+                disabled="@(!UndoRedo.CanUndo && !IsCodeEditorActive())">&#x21A9;&#xFE0F;</button>
         <button class="iconbar-btn" title="@($"{L["toolbar.redo"]}{(UndoRedo.RedoDescription != null ? $" — {UndoRedo.RedoDescription}" : "")} (Ctrl+Y)")" @onclick="PerformRedo"
-                disabled="@(!UndoRedo.CanRedo)">↪️</button>
+                disabled="@(!UndoRedo.CanRedo && !IsCodeEditorActive())">&#x21AA;&#xFE0F;</button>
         <button class="iconbar-btn" title="@($"{L["toolbar.copy"]} (Ctrl+C)")" @onclick="() => Editor.CopySelected(Clipboard)"
                 disabled="@(!CanCopySelection())">📋</button>
         <button class="iconbar-btn" title="@($"{L["toolbar.paste"]} (Ctrl+V)")" @onclick="() => Editor.PasteFromClipboard(Clipboard)"
@@ -1317,20 +1317,36 @@ private void UnsavedDialogCancel()
         Editor.MarkChanged();
     }
 
-    private void PerformUndo()
+    private async Task PerformUndo()
     {
+        if (IsCodeEditorActive())
+        {
+            await JS.InvokeVoidAsync("codeEditor.activeUndo");
+            return;
+        }
         if (UndoRedo.Undo())
         {
             Editor.MarkChanged();
         }
     }
 
-    private void PerformRedo()
+    private async Task PerformRedo()
     {
+        if (IsCodeEditorActive())
+        {
+            await JS.InvokeVoidAsync("codeEditor.activeRedo");
+            return;
+        }
         if (UndoRedo.Redo())
         {
             Editor.MarkChanged();
         }
+    }
+
+    private bool IsCodeEditorActive()
+    {
+        return Editor.SelectedItem is ScriptNode
+            || (Editor.SelectedItem is PlcProgramNode pn && !pn.PlcProgram.Language.Equals("LD", StringComparison.OrdinalIgnoreCase));
     }
 
     // ─── Auth helpers ───────────────────────────────────────
@@ -1640,17 +1656,17 @@ private void UnsavedDialogCancel()
     }
 
     [JSInvokable]
-    public void OnKeyboardUndo()
+    public async Task OnKeyboardUndo()
     {
-        PerformUndo();
-        InvokeAsync(StateHasChanged);
+        await PerformUndo();
+        StateHasChanged();
     }
 
     [JSInvokable]
-    public void OnKeyboardRedo()
+    public async Task OnKeyboardRedo()
     {
-        PerformRedo();
-        InvokeAsync(StateHasChanged);
+        await PerformRedo();
+        StateHasChanged();
     }
 
     [JSInvokable]

@@ -22,6 +22,32 @@
     /// <summary>Exposes the host element so sibling components can target the CodeMirror instance via JS interop.</summary>
     public ElementReference EditorElement => _element;
 
+    /// <summary>Triggers CodeMirror undo.</summary>
+    public async Task UndoAsync()
+    {
+        if (_initialized) await JS.InvokeVoidAsync("codeEditor.undo", _element);
+    }
+
+    /// <summary>Triggers CodeMirror redo.</summary>
+    public async Task RedoAsync()
+    {
+        if (_initialized) await JS.InvokeVoidAsync("codeEditor.redo", _element);
+    }
+
+    /// <summary>Returns true if CodeMirror has undo history.</summary>
+    public async Task<bool> HasUndoAsync()
+    {
+        if (!_initialized) return false;
+        return await JS.InvokeAsync<bool>("codeEditor.hasUndo", _element);
+    }
+
+    /// <summary>Returns true if CodeMirror has redo history.</summary>
+    public async Task<bool> HasRedoAsync()
+    {
+        if (!_initialized) return false;
+        return await JS.InvokeAsync<bool>("codeEditor.hasRedo", _element);
+    }
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)

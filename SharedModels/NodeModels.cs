@@ -419,6 +419,19 @@ namespace SharedModels
         /// <summary>When true (default), this screen appears in the runtime navigation bar/menu.</summary>
         public bool ShowInNavigation { get; set; } = true;
 
+        // --- Editor grid / snap settings ---
+        /// <summary>Show the alignment grid in the editor canvas.</summary>
+        public bool ShowGrid { get; set; }
+
+        /// <summary>Grid cell size in pixels (editor only).</summary>
+        public int EditorGridSize { get; set; } = 20;
+
+        /// <summary>Snap moved/resized symbols to the grid.</summary>
+        public bool SnapToGrid { get; set; }
+
+        /// <summary>Enable smart-snap alignment guides between symbols.</summary>
+        public bool SmartSnap { get; set; }
+
         public List<ScreenSymbol> Symbols { get; set; } = new();
     }
 

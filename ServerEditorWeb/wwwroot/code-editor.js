@@ -199,6 +199,55 @@ window.codeEditor = {
         }
     },
 
+    undo: function (element) {
+        if (element._cm) element._cm.undo();
+    },
+
+    redo: function (element) {
+        if (element._cm) element._cm.redo();
+    },
+
+    hasUndo: function (element) {
+        return element._cm ? element._cm.historySize().undo > 0 : false;
+    },
+
+    hasRedo: function (element) {
+        return element._cm ? element._cm.historySize().redo > 0 : false;
+    },
+
+    // Find the visible CodeMirror instance on the page (if any) and perform undo/redo.
+    // Returns true if a CodeMirror was found and the operation was executed.
+    activeUndo: function () {
+        var cms = document.querySelectorAll('.CodeMirror');
+        for (var i = 0; i < cms.length; i++) {
+            if (cms[i].offsetParent !== null && cms[i].CodeMirror) {
+                cms[i].CodeMirror.undo();
+                return true;
+            }
+        }
+        return false;
+    },
+
+    activeRedo: function () {
+        var cms = document.querySelectorAll('.CodeMirror');
+        for (var i = 0; i < cms.length; i++) {
+            if (cms[i].offsetParent !== null && cms[i].CodeMirror) {
+                cms[i].CodeMirror.redo();
+                return true;
+            }
+        }
+        return false;
+    },
+
+    // Returns true if there is a visible CodeMirror on the page.
+    isCodeEditorVisible: function () {
+        var cms = document.querySelectorAll('.CodeMirror');
+        for (var i = 0; i < cms.length; i++) {
+            if (cms[i].offsetParent !== null && cms[i].CodeMirror) return true;
+        }
+        return false;
+    },
+
     destroy: function (element) {
         var editor = element._cm;
         if (!editor) return;

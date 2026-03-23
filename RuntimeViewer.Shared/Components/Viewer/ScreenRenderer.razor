@@ -27,10 +27,12 @@ else if (Screen.LayoutMode == "responsive")
                 continue;
 
             var hasCmd = sym.Commands.Count > 0;
+            var isInputWidget = sym.Type is "knob" or "rotaryswitch" or "switch" or "hslider" or "vslider";
+            var isInteractive = hasCmd || isInputWidget;
             var canExecute = hasCmd && Auth.HasWriteAccess(sym.RequiredAccess);
             var isLocked = hasCmd && !canExecute && !string.IsNullOrEmpty(sym.RequiredAccess);
 
-            <div class="rv-responsive-widget @(hasCmd ? "rv-responsive-interactive" : "") @(isLocked ? "rv-responsive-locked" : "")"
+            <div class="rv-responsive-widget @(isInteractive ? "rv-responsive-interactive" : "") @(isLocked ? "rv-responsive-locked" : "")"
                  style="grid-column: span @Math.Clamp(sym.ColSpan, 1, Screen.GridColumns); grid-row: span @Math.Max(1, sym.RowSpan); min-height: @(sym.RowHeight)px; order: @sym.Order; @WidgetFontStyle(sym)"
                  @onclick="() => OnSymbolClick(sym)"
                  @onmousedown="(e) => OnSymbolMouseDown(e, sym)"
@@ -348,7 +350,7 @@ else
          height="@(IsKiosk || BestFit ? null : Screen.Height)"
          preserveAspectRatio="xMidYMid meet"
          class="rv-canvas @(IsKiosk ? "rv-canvas-kiosk" : "") @(BestFit && !IsKiosk ? "rv-canvas-bestfit" : "")"
-         style="background: @Screen.Background;"
+         style="background: @Screen.Background;@(_isDraggingKnob || _isDraggingSlider ? " cursor: grabbing; user-select: none;" : "")"
          @ref="_svgRef">
 
         @{ var kfCss = BuildAllKeyframesCss(); }
@@ -384,14 +386,16 @@ else
                 continue;
 
             var hasCmd = sym.Commands.Count > 0;
+            var isInputWidget = sym.Type is "knob" or "rotaryswitch" or "switch" or "hslider" or "vslider";
+            var isInteractive = hasCmd || isInputWidget;
             var canExecute = hasCmd && Auth.HasWriteAccess(sym.RequiredAccess);
             
             var isPressed = _pressedSymbolId == sym.Id;
             var isLocked = hasCmd && !canExecute && !string.IsNullOrEmpty(sym.RequiredAccess);
 
             <LiveSymbol @key="sym.Id" Value="@liveValue"><g transform="translate(@sym.X, @sym.Y) rotate(@F(rotation), @F(sym.Width / 2), @F(sym.Height / 2))"
-               class="@(hasCmd ? "rv-interactive" : "") @(isPressed ? "rv-pressed" : "") @(isLocked ? "rv-locked" : "")"
-               style="@(hasCmd ? "cursor: pointer;" : "") @BuildPositionAnimStyle(sym)"
+               class="@(isInteractive ? "rv-interactive" : "") @(isPressed ? "rv-pressed" : "") @(isLocked ? "rv-locked" : "")"
+               style="@(isInteractive ? "cursor: pointer;" : "") @BuildPositionAnimStyle(sym)"
                @onmousedown="(e) => OnSymbolMouseDown(e, sym)" @onmousedown:stopPropagation
                @onmouseup="(e) => OnSymbolMouseUp(e, sym)" @onmouseup:stopPropagation
                @onclick="() => OnSymbolClick(sym)" @onclick:stopPropagation>
@@ -703,6 +707,8 @@ else
     private bool _isDraggingKnob;
     private double _knobDragStartAngle;
     private double _knobDragStartValue;
+    private double _knobPrevAngle;
+    private double _knobCurrentValue;
     private bool _suppressNextClick;
     private DateTime _lastDragWrite = DateTime.MinValue;
     private const int DragWriteIntervalMs = 60;
@@ -852,7 +858,9 @@ else
                     var cx = sym.X + sym.Width / 2.0;
                     var cy = sym.Y + sym.Height / 2.0;
                     _knobDragStartAngle = Math.Atan2(svgPt.X - cx, -(svgPt.Y - cy)) * 180.0 / Math.PI;
+                    _knobPrevAngle = _knobDragStartAngle;
                     _knobDragStartValue = ParseDouble(Opc.GetValue(sym.VariablePath) ?? "0");
+                    _knobCurrentValue = _knobDragStartValue;
                     _dragKnobSymbol = sym;
                     _isDraggingKnob = true;
                     await StartJsDrag();
@@ -911,6 +919,41 @@ else
         if (_suppressNextClick)
         {
             _suppressNextClick = false;
+            return;
+        }
+
+        // Rotary switch: cycle position on click
+        if (sym.Type == "rotaryswitch" && !string.IsNullOrEmpty(sym.VariablePath))
+        {
+            if (!Auth.HasWriteAccess(sym.RequiredAccess))
+            {
+                await OnRequestLogin.InvokeAsync();
+                return;
+            }
+            var n = Math.Max(2, Math.Min(12, sym.SwitchPositions));
+            var pos = (int)ParseDouble(Opc.GetValue(sym.VariablePath) ?? "0");
+            pos = (pos + 1) % n;
+            var posStr = pos.ToString();
+            Opc.UpdateLocalValue(sym.VariablePath, posStr);
+            StateHasChanged();
+            await Opc.WriteValueAsync(sym.VariablePath, posStr);
+            return;
+        }
+
+        // Toggle switch: toggle on click
+        if (sym.Type == "switch" && !string.IsNullOrEmpty(sym.VariablePath))
+        {
+            if (!Auth.HasWriteAccess(sym.RequiredAccess))
+            {
+                await OnRequestLogin.InvokeAsync();
+                return;
+            }
+            var current = Opc.GetValue(sym.VariablePath) ?? "0";
+            var isOn = current is "True" or "true" or "1";
+            var newVal = isOn ? "0" : "1";
+            Opc.UpdateLocalValue(sym.VariablePath, newVal);
+            StateHasChanged();
+            await Opc.WriteValueAsync(sym.VariablePath, newVal);
             return;
         }
 
@@ -1038,16 +1081,19 @@ else
             var cx = sym.X + sym.Width / 2.0;
             var cy = sym.Y + sym.Height / 2.0;
             var currentAngle = Math.Atan2(svgPt.X - cx, -(svgPt.Y - cy)) * 180.0 / Math.PI;
-            var delta = currentAngle - _knobDragStartAngle;
-            // Normalize delta to -180..180
+
+            // Use incremental delta from previous angle to avoid ±180° wrapping
+            var delta = currentAngle - _knobPrevAngle;
             if (delta > 180) delta -= 360;
             if (delta < -180) delta += 360;
+            _knobPrevAngle = currentAngle;
+
             var min = sym.MinValue ?? 0;
             var max = sym.MaxValue ?? 100;
             // Map 300° rotation range to full value range
             var valueDelta = delta / 300.0 * (max - min);
-            var newVal = Math.Clamp(_knobDragStartValue + valueDelta, min, max);
-            ThrottledDragWrite(sym.VariablePath, newVal.ToString("F2", System.Globalization.CultureInfo.InvariantCulture));
+            _knobCurrentValue = Math.Clamp(_knobCurrentValue + valueDelta, min, max);
+            ThrottledDragWrite(sym.VariablePath, _knobCurrentValue.ToString("F2", System.Globalization.CultureInfo.InvariantCulture));
         }
         catch { }
     }
@@ -1472,7 +1518,7 @@ else
         builder.AddAttribute(seq++, "fill", knobColor);
         builder.AddAttribute(seq++, "stroke", "#999");
         builder.AddAttribute(seq++, "stroke-width", 0.5);
-        builder.AddAttribute(seq++, "style", "filter: drop-shadow(0 1px 2px rgba(0,0,0,0.4));");
+        builder.AddAttribute(seq++, "style", "filter: drop-shadow(0 1px 2px rgba(0,0,0,0.4)); cursor: pointer;");
         builder.CloseElement();
 
         // Pointer line
@@ -1575,7 +1621,7 @@ else
         builder.AddAttribute(seq++, "fill", knobColor);
         builder.AddAttribute(seq++, "stroke", "#666");
         builder.AddAttribute(seq++, "stroke-width", 0.5);
-        builder.AddAttribute(seq++, "style", "filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5)); cursor: grab;");
+        builder.AddAttribute(seq++, "style", "filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5)); cursor: grab; pointer-events: all;");
         builder.CloseElement();
 
         // Pointer line

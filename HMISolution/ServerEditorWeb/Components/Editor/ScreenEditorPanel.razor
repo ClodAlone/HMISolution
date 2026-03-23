@@ -510,6 +510,7 @@
     [Inject] private OpcClientService Opc { get; set; } = default!;
     [Inject] private ClipboardService Clipboard { get; set; } = default!;
     [Inject] private NodeEditorService Editor { get; set; } = default!;
+    [Inject] private UndoRedoService UndoRedo { get; set; } = default!;
 
     private ScreenSymbol? _selectedSymbol;
     private HashSet<ScreenSymbol> _selectedSymbols = new();
@@ -534,6 +535,32 @@
     private int _nextAnimId = 1;
     private System.Threading.Timer? _refreshTimer;
     private TreeNode? _previousNode;
+
+    // ─── Undo snapshots ──────────────────────────────────────
+    private Dictionary<ScreenSymbol, string> _operationSnapshots = new();
+
+    private void CaptureSnapshots(IEnumerable<ScreenSymbol> symbols)
+    {
+        _operationSnapshots.Clear();
+        foreach (var s in symbols)
+            _operationSnapshots[s] = System.Text.Json.JsonSerializer.Serialize(s);
+    }
+
+    private void RecordSnapshotUndo(string description)
+    {
+        var actions = new List<UndoAction>();
+        foreach (var (sym, oldJson) in _operationSnapshots)
+        {
+            var newJson = System.Text.Json.JsonSerializer.Serialize(sym);
+            if (newJson != oldJson)
+                actions.Add(new SnapshotAction { Target = sym, OldJson = oldJson, NewJson = newJson, Description = description });
+        }
+        if (actions.Count == 1)
+            UndoRedo.RecordAction(actions[0]);
+        else if (actions.Count > 1)
+            UndoRedo.RecordAction(new CompoundAction { Actions = actions, Description = description });
+        _operationSnapshots.Clear();
+    }
 
     // ─── Grid / Snap / Distribute state ─────────────────────
     private List<(double X1, double Y1, double X2, double Y2)> _snapGuides = new();
@@ -580,7 +607,15 @@
         using var ms = new System.IO.MemoryStream();
         await stream.CopyToAsync(ms);
         var base64 = Convert.ToBase64String(ms.ToArray());
+        var oldBg = screen.BackgroundImage;
         screen.BackgroundImage = $"data:{file.ContentType};base64,{base64}";
+        var newBg = screen.BackgroundImage;
+        UndoRedo.RecordAction(new CollectionAction
+        {
+            Description = "Change background image",
+            UndoCallback = () => screen.BackgroundImage = oldBg,
+            RedoCallback = () => screen.BackgroundImage = newBg
+        });
         OnChanged();
     }
 
@@ -717,6 +752,14 @@
         }
 
         screen.Symbols.Add(sym);
+
+        UndoRedo.RecordAction(new CollectionAction
+        {
+            Description = $"Add {type} symbol",
+            UndoCallback = () => screen.Symbols.Remove(sym),
+            RedoCallback = () => screen.Symbols.Add(sym)
+        });
+
         _selectedSymbols.Clear();
         _selectedSymbol = sym;
         _selectedSymbols.Add(sym);
@@ -731,8 +774,29 @@
 
         if (_selectedSymbols.Count > 0)
         {
-            foreach (var sym in _selectedSymbols.ToList())
+            var removed = _selectedSymbols.ToList();
+            var indices = removed.Select(s => screen.Symbols.IndexOf(s)).ToList();
+            foreach (var sym in removed)
                 screen.Symbols.Remove(sym);
+
+            UndoRedo.RecordAction(new CollectionAction
+            {
+                Description = removed.Count == 1 ? "Delete symbol" : $"Delete {removed.Count} symbols",
+                UndoCallback = () =>
+                {
+                    for (int i = 0; i < removed.Count; i++)
+                    {
+                        var idx = Math.Min(indices[i], screen.Symbols.Count);
+                        screen.Symbols.Insert(idx, removed[i]);
+                    }
+                },
+                RedoCallback = () =>
+                {
+                    foreach (var sym in removed)
+                        screen.Symbols.Remove(sym);
+                }
+            });
+
             _selectedSymbols.Clear();
             _selectedSymbol = null;
             NotifySelectionChanged();
@@ -822,6 +886,13 @@
             newSelection.Add(pasted);
         }
 
+        UndoRedo.RecordAction(new CollectionAction
+        {
+            Description = $"Paste {newSelection.Count} symbol(s)",
+            UndoCallback = () => { foreach (var s in newSelection) screen.Symbols.Remove(s); },
+            RedoCallback = () => { foreach (var s in newSelection) screen.Symbols.Add(s); }
+        });
+
         _selectedSymbols = new HashSet<ScreenSymbol>(newSelection);
         _selectedSymbol = newSelection.First();
         NotifySelectionChanged();
@@ -895,6 +966,13 @@
             newSelection.Add(dup);
         }
 
+        UndoRedo.RecordAction(new CollectionAction
+        {
+            Description = $"Duplicate {newSelection.Count} symbol(s)",
+            UndoCallback = () => { foreach (var s in newSelection) screen.Symbols.Remove(s); },
+            RedoCallback = () => { foreach (var s in newSelection) screen.Symbols.Add(s); }
+        });
+
         _selectedSymbols = new HashSet<ScreenSymbol>(newSelection);
         _selectedSymbol = newSelection.First();
         NotifySelectionChanged();
@@ -905,8 +983,10 @@
     {
         if (_selectedSymbols.Count > 0)
         {
+            CaptureSnapshots(_selectedSymbols);
             foreach (var sym in _selectedSymbols)
                 sym.Rotation = (sym.Rotation + degrees) % 360;
+            RecordSnapshotUndo("Rotate symbol(s)");
             OnChanged();
         }
     }
@@ -952,6 +1032,9 @@
             _selectedSymbol = sym;
         }
         NotifySelectionChanged();
+
+        // Capture undo snapshots before drag
+        CaptureSnapshots(_selectedSymbols);
 
         // Start drag for all selected
         _isDragging = true;
@@ -1073,6 +1156,9 @@
 
         if (_isDragging || _isRotating || _isResizing)
         {
+            var wasDragging = _isDragging;
+            var wasRotating = _isRotating;
+            var wasResizing = _isResizing;
             _isDragging = false;
             _isRotating = false;
             _isResizing = false;
@@ -1080,6 +1166,12 @@
             _multiDragStarts.Clear();
             _multiResizeStarts.Clear();
             _snapGuides.Clear();
+
+            // Record undo for the completed operation
+            if (wasDragging) RecordSnapshotUndo("Move symbol(s)");
+            else if (wasResizing) RecordSnapshotUndo("Resize symbol(s)");
+            else if (wasRotating) RecordSnapshotUndo("Rotate symbol");
+
             OnChanged();
         }
     }
@@ -1123,6 +1215,7 @@
     private void OnRotateHandleMouseDown(MouseEventArgs e, ScreenSymbol sym)
     {
         _selectedSymbol = sym;
+        CaptureSnapshots(new[] { sym });
         _isRotating = true;
         _dragStartX = e.ClientX;
         _dragStartY = e.ClientY;
@@ -1135,6 +1228,7 @@
     private void OnResizeHandleMouseDown(MouseEventArgs e, ScreenSymbol sym, string handle)
     {
         _selectedSymbol = sym;
+        CaptureSnapshots(_selectedSymbols);
         _isResizing = true;
         _resizeHandle = handle;
         _dragStartX = e.ClientX;
@@ -1274,9 +1368,11 @@
     {
         if (_selectedSymbols.Count < 2) return;
 
+        CaptureSnapshots(_selectedSymbols);
         var groupId = $"grp_{_nextGroupId++}";
         foreach (var sym in _selectedSymbols)
             sym.GroupId = groupId;
+        RecordSnapshotUndo("Group symbols");
         OnChanged();
     }
 
@@ -1292,12 +1388,15 @@
             .Distinct()
             .ToHashSet();
 
+        // Snapshot all affected symbols before ungroup
+        var affected = screen.Symbols.Where(s => !string.IsNullOrEmpty(s.GroupId) && groupIds.Contains(s.GroupId)).ToList();
+        CaptureSnapshots(affected);
+
         // Clear GroupId from ALL symbols that belong to those groups (not just selected ones)
-        foreach (var sym in screen.Symbols)
-        {
-            if (!string.IsNullOrEmpty(sym.GroupId) && groupIds.Contains(sym.GroupId))
-                sym.GroupId = null;
-        }
+        foreach (var sym in affected)
+            sym.GroupId = null;
+
+        RecordSnapshotUndo("Ungroup symbols");
         OnChanged();
     }
 
@@ -2016,7 +2115,14 @@
 
     private void SwitchToResponsive(ScreenConfig screen)
     {
+        var oldMode = screen.LayoutMode;
         screen.LayoutMode = "responsive";
+        UndoRedo.RecordAction(new CollectionAction
+        {
+            Description = "Switch to responsive layout",
+            UndoCallback = () => screen.LayoutMode = oldMode,
+            RedoCallback = () => screen.LayoutMode = "responsive"
+        });
         OnChanged();
     }
 
@@ -2089,6 +2195,7 @@
         var screen = GetScreen();
         if (screen == null || _selectedSymbols.Count < 2) return;
 
+        CaptureSnapshots(_selectedSymbols);
         var cols = Math.Max(1, _distributeColumns);
         var sorted = _selectedSymbols.OrderBy(s => s.Y).ThenBy(s => s.X).ToList();
 
@@ -2107,6 +2214,7 @@
             sorted[i].X = startX + col * cellW;
             sorted[i].Y = startY + row * cellH;
         }
+        RecordSnapshotUndo("Distribute symbols");
         OnChanged();
     }
 
