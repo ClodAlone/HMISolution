@@ -15,6 +15,9 @@ public class DriverTestService
 {
     private static readonly JsonSerializerOptions _jsonOpts = new() { PropertyNameCaseInsensitive = true };
 
+    /// <summary>Returns which drivers support write testing.</summary>
+    public static bool SupportsWrite(string driverKey) => driverKey is "Modbus" or "S7" or "OpcUaClient" or "Mqtt" or "Tcp" or "Sql";
+
     public async Task<DriverTestResult> TestReadAsync(string driverKey, string configJson)
     {
         var sw = Stopwatch.StartNew();
@@ -38,6 +41,26 @@ public class DriverTestService
             return result with { Message = $"{result.Message} ({sw.ElapsedMilliseconds} ms)" };
         }
         catch (Exception ex) { return new DriverTestResult(false, $"Error: {ex.Message}"); }
+    }
+
+    public async Task<DriverTestResult> TestWriteAsync(string driverKey, string configJson, string value)
+    {
+        var sw = Stopwatch.StartNew();
+        try
+        {
+            var result = driverKey switch
+            {
+                "Modbus" => await WriteModbusAsync(configJson, value),
+                "S7" => await WriteS7Async(configJson, value),
+                "OpcUaClient" => await WriteOpcUaClientAsync(configJson, value),
+                "Mqtt" => await WriteMqttAsync(configJson, value),
+                "Tcp" => await WriteTcpAsync(configJson, value),
+                "Sql" => await WriteSqlAsync(configJson, value),
+                _ => new DriverTestResult(false, $"Write not supported for driver: {driverKey}")
+            };
+            return result with { Message = $"{result.Message} ({sw.ElapsedMilliseconds} ms)" };
+        }
+        catch (Exception ex) { return new DriverTestResult(false, $"Write error: {ex.Message}"); }
     }
 
     private async Task<DriverTestResult> TestModbusAsync(string configJson)
@@ -344,5 +367,175 @@ public class DriverTestService
             return new DriverTestResult(false, $"{label} connection timeout to {ip}:{port}");
         await ct;
         return new DriverTestResult(true, $"{label} connected to {ip}:{port}");
+    }
+
+    // ??? Write test implementations ?????????????????????????????
+
+    private async Task<DriverTestResult> WriteModbusAsync(string configJson, string value)
+    {
+        var cfg = JsonSerializer.Deserialize<ModbusTestCfg>(configJson, _jsonOpts);
+        if (cfg is null || string.IsNullOrWhiteSpace(cfg.IpAddress))
+            return new DriverTestResult(false, "Invalid Modbus configuration");
+        int port = cfg.Port > 0 ? cfg.Port : 502;
+        using var tcp = new TcpClient();
+        var ct = tcp.ConnectAsync(cfg.IpAddress, port);
+        if (await Task.WhenAny(ct, Task.Delay(3000)) != ct)
+            return new DriverTestResult(false, $"Connection timeout to {cfg.IpAddress}:{port}");
+        await ct;
+        var factory = new NModbus.ModbusFactory();
+        using var master = factory.CreateMaster(tcp);
+        byte unitId = cfg.UnitId > 0 ? cfg.UnitId : (byte)1;
+        ushort register = cfg.Register;
+        if (cfg.RegisterType == "Coil")
+        {
+            if (!bool.TryParse(value, out var boolVal))
+                return new DriverTestResult(false, "Value must be true/false for Coil");
+            await master.WriteSingleCoilAsync(unitId, register, boolVal);
+            return new DriverTestResult(true, $"Modbus coil write OK ? {boolVal}", boolVal.ToString());
+        }
+        if (!ushort.TryParse(value, out var regVal))
+            return new DriverTestResult(false, "Value must be a number (0–65535) for register");
+        await master.WriteSingleRegisterAsync(unitId, register, regVal);
+        return new DriverTestResult(true, $"Modbus register write OK ? {regVal}", regVal.ToString());
+    }
+
+    private async Task<DriverTestResult> WriteS7Async(string configJson, string value)
+    {
+        var cfg = JsonSerializer.Deserialize<S7TestCfg>(configJson, _jsonOpts);
+        if (cfg is null || string.IsNullOrWhiteSpace(cfg.IpAddress))
+            return new DriverTestResult(false, "Invalid S7 configuration");
+        if (string.IsNullOrWhiteSpace(cfg.Address))
+            return new DriverTestResult(false, "No S7 address specified to write");
+        using var plc = new S7.Net.Plc(S7.Net.CpuType.S71200, cfg.IpAddress, (short)cfg.Rack, (short)cfg.Slot);
+        await plc.OpenAsync();
+        if (!plc.IsConnected)
+            return new DriverTestResult(false, $"Cannot connect to S7 at {cfg.IpAddress}");
+        object writeVal;
+        if (double.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var dv))
+            writeVal = cfg.Address.Contains("DBD") || cfg.Address.Contains("MD") ? (object)(float)dv : (int)dv;
+        else if (bool.TryParse(value, out var bv))
+            writeVal = bv;
+        else
+            writeVal = value;
+        await plc.WriteAsync(cfg.Address, writeVal);
+        return new DriverTestResult(true, $"S7 write OK ? {cfg.Address} = {writeVal}", writeVal.ToString());
+    }
+
+    private async Task<DriverTestResult> WriteOpcUaClientAsync(string configJson, string value)
+    {
+        var cfg = JsonSerializer.Deserialize<OpcUaTestCfg>(configJson, _jsonOpts);
+        if (cfg is null || string.IsNullOrWhiteSpace(cfg.EndpointUrl))
+            return new DriverTestResult(false, "Invalid OPC UA Client configuration");
+        if (string.IsNullOrWhiteSpace(cfg.NodeId))
+            return new DriverTestResult(false, "No NodeId specified to write");
+        var pkiRoot = "%LocalApplicationData%/ServerEditorWeb/pki";
+        var appCfg = new Opc.Ua.ApplicationConfiguration
+        {
+            ApplicationName = "DriverTestOpcClient",
+            ApplicationUri = $"urn:{System.Net.Dns.GetHostName()}:DriverTestOpcClient",
+            ApplicationType = Opc.Ua.ApplicationType.Client,
+            SecurityConfiguration = new Opc.Ua.SecurityConfiguration
+            {
+                ApplicationCertificate = new Opc.Ua.CertificateIdentifier { StoreType = Opc.Ua.CertificateStoreType.Directory, StorePath = $"{pkiRoot}/own", SubjectName = "DriverTestOpcClient" },
+                TrustedPeerCertificates = new Opc.Ua.CertificateTrustList { StoreType = Opc.Ua.CertificateStoreType.Directory, StorePath = $"{pkiRoot}/trusted" },
+                TrustedIssuerCertificates = new Opc.Ua.CertificateTrustList { StoreType = Opc.Ua.CertificateStoreType.Directory, StorePath = $"{pkiRoot}/issuer" },
+                RejectedCertificateStore = new Opc.Ua.CertificateTrustList { StoreType = Opc.Ua.CertificateStoreType.Directory, StorePath = $"{pkiRoot}/rejected" }
+            },
+            TransportQuotas = new Opc.Ua.TransportQuotas { OperationTimeout = 10000 },
+            ClientConfiguration = new Opc.Ua.ClientConfiguration { DefaultSessionTimeout = 30000 }
+        };
+        await appCfg.Validate(Opc.Ua.ApplicationType.Client);
+        appCfg.CertificateValidator.CertificateValidation += (_, e) =>
+        { if (e.Error.StatusCode == Opc.Ua.StatusCodes.BadCertificateUntrusted) e.Accept = true; };
+        var selectedEndpoint = Opc.Ua.Client.CoreClientUtils.SelectEndpoint(appCfg, cfg.EndpointUrl, false, 10000);
+        var epCfg = Opc.Ua.EndpointConfiguration.Create(appCfg);
+        var endpoint = new Opc.Ua.ConfiguredEndpoint(null, selectedEndpoint, epCfg);
+        var session = await Opc.Ua.Client.Session.Create(appCfg, endpoint, false, "DriverTestSession", 30000, new Opc.Ua.UserIdentity(new Opc.Ua.AnonymousIdentityToken()), null);
+        try
+        {
+            var nodeId = Opc.Ua.NodeId.Parse(cfg.NodeId);
+            // Read first to determine the data type
+            var dv2 = await Opc.Ua.Client.SessionClientExtensions.ReadValueAsync(session, nodeId);
+            object writeVal = value;
+            if (dv2.WrappedValue.Value is double)
+                writeVal = double.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var d) ? d : value;
+            else if (dv2.WrappedValue.Value is float)
+                writeVal = float.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var f) ? f : value;
+            else if (dv2.WrappedValue.Value is int)
+                writeVal = int.TryParse(value, out var i) ? i : value;
+            else if (dv2.WrappedValue.Value is bool)
+                writeVal = bool.TryParse(value, out var b) ? b : value;
+            var writeValue = new Opc.Ua.WriteValue
+            {
+                NodeId = nodeId,
+                AttributeId = Opc.Ua.Attributes.Value,
+                Value = new Opc.Ua.DataValue(new Opc.Ua.Variant(writeVal))
+            };
+            var writeRequest = new Opc.Ua.WriteValueCollection { writeValue };
+            var response = await session.WriteAsync(null, writeRequest, CancellationToken.None);
+            if (response.Results.Count > 0 && Opc.Ua.StatusCode.IsBad(response.Results[0]))
+                return new DriverTestResult(false, $"Write failed: {Opc.Ua.StatusCodes.GetBrowseName(response.Results[0].Code)}");
+            return new DriverTestResult(true, "OPC UA write OK", writeVal.ToString());
+        }
+        finally { await session.CloseAsync(); session.Dispose(); }
+    }
+
+    private async Task<DriverTestResult> WriteMqttAsync(string configJson, string value)
+    {
+        var cfg = JsonSerializer.Deserialize<MqttTestCfg>(configJson, _jsonOpts);
+        if (cfg is null || string.IsNullOrWhiteSpace(cfg.Broker))
+            return new DriverTestResult(false, "Invalid MQTT configuration");
+        if (string.IsNullOrWhiteSpace(cfg.Topic))
+            return new DriverTestResult(false, "No topic specified to publish");
+        int port = cfg.Port > 0 ? cfg.Port : 1883;
+        var factory = new MQTTnet.MqttClientFactory();
+        using var mqttClient = factory.CreateMqttClient();
+        var options = new MQTTnet.MqttClientOptionsBuilder().WithTcpServer(cfg.Broker, port).WithTimeout(TimeSpan.FromSeconds(5)).Build();
+        var connectResult = await mqttClient.ConnectAsync(options);
+        if (connectResult.ResultCode != MQTTnet.MqttClientConnectResultCode.Success)
+            return new DriverTestResult(false, $"MQTT connect failed: {connectResult.ResultCode}");
+        var msg = new MQTTnet.MqttApplicationMessageBuilder().WithTopic(cfg.Topic).WithPayload(Encoding.UTF8.GetBytes(value)).Build();
+        await mqttClient.PublishAsync(msg);
+        await mqttClient.DisconnectAsync(new MQTTnet.MqttClientDisconnectOptions());
+        return new DriverTestResult(true, $"MQTT publish OK ? {cfg.Topic}", value);
+    }
+
+    private async Task<DriverTestResult> WriteTcpAsync(string configJson, string value)
+    {
+        var cfg = JsonSerializer.Deserialize<TcpTestCfg>(configJson, _jsonOpts);
+        if (cfg is null || string.IsNullOrWhiteSpace(cfg.IpAddress) || cfg.Port <= 0)
+            return new DriverTestResult(false, "Invalid TCP configuration");
+        using var tcp = new TcpClient();
+        var ct = tcp.ConnectAsync(cfg.IpAddress, cfg.Port);
+        if (await Task.WhenAny(ct, Task.Delay(3000)) != ct)
+            return new DriverTestResult(false, $"Connection timeout to {cfg.IpAddress}:{cfg.Port}");
+        await ct;
+        using var stream = tcp.GetStream();
+        stream.WriteTimeout = 2000;
+        var data = Encoding.ASCII.GetBytes(value.Replace("\\r", "\r").Replace("\\n", "\n"));
+        await stream.WriteAsync(data);
+        return new DriverTestResult(true, $"TCP write OK ? {data.Length} bytes sent", value);
+    }
+
+    private async Task<DriverTestResult> WriteSqlAsync(string configJson, string value)
+    {
+        var cfg = JsonSerializer.Deserialize<SqlTestCfg>(configJson, _jsonOpts);
+        if (cfg is null || string.IsNullOrWhiteSpace(cfg.ConnectionString))
+            return new DriverTestResult(false, "Invalid SQL configuration");
+        if (string.IsNullOrWhiteSpace(value))
+            return new DriverTestResult(false, "No SQL statement provided");
+        System.Data.Common.DbConnection conn = cfg.ConnectionString.Contains(".db", StringComparison.OrdinalIgnoreCase)
+                || (cfg.ConnectionString.StartsWith("Data Source=", StringComparison.OrdinalIgnoreCase)
+                    && !cfg.ConnectionString.Contains("Server=", StringComparison.OrdinalIgnoreCase))
+            ? new Microsoft.Data.Sqlite.SqliteConnection(cfg.ConnectionString)
+            : new Npgsql.NpgsqlConnection(cfg.ConnectionString);
+        await using (conn)
+        {
+            await conn.OpenAsync();
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = value;
+            var rows = await cmd.ExecuteNonQueryAsync();
+            return new DriverTestResult(true, $"SQL execute OK ? {rows} row(s) affected", rows.ToString());
+        }
     }
 }

@@ -17,11 +17,27 @@
                     <button class="btn btn-sm btn-outline-info py-0 px-1" style="font-size: 9px;"
                             disabled="@_testBusy"
                             @onclick="() => RunDriverTest(key)" title="Test read this driver variable">⚡ Test</button>
+                    @if (DriverTestService.SupportsWrite(key))
+                    {
+                        <button class="btn btn-sm btn-outline-warning py-0 px-1" style="font-size: 9px;"
+                                disabled="@_testBusy"
+                                @onclick="() => ToggleWritePanel(key)" title="Write a value to this driver">✏️ Write</button>
+                    }
                     <button class="btn btn-sm btn-outline-danger py-0 px-1" style="font-size: 9px;"
                             @onclick="() => RemoveDriver(key)" title="Remove driver binding">✕</button>
                 </span>
             </div>
             <div class="card-body vde-card-body p-2">
+                @if (_testBusy && _testDriverKey == key)
+                {
+                    <div class="vde-progress p-2 mb-2">
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="vde-spinner"></span>
+                            <span class="small" style="font-size: 11px;">@(_testOperation == "write" ? "Writing…" : "Testing…") connecting to @key driver</span>
+                        </div>
+                        <div class="vde-progress-bar mt-1"><div class="vde-progress-bar-fill"></div></div>
+                    </div>
+                }
                 @if (_testDriverKey == key && _testResult != null)
                 {
                     <div class="vde-test-result p-2 mb-2 @(_testResult.Success ? "vde-test-ok" : "vde-test-err")">
@@ -33,6 +49,26 @@
                         {
                             <div class="mt-1"><code style="font-size:11px;">@_testResult.Value</code></div>
                             <button class="btn btn-sm btn-outline-info py-0 px-1 mt-1" style="font-size:9px;" disabled="@_testBusy" @onclick="() => RunDriverTest(key)">🔄 Re-test</button>
+                        }
+                    </div>
+                }
+                @if (_writeDriverKey == key)
+                {
+                    <div class="vde-test-result p-2 mb-2" style="border: 1px solid color-mix(in srgb, var(--bs-warning, #ffc107) 40%, transparent); border-radius: 4px; background: color-mix(in srgb, var(--bs-warning, #ffc107) 8%, transparent);">
+                        <label class="form-label mb-1 small fw-bold" style="font-size: 10px;">✏️ Write Test Value</label>
+                        <div class="d-flex gap-1 align-items-center">
+                            <input type="text" class="form-control form-control-sm" style="font-size: 11px;"
+                                   placeholder="@WriteHint(key)" @bind="_testWriteValue" @bind:event="oninput" />
+                            <button class="btn btn-sm btn-warning py-0 px-2" style="font-size: 10px; white-space: nowrap;"
+                                    disabled="@(_testBusy || string.IsNullOrWhiteSpace(_testWriteValue))"
+                                    @onclick="() => RunDriverTestWrite(key)">⚡ Send</button>
+                            <button class="btn btn-sm py-0 px-1" style="font-size: 9px;" @onclick="DismissWritePanel">✕</button>
+                        </div>
+                        @if (_writeResult != null)
+                        {
+                            <div class="mt-1 small @(_writeResult.Success ? "text-success" : "text-danger")" style="font-size: 10px;">
+                                @(_writeResult.Success ? "✅" : "❌") @_writeResult.Message
+                            </div>
                         }
                     </div>
                 }
@@ -231,6 +267,40 @@
     .vde-test-result { border-radius: 4px; font-size: 11px; }
     .vde-test-ok { background: color-mix(in srgb, var(--bs-success, #198754) 12%, transparent); border: 1px solid color-mix(in srgb, var(--bs-success, #198754) 30%, transparent); }
     .vde-test-err { background: color-mix(in srgb, var(--bs-danger, #dc3545) 12%, transparent); border: 1px solid color-mix(in srgb, var(--bs-danger, #dc3545) 30%, transparent); }
+    /* Progress indicator */
+    .vde-progress {
+        border-radius: 4px;
+        font-size: 11px;
+        background: color-mix(in srgb, var(--bs-info, #0dcaf0) 8%, transparent);
+        border: 1px solid color-mix(in srgb, var(--bs-info, #0dcaf0) 25%, transparent);
+    }
+    .vde-spinner {
+        display: inline-block;
+        width: 14px;
+        height: 14px;
+        border: 2px solid color-mix(in srgb, var(--bs-info, #0dcaf0) 30%, transparent);
+        border-top-color: var(--bs-info, #0dcaf0);
+        border-radius: 50%;
+        animation: vde-spin 0.8s linear infinite;
+    }
+    @@keyframes vde-spin { to { transform: rotate(360deg); } }
+    .vde-progress-bar {
+        height: 3px;
+        border-radius: 2px;
+        background: color-mix(in srgb, var(--bs-info, #0dcaf0) 15%, transparent);
+        overflow: hidden;
+    }
+    .vde-progress-bar-fill {
+        height: 100%;
+        width: 40%;
+        border-radius: 2px;
+        background: var(--bs-info, #0dcaf0);
+        animation: vde-indeterminate 1.4s ease-in-out infinite;
+    }
+    @@keyframes vde-indeterminate {
+        0% { transform: translateX(-100%); }
+        100% { transform: translateX(350%); }
+    }
 </style>
 
 @code {
@@ -248,7 +318,12 @@
 
     private bool _testBusy;
     private string? _testDriverKey;
+    private string _testOperation = "read";
     private ServerEditorWeb.Services.DriverTestResult? _testResult;
+
+    private string? _writeDriverKey;
+    private string _testWriteValue = "";
+    private ServerEditorWeb.Services.DriverTestResult? _writeResult;
 
     protected override void OnParametersSet()
     {
@@ -865,6 +940,7 @@
         }
         _testBusy = true;
         _testDriverKey = driverKey;
+        _testOperation = "read";
         _testResult = null;
         StateHasChanged();
         try
@@ -879,4 +955,49 @@
     }
 
     private void DismissTestResult() { _testResult = null; _testDriverKey = null; }
+
+    private void ToggleWritePanel(string driverKey)
+    {
+        if (_writeDriverKey == driverKey) { DismissWritePanel(); return; }
+        _writeDriverKey = driverKey;
+        _testWriteValue = "";
+        _writeResult = null;
+    }
+
+    private void DismissWritePanel() { _writeDriverKey = null; _testWriteValue = ""; _writeResult = null; }
+
+    private async Task RunDriverTestWrite(string driverKey)
+    {
+        var json = GetDriverConfigJson(driverKey);
+        if (json is null)
+        {
+            _writeResult = new DriverTestResult(false, "No configuration found for this driver.", null);
+            return;
+        }
+        _testBusy = true;
+        _testDriverKey = driverKey;
+        _testOperation = "write";
+        _writeResult = null;
+        StateHasChanged();
+        try
+        {
+            _writeResult = await _driverTestSvc.TestWriteAsync(driverKey, json, _testWriteValue);
+        }
+        catch (Exception ex)
+        {
+            _writeResult = new DriverTestResult(false, ex.Message, null);
+        }
+        finally { _testBusy = false; }
+    }
+
+    private static string WriteHint(string key) => key switch
+    {
+        "Modbus" => "Value (0–65535 or true/false)",
+        "S7" => "Value to write",
+        "OpcUaClient" => "Value to write",
+        "Mqtt" => "Message payload to publish",
+        "Tcp" => "Data to send (\\r\\n for line ending)",
+        "Sql" => "SQL statement (UPDATE/INSERT)",
+        _ => "Value"
+    };
 }
