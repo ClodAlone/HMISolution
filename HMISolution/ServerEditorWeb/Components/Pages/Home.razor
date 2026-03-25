@@ -1548,6 +1548,35 @@ private void UnsavedDialogCancel()
             Stroke = "#333333"
         };
 
+        // Copy library animations to the placed symbol
+        if (item.Animations.Count > 0)
+        {
+            foreach (var anim in item.Animations)
+            {
+                sym.Animations.Add(new SymbolAnimation
+                {
+                    Id = Guid.NewGuid().ToString("N")[..8],
+                    Name = anim.Name,
+                    Enabled = anim.Enabled,
+                    Property = anim.Property,
+                    Trigger = anim.Trigger,
+                    TriggerVariable = anim.TriggerVariable,
+                    TriggerCondition = anim.TriggerCondition,
+                    Keyframes = anim.Keyframes.Select(k => new AnimationKeyframe
+                    {
+                        Percent = k.Percent,
+                        Value = k.Value,
+                        Easing = k.Easing
+                    }).ToList(),
+                    DurationMs = anim.DurationMs,
+                    DelayMs = anim.DelayMs,
+                    Easing = anim.Easing,
+                    RepeatCount = anim.RepeatCount,
+                    AutoReverse = anim.AutoReverse
+                });
+            }
+        }
+
         screen.Symbols.Add(sym);
         Editor.MarkChanged();
         _dockContainer?.ShowPanel("screen", "center");
