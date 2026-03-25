@@ -1,4 +1,5 @@
-@using ServerEditorWeb.Services
+﻿@using ServerEditorWeb.Services
+@using SharedModels
 @using Microsoft.JSInterop
 @implements IDisposable
 
@@ -20,7 +21,6 @@
         <button class="btn btn-sm btn-outline-success ms-auto" @onclick="ShowUploadDialog" title="Import SVG files from a folder">📤 Import</button>
         <button class="btn btn-sm btn-outline-info" @onclick="Refresh" title="Reload from disk">🔄</button>
     </div>
-
     @if (_showUpload)
     {
         <div class="symbol-library-upload-overlay" @onclick="CancelUpload">
@@ -73,16 +73,21 @@
             </div>
         </div>
     }
-
     <div class="symbol-library-grid">
         @foreach (var sym in GetFilteredSymbols())
         {
             var item = sym;
-            <div class="symbol-library-item" @onclick="() => OnSymbolSelected.InvokeAsync(item)" title="@item.Name">
+            var animClass = GetGridAnimClass(item);
+            <div class="symbol-library-item @animClass" @onclick="() => OnSymbolSelected.InvokeAsync(item)" title="@item.Name">
                 <div class="symbol-library-preview">
                     @((MarkupString)item.SvgContent)
                 </div>
                 <div class="symbol-library-name">@item.Name</div>
+                @if (item.Animations.Count > 0)
+                {
+                    <span class="symbol-anim-badge" title="@item.Animations.Count animation(s)">⚡</span>
+                    <button class="symbol-anim-btn" @onclick:stopPropagation @onclick="() => ShowAnimPreview(item)" title="Preview animation">▶</button>
+                }
             </div>
         }
 
@@ -91,8 +96,40 @@
             <div class="text-muted small p-2">No symbols found.</div>
         }
     </div>
+    @if (_previewItem != null)
+    {
+        <div class="symbol-anim-preview-overlay" @onclick="CloseAnimPreview">
+            <div class="symbol-anim-preview-dialog" @onclick:stopPropagation>
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="mb-0">🎬 @_previewItem.Name</h6>
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="CloseAnimPreview">✕</button>
+                </div>
+                <div class="symbol-anim-preview-stage @(_previewPlaying ? GetPreviewAnimClass(_previewItem) : "")">
+                    @((MarkupString)_previewItem.SvgContent)
+                </div>
+                <div class="d-flex gap-2 mt-2 align-items-center">
+                    <button class="btn btn-sm @(_previewPlaying ? "btn-warning" : "btn-success")" @onclick="TogglePreview">
+                        @(_previewPlaying ? "⏸ Pause" : "▶ Play")
+                    </button>
+                    <span class="small text-muted">@_previewItem.Animations.Count animation(s)</span>
+                </div>
+                @if (_previewItem.Animations.Count > 0)
+                {
+                    <div class="mt-2">
+                        @foreach (var anim in _previewItem.Animations)
+                        {
+                            <div class="symbol-anim-info-row">
+                                <span class="badge bg-info me-1">@anim.Property</span>
+                                <span class="small">@anim.Name</span>
+                                <span class="small text-muted ms-auto">@(anim.DurationMs)ms</span>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    }
 </div>
-
 @* Hidden file inputs for folder and file selection *@
 <input type="file" @ref="_folderInput" style="display:none" accept=".svg"
        webkitdirectory directory multiple />
@@ -119,6 +156,9 @@
     private DotNetObjectReference<SymbolLibraryPanel>? _selfRef;
     private List<(string FileName, byte[] Content)> _pendingFiles = [];
 
+    // Animation preview state
+    private SymbolLibraryItem? _previewItem;
+    private bool _previewPlaying = true;
     private IEnumerable<SymbolLibraryItem> GetFilteredSymbols()
     {
         var symbols = Library.GetSymbols().AsEnumerable();
@@ -134,6 +174,44 @@
         return symbols;
     }
 
+    private string GetGridAnimClass(SymbolLibraryItem item)
+    {
+        if (item.Animations.Count == 0) return "";
+        var prop = item.Animations[0].Property;
+        return prop switch
+        {
+            "Rotation" => "sym-grid-rotate",
+            "Fill" => "sym-grid-fill",
+            "Scale" => "sym-grid-scale",
+            "Opacity" => "sym-grid-opacity",
+            "Stroke" => "sym-grid-stroke",
+            _ => "sym-grid-pulse"
+        };
+    }
+
+    private string GetPreviewAnimClass(SymbolLibraryItem item)
+    {
+        if (item.Animations.Count == 0) return "";
+        var prop = item.Animations[0].Property;
+        return prop switch
+        {
+            "Rotation" => "sym-preview-rotate",
+            "Fill" => "sym-preview-fill",
+            "Scale" => "sym-preview-scale",
+            "Opacity" => "sym-preview-opacity",
+            "Stroke" => "sym-preview-stroke",
+            _ => "sym-preview-pulse"
+        };
+    }
+
+    private void ShowAnimPreview(SymbolLibraryItem item)
+    {
+        _previewItem = item;
+        _previewPlaying = true;
+    }
+
+    private void CloseAnimPreview() => _previewItem = null;
+    private void TogglePreview() => _previewPlaying = !_previewPlaying;
     private void Refresh()
     {
         Library.Refresh();
@@ -191,7 +269,6 @@
         _pendingFileCount = _pendingFiles.Count;
         InvokeAsync(StateHasChanged);
     }
-
     private async Task DoUpload()
     {
         if (string.IsNullOrWhiteSpace(_uploadCategory) || _uploading) return;
