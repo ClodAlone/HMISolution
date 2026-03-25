@@ -1,7 +1,22 @@
 ﻿@using SharedModels
 
 <div class="toolbox-panel">
-    @foreach (var category in _categories)
+    <div class="toolbox-search">
+        <span class="toolbox-search-icon">🔍</span>
+        <input type="text" class="toolbox-search-input" placeholder="Search widgets..."
+               @bind="_searchText" @bind:event="oninput" @bind:after="OnSearchChanged" />
+        @if (!string.IsNullOrEmpty(_searchText))
+        {
+            <button class="toolbox-search-clear" @onclick="ClearSearch" title="Clear">✕</button>
+        }
+    </div>
+
+    @if (_filteredCategories.Count == 0)
+    {
+        <div class="toolbox-empty">No widgets match "<strong>@_searchText</strong>"</div>
+    }
+
+    @foreach (var category in _filteredCategories)
     {
         <div class="toolbox-category">
             <button class="toolbox-category-header" @onclick="() => ToggleCategory(category.Name)">
@@ -15,13 +30,40 @@
                 <div class="toolbox-items">
                     @foreach (var item in category.Items)
                     {
-                        <button class="toolbox-item @item.CssClass" @onclick="() => OnItemClicked(item.Type)" title="@item.Tooltip">
-                            <span class="toolbox-item-icon">@item.Icon</span>
-                            <span class="toolbox-item-label">@item.Label</span>
-                        </button>
+                        <div class="toolbox-item-wrap">
+                            <button class="toolbox-item @item.CssClass"
+                                    @onclick="() => OnItemClicked(item.Type)"
+                                    @onmouseenter="() => ShowPreview(item)"
+                                    @onmouseleave="HidePreview"
+                                    title="@item.Tooltip">
+                                <span class="toolbox-item-icon">@item.Icon</span>
+                                <span class="toolbox-item-label">@item.Label</span>
+                                @if (!string.IsNullOrEmpty(item.Animation))
+                                {
+                                    <span class="toolbox-anim-badge" title="Has animation: @item.Animation">▶</span>
+                                }
+                            </button>
+                        </div>
                     }
                 </div>
             }
+        </div>
+    }
+
+    @if (_previewItem != null)
+    {
+        <div class="toolbox-preview-popup">
+            <div class="toolbox-preview-header">
+                <span>@_previewItem.Icon @_previewItem.Label</span>
+                @if (!string.IsNullOrEmpty(_previewItem.Animation))
+                {
+                    <span class="badge bg-info" style="font-size: 8px;">@_previewItem.Animation</span>
+                }
+            </div>
+            <div class="toolbox-preview-canvas">
+                @RenderPreview(_previewItem)
+            </div>
+            <div class="toolbox-preview-desc">@_previewItem.Tooltip</div>
         </div>
     }
 </div>
@@ -29,7 +71,12 @@
 @code {
     [Parameter] public EventCallback<string> OnSymbolTypeSelected { get; set; }
 
+    private string _searchText = "";
     private HashSet<string> _collapsedCategories = new();
+    private List<ToolboxCategory> _filteredCategories = new();
+    private ToolboxItem? _previewItem;
+
+    protected override void OnInitialized() { _filteredCategories = _categories; }
 
     private bool IsCategoryExpanded(string name) => !_collapsedCategories.Contains(name);
 
@@ -39,12 +86,99 @@
             _collapsedCategories.Add(name);
     }
 
-    private async Task OnItemClicked(string type)
+    private async Task OnItemClicked(string type) => await OnSymbolTypeSelected.InvokeAsync(type);
+
+    private void OnSearchChanged()
     {
-        await OnSymbolTypeSelected.InvokeAsync(type);
+        if (string.IsNullOrWhiteSpace(_searchText)) { _filteredCategories = _categories; return; }
+        var q = _searchText.Trim();
+        _filteredCategories = _categories
+            .Select(c => new ToolboxCategory(c.Name, c.Icon, c.Items
+                .Where(i => i.Label.Contains(q, StringComparison.OrdinalIgnoreCase)
+                         || i.Type.Contains(q, StringComparison.OrdinalIgnoreCase)
+                         || i.Tooltip.Contains(q, StringComparison.OrdinalIgnoreCase)
+                         || (!string.IsNullOrEmpty(i.Animation) && i.Animation.Contains(q, StringComparison.OrdinalIgnoreCase)))
+                .ToList()))
+            .Where(c => c.Items.Count > 0)
+            .ToList();
     }
 
-    private record ToolboxItem(string Type, string Icon, string Label, string Tooltip, string CssClass);
+    private void ClearSearch() { _searchText = ""; _filteredCategories = _categories; }
+    private void ShowPreview(ToolboxItem item) { _previewItem = item; }
+    private void HidePreview() { _previewItem = null; }
+
+    private RenderFragment RenderPreview(ToolboxItem item) => builder =>
+    {
+        var w = 160; var h = 80;
+        builder.OpenElement(0, "svg");
+        builder.AddAttribute(1, "width", w);
+        builder.AddAttribute(2, "height", h);
+        builder.AddAttribute(3, "viewBox", $"0 0 {w} {h}");
+        builder.AddAttribute(4, "xmlns", "http://www.w3.org/2000/svg");
+        builder.AddAttribute(5, "style", "background: #0f172a; border-radius: 4px;");
+        switch (item.Type)
+        {
+            case "rect":
+                builder.AddMarkupContent(10, "<rect x=\"20\" y=\"15\" width=\"120\" height=\"50\" rx=\"4\" fill=\"#3b82f6\" opacity=\"0.9\"/>");
+                break;
+            case "circle":
+                builder.AddMarkupContent(10, "<circle cx=\"80\" cy=\"40\" r=\"30\" fill=\"#8b5cf6\"/>");
+                break;
+            case "ellipse":
+                builder.AddMarkupContent(10, "<ellipse cx=\"80\" cy=\"40\" rx=\"55\" ry=\"25\" fill=\"#ec4899\"/>");
+                break;
+            case "text":
+                builder.AddMarkupContent(10, "<text x=\"80\" y=\"48\" text-anchor=\"middle\" fill=\"#e2e8f0\" font-size=\"16\" font-weight=\"bold\">Hello</text>");
+                break;
+            case "line":
+                builder.AddMarkupContent(10, "<line x1=\"20\" y1=\"60\" x2=\"140\" y2=\"20\" stroke=\"#f59e0b\" stroke-width=\"3\"/>");
+                break;
+            case "gauge":
+                builder.AddMarkupContent(10, "<circle cx=\"80\" cy=\"50\" r=\"30\" fill=\"none\" stroke=\"#334155\" stroke-width=\"6\"/><circle cx=\"80\" cy=\"50\" r=\"30\" fill=\"none\" stroke=\"#3b82f6\" stroke-width=\"6\" stroke-dasharray=\"120 200\" class=\"tbx-anim-gauge\"/><circle cx=\"80\" cy=\"50\" r=\"3\" fill=\"#f59e0b\"/>");
+                break;
+            case "indicator":
+                builder.AddMarkupContent(10, "<circle cx=\"50\" cy=\"40\" r=\"15\" fill=\"#22c55e\" class=\"tbx-anim-pulse\"/><circle cx=\"110\" cy=\"40\" r=\"15\" fill=\"#ef4444\" opacity=\"0.3\"/>");
+                break;
+            case "switch":
+                builder.AddMarkupContent(10, "<rect x=\"45\" y=\"28\" width=\"70\" height=\"30\" rx=\"15\" fill=\"#22c55e\"/><circle cx=\"100\" cy=\"43\" r=\"12\" fill=\"white\" class=\"tbx-anim-toggle\"/>");
+                break;
+            case "pipe":
+                builder.AddMarkupContent(10, "<rect x=\"10\" y=\"30\" width=\"140\" height=\"20\" rx=\"4\" fill=\"#475569\"/><line x1=\"10\" y1=\"40\" x2=\"150\" y2=\"40\" stroke=\"#3b82f6\" stroke-width=\"4\" stroke-dasharray=\"10 6\" class=\"tbx-anim-flow\"/>");
+                break;
+            case "tank":
+                builder.AddMarkupContent(10, "<rect x=\"40\" y=\"10\" width=\"80\" height=\"60\" rx=\"4\" fill=\"#1e293b\" stroke=\"#475569\" stroke-width=\"2\"/><rect x=\"42\" y=\"35\" width=\"76\" height=\"33\" rx=\"2\" fill=\"#3b82f6\" opacity=\"0.7\" class=\"tbx-anim-fill\"/><text x=\"80\" y=\"48\" text-anchor=\"middle\" fill=\"#e2e8f0\" font-size=\"11\">65%</text>");
+                break;
+            case "motorcontrol":
+                builder.AddMarkupContent(10, "<circle cx=\"80\" cy=\"40\" r=\"28\" fill=\"#1e293b\" stroke=\"#22c55e\" stroke-width=\"3\"/><text x=\"80\" y=\"46\" text-anchor=\"middle\" fill=\"#22c55e\" font-size=\"16\" class=\"tbx-anim-spin-text\">M</text>");
+                break;
+            case "valve":
+                builder.AddMarkupContent(10, "<polygon points=\"50,20 80,40 50,60\" fill=\"#22c55e\" opacity=\"0.8\"/><polygon points=\"110,20 80,40 110,60\" fill=\"#22c55e\" opacity=\"0.8\"/>");
+                break;
+            case "lamp":
+                builder.AddMarkupContent(10, "<circle cx=\"80\" cy=\"35\" r=\"14\" fill=\"#fbbf24\" stroke=\"#f59e0b\" stroke-width=\"2\" class=\"tbx-anim-pulse\"/><rect x=\"74\" y=\"49\" width=\"12\" height=\"8\" rx=\"2\" fill=\"#94a3b8\"/>");
+                break;
+            case "light":
+                builder.AddMarkupContent(10, "<rect x=\"65\" y=\"5\" width=\"30\" height=\"12\" rx=\"3\" fill=\"#475569\"/><polygon points=\"65,17 40,55 120,55 95,17\" fill=\"#fbbf24\" opacity=\"0.15\"/><circle cx=\"80\" cy=\"18\" r=\"3\" fill=\"#fbbf24\" class=\"tbx-anim-pulse\"/>");
+                break;
+            case "wire":
+                builder.AddMarkupContent(10, "<line x1=\"10\" y1=\"40\" x2=\"70\" y2=\"40\" stroke=\"#ef4444\" stroke-width=\"3\"/><circle cx=\"70\" cy=\"40\" r=\"4\" fill=\"#ef4444\"/><line x1=\"90\" y1=\"40\" x2=\"150\" y2=\"40\" stroke=\"#3b82f6\" stroke-width=\"3\"/><line x1=\"70\" y1=\"40\" x2=\"90\" y2=\"40\" stroke=\"#22d3ee\" stroke-width=\"2\" stroke-dasharray=\"4 3\" class=\"tbx-anim-flow\"/>");
+                break;
+            case "transformer":
+                builder.AddMarkupContent(10, "<circle cx=\"55\" cy=\"40\" r=\"18\" fill=\"none\" stroke=\"#f59e0b\" stroke-width=\"2.5\"/><circle cx=\"105\" cy=\"40\" r=\"18\" fill=\"none\" stroke=\"#3b82f6\" stroke-width=\"2.5\"/><text x=\"55\" y=\"44\" text-anchor=\"middle\" fill=\"#f59e0b\" font-size=\"10\">P</text><text x=\"105\" y=\"44\" text-anchor=\"middle\" fill=\"#3b82f6\" font-size=\"10\">S</text>");
+                break;
+            case "battery":
+                builder.AddMarkupContent(10, "<rect x=\"35\" y=\"18\" width=\"90\" height=\"44\" rx=\"4\" fill=\"#1e293b\" stroke=\"#475569\" stroke-width=\"2\"/><rect x=\"125\" y=\"30\" width=\"8\" height=\"20\" rx=\"2\" fill=\"#475569\"/><rect x=\"39\" y=\"22\" width=\"56\" height=\"36\" rx=\"2\" fill=\"#22c55e\" opacity=\"0.6\" class=\"tbx-anim-fill\"/><text x=\"80\" y=\"45\" text-anchor=\"middle\" fill=\"#e2e8f0\" font-size=\"12\">75%</text>");
+                break;
+            default:
+                builder.AddMarkupContent(10, $"<text x=\"80\" y=\"35\" text-anchor=\"middle\" fill=\"#94a3b8\" font-size=\"28\">{item.Icon}</text><text x=\"80\" y=\"60\" text-anchor=\"middle\" fill=\"#64748b\" font-size=\"10\">{item.Label}</text>");
+                break;
+        }
+        if (!string.IsNullOrEmpty(item.Animation))
+            builder.AddMarkupContent(90, $"<rect x=\"0\" y=\"0\" width=\"{w}\" height=\"{h}\" fill=\"none\" stroke=\"#22d3ee\" stroke-width=\"2\" stroke-dasharray=\"6 4\" rx=\"4\" class=\"tbx-anim-dash\"/>");
+        builder.CloseElement();
+    };
+
+    private record ToolboxItem(string Type, string Icon, string Label, string Tooltip, string CssClass, string Animation = "");
     private record ToolboxCategory(string Name, string Icon, List<ToolboxItem> Items);
 
     private static readonly List<ToolboxCategory> _categories =
@@ -59,15 +193,28 @@
         ]),
         new("Instruments", "🔘",
         [
-            new("gauge",       "🔘", "Gauge",         "Analog gauge display",          "item-instrument"),
-            new("indicator",   "🔴", "Indicator",     "Status indicator light",        "item-instrument"),
-            new("switch",      "🔀", "Toggle Switch", "Apple-style on/off toggle",     "item-instrument"),
-            new("rotaryswitch","🎛️", "Rotary Switch", "Multi-position rotary selector","item-instrument"),
-            new("knob",        "🎚️", "Knob",          "Interactive circular knob with scale",  "item-instrument"),
-            new("hslider",     "↔️", "H-Slider",      "Horizontal slider with pointer",        "item-instrument"),
-            new("vslider",     "↕️", "V-Slider",      "Vertical slider with pointer",          "item-instrument"),
+            new("gauge",       "🔘", "Gauge",         "Analog gauge display",          "item-instrument", "sweep"),
+            new("indicator",   "🔴", "Indicator",     "Status indicator light",        "item-instrument", "pulse"),
+            new("switch",      "🔀", "Toggle Switch", "Apple-style on/off toggle",     "item-instrument", "toggle"),
+            new("rotaryswitch","🎛️", "Rotary Switch", "Multi-position rotary selector","item-instrument", "rotate"),
+            new("knob",        "🎚️", "Knob",          "Interactive circular knob with scale",  "item-instrument", "rotate"),
+            new("hslider",     "↔️", "H-Slider",      "Horizontal slider with pointer",        "item-instrument", "slide"),
+            new("vslider",     "↕️", "V-Slider",      "Vertical slider with pointer",          "item-instrument", "slide"),
             new("button",      "🔲", "Button",        "Styled command button with visual presets", "item-instrument"),
-            new("animtext",    "🎬", "Anim Text",     "Animated text with scrolling, flash, and localization", "item-instrument"),
+            new("animtext",    "🎬", "Anim Text",     "Animated text with scrolling, flash, and localization", "item-instrument", "scroll"),
+            new("progressbar", "📊", "Progress Bar",  "Horizontal or vertical progress bar with percentage",   "item-instrument", "fill"),
+            new("numericdisplay","🔢","Numeric Display","Large formatted number readout with unit and zones",   "item-instrument", "count"),
+            new("ledarray",    "💡", "LED Array",     "Row/column of status LEDs bound to integer bit mask",   "item-instrument", "blink"),
+            new("pipe",        "🔧", "Pipe",          "Pipe segment with animated flow direction",             "item-instrument", "flow"),
+            new("tank",        "🛢️", "Tank",          "Liquid tank level with fill and label",                "item-instrument", "fill"),
+            new("motorcontrol","⚙️", "Motor Control", "Motor/pump/fan with run/stop/fault states",           "item-instrument", "spin"),
+            new("valve",       "🔶", "Valve",         "Gate/ball/butterfly valve with open/closed state",     "item-instrument", "toggle"),
+            new("sparkline",   "〰️", "Sparkline",     "Mini inline trend chart for a single variable",       "item-instrument"),
+            new("colorzone",   "🟩", "Color Zone",    "Zone that changes color based on variable rules",     "item-instrument", "pulse"),
+            new("conveyor",    "C", "Conveyor",      "Animated conveyor belt with run/stop/fault states",   "item-instrument", "flow"),
+            new("heatexchanger","H", "Heat Exchanger","Heat exchanger with hot/cold flow visualization",    "item-instrument", "flow"),
+            new("flowmeter",   "F", "Flow Meter",    "Flow rate display with optional totalizer",           "item-instrument", "count"),
+            new("setpointramp","S", "Setpoint Ramp", "Setpoint with ramp up/down visualization",            "item-instrument", "ramp"),
         ]),
         new("Data Widgets", "📊",
         [
@@ -76,7 +223,21 @@
             new("hdagrid",   "📋", "HDA Grid",    "Historical data archive grid",                    "item-data"),
             new("eventlog",  "📓", "Event Log",   "Event log grid with time filtering",              "item-data"),
             new("editbox",   "✏️", "Edit Box",    "Read/write value input control",                  "item-data"),
-            new("trend",     "📈", "Trend",       "Realtime trend with live variable traces",        "item-data"),
+            new("trend",     "📈", "Trend",       "Realtime trend with live variable traces",        "item-data", "sweep"),
+            new("dropdown",  "🔽", "Dropdown",    "Variable-bound dropdown select with options",       "item-data"),
+            new("datatable", "📑", "Data Table",  "Read-only table of multiple variable values",       "item-data"),
+            new("alarmbanner","🚨","Alarm Banner","Compact alarm severity count and status banner",    "item-data", "pulse"),
+            new("piechart",  "P", "Pie Chart",   "Pie or doughnut chart from multiple variables",        "item-data"),
+            new("barchart",  "B", "Bar Chart",   "Bar chart comparing multiple variable values",          "item-data"),
+            new("xyplot",     "X", "XY Plot",      "XY scatter/line plot from two variable axes",          "item-data"),
+        ]),
+        new("Electrical", "⚡",
+        [
+            new("lamp",        "💡", "Lamp",          "Lightbulb with on/off glow state",               "item-electrical", "pulse"),
+            new("light",       "🔦", "Light",         "Light fixture (ceiling/wall/spot)",               "item-electrical", "pulse"),
+            new("wire",        "〰", "Wire",           "Electrical wire/conductor segment",               "item-electrical", "flow"),
+            new("transformer", "🔌", "Transformer",   "Transformer with primary/secondary coils",        "item-electrical"),
+            new("battery",     "🔋", "Battery",       "Battery cell with charge level indicator",         "item-electrical", "fill"),
         ]),
         new("Media & Navigation", "🪟",
         [
@@ -86,7 +247,9 @@
             new("screenembed", "🪟", "Screen Embed", "Embed other screens (tabbed if multiple)",       "item-media"),
             new("reportviewer","📊", "Report Viewer","Embedded report viewer bound to a report definition", "item-media"),
             new("imagemap",    "🖼️", "Image Map",    "Show raster images based on variable condition", "item-media"),
-            new("navbutton",  "🔗", "Nav Button",   "Navigation button to switch between screens",          "item-media"),
+            new("navbutton",  "N", "Nav Button",   "Navigation button to switch between screens",          "item-media"),
+            new("popup",       "?", "Popup",         "Popup/tooltip overlay triggered by hover or variable",  "item-media"),
+            new("pdfviewer",   "D", "PDF Viewer",    "Embedded PDF document viewer",                          "item-media"),
         ]),
     ];
 }

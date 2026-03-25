@@ -1152,6 +1152,52 @@
                 If Messages is empty, the Label is used. Use @@StringId for localized strings.
                 Scroll cycles through messages as a marquee. Flash alternates colors. Fade crossfades between messages.
             </div>
+
+            <button class="btn btn-sm btn-outline-info w-100 py-0 mt-2" style="font-size: 10px;" @onclick="ToggleWidgetPreview">
+                @(_widgetPreviewActive ? "⏹ Hide Preview" : "▶ Preview Animation")
+            </button>
+            @if (_widgetPreviewActive)
+            {
+                var atMode = _selectedSymbol.AnimTextMode ?? "scroll";
+                var atSpeed = _selectedSymbol.AnimTextSpeed > 0 ? _selectedSymbol.AnimTextSpeed : 5;
+                var atColor1 = _selectedSymbol.Fill ?? "#e2e8f0";
+                var atColor2 = _selectedSymbol.AnimTextColor2 ?? "#ff4444";
+                var atBg1 = string.IsNullOrEmpty(_selectedSymbol.AnimTextBackground) ? "transparent" : _selectedSymbol.AnimTextBackground;
+                var atBg2 = string.IsNullOrEmpty(_selectedSymbol.AnimTextBackground2) ? atBg1 : _selectedSymbol.AnimTextBackground2;
+                var atText = !string.IsNullOrEmpty(_selectedSymbol.Label) ? _selectedSymbol.Label : "Sample Text";
+                var atBr = _selectedSymbol.AnimTextBorderRadius;
+                var atBorder = _selectedSymbol.AnimTextShowBorder ? $"border: 1px solid {atColor1};" : "";
+                var atId = "atPrev";
+                <div class="mt-2 rounded" style="background: #0f172a; border: 1px solid #334155; padding: 8px;">
+                    <style>
+                        @@keyframes @(atId)_scroll { 0% { transform: translateX(100%); } 100% { transform: translateX(-100%); } }
+                        @@keyframes @(atId)_flash { 0%,49% { color: @atColor1; background: @atBg1; } 50%,100% { color: @atColor2; background: @atBg2; } }
+                        @@keyframes @(atId)_pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.2; } }
+                        @@keyframes @(atId)_type { from { width: 0; } to { width: @(atText.Length)ch; } }
+                        @@keyframes @(atId)_blink { 50% { border-color: transparent; } }
+                    </style>
+                    <div style="overflow: hidden; border-radius: @(atBr)px; @atBorder background: @atBg1; padding: 4px; font-size: 13px; font-weight: bold;">
+                        @switch (atMode)
+                        {
+                            case "scroll":
+                                <div style="white-space: nowrap; animation: @(atId)_scroll @(Fmt(atSpeed))s linear infinite; color: @atColor1;">@atText</div>
+                                break;
+                            case "flash":
+                                <div style="text-align: center; animation: @(atId)_flash @(Fmt(atSpeed))s step-end infinite; color: @atColor1;">@atText</div>
+                                break;
+                            case "pulse":
+                                <div style="text-align: center; animation: @(atId)_pulse @(Fmt(atSpeed))s ease-in-out infinite; color: @atColor1;">@atText</div>
+                                break;
+                            case "typewriter":
+                                <div style="overflow: hidden; white-space: nowrap; border-right: 2px solid @atColor1; width: 0; color: @atColor1; animation: @(atId)_type @(Fmt(atSpeed))s steps(@atText.Length) infinite, @(atId)_blink 0.7s step-end infinite;">@atText</div>
+                                break;
+                            case "fade":
+                                <div style="text-align: center; animation: @(atId)_pulse @(Fmt(atSpeed))s ease-in-out infinite; color: @atColor1;">@atText</div>
+                                break;
+                        }
+                    </div>
+                </div>
+            }
         }
         @if (_selectedSymbol.Type is "eventlog")
         {
@@ -1193,6 +1239,236 @@
                     <option value="Alarm,Auth,Driver">Alarm + Auth + Driver</option>
                     <option value="Driver,System">Driver + System</option>
                 </select>
+            </div>
+        }
+        @if (_selectedSymbol.Type is "lamp")
+        {
+            <hr class="my-2" />
+            <h6 class="mb-2 small" style="color: #fbbf24;">ðŸ’¡ Lamp Settings</h6>
+            <div class="mb-2">
+                <label class="form-label mb-0 small">Style</label>
+                <select class="form-select form-select-sm" style="font-size: 10px;"
+                        @bind="_selectedSymbol.LampStyle" @bind:after="OnChanged">
+                    <option value="bulb">Bulb</option>
+                    <option value="led">LED</option>
+                    <option value="fluorescent">Fluorescent</option>
+                </select>
+            </div>
+            <div class="d-flex gap-1 mb-2">
+                <div>
+                    <label class="form-label mb-0 small">On Color</label>
+                    <input type="color" class="form-control form-control-sm form-control-color"
+                           @bind="_selectedSymbol.LampOnColor" @bind:after="OnChanged" />
+                </div>
+                <div>
+                    <label class="form-label mb-0 small">Off Color</label>
+                    <input type="color" class="form-control form-control-sm form-control-color"
+                           @bind="_selectedSymbol.LampOffColor" @bind:after="OnChanged" />
+                </div>
+            </div>
+            <div class="d-flex gap-1 mb-2">
+                <div>
+                    <label class="form-label mb-0 small">Glass Color</label>
+                    <input type="color" class="form-control form-control-sm form-control-color"
+                           @bind="_selectedSymbol.LampGlassColor" @bind:after="OnChanged" />
+                </div>
+                <div>
+                    <label class="form-label mb-0 small">Base Color</label>
+                    <input type="color" class="form-control form-control-sm form-control-color"
+                           @bind="_selectedSymbol.LampBaseColor" @bind:after="OnChanged" />
+                </div>
+            </div>
+        }
+        @if (_selectedSymbol.Type is "light")
+        {
+            <hr class="my-2" />
+            <h6 class="mb-2 small" style="color: #fbbf24;">ðŸ”¦ Light Fixture Settings</h6>
+            <div class="mb-2">
+                <label class="form-label mb-0 small">Style</label>
+                <select class="form-select form-select-sm" style="font-size: 10px;"
+                        @bind="_selectedSymbol.LightStyle" @bind:after="OnChanged">
+                    <option value="ceiling">Ceiling</option>
+                    <option value="wall">Wall</option>
+                    <option value="spot">Spot</option>
+                </select>
+            </div>
+            <div class="d-flex gap-1 mb-2">
+                <div>
+                    <label class="form-label mb-0 small">On Color</label>
+                    <input type="color" class="form-control form-control-sm form-control-color"
+                           @bind="_selectedSymbol.LightOnColor" @bind:after="OnChanged" />
+                </div>
+                <div>
+                    <label class="form-label mb-0 small">Off Color</label>
+                    <input type="color" class="form-control form-control-sm form-control-color"
+                           @bind="_selectedSymbol.LightOffColor" @bind:after="OnChanged" />
+                </div>
+            </div>
+            <div class="d-flex gap-1 mb-2">
+                <div>
+                    <label class="form-label mb-0 small">Body Color</label>
+                    <input type="color" class="form-control form-control-sm form-control-color"
+                           @bind="_selectedSymbol.LightBodyColor" @bind:after="OnChanged" />
+                </div>
+                <div class="d-flex align-items-end">
+                    <div class="form-check form-check-sm">
+                        <input type="checkbox" class="form-check-input" id="lightShowBeam"
+                               checked="@_selectedSymbol.LightShowBeam"
+                               @onchange="(e) => { _selectedSymbol.LightShowBeam = (bool)(e.Value ?? false); OnChanged(); }" />
+                        <label class="form-check-label small" for="lightShowBeam">Show Beam</label>
+                    </div>
+                </div>
+            </div>
+        }
+        @if (_selectedSymbol.Type is "wire")
+        {
+            <hr class="my-2" />
+            <h6 class="mb-2 small" style="color: #ef4444;">ã€° Wire Settings</h6>
+            <div class="mb-2">
+                <label class="form-label mb-0 small">Orientation</label>
+                <select class="form-select form-select-sm" style="font-size: 10px;"
+                        @bind="_selectedSymbol.WireOrientation" @bind:after="OnChanged">
+                    <option value="horizontal">Horizontal</option>
+                    <option value="vertical">Vertical</option>
+                    <option value="corner-tl">Corner â†° (Top-Left)</option>
+                    <option value="corner-tr">Corner â†± (Top-Right)</option>
+                    <option value="corner-bl">Corner â†² (Bottom-Left)</option>
+                    <option value="corner-br">Corner â†³ (Bottom-Right)</option>
+                </select>
+            </div>
+            <div class="d-flex gap-1 mb-2">
+                <div>
+                    <label class="form-label mb-0 small">Energized Color</label>
+                    <input type="color" class="form-control form-control-sm form-control-color"
+                           @bind="_selectedSymbol.WireEnergizedColor" @bind:after="OnChanged" />
+                </div>
+                <div>
+                    <label class="form-label mb-0 small">De-energized Color</label>
+                    <input type="color" class="form-control form-control-sm form-control-color"
+                           @bind="_selectedSymbol.WireDeadColor" @bind:after="OnChanged" />
+                </div>
+            </div>
+            <div class="d-flex gap-1 mb-2">
+                <div>
+                    <label class="form-label mb-0 small">Thickness</label>
+                    <input type="number" class="form-control form-control-sm" style="font-size: 10px; width: 70px;"
+                           min="1" max="20" step="0.5"
+                           @bind="_selectedSymbol.WireThickness" @bind:after="OnChanged" />
+                </div>
+                <div class="d-flex align-items-end">
+                    <div class="form-check form-check-sm">
+                        <input type="checkbox" class="form-check-input" id="wireShowFlow"
+                               checked="@_selectedSymbol.WireShowFlow"
+                               @onchange="(e) => { _selectedSymbol.WireShowFlow = (bool)(e.Value ?? false); OnChanged(); }" />
+                        <label class="form-check-label small" for="wireShowFlow">Show Flow</label>
+                    </div>
+                </div>
+            </div>
+        }
+        @if (_selectedSymbol.Type is "transformer")
+        {
+            <hr class="my-2" />
+            <h6 class="mb-2 small" style="color: #3b82f6;">ðŸ”Œ Transformer Settings</h6>
+            <div class="mb-2">
+                <label class="form-label mb-0 small">Orientation</label>
+                <select class="form-select form-select-sm" style="font-size: 10px;"
+                        @bind="_selectedSymbol.TransformerOrientation" @bind:after="OnChanged">
+                    <option value="vertical">Vertical</option>
+                    <option value="horizontal">Horizontal</option>
+                </select>
+            </div>
+            <div class="d-flex gap-1 mb-2">
+                <div>
+                    <label class="form-label mb-0 small">Primary Color</label>
+                    <input type="color" class="form-control form-control-sm form-control-color"
+                           @bind="_selectedSymbol.TransformerPrimaryColor" @bind:after="OnChanged" />
+                </div>
+                <div>
+                    <label class="form-label mb-0 small">Secondary Color</label>
+                    <input type="color" class="form-control form-control-sm form-control-color"
+                           @bind="_selectedSymbol.TransformerSecondaryColor" @bind:after="OnChanged" />
+                </div>
+            </div>
+            <div class="d-flex gap-1 mb-2">
+                <div>
+                    <label class="form-label mb-0 small">Core Color</label>
+                    <input type="color" class="form-control form-control-sm form-control-color"
+                           @bind="_selectedSymbol.TransformerCoreColor" @bind:after="OnChanged" />
+                </div>
+                <div class="d-flex align-items-end">
+                    <div class="form-check form-check-sm">
+                        <input type="checkbox" class="form-check-input" id="tfShowLabels"
+                               checked="@_selectedSymbol.TransformerShowLabels"
+                               @onchange="(e) => { _selectedSymbol.TransformerShowLabels = (bool)(e.Value ?? false); OnChanged(); }" />
+                        <label class="form-check-label small" for="tfShowLabels">Show Labels</label>
+                    </div>
+                </div>
+            </div>
+            <div class="mb-2">
+                <label class="form-label mb-0 small">Primary Variable</label>
+                <input type="text" class="form-control form-control-sm" style="font-size: 10px;"
+                       @bind="_selectedSymbol.TransformerPrimaryPath" @bind:after="OnChanged"
+                       placeholder="e.g. PLC1.PrimaryVoltage" />
+            </div>
+            <div class="mb-2">
+                <label class="form-label mb-0 small">Secondary Variable</label>
+                <input type="text" class="form-control form-control-sm" style="font-size: 10px;"
+                       @bind="_selectedSymbol.TransformerSecondaryPath" @bind:after="OnChanged"
+                       placeholder="e.g. PLC1.SecondaryVoltage" />
+            </div>
+        }
+        @if (_selectedSymbol.Type is "battery")
+        {
+            <hr class="my-2" />
+            <h6 class="mb-2 small" style="color: #22c55e;">ðŸ”‹ Battery Settings</h6>
+            <div class="mb-2">
+                <label class="form-label mb-0 small">Orientation</label>
+                <select class="form-select form-select-sm" style="font-size: 10px;"
+                        @bind="_selectedSymbol.BatteryOrientation" @bind:after="OnChanged">
+                    <option value="vertical">Vertical</option>
+                    <option value="horizontal">Horizontal</option>
+                </select>
+            </div>
+            <div class="d-flex gap-1 mb-2">
+                <div>
+                    <label class="form-label mb-0 small">Full Color</label>
+                    <input type="color" class="form-control form-control-sm form-control-color"
+                           @bind="_selectedSymbol.BatteryFullColor" @bind:after="OnChanged" />
+                </div>
+                <div>
+                    <label class="form-label mb-0 small">Low Color</label>
+                    <input type="color" class="form-control form-control-sm form-control-color"
+                           @bind="_selectedSymbol.BatteryLowColor" @bind:after="OnChanged" />
+                </div>
+            </div>
+            <div class="d-flex gap-1 mb-2">
+                <div>
+                    <label class="form-label mb-0 small">Case Color</label>
+                    <input type="color" class="form-control form-control-sm form-control-color"
+                           @bind="_selectedSymbol.BatteryCaseColor" @bind:after="OnChanged" />
+                </div>
+                <div>
+                    <label class="form-label mb-0 small">Segments</label>
+                    <input type="number" class="form-control form-control-sm" style="font-size: 10px; width: 70px;"
+                           min="1" max="10"
+                           @bind="_selectedSymbol.BatterySegments" @bind:after="OnChanged" />
+                </div>
+            </div>
+            <div class="d-flex gap-1 mb-2">
+                <div>
+                    <label class="form-label mb-0 small">Low Threshold (%)</label>
+                    <input type="number" class="form-control form-control-sm" style="font-size: 10px; width: 80px;"
+                           min="0" max="100" step="5"
+                           @bind="_selectedSymbol.BatteryLowThreshold" @bind:after="OnChanged" />
+                </div>
+                <div class="d-flex align-items-end">
+                    <div class="form-check form-check-sm">
+                        <input type="checkbox" class="form-check-input" id="batShowLevel"
+                               checked="@_selectedSymbol.BatteryShowLevel"
+                               @onchange="(e) => { _selectedSymbol.BatteryShowLevel = (bool)(e.Value ?? false); OnChanged(); }" />
+                        <label class="form-check-label small" for="batShowLevel">Show Level</label>
+                    </div>
+                </div>
             </div>
         }
 
@@ -1601,6 +1877,11 @@ else
     private System.Threading.Timer? _previewTimer;
     private double _previewElapsed;
     private Dictionary<string, double>? _previewOriginalValues;
+
+    private bool _widgetPreviewActive;
+    private void ToggleWidgetPreview() => _widgetPreviewActive = !_widgetPreviewActive;
+    private static readonly System.Globalization.CultureInfo _fmtCi = System.Globalization.CultureInfo.InvariantCulture;
+    private static string Fmt(double v) => v.ToString("F1", _fmtCi);
 
     // Snapshot-based undo for screen symbol properties
     private string? _symbolSnapshot;

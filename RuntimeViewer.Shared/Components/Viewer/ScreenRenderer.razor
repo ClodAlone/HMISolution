@@ -3320,6 +3320,7 @@ else
         var showFlow = sym.PipeShowFlow;
         var speed = sym.PipeFlowSpeed > 0 ? sym.PipeFlowSpeed : 1;
         var isHoriz = (sym.PipeOrientation ?? "horizontal") == "horizontal";
+        var isCorner = (sym.PipeOrientation ?? "").StartsWith("corner");
 
         // Check if flow should be active from bound variable
         bool flowActive = showFlow;
@@ -3328,7 +3329,61 @@ else
             flowActive = showFlow && liveValue is not "0" and not "false" and not "False";
         }
 
-        if (isHoriz)
+        if (isCorner)
+        {
+            var cornerDir = sym.PipeOrientation ?? "corner-tl";
+            var cThk = Math.Min(w, h) * 0.3;
+            var cMid = cThk / 2;
+            string pathD = cornerDir switch
+            {
+                "corner-tl" => $"M {F(w)},{F(cMid)} L {F(cMid)},{F(cMid)} L {F(cMid)},{F(h)}",
+                "corner-tr" => $"M 0,{F(cMid)} L {F(w - cMid)},{F(cMid)} L {F(w - cMid)},{F(h)}",
+                "corner-bl" => $"M {F(cMid)},0 L {F(cMid)},{F(h - cMid)} L {F(w)},{F(h - cMid)}",
+                _ =>           $"M {F(w - cMid)},0 L {F(w - cMid)},{F(h - cMid)} L 0,{F(h - cMid)}"
+            };
+            // Corner pipe body
+            builder.OpenElement(seq++, "path");
+            builder.AddAttribute(seq++, "d", pathD);
+            builder.AddAttribute(seq++, "stroke", pipeColor);
+            builder.AddAttribute(seq++, "stroke-width", F(cThk));
+            builder.AddAttribute(seq++, "fill", "none");
+            builder.AddAttribute(seq++, "stroke-linejoin", "round");
+            builder.AddAttribute(seq++, "stroke-linecap", "round");
+            builder.CloseElement();
+            // Highlight along the outer edge
+            var hlThk = cThk * 0.25;
+            var hlOff = cThk * 0.35;
+            string hlD = cornerDir switch
+            {
+                "corner-tl" => $"M {F(w)},{F(cMid - hlOff)} L {F(cMid - hlOff)},{F(cMid - hlOff)} L {F(cMid - hlOff)},{F(h)}",
+                "corner-tr" => $"M 0,{F(cMid - hlOff)} L {F(w - cMid + hlOff)},{F(cMid - hlOff)} L {F(w - cMid + hlOff)},{F(h)}",
+                "corner-bl" => $"M {F(cMid - hlOff)},0 L {F(cMid - hlOff)},{F(h - cMid + hlOff)} L {F(w)},{F(h - cMid + hlOff)}",
+                _ =>           $"M {F(w - cMid + hlOff)},0 L {F(w - cMid + hlOff)},{F(h - cMid + hlOff)} L 0,{F(h - cMid + hlOff)}"
+            };
+            builder.OpenElement(seq++, "path");
+            builder.AddAttribute(seq++, "d", hlD);
+            builder.AddAttribute(seq++, "stroke", "rgba(255,255,255,0.15)");
+            builder.AddAttribute(seq++, "stroke-width", F(hlThk));
+            builder.AddAttribute(seq++, "fill", "none");
+            builder.AddAttribute(seq++, "stroke-linejoin", "round");
+            builder.AddAttribute(seq++, "stroke-linecap", "round");
+            builder.CloseElement();
+            // Flow stripes along corner path
+            if (flowActive)
+            {
+                var animDur = $"{F(speed)}s";
+                builder.OpenElement(seq++, "path");
+                builder.AddAttribute(seq++, "d", pathD);
+                builder.AddAttribute(seq++, "stroke", flowColor);
+                builder.AddAttribute(seq++, "stroke-width", 2);
+                builder.AddAttribute(seq++, "fill", "none");
+                builder.AddAttribute(seq++, "stroke-dasharray", "6,4");
+                builder.AddAttribute(seq++, "stroke-linejoin", "round");
+                builder.AddAttribute(seq++, "style", $"animation: pipeFlow {animDur} linear infinite;");
+                builder.CloseElement();
+            }
+        }
+        else if (isHoriz)
         {
             var pipeH = h * 0.6;
             var pipeY = (h - pipeH) / 2;
@@ -3520,7 +3575,40 @@ else
         int seq = 0;
         var pipeColor = sym.PipeColor ?? "#64748b";
         var isHoriz = (sym.PipeOrientation ?? "horizontal") == "horizontal";
+        var isCorner = (sym.PipeOrientation ?? "").StartsWith("corner");
 
+        if (isCorner)
+        {
+            // For responsive mode, render an inline SVG corner inside a div
+            builder.OpenElement(seq++, "div");
+            builder.AddAttribute(seq++, "style", "width:100%;height:100%;display:flex;align-items:center;justify-content:center;");
+            builder.OpenElement(seq++, "svg");
+            builder.AddAttribute(seq++, "viewBox", "0 0 100 100");
+            builder.AddAttribute(seq++, "style", "width:100%;height:100%;");
+            builder.AddAttribute(seq++, "xmlns", "http://www.w3.org/2000/svg");
+            var cDir = sym.PipeOrientation;
+            var cThk = 30.0;
+            var cMid = 15.0;
+            string cPath = cDir switch
+            {
+                "corner-tl" => $"M 100,{F(cMid)} L {F(cMid)},{F(cMid)} L {F(cMid)},100",
+                "corner-tr" => $"M 0,{F(cMid)} L {F(100 - cMid)},{F(cMid)} L {F(100 - cMid)},100",
+                "corner-bl" => $"M {F(cMid)},0 L {F(cMid)},{F(100 - cMid)} L 100,{F(100 - cMid)}",
+                _ =>           $"M {F(100 - cMid)},0 L {F(100 - cMid)},{F(100 - cMid)} L 0,{F(100 - cMid)}"
+            };
+            builder.OpenElement(seq++, "path");
+            builder.AddAttribute(seq++, "d", cPath);
+            builder.AddAttribute(seq++, "stroke", pipeColor);
+            builder.AddAttribute(seq++, "stroke-width", F(cThk));
+            builder.AddAttribute(seq++, "fill", "none");
+            builder.AddAttribute(seq++, "stroke-linejoin", "round");
+            builder.AddAttribute(seq++, "stroke-linecap", "round");
+            builder.CloseElement();
+            builder.CloseElement(); // svg
+            builder.CloseElement(); // div
+        }
+        else
+        {
         builder.OpenElement(seq++, "div");
         builder.AddAttribute(seq++, "style",
             $"width:100%;height:100%;display:flex;align-items:center;justify-content:center;");
@@ -3541,6 +3629,7 @@ else
 
         builder.CloseElement(); // pipe body
         builder.CloseElement(); // wrapper
+        }
     };
 
     // ─── Tank rendering ────────────────────────────────────────

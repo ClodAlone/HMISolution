@@ -1,6 +1,7 @@
 @using ServerEditorWeb.Models
 @using ServerEditorWeb.Services
 @using SharedModels
+@using Microsoft.JSInterop
 @implements IDisposable
 
 <div class="screen-editor-panel">
@@ -396,9 +397,131 @@
                                             }
                                             @RenderSvgText(sym.Width / 2, sym.Height - 6, "middle", null, "#6b7280", 7, $"{sym.TrendPens.Count} pen(s) · {sym.TrendTimeWindowSeconds}s")
                                             break;
+                                        case "lamp":
+                                            {
+                                                var lmpOn = sym.LampOnColor ?? "#fbbf24";
+                                                var lmpGlass = sym.LampGlassColor ?? "#fef3c7";
+                                                var lmpBase = sym.LampBaseColor ?? "#78716c";
+                                                var lmpCx = sym.Width / 2.0;
+                                                var lmpR = Math.Min(sym.Width, sym.Height) * 0.32;
+                                                var lmpBaseW = lmpR * 1.1;
+                                                var lmpBaseH = sym.Height * 0.22;
+                                                var lmpBaseY = sym.Height * 0.68;
+                                                <circle cx="@F(lmpCx)" cy="@F(sym.Height*0.4)" r="@F(lmpR)" fill="@lmpGlass" stroke="@lmpOn" stroke-width="1.5" opacity="0.9" />
+                                                <circle cx="@F(lmpCx)" cy="@F(sym.Height*0.4)" r="@F(lmpR*0.6)" fill="@lmpOn" opacity="0.6" />
+                                                <rect x="@F(lmpCx-lmpBaseW/2)" y="@F(lmpBaseY)" width="@F(lmpBaseW)" height="@F(lmpBaseH)" rx="2" fill="@lmpBase" stroke="#555" stroke-width="0.5" />
+                                                <line x1="@F(lmpCx-lmpBaseW/2)" y1="@F(lmpBaseY+lmpBaseH*0.33)" x2="@F(lmpCx+lmpBaseW/2)" y2="@F(lmpBaseY+lmpBaseH*0.33)" stroke="#666" stroke-width="0.5" />
+                                                <line x1="@F(lmpCx-lmpBaseW/2)" y1="@F(lmpBaseY+lmpBaseH*0.66)" x2="@F(lmpCx+lmpBaseW/2)" y2="@F(lmpBaseY+lmpBaseH*0.66)" stroke="#666" stroke-width="0.5" />
+                                            }
+                                            break;
+                                        case "light":
+                                            {
+                                                var ltOn = sym.LightOnColor ?? "#fbbf24";
+                                                var ltBody = sym.LightBodyColor ?? "#64748b";
+                                                var ltCx = sym.Width / 2.0;
+                                                var ltW = sym.Width * 0.5;
+                                                var ltH = sym.Height * 0.3;
+                                                <rect x="@F(ltCx-ltW/2)" y="0" width="@F(ltW)" height="@F(ltH)" rx="3" fill="@ltBody" stroke="#475569" stroke-width="1" />
+                                                <polygon points="@F(ltCx-ltW/2),@F(ltH) @F(ltCx-sym.Width*0.42),@F(sym.Height*0.85) @F(ltCx+sym.Width*0.42),@F(sym.Height*0.85) @F(ltCx+ltW/2),@F(ltH)" fill="@ltOn" opacity="0.25" />
+                                                <circle cx="@F(ltCx)" cy="@F(ltH+4)" r="4" fill="@ltOn" opacity="0.9" />
+                                            }
+                                            break;
+                                        case "wire":
+                                            {
+                                                var wrC = sym.WireEnergizedColor ?? "#ef4444";
+                                                var wrThk = sym.WireThickness > 0 ? sym.WireThickness : 3;
+                                                var wrOri = sym.WireOrientation ?? "horizontal";
+                                                var wrIsCorner = wrOri.StartsWith("corner");
+                                                @if (wrIsCorner)
+                                                {
+                                                    var wrMid = wrThk / 2;
+                                                    var wrD = wrOri switch {
+                                                        "corner-tl" => $"M {F(sym.Width)},{F(wrMid)} L {F(wrMid)},{F(wrMid)} L {F(wrMid)},{F(sym.Height)}",
+                                                        "corner-tr" => $"M 0,{F(wrMid)} L {F(sym.Width-wrMid)},{F(wrMid)} L {F(sym.Width-wrMid)},{F(sym.Height)}",
+                                                        "corner-bl" => $"M {F(wrMid)},0 L {F(wrMid)},{F(sym.Height-wrMid)} L {F(sym.Width)},{F(sym.Height-wrMid)}",
+                                                        _ => $"M {F(sym.Width-wrMid)},0 L {F(sym.Width-wrMid)},{F(sym.Height-wrMid)} L 0,{F(sym.Height-wrMid)}"
+                                                    };
+                                                    <path d="@wrD" stroke="@wrC" stroke-width="@F(wrThk)" fill="none" stroke-linejoin="round" stroke-linecap="round" />
+                                                }
+                                                else if (wrOri == "vertical")
+                                                {
+                                                    var wrX = sym.Width / 2.0;
+                                                    <line x1="@F(wrX)" y1="0" x2="@F(wrX)" y2="@sym.Height" stroke="@wrC" stroke-width="@F(wrThk)" stroke-linecap="round" />
+                                                    <circle cx="@F(wrX)" cy="3" r="@F(wrThk*0.8)" fill="@wrC" />
+                                                    <circle cx="@F(wrX)" cy="@F(sym.Height-3)" r="@F(wrThk*0.8)" fill="@wrC" />
+                                                }
+                                                else
+                                                {
+                                                    var wrY = sym.Height / 2.0;
+                                                    <line x1="0" y1="@F(wrY)" x2="@sym.Width" y2="@F(wrY)" stroke="@wrC" stroke-width="@F(wrThk)" stroke-linecap="round" />
+                                                    <circle cx="3" cy="@F(wrY)" r="@F(wrThk*0.8)" fill="@wrC" />
+                                                    <circle cx="@F(sym.Width-3)" cy="@F(wrY)" r="@F(wrThk*0.8)" fill="@wrC" />
+                                                }
+                                            }
+                                            break;
+                                        case "transformer":
+                                            {
+                                                var tfPri = sym.TransformerPrimaryColor ?? "#3b82f6";
+                                                var tfSec = sym.TransformerSecondaryColor ?? "#22c55e";
+                                                var tfCore = sym.TransformerCoreColor ?? "#64748b";
+                                                var tfIsV = (sym.TransformerOrientation ?? "vertical") == "vertical";
+                                                var tfCx = sym.Width / 2.0;
+                                                var tfCy = sym.Height / 2.0;
+                                                @if (tfIsV) {
+                                                    var tfCoilR = Math.Min(sym.Width * 0.35, sym.Height * 0.22);
+                                                    <rect x="@F(tfCx-2)" y="@F(tfCy-tfCoilR*0.3)" width="4" height="@F(tfCoilR*0.6)" fill="@tfCore" />
+                                                    <circle cx="@F(tfCx)" cy="@F(tfCy-tfCoilR*1.1)" r="@F(tfCoilR)" fill="none" stroke="@tfPri" stroke-width="2.5" />
+                                                    <circle cx="@F(tfCx)" cy="@F(tfCy+tfCoilR*1.1)" r="@F(tfCoilR)" fill="none" stroke="@tfSec" stroke-width="2.5" />
+                                                    <line x1="@F(tfCx)" y1="0" x2="@F(tfCx)" y2="@F(tfCy-tfCoilR*2.1)" stroke="@tfPri" stroke-width="1.5" />
+                                                    <line x1="@F(tfCx)" y1="@F(tfCy+tfCoilR*2.1)" x2="@F(tfCx)" y2="@sym.Height" stroke="@tfSec" stroke-width="1.5" />
+                                                } else {
+                                                    var tfCoilR = Math.Min(sym.Height * 0.35, sym.Width * 0.22);
+                                                    <rect x="@F(tfCx-tfCoilR*0.3)" y="@F(tfCy-2)" width="@F(tfCoilR*0.6)" height="4" fill="@tfCore" />
+                                                    <circle cx="@F(tfCx-tfCoilR*1.1)" cy="@F(tfCy)" r="@F(tfCoilR)" fill="none" stroke="@tfPri" stroke-width="2.5" />
+                                                    <circle cx="@F(tfCx+tfCoilR*1.1)" cy="@F(tfCy)" r="@F(tfCoilR)" fill="none" stroke="@tfSec" stroke-width="2.5" />
+                                                    <line x1="0" y1="@F(tfCy)" x2="@F(tfCx-tfCoilR*2.1)" y2="@F(tfCy)" stroke="@tfPri" stroke-width="1.5" />
+                                                    <line x1="@F(tfCx+tfCoilR*2.1)" y1="@F(tfCy)" x2="@sym.Width" y2="@F(tfCy)" stroke="@tfSec" stroke-width="1.5" />
+                                                }
+                                            }
+                                            break;
+                                        case "battery":
+                                            {
+                                                var batCase = sym.BatteryCaseColor ?? "#334155";
+                                                var batFull = sym.BatteryFullColor ?? "#22c55e";
+                                                var batLow = sym.BatteryLowColor ?? "#ef4444";
+                                                var batSegs = sym.BatterySegments > 0 ? sym.BatterySegments : 4;
+                                                var batIsV = (sym.BatteryOrientation ?? "vertical") == "vertical";
+                                                var batPct = 0.65;
+                                                var batFilledSegs = (int)Math.Ceiling(batSegs * batPct);
+                                                var batColor = batPct < 0.25 ? batLow : batFull;
+                                                @if (batIsV) {
+                                                    var batTermW = sym.Width * 0.35;
+                                                    var batTermH = 4.0;
+                                                    <rect x="@F(sym.Width/2-batTermW/2)" y="0" width="@F(batTermW)" height="@F(batTermH)" rx="1" fill="#94a3b8" />
+                                                    <rect x="2" y="@F(batTermH)" width="@F(sym.Width-4)" height="@F(sym.Height-batTermH-2)" rx="3" fill="@batCase" stroke="#475569" stroke-width="1" />
+                                                    var batSegH = (sym.Height - batTermH - 8) / batSegs;
+                                                    @for (var bi = 0; bi < batSegs; bi++) {
+                                                        var bsy = sym.Height - 4 - (bi + 1) * batSegH;
+                                                        var bFill = bi < batFilledSegs ? batColor : "#1e293b";
+                                                        <rect x="5" y="@F(bsy)" width="@F(sym.Width-10)" height="@F(batSegH-2)" rx="1" fill="@bFill" />
+                                                    }
+                                                } else {
+                                                    var batTermW2 = 4.0;
+                                                    var batTermH2 = sym.Height * 0.35;
+                                                    <rect x="@F(sym.Width-batTermW2)" y="@F(sym.Height/2-batTermH2/2)" width="@F(batTermW2)" height="@F(batTermH2)" rx="1" fill="#94a3b8" />
+                                                    <rect x="0" y="2" width="@F(sym.Width-batTermW2-2)" height="@F(sym.Height-4)" rx="3" fill="@batCase" stroke="#475569" stroke-width="1" />
+                                                    var batSegW = (sym.Width - batTermW2 - 8) / batSegs;
+                                                    @for (var bi = 0; bi < batSegs; bi++) {
+                                                        var bsx = 4 + bi * batSegW;
+                                                        var bFill = bi < batFilledSegs ? batColor : "#1e293b";
+                                                        <rect x="@F(bsx)" y="5" width="@F(batSegW-2)" height="@F(sym.Height-10)" rx="1" fill="@bFill" />
+                                                    }
+                                                }
+                                            }
+                                            break;
                             }
 
-                            @if (!string.IsNullOrEmpty(labelText ?? sym.Label) && sym.Type is not "text")
+                            @if (!string.IsNullOrEmpty(labelText ?? sym.Label) && sym.Type is not "text" and not "lamp" and not "light" and not "wire" and not "transformer" and not "battery")
                             {
                                 @RenderSvgText(sym.Width / 2, sym.Height + 14, "middle", null, "#333", 11, labelText ?? sym.Label, sym)
                             }
@@ -511,6 +634,7 @@
     [Inject] private ClipboardService Clipboard { get; set; } = default!;
     [Inject] private NodeEditorService Editor { get; set; } = default!;
     [Inject] private UndoRedoService UndoRedo { get; set; } = default!;
+    [Inject] private Microsoft.JSInterop.IJSRuntime JS { get; set; } = default!;
 
     private ScreenSymbol? _selectedSymbol;
     private HashSet<ScreenSymbol> _selectedSymbols = new();
@@ -675,10 +799,10 @@
             Type = type,
             X = 50 + screen.Symbols.Count * 20 % (screen.Width - 100),
             Y = 50 + screen.Symbols.Count * 20 % (screen.Height - 80),
-            Width = type == "text" ? 120 : type == "line" ? 100 : type is "alarmlist" or "hdachart" or "hdagrid" or "eventlog" ? 500 : type == "editbox" ? 160 : type == "ipcamera" ? 320 : type == "recipe" ? 280 : type == "screenembed" ? 400 : 80,
-            Height = type == "text" ? 30 : type == "line" ? 2 : type == "indicator" ? 30 : type == "alarmlist" ? 250 : type is "hdachart" or "hdagrid" or "eventlog" ? 220 : type == "editbox" ? 32 : type == "ipcamera" ? 240 : type == "recipe" ? 300 : type == "screenembed" ? 300 : 40,
+            Width = type == "text" ? 120 : type == "line" ? 100 : type is "alarmlist" or "hdachart" or "hdagrid" or "eventlog" ? 500 : type == "editbox" ? 160 : type == "ipcamera" ? 320 : type == "recipe" ? 280 : type == "screenembed" ? 400 : type == "lamp" ? 60 : type == "light" ? 80 : type == "wire" ? 200 : type == "transformer" ? 80 : type == "battery" ? 40 : 80,
+            Height = type == "text" ? 30 : type == "line" ? 2 : type == "indicator" ? 30 : type == "alarmlist" ? 250 : type is "hdachart" or "hdagrid" or "eventlog" ? 220 : type == "editbox" ? 32 : type == "ipcamera" ? 240 : type == "recipe" ? 300 : type == "screenembed" ? 300 : type == "lamp" ? 80 : type == "light" ? 60 : type == "wire" ? 20 : type == "transformer" ? 100 : type == "battery" ? 80 : 40,
             Label = type == "text" ? "Label" : type == "alarmlist" ? "Alarm List" : type == "hdachart" ? "HDA Chart" : type == "hdagrid" ? "HDA Grid" : type == "eventlog" ? "Event Log" : type == "editbox" ? "" : type == "ipcamera" ? "" : type == "recipe" ? "" : type == "screenembed" ? "Embedded Screen" : "",
-            Fill = type == "indicator" ? "#44cc44" : type == "alarmlist" ? "#1a1a2e" : type is "hdachart" or "hdagrid" ? "#111827" : type == "eventlog" ? "#0f172a" : type == "editbox" ? "#1e293b" : type == "ipcamera" ? "#0a0a0a" : type == "recipe" ? "#1a1a2e" : type == "screenembed" ? "#0f172a" : "#4a90d9"
+            Fill = type == "indicator" ? "#44cc44" : type == "alarmlist" ? "#1a1a2e" : type is "hdachart" or "hdagrid" ? "#111827" : type == "eventlog" ? "#0f172a" : type == "editbox" ? "#1e293b" : type == "ipcamera" ? "#0a0a0a" : type == "recipe" ? "#1a1a2e" : type == "screenembed" ? "#0f172a" : type == "lamp" ? "#fbbf24" : type == "light" ? "#fbbf24" : type == "wire" ? "#ef4444" : type == "transformer" ? "#3b82f6" : type == "battery" ? "#22c55e" : "#4a90d9"
         };
 
         if (type == "gauge")
@@ -750,6 +874,58 @@
             sym.Stroke = "#334155";
             sym.StrokeWidth = 1;
         }
+        if (type == "lamp")
+        {
+            sym.Stroke = "none";
+            sym.StrokeWidth = 0;
+            sym.LampStyle = "bulb";
+            sym.LampOnColor = "#fbbf24";
+            sym.LampOffColor = "#334155";
+            sym.LampGlassColor = "#fef3c7";
+            sym.LampBaseColor = "#78716c";
+        }
+        if (type == "light")
+        {
+            sym.Stroke = "none";
+            sym.StrokeWidth = 0;
+            sym.LightStyle = "ceiling";
+            sym.LightOnColor = "#fbbf24";
+            sym.LightOffColor = "#334155";
+            sym.LightBodyColor = "#64748b";
+            sym.LightShowBeam = true;
+        }
+        if (type == "wire")
+        {
+            sym.Stroke = "none";
+            sym.StrokeWidth = 0;
+            sym.WireOrientation = "horizontal";
+            sym.WireEnergizedColor = "#ef4444";
+            sym.WireDeadColor = "#64748b";
+            sym.WireThickness = 3;
+            sym.WireShowFlow = true;
+        }
+        if (type == "transformer")
+        {
+            sym.Stroke = "#334155";
+            sym.StrokeWidth = 1;
+            sym.TransformerOrientation = "vertical";
+            sym.TransformerPrimaryColor = "#3b82f6";
+            sym.TransformerSecondaryColor = "#22c55e";
+            sym.TransformerCoreColor = "#64748b";
+            sym.TransformerShowLabels = true;
+        }
+        if (type == "battery")
+        {
+            sym.Stroke = "none";
+            sym.StrokeWidth = 0;
+            sym.BatteryOrientation = "vertical";
+            sym.BatteryFullColor = "#22c55e";
+            sym.BatteryLowColor = "#ef4444";
+            sym.BatteryCaseColor = "#334155";
+            sym.BatterySegments = 4;
+            sym.BatteryShowLevel = true;
+            sym.BatteryLowThreshold = 20;
+        }
 
         screen.Symbols.Add(sym);
 
@@ -765,9 +941,19 @@
         _selectedSymbols.Add(sym);
         NotifySelectionChanged();
         OnChanged();
+        _ = ScrollToSymbolAsync(sym);
     }
 
-    private void DeleteSelected()
+        private async Task ScrollToSymbolAsync(ScreenSymbol sym)
+    {
+        await Task.Yield();
+        try
+        {
+            await JS.InvokeVoidAsync("eval", $"document.querySelector('.screen-canvas-wrap')?.scrollTo({{ left: {F(Math.Max(0, sym.X - 60))}, top: {F(Math.Max(0, sym.Y - 60))}, behavior: 'smooth' }})");
+        }
+        catch { /* ignore if JS not available */ }
+    }
+private void DeleteSelected()
     {
         var screen = GetScreen();
         if (screen == null) return;

@@ -64,8 +64,7 @@
                 <label class="form-label mb-0 small">H:</label>
                 <input type="number" class="form-control form-control-sm" style="width: 60px;" @bind="screen.Height" @bind:after="OnChanged" />
                 <label class="form-label mb-0 small">BG:</label>
-                <input type="color" class="form-control form-control-sm form-control-color" style="width: 35px; height: 28px;"
-                       @bind="screen.Background" @bind:after="OnChanged" />
+                <ColorPicker Value="@(screen.Background)" ValueChanged="(v) => { screen.Background = v; }" OnAfterChange="OnChanged" />
                 <label class="form-label mb-0 small">BG Image:</label>
                 <select class="form-select form-select-sm" style="width: 130px; font-size: 10px;"
                         value="@screen.BackgroundImageId"
@@ -143,7 +142,8 @@
                         var gs = screen.EditorGridSize;
                         <defs>
                             <pattern id="editor-grid" width="@gs" height="@gs" patternUnits="userSpaceOnUse">
-                                <path d="M @gs 0 L 0 0 0 @gs" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="0.5" />
+                                <path d="M @gs 0 L 0 0 0 @gs" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="0.5" />
+                                <circle cx="0" cy="0" r="1" fill="rgba(255,255,255,0.35)" />
                             </pattern>
                         </defs>
                         <rect width="@screen.Width" height="@screen.Height" fill="url(#editor-grid)" />
@@ -777,7 +777,30 @@
                                             var pipeC = sym.PipeColor ?? "#64748b";
                                             var pipeF = sym.PipeFlowColor ?? "#94a3b8";
                                             var pipeHz = (sym.PipeOrientation ?? "horizontal") == "horizontal";
-                                            @if (pipeHz)
+                                            var pipeIsCorner = (sym.PipeOrientation ?? "").StartsWith("corner");
+                                            @if (pipeIsCorner)
+                                            {
+                                                var cDir = sym.PipeOrientation;
+                                                var cThk = Math.Min(sym.Width, sym.Height) * 0.3;
+                                                var cMid = cThk / 2;
+                                                @if (cDir == "corner-tl")
+                                                {
+                                                    <path d="M @sym.Width,@F(cMid) L @F(cMid),@F(cMid) L @F(cMid),@sym.Height" stroke="@pipeC" stroke-width="@F(cThk)" fill="none" stroke-linejoin="round" stroke-linecap="round" />
+                                                }
+                                                else if (cDir == "corner-tr")
+                                                {
+                                                    <path d="M 0,@F(cMid) L @F(sym.Width-cMid),@F(cMid) L @F(sym.Width-cMid),@sym.Height" stroke="@pipeC" stroke-width="@F(cThk)" fill="none" stroke-linejoin="round" stroke-linecap="round" />
+                                                }
+                                                else if (cDir == "corner-bl")
+                                                {
+                                                    <path d="M @F(cMid),0 L @F(cMid),@F(sym.Height-cMid) L @sym.Width,@F(sym.Height-cMid)" stroke="@pipeC" stroke-width="@F(cThk)" fill="none" stroke-linejoin="round" stroke-linecap="round" />
+                                                }
+                                                else
+                                                {
+                                                    <path d="M @F(sym.Width-cMid),0 L @F(sym.Width-cMid),@F(sym.Height-cMid) L 0,@F(sym.Height-cMid)" stroke="@pipeC" stroke-width="@F(cThk)" fill="none" stroke-linejoin="round" stroke-linecap="round" />
+                                                }
+                                            }
+                                            else if (pipeHz)
                                             {
                                                 var pipeH2 = sym.Height / 2;
                                                 <rect x="0" y="@F(pipeH2 / 2)" width="@sym.Width" height="@F(pipeH2)" rx="3" fill="@pipeC" />

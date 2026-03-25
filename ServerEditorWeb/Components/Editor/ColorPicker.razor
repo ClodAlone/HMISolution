@@ -1,0 +1,314 @@
+@* Color picker with tabbed UI: Color | Gradient *@
+
+<div class="color-picker-wrap" @onclick:stopPropagation>
+    <div class="d-flex align-items-center gap-1">
+        @if (IsGradient(Value))
+        {
+            <span class="color-picker-swatch" style="background:@Value;" @onclick="ToggleDropdown" title="Edit gradient"></span>
+        }
+        else
+        {
+            <input type="color" class="color-picker-native" value="@(Value ?? "#000000")"
+                   @oninput="OnNativeInput" @onchange="OnNativeChange" title="Pick a custom color" />
+        }
+        <button type="button" class="color-picker-toggle @(_open ? "open" : "")"
+                @onclick="ToggleDropdown" title="Color palette &amp; gradients">&#x25BE;</button>
+    </div>
+
+    @if (_open)
+    {
+        <div class="color-picker-dropdown">
+            <div class="cp-tabs">
+                <button type="button" class="cp-tab @(_tab == 0 ? "active" : "")" @onclick="() => _tab = 0">Color</button>
+                <button type="button" class="cp-tab @(_tab == 1 ? "active" : "")" @onclick="() => _tab = 1">Gradient</button>
+            </div>
+
+            @if (_tab == 0)
+            {
+                <div class="color-picker-palette">
+                    @foreach (var c in _solidPalette)
+                    {
+                        <button type="button" class="color-picker-cell @(string.Equals(c, Value, StringComparison.OrdinalIgnoreCase) ? "active" : "")"
+                                style="background:@c;" title="@c"
+                                @onclick="() => Pick(c)"></button>
+                    }
+                </div>
+                <div class="cp-native-row">
+                    <input type="color" class="color-picker-native" value="@(IsGradient(Value) ? "#000000" : (Value ?? "#000000"))"
+                           @oninput="OnNativeInput" @onchange="OnNativeChange" title="Custom color" />
+                    <input type="text" class="form-control form-control-sm color-picker-hex"
+                           value="@(IsGradient(Value) ? "" : Value)" @onchange="OnTextChange"
+                           spellcheck="false" placeholder="#hex color" />
+                    <span class="color-picker-preview" style="background:@Value;"></span>
+                </div>
+            }
+            else
+            {
+                <div class="color-picker-section-label">Presets</div>
+                <div class="color-picker-gradients">
+                    @foreach (var g in _gradientPresets)
+                    {
+                        <button type="button" class="color-picker-grad @(string.Equals(g.Css, Value, StringComparison.OrdinalIgnoreCase) ? "active" : "")"
+                                style="background:@g.Css;" title="@g.Name"
+                                @onclick="() => Pick(g.Css)"></button>
+                    }
+                </div>
+
+                <div class="color-picker-section-label">Custom Gradient</div>
+                <div class="cp-grad-builder">
+                    <div class="cp-grad-type-row">
+                        <select class="form-select form-select-sm cp-grad-select" value="@_gradType" @onchange="OnGradTypeChange">
+                            <option value="linear">Linear</option>
+                            <option value="radial">Radial</option>
+                        </select>
+                        @if (_gradType == "linear")
+                        {
+                            <input type="number" class="form-control form-control-sm cp-grad-angle" min="0" max="360"
+                                   value="@_gradAngle" @onchange="OnGradAngleChange" title="Angle (deg)" />
+                            <span class="cp-grad-deg">deg</span>
+                        }
+                    </div>
+
+                    <div class="cp-grad-preview" style="background:@BuildGradientCss();"></div>
+
+                    <div class="cp-stops">
+                        @for (int i = 0; i < _stops.Count; i++)
+                        {
+                            var idx = i;
+                            <div class="cp-stop-row">
+                                <input type="color" class="cp-stop-color" value="@_stops[idx].Color"
+                                       @onchange="(e) => OnStopColorChange(idx, e)" />
+                                <input type="number" class="form-control form-control-sm cp-stop-pos" min="0" max="100"
+                                       value="@_stops[idx].Position" @onchange="(e) => OnStopPosChange(idx, e)" />
+                                <span class="cp-stop-pct">%</span>
+                                @if (_stops.Count > 2)
+                                {
+                                    <button type="button" class="cp-stop-remove" @onclick="() => RemoveStop(idx)" title="Remove stop">&#x2715;</button>
+                                }
+                            </div>
+                        }
+                    </div>
+                    <div class="cp-grad-actions">
+                        <button type="button" class="btn btn-sm cp-add-stop" @onclick="AddStop">+ Add Stop</button>
+                        <button type="button" class="btn btn-sm cp-apply-grad" @onclick="ApplyGradient">Apply</button>
+                    </div>
+                </div>
+
+                <div class="color-picker-hex-row">
+                    <span class="color-picker-preview" style="background:@Value;"></span>
+                    <input type="text" class="form-control form-control-sm color-picker-hex"
+                           value="@Value" @onchange="OnTextChange" spellcheck="false" placeholder="CSS gradient or #hex" />
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string Value { get; set; } = "#000000";
+    [Parameter] public EventCallback<string> ValueChanged { get; set; }
+    [Parameter] public EventCallback OnAfterChange { get; set; }
+
+    private bool _open;
+    private int _tab;
+
+    private string _gradType = "linear";
+    private int _gradAngle = 135;
+    private List<GradientStop> _stops = new() { new("#ff512f", 0), new("#dd2476", 100) };
+
+    private static bool IsGradient(string? v) =>
+        v != null && (v.Contains("gradient", StringComparison.OrdinalIgnoreCase)
+                   || v.Contains("linear-", StringComparison.OrdinalIgnoreCase)
+                   || v.Contains("radial-", StringComparison.OrdinalIgnoreCase));
+
+    private void ToggleDropdown()
+    {
+        _open = !_open;
+        if (_open)
+        {
+            _tab = IsGradient(Value) ? 1 : 0;
+            if (IsGradient(Value)) ParseGradient(Value);
+        }
+    }
+
+    private async Task Pick(string color)
+    {
+        Value = color;
+        _open = false;
+        await ValueChanged.InvokeAsync(color);
+        await OnAfterChange.InvokeAsync();
+    }
+
+    private async Task OnNativeInput(ChangeEventArgs e)
+    {
+        var c = e.Value?.ToString() ?? "#000000";
+        Value = c;
+        await ValueChanged.InvokeAsync(c);
+    }
+
+    private async Task OnNativeChange(ChangeEventArgs e)
+    {
+        var c = e.Value?.ToString() ?? "#000000";
+        Value = c;
+        await ValueChanged.InvokeAsync(c);
+        await OnAfterChange.InvokeAsync();
+    }
+
+    private async Task OnTextChange(ChangeEventArgs e)
+    {
+        var raw = e.Value?.ToString()?.Trim() ?? "";
+        if (string.IsNullOrEmpty(raw)) return;
+        Value = raw;
+        await ValueChanged.InvokeAsync(raw);
+        await OnAfterChange.InvokeAsync();
+    }
+
+    private void OnGradTypeChange(ChangeEventArgs e) => _gradType = e.Value?.ToString() ?? "linear";
+
+    private void OnGradAngleChange(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var a)) _gradAngle = Math.Clamp(a, 0, 360);
+    }
+
+    private void OnStopColorChange(int idx, ChangeEventArgs e)
+    {
+        if (idx >= 0 && idx < _stops.Count)
+            _stops[idx] = _stops[idx] with { Color = e.Value?.ToString() ?? "#000000" };
+    }
+
+    private void OnStopPosChange(int idx, ChangeEventArgs e)
+    {
+        if (idx >= 0 && idx < _stops.Count && int.TryParse(e.Value?.ToString(), out var p))
+            _stops[idx] = _stops[idx] with { Position = Math.Clamp(p, 0, 100) };
+    }
+
+    private void AddStop()
+    {
+        if (_stops.Count >= 8) return;
+        var midPos = _stops.Count >= 2 ? (_stops[^2].Position + _stops[^1].Position) / 2 : 50;
+        _stops.Insert(_stops.Count - 1, new("#888888", midPos));
+    }
+
+    private void RemoveStop(int idx)
+    {
+        if (_stops.Count > 2 && idx >= 0 && idx < _stops.Count) _stops.RemoveAt(idx);
+    }
+
+    private string BuildGradientCss()
+    {
+        var sorted = _stops.OrderBy(s => s.Position).ToList();
+        var stopsCss = string.Join(", ", sorted.Select(s => $"{s.Color} {s.Position}%"));
+        return _gradType == "radial"
+            ? $"radial-gradient(circle, {stopsCss})"
+            : $"linear-gradient({_gradAngle}deg, {stopsCss})";
+    }
+
+    private async Task ApplyGradient()
+    {
+        var css = BuildGradientCss();
+        Value = css;
+        _open = false;
+        await ValueChanged.InvokeAsync(css);
+        await OnAfterChange.InvokeAsync();
+    }
+
+    private void ParseGradient(string css)
+    {
+        try
+        {
+            _gradType = css.StartsWith("radial-gradient", StringComparison.OrdinalIgnoreCase) ? "radial" : "linear";
+
+            if (_gradType == "linear")
+            {
+                var openP = css.IndexOf('(');
+                if (openP >= 0)
+                {
+                    var inner = css.AsSpan().Slice(openP + 1);
+                    var degIdx = inner.IndexOf("deg", StringComparison.OrdinalIgnoreCase);
+                    if (degIdx > 0 && int.TryParse(inner.Slice(0, degIdx).Trim(), out var angle))
+                        _gradAngle = Math.Clamp(angle, 0, 360);
+                }
+            }
+
+            var parsed = new List<GradientStop>();
+            var openParen = css.IndexOf('(');
+            var remaining = openParen >= 0 ? css.Substring(openParen + 1).TrimEnd(')') : css;
+            var parts = remaining.Split(',');
+
+            foreach (var part in parts)
+            {
+                var trimmed = part.Trim();
+                if (trimmed.Contains("deg", StringComparison.OrdinalIgnoreCase) && !trimmed.Contains('#')) continue;
+                if (trimmed.Equals("circle", StringComparison.OrdinalIgnoreCase)) continue;
+
+                var color = "";
+                var pos = -1;
+                var pctIdx = trimmed.LastIndexOf('%');
+
+                if (pctIdx > 0)
+                {
+                    var before = trimmed.Substring(0, pctIdx).Trim();
+                    var lastSpace = before.LastIndexOf(' ');
+                    if (lastSpace > 0 && int.TryParse(before.Substring(lastSpace + 1), out var pv))
+                    {
+                        color = before.Substring(0, lastSpace).Trim();
+                        pos = Math.Clamp(pv, 0, 100);
+                    }
+                    else
+                    {
+                        color = before;
+                    }
+                }
+                else
+                {
+                    color = trimmed;
+                }
+
+                if (!string.IsNullOrEmpty(color))
+                    parsed.Add(new(color, pos >= 0 ? pos : -1));
+            }
+
+            if (parsed.Count >= 2)
+            {
+                for (int i = 0; i < parsed.Count; i++)
+                {
+                    if (parsed[i].Position < 0)
+                        parsed[i] = parsed[i] with { Position = (int)(100.0 * i / (parsed.Count - 1)) };
+                }
+                _stops = parsed;
+            }
+        }
+        catch { }
+    }
+
+    private record GradientStop(string Color, int Position);
+
+    private static readonly string[] _solidPalette =
+    [
+        "#000000","#1a1a1a","#333333","#4d4d4d","#666666","#808080","#999999","#b3b3b3","#cccccc","#ffffff",
+        "#ff0000","#e60000","#cc0000","#ff4d4d","#ff8080","#ff6b6b","#e74c3c","#c0392b","#ff1493","#ff69b4",
+        "#ff8c00","#ff6600","#ff9900","#ffb347","#e67e22","#d35400","#a0522d","#8b4513","#cd853f","#deb887",
+        "#ffff00","#ffd700","#ffc107","#ffeb3b","#cddc39","#8bc34a","#4caf50","#2ecc71","#27ae60","#1abc9c",
+        "#00ffff","#00bcd4","#009688","#26a69a","#00897b","#00acc1","#0097a7","#006064","#80deea","#b2ebf2",
+        "#0000ff","#0d6efd","#2196f3","#1976d2","#0d47a1","#3f51b5","#283593","#1a237e","#42a5f5","#90caf9",
+        "#9c27b0","#8e24aa","#7b1fa2","#6a1b9a","#e91e63","#ad1457","#ce93d8","#ba68c8","#ab47bc","#7e57c2",
+        "#00ff00","#ff4444","#ffaa00","#00aaff","#44ff44","#ff8800","#00ff88","#8800ff","#ff0088","#888888",
+    ];
+
+    private record GradientPreset(string Name, string Css);
+    private static readonly GradientPreset[] _gradientPresets =
+    [
+        new("Sunset",       "linear-gradient(135deg, #ff512f, #dd2476)"),
+        new("Ocean",        "linear-gradient(135deg, #2193b0, #6dd5ed)"),
+        new("Forest",       "linear-gradient(135deg, #11998e, #38ef7d)"),
+        new("Fire",         "linear-gradient(135deg, #f12711, #f5af19)"),
+        new("Night Sky",    "linear-gradient(135deg, #0f0c29, #302b63, #24243e)"),
+        new("Cool Gray",    "linear-gradient(135deg, #e0eafc, #cfdef3)"),
+        new("Electric",     "linear-gradient(135deg, #4776E6, #8E54E9)"),
+        new("HMI Dark",     "linear-gradient(180deg, #1a1a2e, #16213e, #0f3460)"),
+        new("HMI Panel",    "linear-gradient(180deg, #2d2d3d, #1e1e2e)"),
+        new("Alarm Red",    "linear-gradient(180deg, #8b0000, #ff4444)"),
+        new("Status Green", "linear-gradient(180deg, #004d00, #00cc44)"),
+        new("Steel",        "linear-gradient(180deg, #485563, #29323c)"),
+    ];
+}

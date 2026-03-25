@@ -750,6 +750,74 @@ namespace SharedModels
         /// <summary>Report definition name (must match a ReportConfig.Name).</summary>
         public string ReportName { get; set; } = "";
 
+        // â”€â”€ Lamp â”€â”€
+        /// <summary>Lamp on-state glow color. Default "#fbbf24" (warm yellow).</summary>
+        public string LampOnColor { get; set; } = "#fbbf24";
+        /// <summary>Lamp off-state color. Default "#334155".</summary>
+        public string LampOffColor { get; set; } = "#334155";
+        /// <summary>Lamp glass/bulb body color. Default "#fef3c7".</summary>
+        public string LampGlassColor { get; set; } = "#fef3c7";
+        /// <summary>Lamp base/socket color. Default "#78716c".</summary>
+        public string LampBaseColor { get; set; } = "#78716c";
+        /// <summary>Lamp style: "bulb", "led", "fluorescent". Default "bulb".</summary>
+        public string LampStyle { get; set; } = "bulb";
+
+        // â”€â”€ Light (fixture) â”€â”€
+        /// <summary>Light on-state color. Default "#fbbf24".</summary>
+        public string LightOnColor { get; set; } = "#fbbf24";
+        /// <summary>Light off-state color. Default "#334155".</summary>
+        public string LightOffColor { get; set; } = "#334155";
+        /// <summary>Light fixture body color. Default "#64748b".</summary>
+        public string LightBodyColor { get; set; } = "#64748b";
+        /// <summary>Light style: "ceiling", "wall", "spot". Default "ceiling".</summary>
+        public string LightStyle { get; set; } = "ceiling";
+        /// <summary>Show light beam/cone effect when on. Default true.</summary>
+        public bool LightShowBeam { get; set; } = true;
+
+        // â”€â”€ Wire â”€â”€
+        /// <summary>Wire color when energized. Default "#ef4444" (red).</summary>
+        public string WireEnergizedColor { get; set; } = "#ef4444";
+        /// <summary>Wire color when de-energized. Default "#64748b".</summary>
+        public string WireDeadColor { get; set; } = "#64748b";
+        /// <summary>Wire thickness in px. Default 3.</summary>
+        public double WireThickness { get; set; } = 3;
+        /// <summary>Wire orientation: "horizontal", "vertical", "corner-tl", "corner-tr", "corner-bl", "corner-br". Default "horizontal".</summary>
+        public string WireOrientation { get; set; } = "horizontal";
+        /// <summary>Show energy flow animation dots. Default true.</summary>
+        public bool WireShowFlow { get; set; } = true;
+
+        // â”€â”€ Transformer â”€â”€
+        /// <summary>Primary coil color. Default "#3b82f6".</summary>
+        public string TransformerPrimaryColor { get; set; } = "#3b82f6";
+        /// <summary>Secondary coil color. Default "#22c55e".</summary>
+        public string TransformerSecondaryColor { get; set; } = "#22c55e";
+        /// <summary>Core/body color. Default "#64748b".</summary>
+        public string TransformerCoreColor { get; set; } = "#64748b";
+        /// <summary>Orientation: "horizontal" or "vertical". Default "vertical".</summary>
+        public string TransformerOrientation { get; set; } = "vertical";
+        /// <summary>Show voltage labels. Default true.</summary>
+        public bool TransformerShowLabels { get; set; } = true;
+        /// <summary>Variable path for primary voltage.</summary>
+        public string TransformerPrimaryPath { get; set; } = "";
+        /// <summary>Variable path for secondary voltage.</summary>
+        public string TransformerSecondaryPath { get; set; } = "";
+
+        // â”€â”€ Battery â”€â”€
+        /// <summary>Battery charge color (full). Default "#22c55e".</summary>
+        public string BatteryFullColor { get; set; } = "#22c55e";
+        /// <summary>Battery low-charge color. Default "#ef4444".</summary>
+        public string BatteryLowColor { get; set; } = "#ef4444";
+        /// <summary>Battery body/case color. Default "#334155".</summary>
+        public string BatteryCaseColor { get; set; } = "#334155";
+        /// <summary>Orientation: "horizontal" or "vertical". Default "vertical".</summary>
+        public string BatteryOrientation { get; set; } = "vertical";
+        /// <summary>Show charge percentage text. Default true.</summary>
+        public bool BatteryShowLevel { get; set; } = true;
+        /// <summary>Number of segments/cells. Default 4.</summary>
+        public int BatterySegments { get; set; } = 4;
+        /// <summary>Low battery threshold percentage (0-100). Default 20.</summary>
+        public double BatteryLowThreshold { get; set; } = 20;
+
     }
 
     /// <summary>
