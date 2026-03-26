@@ -105,6 +105,10 @@ else
                         <div class="menu-item" @onclick="SaveAsMenu" @onclick:stopPropagation>
                             <span class="menu-icon">💾</span><span class="menu-label">@L["menu.file.saveAs"]</span><span class="menu-shortcut">Ctrl+Shift+S</span>
                         </div>
+                        <div class="menu-separator"></div>
+                        <div class="menu-item @(string.IsNullOrEmpty(Editor.CurrentFilePath) ? "disabled" : "")" @onclick="CreateSnapshotMenu" @onclick:stopPropagation>
+                            <span class="menu-icon">📸</span><span class="menu-label">Create Snapshot</span>
+                        </div>
                     </div>
                 }
             </div>
@@ -452,6 +456,10 @@ else
                 {
                     <CertificatePanel />
                 }
+                else if (context.Id == "backups")
+                {
+                    <BackupPanel />
+                }
                 else if (context.Id == "crashes")
                 {
                     <CrashReportsPanel />
@@ -728,6 +736,7 @@ else
     [Inject] private UndoRedoService UndoRedo { get; set; } = default!;
     [Inject] private PropertyGridService PropertyGrid { get; set; } = default!;
     [Inject] private EditorLocalizationService L { get; set; } = default!;
+    [Inject] private BackupService BackupSvc { get; set; } = default!;
 
     private LogViewerService _serverLogService = new();
     private LogViewerService _appLogService = new();
@@ -811,6 +820,7 @@ else
         new() { Id = "scheduler", Title = "Scheduler Editor", Icon = "📅", Zone = "center" },
         new() { Id = "report", Title = "Report Designer", Icon = "📄", Zone = "center" },
         new() { Id = "certificates", Title = "Certificates", Icon = "🔐", Zone = "center" },
+        new() { Id = "backups", Title = "Backups", Icon = "💾", Zone = "center" },
         new() { Id = "serverlog", Title = "Server Logs", Icon = "📋", Zone = "bottom" },
         new() { Id = "applog", Title = "App Log", Icon = "📒", Zone = "bottom" },
         new() { Id = "crashes", Title = "Crash Reports", Icon = "🐛", Zone = "bottom" },
@@ -986,6 +996,7 @@ private void UnsavedDialogCancel()
         {
             _selectedFile = Editor.CurrentFilePath;
             SetupLogDirectory();
+            BackupSvc.ConfigureScheduledBackup();
         }
 
         _requiresLogin = AuthService.IsLoginRequired(Editor.RootModel);
@@ -1104,7 +1115,10 @@ private void UnsavedDialogCancel()
         var (success, msg) = Editor.Save();
         ShowToast(success, msg);
         if (success)
+        {
             _appLogService.AddLog("INF", msg);
+            BackupSvc.OnProjectSaved();
+        }
     }
 
     private void SaveAs()
@@ -1120,6 +1134,7 @@ private void UnsavedDialogCancel()
             _availableFiles = Editor.GetAvailableFiles();
             _appLogService.AddLog("INF", msg);
             SetupLogDirectory();
+            BackupSvc.OnProjectSaved();
         }
     }
 
@@ -1217,6 +1232,14 @@ private void UnsavedDialogCancel()
     private void LoadFileMenu() { CloseMenus(); OpenFileBrowser(); }
     private void SaveMenu() { CloseMenus(); Save(); }
     private void SaveAsMenu() { CloseMenus(); _saveAsPath = Editor.CurrentFilePath ?? ""; _showSaveAsDialog = true; }
+    private void CreateSnapshotMenu()
+    {
+        CloseMenus();
+        if (string.IsNullOrEmpty(Editor.CurrentFilePath)) return;
+        var (success, msg) = BackupSvc.CreateSnapshot();
+        ShowToast(success, msg);
+        if (success) _appLogService.AddLog("INF", msg);
+    }
     private void AddFolderMenu() { CloseMenus(); AddFolder(); }
     private void AddVariableMenu() { CloseMenus(); AddVariable(); }
     private void AddScriptMenu() { CloseMenus(); AddScript(); }

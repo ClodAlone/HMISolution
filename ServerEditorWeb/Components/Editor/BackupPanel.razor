@@ -1,0 +1,518 @@
+@using SharedModels
+@using ServerEditorWeb.Services
+@inject BackupService Backup
+@inject NodeEditorService Editor
+
+<div class="backup-panel">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <h6 class="mb-0">💾 Project Backups</h6>
+        <div class="d-flex gap-1">
+            <button class="btn btn-sm btn-outline-secondary" @onclick="Refresh">↻ Refresh</button>
+            <button class="btn btn-sm btn-primary" @onclick="CreateManualSnapshot" disabled="@_loading">
+                @if (_loading) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                📸 Snapshot
+            </button>
+        </div>
+    </div>
+
+    @* Status message *@
+    @if (!string.IsNullOrEmpty(_statusMessage))
+    {
+        <div class="alert @(_statusSuccess ? "alert-success" : "alert-danger") py-1 px-2 small mb-2 d-flex justify-content-between align-items-center">
+            <span>@_statusMessage</span>
+            <button type="button" class="btn-close btn-close-sm" @onclick="() => _statusMessage = null"></button>
+        </div>
+    }
+
+    @* Stats bar *@
+    <div class="backup-stats mb-2">
+        <span>📦 @_snapshots.Count snapshot(s)</span>
+        <span class="text-muted mx-1">·</span>
+        <span>@BackupService.FormatSize(_totalBytes) total</span>
+        @if (!string.IsNullOrEmpty(Backup.GetBackupDirectory()))
+        {
+            <span class="text-muted mx-1">·</span>
+            <span class="text-muted" style="font-size: 10px; font-family: monospace;" title="@Backup.GetBackupDirectory()">@ShortenPath(Backup.GetBackupDirectory()!)</span>
+        }
+    </div>
+
+    @* Settings card *@
+    <div class="card mb-2">
+        <div class="card-header py-1 px-2 d-flex justify-content-between align-items-center" style="font-size: 12px; cursor: pointer;" @onclick="() => _settingsExpanded = !_settingsExpanded">
+            <span>⚙️ Auto-Backup Settings</span>
+            <span>@(_settingsExpanded ? "▼" : "▶")</span>
+        </div>
+        @if (_settingsExpanded)
+        {
+            <div class="card-body p-2">
+                <div class="form-check form-switch mb-2">
+                    <input class="form-check-input" type="checkbox" checked="@_autoEnabled"
+                           @onchange="(e) => { SetAutoEnabled((bool)(e.Value ?? false)); }" />
+                    <label class="form-check-label small">Enable automated backups</label>
+                </div>
+                @if (_autoEnabled)
+                {
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" checked="@_snapshotOnSave"
+                               @onchange="(e) => { SetSnapshotOnSave((bool)(e.Value ?? false)); }" />
+                        <label class="form-check-label small">Snapshot on every save</label>
+                    </div>
+                    <div class="row g-2 mb-2">
+                        <div class="col-6">
+                            <label class="form-label mb-0 small">Scheduled interval (min)</label>
+                            <input type="number" class="form-control form-control-sm" min="0"
+                                   value="@_scheduleMinutes"
+                                   @onchange="(e) => { SetScheduleMinutes(int.TryParse(e.Value?.ToString(), out var v) ? v : 0); }" />
+                            <div class="form-text">0 = disabled. E.g. 30 = every 30 min.</div>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label mb-0 small">Max snapshots to keep</label>
+                            <input type="number" class="form-control form-control-sm" min="1"
+                                   value="@_maxSnapshots"
+                                   @onchange="(e) => { SetMaxSnapshots(int.TryParse(e.Value?.ToString(), out var v) ? Math.Max(1, v) : 20); }" />
+                            <div class="form-text">Oldest pruned automatically.</div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+
+    @* Snapshot list *@
+    @if (_snapshots.Count == 0)
+    {
+        <div class="backup-empty">
+            <span class="backup-empty-icon">📭</span>
+            <div class="mt-1">No snapshots yet. Click <strong>📸 Snapshot</strong> to create one.</div>
+        </div>
+    }
+    else
+    {
+        <div class="backup-list">
+            @foreach (var snap in _snapshots)
+            {
+                var isSelected = _selectedPath == snap.FilePath;
+                <div class="backup-item @(isSelected ? "selected" : "")" @onclick="() => SelectSnapshot(snap)">
+                    <div class="backup-item-header">
+                        <span class="backup-trigger-badge @TriggerClass(snap.Trigger)">@TriggerIcon(snap.Trigger)</span>
+                        <span class="backup-time">@snap.CreatedUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</span>
+                        <span class="backup-size">@BackupService.FormatSize(snap.SizeBytes)</span>
+                    </div>
+                    @if (!string.IsNullOrEmpty(snap.Label))
+                    {
+                        <div class="backup-label">@snap.Label</div>
+                    }
+                    <div class="backup-filename">@snap.FileName</div>
+                </div>
+            }
+        </div>
+    }
+
+    @* Action bar for selected snapshot *@
+    @if (_selectedSnap != null)
+    {
+        <div class="backup-actions mt-2 p-2 border rounded">
+            <div class="d-flex gap-1 mb-1 align-items-center">
+                <strong class="small flex-fill" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">@_selectedSnap.FileName</strong>
+            </div>
+            <div class="d-flex gap-1 flex-wrap">
+                <button class="btn btn-sm btn-outline-success" @onclick="RestoreSelected" disabled="@_loading">
+                    ♻️ Restore
+                </button>
+                <button class="btn btn-sm btn-outline-info" @onclick="PreviewSelected">
+                    📋 Contents
+                </button>
+                <button class="btn btn-sm btn-outline-secondary" @onclick="EditLabel">
+                    🏷️ Label
+                </button>
+                <button class="btn btn-sm btn-outline-danger" @onclick="DeleteSelected">
+                    🗑 Delete
+                </button>
+            </div>
+        </div>
+    }
+</div>
+
+@* ── Restore confirm modal ── *@
+@if (_showRestoreConfirm)
+{
+    <div class="modal-backdrop show" @onclick="() => _showRestoreConfirm = false"></div>
+    <div class="modal show d-block" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header py-2">
+                    <h6 class="modal-title">♻️ Confirm Restore</h6>
+                    <button type="button" class="btn-close btn-close-sm" @onclick="() => _showRestoreConfirm = false"></button>
+                </div>
+                <div class="modal-body small">
+                    <p>This will <strong>overwrite</strong> your current project files with the snapshot:</p>
+                    <p class="font-monospace bg-light p-2 rounded">@(_selectedSnap?.FileName ?? "")</p>
+                    <p class="text-muted">A safety backup of the current state will be created automatically before restoring.</p>
+                    <p class="fw-bold text-danger">After restoring, you must reload the project for changes to take effect.</p>
+                </div>
+                <div class="modal-footer py-1">
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="() => _showRestoreConfirm = false">Cancel</button>
+                    <button class="btn btn-sm btn-success" @onclick="ConfirmRestore" disabled="@_loading">
+                        @if (_loading) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                        ♻️ Restore Now
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* ── Preview modal ── *@
+@if (_showPreview && _previewEntries != null)
+{
+    <div class="modal-backdrop show" @onclick="() => _showPreview = false"></div>
+    <div class="modal show d-block" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content">
+                <div class="modal-header py-2">
+                    <h6 class="modal-title">📋 Snapshot Contents</h6>
+                    <button type="button" class="btn-close btn-close-sm" @onclick="() => _showPreview = false"></button>
+                </div>
+                <div class="modal-body p-0" style="max-height: 400px; overflow-y: auto;">
+                    <table class="table table-sm table-striped mb-0" style="font-size: 11px;">
+                        <thead>
+                            <tr><th>File</th><th style="width: 80px; text-align: right;">Size</th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var (name, size) in _previewEntries)
+                            {
+                                <tr>
+                                    <td class="font-monospace">@name</td>
+                                    <td style="text-align: right;">@BackupService.FormatSize(size)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* ── Label edit modal ── *@
+@if (_showLabelEdit)
+{
+    <div class="modal-backdrop show" @onclick="() => _showLabelEdit = false"></div>
+    <div class="modal show d-block" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered modal-sm">
+            <div class="modal-content">
+                <div class="modal-header py-2">
+                    <h6 class="modal-title">🏷️ Edit Label</h6>
+                    <button type="button" class="btn-close btn-close-sm" @onclick="() => _showLabelEdit = false"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="text" class="form-control form-control-sm" @bind="_editLabelText"
+                           placeholder="e.g. Before major refactor" />
+                </div>
+                <div class="modal-footer py-1">
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="() => _showLabelEdit = false">Cancel</button>
+                    <button class="btn btn-sm btn-primary" @onclick="SaveLabel">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .backup-panel {
+        padding: 8px;
+        height: 100%;
+        overflow-y: auto;
+    }
+
+    .backup-stats {
+        font-size: 11px;
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+
+    .backup-list {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+    }
+
+    .backup-item {
+        padding: 6px 8px;
+        border: 1px solid var(--border-color, #dee2e6);
+        border-radius: 5px;
+        background: var(--bg-secondary, #f8f9fa);
+        cursor: pointer;
+        transition: background 0.15s, border-color 0.15s;
+    }
+
+    .backup-item:hover {
+        background: rgba(0,0,0,0.04);
+    }
+
+    .backup-item.selected {
+        border-color: var(--bs-primary, #0d6efd);
+        background: rgba(13, 110, 253, 0.06);
+    }
+
+    .backup-item-header {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11px;
+    }
+
+    .backup-trigger-badge {
+        font-size: 9px;
+        font-weight: 600;
+        padding: 1px 6px;
+        border-radius: 3px;
+        text-transform: uppercase;
+        flex-shrink: 0;
+    }
+
+    .backup-trigger-badge.manual { background: #0d6efd; color: white; }
+    .backup-trigger-badge.auto-save { background: #198754; color: white; }
+    .backup-trigger-badge.scheduled { background: #6f42c1; color: white; }
+    .backup-trigger-badge.auto-restore { background: #fd7e14; color: white; }
+
+    .backup-time {
+        font-family: monospace;
+        font-size: 11px;
+        flex: 1;
+    }
+
+    .backup-size {
+        font-size: 10px;
+        color: var(--text-muted, #6c757d);
+        flex-shrink: 0;
+    }
+
+    .backup-label {
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--bs-primary, #0d6efd);
+        margin-top: 1px;
+    }
+
+    .backup-filename {
+        font-size: 9px;
+        font-family: monospace;
+        color: var(--text-muted, #6c757d);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .backup-empty {
+        text-align: center;
+        padding: 24px;
+        color: var(--text-muted, #6c757d);
+        font-size: 12px;
+    }
+
+    .backup-empty-icon {
+        font-size: 32px;
+        display: block;
+    }
+
+    .backup-actions {
+        background: var(--bg-secondary, #f8f9fa);
+    }
+</style>
+
+@code {
+    private List<BackupSnapshot> _snapshots = new();
+    private long _totalBytes;
+    private string? _selectedPath;
+    private BackupSnapshot? _selectedSnap;
+    private string? _statusMessage;
+    private bool _statusSuccess;
+    private bool _loading;
+
+    // Settings
+    private bool _settingsExpanded;
+    private bool _autoEnabled;
+    private bool _snapshotOnSave = true;
+    private int _scheduleMinutes;
+    private int _maxSnapshots = 20;
+
+    // Modals
+    private bool _showRestoreConfirm;
+    private bool _showPreview;
+    private List<(string name, long size)>? _previewEntries;
+    private bool _showLabelEdit;
+    private string _editLabelText = "";
+
+    protected override void OnInitialized()
+    {
+        LoadSettings();
+        Refresh();
+    }
+
+    private void LoadSettings()
+    {
+        var config = Editor.RootModel?.Server?.Backup;
+        if (config != null)
+        {
+            _autoEnabled = config.Enabled;
+            _snapshotOnSave = config.SnapshotOnSave;
+            _scheduleMinutes = config.ScheduleMinutes;
+            _maxSnapshots = config.MaxSnapshots > 0 ? config.MaxSnapshots : 20;
+        }
+    }
+
+    private void Refresh()
+    {
+        _snapshots = Backup.ListSnapshots();
+        var stats = Backup.GetBackupStats();
+        _totalBytes = stats.totalBytes;
+        _selectedPath = null;
+        _selectedSnap = null;
+    }
+
+    private void SelectSnapshot(BackupSnapshot snap)
+    {
+        if (_selectedPath == snap.FilePath)
+        {
+            _selectedPath = null;
+            _selectedSnap = null;
+        }
+        else
+        {
+            _selectedPath = snap.FilePath;
+            _selectedSnap = snap;
+        }
+    }
+
+    private void CreateManualSnapshot()
+    {
+        _loading = true;
+        var (success, message) = Backup.CreateSnapshot();
+        _statusMessage = message;
+        _statusSuccess = success;
+        _loading = false;
+        Refresh();
+    }
+
+    private void RestoreSelected()
+    {
+        if (_selectedSnap == null) return;
+        _showRestoreConfirm = true;
+    }
+
+    private void ConfirmRestore()
+    {
+        if (_selectedSnap == null) return;
+        _loading = true;
+        _showRestoreConfirm = false;
+        var (success, message) = Backup.RestoreSnapshot(_selectedSnap.FilePath);
+        _statusMessage = message;
+        _statusSuccess = success;
+        _loading = false;
+        Refresh();
+    }
+
+    private void PreviewSelected()
+    {
+        if (_selectedSnap == null) return;
+        _previewEntries = Backup.PreviewSnapshot(_selectedSnap.FilePath);
+        _showPreview = true;
+    }
+
+    private void EditLabel()
+    {
+        if (_selectedSnap == null) return;
+        _editLabelText = _selectedSnap.Label;
+        _showLabelEdit = true;
+    }
+
+    private void SaveLabel()
+    {
+        if (_selectedSnap != null)
+        {
+            Backup.UpdateLabel(_selectedSnap.FilePath, _editLabelText);
+            _selectedSnap.Label = _editLabelText;
+        }
+        _showLabelEdit = false;
+    }
+
+    private void DeleteSelected()
+    {
+        if (_selectedSnap == null) return;
+        if (Backup.DeleteSnapshot(_selectedSnap.FilePath))
+        {
+            _statusMessage = $"Deleted: {_selectedSnap.FileName}";
+            _statusSuccess = true;
+            Refresh();
+        }
+        else
+        {
+            _statusMessage = "Failed to delete snapshot.";
+            _statusSuccess = false;
+        }
+    }
+
+    private void SaveConfig()
+    {
+        if (Editor.RootModel?.Server != null)
+        {
+            Editor.RootModel.Server.Backup ??= new BackupConfig();
+            Editor.RootModel.Server.Backup.Enabled = _autoEnabled;
+            Editor.RootModel.Server.Backup.SnapshotOnSave = _snapshotOnSave;
+            Editor.RootModel.Server.Backup.ScheduleMinutes = _scheduleMinutes;
+            Editor.RootModel.Server.Backup.MaxSnapshots = _maxSnapshots;
+            Editor.MarkChanged();
+            Backup.ConfigureScheduledBackup();
+        }
+    }
+
+    private void SetAutoEnabled(bool value)
+    {
+        _autoEnabled = value;
+        SaveConfig();
+    }
+
+    private void SetSnapshotOnSave(bool value)
+    {
+        _snapshotOnSave = value;
+        SaveConfig();
+    }
+
+    private void SetScheduleMinutes(int value)
+    {
+        _scheduleMinutes = value;
+        SaveConfig();
+    }
+
+    private void SetMaxSnapshots(int value)
+    {
+        _maxSnapshots = value;
+        SaveConfig();
+    }
+
+    private static string TriggerIcon(string trigger) => trigger switch
+    {
+        "auto-save" => "💾 save",
+        "scheduled" => "⏰ sched",
+        "auto-restore" => "🔒 safety",
+        _ => "📸 manual"
+    };
+
+    private static string TriggerClass(string trigger) => trigger switch
+    {
+        "auto-save" => "auto-save",
+        "scheduled" => "scheduled",
+        "auto-restore" => "auto-restore",
+        _ => "manual"
+    };
+
+    private static string ShortenPath(string path)
+    {
+        if (path.Length <= 50) return path;
+        var parts = path.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        if (parts.Length <= 3) return path;
+        return $"{parts[0]}\\...\\{parts[^2]}\\{parts[^1]}";
+    }
+}

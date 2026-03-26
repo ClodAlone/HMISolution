@@ -322,6 +322,12 @@ namespace SharedModels
         /// When configured, the server can register with a GDS and receive CA-signed certificates.
         /// </summary>
         public GdsConfig? Gds { get; set; }
+
+        /// <summary>
+        /// Automated backup/snapshot configuration. When enabled, the editor creates
+        /// ZIP snapshots of the project on save and/or on a schedule.
+        /// </summary>
+        public BackupConfig? Backup { get; set; }
     }
 
     /// <summary>
@@ -399,6 +405,30 @@ namespace SharedModels
 
         /// <summary>Password for GDS authentication.</summary>
         public string Password { get; set; } = "";
+    }
+
+    /// <summary>
+    /// Configuration for automated project backup snapshots.
+    /// </summary>
+    public class BackupConfig
+    {
+        /// <summary>Whether automated backups are enabled.</summary>
+        public bool Enabled { get; set; }
+
+        /// <summary>Create a snapshot automatically each time the project is saved.</summary>
+        public bool SnapshotOnSave { get; set; } = true;
+
+        /// <summary>
+        /// Interval in minutes for scheduled snapshots (0 = disabled).
+        /// When > 0, a snapshot is created every N minutes while the project is open.
+        /// </summary>
+        public int ScheduleMinutes { get; set; }
+
+        /// <summary>
+        /// Maximum number of snapshots to keep. Oldest snapshots beyond this limit
+        /// are automatically deleted. Default: 20.
+        /// </summary>
+        public int MaxSnapshots { get; set; } = 20;
     }
 
     /// <summary>

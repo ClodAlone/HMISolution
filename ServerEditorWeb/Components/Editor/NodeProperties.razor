@@ -999,6 +999,41 @@ else if (Node is ServerSettingsNode ssNode)
             </div>
         </div>
     </div>
+
+    @* ── Backup / Snapshots ── *@
+    <div class="mb-3">
+        <div class="d-flex justify-content-between align-items-center mb-1">
+            <label class="form-label mb-0 fw-bold">💾 Automated Backups</label>
+            <div class="form-check form-switch mb-0">
+                <input class="form-check-input" type="checkbox"
+                       checked="@(ssNode.Settings.Backup?.Enabled == true)"
+                       @onchange="(e) => { EnsureBackupConfig(ssNode).Enabled = (bool)(e.Value ?? false); OnChanged(); }" />
+            </div>
+        </div>
+        <div class="form-text mb-2">ZIP snapshots of the project stored in a <code>backups/</code> folder.</div>
+        @if (ssNode.Settings.Backup is { Enabled: true })
+        {
+            <div class="form-check mb-2">
+                <input class="form-check-input" type="checkbox"
+                       @bind="ssNode.Settings.Backup.SnapshotOnSave" @bind:after="OnChanged" />
+                <label class="form-check-label small">Snapshot on every save</label>
+            </div>
+            <div class="row g-2">
+                <div class="col-6">
+                    <label class="form-label mb-0 small">Schedule (minutes)</label>
+                    <input type="number" class="form-control form-control-sm" min="0"
+                           @bind="ssNode.Settings.Backup.ScheduleMinutes" @bind:after="OnChanged" />
+                    <div class="form-text">0 = disabled.</div>
+                </div>
+                <div class="col-6">
+                    <label class="form-label mb-0 small">Max snapshots</label>
+                    <input type="number" class="form-control form-control-sm" min="1"
+                           @bind="ssNode.Settings.Backup.MaxSnapshots" @bind:after="OnChanged" />
+                    <div class="form-text">Oldest auto-pruned.</div>
+                </div>
+            </div>
+        }
+    </div>
 }
 else if (Node is UserGroupNode ugNode)
 {
@@ -1197,5 +1232,13 @@ else if (Node is UserNode uNode)
     {
         ssNode.Settings.Gds ??= new GdsConfig();
         return ssNode.Settings.Gds;
+    }
+
+    // ── Backup Config helper ──
+
+    private BackupConfig EnsureBackupConfig(ServerSettingsNode ssNode)
+    {
+        ssNode.Settings.Backup ??= new BackupConfig();
+        return ssNode.Settings.Backup;
     }
 }
