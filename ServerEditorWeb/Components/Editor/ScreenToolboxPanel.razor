@@ -33,14 +33,16 @@
                         <div class="toolbox-item-wrap">
                             <button class="toolbox-item @item.CssClass"
                                     @onclick="() => OnItemClicked(item.Type)"
+                                    @onmouseenter="() => ShowPreview(item)"
+                                    @onmouseleave="HidePreview"
                                     title="@item.Tooltip">
                                 <span class="toolbox-item-icon">@item.Icon</span>
                                 <span class="toolbox-item-label">@item.Label</span>
+                                @if (!string.IsNullOrEmpty(item.Animation))
+                                {
+                                    <span class="toolbox-anim-badge" title="Has animation: @item.Animation">▶</span>
+                                }
                             </button>
-                            @if (!string.IsNullOrEmpty(item.Animation))
-                            {
-                                <button class="toolbox-anim-badge" @onclick:stopPropagation="true" @onclick="() => ShowPreview(item)" title="Preview animation">▶</button>
-                            }
                         </div>
                     }
                 </div>
@@ -50,8 +52,8 @@
 
     @if (_previewItem != null)
     {
-        <div class="toolbox-preview-overlay" @onclick="HidePreview"><div class="toolbox-preview-dialog" @onclick:stopPropagation>
-            <div class="toolbox-preview-header"><button class="toolbox-preview-close" @onclick="HidePreview" title="Close">✕</button>
+        <div class="toolbox-preview-popup">
+            <div class="toolbox-preview-header">
                 <span>@_previewItem.Icon @_previewItem.Label</span>
                 @if (!string.IsNullOrEmpty(_previewItem.Animation))
                 {
@@ -61,7 +63,7 @@
             <div class="toolbox-preview-canvas">
                 @RenderPreview(_previewItem)
             </div>
-            <div class="toolbox-preview-desc">@_previewItem.Tooltip</div><div class="toolbox-preview-actions"><button class="btn btn-sm btn-primary" @onclick="PlacePreviewItem">+ Place on Screen</button></div></div>
+            <div class="toolbox-preview-desc">@_previewItem.Tooltip</div>
         </div>
     }
 </div>
@@ -105,14 +107,6 @@
     private void ShowPreview(ToolboxItem item) { _previewItem = item; }
     private void HidePreview() { _previewItem = null; }
 
-    private async Task PlacePreviewItem()
-    {
-        if (_previewItem != null)
-        {
-            await OnSymbolTypeSelected.InvokeAsync(_previewItem.Type);
-            _previewItem = null;
-        }
-    }
 
     private RenderFragment RenderPreview(ToolboxItem item) => builder =>
     {

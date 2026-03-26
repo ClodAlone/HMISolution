@@ -73,6 +73,51 @@ else if (Node is VariableNode variable)
             <div class="form-text">@L["prop.enableStatsHint"]</div>
         </div>
 
+        @* ── Engineering Unit ── *@
+        <div class="mb-3">
+            <label class="form-label">Engineering Unit</label>
+            <input type="text" class="form-control" @bind="variable.Variable.EngineeringUnit" @bind:after="OnChanged"
+                   placeholder="e.g. °C, bar, %, m³/h" />
+            <div class="form-text">Exposed as OPC UA EngineeringUnits property.</div>
+        </div>
+
+        @* ── Scaling ── *@
+        <div class="mb-3">
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox"
+                       checked="@(variable.Variable.Scaling != null)"
+                       @onchange="e => { if ((bool)(e.Value ?? false)) variable.Variable.Scaling ??= new SharedModels.ScalingConfig(); else variable.Variable.Scaling = null; OnChanged(); }" />
+                <label class="form-check-label">Enable Linear Scaling</label>
+            </div>
+            <div class="form-text">Convert raw driver values to engineering units (linear interpolation).</div>
+        </div>
+        @if (variable.Variable.Scaling is { } sc)
+        {
+            <div class="row g-2 mb-2">
+                <div class="col-6">
+                    <label class="form-label small">Raw Min</label>
+                    <input type="number" step="any" class="form-control form-control-sm" @bind="sc.RawMin" @bind:after="OnChanged" />
+                </div>
+                <div class="col-6">
+                    <label class="form-label small">Raw Max</label>
+                    <input type="number" step="any" class="form-control form-control-sm" @bind="sc.RawMax" @bind:after="OnChanged" />
+                </div>
+            </div>
+            <div class="row g-2 mb-2">
+                <div class="col-6">
+                    <label class="form-label small">Eng Min</label>
+                    <input type="number" step="any" class="form-control form-control-sm" @bind="sc.EngMin" @bind:after="OnChanged" />
+                </div>
+                <div class="col-6">
+                    <label class="form-label small">Eng Max</label>
+                    <input type="number" step="any" class="form-control form-control-sm" @bind="sc.EngMax" @bind:after="OnChanged" />
+                </div>
+            </div>
+            <div class="mb-3 form-check">
+                <input class="form-check-input" type="checkbox" @bind="sc.ClampEnabled" @bind:after="OnChanged" />
+                <label class="form-check-label">Clamp to engineering range</label>
+            </div>
+        }
 
         <VariableDriverEditor Variable="variable.Variable"
                               VariableNode="variable"
@@ -1033,6 +1078,193 @@ else if (Node is ServerSettingsNode ssNode)
                 </div>
             </div>
         }
+
+        @* ── REST API ── *@
+        <hr />
+        <h6>🌐 REST API</h6>
+        <div class="mb-2">
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox"
+                       checked="@(ssNode.Settings.Api != null)"
+                       @onchange="e => { if ((bool)(e.Value ?? false)) ssNode.Settings.Api ??= new SharedModels.ApiConfig(); else ssNode.Settings.Api = null; OnChanged(); }" />
+                <label class="form-check-label">Enable REST API</label>
+            </div>
+            <div class="form-text">Expose variables, alarms, recipes, and reports to external systems (MES/ERP).</div>
+        </div>
+        @if (ssNode.Settings.Api is { } apiCfg)
+        {
+            <div class="mb-2 form-check">
+                <input class="form-check-input" type="checkbox" @bind="apiCfg.Enabled" @bind:after="OnChanged" />
+                <label class="form-check-label">Active</label>
+            </div>
+            <div class="mb-2">
+                <label class="form-label small">Port</label>
+                <input type="number" class="form-control form-control-sm" @bind="apiCfg.Port" @bind:after="OnChanged" />
+                <div class="form-text">Default: 14842</div>
+            </div>
+            <div class="mb-2">
+                <label class="form-label small">API Key</label>
+                <input type="text" class="form-control form-control-sm" @bind="apiCfg.ApiKey" @bind:after="OnChanged"
+                       placeholder="Leave empty for no auth (not recommended)" />
+                <div class="form-text">Clients send this via <code>X-API-Key</code> header or <code>?apiKey=</code> query parameter.</div>
+            </div>
+        }
+
+        @* ── Redundancy / High Availability ── *@
+        <hr />
+        <h6>🔄 Redundancy / HA</h6>
+        <div class="mb-2">
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox"
+                       checked="@(ssNode.Settings.Redundancy != null)"
+                       @onchange="e => { if ((bool)(e.Value ?? false)) ssNode.Settings.Redundancy ??= new SharedModels.RedundancyConfig(); else ssNode.Settings.Redundancy = null; OnChanged(); }" />
+                <label class="form-check-label">Enable Redundancy</label>
+            </div>
+            <div class="form-text">Heartbeat-based failover between primary and standby servers.</div>
+        </div>
+        @if (ssNode.Settings.Redundancy is { } redCfg)
+        {
+            <div class="mb-2 form-check">
+                <input class="form-check-input" type="checkbox" @bind="redCfg.Enabled" @bind:after="OnChanged" />
+                <label class="form-check-label">Active</label>
+            </div>
+            <div class="mb-2">
+                <label class="form-label small">Role</label>
+                <select class="form-select form-select-sm" @bind="redCfg.Role" @bind:after="OnChanged">
+                    <option value="Primary">Primary</option>
+                    <option value="Standby">Standby</option>
+                </select>
+            </div>
+            <div class="mb-2">
+                <label class="form-label small">Partner Endpoint</label>
+                <input type="text" class="form-control form-control-sm" @bind="redCfg.PartnerEndpoint" @bind:after="OnChanged"
+                       placeholder="http://192.168.1.100:14841" />
+            </div>
+            <div class="row g-2 mb-2">
+                <div class="col-6">
+                    <label class="form-label small">Heartbeat (sec)</label>
+                    <input type="number" min="1" class="form-control form-control-sm" @bind="redCfg.HeartbeatIntervalSeconds" @bind:after="OnChanged" />
+                </div>
+                <div class="col-6">
+                    <label class="form-label small">Missed Beats</label>
+                    <input type="number" min="1" class="form-control form-control-sm" @bind="redCfg.FailoverMissedHeartbeats" @bind:after="OnChanged" />
+                </div>
+            </div>
+            <div class="mb-2">
+                <label class="form-label small">State Sync Interval (ms)</label>
+                <input type="number" min="0" class="form-control form-control-sm" @bind="redCfg.StateSyncIntervalMs" @bind:after="OnChanged" />
+                <div class="form-text">0 = disabled. Default 10000 (10 sec).</div>
+            </div>
+            <div class="mb-2 form-check">
+                <input class="form-check-input" type="checkbox" @bind="redCfg.AutoSwitchback" @bind:after="OnChanged" />
+                <label class="form-check-label">Auto Switchback</label>
+                <div class="form-text">Automatically return to standby when primary recovers.</div>
+            </div>
+        }
+    </div>
+}
+else if (Node is CalculatedNode calcNode)
+{
+    <div class="properties-panel">
+        <h5>📐 Calculated Tag</h5>
+        <div class="mb-3">
+            <label class="form-label">Name</label>
+            <input type="text" class="form-control" @bind="calcNode.Name" @bind:after="OnChanged" />
+        </div>
+        <div class="mb-3 form-check">
+            <input class="form-check-input" type="checkbox" @bind="calcNode.Config.Enabled" @bind:after="OnChanged" />
+            <label class="form-check-label">Enabled</label>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Output Type</label>
+            <select class="form-select" @bind="calcNode.Config.Type" @bind:after="OnChanged">
+                <option value="Double">Double</option>
+                <option value="Int32">Int32</option>
+                <option value="Boolean">Boolean</option>
+                <option value="String">String</option>
+            </select>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Folder Path</label>
+            <input type="text" class="form-control" @bind="calcNode.Config.FolderPath" @bind:after="OnChanged" placeholder="_Calculated" />
+            <div class="form-text">OPC UA folder where the variable is created.</div>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Interval (ms)</label>
+            <input type="number" min="100" class="form-control" @bind="calcNode.Config.IntervalMs" @bind:after="OnChanged" />
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Engineering Unit</label>
+            <input type="text" class="form-control" @bind="calcNode.Config.EngineeringUnit" @bind:after="OnChanged" placeholder="e.g. °C, bar" />
+        </div>
+
+        <hr />
+        <h6>Computation Mode</h6>
+        <div class="mb-2">
+            <div class="form-check">
+                <input class="form-check-input" type="radio" name="calcMode_@calcNode.Name"
+                       checked="@(string.IsNullOrEmpty(calcNode.Config.AggregateFunction))"
+                       @onchange="() => { calcNode.Config.AggregateFunction = string.Empty; OnChanged(); }" />
+                <label class="form-check-label">Expression</label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" type="radio" name="calcMode_@calcNode.Name"
+                       checked="@(!string.IsNullOrEmpty(calcNode.Config.AggregateFunction))"
+                       @onchange="() => SetAggregateMode(calcNode)" />
+                <label class="form-check-label">Aggregate Function</label>
+            </div>
+        </div>
+
+        @if (string.IsNullOrEmpty(calcNode.Config.AggregateFunction))
+        {
+            <div class="mb-3">
+                <label class="form-label">Expression</label>
+                <textarea class="form-control" rows="3" @bind="calcNode.Config.Expression" @bind:after="OnChanged"
+                          placeholder="Read(&quot;Tank1.Level&quot;) + Read(&quot;Tank2.Level&quot;)"></textarea>
+                <div class="form-text">C# expression. Use <code>Read("path")</code> to reference variables.</div>
+            </div>
+        }
+        else
+        {
+            <div class="mb-2">
+                <label class="form-label">Function</label>
+                <select class="form-select" @bind="calcNode.Config.AggregateFunction" @bind:after="OnChanged">
+                    <option value="Avg">Avg (Average)</option>
+                    <option value="Sum">Sum</option>
+                    <option value="Min">Min</option>
+                    <option value="Max">Max</option>
+                    <option value="Count">Count</option>
+                    <option value="RateOfChange">RateOfChange</option>
+                    <option value="Delta">Delta</option>
+                    <option value="RunningAvg">RunningAvg</option>
+                    <option value="RunningMin">RunningMin</option>
+                    <option value="RunningMax">RunningMax</option>
+                    <option value="StdDev">StdDev</option>
+                </select>
+            </div>
+            <div class="mb-2">
+                <label class="form-label">Source Path(s)</label>
+                <input type="text" class="form-control" @bind="calcNode.Config.AggregateSourcePath" @bind:after="OnChanged"
+                       placeholder="Tank1.Level or Tank1.Level;Tank2.Level" />
+                <div class="form-text">Semicolon-separated for multi-source aggregates (Sum, Min, Max across tags).</div>
+            </div>
+            <div class="mb-2">
+                <label class="form-label">Window (seconds)</label>
+                <input type="number" min="1" class="form-control" @bind="calcNode.Config.AggregateWindowSeconds" @bind:after="OnChanged" />
+                <div class="form-text">Rolling window for time-based aggregates. Default 300 (5 min).</div>
+            </div>
+        }
+    </div>
+}
+else if (Node is CalculatedGroupNode)
+{
+    <div class="properties-panel">
+        <h5>🔢 Calculated Tags</h5>
+        <p class="text-muted">Select a calculated tag to edit, or add a new one.</p>
+        <p class="text-muted small">
+            Calculated tags compute values from expressions or aggregate functions.<br/>
+            Use <strong>Expression</strong> mode for custom C# formulas, or <strong>Aggregate</strong> mode for built-in functions like Avg, Sum, Min, Max, StdDev, etc.
+        </p>
     </div>
 }
 else if (Node is UserGroupNode ugNode)
@@ -1240,5 +1472,12 @@ else if (Node is UserNode uNode)
     {
         ssNode.Settings.Backup ??= new BackupConfig();
         return ssNode.Settings.Backup;
+    }
+
+    private void SetAggregateMode(CalculatedNode calcNode)
+    {
+        if (string.IsNullOrEmpty(calcNode.Config.AggregateFunction))
+            calcNode.Config.AggregateFunction = "Avg";
+        OnChanged();
     }
 }

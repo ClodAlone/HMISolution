@@ -61,6 +61,30 @@
         {
             CollectPaths(root, "");
         }
+
+        // Include calculated / virtual variables
+        var calcVars = Editor.RootModel?.CalculatedVariables;
+        if (calcVars != null)
+        {
+            foreach (var cv in calcVars)
+            {
+                if (!cv.Enabled || string.IsNullOrWhiteSpace(cv.Name)) continue;
+                var folder = string.IsNullOrWhiteSpace(cv.FolderPath) ? "_Calculated" : cv.FolderPath;
+                var fullPath = $"{folder}.{cv.Name}";
+                // Add folder entry once
+                if (!_allPaths.Any(p => p.IsFolder && p.Path == folder))
+                {
+                    _allPaths.Add(new VarPathEntry { Path = folder, IsFolder = true });
+                }
+                _allPaths.Add(new VarPathEntry
+                {
+                    Path = fullPath,
+                    Type = cv.Type,
+                    IsFolder = false
+                });
+            }
+        }
+
         ApplyFilter();
     }
 

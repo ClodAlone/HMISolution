@@ -1118,6 +1118,7 @@
     [Inject] private ClipboardService Clipboard { get; set; } = default!;
     [Inject] private NodeEditorService Editor { get; set; } = default!;
     [Inject] private UndoRedoService UndoRedo { get; set; } = default!;
+    [Inject] private Microsoft.JSInterop.IJSRuntime JS { get; set; } = default!;
 
     private ScreenSymbol? _selectedSymbol;
     private HashSet<ScreenSymbol> _selectedSymbols = new();
@@ -1675,6 +1676,17 @@
         _selectedSymbols.Add(sym);
         NotifySelectionChanged();
         OnChanged();
+        _ = ScrollToSymbolAsync(sym);
+    }
+
+    public async Task ScrollToSymbolAsync(ScreenSymbol sym)
+    {
+        await Task.Yield();
+        try
+        {
+            await JS.InvokeVoidAsync("eval", $"document.querySelector('.screen-canvas-wrap')?.scrollTo({{ left: {F(Math.Max(0, sym.X - 60))}, top: {F(Math.Max(0, sym.Y - 60))}, behavior: 'smooth' }})");
+        }
+        catch { /* ignore if JS not available */ }
     }
 
     private static int GetResponsiveColSpan(string type) => type switch

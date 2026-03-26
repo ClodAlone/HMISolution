@@ -30,6 +30,7 @@ namespace SharedModels
         public List<CameraConfig> Cameras { get; set; } = new();
         public List<SchedulerConfig> Schedulers { get; set; } = new();
         public List<ReportConfig> Reports { get; set; } = new();
+        public List<CalculatedVariableConfig> CalculatedVariables { get; set; } = new();
 
         /// <summary>
         /// PBKDF2-SHA256 hash of the project protection password.
@@ -74,6 +75,12 @@ namespace SharedModels
         /// <summary>Optional runtime statistics configuration (min, max, average tracking).</summary>
         public VariableStatisticsConfig? Statistics { get; set; }
 
+        /// <summary>Optional linear scaling configuration (raw ↔ engineering conversion).</summary>
+        public ScalingConfig? Scaling { get; set; }
+
+        /// <summary>Engineering unit label (e.g. "°C", "bar", "%", "m³/h"). Exposed as OPC UA EngineeringUnits property.</summary>
+        public string EngineeringUnit { get; set; } = "";
+
         [JsonExtensionData]
         public Dictionary<string, JsonElement>? DriverConfigs { get; set; }
     }
@@ -83,6 +90,48 @@ namespace SharedModels
     {
         /// <summary>Whether runtime statistics collection is enabled for this variable.</summary>
         public bool Enabled { get; set; }
+    }
+
+    /// <summary>Linear scaling: raw driver values ↔ engineering units (linear interpolation).</summary>
+    public class ScalingConfig
+    {
+        /// <summary>Raw value corresponding to the engineering minimum.</summary>
+        public double RawMin { get; set; }
+
+        /// <summary>Raw value corresponding to the engineering maximum.</summary>
+        public double RawMax { get; set; } = 100;
+
+        /// <summary>Engineering value at the low end of the scale.</summary>
+        public double EngMin { get; set; }
+
+        /// <summary>Engineering value at the high end of the scale.</summary>
+        public double EngMax { get; set; } = 100;
+
+        /// <summary>When true, clamp the engineering value to [EngMin, EngMax].</summary>
+        public bool ClampEnabled { get; set; }
+
+        /// <summary>Applies forward scaling: raw → engineering.</summary>
+        public double RawToEng(double raw)
+        {
+            double range = RawMax - RawMin;
+            if (Math.Abs(range) < 1e-15) return EngMin;
+            double eng = (raw - RawMin) / range * (EngMax - EngMin) + EngMin;
+            if (ClampEnabled)
+            {
+                double lo = Math.Min(EngMin, EngMax);
+                double hi = Math.Max(EngMin, EngMax);
+                eng = Math.Clamp(eng, lo, hi);
+            }
+            return eng;
+        }
+
+        /// <summary>Applies reverse scaling: engineering → raw.</summary>
+        public double EngToRaw(double eng)
+        {
+            double range = EngMax - EngMin;
+            if (Math.Abs(range) < 1e-15) return RawMin;
+            return (eng - EngMin) / range * (RawMax - RawMin) + RawMin;
+        }
     }
 
     [JsonConverter(typeof(JsonStringEnumConverter))]
@@ -328,6 +377,12 @@ namespace SharedModels
         /// ZIP snapshots of the project on save and/or on a schedule.
         /// </summary>
         public BackupConfig? Backup { get; set; }
+
+        /// <summary>REST API configuration (exposes variables, alarms, recipes to external systems).</summary>
+        public ApiConfig? Api { get; set; }
+
+        /// <summary>Server redundancy / high-availability configuration.</summary>
+        public RedundancyConfig? Redundancy { get; set; }
     }
 
     /// <summary>
@@ -1858,5 +1913,119 @@ namespace SharedModels
 
         /// <summary>File name pattern. Supports {ReportName}, {DateTime}, {Date}. Default "{ReportName}_{DateTime}".</summary>
         public string FileNamePattern { get; set; } = "{ReportName}_{DateTime}";
+    }
+
+    // --- Feature: REST API Configuration ---
+
+    /// <summary>
+    /// REST API configuration for exposing variables, alarms, recipes, and reports
+    /// to external systems (MES, ERP, dashboards) via HTTP.
+    /// </summary>
+    public class ApiConfig
+    {
+        /// <summary>Whether the REST API is enabled.</summary>
+        public bool Enabled { get; set; }
+
+        /// <summary>HTTP port for the REST API. Default 14842.</summary>
+        public int Port { get; set; } = 14842;
+
+        /// <summary>
+        /// API key for authentication. Sent as X-API-Key header or ?apiKey= query parameter.
+        /// Empty = no authentication required (not recommended for production).
+        /// </summary>
+        public string ApiKey { get; set; } = "";
+    }
+
+    // --- Feature: Redundancy / High Availability ---
+
+    /// <summary>
+    /// Server redundancy configuration for high-availability deployments.
+    /// Implements a heartbeat-based failover mechanism between primary and standby servers.
+    /// </summary>
+    public class RedundancyConfig
+    {
+        /// <summary>Whether redundancy is enabled.</summary>
+        public bool Enabled { get; set; }
+
+        /// <summary>Role of this server instance: "Primary" or "Standby".</summary>
+        [AllowedStringValues("Primary", "Standby")]
+        public string Role { get; set; } = "Primary";
+
+        /// <summary>HTTP endpoint of the partner server (e.g. "http://192.168.1.100:14841").</summary>
+        public string PartnerEndpoint { get; set; } = "";
+
+        /// <summary>Heartbeat interval in seconds. Default 5.</summary>
+        public int HeartbeatIntervalSeconds { get; set; } = 5;
+
+        /// <summary>
+        /// Number of consecutive missed heartbeats before triggering failover. Default 3.
+        /// </summary>
+        public int FailoverMissedHeartbeats { get; set; } = 3;
+
+        /// <summary>
+        /// Interval in milliseconds for syncing variable state from primary to standby.
+        /// Set to 0 to disable state sync. Default 10000 (10 seconds).
+        /// </summary>
+        public int StateSyncIntervalMs { get; set; } = 10000;
+
+        /// <summary>
+        /// When true, standby automatically switches back to standby role when the primary recovers.
+        /// </summary>
+        public bool AutoSwitchback { get; set; }
+
+        /// <summary>
+        /// OPC UA endpoint URLs for both servers, exposed to clients for reconnection on failover.
+        /// </summary>
+        public List<string> ServerUrls { get; set; } = new();
+
+        /// <summary>
+        /// Maximum allowed replication lag in seconds before raising a warning. Default 30.
+        /// </summary>
+        public int MaxReplicationLagSeconds { get; set; } = 30;
+    }
+
+    // --- Feature: Calculated / Virtual Tags ---
+
+    /// <summary>
+    /// Configuration for a calculated (virtual) variable whose value is computed
+    /// from an expression referencing other OPC variables.
+    /// </summary>
+    public class CalculatedVariableConfig
+    {
+        public string Name { get; set; } = "";
+
+        /// <summary>
+        /// C# expression that computes the value. Use Read("path") to reference OPC variables.
+        /// Leave empty when using AggregateFunction instead.
+        /// </summary>
+        public string Expression { get; set; } = "";
+
+        /// <summary>Output variable type: Double, Int32, Boolean, String. Default "Double".</summary>
+        public string Type { get; set; } = "Double";
+
+        /// <summary>Evaluation interval in milliseconds. Default 1000.</summary>
+        public int IntervalMs { get; set; } = 1000;
+
+        /// <summary>Whether this calculated variable is active.</summary>
+        public bool Enabled { get; set; } = true;
+
+        /// <summary>Folder path where the variable is created. Default "_Calculated".</summary>
+        public string FolderPath { get; set; } = "_Calculated";
+
+        /// <summary>Engineering unit label.</summary>
+        public string EngineeringUnit { get; set; } = "";
+
+        /// <summary>
+        /// Built-in aggregate function instead of a custom expression.
+        /// Supported: "Avg", "Sum", "Min", "Max", "Count", "RateOfChange", "Delta",
+        /// "RunningAvg", "RunningMin", "RunningMax", "StdDev".
+        /// </summary>
+        public string AggregateFunction { get; set; } = "";
+
+        /// <summary>Variable path(s) to aggregate. Semicolon-separated for multi-source.</summary>
+        public string AggregateSourcePath { get; set; } = "";
+
+        /// <summary>Rolling window size in seconds for time-based aggregates. Default 300.</summary>
+        public int AggregateWindowSeconds { get; set; } = 300;
     }
 }

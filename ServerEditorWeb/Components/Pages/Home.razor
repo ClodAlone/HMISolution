@@ -322,6 +322,8 @@ else
                 disabled="@(Editor.SelectedItem is not SchedulerGroupNode)">📅</button>
         <button class="iconbar-btn" title="@L["toolbar.addReport"]" @onclick="AddReport"
                 disabled="@(Editor.SelectedItem is not ReportGroupNode)">📄</button>
+        <button class="iconbar-btn" title="Add Calculated Tag" @onclick="AddCalculated"
+                disabled="@(Editor.SelectedItem is not CalculatedGroupNode)">📐</button>
         <button class="iconbar-btn" title="@L["toolbar.addScreen"]" @onclick="AddScreen"
                 disabled="@(Editor.SelectedItem is not (ScreenGroupNode or ResourceFolderNode { ResourceKind: "Screen" }))">🖼️</button>
 
@@ -345,7 +347,7 @@ else
                     OnDoubleClick="OnNodeDoubleClick"
                     OnAddFolder="OnAddFolder" OnAddVariable="OnAddVariable" OnAddScript="OnAddScript"
                     OnAddPlcProgram="OnAddPlcProgram" OnAddRecipe="OnAddRecipe" OnAddScheduler="OnAddScheduler" OnAddReport="OnAddReport"
-                    OnAddScreen="OnAddScreen" OnAddUserGroup="OnAddUserGroup" OnAddUser="OnAddUser"
+                    OnAddCalculated="OnAddCalculated" OnAddScreen="OnAddScreen" OnAddUserGroup="OnAddUserGroup" OnAddUser="OnAddUser"
                     OnDelete="OnDelete"
                     OnCopy="OnCopyNode" OnPaste="OnPasteNode"
                     OnSetActiveProject="OnSetActiveProject" OnCloseProject="OnCloseProject"
@@ -844,6 +846,7 @@ private void OnAddPlcProgram(TreeNode node) { Editor.SelectNode(node); Editor.Ad
 private void OnAddRecipe(TreeNode node) { Editor.SelectNode(node); Editor.AddRecipe(); }
 private void OnAddScheduler(TreeNode node) { Editor.SelectNode(node); Editor.AddScheduler(); }
     private void OnAddReport(TreeNode node) { Editor.SelectNode(node); Editor.AddReport(); }
+    private void OnAddCalculated(TreeNode node) { Editor.SelectNode(node); Editor.AddCalculated(); }
 private void OnAddScreen(TreeNode node) { Editor.SelectNode(node); Editor.AddScreen(); }
 private void OnAddUserGroup(TreeNode node) { Editor.SelectNode(node); Editor.AddUserGroup(); }
 private void OnAddUser(TreeNode node) { Editor.SelectNode(node); Editor.AddUser(); }
@@ -1204,6 +1207,7 @@ private void UnsavedDialogCancel()
     private void AddRecipe() { if (GuardLocked()) return; Editor.AddRecipe(); }
     private void AddScheduler() { if (GuardLocked()) return; Editor.AddScheduler(); }
     private void AddReport() { if (GuardLocked()) return; Editor.AddReport(); }
+    private void AddCalculated() { if (GuardLocked()) return; Editor.AddCalculated(); }
     private void AddScreen() { if (GuardLocked()) return; Editor.AddScreen(); }
     private void Delete() { if (GuardLocked()) return; Editor.DeleteSelected(); }
 
@@ -1614,6 +1618,8 @@ private void UnsavedDialogCancel()
         screen.Symbols.Add(sym);
         Editor.MarkChanged();
         _dockContainer?.ShowPanel("screen", "center");
+        if (_screenEditorPanel != null)
+            _ = _screenEditorPanel.ScrollToSymbolAsync(sym);
     }
 
     private void OnToolboxSymbolSelected(string type)
