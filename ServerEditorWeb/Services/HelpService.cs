@@ -80,6 +80,8 @@ public class HelpService
             "xref" => "crossreference",
             "watch" => "watchtable",
             "problems" => "problems",
+            "certificates" => "certificates",
+            "backups" => "backups",
             "help" => "welcome",
             _ => "welcome"
         };
@@ -125,6 +127,11 @@ public class HelpService
             ("problems", "Problems Panel", "⚠️"),
             ("properties", "Properties Panel", "🏷️"),
             ("keyboard", "Keyboard Shortcuts", "⌨️"),
+            ("certificates", "Certificate Management", "🔐"),
+            ("backups", "Project Backups", "💾"),
+            ("notifications", "Alarm Notifications", "🔔"),
+            ("tagbrowser", "Runtime Tag Browser", "🏷️"),
+            ("restapi", "REST API", "🌐"),
         };
 
         if (locale != "en" && _tocTitles.TryGetValue(locale, out var titles))
@@ -178,6 +185,11 @@ public class HelpService
             ["problems"] = "Probleme-Panel",
             ["properties"] = "Eigenschaften-Panel",
             ["keyboard"] = "Tastaturkürzel",
+            ["certificates"] = "Zertifikatverwaltung",
+            ["backups"] = "Projektsicherungen",
+            ["notifications"] = "Alarmbenachrichtigungen",
+            ["tagbrowser"] = "Tag-Browser (Laufzeit)",
+            ["restapi"] = "REST-API",
         },
         ["it"] = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -213,6 +225,11 @@ public class HelpService
             ["problems"] = "Pannello problemi",
             ["properties"] = "Pannello proprietà",
             ["keyboard"] = "Scorciatoie da tastiera",
+            ["certificates"] = "Gestione certificati",
+            ["backups"] = "Backup del progetto",
+            ["notifications"] = "Notifiche allarme",
+            ["tagbrowser"] = "Browser tag (Runtime)",
+            ["restapi"] = "API REST",
         },
         ["fr"] = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -248,6 +265,11 @@ public class HelpService
             ["problems"] = "Panneau des problèmes",
             ["properties"] = "Panneau des propriétés",
             ["keyboard"] = "Raccourcis clavier",
+            ["certificates"] = "Gestion des certificats",
+            ["backups"] = "Sauvegardes du projet",
+            ["notifications"] = "Notifications d'alarme",
+            ["tagbrowser"] = "Navigateur de tags",
+            ["restapi"] = "API REST",
         },
         ["ja"] = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -283,6 +305,11 @@ public class HelpService
             ["problems"] = "問題パネル",
             ["properties"] = "プロパティパネル",
             ["keyboard"] = "キーボードショートカット",
+            ["certificates"] = "証明書管理",
+            ["backups"] = "プロジェクトバックアップ",
+            ["notifications"] = "アラーム通知",
+            ["tagbrowser"] = "タグブラウザー",
+            ["restapi"] = "REST API",
         },
         ["zh"] = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -318,6 +345,11 @@ public class HelpService
             ["problems"] = "问题面板",
             ["properties"] = "属性面板",
             ["keyboard"] = "键盘快捷键",
+            ["certificates"] = "证书管理",
+            ["backups"] = "项目备份",
+            ["notifications"] = "报警通知",
+            ["tagbrowser"] = "标签浏览器",
+            ["restapi"] = "REST API",
         },
     };
 
@@ -880,6 +912,111 @@ Configure IP camera streams for live video on HMI screens.
 - **Refresh Interval** — Update rate for snapshot mode
 - **Name** — Display name
 """),
+
+        ["certificates"] = new("🔐 Certificate Management", """
+## Certificate Management
+
+Manage OPC UA PKI certificates and optionally register with a Global Discovery Server (GDS).
+
+### Panel Features
+- **Application Certificate** — View the server's own certificate (thumbprint, expiry, subject)
+- **Trusted Store** — List certificates trusted by the server
+- **Rejected Store** — Review and accept/reject untrusted certificates
+- **Issuer Store** — CA certificates used to validate chains
+- **Generate Certificate** — Create a new self-signed application certificate
+
+### GDS Integration
+When configured, the editor can:
+1. Register the application with a GDS
+2. Submit a Certificate Signing Request (CSR)
+3. Pull the signed certificate from the GDS
+4. Manage the server trust list through the GDS
+
+### PKI Folders
+Certificates are stored in the standard OPC UA PKI structure under `pki/` with subdirectories for own, trusted, rejected, and issuer certificates.
+"""),
+
+        ["backups"] = new("💾 Project Backups", """
+## Project Backup & Restore
+
+Automated ZIP snapshots of the project configuration and all resource files.
+
+### Backup Triggers
+- **Manual** — File menu → Create Snapshot, or click in the Backups panel
+- **Auto-save** — Automatically snapshot when the project is saved (if enabled)
+- **Scheduled** — Timer-based backups at a configurable interval
+
+### What Is Backed Up
+Each snapshot ZIP contains the project configuration file plus all resource subdirectories (scripts/, screens/, plcprograms/).
+
+### Restore
+1. Open the Backups panel
+2. Select a snapshot from the list
+3. Click **Restore** — a safety backup of the current state is created first
+4. The project reloads from the restored snapshot
+
+### Retention
+Configure **Max Snapshots** in Server Settings. Oldest snapshots are automatically pruned when the limit is exceeded.
+"""),
+
+        ["notifications"] = new("🔔 Alarm Notifications", """
+## Alarm Notification System
+
+Send real-time notifications when alarms activate via Email, Telegram, or WhatsApp.
+
+### Channels
+- **Email** — SMTP (host, port, credentials, SSL, recipients)
+- **Telegram** — Bot API (bot token, chat ID)
+- **WhatsApp** — Cloud API (access token, phone number ID, recipients)
+
+### Per-Variable Configuration
+On each variable's Alarm section, enable **Notify on Activation** to trigger notifications when that alarm activates.
+
+### Setup
+1. Configure notification channels in **Server Settings**
+2. Enable **Notify on Activation** on desired variable alarms
+3. Start the server — notifications fire when alarms activate
+"""),
+
+        ["tagbrowser"] = new("🏷️ Runtime Tag Browser", """
+## Runtime Tag Browser
+
+Browse and search OPC UA variables at runtime from the RuntimeViewer.
+
+### Opening
+Click the **Tags** button in the RuntimeViewer toolbar to open the slide-out panel.
+
+### Tree View
+Hierarchical browsing of the OPC UA address space starting from the Objects folder.
+
+### Search
+Type in the search box to filter all tags in real time. Multiple search terms supported.
+
+### Tag Details
+Select a variable tag to see its browse path, NodeId, data type, and live value.
+
+### Write Values
+Enter a new value and click Write to write to the selected variable.
+"""),
+
+        ["restapi"] = new("🌐 REST API", """
+## REST API
+
+The OPC UA server exposes a built-in HTTP REST API on the diagnostics port (default: 14841).
+
+### Endpoint Categories
+- **Variables** — Read, write, browse
+- **Alarms** — List, acknowledge, confirm
+- **History** — Query historical data (HDA)
+- **Recipes** — List, load, save, activate
+- **Server** — Info, diagnostics, health check
+
+### Authentication
+When anonymous access is disabled, the API requires Basic authentication.
+
+### Demo Project
+The RestApiDemo Blazor Web App provides 7 interactive pages demonstrating all API endpoints.
+"""),
     };
 
     // ═══════════════════════════════════════════════════════════
@@ -1415,7 +1552,90 @@ IP-Kamera-Streams für Live-Video auf HMI-Bildschirmen konfigurieren.
 - **Aktualisierungsintervall** — Aktualisierungsrate für Snapshot-Modus
 - **Name** — Anzeigename
 """),
-        },
+
+            ["certificates"] = new("🔐 Zertifikatverwaltung", """
+## Zertifikatverwaltung
+
+OPC-UA-PKI-Zertifikate verwalten und optional beim Global Discovery Server (GDS) registrieren.
+
+### Panel-Funktionen
+- **Anwendungszertifikat** — Serverzertifikat anzeigen (Fingerabdruck, Ablauf, Betreff)
+- **Vertrauenswürdige Zertifikate** — Liste der vom Server vertrauenswürdigen Zertifikate
+- **Abgelehnte Zertifikate** — Nicht vertrauenswürdige Zertifikate prüfen und akzeptieren/ablehnen
+- **Aussteller-Zertifikate** — CA-Zertifikate zur Kettenvalidierung
+- **Zertifikat generieren** — Neues selbstsigniertes Anwendungszertifikat erstellen
+
+### GDS-Integration
+Bei Konfiguration kann der Editor:
+1. Die Anwendung beim GDS registrieren
+2. Eine Zertifikatsignierungsanfrage (CSR) einreichen
+3. Das signierte Zertifikat vom GDS abrufen
+4. Die Server-Vertrauensliste über den GDS verwalten
+"""),
+            ["backups"] = new("💾 Projektsicherungen", """
+## Projektsicherung & Wiederherstellung
+
+Automatische ZIP-Snapshots der Projektkonfiguration und aller Ressourcendateien.
+
+### Sicherungsauslöser
+- **Manuell** — Dateimenü → Snapshot erstellen oder im Backup-Panel klicken
+- **Auto-Speichern** — Automatischer Snapshot beim Speichern des Projekts
+- **Geplant** — Timer-basierte Sicherungen in konfigurierbarem Intervall
+
+### Wiederherstellung
+1. Backup-Panel öffnen
+2. Snapshot aus der Liste auswählen
+3. **Wiederherstellen** klicken — vorher wird eine Sicherheitskopie erstellt
+4. Das Projekt wird aus dem wiederhergestellten Snapshot neu geladen
+"""),
+            ["notifications"] = new("🔔 Alarmbenachrichtigungen", """
+## Alarmbenachrichtigungssystem
+
+Echtzeit-Benachrichtigungen bei Alarmaktivierung über E-Mail, Telegram oder WhatsApp.
+
+### Kanäle
+- **E-Mail** — SMTP-Konfiguration (Host, Port, Anmeldedaten, SSL, Empfänger)
+- **Telegram** — Bot-Token und Chat-ID
+- **WhatsApp** — Twilio Account-SID, Auth-Token, Von-/An-Nummern
+
+### Pro-Variable-Konfiguration
+Im Alarm-Abschnitt jeder Variable **Bei Aktivierung benachrichtigen** aktivieren.
+"""),
+            ["tagbrowser"] = new("🏷️ Tag-Browser (Laufzeit)", """
+## Tag-Browser zur Laufzeit
+
+OPC-UA-Variablen zur Laufzeit im RuntimeViewer durchsuchen und suchen.
+
+### Öffnen
+Klicken Sie auf die Schaltfläche **🏷️ Tags** in der RuntimeViewer-Symbolleiste.
+
+### Baumansicht
+Hierarchische Darstellung des OPC-UA-Adressraums ab dem Objects-Ordner.
+
+### Suche
+Suchbegriffe in das Suchfeld eingeben, um alle Tags in Echtzeit zu filtern.
+
+### Tag-Details
+Variable auswählen, um Browsepfad, NodeId, Datentyp und Live-Wert anzuzeigen.
+
+### Werte schreiben
+Neuen Wert eingeben und **W** klicken, um in die ausgewählte Variable zu schreiben.
+"""),
+            ["restapi"] = new("🌐 REST-API", """
+## REST-API
+
+Der OPC-UA-Server bietet eine integrierte HTTP-REST-API auf dem Diagnoseport (Standard: 14841).
+
+### Endpunktkategorien
+- **Variablen** — Lesen, Schreiben, Durchsuchen
+- **Alarme** — Aktive Alarme auflisten, quittieren, bestätigen
+- **Historie** — Historische Daten abfragen (HDA)
+- **Rezepte** — Auflisten, Laden, Speichern, Aktivieren
+- **Server** — Serverinfo, Diagnose, Gesundheitsprüfung
+
+### Demo-Projekt
+Die RestApiDemo Blazor Web App bietet 7 interaktive Seiten zur Demonstration aller API-Endpunkte.
+"""),        },
 
         // ───────────────────── ITALIAN ─────────────────────
         ["it"] = new(StringComparer.OrdinalIgnoreCase)
@@ -1945,7 +2165,83 @@ Configura stream di telecamere IP per video live sulle schermate HMI.
 - **Intervallo aggiornamento** — Frequenza di aggiornamento per modalità snapshot
 - **Nome** — Nome visualizzato
 """),
-        },
+
+            ["certificates"] = new("🔐 Gestione certificati", """
+## Gestione Certificati
+
+Gestire i certificati PKI OPC UA e registrarsi opzionalmente presso un Global Discovery Server (GDS).
+
+### Funzionalità del pannello
+- **Certificato applicazione** — Visualizzare il certificato del server
+- **Archivio attendibili** — Elenco dei certificati attendibili
+- **Archivio rifiutati** — Esaminare e accettare/rifiutare certificati non attendibili
+- **Archivio emittenti** — Certificati CA per la validazione della catena
+- **Genera certificato** — Creare un nuovo certificato autofirmato
+
+### Integrazione GDS
+Registrare l'applicazione, inviare CSR, recuperare il certificato firmato e gestire l'elenco attendibili.
+"""),
+            ["backups"] = new("💾 Backup del progetto", """
+## Backup e ripristino del progetto
+
+Snapshot ZIP automatici della configurazione del progetto e di tutti i file di risorse.
+
+### Trigger di backup
+- **Manuale** — Menu File → Crea snapshot o clic nel pannello Backup
+- **Salvataggio automatico** — Snapshot automatico al salvataggio del progetto
+- **Pianificato** — Backup basati su timer a intervallo configurabile
+
+### Ripristino
+Selezionare uno snapshot e fare clic su **Ripristina**. Viene creata prima una copia di sicurezza.
+"""),
+            ["notifications"] = new("🔔 Notifiche allarme", """
+## Sistema di notifica allarmi
+
+Notifiche in tempo reale all'attivazione degli allarmi tramite Email, Telegram o WhatsApp.
+
+### Canali
+- **Email** — Configurazione SMTP
+- **Telegram** — Token bot e ID chat
+- **WhatsApp** — Twilio Account SID, token di autenticazione
+
+### Configurazione per variabile
+Nella sezione Allarme di ogni variabile, attivare **Notifica all'attivazione**.
+"""),
+            ["tagbrowser"] = new("🏷️ Browser tag (Runtime)", """
+## Browser tag in Runtime
+
+Sfogliare e cercare variabili OPC UA in fase di esecuzione nel RuntimeViewer.
+
+### Apertura
+Fare clic sul pulsante **🏷️ Tags** nella barra degli strumenti del RuntimeViewer.
+
+### Vista ad albero
+Visualizzazione gerarchica dello spazio degli indirizzi OPC UA dalla cartella Objects.
+
+### Ricerca
+Digitare nella casella di ricerca per filtrare tutti i tag in tempo reale.
+
+### Dettagli tag
+Selezionare un tag variabile per vedere percorso, NodeId, tipo di dati e valore live.
+
+### Scrittura valori
+Inserire un nuovo valore e fare clic su **W** per scrivere nella variabile selezionata.
+"""),
+            ["restapi"] = new("🌐 API REST", """
+## API REST
+
+Il server OPC UA espone un'API REST HTTP integrata sulla porta diagnostica (predefinita: 14841).
+
+### Categorie di endpoint
+- **Variabili** — Lettura, scrittura, navigazione
+- **Allarmi** — Elencare, confermare, riconoscere
+- **Storico** — Interrogare dati storici (HDA)
+- **Ricette** — Elencare, caricare, salvare, attivare
+- **Server** — Info server, diagnostica, controllo salute
+
+### Progetto demo
+L'app RestApiDemo fornisce 7 pagine interattive che dimostrano tutti gli endpoint API.
+"""),        },
 
         // ───────────────────── FRENCH ─────────────────────
         ["fr"] = new(StringComparer.OrdinalIgnoreCase)
@@ -2475,7 +2771,83 @@ Configurez les flux de caméras IP pour la vidéo en direct sur les écrans IHM.
 - **Intervalle de rafraîchissement** — Taux de mise à jour pour le mode instantané
 - **Nom** — Nom d'affichage
 """),
-        },
+
+            ["certificates"] = new("🔐 Gestion des certificats", """
+## Gestion des Certificats
+
+Gérer les certificats PKI OPC UA et s'inscrire auprès d'un Global Discovery Server (GDS).
+
+### Fonctionnalités du panneau
+- **Certificat d'application** — Afficher le certificat du serveur
+- **Magasin de confiance** — Liste des certificats de confiance
+- **Magasin rejeté** — Examiner et accepter/rejeter les certificats non fiables
+- **Magasin émetteur** — Certificats CA pour la validation de la chaîne
+- **Générer un certificat** — Créer un nouveau certificat auto-signé
+
+### Intégration GDS
+Enregistrer l'application, soumettre une CSR, récupérer le certificat signé et gérer la liste de confiance.
+"""),
+            ["backups"] = new("💾 Sauvegardes du projet", """
+## Sauvegarde et restauration du projet
+
+Snapshots ZIP automatiques de la configuration du projet et de tous les fichiers de ressources.
+
+### Déclencheurs de sauvegarde
+- **Manuel** — Menu Fichier → Créer un snapshot ou cliquer dans le panneau Sauvegardes
+- **Sauvegarde automatique** — Snapshot automatique lors de l'enregistrement du projet
+- **Planifié** — Sauvegardes par minuterie à intervalle configurable
+
+### Restauration
+Sélectionner un snapshot et cliquer sur **Restaurer**. Une copie de sécurité est créée au préalable.
+"""),
+            ["notifications"] = new("🔔 Notifications d'alarme", """
+## Système de notification d'alarmes
+
+Notifications en temps réel lors de l'activation des alarmes via Email, Telegram ou WhatsApp.
+
+### Canaux
+- **Email** — Configuration SMTP
+- **Telegram** — Jeton du bot et ID du chat
+- **WhatsApp** — Twilio Account SID, jeton d'authentification
+
+### Configuration par variable
+Dans la section Alarme de chaque variable, activer **Notifier à l'activation**.
+"""),
+            ["tagbrowser"] = new("🏷️ Navigateur de tags (Runtime)", """
+## Navigateur de tags en Runtime
+
+Parcourir et rechercher des variables OPC UA en cours d'exécution dans le RuntimeViewer.
+
+### Ouverture
+Cliquer sur le bouton **🏷️ Tags** dans la barre d'outils du RuntimeViewer.
+
+### Vue arborescente
+Affichage hiérarchique de l'espace d'adressage OPC UA à partir du dossier Objects.
+
+### Recherche
+Taper dans la zone de recherche pour filtrer tous les tags en temps réel.
+
+### Détails du tag
+Sélectionner un tag variable pour voir le chemin, NodeId, type de données et valeur en direct.
+
+### Écriture de valeurs
+Entrer une nouvelle valeur et cliquer sur **W** pour écrire dans la variable sélectionnée.
+"""),
+            ["restapi"] = new("🌐 API REST", """
+## API REST
+
+Le serveur OPC UA expose une API REST HTTP intégrée sur le port de diagnostic (par défaut : 14841).
+
+### Catégories de points de terminaison
+- **Variables** — Lecture, écriture, navigation
+- **Alarmes** — Lister, confirmer, acquitter
+- **Historique** — Interroger les données historiques (HDA)
+- **Recettes** — Lister, charger, sauvegarder, activer
+- **Serveur** — Info serveur, diagnostics, vérification de santé
+
+### Projet de démonstration
+L'application RestApiDemo fournit 7 pages interactives démontrant tous les points de terminaison.
+"""),        },
 
         // ───────────────────── JAPANESE ─────────────────────
         ["ja"] = new(StringComparer.OrdinalIgnoreCase)
@@ -3005,7 +3377,83 @@ HMI画面のライブビデオ用IPカメラストリームを設定します。
 - **更新間隔** — スナップショットモードの更新レート
 - **名前** — 表示名
 """),
-        },
+
+            ["certificates"] = new("🔐 証明書管理", """
+## 証明書管理
+
+OPC UA PKI証明書を管理し、オプションでGlobal Discovery Server（GDS）に登録します。
+
+### パネル機能
+- **アプリケーション証明書** — サーバー証明書を表示
+- **信頼済みストア** — 信頼された証明書の一覧
+- **拒否済みストア** — 信頼されていない証明書を確認・承認/拒否
+- **発行者ストア** — チェーン検証用のCA証明書
+- **証明書生成** — 新しい自己署名アプリケーション証明書を作成
+
+### GDS統合
+アプリケーションの登録、CSRの送信、署名済み証明書の取得、信頼リストの管理が可能です。
+"""),
+            ["backups"] = new("💾 プロジェクトバックアップ", """
+## プロジェクトのバックアップと復元
+
+プロジェクト構成およびすべてのリソースファイルの自動ZIPスナップショット。
+
+### バックアップトリガー
+- **手動** — ファイルメニュー → スナップショット作成、またはバックアップパネルでクリック
+- **自動保存** — プロジェクト保存時に自動的にスナップショット
+- **スケジュール** — 設定可能な間隔でのタイマーベースのバックアップ
+
+### 復元
+スナップショットを選択して**復元**をクリック。事前に安全バックアップが作成されます。
+"""),
+            ["notifications"] = new("🔔 アラーム通知", """
+## アラーム通知システム
+
+アラームが作動した際にEmail、Telegram、またはWhatsApp経由でリアルタイム通知を送信します。
+
+### チャネル
+- **Email** — SMTP設定
+- **Telegram** — ボットトークンとチャットID
+- **WhatsApp** — Twilio Account SID、認証トークン
+
+### 変数ごとの設定
+各変数のアラームセクションで**作動時に通知**を有効にします。
+"""),
+            ["tagbrowser"] = new("🏷️ タグブラウザー（ランタイム）", """
+## ランタイムタグブラウザー
+
+RuntimeViewerでOPC UA変数をランタイムで閲覧・検索します。
+
+### 開き方
+RuntimeViewerのツールバーで**🏷️ Tags**ボタンをクリックします。
+
+### ツリービュー
+ObjectsフォルダーからのOPC UAアドレス空間の階層表示。
+
+### 検索
+検索ボックスに入力してすべてのタグをリアルタイムでフィルタリング。
+
+### タグ詳細
+変数タグを選択してパス、NodeId、データ型、ライブ値を表示。
+
+### 値の書き込み
+新しい値を入力して**W**をクリックして選択した変数に書き込みます。
+"""),
+            ["restapi"] = new("🌐 REST API", """
+## REST API
+
+OPC UAサーバーは診断ポート（デフォルト：14841）で組み込みHTTP REST APIを公開します。
+
+### エンドポイントカテゴリ
+- **変数** — 読み取り、書き込み、閲覧
+- **アラーム** — 一覧表示、確認、承認
+- **履歴** — 過去のデータを照会（HDA）
+- **レシピ** — 一覧表示、読み込み、保存、有効化
+- **サーバー** — サーバー情報、診断、ヘルスチェック
+
+### デモプロジェクト
+RestApiDemoアプリはすべてのAPIエンドポイントを示す7つのインタラクティブページを提供します。
+"""),        },
 
         // ───────────────────── CHINESE ─────────────────────
         ["zh"] = new(StringComparer.OrdinalIgnoreCase)
@@ -3535,7 +3983,83 @@ HMI画面的预制工业SVG符号。
 - **刷新间隔** — 快照模式的更新率
 - **名称** — 显示名称
 """),
-        },
+
+            ["certificates"] = new("🔐 证书管理", """
+## 证书管理
+
+管理OPC UA PKI证书，并可选择注册到全局发现服务器（GDS）。
+
+### 面板功能
+- **应用程序证书** — 查看服务器证书
+- **受信任存储** — 受信任证书列表
+- **已拒绝存储** — 审查并接受/拒绝不受信任的证书
+- **颁发者存储** — 用于链验证的CA证书
+- **生成证书** — 创建新的自签名应用程序证书
+
+### GDS集成
+注册应用程序、提交CSR、获取签名证书并管理信任列表。
+"""),
+            ["backups"] = new("💾 项目备份", """
+## 项目备份与恢复
+
+项目配置和所有资源文件的自动ZIP快照。
+
+### 备份触发器
+- **手动** — 文件菜单 → 创建快照，或在备份面板中点击
+- **自动保存** — 保存项目时自动创建快照
+- **计划** — 可配置间隔的定时备份
+
+### 恢复
+选择一个快照并点击**恢复**。之前会先创建安全备份副本。
+"""),
+            ["notifications"] = new("🔔 报警通知", """
+## 报警通知系统
+
+报警激活时通过电子邮件、Telegram或WhatsApp发送实时通知。
+
+### 通道
+- **电子邮件** — SMTP配置
+- **Telegram** — 机器人令牌和聊天ID
+- **WhatsApp** — Twilio Account SID、认证令牌
+
+### 每个变量的配置
+在每个变量的报警部分中，启用**激活时通知**。
+"""),
+            ["tagbrowser"] = new("🏷️ 标签浏览器（运行时）", """
+## 运行时标签浏览器
+
+在RuntimeViewer中运行时浏览和搜索OPC UA变量。
+
+### 打开方式
+点击RuntimeViewer工具栏中的**🏷️ Tags**按钮。
+
+### 树形视图
+从Objects文件夹开始的OPC UA地址空间层次显示。
+
+### 搜索
+在搜索框中输入以实时过滤所有标签。
+
+### 标签详情
+选择一个变量标签以查看路径、NodeId、数据类型和实时值。
+
+### 写入值
+输入新值并点击**W**写入选定的变量。
+"""),
+            ["restapi"] = new("🌐 REST API", """
+## REST API
+
+OPC UA服务器在诊断端口（默认：14841）上公开内置的HTTP REST API。
+
+### 端点类别
+- **变量** — 读取、写入、浏览
+- **报警** — 列出、确认、应答
+- **历史** — 查询历史数据（HDA）
+- **配方** — 列出、加载、保存、激活
+- **服务器** — 服务器信息、诊断、健康检查
+
+### 演示项目
+RestApiDemo应用提供7个交互式页面，演示所有API端点。
+"""),        },
     };
 }
 

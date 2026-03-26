@@ -80,6 +80,8 @@ public class HelpService
             "xref" => "crossreference",
             "watch" => "watchtable",
             "problems" => "problems",
+            "certificates" => "certificates",
+            "backups" => "backups",
             "help" => "welcome",
             _ => "welcome"
         };
@@ -126,6 +128,11 @@ public class HelpService
             ("problems", "Problems Panel", "⚠️"),
             ("properties", "Properties Panel", "🏷️"),
             ("keyboard", "Keyboard Shortcuts", "⌨️"),
+            ("certificates", "Certificate Management", "🔐"),
+            ("backups", "Project Backups", "💾"),
+            ("notifications", "Alarm Notifications", "🔔"),
+            ("tagbrowser", "Runtime Tag Browser", "🏷️"),
+            ("restapi", "REST API", "🌐"),
         };
 
         if (locale != "en" && _tocTitles.TryGetValue(locale, out var titles))
@@ -180,6 +187,11 @@ public class HelpService
             ["problems"] = "Probleme-Panel",
             ["properties"] = "Eigenschaften-Panel",
             ["keyboard"] = "Tastaturkürzel",
+            ["certificates"] = "Zertifikatverwaltung",
+            ["backups"] = "Projektsicherungen",
+            ["notifications"] = "Alarmbenachrichtigungen",
+            ["tagbrowser"] = "Tag-Browser (Laufzeit)",
+            ["restapi"] = "REST-API",
         },
         ["it"] = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -216,6 +228,11 @@ public class HelpService
             ["problems"] = "Pannello problemi",
             ["properties"] = "Pannello proprietà",
             ["keyboard"] = "Scorciatoie da tastiera",
+            ["certificates"] = "Gestione certificati",
+            ["backups"] = "Backup del progetto",
+            ["notifications"] = "Notifiche allarme",
+            ["tagbrowser"] = "Browser tag (Runtime)",
+            ["restapi"] = "API REST",
         },
         ["fr"] = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -252,6 +269,11 @@ public class HelpService
             ["problems"] = "Panneau des problèmes",
             ["properties"] = "Panneau des propriétés",
             ["keyboard"] = "Raccourcis clavier",
+            ["certificates"] = "Gestion des certificats",
+            ["backups"] = "Sauvegardes du projet",
+            ["notifications"] = "Notifications d'alarme",
+            ["tagbrowser"] = "Navigateur de tags (Runtime)",
+            ["restapi"] = "API REST",
         },
         ["ja"] = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -288,6 +310,11 @@ public class HelpService
             ["problems"] = "問題パネル",
             ["properties"] = "プロパティパネル",
             ["keyboard"] = "キーボードショートカット",
+            ["certificates"] = "証明書管理",
+            ["backups"] = "プロジェクトバックアップ",
+            ["notifications"] = "アラーム通知",
+            ["tagbrowser"] = "タグブラウザー（ランタイム）",
+            ["restapi"] = "REST API",
         },
         ["zh"] = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -324,6 +351,11 @@ public class HelpService
             ["problems"] = "问题面板",
             ["properties"] = "属性面板",
             ["keyboard"] = "键盘快捷键",
+            ["certificates"] = "证书管理",
+            ["backups"] = "项目备份",
+            ["notifications"] = "报警通知",
+            ["tagbrowser"] = "标签浏览器（运行时）",
+            ["restapi"] = "REST API",
         },
     };
 
@@ -975,6 +1007,173 @@ Configure IP camera streams for live video on HMI screens.
 - **Stream URL** — MJPEG or snapshot URL
 - **Refresh Interval** — Update rate for snapshot mode
 - **Name** — Display name
+"""),
+
+        ["certificates"] = new("🔐 Certificate Management", """
+## Certificate Management
+
+Manage OPC UA PKI certificates and optionally register with a Global Discovery Server (GDS).
+
+### Panel Features
+- **Application Certificate** — View the server's own certificate (thumbprint, expiry, subject)
+- **Trusted Store** — List certificates trusted by the server
+- **Rejected Store** — Review and accept/reject untrusted certificates
+- **Issuer Store** — CA certificates used to validate chains
+- **Generate Certificate** — Create a new self-signed application certificate
+
+### GDS Integration
+When configured, the editor can:
+1. Register the application with a GDS
+2. Submit a Certificate Signing Request (CSR)
+3. Pull the signed certificate from the GDS
+4. Manage the server trust list through the GDS
+
+### Configuration
+In Server Settings → GDS Configuration:
+- **GDS Endpoint URL** — The GDS server OPC UA endpoint
+- **GDS Username / Password** — Credentials for GDS authentication
+- **Application Name / URI** — Application identity for registration
+
+### PKI Folders
+Certificates are stored in the standard OPC UA PKI structure:
+```
+pki/
+├── own/certs/          (application certificate)
+├── own/private/        (private key)
+├── trusted/certs/      (trusted certificates)
+├── rejected/certs/     (rejected certificates)
+└── issuers/certs/      (issuer CA certificates)
+```
+"""),
+
+        ["backups"] = new("💾 Project Backups", """
+## Project Backup & Restore
+
+Automated ZIP snapshots of the project configuration and all resource files.
+
+### Backup Triggers
+- **Manual** — File menu → Create Snapshot, or click in the Backups panel
+- **Auto-save** — Automatically snapshot when the project is saved (if enabled)
+- **Scheduled** — Timer-based backups at a configurable interval
+
+### What Is Backed Up
+Each snapshot ZIP contains:
+- `nodes.json` — The project configuration file
+- `scripts/` — All script source files
+- `screens/` — All screen resource files
+- `plcprograms/` — All PLC program files
+
+### Restore
+1. Open the Backups panel
+2. Select a snapshot from the list
+3. Click **Restore** — a safety backup of the current state is created first
+4. The project reloads from the restored snapshot
+
+### Retention
+Configure **Max Snapshots** in Server Settings → Backup. Oldest snapshots
+are automatically pruned when the limit is exceeded.
+
+### Configuration
+| Setting | Description | Default |
+|---------|-------------|---------|
+| **AutoSnapshotOnSave** | Snapshot on every save | `true` |
+| **ScheduleIntervalMinutes** | Scheduled backup interval | `60` |
+| **MaxSnapshots** | Maximum retained snapshots | `50` |
+"""),
+
+        ["notifications"] = new("🔔 Alarm Notifications", """
+## Alarm Notification System
+
+Send real-time notifications when alarms activate via Email, Telegram, or WhatsApp.
+
+### Channels
+| Channel | Service | Configuration |
+|---------|---------|---------------|
+| **Email** | SMTP | Host, port, credentials, SSL, recipients |
+| **Telegram** | Bot API | Bot token, chat ID |
+| **WhatsApp** | Twilio | Account SID, auth token, from/to numbers |
+
+### Per-Variable Configuration
+On each variable's Alarm section, enable **Notify on Activation** to trigger
+notifications when that alarm activates. Only alarms with this flag send
+notifications — this prevents notification storms.
+
+### Setup
+1. Configure notification channels in **Server Settings → Alarm Notification**
+2. Enable **Notify on Activation** on desired variable alarms
+3. Start the server — notifications fire when alarms activate
+
+### Editor UI
+- Variable Properties panel → Alarm section → Notify on Activation checkbox
+- Server Settings node → Alarm Notification section with all channel fields
+"""),
+
+        ["tagbrowser"] = new("🏷️ Runtime Tag Browser", """
+## Runtime Tag Browser
+
+Browse and search OPC UA variables at runtime from the RuntimeViewer.
+
+### Opening
+Click the **🏷️ Tags** button in the RuntimeViewer toolbar to open the
+slide-out panel on the right side.
+
+### Tree View
+The tag browser shows a hierarchical tree of the OPC UA address space
+starting from the Objects folder. Click folders to expand/collapse. Children
+are loaded on demand (lazy loading).
+
+### Search
+Type in the search box to filter all tags in real time. Multiple search terms
+are supported (space-separated, AND logic). Matching text is highlighted.
+Up to 200 results are shown in the flat filtered list.
+
+### Tag Details
+Select a variable tag to see:
+- **Browse Path** — Full hierarchical path
+- **NodeId** — OPC UA node identifier
+- **Data Type** — Built-in type (Double, Int32, Boolean, etc.)
+- **Live Value** — Current value, polled every second
+
+### Write Values
+Enter a new value in the Write field and click **W** to write to the selected
+variable. A success/failure status is displayed.
+
+### Refresh
+Click the ⟳ button to re-browse the server, picking up any variables added
+or removed at runtime.
+"""),
+
+        ["restapi"] = new("🌐 REST API", """
+## REST API
+
+The OPC UA server exposes a built-in HTTP REST API on the diagnostics port
+(default: 14841).
+
+### Endpoint Categories
+| Category | Endpoints | Description |
+|----------|-----------|-------------|
+| **Variables** | GET/POST | Read, write, browse variables |
+| **Alarms** | GET/POST | List active alarms, acknowledge, confirm |
+| **History** | GET | Query historical data (HDA) |
+| **Recipes** | GET/POST | List, load, save, activate recipes |
+| **Server** | GET | Server info, diagnostics, health check |
+
+### Authentication
+When anonymous access is disabled, the API requires Basic authentication
+with valid user credentials.
+
+### Demo Project
+The `RestApiDemo` Blazor Web App provides 7 interactive pages demonstrating
+all API endpoints. Run it alongside the OPC server to test the API.
+
+### Example
+```
+GET http://localhost:14841/api/variables/Plant.Temperature
+POST http://localhost:14841/api/variables/Plant.Output
+     Body: { "value": 42.0 }
+GET http://localhost:14841/api/alarms
+POST http://localhost:14841/api/alarms/acknowledge
+```
 """),
     };
 
