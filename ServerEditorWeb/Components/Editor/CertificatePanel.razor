@@ -1,0 +1,522 @@
+@using SharedModels
+@using ServerEditorWeb.Services
+@inject CertificateService CertService
+@inject NodeEditorService Editor
+
+<div class="cert-panel">
+    @* Store selector (Server vs Editor) and tab bar *@
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <h6 class="mb-0">🔐 Certificates</h6>
+        <div class="d-flex gap-1">
+            <select class="form-select form-select-sm" style="width: 130px;" @bind="_storeTarget">
+                <option value="server">Server PKI</option>
+                <option value="editor">Editor PKI</option>
+            </select>
+            <button class="btn btn-sm btn-outline-secondary" @onclick="Refresh">↻ Refresh</button>
+        </div>
+    </div>
+
+    @* Tab bar *@
+    <ul class="nav nav-tabs nav-sm mb-2">
+        <li class="nav-item">
+            <button class="nav-link @(_activeTab == "trusted" ? "active" : "")" @onclick='() => SetTab("trusted")'>
+                ✅ Trusted <span class="badge bg-success">@_trustedCerts.Count</span>
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link @(_activeTab == "rejected" ? "active" : "")" @onclick='() => SetTab("rejected")'>
+                🚫 Rejected <span class="badge bg-danger">@_rejectedCerts.Count</span>
+            </button>
+        </li>
+        @if (_storeTarget == "server")
+        {
+            <li class="nav-item">
+                <button class="nav-link @(_activeTab == "issuer" ? "active" : "")" @onclick='() => SetTab("issuer")'>
+                    🏛️ Issuers <span class="badge bg-secondary">@_issuerCerts.Count</span>
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link @(_activeTab == "own" ? "active" : "")" @onclick='() => SetTab("own")'>
+                    🆔 Own <span class="badge bg-primary">@_ownCerts.Count</span>
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link @(_activeTab == "gds" ? "active" : "")" @onclick='() => SetTab("gds")'>
+                    🌐 GDS
+                </button>
+            </li>
+        }
+    </ul>
+
+    @* Status message *@
+    @if (!string.IsNullOrEmpty(_statusMessage))
+    {
+        <div class="alert @(_statusSuccess ? "alert-success" : "alert-danger") py-1 px-2 small mb-2 d-flex justify-content-between align-items-center">
+            <span>@_statusMessage</span>
+            <button type="button" class="btn-close btn-close-sm" @onclick="ClearStatus"></button>
+        </div>
+    }
+
+    @* Tab content *@
+    @if (_activeTab == "trusted")
+    {
+        @RenderCertList(_trustedCerts, "trusted", canReject: true)
+    }
+    else if (_activeTab == "rejected")
+    {
+        @RenderCertList(_rejectedCerts, "rejected", canTrust: true)
+    }
+    else if (_activeTab == "issuer")
+    {
+        @RenderCertList(_issuerCerts, "issuer")
+    }
+    else if (_activeTab == "own")
+    {
+        @RenderCertList(_ownCerts, "own")
+    }
+    else if (_activeTab == "gds")
+    {
+        @RenderGdsPanel()
+    }
+</div>
+
+@* ── Certificate details modal ── *@
+@if (_detailCert != null)
+{
+    <div class="modal-backdrop show" @onclick="() => _detailCert = null"></div>
+    <div class="modal show d-block" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content">
+                <div class="modal-header py-2">
+                    <h6 class="modal-title">🔍 Certificate Details</h6>
+                    <button type="button" class="btn-close btn-close-sm" @onclick="() => _detailCert = null"></button>
+                </div>
+                <div class="modal-body" style="font-size: 12px;">
+                    <table class="table table-sm table-borderless mb-0">
+                        <tbody>
+                            <tr><td class="text-muted" style="width: 120px;">Subject</td><td class="font-monospace">@_detailCert.Subject</td></tr>
+                            <tr><td class="text-muted">Issuer</td><td class="font-monospace">@_detailCert.Issuer</td></tr>
+                            <tr><td class="text-muted">Thumbprint</td><td class="font-monospace">@_detailCert.Thumbprint</td></tr>
+                            <tr><td class="text-muted">Serial</td><td class="font-monospace">@_detailCert.SerialNumber</td></tr>
+                            <tr><td class="text-muted">Valid From</td><td>@_detailCert.NotBefore.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</td></tr>
+                            <tr>
+                                <td class="text-muted">Valid To</td>
+                                <td class="@(_detailCert.IsExpired ? "text-danger fw-bold" : "")">
+                                    @_detailCert.NotAfter.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")
+                                    @if (_detailCert.IsExpired) { <span> (EXPIRED)</span> }
+                                </td>
+                            </tr>
+                            <tr><td class="text-muted">Key Size</td><td>@_detailCert.KeySizeBits bits</td></tr>
+                            @if (!string.IsNullOrEmpty(_detailCert.ApplicationUri))
+                            {
+                                <tr><td class="text-muted">Application URI</td><td class="font-monospace" style="word-break: break-all;">@_detailCert.ApplicationUri</td></tr>
+                            }
+                            @if (_detailCert.DomainNames.Count > 0)
+                            {
+                                <tr><td class="text-muted">DNS Names</td><td>@string.Join(", ", _detailCert.DomainNames)</td></tr>
+                            }
+                            <tr><td class="text-muted">Store</td><td>@_detailCert.StoreName</td></tr>
+                            <tr><td class="text-muted">File</td><td class="font-monospace" style="word-break: break-all; font-size: 10px;">@_detailCert.FilePath</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .cert-panel {
+        padding: 8px;
+        height: 100%;
+        overflow-y: auto;
+    }
+
+    .nav-sm .nav-link {
+        font-size: 11px;
+        padding: 4px 10px;
+    }
+
+    .cert-list {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+    }
+
+    .cert-item {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 8px;
+        border: 1px solid var(--border-color, #dee2e6);
+        border-radius: 5px;
+        background: var(--bg-secondary, #f8f9fa);
+        font-size: 11px;
+        cursor: pointer;
+        transition: background 0.15s;
+    }
+
+    .cert-item:hover {
+        background: rgba(0,0,0,0.04);
+    }
+
+    .cert-item.expired {
+        border-color: #dc3545;
+        background: rgba(220, 53, 69, 0.06);
+    }
+
+    .cert-subject {
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-weight: 500;
+    }
+
+    .cert-expiry {
+        font-size: 10px;
+        color: var(--text-muted, #6c757d);
+        flex-shrink: 0;
+        font-family: monospace;
+    }
+
+    .cert-actions {
+        display: flex;
+        gap: 2px;
+        flex-shrink: 0;
+    }
+
+    .cert-actions .btn {
+        font-size: 9px;
+        padding: 1px 6px;
+        line-height: 1.4;
+    }
+
+    .cert-empty {
+        text-align: center;
+        padding: 24px;
+        color: var(--text-muted, #6c757d);
+        font-size: 12px;
+    }
+
+    .cert-empty-icon {
+        font-size: 32px;
+        display: block;
+        margin-bottom: 4px;
+    }
+
+    .gds-section {
+        padding: 8px;
+    }
+
+    .gds-section label {
+        font-size: 12px;
+    }
+</style>
+
+@code {
+    private string _storeTarget = "server";
+    private string _activeTab = "trusted";
+    private string? _statusMessage;
+    private bool _statusSuccess;
+    private CertificateInfo? _detailCert;
+
+    private List<CertificateInfo> _trustedCerts = new();
+    private List<CertificateInfo> _rejectedCerts = new();
+    private List<CertificateInfo> _issuerCerts = new();
+    private List<CertificateInfo> _ownCerts = new();
+
+    // GDS form fields
+    private string _gdsEndpoint = "";
+    private string _gdsUserName = "";
+    private string _gdsPassword = "";
+    private bool _gdsLoading;
+    private string _gdsAppName = "SimpleOpcFileServer";
+    private string _gdsAppUri = "";
+
+    protected override void OnInitialized()
+    {
+        _gdsAppUri = $"urn:{System.Net.Dns.GetHostName()}:SimpleOpcFileServer";
+
+        // Load GDS settings from config if available
+        var gdsConfig = Editor.RootModel?.Server?.Gds;
+        if (gdsConfig != null)
+        {
+            _gdsEndpoint = gdsConfig.EndpointUrl;
+            _gdsUserName = gdsConfig.UserName;
+            _gdsPassword = gdsConfig.Password;
+        }
+
+        Refresh();
+    }
+
+    private void Refresh()
+    {
+        if (_storeTarget == "server")
+        {
+            _trustedCerts = CertService.GetServerTrusted();
+            _rejectedCerts = CertService.GetServerRejected();
+            _issuerCerts = CertService.GetServerIssuers();
+            _ownCerts = CertService.GetServerOwn();
+        }
+        else
+        {
+            _trustedCerts = CertService.GetEditorTrusted();
+            _rejectedCerts = CertService.GetEditorRejected();
+            _issuerCerts = new();
+            _ownCerts = new();
+        }
+    }
+
+    private void SetTab(string tab)
+    {
+        _activeTab = tab;
+    }
+
+    private string GetPkiRoot() =>
+        _storeTarget == "server" ? CertService.ServerPkiRoot : CertService.EditorPkiRoot;
+
+    private void TrustCert(CertificateInfo cert)
+    {
+        if (CertService.TrustCertificate(GetPkiRoot(), cert.Thumbprint))
+        {
+            _statusMessage = $"Trusted: {cert.Subject}";
+            _statusSuccess = true;
+            Refresh();
+        }
+        else
+        {
+            _statusMessage = $"Failed to trust certificate.";
+            _statusSuccess = false;
+        }
+    }
+
+    private void RejectCert(CertificateInfo cert)
+    {
+        if (CertService.RejectCertificate(GetPkiRoot(), cert.Thumbprint))
+        {
+            _statusMessage = $"Rejected: {cert.Subject}";
+            _statusSuccess = true;
+            Refresh();
+        }
+        else
+        {
+            _statusMessage = $"Failed to reject certificate.";
+            _statusSuccess = false;
+        }
+    }
+
+    private void DeleteCert(CertificateInfo cert)
+    {
+        if (CertService.DeleteCertificate(cert.FilePath))
+        {
+            _statusMessage = $"Deleted: {cert.Subject}";
+            _statusSuccess = true;
+            Refresh();
+        }
+        else
+        {
+            _statusMessage = $"Failed to delete certificate.";
+            _statusSuccess = false;
+        }
+    }
+
+    private void ShowDetails(CertificateInfo cert)
+    {
+        _detailCert = cert;
+    }
+
+    private void ClearStatus()
+    {
+        _statusMessage = null;
+    }
+
+    private void SaveGdsSettings()
+    {
+        if (Editor.RootModel?.Server != null)
+        {
+            Editor.RootModel.Server.Gds ??= new GdsConfig();
+            Editor.RootModel.Server.Gds.EndpointUrl = _gdsEndpoint;
+            Editor.RootModel.Server.Gds.UserName = _gdsUserName;
+            Editor.RootModel.Server.Gds.Password = _gdsPassword;
+            Editor.MarkChanged();
+        }
+    }
+
+    private async Task GdsRegister()
+    {
+        if (string.IsNullOrWhiteSpace(_gdsEndpoint))
+        {
+            _statusMessage = "GDS endpoint URL is required.";
+            _statusSuccess = false;
+            return;
+        }
+
+        _gdsLoading = true;
+        _statusMessage = null;
+        StateHasChanged();
+
+        SaveGdsSettings();
+
+        var result = await CertService.RegisterWithGdsAsync(
+            _gdsEndpoint, _gdsAppName, _gdsAppUri,
+            string.IsNullOrEmpty(_gdsUserName) ? null : _gdsUserName,
+            _gdsPassword);
+
+        _statusMessage = result.Message;
+        _statusSuccess = result.Success;
+        _gdsLoading = false;
+
+        if (result.Success)
+            Refresh();
+    }
+
+    private async Task GdsPullTrustList()
+    {
+        if (string.IsNullOrWhiteSpace(_gdsEndpoint))
+        {
+            _statusMessage = "GDS endpoint URL is required.";
+            _statusSuccess = false;
+            return;
+        }
+
+        _gdsLoading = true;
+        _statusMessage = null;
+        StateHasChanged();
+
+        SaveGdsSettings();
+
+        var result = await CertService.PullTrustListAsync(
+            _gdsEndpoint, _gdsAppName, _gdsAppUri,
+            string.IsNullOrEmpty(_gdsUserName) ? null : _gdsUserName,
+            _gdsPassword);
+
+        _statusMessage = result.Message;
+        _statusSuccess = result.Success;
+        _gdsLoading = false;
+
+        if (result.Success)
+            Refresh();
+    }
+
+    private RenderFragment RenderCertList(List<CertificateInfo> certs, string store,
+        bool canTrust = false, bool canReject = false) => __builder =>
+    {
+        if (certs.Count == 0)
+        {
+            <div class="cert-empty">
+                <span class="cert-empty-icon">📭</span>
+                No certificates in @store store.
+            </div>
+        }
+        else
+        {
+            <div class="cert-list">
+                @foreach (var cert in certs)
+                {
+                    <div class="cert-item @(cert.IsExpired ? "expired" : "")" @onclick="() => ShowDetails(cert)">
+                        <span>@(cert.IsExpired ? "⚠️" : "🔒")</span>
+                        <span class="cert-subject" title="@cert.Subject">@ExtractCN(cert.Subject)</span>
+                        <span class="cert-expiry" title="Expires @cert.NotAfter.ToLocalTime().ToString("yyyy-MM-dd")">
+                            @(cert.IsExpired ? "EXPIRED" : $"→ {cert.NotAfter.ToLocalTime():yyyy-MM-dd}")
+                        </span>
+                        <div class="cert-actions" @onclick:stopPropagation>
+                            @if (canTrust)
+                            {
+                                <button class="btn btn-sm btn-outline-success" @onclick="() => TrustCert(cert)" title="Trust">✅</button>
+                            }
+                            @if (canReject)
+                            {
+                                <button class="btn btn-sm btn-outline-warning" @onclick="() => RejectCert(cert)" title="Reject">🚫</button>
+                            }
+                            <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteCert(cert)" title="Delete">🗑</button>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    };
+
+    private RenderFragment RenderGdsPanel() => __builder =>
+    {
+        <div class="gds-section">
+            <p class="small text-muted mb-2">
+                Connect to an OPC UA Global Discovery Server (GDS) to register your application,
+                request CA-signed certificates, and pull the global trust list.
+            </p>
+
+            <div class="mb-2">
+                <label class="form-label mb-0 small fw-bold">GDS Endpoint URL</label>
+                <input type="text" class="form-control form-control-sm" @bind="_gdsEndpoint"
+                       placeholder="opc.tcp://gds.example.com:58810/GlobalDiscoveryServer" />
+            </div>
+
+            <div class="row g-2 mb-2">
+                <div class="col-6">
+                    <label class="form-label mb-0 small">Username (optional)</label>
+                    <input type="text" class="form-control form-control-sm" @bind="_gdsUserName"
+                           placeholder="Anonymous if empty" />
+                </div>
+                <div class="col-6">
+                    <label class="form-label mb-0 small">Password</label>
+                    <input type="password" class="form-control form-control-sm" @bind="_gdsPassword" />
+                </div>
+            </div>
+
+            <div class="card mb-2">
+                <div class="card-header py-1 px-2" style="font-size: 12px;">
+                    🆔 Application Identity
+                </div>
+                <div class="card-body p-2">
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <label class="form-label mb-0 small">Application Name</label>
+                            <input type="text" class="form-control form-control-sm" @bind="_gdsAppName" />
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label mb-0 small">Application URI</label>
+                            <input type="text" class="form-control form-control-sm" @bind="_gdsAppUri" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="d-flex gap-2 mb-2">
+                <button class="btn btn-sm btn-primary" @onclick="GdsRegister" disabled="@_gdsLoading">
+                    @if (_gdsLoading) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                    📝 Register & Request Certificate
+                </button>
+                <button class="btn btn-sm btn-outline-primary" @onclick="GdsPullTrustList" disabled="@_gdsLoading">
+                    @if (_gdsLoading) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                    📥 Pull Trust List
+                </button>
+            </div>
+
+            <div class="card">
+                <div class="card-header py-1 px-2" style="font-size: 12px;">
+                    📂 PKI Store Locations
+                </div>
+                <div class="card-body p-2">
+                    <table class="table table-sm table-borderless mb-0" style="font-size: 10px;">
+                        <tbody>
+                            <tr><td class="text-muted" style="width: 80px;">Server PKI</td><td class="font-monospace">@CertService.ServerPkiRoot</td></tr>
+                            <tr><td class="text-muted">Editor PKI</td><td class="font-monospace">@CertService.EditorPkiRoot</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    };
+
+    private static string ExtractCN(string subject)
+    {
+        if (string.IsNullOrEmpty(subject)) return "(no subject)";
+        foreach (var part in subject.Split(','))
+        {
+            var trimmed = part.Trim();
+            if (trimmed.StartsWith("CN=", StringComparison.OrdinalIgnoreCase))
+                return trimmed.Substring(3);
+        }
+        return subject;
+    }
+}

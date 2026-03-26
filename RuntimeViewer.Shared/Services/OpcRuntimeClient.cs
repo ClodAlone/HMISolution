@@ -16,6 +16,10 @@ public class AlarmEntry
     public DateTime Time { get; set; }
     public bool IsAcked { get; set; }
     public bool IsConfirmed { get; set; }
+    public bool IsShelved { get; set; }
+    public bool AllowShelving { get; set; }
+    public DateTime? ShelvedUntil { get; set; }
+    public string? ShelvedBy { get; set; }
     public bool IsSelected { get; set; }
 }
 
@@ -34,7 +38,7 @@ public class OpcRuntimeClient : IDisposable
     public event Action<string>? ValueChanged;
     public event Action? StateChanged;
 
-    // ─── Diagnostic log ─────────────────────────────────────
+    // â”€â”€â”€ Diagnostic log â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     private readonly List<string> _diagnosticLog = new();
     private const int MaxLogEntries = 200;
 
@@ -207,13 +211,13 @@ public class OpcRuntimeClient : IDisposable
             Log($"CONNECT: Subscription created. Id={_subscription.Id}, PublishingInterval={_subscription.CurrentPublishingInterval}ms");
 
             ErrorMessage = null;
-            Log("CONNECT: ✓ Connected successfully");
+            Log("CONNECT: âœ“ Connected successfully");
             StateChanged?.Invoke();
         }
         catch (Exception ex)
         {
             ErrorMessage = ex.Message;
-            Log($"CONNECT: ✗ FAILED — {ex.GetType().Name}: {ex.Message}");
+            Log($"CONNECT: âœ— FAILED â€” {ex.GetType().Name}: {ex.Message}");
             StateChanged?.Invoke();
         }
     }
@@ -222,14 +226,14 @@ public class OpcRuntimeClient : IDisposable
     {
         if (_subscription == null || _session == null)
         {
-            Log($"MONITOR: Skipped — subscription={(_subscription != null ? "ok" : "NULL")}, session={(_session != null ? "ok" : "NULL")}");
+            Log($"MONITOR: Skipped â€” subscription={(_subscription != null ? "ok" : "NULL")}, session={(_session != null ? "ok" : "NULL")}");
             return;
         }
 
         var pathList = variablePaths.Where(p => !string.IsNullOrEmpty(p)).ToList();
         Log($"MONITOR: Setting up {pathList.Count} variable(s) with ns={namespaceIndex}");
 
-        // Remove existing monitored items — snapshot to a list first to avoid
+        // Remove existing monitored items â€” snapshot to a list first to avoid
         // modifying the subscription's internal collection while iterating it.
         var existing = _subscription.MonitoredItems.ToList();
         if (existing.Count > 0)
@@ -261,10 +265,10 @@ public class OpcRuntimeClient : IDisposable
         foreach (var mi in _subscription.MonitoredItems)
         {
             var statusName = mi.Status?.Error?.StatusCode.ToString() ?? "Good";
-            Log($"  ITEM: \"{mi.DisplayName}\" → NodeId={mi.StartNodeId} | Created={mi.Status?.Created} | Status={statusName}");
+            Log($"  ITEM: \"{mi.DisplayName}\" â†’ NodeId={mi.StartNodeId} | Created={mi.Status?.Created} | Status={statusName}");
         }
 
-        Log($"MONITOR: ✓ ApplyChanges done. {_subscription.MonitoredItemCount} active monitored item(s)");
+        Log($"MONITOR: âœ“ ApplyChanges done. {_subscription.MonitoredItemCount} active monitored item(s)");
     }
 
     private int _notificationCount;
@@ -314,7 +318,7 @@ public class OpcRuntimeClient : IDisposable
         {
             var nodeId = new NodeId(variablePath, namespaceIndex);
 
-            // Send the value as a string — the server's HandleWriteValue
+            // Send the value as a string â€” the server's HandleWriteValue
             // converts strings to the correct DataType (Double, Int32, etc.).
             var nodesToWrite = new WriteValueCollection
             {
@@ -363,7 +367,7 @@ public class OpcRuntimeClient : IDisposable
         }
         catch (Exception ex)
         {
-            Log($"DISCONNECT: Error during close — {ex.Message}");
+            Log($"DISCONNECT: Error during close â€” {ex.Message}");
         }
         finally
         {
@@ -444,16 +448,16 @@ public class OpcRuntimeClient : IDisposable
         {
             // Use ConditionRefresh via a temporary event subscription to collect active alarms
             var filter = new EventFilter();
-            // [0] EventId — needed for Acknowledge/Confirm calls
+            // [0] EventId â€” needed for Acknowledge/Confirm calls
             filter.SelectClauses.Add(new SimpleAttributeOperand(
                 ObjectTypeIds.BaseEventType, BrowseNames.EventId));
-            // [1] Retain — true if the alarm is still active
+            // [1] Retain â€” true if the alarm is still active
             filter.SelectClauses.Add(new SimpleAttributeOperand(
                 ObjectTypeIds.ConditionType, BrowseNames.Retain));
-            // [2] SourceNode — the NodeId of the condition source
+            // [2] SourceNode â€” the NodeId of the condition source
             filter.SelectClauses.Add(new SimpleAttributeOperand(
                 ObjectTypeIds.BaseEventType, BrowseNames.SourceNode));
-            // [3] NodeId of the condition — used as ObjectId for method calls
+            // [3] NodeId of the condition â€” used as ObjectId for method calls
             filter.SelectClauses.Add(new SimpleAttributeOperand(
                 ObjectTypeIds.ConditionType, BrowseNames.NodeId));
 
@@ -561,7 +565,12 @@ public class OpcRuntimeClient : IDisposable
                 ObjectTypeIds.AcknowledgeableConditionType,
                 new QualifiedName[] { BrowseNames.ConfirmedState, BrowseNames.Id }));
 
+            // [9] SuppressedState/Id (shelving)
+            filter.SelectClauses.Add(new SimpleAttributeOperand(
+                ObjectTypeIds.AlarmConditionType,
+                new QualifiedName[] { BrowseNames.SuppressedState, BrowseNames.Id }));
             var sub = new Subscription(_session.DefaultSubscription)
+
             {
                 PublishingInterval = 100, KeepAliveCount = 5,
                 LifetimeCount = 20, MaxNotificationsPerPublish = 1000
@@ -614,6 +623,8 @@ public class OpcRuntimeClient : IDisposable
                 var isAcked = evt.EventFields.Count > 7 && evt.EventFields[7].Value is true;
                 var isConfirmed = evt.EventFields.Count > 8 && evt.EventFields[8].Value is true;
 
+                var isShelved = evt.EventFields.Count > 9 && evt.EventFields[9].Value is true;
+
                 result.Add(new AlarmEntry
                 {
                     Id = $"alarm_{idx++}",
@@ -624,10 +635,11 @@ public class OpcRuntimeClient : IDisposable
                     Severity = severity,
                     Time = time,
                     IsAcked = isAcked,
-                    IsConfirmed = isConfirmed
+                    IsConfirmed = isConfirmed,
+                    IsShelved = isShelved
                 });
-            }
 
+            }
             sub.Delete(true);
             _session.RemoveSubscription(sub);
         }
@@ -662,6 +674,44 @@ public class OpcRuntimeClient : IDisposable
             return true;
         }
         catch { return false; }
+    }
+
+    /// <summary>Shelve an alarm by calling the server's ShelveAlarm OPC UA method.</summary>
+    public async Task<bool> ShelveAlarmAsync(string variablePath, int durationMinutes, string username = "operator")
+    {
+        if (_session == null || !_session.Connected) return false;
+        try
+        {
+            var methodId = new NodeId("_AlarmManagement.ShelveAlarm", _session.NamespaceUris.GetIndexOrAppend("http://simpleopcfileserver.org/UA"));
+            var objectId = new NodeId("_AlarmManagement", _session.NamespaceUris.GetIndexOrAppend("http://simpleopcfileserver.org/UA"));
+            var result = await Task.Run(() =>
+                _session.Call(objectId, methodId, new object[] { variablePath, durationMinutes, username }));
+            return result != null && result.Count > 0 && result[0] is true;
+        }
+        catch (Exception ex)
+        {
+            Log($"SHELVE: Failed to shelve {variablePath} — {ex.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>Unshelve an alarm by calling the server's UnshelveAlarm OPC UA method.</summary>
+    public async Task<bool> UnshelveAlarmAsync(string variablePath, string username = "operator")
+    {
+        if (_session == null || !_session.Connected) return false;
+        try
+        {
+            var methodId = new NodeId("_AlarmManagement.UnshelveAlarm", _session.NamespaceUris.GetIndexOrAppend("http://simpleopcfileserver.org/UA"));
+            var objectId = new NodeId("_AlarmManagement", _session.NamespaceUris.GetIndexOrAppend("http://simpleopcfileserver.org/UA"));
+            var result = await Task.Run(() =>
+                _session.Call(objectId, methodId, new object[] { variablePath, username }));
+            return result != null && result.Count > 0 && result[0] is true;
+        }
+        catch (Exception ex)
+        {
+            Log($"UNSHELVE: Failed to unshelve {variablePath} — {ex.Message}");
+            return false;
+        }
     }
 
     public void Dispose()

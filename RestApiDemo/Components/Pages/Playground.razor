@@ -1,0 +1,140 @@
+@page "/playground"
+@rendermode InteractiveServer
+@inject HmiApiClient Api
+@inject IConfiguration Config
+
+<div class="page-header">
+    <h1>API Playground</h1>
+    <p>Send raw HTTP requests to any REST API endpoint and inspect the response</p>
+</div>
+
+<div class="card">
+    <div class="card-title">Request</div>
+    <div style="display:flex; gap:8px; align-items:flex-end; margin-bottom:12px;">
+        <div class="form-group" style="width:110px;">
+            <label>Method</label>
+            <select @bind="_method">
+                <option>GET</option>
+                <option>POST</option>
+            </select>
+        </div>
+        <div class="form-group" style="flex:1;">
+            <label>URL</label>
+            <input type="text" @bind="_url" placeholder="/api/health" />
+        </div>
+        <button class="btn btn-primary" style="margin-bottom:12px;" @onclick="Send" disabled="@_loading">🚀 Send</button>
+    </div>
+
+    @if (_method == "POST")
+    {
+        <div class="form-group">
+            <label>Request Body (JSON)</label>
+            <textarea @bind="_body" rows="5" placeholder=@("{ \"value\": 42 }")></textarea>
+        </div>
+    }
+</div>
+
+@* Quick-links *@
+<div class="card" style="margin-bottom:16px;">
+    <div class="card-title">Quick Endpoints</div>
+    <div style="display:flex; flex-wrap:wrap; gap:6px;">
+        <button class="btn btn-sm" @onclick=@(() => SetRequest("GET", "/api/health"))>GET /api/health</button>
+        <button class="btn btn-sm" @onclick=@(() => SetRequest("GET", "/api/variables"))>GET /api/variables</button>
+        <button class="btn btn-sm" @onclick=@(() => SetRequest("GET", "/api/alarms"))>GET /api/alarms</button>
+        <button class="btn btn-sm" @onclick=@(() => SetRequest("GET", "/api/recipes"))>GET /api/recipes</button>
+        <button class="btn btn-sm" @onclick=@(() => SetRequest("GET", "/api/diagnostics"))>GET /api/diagnostics</button>
+        <button class="btn btn-sm" @onclick=@(() => SetRequest("GET", "/api/events?max=10"))>GET /api/events</button>
+        <button class="btn btn-sm" @onclick=@(() => SetRequest("GET", "/api/audit?max=10"))>GET /api/audit</button>
+        <button class="btn btn-sm" @onclick=@(() => SetRequest("GET", "/api/redundancy"))>GET /api/redundancy</button>
+        <button class="btn btn-sm" @onclick=@(() => SetRequest("GET", "/api/export/csv"))>GET /api/export/csv</button>
+        <button class="btn btn-sm" @onclick=@(() => SetRequest("POST", "/api/variables/batch-read", "{ \"paths\": [\"Folder.Tag1\"] }"))>POST batch-read</button>
+        <button class="btn btn-sm" @onclick=@(() => SetRequest("POST", "/api/variables/batch-write", "{ \"values\": { \"Folder.Tag1\": 42 } }"))>POST batch-write</button>
+    </div>
+</div>
+
+@* Response *@
+@if (_responseCode.HasValue)
+{
+    <div class="card">
+        <div class="card-title">
+            Response
+            <span class="pill @(_responseCode < 300 ? "pill-ok" : _responseCode < 500 ? "pill-warn" : "pill-error")" style="margin-left:8px;">
+                @_responseCode
+            </span>
+            <span style="margin-left:8px; font-size:10px; color:#5a6a8a;">@_elapsed ms</span>
+        </div>
+        <div class="code-block">@_responseBody</div>
+    </div>
+}
+
+@code {
+    private string _method = "GET";
+    private string _url = "/api/health";
+    private string _body = "";
+    private bool _loading;
+    private int? _responseCode;
+    private string _responseBody = "";
+    private long _elapsed;
+
+    private void SetRequest(string method, string url, string body = "")
+    {
+        _method = method;
+        _url = url;
+        _body = body;
+    }
+
+    private async Task Send()
+    {
+        _loading = true;
+        _responseCode = null;
+        StateHasChanged();
+
+        try
+        {
+            var baseUrl = Config["HmiApi:BaseUrl"] ?? "http://localhost:14842";
+            var apiKey = Config["HmiApi:ApiKey"];
+
+            using var http = new HttpClient { BaseAddress = new Uri(baseUrl), Timeout = TimeSpan.FromSeconds(10) };
+            if (!string.IsNullOrEmpty(apiKey))
+                http.DefaultRequestHeaders.Add("X-API-Key", apiKey);
+
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+
+            HttpResponseMessage response;
+            if (_method == "POST")
+            {
+                var content = new StringContent(
+                    string.IsNullOrWhiteSpace(_body) ? "{}" : _body,
+                    System.Text.Encoding.UTF8, "application/json");
+                response = await http.PostAsync(_url, content);
+            }
+            else
+            {
+                response = await http.GetAsync(_url);
+            }
+
+            sw.Stop();
+            _elapsed = sw.ElapsedMilliseconds;
+            _responseCode = (int)response.StatusCode;
+
+            var json = await response.Content.ReadAsStringAsync();
+            try
+            {
+                var doc = JsonDocument.Parse(json);
+                _responseBody = JsonSerializer.Serialize(doc, new JsonSerializerOptions { WriteIndented = true });
+            }
+            catch
+            {
+                _responseBody = json;
+            }
+        }
+        catch (Exception ex)
+        {
+            _responseCode = 0;
+            _responseBody = $"Error: {ex.Message}";
+            _elapsed = 0;
+        }
+
+        _loading = false;
+    }
+}

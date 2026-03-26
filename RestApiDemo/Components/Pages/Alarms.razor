@@ -1,0 +1,150 @@
+@page "/alarms"
+@rendermode InteractiveServer
+@inject HmiApiClient Api
+
+<div class="page-header">
+    <h1>Alarms</h1>
+    <p>View active alarms, acknowledge, shelve and unshelve via <code>/api/alarms</code></p>
+</div>
+
+<div class="toolbar">
+    <button class="btn btn-primary" @onclick="Refresh" disabled="@_loading">🔄 Refresh</button>
+    <span class="toolbar-spacer"></span>
+    <span style="font-size:11px; color:#5a6a8a;">@(_alarms?.Count ?? 0) active alarm(s)</span>
+</div>
+
+@if (_alarms?.Alarms?.Count > 0)
+{
+    <div class="card">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Variable Path</th>
+                    <th>Message</th>
+                    <th>Severity</th>
+                    <th>Active</th>
+                    <th>Acked</th>
+                    <th>Shelved</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var a in _alarms.Alarms)
+                {
+                    <tr style="@(a.IsShelved ? "opacity:0.55; font-style:italic;" : "")">
+                        <td style="font-family:monospace; font-size:11px;">@a.VariablePath</td>
+                        <td>@a.Message</td>
+                        <td>
+                            @{ var sevClass = a.Severity >= 900 ? "pill-error" : a.Severity >= 500 ? "pill-warn" : "pill-info"; }
+                            <span class="pill @sevClass">@a.Severity</span>
+                        </td>
+                        <td>@(a.IsActive ? "🔴" : "⚪")</td>
+                        <td>@(a.IsAcknowledged ? "✔" : "—")</td>
+                        <td>
+                            @if (a.IsShelved)
+                            {
+                                <span title="Shelved by @a.ShelvedBy until @a.ShelvedUntil" style="color:#ffc107;">🔇 Yes</span>
+                            }
+                            else { <span style="color:#555;">—</span> }
+                        </td>
+                        <td style="display:flex; gap:4px;">
+                            @if (!a.IsAcknowledged)
+                            {
+                                <button class="btn btn-sm btn-success" @onclick="() => Acknowledge(a.VariablePath)">✔ Ack</button>
+                            }
+                            @if (a.IsShelved)
+                            {
+                                <button class="btn btn-sm btn-primary" @onclick="() => Unshelve(a.VariablePath)">🔔 Unshelve</button>
+                            }
+                            else if (a.AllowShelving)
+                            {
+                                <button class="btn btn-sm btn-warning" @onclick="() => ShowShelve(a.VariablePath)">🔇 Shelve</button>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+else
+{
+    <div class="card" style="text-align:center; padding:40px; color:#5a6a8a;">
+        ✅ No active alarms
+    </div>
+}
+
+@* Shelve dialog *@
+@if (_shelveTarget != null)
+{
+    <div class="card" style="border-color:#ffc107;">
+        <div class="card-title" style="color:#ffc107;">🔇 Shelve Alarm: @_shelveTarget</div>
+        <div style="display:flex; gap:8px; align-items:flex-end;">
+            <div class="form-group" style="flex:1;">
+                <label>Duration (minutes)</label>
+                <select @bind="_shelveDuration">
+                    <option value="15">15 min</option>
+                    <option value="30">30 min</option>
+                    <option value="60">1 hour</option>
+                    <option value="120">2 hours</option>
+                    <option value="480">8 hours</option>
+                </select>
+            </div>
+            <div class="form-group" style="flex:1;">
+                <label>Username</label>
+                <input type="text" @bind="_shelveUser" />
+            </div>
+            <button class="btn btn-warning" style="margin-bottom:12px;" @onclick="ConfirmShelve">Confirm Shelve</button>
+            <button class="btn" style="margin-bottom:12px;" @onclick="() => _shelveTarget = null">Cancel</button>
+        </div>
+    </div>
+}
+
+@if (_actionResult != null)
+{
+    <div style="margin-top:8px; font-size:12px; color:#7dffb3;">@_actionResult</div>
+}
+
+@code {
+    private bool _loading;
+    private AlarmListResponse? _alarms;
+    private string? _shelveTarget;
+    private int _shelveDuration = 60;
+    private string _shelveUser = "demo-user";
+    private string? _actionResult;
+
+    protected override async Task OnInitializedAsync() => await Refresh();
+
+    private async Task Refresh()
+    {
+        _loading = true;
+        _alarms = await Api.GetAlarmsAsync();
+        _loading = false;
+        _actionResult = null;
+    }
+
+    private async Task Acknowledge(string path)
+    {
+        var result = await Api.AcknowledgeAlarmAsync(path);
+        _actionResult = $"✔ Acknowledged: {path} — {result?.Status}";
+        await Refresh();
+    }
+
+    private void ShowShelve(string path) => _shelveTarget = path;
+
+    private async Task ConfirmShelve()
+    {
+        if (_shelveTarget == null) return;
+        var result = await Api.ShelveAlarmAsync(_shelveTarget, _shelveDuration, _shelveUser);
+        _actionResult = $"🔇 Shelved: {_shelveTarget} for {_shelveDuration} min — {result?.Status}";
+        _shelveTarget = null;
+        await Refresh();
+    }
+
+    private async Task Unshelve(string path)
+    {
+        var result = await Api.UnshelveAlarmAsync(path, _shelveUser);
+        _actionResult = $"🔔 Unshelved: {path} — {result?.Status}";
+        await Refresh();
+    }
+}

@@ -320,6 +320,32 @@ public class ReportNode : TreeNode
     public void SyncName() => Report.Name = Name;
 }
 
+public class CalculatedGroupNode : TreeNode
+{
+    public override string TypeName => "CalculatedGroup";
+    public override string Icon => "🔢";
+
+    public CalculatedGroupNode()
+    {
+        Name = "Calculated Tags";
+    }
+}
+
+public class CalculatedNode : TreeNode
+{
+    public override string TypeName => "Calculated";
+    public override string Icon => "📐";
+    public CalculatedVariableConfig Config { get; }
+
+    public CalculatedNode(CalculatedVariableConfig config)
+    {
+        Config = config;
+        Name = config.Name;
+    }
+
+    public void SyncName() => Config.Name = Name;
+}
+
 /// <summary>
 /// Tree node for editing the server/runtime settings of a project.
 /// </summary>

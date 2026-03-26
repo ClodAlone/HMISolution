@@ -45,6 +45,9 @@ namespace SimpleOpcFileServer
         // Event journal
         private EventLogger? _eventLogger;
 
+        // Alarm notification service (Email, Telegram, WhatsApp)
+        private NotificationService? _notificationService;
+
         // Retentive variable storage
         private readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> _retentiveValues = new();
         private string? _retentivePath;
@@ -340,6 +343,10 @@ namespace SimpleOpcFileServer
             _eventLogger?.Dispose();
             _eventLogger = null;
 
+            // Cleanup previous notification service (new one created in LoadModel)
+            _notificationService?.Dispose();
+            _notificationService = null;
+
             // Delete old root nodes
             foreach (var nodeId in _rootNodeIds)
             {
@@ -550,6 +557,14 @@ namespace SimpleOpcFileServer
 
                      _eventLogger.LogSystem("Info", "Server", $"Server started — configuration loaded. {lastActiveText}");
                      DiagnosticsCollector.Instance.Register("EventLogger", "EventLog");
+                 }
+
+                 // Alarm notifications (Email, Telegram, WhatsApp)
+                 var notifCfg = nodeModel.Server?.AlarmNotification;
+                 if (notifCfg is { Enabled: true })
+                 {
+                     _notificationService = new NotificationService(notifCfg);
+                     _eventLogger?.LogSystem("Info", "Notification", "Alarm notification service started");
                  }
 
                  if (nodeModel.Folder != null)
@@ -1580,6 +1595,9 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 Utils.Trace("ALARM-REPORTED: {0} message={1}", info.VariablePath, message);
                 _eventLogger?.LogAlarm(severity >= 800 ? "Critical" : "Warning", info.VariablePath, message,
                     $"Value={val:G6} HH={highHigh} H={cfg.HighLimit} L={cfg.LowLimit} LL={lowLow} Hyst={hyst}");
+
+                if (cfg.NotifyOnActivation)
+                    _notificationService?.NotifyAlarmActivated(info.VariablePath, message, severity);
             }
             else if (shouldDeactivate)
             {
@@ -1649,6 +1667,9 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 ReportAlarmEvent(alarm);
                 _eventLogger?.LogAlarm(cfg.ConditionSeverity >= 800 ? "Critical" : "Warning",
                     info.VariablePath, message, $"Operator={cfg.Operator} Compare={cfg.CompareValue} Value={valueStr} Hyst={cfg.Hysteresis}");
+
+                if (cfg.NotifyOnActivation)
+                    _notificationService?.NotifyAlarmActivated(info.VariablePath, message, cfg.ConditionSeverity);
             }
             else if (shouldDeactivate)
             {
@@ -1796,6 +1817,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 _recipeManager?.Dispose();
                 _schedulerManager?.Dispose();
                 _reportManager?.Dispose();
+                _notificationService?.Dispose();
                 _eventLogger?.Dispose();
                 foreach (var rw in _resourceWatchers) rw.Dispose();
                 _resourceWatchers.Clear();

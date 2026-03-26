@@ -30,6 +30,7 @@ namespace SharedModels
         public List<CameraConfig> Cameras { get; set; } = new();
         public List<SchedulerConfig> Schedulers { get; set; } = new();
         public List<ReportConfig> Reports { get; set; } = new();
+        public List<CalculatedVariableConfig> CalculatedVariables { get; set; } = new();
 
         /// <summary>
         /// PBKDF2-SHA256 hash of the project protection password.
@@ -73,6 +74,12 @@ namespace SharedModels
 
         /// <summary>Optional runtime statistics configuration (min, max, average tracking).</summary>
         public VariableStatisticsConfig? Statistics { get; set; }
+
+        /// <summary>Optional linear scaling configuration (raw ↔ engineering conversion).</summary>
+        public ScalingConfig? Scaling { get; set; }
+
+        /// <summary>Engineering unit label (e.g. "°C", "bar", "%", "m³/h"). Exposed as OPC UA EngineeringUnits property.</summary>
+        public string EngineeringUnit { get; set; } = "";
 
         [JsonExtensionData]
         public Dictionary<string, JsonElement>? DriverConfigs { get; set; }
@@ -132,6 +139,15 @@ namespace SharedModels
         /// A value of 0 disables hysteresis.
         /// </summary>
         public double Hysteresis { get; set; }
+
+        /// <summary>Whether operators can shelve (temporarily suppress) this alarm at runtime.</summary>
+        public bool AllowShelving { get; set; }
+
+        /// <summary>Maximum shelving duration in minutes. 0 = unlimited. Default 60.</summary>
+        public int MaxShelvingMinutes { get; set; } = 60;
+
+        /// <summary>Notification configuration for this alarm (email, webhook, escalation).</summary>
+        public AlarmNotificationConfig? Notification { get; set; }
     }
 
     public class DataLoggingConfig
@@ -304,6 +320,18 @@ namespace SharedModels
         /// cloud SignalR hub instead of directly to the OPC UA server.
         /// </summary>
         public CloudRelayConfig? CloudRelay { get; set; }
+
+        /// <summary>Audit trail configuration for operator action logging (FDA 21 CFR Part 11 compliance).</summary>
+        public AuditTrailConfig? AuditTrail { get; set; }
+
+        /// <summary>Global notification configuration (SMTP, webhook defaults) used by alarm notifications.</summary>
+        public NotificationsConfig? Notifications { get; set; }
+
+        /// <summary>REST API configuration for external integration (MES/ERP, dashboards, mobile).</summary>
+        public ApiConfig? Api { get; set; }
+
+        /// <summary>Server redundancy / high-availability configuration.</summary>
+        public RedundancyConfig? Redundancy { get; set; }
     }
 
     /// <summary>
@@ -1413,5 +1441,267 @@ namespace SharedModels
 
         /// <summary>File name pattern. Supports {ReportName}, {DateTime}, {Date}. Default "{ReportName}_{DateTime}".</summary>
         public string FileNamePattern { get; set; } = "{ReportName}_{DateTime}";
+    }
+
+    // ─── Feature: Tag Scaling / Engineering Units ────────────────────
+
+    /// <summary>
+    /// Linear scaling configuration for converting between raw (driver) and engineering (display) values.
+    /// Formula: EngValue = (RawValue - RawMin) / (RawMax - RawMin) * (EngMax - EngMin) + EngMin
+    /// </summary>
+    public class ScalingConfig
+    {
+        /// <summary>Raw value corresponding to the engineering minimum.</summary>
+        public double RawMin { get; set; }
+
+        /// <summary>Raw value corresponding to the engineering maximum.</summary>
+        public double RawMax { get; set; } = 100;
+
+        /// <summary>Engineering value at the low end of the scale.</summary>
+        public double EngMin { get; set; }
+
+        /// <summary>Engineering value at the high end of the scale.</summary>
+        public double EngMax { get; set; } = 100;
+
+        /// <summary>When true, clamp the engineering value to [EngMin, EngMax].</summary>
+        public bool ClampEnabled { get; set; }
+
+        /// <summary>
+        /// Applies forward scaling: raw → engineering.
+        /// </summary>
+        public double RawToEng(double raw)
+        {
+            double range = RawMax - RawMin;
+            if (Math.Abs(range) < 1e-15) return EngMin;
+            double eng = (raw - RawMin) / range * (EngMax - EngMin) + EngMin;
+            if (ClampEnabled)
+            {
+                double lo = Math.Min(EngMin, EngMax);
+                double hi = Math.Max(EngMin, EngMax);
+                eng = Math.Clamp(eng, lo, hi);
+            }
+            return eng;
+        }
+
+        /// <summary>
+        /// Applies reverse scaling: engineering → raw.
+        /// </summary>
+        public double EngToRaw(double eng)
+        {
+            double range = EngMax - EngMin;
+            if (Math.Abs(range) < 1e-15) return RawMin;
+            return (eng - EngMin) / range * (RawMax - RawMin) + RawMin;
+        }
+    }
+
+    // ─── Feature: Alarm Notification ─────────────────────────────────
+
+    /// <summary>
+    /// Per-alarm notification configuration. When an alarm activates, the server
+    /// can send emails, call webhooks, and escalate if not acknowledged in time.
+    /// </summary>
+    public class AlarmNotificationConfig
+    {
+        /// <summary>Send email notification when the alarm activates.</summary>
+        public bool EmailEnabled { get; set; }
+
+        /// <summary>Comma-separated email recipients for this alarm.</summary>
+        public string EmailRecipients { get; set; } = "";
+
+        /// <summary>Send HTTP POST webhook when the alarm activates.</summary>
+        public bool WebhookEnabled { get; set; }
+
+        /// <summary>Webhook URL to POST alarm JSON to. Empty = use server default.</summary>
+        public string WebhookUrl { get; set; } = "";
+
+        /// <summary>
+        /// Escalation time in minutes. If the alarm is not acknowledged within this time,
+        /// a second notification is sent to the escalation recipients. 0 = no escalation.
+        /// </summary>
+        public int EscalationMinutes { get; set; }
+
+        /// <summary>Comma-separated escalation email recipients.</summary>
+        public string EscalationRecipients { get; set; } = "";
+    }
+
+    // ─── Feature: Audit Trail ────────────────────────────────────────
+
+    /// <summary>
+    /// Configuration for the operator audit trail.
+    /// Records who wrote which value, acknowledged which alarm, loaded which recipe, etc.
+    /// Stored in a separate SQLite database for compliance (FDA 21 CFR Part 11).
+    /// </summary>
+    public class AuditTrailConfig
+    {
+        /// <summary>Whether audit trail logging is enabled. Default true when section is present.</summary>
+        public bool Enabled { get; set; } = true;
+
+        /// <summary>Path to the SQLite database file (relative to nodes.json). Default "audit.db".</summary>
+        public string DbPath { get; set; } = "audit.db";
+
+        /// <summary>Maximum age of audit records in days. 0 = keep forever. Default 365.</summary>
+        public int MaxAgeDays { get; set; } = 365;
+    }
+
+    // ─── Feature: Notification System ────────────────────────────────
+
+    /// <summary>
+    /// Global notification configuration used as defaults for alarm notifications.
+    /// </summary>
+    public class NotificationsConfig
+    {
+        /// <summary>SMTP configuration for sending alarm email notifications.</summary>
+        public SmtpNotificationConfig? Smtp { get; set; }
+
+        /// <summary>Default webhook URL for alarm notifications. Per-alarm config overrides this.</summary>
+        public string DefaultWebhookUrl { get; set; } = "";
+    }
+
+    /// <summary>
+    /// SMTP settings for the notification system.
+    /// </summary>
+    public class SmtpNotificationConfig
+    {
+        public string Host { get; set; } = "";
+        public int Port { get; set; } = 587;
+        public bool UseSsl { get; set; } = true;
+        public string Username { get; set; } = "";
+        public string Password { get; set; } = "";
+        public string FromAddress { get; set; } = "";
+    }
+
+    // ─── Feature: REST API ───────────────────────────────────────────
+
+    /// <summary>
+    /// Configuration for the REST API endpoint that enables external integration.
+    /// Exposes variable read/write, alarm status, event log, and data export.
+    /// </summary>
+    public class ApiConfig
+    {
+        /// <summary>Whether the REST API is enabled.</summary>
+        public bool Enabled { get; set; }
+
+        /// <summary>HTTP port for the REST API. Default 14842.</summary>
+        public int Port { get; set; } = 14842;
+
+        /// <summary>
+        /// API key for authentication. Sent as X-API-Key header or ?apiKey= query parameter.
+        /// Empty = no authentication required (not recommended for production).
+        /// </summary>
+        public string ApiKey { get; set; } = "";
+    }
+
+    // ─── Feature: Redundancy / High Availability ─────────────────────
+
+    /// <summary>
+    /// Server redundancy configuration for high-availability deployments.
+    /// Implements a heartbeat-based failover mechanism between primary and standby servers.
+    /// </summary>
+    public class RedundancyConfig
+    {
+        /// <summary>Whether redundancy is enabled.</summary>
+        public bool Enabled { get; set; }
+
+        /// <summary>Role of this server instance: "Primary" or "Standby".</summary>
+        [AllowedStringValues("Primary", "Standby")]
+        public string Role { get; set; } = "Primary";
+
+        /// <summary>HTTP endpoint of the partner server (e.g. "http://192.168.1.100:14841").</summary>
+        public string PartnerEndpoint { get; set; } = "";
+
+        /// <summary>Heartbeat interval in seconds. Default 5.</summary>
+        public int HeartbeatIntervalSeconds { get; set; } = 5;
+
+        /// <summary>
+        /// Number of consecutive missed heartbeats before triggering failover.
+        /// Failover timeout = HeartbeatIntervalSeconds × FailoverMissedHeartbeats. Default 3.
+        /// </summary>
+        public int FailoverMissedHeartbeats { get; set; } = 3;
+
+        /// <summary>
+        /// Interval in milliseconds for syncing variable state from primary to standby.
+        /// Set to 0 to disable state sync. Default 10000 (10 seconds).
+        /// </summary>
+        public int StateSyncIntervalMs { get; set; } = 10000;
+
+        /// <summary>
+        /// When true, standby automatically switches back to standby role when the primary recovers.
+        /// When false, manual intervention is required for switchback. Default false.
+        /// </summary>
+        public bool AutoSwitchback { get; set; }
+
+        /// <summary>
+        /// OPC UA endpoint URLs for both servers, exposed to clients for reconnection on failover.
+        /// Example: ["opc.tcp://server1:4840", "opc.tcp://server2:4840"]
+        /// </summary>
+        public List<string> ServerUrls { get; set; } = new();
+
+        /// <summary>
+        /// Connection string for the partner's database (used for replication health checks).
+        /// Leave empty to skip database replication monitoring.
+        /// </summary>
+        public string? PartnerDatabaseConnectionString { get; set; }
+
+        /// <summary>
+        /// Maximum allowed replication lag in seconds before raising a warning. Default 30.
+        /// </summary>
+        public int MaxReplicationLagSeconds { get; set; } = 30;
+    }
+
+    // ─── Feature: Calculated / Virtual Tags ──────────────────────────
+
+    /// <summary>
+    /// Configuration for a calculated (virtual) variable whose value is computed
+    /// from an expression referencing other OPC variables.
+    /// Evaluated cyclically at the configured interval.
+    /// </summary>
+    public class CalculatedVariableConfig
+    {
+        public string Name { get; set; } = "";
+
+        /// <summary>
+        /// C# expression that computes the value. Use Read("path") to reference OPC variables.
+        /// Examples: "Read(\"Tank1.Level\") + Read(\"Tank2.Level\")",
+        /// "Math.Round(Read(\"Sensor.Temperature\") * 1.8 + 32, 2)"
+        /// Leave empty when using AggregateFunction instead.
+        /// </summary>
+        public string Expression { get; set; } = "";
+
+        /// <summary>Output variable type: Double, Int32, Boolean, String. Default "Double".</summary>
+        public string Type { get; set; } = "Double";
+
+        /// <summary>Evaluation interval in milliseconds. Default 1000.</summary>
+        public int IntervalMs { get; set; } = 1000;
+
+        /// <summary>Whether this calculated variable is active.</summary>
+        public bool Enabled { get; set; } = true;
+
+        /// <summary>Folder path where the variable is created (e.g. "Calculated" or "Plant.Calculated").</summary>
+        public string FolderPath { get; set; } = "_Calculated";
+
+        /// <summary>Engineering unit label.</summary>
+        public string EngineeringUnit { get; set; } = "";
+
+        /// <summary>
+        /// Built-in aggregate function to apply instead of a custom expression.
+        /// When set, AggregateSourcePath must also be specified.
+        /// Supported: "Avg", "Sum", "Min", "Max", "Count", "RateOfChange", "Delta",
+        /// "RunningAvg", "RunningMin", "RunningMax", "StdDev".
+        /// Leave empty to use Expression instead.
+        /// </summary>
+        public string AggregateFunction { get; set; } = "";
+
+        /// <summary>
+        /// Variable path(s) to aggregate. For single-source aggregates (Avg, RateOfChange, etc.)
+        /// specify one path. For multi-source aggregates (Sum, Min, Max across tags)
+        /// specify a semicolon-separated list: "Tank1.Level;Tank2.Level;Tank3.Level".
+        /// </summary>
+        public string AggregateSourcePath { get; set; } = "";
+
+        /// <summary>
+        /// Rolling window size in seconds for time-based aggregates (RunningAvg, RunningMin,
+        /// RunningMax, StdDev). Samples outside this window are discarded. Default 300 (5 min).
+        /// </summary>
+        public int AggregateWindowSeconds { get; set; } = 300;
     }
 }

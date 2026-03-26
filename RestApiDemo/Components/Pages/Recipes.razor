@@ -1,0 +1,77 @@
+@page "/recipes"
+@rendermode InteractiveServer
+@inject HmiApiClient Api
+
+<div class="page-header">
+    <h1>Recipes</h1>
+    <p>List and execute recipes via <code>/api/recipes</code></p>
+</div>
+
+<div class="toolbar">
+    <button class="btn btn-primary" @onclick="Load" disabled="@_loading">ðŸ”„ Refresh</button>
+</div>
+
+@if (_recipes?.Recipes?.Count > 0)
+{
+    <div class="card">
+        <div class="card-title">Configured Recipes (@_recipes.Count)</div>
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Recipe Name</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var name in _recipes.Recipes)
+                {
+                    <tr>
+                        <td style="font-weight:600;">@name</td>
+                        <td style="display:flex; gap:4px;">
+                            <button class="btn btn-sm btn-success" @onclick="() => ExecuteLoad(name)">ðŸ“¥ Load</button>
+                            <button class="btn btn-sm btn-primary" @onclick="() => ExecuteSave(name)">ðŸ’¾ Save</button>
+                            <button class="btn btn-sm btn-warning" @onclick="() => ExecuteActivate(name)">â–¶ Activate</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+else
+{
+    <div class="card" style="text-align:center; padding:40px; color:#5a6a8a;">
+        No recipes configured on this server
+    </div>
+}
+
+@if (_result != null)
+{
+    <div style="margin-top:8px; font-size:12px; color:#7dffb3;">@_result</div>
+}
+
+@code {
+    private bool _loading;
+    private RecipeListResponse? _recipes;
+    private string? _result;
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load()
+    {
+        _loading = true;
+        _recipes = await Api.GetRecipesAsync();
+        _loading = false;
+        _result = null;
+    }
+
+    private Task ExecuteLoad(string name) => Execute(name, "Load");
+    private Task ExecuteSave(string name) => Execute(name, "Save");
+    private Task ExecuteActivate(string name) => Execute(name, "Activate");
+
+    private async Task Execute(string name, string action)
+    {
+        var res = await Api.ExecuteRecipeAsync(name, action);
+        _result = $"Recipe '{name}' action '{action}' â€” {res?.Status ?? res?.Error ?? "no response"}";
+    }
+}

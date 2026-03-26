@@ -34,6 +34,7 @@ builder.Services.AddSingleton<LicenseService>();
 builder.Services.AddSingleton<HelpService>();
 builder.Services.AddSingleton<EditorLocalizationService>();
 builder.Services.AddSingleton<DriverTestService>();
+builder.Services.AddSingleton<CertificateService>();
 
 var app = builder.Build();
 

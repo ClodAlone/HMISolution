@@ -391,6 +391,17 @@ public class NodeEditorService
         }
         proj.Children.Add(reportGroup);
 
+        var calcGroup = new CalculatedGroupNode() { Parent = proj };
+        if (proj.Model.CalculatedVariables != null)
+        {
+            foreach (var calc in proj.Model.CalculatedVariables)
+            {
+                var cNode = new CalculatedNode(calc) { Parent = calcGroup };
+                calcGroup.Children.Add(cNode);
+            }
+        }
+        proj.Children.Add(calcGroup);
+
         var screenGroup = new ScreenGroupNode() { Parent = proj };
         if (proj.Model.Screens != null)
         {
@@ -728,6 +739,28 @@ public class NodeEditorService
                 Title = "New Report"
             };
             var newNode = new ReportNode(newReport) { Parent = parent };
+            parent.Children.Add(newNode);
+            parent.IsExpanded = true;
+            SelectedItem = newNode;
+            HasUnsavedChanges = true;
+            NotifyStateChanged();
+        }
+    }
+
+    public void AddCalculated()
+    {
+        if (SelectedItem is CalculatedGroupNode parent)
+        {
+            var newCalc = new CalculatedVariableConfig
+            {
+                Name = "NewCalculated",
+                Expression = "",
+                Type = "Double",
+                IntervalMs = 1000,
+                Enabled = true,
+                FolderPath = "_Calculated"
+            };
+            var newNode = new CalculatedNode(newCalc) { Parent = parent };
             parent.Children.Add(newNode);
             parent.IsExpanded = true;
             SelectedItem = newNode;
@@ -1483,6 +1516,18 @@ public class NodeEditorService
                     {
                         rptNode.SyncName();
                         _rootModel.Reports.Add(rptNode.Report);
+                    }
+                }
+            }
+            else if (root is CalculatedGroupNode calcGrpNode && _rootModel != null)
+            {
+                _rootModel.CalculatedVariables.Clear();
+                foreach (var child in calcGrpNode.Children)
+                {
+                    if (child is CalculatedNode cNode)
+                    {
+                        cNode.SyncName();
+                        _rootModel.CalculatedVariables.Add(cNode.Config);
                     }
                 }
             }

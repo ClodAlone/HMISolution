@@ -793,6 +793,211 @@ else if (Node is ServerSettingsNode ssNode)
                    @onfocus="() => CaptureForUndo(ssNode.Settings, nameof(ssNode.Settings.DiagnosticsPort))" />
             <div class="form-text">@L["prop.diagPortHint"]</div>
         </div>
+
+        @* ─── Alarm Notifications ─────────────────────────────── *@
+        <hr />
+        <h6>📨 Alarm Notifications</h6>
+        <div class="form-text mb-2">
+            Send alarm notifications via Email, Telegram, and/or WhatsApp when alarms with "Notify on activation" fire.
+        </div>
+        <div class="mb-3 form-check">
+            <input class="form-check-input" type="checkbox"
+                   checked="@(ssNode.Settings.AlarmNotification?.Enabled == true)"
+                   @onchange="(e) => { EnsureAlarmNotification(ssNode).Enabled = (bool)(e.Value ?? false); OnChanged(); }" />
+            <label class="form-check-label">Enable Alarm Notifications</label>
+        </div>
+        @if (ssNode.Settings.AlarmNotification is { Enabled: true })
+        {
+            <div class="row g-2 mb-3">
+                <div class="col-6">
+                    <label class="form-label small">Min Severity</label>
+                    <input type="number" class="form-control form-control-sm" min="1" max="1000"
+                           @bind="ssNode.Settings.AlarmNotification.MinSeverity" @bind:after="OnChanged" />
+                    <div class="form-text">Only notify for alarms ≥ this severity (1–1000).</div>
+                </div>
+                <div class="col-6">
+                    <label class="form-label small">Cooldown (sec)</label>
+                    <input type="number" class="form-control form-control-sm" min="0"
+                           @bind="ssNode.Settings.AlarmNotification.CooldownSeconds" @bind:after="OnChanged" />
+                    <div class="form-text">Seconds between repeated notifications for the same alarm.</div>
+                </div>
+            </div>
+
+            @* ── Email Channel ── *@
+            <div class="card mb-2">
+                <div class="card-header py-1 px-2 d-flex justify-content-between align-items-center" style="font-size: 12px;">
+                    <span>📧 Email (SMTP)</span>
+                    <div class="form-check form-switch mb-0">
+                        <input class="form-check-input" type="checkbox"
+                               checked="@(ssNode.Settings.AlarmNotification.Email?.Enabled == true)"
+                               @onchange="(e) => { EnsureEmailChannel(ssNode).Enabled = (bool)(e.Value ?? false); OnChanged(); }" />
+                    </div>
+                </div>
+                @if (ssNode.Settings.AlarmNotification.Email is { Enabled: true })
+                {
+                    <div class="card-body p-2">
+                        <div class="row g-1 mb-1">
+                            <div class="col-8">
+                                <label class="form-label mb-0 small">SMTP Host</label>
+                                <input type="text" class="form-control form-control-sm"
+                                       @bind="ssNode.Settings.AlarmNotification.Email.SmtpHost" @bind:after="OnChanged"
+                                       placeholder="smtp.gmail.com" />
+                            </div>
+                            <div class="col-4">
+                                <label class="form-label mb-0 small">Port</label>
+                                <input type="number" class="form-control form-control-sm"
+                                       @bind="ssNode.Settings.AlarmNotification.Email.SmtpPort" @bind:after="OnChanged" />
+                            </div>
+                        </div>
+                        <div class="mb-1 form-check">
+                            <input class="form-check-input" type="checkbox"
+                                   @bind="ssNode.Settings.AlarmNotification.Email.UseSsl" @bind:after="OnChanged" />
+                            <label class="form-check-label small">Use SSL/TLS</label>
+                        </div>
+                        <div class="row g-1 mb-1">
+                            <div class="col-6">
+                                <label class="form-label mb-0 small">Username</label>
+                                <input type="text" class="form-control form-control-sm"
+                                       @bind="ssNode.Settings.AlarmNotification.Email.Username" @bind:after="OnChanged" />
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label mb-0 small">Password</label>
+                                <input type="password" class="form-control form-control-sm"
+                                       @bind="ssNode.Settings.AlarmNotification.Email.Password" @bind:after="OnChanged" />
+                            </div>
+                        </div>
+                        <div class="mb-1">
+                            <label class="form-label mb-0 small">From</label>
+                            <input type="email" class="form-control form-control-sm"
+                                   @bind="ssNode.Settings.AlarmNotification.Email.From" @bind:after="OnChanged"
+                                   placeholder="alerts@mycompany.com" />
+                        </div>
+                        <div class="mb-1">
+                            <label class="form-label mb-0 small">To (comma-separated)</label>
+                            <input type="text" class="form-control form-control-sm"
+                                   @bind="ssNode.Settings.AlarmNotification.Email.To" @bind:after="OnChanged"
+                                   placeholder="operator@mycompany.com, manager@mycompany.com" />
+                        </div>
+                    </div>
+                }
+            </div>
+
+            @* ── Telegram Channel ── *@
+            <div class="card mb-2">
+                <div class="card-header py-1 px-2 d-flex justify-content-between align-items-center" style="font-size: 12px;">
+                    <span>✈️ Telegram</span>
+                    <div class="form-check form-switch mb-0">
+                        <input class="form-check-input" type="checkbox"
+                               checked="@(ssNode.Settings.AlarmNotification.Telegram?.Enabled == true)"
+                               @onchange="(e) => { EnsureTelegramChannel(ssNode).Enabled = (bool)(e.Value ?? false); OnChanged(); }" />
+                    </div>
+                </div>
+                @if (ssNode.Settings.AlarmNotification.Telegram is { Enabled: true })
+                {
+                    <div class="card-body p-2">
+                        <div class="mb-1">
+                            <label class="form-label mb-0 small">Bot Token</label>
+                            <input type="password" class="form-control form-control-sm"
+                                   @bind="ssNode.Settings.AlarmNotification.Telegram.BotToken" @bind:after="OnChanged"
+                                   placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11" />
+                            <div class="form-text">Create a bot via @@BotFather on Telegram.</div>
+                        </div>
+                        <div class="mb-1">
+                            <label class="form-label mb-0 small">Chat ID(s) (comma-separated)</label>
+                            <input type="text" class="form-control form-control-sm"
+                                   @bind="ssNode.Settings.AlarmNotification.Telegram.ChatId" @bind:after="OnChanged"
+                                   placeholder="-1001234567890" />
+                            <div class="form-text">User, group, or channel ID. Use @@userinfobot to find your chat ID.</div>
+                        </div>
+                        <div class="mb-1 form-check">
+                            <input class="form-check-input" type="checkbox"
+                                   @bind="ssNode.Settings.AlarmNotification.Telegram.UseHtml" @bind:after="OnChanged" />
+                            <label class="form-check-label small">Use HTML formatting</label>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            @* ── WhatsApp Channel ── *@
+            <div class="card mb-2">
+                <div class="card-header py-1 px-2 d-flex justify-content-between align-items-center" style="font-size: 12px;">
+                    <span>💬 WhatsApp</span>
+                    <div class="form-check form-switch mb-0">
+                        <input class="form-check-input" type="checkbox"
+                               checked="@(ssNode.Settings.AlarmNotification.WhatsApp?.Enabled == true)"
+                               @onchange="(e) => { EnsureWhatsAppChannel(ssNode).Enabled = (bool)(e.Value ?? false); OnChanged(); }" />
+                    </div>
+                </div>
+                @if (ssNode.Settings.AlarmNotification.WhatsApp is { Enabled: true })
+                {
+                    <div class="card-body p-2">
+                        <div class="mb-1">
+                            <label class="form-label mb-0 small">Access Token</label>
+                            <input type="password" class="form-control form-control-sm"
+                                   @bind="ssNode.Settings.AlarmNotification.WhatsApp.AccessToken" @bind:after="OnChanged"
+                                   placeholder="WhatsApp Cloud API access token" />
+                        </div>
+                        <div class="mb-1">
+                            <label class="form-label mb-0 small">Phone Number ID</label>
+                            <input type="text" class="form-control form-control-sm"
+                                   @bind="ssNode.Settings.AlarmNotification.WhatsApp.PhoneNumberId" @bind:after="OnChanged"
+                                   placeholder="From Meta Business Manager" />
+                        </div>
+                        <div class="mb-1">
+                            <label class="form-label mb-0 small">To (E.164 format, comma-separated)</label>
+                            <input type="text" class="form-control form-control-sm"
+                                   @bind="ssNode.Settings.AlarmNotification.WhatsApp.To" @bind:after="OnChanged"
+                                   placeholder="+1234567890, +0987654321" />
+                        </div>
+                        <div class="row g-1 mb-1">
+                            <div class="col-6">
+                                <label class="form-label mb-0 small">Template Name (optional)</label>
+                                <input type="text" class="form-control form-control-sm"
+                                       @bind="ssNode.Settings.AlarmNotification.WhatsApp.TemplateName" @bind:after="OnChanged"
+                                       placeholder="alarm_notification" />
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label mb-0 small">Template Language</label>
+                                <input type="text" class="form-control form-control-sm"
+                                       @bind="ssNode.Settings.AlarmNotification.WhatsApp.TemplateLanguage" @bind:after="OnChanged"
+                                       placeholder="en_US" />
+                            </div>
+                        </div>
+                        <div class="form-text">Use a template for initiating conversations. Leave empty for free-form text (24h session window only).</div>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+
+    @* ── GDS (Global Discovery Server) ── *@
+    <div class="mb-3">
+        <div class="d-flex justify-content-between align-items-center mb-1">
+            <label class="form-label mb-0 fw-bold">🌐 GDS (Global Discovery Server)</label>
+        </div>
+        <div class="form-text mb-2">Configure a GDS endpoint for centralized certificate management.</div>
+        <div class="mb-2">
+            <label class="form-label mb-0 small">GDS Endpoint URL</label>
+            <input type="text" class="form-control form-control-sm"
+                   value="@(ssNode.Settings.Gds?.EndpointUrl ?? "")"
+                   @onchange="(e) => { EnsureGdsConfig(ssNode).EndpointUrl = e.Value?.ToString() ?? string.Empty; OnChanged(); }"
+                   placeholder="opc.tcp://gds.example.com:58810/GlobalDiscoveryServer" />
+        </div>
+        <div class="row g-2 mb-1">
+            <div class="col-6">
+                <label class="form-label mb-0 small">Username (optional)</label>
+                <input type="text" class="form-control form-control-sm"
+                       value="@(ssNode.Settings.Gds?.UserName ?? "")"
+                       @onchange="(e) => { EnsureGdsConfig(ssNode).UserName = e.Value?.ToString() ?? string.Empty; OnChanged(); }"
+                       placeholder="Anonymous if empty" />
+            </div>
+            <div class="col-6">
+                <label class="form-label mb-0 small">Password</label>
+                <input type="password" class="form-control form-control-sm"
+                       value="@(ssNode.Settings.Gds?.Password ?? "")"
+                       @onchange="(e) => { EnsureGdsConfig(ssNode).Password = e.Value?.ToString() ?? string.Empty; OnChanged(); }" />
+            </div>
+        </div>
     </div>
 }
 else if (Node is UserGroupNode ugNode)
@@ -955,5 +1160,42 @@ else if (Node is UserNode uNode)
             node.Recipe.Variables.RemoveAt(listIndex);
             OnChanged();
         }
+    }
+
+    // ── Alarm Notification helpers (ensure objects exist on first toggle) ──
+
+    private AlarmNotificationConfig EnsureAlarmNotification(ServerSettingsNode ssNode)
+    {
+        ssNode.Settings.AlarmNotification ??= new AlarmNotificationConfig();
+        return ssNode.Settings.AlarmNotification;
+    }
+
+    private EmailNotificationChannel EnsureEmailChannel(ServerSettingsNode ssNode)
+    {
+        EnsureAlarmNotification(ssNode);
+        ssNode.Settings.AlarmNotification!.Email ??= new EmailNotificationChannel();
+        return ssNode.Settings.AlarmNotification.Email;
+    }
+
+    private TelegramNotificationChannel EnsureTelegramChannel(ServerSettingsNode ssNode)
+    {
+        EnsureAlarmNotification(ssNode);
+        ssNode.Settings.AlarmNotification!.Telegram ??= new TelegramNotificationChannel();
+        return ssNode.Settings.AlarmNotification.Telegram;
+    }
+
+    private WhatsAppNotificationChannel EnsureWhatsAppChannel(ServerSettingsNode ssNode)
+    {
+        EnsureAlarmNotification(ssNode);
+        ssNode.Settings.AlarmNotification!.WhatsApp ??= new WhatsAppNotificationChannel();
+        return ssNode.Settings.AlarmNotification.WhatsApp;
+    }
+
+    // ── GDS Config helper ──
+
+    private GdsConfig EnsureGdsConfig(ServerSettingsNode ssNode)
+    {
+        ssNode.Settings.Gds ??= new GdsConfig();
+        return ssNode.Settings.Gds;
     }
 }

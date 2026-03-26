@@ -1,10 +1,10 @@
-﻿@using SharedModels
+@using SharedModels
 @using RuntimeViewer.Shared.Services
 @implements IDisposable
 
 <div class="alarm-list-widget" style="width: 100%; height: 100%; display: flex; flex-direction: column; font-family: var(--widget-font-family, sans-serif); font-size: var(--widget-font-size, 11px); font-weight: var(--widget-font-weight, normal); font-style: var(--widget-font-style, normal); background: var(--alarm-bg, #1a1a2e); color: var(--alarm-text, #e0e0e0); border: 1px solid var(--alarm-border, #333); border-radius: 4px; overflow: hidden;">
     @* Toolbar *@
-    <div style="display: flex; gap: 4px; align-items: center; padding: 4px 6px; background: var(--alarm-header-bg, #16213e); border-bottom: 1px solid var(--alarm-border, #333); flex-shrink: 0;">
+    <div style="display: flex; gap: 4px; align-items: center; padding: 4px 6px; background: var(--alarm-header-bg, #16213e); border-bottom: 1px solid var(--alarm-border, #333); flex-shrink: 0; flex-wrap: wrap;">
         <span style="font-weight: bold; font-size: 12px;">🔔 Alarms</span>
         <span style="font-size: 10px; color: #888;">(@_alarms.Count)</span>
         <span style="flex: 1;"></span>
@@ -13,9 +13,30 @@
         <button class="alarm-btn" @onclick="AckSelected" disabled="@(!HasSelected || _loading)" title="Acknowledge selected">✔ Ack</button>
         <button class="alarm-btn" @onclick="ConfirmSelected" disabled="@(!HasSelected || _loading)" title="Confirm/Reset selected">✔✔ Reset</button>
         <span style="width: 1px; height: 14px; background: #444;"></span>
+        <button class="alarm-btn" @onclick="ShowShelveDialog" disabled="@(!HasSelected || _loading)" title="Shelve selected alarms">🔇 Shelve</button>
+        <button class="alarm-btn" @onclick="UnshelveSelected" disabled="@(!HasShelvedSelected || _loading)" title="Unshelve selected alarms">🔔 Unshelve</button>
+        <span style="width: 1px; height: 14px; background: #444;"></span>
         <button class="alarm-btn alarm-btn-danger" @onclick="AckAll" disabled="@(_alarms.Count == 0 || _loading)" title="Acknowledge all">✔ Ack All</button>
         <button class="alarm-btn alarm-btn-danger" @onclick="ConfirmAll" disabled="@(_alarms.Count == 0 || _loading)" title="Confirm/Reset all">✔✔ Reset All</button>
     </div>
+
+    @* Shelve duration dialog *@
+    @if (_showShelveDialog)
+    {
+        <div style="display: flex; align-items: center; gap: 6px; padding: 4px 8px; background: #1e2a4a; border-bottom: 1px solid #444; flex-shrink: 0;">
+            <span style="font-size: 11px; color: #aaa;">Shelve for:</span>
+            <select @bind="_shelveDurationMinutes" style="background: #2a2a4a; color: #e0e0e0; border: 1px solid #555; border-radius: 3px; padding: 2px 4px; font-size: 11px;">
+                <option value="15">15 min</option>
+                <option value="30">30 min</option>
+                <option value="60">1 hour</option>
+                <option value="120">2 hours</option>
+                <option value="480">8 hours</option>
+                <option value="1440">24 hours</option>
+            </select>
+            <button class="alarm-btn" @onclick="ShelveSelected" style="background: #4a3a00; color: #ffc107;">🔇 Confirm Shelve</button>
+            <button class="alarm-btn" @onclick="() => _showShelveDialog = false">✕ Cancel</button>
+        </div>
+    }
 
     @* Table *@
     <div style="flex: 1; overflow-y: auto;">
@@ -45,6 +66,7 @@
                         <th style="width: 130px;">Time</th>
                         <th style="width: 40px;">Ack</th>
                         <th style="width: 40px;">Cfm</th>
+                        <th style="width: 55px;">Shelved</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -52,7 +74,8 @@
                     {
                         var a = alarm;
                         var severityClass = GetSeverityClass(a.Severity);
-                        <tr class="@severityClass @(a.IsSelected ? "alarm-selected" : "") @(!a.IsAcked ? "alarm-unacked" : "")" @onclick="() => ToggleSelection(a)">
+                        var shelvedClass = a.IsShelved ? "alarm-shelved" : "";
+                        <tr class="@severityClass @shelvedClass @(a.IsSelected ? "alarm-selected" : "") @(!a.IsAcked ? "alarm-unacked" : "")" @onclick="() => ToggleSelection(a)">
                             <td @onclick:stopPropagation>
                                 <input type="checkbox" checked="@a.IsSelected" @onchange="() => ToggleSelection(a)" />
                             </td>
@@ -62,6 +85,16 @@
                             <td class="alarm-time">@a.Time.ToString("yyyy-MM-dd HH:mm:ss")</td>
                             <td>@(a.IsAcked ? "✔" : "—")</td>
                             <td>@(a.IsConfirmed ? "✔" : "—")</td>
+                            <td>
+                                @if (a.IsShelved)
+                                {
+                                    <span title="@($"Shelved by {a.ShelvedBy} until {a.ShelvedUntil:HH:mm}")" style="color: #ffc107;">🔇</span>
+                                }
+                                else
+                                {
+                                    <span style="color: #555;">—</span>
+                                }
+                            </td>
                         </tr>
                     }
                 </tbody>
@@ -70,14 +103,33 @@
     </div>
 </div>
 
+<style>
+    .alarm-shelved {
+        opacity: 0.55;
+        background: repeating-linear-gradient(
+            -45deg,
+            transparent,
+            transparent 8px,
+            rgba(255, 193, 7, 0.06) 8px,
+            rgba(255, 193, 7, 0.06) 16px
+        ) !important;
+    }
+    .alarm-shelved td {
+        font-style: italic;
+    }
+</style>
+
 @code {
     [Inject] private OpcRuntimeClient Opc { get; set; } = default!;
 
     private List<AlarmEntry> _alarms = new();
     private bool _loading;
     private System.Threading.Timer? _refreshTimer;
+    private bool _showShelveDialog;
+    private int _shelveDurationMinutes = 60;
 
     private bool HasSelected => _alarms.Any(a => a.IsSelected);
+    private bool HasShelvedSelected => _alarms.Any(a => a.IsSelected && a.IsShelved);
     private bool AllSelected => _alarms.Count > 0 && _alarms.All(a => a.IsSelected);
 
     protected override async Task OnInitializedAsync()
@@ -155,6 +207,28 @@
         await RefreshAlarms();
     }
 
+    private void ShowShelveDialog()
+    {
+        _showShelveDialog = true;
+    }
+
+    private async Task ShelveSelected()
+    {
+        _showShelveDialog = false;
+        var selected = _alarms.Where(a => a.IsSelected && !a.IsShelved).ToList();
+        foreach (var a in selected)
+            await Opc.ShelveAlarmAsync(a.SourceName, _shelveDurationMinutes);
+        await RefreshAlarms();
+    }
+
+    private async Task UnshelveSelected()
+    {
+        var selected = _alarms.Where(a => a.IsSelected && a.IsShelved).ToList();
+        foreach (var a in selected)
+            await Opc.UnshelveAlarmAsync(a.SourceName);
+        await RefreshAlarms();
+    }
+
     private static string GetSeverityClass(string severity)
     {
         if (int.TryParse(severity, out var sev))
@@ -175,4 +249,3 @@
         _refreshTimer?.Dispose();
     }
 }
-

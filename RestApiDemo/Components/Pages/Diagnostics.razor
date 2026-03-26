@@ -1,0 +1,77 @@
+@page "/diagnostics"
+@rendermode InteractiveServer
+@inject HmiApiClient Api
+
+<div class="page-header">
+    <h1>Diagnostics</h1>
+    <p>Server diagnostics and redundancy status via <code>/api/diagnostics</code> and <code>/api/redundancy</code></p>
+</div>
+
+<div class="toolbar">
+    <button class="btn btn-primary" @onclick="Load">🔄 Refresh</button>
+    <span class="toolbar-spacer"></span>
+    @if (_autoRefresh)
+    {
+        <button class="btn btn-danger" @onclick="StopAutoRefresh">⏹ Stop Auto-Refresh</button>
+    }
+    else
+    {
+        <button class="btn btn-success" @onclick="StartAutoRefresh">▶ Auto-Refresh (2s)</button>
+    }
+</div>
+
+<div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+    <div class="card">
+        <div class="card-title">Server Diagnostics</div>
+        @if (_diagnostics.HasValue)
+        {
+            <div class="code-block">@FormatJson(_diagnostics.Value)</div>
+        }
+        else { <span style="color:#5a6a8a;">No diagnostics available</span> }
+    </div>
+
+    <div class="card">
+        <div class="card-title">Redundancy Status</div>
+        @if (_redundancy.HasValue)
+        {
+            <div class="code-block">@FormatJson(_redundancy.Value)</div>
+        }
+        else { <span style="color:#5a6a8a;">Redundancy not configured</span> }
+    </div>
+</div>
+
+@code {
+    private JsonElement? _diagnostics;
+    private JsonElement? _redundancy;
+    private bool _autoRefresh;
+    private System.Threading.Timer? _timer;
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load()
+    {
+        _diagnostics = await Api.GetDiagnosticsAsync();
+        _redundancy = await Api.GetRedundancyAsync();
+    }
+
+    private void StartAutoRefresh()
+    {
+        _autoRefresh = true;
+        _timer = new System.Threading.Timer(async _ =>
+        {
+            await InvokeAsync(async () => { await Load(); StateHasChanged(); });
+        }, null, 2000, 2000);
+    }
+
+    private void StopAutoRefresh()
+    {
+        _autoRefresh = false;
+        _timer?.Dispose();
+        _timer = null;
+    }
+
+    private static string FormatJson(JsonElement el) =>
+        JsonSerializer.Serialize(el, new JsonSerializerOptions { WriteIndented = true });
+
+    public void Dispose() => _timer?.Dispose();
+}

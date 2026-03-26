@@ -132,6 +132,12 @@ namespace SharedModels
         /// A value of 0 disables hysteresis.
         /// </summary>
         public double Hysteresis { get; set; }
+
+        /// <summary>
+        /// When true, alarm activation triggers notifications via the configured channels
+        /// (Email, Telegram, WhatsApp) in the server's AlarmNotification settings.
+        /// </summary>
+        public bool NotifyOnActivation { get; set; }
     }
 
     public class DataLoggingConfig
@@ -304,6 +310,18 @@ namespace SharedModels
         /// cloud SignalR hub instead of directly to the OPC UA server.
         /// </summary>
         public CloudRelayConfig? CloudRelay { get; set; }
+
+        /// <summary>
+        /// Alarm notification configuration. Defines delivery channels (Email, Telegram, WhatsApp)
+        /// used when an alarm with NotifyOnActivation fires.
+        /// </summary>
+        public AlarmNotificationConfig? AlarmNotification { get; set; }
+
+        /// <summary>
+        /// GDS (Global Discovery Server) configuration for OPC UA certificate management.
+        /// When configured, the server can register with a GDS and receive CA-signed certificates.
+        /// </summary>
+        public GdsConfig? Gds { get; set; }
     }
 
     /// <summary>
@@ -366,6 +384,134 @@ namespace SharedModels
 
         /// <summary>Optional project/site name included in the email subject.</summary>
         public string ProjectName { get; set; } = "";
+    }
+
+    /// <summary>
+    /// Configuration for OPC UA Global Discovery Server (GDS) integration.
+    /// </summary>
+    public class GdsConfig
+    {
+        /// <summary>OPC UA endpoint URL of the GDS (e.g. "opc.tcp://gds.example.com:58810/GlobalDiscoveryServer").</summary>
+        public string EndpointUrl { get; set; } = "";
+
+        /// <summary>Username for GDS authentication (optional — leave empty for anonymous).</summary>
+        public string UserName { get; set; } = "";
+
+        /// <summary>Password for GDS authentication.</summary>
+        public string Password { get; set; } = "";
+    }
+
+    /// <summary>
+    /// Configuration for alarm notifications delivered via Email, Telegram, and/or WhatsApp
+    /// when an alarm with NotifyOnActivation fires.
+    /// </summary>
+    public class AlarmNotificationConfig
+    {
+        /// <summary>Whether alarm notifications are globally enabled.</summary>
+        public bool Enabled { get; set; }
+
+        /// <summary>
+        /// Minimum severity threshold (1–1000) for sending notifications.
+        /// Alarms below this severity are silently ignored. Default 1 (all alarms).
+        /// </summary>
+        public ushort MinSeverity { get; set; } = 1;
+
+        /// <summary>
+        /// Cooldown period in seconds between repeated notifications for the same alarm.
+        /// Prevents notification flooding during alarm flickering. Default 60 seconds.
+        /// </summary>
+        public int CooldownSeconds { get; set; } = 60;
+
+        /// <summary>Email channel configuration.</summary>
+        public EmailNotificationChannel? Email { get; set; }
+
+        /// <summary>Telegram Bot API channel configuration.</summary>
+        public TelegramNotificationChannel? Telegram { get; set; }
+
+        /// <summary>WhatsApp Cloud API channel configuration.</summary>
+        public WhatsAppNotificationChannel? WhatsApp { get; set; }
+    }
+
+    /// <summary>
+    /// Email notification channel using SMTP.
+    /// </summary>
+    public class EmailNotificationChannel
+    {
+        /// <summary>Whether email notifications are enabled.</summary>
+        public bool Enabled { get; set; }
+
+        /// <summary>SMTP server host (e.g. "smtp.gmail.com").</summary>
+        public string SmtpHost { get; set; } = "";
+
+        /// <summary>SMTP port (e.g. 587 for TLS, 465 for SSL).</summary>
+        public int SmtpPort { get; set; } = 587;
+
+        /// <summary>Use TLS/SSL for the SMTP connection.</summary>
+        public bool UseSsl { get; set; } = true;
+
+        /// <summary>SMTP username (often the sender email address).</summary>
+        public string Username { get; set; } = "";
+
+        /// <summary>SMTP password or app password.</summary>
+        public string Password { get; set; } = "";
+
+        /// <summary>Sender email address.</summary>
+        public string From { get; set; } = "";
+
+        /// <summary>Recipient email address(es), comma-separated.</summary>
+        public string To { get; set; } = "";
+    }
+
+    /// <summary>
+    /// Telegram Bot API notification channel.
+    /// Requires a bot token from &#64;BotFather and a chat ID.
+    /// </summary>
+    public class TelegramNotificationChannel
+    {
+        /// <summary>Whether Telegram notifications are enabled.</summary>
+        public bool Enabled { get; set; }
+
+        /// <summary>Telegram Bot API token (e.g. "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11").</summary>
+        public string BotToken { get; set; } = "";
+
+        /// <summary>
+        /// Target chat ID(s), comma-separated.
+        /// Can be a user, group, or channel ID (e.g. "-1001234567890").
+        /// </summary>
+        public string ChatId { get; set; } = "";
+
+        /// <summary>When true, sends with parse_mode=HTML for formatted messages.</summary>
+        public bool UseHtml { get; set; } = true;
+    }
+
+    /// <summary>
+    /// WhatsApp Cloud API notification channel.
+    /// Requires a Meta/WhatsApp Business account with Cloud API access.
+    /// </summary>
+    public class WhatsAppNotificationChannel
+    {
+        /// <summary>Whether WhatsApp notifications are enabled.</summary>
+        public bool Enabled { get; set; }
+
+        /// <summary>WhatsApp Cloud API access token.</summary>
+        public string AccessToken { get; set; } = "";
+
+        /// <summary>WhatsApp Business Phone Number ID (from Meta Business Manager).</summary>
+        public string PhoneNumberId { get; set; } = "";
+
+        /// <summary>
+        /// Recipient phone number(s) in E.164 format, comma-separated (e.g. "+1234567890").
+        /// </summary>
+        public string To { get; set; } = "";
+
+        /// <summary>
+        /// Optional pre-approved message template name. When set, sends a template message
+        /// instead of a free-form text (required for initiating conversations).
+        /// </summary>
+        public string TemplateName { get; set; } = "";
+
+        /// <summary>Language code for the template (e.g. "en_US"). Default "en_US".</summary>
+        public string TemplateLanguage { get; set; } = "en_US";
     }
 
     /// <summary>

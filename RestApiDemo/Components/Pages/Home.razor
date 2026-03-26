@@ -1,0 +1,147 @@
+@page "/"
+@rendermode InteractiveServer
+@inject HmiApiClient Api
+
+<div class="page-header">
+    <h1>Dashboard</h1>
+    <p>HMI Server REST API overview — real-time status from all endpoints</p>
+</div>
+
+<div class="connection-bar">
+    @if (_connected)
+    {
+        <span class="dot dot-green"></span>
+        <span>Connected to <strong>@_baseUrl</strong></span>
+        <span style="margin-left:auto; color:#5a6a8a;">@_health?.Variables variables</span>
+    }
+    else
+    {
+        <span class="dot dot-red"></span>
+        <span>Cannot reach server at <strong>@_baseUrl</strong> — is the HMI server running with the REST API enabled?</span>
+    }
+    <button class="btn btn-sm" style="margin-left:8px;" @onclick="Refresh" disabled="@_loading">🔄 Refresh</button>
+</div>
+
+<div class="card-grid">
+    <div class="stat-card">
+        <div class="stat-value">@(_health?.Variables ?? 0)</div>
+        <div class="stat-label">Variables</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">@(_alarmCount)</div>
+        <div class="stat-label">Active Alarms</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">@(_recipeCount)</div>
+        <div class="stat-label">Recipes</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">@(_eventCount)</div>
+        <div class="stat-label">Recent Events</div>
+    </div>
+</div>
+
+@if (_connected)
+{
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+        <div class="card">
+            <div class="card-title">Recent Events</div>
+            @if (_events?.Events?.Count > 0)
+            {
+                <table class="data-table">
+                    <thead><tr><th>Time</th><th>Category</th><th>Message</th></tr></thead>
+                    <tbody>
+                        @foreach (var e in _events.Events.Take(8))
+                        {
+                            <tr>
+                                <td style="white-space:nowrap;">@e.Timestamp.ToString("HH:mm:ss")</td>
+                                <td><span class="pill @GetCategoryPill(e.Category)">@e.Category</span></td>
+                                <td>@Truncate(e.Message, 60)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+            else { <span style="color:#5a6a8a; font-size:12px;">No events available</span> }
+        </div>
+
+        <div class="card">
+            <div class="card-title">Active Alarms</div>
+            @if (_alarms?.Alarms?.Count > 0)
+            {
+                <table class="data-table">
+                    <thead><tr><th>Source</th><th>Message</th><th>Sev</th><th>State</th></tr></thead>
+                    <tbody>
+                        @foreach (var a in _alarms.Alarms.Take(8))
+                        {
+                            <tr>
+                                <td>@Truncate(a.VariablePath, 25)</td>
+                                <td>@Truncate(a.Message, 30)</td>
+                                <td>@a.Severity</td>
+                                <td>
+                                    @if (a.IsShelved) { <span class="pill pill-warn">Shelved</span> }
+                                    else if (!a.IsAcknowledged) { <span class="pill pill-error">Unacked</span> }
+                                    else { <span class="pill pill-ok">Acked</span> }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+            else { <span style="color:#5a6a8a; font-size:12px;">No active alarms ✅</span> }
+        </div>
+    </div>
+}
+
+@code {
+    private bool _loading;
+    private bool _connected;
+    private string _baseUrl = "";
+
+    private HealthResponse? _health;
+    private AlarmListResponse? _alarms;
+    private EventListResponse? _events;
+    private int _alarmCount, _recipeCount, _eventCount;
+
+    [Inject] private IConfiguration Config { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _baseUrl = Config["HmiApi:BaseUrl"] ?? "http://localhost:14842";
+        await Refresh();
+    }
+
+    private async Task Refresh()
+    {
+        _loading = true;
+        StateHasChanged();
+
+        _health = await Api.GetHealthAsync();
+        _connected = _health != null;
+
+        if (_connected)
+        {
+            _alarms = await Api.GetAlarmsAsync();
+            _alarmCount = _alarms?.Count ?? 0;
+
+            var recipes = await Api.GetRecipesAsync();
+            _recipeCount = recipes?.Count ?? 0;
+
+            _events = await Api.GetEventsAsync(max: 20);
+            _eventCount = _events?.Count ?? 0;
+        }
+
+        _loading = false;
+    }
+
+    private static string GetCategoryPill(string cat) => cat.ToLower() switch
+    {
+        "critical" or "error" => "pill-error",
+        "warning" => "pill-warn",
+        "info" => "pill-info",
+        _ => "pill-ok"
+    };
+
+    private static string Truncate(string? s, int max) =>
+        s == null ? "" : s.Length <= max ? s : s[..max] + "…";
+}

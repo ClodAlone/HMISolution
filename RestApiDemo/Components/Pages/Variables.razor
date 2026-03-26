@@ -1,0 +1,143 @@
+@page "/variables"
+@rendermode InteractiveServer
+@inject HmiApiClient Api
+
+<div class="page-header">
+    <h1>Variables</h1>
+    <p>Read and write server variables via <code>GET/POST /api/variables</code></p>
+</div>
+
+<div class="toolbar">
+    <input type="text" @bind="_filter" @bind:event="oninput" placeholder="Filter by path…" style="max-width:300px;" />
+    <button class="btn btn-primary" @onclick="Load" disabled="@_loading">🔄 Load</button>
+    <span class="toolbar-spacer"></span>
+    <span style="font-size:11px; color:#5a6a8a;">@(_vars?.Count ?? 0) variables</span>
+</div>
+
+@* Write panel *@
+<div class="card" style="margin-bottom:16px;">
+    <div class="card-title">Write Variable</div>
+    <div style="display:flex; gap:8px; align-items:flex-end;">
+        <div class="form-group" style="flex:2;">
+            <label>Variable Path</label>
+            <input type="text" @bind="_writePath" placeholder="e.g. Folder.Temperature" />
+        </div>
+        <div class="form-group" style="flex:1;">
+            <label>Value</label>
+            <input type="text" @bind="_writeValue" placeholder="42" />
+        </div>
+        <button class="btn btn-success" style="margin-bottom:12px;" @onclick="WriteVariable" disabled="@(string.IsNullOrEmpty(_writePath))">✏️ Write</button>
+    </div>
+    @if (_writeResult != null)
+    {
+        <div style="font-size:12px; color:#7dffb3; margin-top:6px;">✔ Written: @_writeResult</div>
+    }
+</div>
+
+@* Batch operations *@
+<div class="card" style="margin-bottom:16px;">
+    <div class="card-title">Batch Read</div>
+    <div style="display:flex; gap:8px; align-items:flex-end;">
+        <div class="form-group" style="flex:1;">
+            <label>Paths (comma-separated)</label>
+            <input type="text" @bind="_batchPaths" placeholder="Folder.Tag1, Folder.Tag2, Folder.Tag3" />
+        </div>
+        <button class="btn btn-primary" style="margin-bottom:12px;" @onclick="BatchRead" disabled="@(string.IsNullOrEmpty(_batchPaths))">📥 Batch Read</button>
+    </div>
+    @if (_batchResults != null)
+    {
+        <div class="code-block" style="margin-top:8px;">@FormatJson(_batchResults)</div>
+    }
+</div>
+
+@* Variable list *@
+<div class="card">
+    <div class="card-title">All Variables</div>
+    @if (_vars?.Variables != null)
+    {
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Path</th>
+                    <th>Value</th>
+                    <th>Type</th>
+                    <th>Quality</th>
+                    <th>Timestamp</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var v in _vars.Variables)
+                {
+                    <tr>
+                        <td style="font-family:monospace; font-size:11px;">@v.Path</td>
+                        <td style="color:#00d2ff; font-weight:600;">@v.Value</td>
+                        <td style="color:#5a6a8a;">@v.Type</td>
+                        <td>
+                            @if (v.Quality == "Good") { <span class="pill pill-ok">Good</span> }
+                            else { <span class="pill pill-warn">@v.Quality</span> }
+                        </td>
+                        <td style="color:#5a6a8a; font-size:11px;">@v.Timestamp?.ToString("HH:mm:ss")</td>
+                        <td><button class="btn btn-sm" @onclick="() => SelectForWrite(v)">✏️</button></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+    else if (_loading)
+    {
+        <span style="color:#5a6a8a;">Loading…</span>
+    }
+</div>
+
+@code {
+    private bool _loading;
+    private string _filter = "";
+    private VariableListResponse? _vars;
+
+    private string _writePath = "";
+    private string _writeValue = "";
+    private string? _writeResult;
+
+    private string _batchPaths = "";
+    private VariableListResponse? _batchResults;
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load()
+    {
+        _loading = true;
+        _vars = await Api.GetVariablesAsync(string.IsNullOrWhiteSpace(_filter) ? null : _filter);
+        _loading = false;
+    }
+
+    private async Task WriteVariable()
+    {
+        _writeResult = null;
+        object value = double.TryParse(_writeValue, out var d) ? d
+            : bool.TryParse(_writeValue, out var b) ? b
+            : _writeValue;
+        var result = await Api.WriteVariableAsync(_writePath, value);
+        _writeResult = result?.Status == "ok" ? $"{_writePath} = {_writeValue}" : result?.Status ?? "Failed";
+        await Load();
+    }
+
+    private async Task BatchRead()
+    {
+        var paths = _batchPaths.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        _batchResults = await Api.BatchReadAsync(paths);
+    }
+
+    private void SelectForWrite(VariableResponse v)
+    {
+        _writePath = v.Path;
+        _writeValue = v.Value?.ToString() ?? "";
+        _writeResult = null;
+    }
+
+    private static string FormatJson(object? obj)
+    {
+        if (obj == null) return "null";
+        return JsonSerializer.Serialize(obj, new JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+    }
+}

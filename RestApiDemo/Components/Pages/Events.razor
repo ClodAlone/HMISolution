@@ -1,0 +1,95 @@
+@page "/events"
+@rendermode InteractiveServer
+@inject HmiApiClient Api
+
+<div class="page-header">
+    <h1>Events &amp; Audit</h1>
+    <p>Query the event log and audit trail via <code>/api/events</code> and <code>/api/audit</code></p>
+</div>
+
+<div class="toolbar">
+    <button class="btn @(_activeTab == "events" ? "btn-primary" : "")" @onclick=@(() => _activeTab = "events")>📜 Events</button>
+    <button class="btn @(_activeTab == "audit" ? "btn-primary" : "")" @onclick=@(() => _activeTab = "audit")>🔒 Audit Trail</button>
+    <span class="toolbar-spacer"></span>
+    <div class="form-group" style="margin-bottom:0; display:flex; align-items:center; gap:6px;">
+        <label style="margin:0;">Max:</label>
+        <input type="number" @bind="_maxResults" style="width:80px;" />
+    </div>
+    <button class="btn btn-primary" @onclick="Load">🔄 Load</button>
+</div>
+
+@if (_activeTab == "events")
+{
+    <div class="card">
+        <div class="card-title">Event Log (@(_events?.Count ?? 0) entries)</div>
+        @if (_events?.Events?.Count > 0)
+        {
+            <table class="data-table">
+                <thead><tr><th>Timestamp</th><th>Category</th><th>Source</th><th>Message</th><th>Details</th></tr></thead>
+                <tbody>
+                    @foreach (var e in _events.Events)
+                    {
+                        <tr>
+                            <td style="white-space:nowrap; font-size:11px;">@e.Timestamp.ToString("yyyy-MM-dd HH:mm:ss")</td>
+                            <td><span class="pill @GetCatPill(e.Category)">@e.Category</span></td>
+                            <td>@e.Source</td>
+                            <td>@e.Message</td>
+                            <td style="color:#5a6a8a; font-size:11px;">@(e.Details ?? "—")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+        else { <span style="color:#5a6a8a;">No events found</span> }
+    </div>
+}
+else
+{
+    <div class="card">
+        <div class="card-title">Audit Trail (@(_audit?.Count ?? 0) records)</div>
+        @if (_audit?.Records?.Count > 0)
+        {
+            <table class="data-table">
+                <thead><tr><th>Timestamp</th><th>Action</th><th>Username</th><th>Target</th><th>Details</th></tr></thead>
+                <tbody>
+                    @foreach (var a in _audit.Records)
+                    {
+                        <tr>
+                            <td style="white-space:nowrap; font-size:11px;">@a.Timestamp.ToString("yyyy-MM-dd HH:mm:ss")</td>
+                            <td><span class="pill pill-info">@a.Action</span></td>
+                            <td style="font-weight:600;">@a.Username</td>
+                            <td style="font-family:monospace; font-size:11px;">@(a.Target ?? "—")</td>
+                            <td style="color:#5a6a8a; font-size:11px;">@(a.Details ?? "—")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+        else { <span style="color:#5a6a8a;">No audit records found</span> }
+    </div>
+}
+
+@code {
+    private string _activeTab = "events";
+    private int _maxResults = 100;
+    private EventListResponse? _events;
+    private AuditListResponse? _audit;
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load()
+    {
+        if (_activeTab == "events")
+            _events = await Api.GetEventsAsync(max: _maxResults);
+        else
+            _audit = await Api.GetAuditAsync(max: _maxResults);
+    }
+
+    private static string GetCatPill(string cat) => cat.ToLower() switch
+    {
+        "critical" or "error" => "pill-error",
+        "warning" => "pill-warn",
+        "info" => "pill-info",
+        _ => "pill-ok"
+    };
+}
