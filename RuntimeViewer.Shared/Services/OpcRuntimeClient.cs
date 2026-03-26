@@ -1,4 +1,4 @@
-﻿using Opc.Ua;
+using Opc.Ua;
 using Opc.Ua.Client;
 using Opc.Ua.Configuration;
 
@@ -21,6 +21,21 @@ public class AlarmEntry
     public DateTime? ShelvedUntil { get; set; }
     public string? ShelvedBy { get; set; }
     public bool IsSelected { get; set; }
+}
+
+/// <summary>Represents a node discovered during an OPC UA Browse operation.</summary>
+public class BrowsedTag
+{
+    public string NodeId { get; set; } = "";
+    public string DisplayName { get; set; } = "";
+    public string BrowsePath { get; set; } = "";
+    public string NodeClass { get; set; } = "";
+    public string DataType { get; set; } = "";
+    public bool IsFolder { get; set; }
+    public bool IsExpanded { get; set; }
+    public int Depth { get; set; }
+    public List<BrowsedTag> Children { get; set; } = [];
+    public bool ChildrenLoaded { get; set; }
 }
 
 public class OpcRuntimeClient : IDisposable
@@ -713,6 +728,213 @@ public class OpcRuntimeClient : IDisposable
             return false;
         }
     }
+
+    // ─── Tag Browser ─────────────────────────────────────────
+
+    /// <summary>Browse child nodes of the given parent. Returns folders and variables.</summary>
+    public async Task<List<BrowsedTag>> BrowseChildrenAsync(string? parentNodeId = null, ushort namespaceIndex = 2)
+    {
+        var result = new List<BrowsedTag>();
+        if (_session == null || !_session.Connected) return result;
+
+        try
+        {
+            NodeId startNode;
+            if (string.IsNullOrEmpty(parentNodeId))
+            {
+                // Start from the Objects folder
+                startNode = ObjectIds.ObjectsFolder;
+            }
+            else
+            {
+                startNode = NodeId.Parse(parentNodeId);
+            }
+
+            var browseDesc = new BrowseDescription
+            {
+                NodeId = startNode,
+                BrowseDirection = BrowseDirection.Forward,
+                ReferenceTypeId = ReferenceTypeIds.HierarchicalReferences,
+                IncludeSubtypes = true,
+                NodeClassMask = (uint)(NodeClass.Object | NodeClass.Variable),
+                ResultMask = (uint)(BrowseResultMask.DisplayName | BrowseResultMask.NodeClass | BrowseResultMask.TypeDefinition)
+            };
+
+            ReferenceDescriptionCollection? references = null;
+            byte[]? continuationPoint = null;
+
+            await Task.Run(() =>
+                _session.Browse(null, null, startNode,
+                    0u, browseDesc.BrowseDirection,
+                    browseDesc.ReferenceTypeId,
+                    browseDesc.IncludeSubtypes,
+                    browseDesc.NodeClassMask,
+                    out continuationPoint, out references));
+
+            if (references != null)
+            {
+                foreach (var rd in references)
+                {
+                    var nodeId = ExpandedNodeId.ToNodeId(rd.NodeId, _session.NamespaceUris);
+                    var isFolder = rd.NodeClass == NodeClass.Object;
+                    var dataType = "";
+
+                    if (!isFolder)
+                    {
+                        try
+                        {
+                            var dtVal = _session.ReadValue(nodeId);
+                            dataType = dtVal?.WrappedValue.TypeInfo?.BuiltInType.ToString() ?? "";
+                        }
+                        catch { }
+                    }
+
+                    result.Add(new BrowsedTag
+                    {
+                        NodeId = nodeId.ToString(),
+                        DisplayName = rd.DisplayName?.Text ?? "",
+                        BrowsePath = nodeId is { NamespaceIndex: > 0, IdType: IdType.String }
+                            ? (string)nodeId.Identifier
+                            : rd.DisplayName?.Text ?? "",
+                        NodeClass = rd.NodeClass.ToString(),
+                        DataType = dataType,
+                        IsFolder = isFolder
+                    });
+                }
+            }
+
+            // Release continuation point if any
+            while (continuationPoint != null && continuationPoint.Length > 0)
+            {
+                var cp = continuationPoint;
+                var browseNextResult = await Task.Run(() =>
+                {
+                    _session.BrowseNext(null, false, cp, out var nc, out var nr);
+                    return (ContinuationPoint: nc, References: nr);
+                });
+                continuationPoint = browseNextResult.ContinuationPoint;
+
+                if (browseNextResult.References != null)
+                {
+                    foreach (var rd in browseNextResult.References)
+                    {
+                        var nodeId = ExpandedNodeId.ToNodeId(rd.NodeId, _session.NamespaceUris);
+                        var isFolder = rd.NodeClass == NodeClass.Object;
+                        var dataType = "";
+
+                        if (!isFolder)
+                        {
+                            try
+                            {
+                                var dtVal = _session.ReadValue(nodeId);
+                                dataType = dtVal?.WrappedValue.TypeInfo?.BuiltInType.ToString() ?? "";
+                            }
+                            catch { }
+                        }
+
+                        result.Add(new BrowsedTag
+                        {
+                            NodeId = nodeId.ToString(),
+                            DisplayName = rd.DisplayName?.Text ?? "",
+                            BrowsePath = nodeId is { NamespaceIndex: > 0, IdType: IdType.String }
+                                ? (string)nodeId.Identifier
+                                : rd.DisplayName?.Text ?? "",
+                            NodeClass = rd.NodeClass.ToString(),
+                            DataType = dataType,
+                            IsFolder = isFolder
+                        });
+                    }
+                }
+            }
+
+            Log($"BROWSE: {result.Count} child node(s) under {parentNodeId ?? "Objects"}");
+        }
+        catch (Exception ex)
+        {
+            Log($"BROWSE ERROR: {ex.GetType().Name}: {ex.Message}");
+        }
+
+        return result;
+    }
+
+    /// <summary>Recursively collect all variable tags from the server (up to maxDepth levels).</summary>
+    public async Task<List<BrowsedTag>> BrowseAllTagsAsync(int maxDepth = 10, ushort namespaceIndex = 2)
+    {
+        var allTags = new List<BrowsedTag>();
+        if (_session == null || !_session.Connected) return allTags;
+
+        async Task BrowseRecursive(string? parentId, string parentPath, int depth)
+        {
+            if (depth > maxDepth) return;
+            var children = await BrowseChildrenAsync(parentId, namespaceIndex);
+            foreach (var child in children)
+            {
+                var path = string.IsNullOrEmpty(parentPath)
+                    ? child.DisplayName
+                    : $"{parentPath}.{child.DisplayName}";
+                child.BrowsePath = path;
+                child.Depth = depth;
+                allTags.Add(child);
+                if (child.IsFolder)
+                    await BrowseRecursive(child.NodeId, path, depth + 1);
+            }
+        }
+
+        await BrowseRecursive(null, "", 0);
+        Log($"BROWSE ALL: Found {allTags.Count} total tag(s)");
+        return allTags;
+    }
+
+    /// <summary>Read the current value of a tag by its NodeId string.</summary>
+    public async Task<string?> ReadTagValueAsync(string nodeIdStr)
+    {
+        if (_session == null || !_session.Connected) return null;
+        try
+        {
+            var nodeId = NodeId.Parse(nodeIdStr);
+            DataValue? val = null;
+            await Task.Run(() => val = _session.ReadValue(nodeId));
+            if (val?.WrappedValue.Value is IFormattable fmt)
+                return fmt.ToString(null, System.Globalization.CultureInfo.InvariantCulture);
+            return val?.WrappedValue.Value?.ToString();
+        }
+        catch (Exception ex)
+        {
+            Log($"READ TAG ERROR: {nodeIdStr} — {ex.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>Write a value to a tag by its NodeId string.</summary>
+    public async Task<bool> WriteTagValueAsync(string nodeIdStr, string value)
+    {
+        if (_session == null || !_session.Connected) return false;
+        try
+        {
+            var nodeId = NodeId.Parse(nodeIdStr);
+            var nodesToWrite = new WriteValueCollection
+            {
+                new WriteValue
+                {
+                    NodeId = nodeId,
+                    AttributeId = Attributes.Value,
+                    Value = new DataValue(new Variant(value))
+                }
+            };
+            StatusCodeCollection? results = null;
+            DiagnosticInfoCollection? diagnosticInfos = null;
+            await Task.Run(() => _session.Write(null, nodesToWrite, out results, out diagnosticInfos));
+            var ok = results != null && StatusCode.IsGood(results[0]);
+            if (!ok) Log($"WRITE TAG FAIL: {nodeIdStr} = {value}");
+            return ok;
+        }
+        catch (Exception ex)
+        {
+            Log($"WRITE TAG ERROR: {nodeIdStr} = {value} — {ex.Message}");
+            return false;
+        }
+    }
+
 
     public void Dispose()
     {

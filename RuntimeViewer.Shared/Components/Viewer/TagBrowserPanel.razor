@@ -1,0 +1,356 @@
+@using RuntimeViewer.Shared.Services
+@implements IDisposable
+
+<div class="rv-tagbrowser-panel">
+    <div class="rv-tagbrowser-header">
+        <span>&#x1F3F7;&#xFE0F; Tag Browser</span>
+        <span style="flex:1;"></span>
+        <button class="rv-tagbrowser-btn" @onclick="RefreshRoot" title="Refresh" disabled="@_loading">&#x27F3;</button>
+        <button class="rv-tagbrowser-btn" @onclick="() => OnClose.InvokeAsync()" title="Close">&#x2715;</button>
+    </div>
+
+    <div class="rv-tagbrowser-search">
+        <input type="text" placeholder="Search tags..." @bind="_searchText" @bind:event="oninput"
+               @onkeydown="OnSearchKeyDown" />
+        @if (!string.IsNullOrEmpty(_searchText))
+        {
+            <button class="rv-tagbrowser-clear" @onclick="ClearSearch" title="Clear">&#x2715;</button>
+        }
+    </div>
+
+    @if (_loading)
+    {
+        <div class="rv-tagbrowser-loading">
+            <span class="rv-tagbrowser-spinner"></span>
+            <span>Browsing server...</span>
+        </div>
+    }
+    else if (!string.IsNullOrEmpty(_error))
+    {
+        <div class="rv-tagbrowser-error">@_error</div>
+    }
+    else if (IsSearchMode)
+    {
+        <div class="rv-tagbrowser-list">
+            @{ var filtered = GetFilteredTags(); }
+            @if (filtered.Count == 0)
+            {
+                <div class="rv-tagbrowser-empty">No tags match "@_searchText"</div>
+            }
+            else
+            {
+                @foreach (var tag in filtered.Take(200))
+                {
+                    var t = tag;
+                    <div class="rv-tagbrowser-item @(t == _selectedTag ? "selected" : "")"
+                         @onclick="() => SelectTag(t)">
+                        <span class="rv-tagbrowser-icon">@(t.IsFolder ? "\U0001F4C1" : "\U0001F4CA")</span>
+                        <span class="rv-tagbrowser-path" title="@t.BrowsePath">@HighlightMatch(t.BrowsePath)</span>
+                        @if (!t.IsFolder && !string.IsNullOrEmpty(t.DataType))
+                        {
+                            <span class="rv-tagbrowser-dtype">@t.DataType</span>
+                        }
+                    </div>
+                }
+                @if (filtered.Count > 200)
+                {
+                    <div class="rv-tagbrowser-more">... +@(filtered.Count - 200) more results</div>
+                }
+            }
+        </div>
+    }
+    else
+    {
+        <div class="rv-tagbrowser-tree">
+            @if (_rootNodes.Count == 0)
+            {
+                <div class="rv-tagbrowser-empty">No tags found. Click Refresh to browse.</div>
+            }
+            else
+            {
+                @RenderNodes(_rootNodes)
+            }
+        </div>
+    }
+
+    @if (_selectedTag != null && !_selectedTag.IsFolder)
+    {
+        <div class="rv-tagbrowser-detail">
+            <div class="rv-tagbrowser-detail-row">
+                <span class="rv-tagbrowser-detail-label">Path</span>
+                <span class="rv-tagbrowser-detail-value" title="@_selectedTag.BrowsePath">@_selectedTag.BrowsePath</span>
+            </div>
+            <div class="rv-tagbrowser-detail-row">
+                <span class="rv-tagbrowser-detail-label">NodeId</span>
+                <span class="rv-tagbrowser-detail-value" title="@_selectedTag.NodeId">@_selectedTag.NodeId</span>
+            </div>
+            <div class="rv-tagbrowser-detail-row">
+                <span class="rv-tagbrowser-detail-label">Type</span>
+                <span class="rv-tagbrowser-detail-value">@_selectedTag.DataType</span>
+            </div>
+            <div class="rv-tagbrowser-detail-row">
+                <span class="rv-tagbrowser-detail-label">Value</span>
+                <span class="rv-tagbrowser-detail-value rv-tagbrowser-live">@(_selectedValue ?? "---")</span>
+                <button class="rv-tagbrowser-btn-sm" @onclick="ReadSelectedValue" title="Read now">R</button>
+            </div>
+            <div class="rv-tagbrowser-detail-row">
+                <span class="rv-tagbrowser-detail-label">Write</span>
+                <input type="text" class="rv-tagbrowser-write-input" @bind="_writeValue" placeholder="New value" />
+                <button class="rv-tagbrowser-btn-sm rv-tagbrowser-btn-write" @onclick="WriteSelectedValue"
+                        disabled="@_writing" title="Write value">W</button>
+            </div>
+            @if (!string.IsNullOrEmpty(_writeStatus))
+            {
+                <div class="rv-tagbrowser-write-status @(_writeOk ? "ok" : "fail")">@_writeStatus</div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Inject] private OpcRuntimeClient Opc { get; set; } = default!;
+
+    private List<BrowsedTag> _rootNodes = [];
+    private List<BrowsedTag> _allFlatTags = [];
+    private BrowsedTag? _selectedTag;
+    private string? _selectedValue;
+    private string _searchText = "";
+    private string _writeValue = "";
+    private string _writeStatus = "";
+    private bool _writeOk;
+    private bool _writing;
+    private bool _loading;
+    private string? _error;
+    private System.Threading.Timer? _valueTimer;
+
+    private bool IsSearchMode => !string.IsNullOrEmpty(_searchText) && _searchText.Length >= 1;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Opc.IsConnected)
+            await RefreshRoot();
+    }
+
+    private RenderFragment RenderNodes(List<BrowsedTag> nodes) => builder =>
+    {
+        foreach (var node in nodes)
+        {
+            var n = node;
+            builder.OpenElement(0, "div");
+            builder.AddAttribute(1, "class", "rv-tagbrowser-item " + (n == _selectedTag ? "selected" : ""));
+            builder.AddAttribute(2, "style", "padding-left: " + (n.Depth * 16 + 4) + "px;");
+            builder.AddAttribute(3, "onclick", EventCallback.Factory.Create(this, () => OnTreeNodeClick(n)));
+
+            builder.OpenElement(10, "span");
+            builder.AddAttribute(11, "class", "rv-tagbrowser-arrow");
+            builder.AddContent(12, n.IsFolder ? (n.IsExpanded ? "\u25BC" : "\u25B6") : " ");
+            builder.CloseElement();
+
+            builder.OpenElement(20, "span");
+            builder.AddAttribute(21, "class", "rv-tagbrowser-icon");
+            builder.AddContent(22, n.IsFolder ? "\U0001F4C1" : "\U0001F4CA");
+            builder.CloseElement();
+
+            builder.OpenElement(30, "span");
+            builder.AddAttribute(31, "class", "rv-tagbrowser-name");
+            builder.AddAttribute(32, "title", n.BrowsePath);
+            builder.AddContent(33, n.DisplayName);
+            builder.CloseElement();
+
+            if (!n.IsFolder && !string.IsNullOrEmpty(n.DataType))
+            {
+                builder.OpenElement(40, "span");
+                builder.AddAttribute(41, "class", "rv-tagbrowser-dtype");
+                builder.AddContent(42, n.DataType);
+                builder.CloseElement();
+            }
+
+            builder.CloseElement();
+
+            if (n.IsFolder && n.IsExpanded && n.Children.Count > 0)
+            {
+                RenderNodes(n.Children)(builder);
+            }
+        }
+    };
+
+    private async Task OnTreeNodeClick(BrowsedTag node)
+    {
+        if (node.IsFolder)
+            await ToggleExpand(node);
+        await SelectTag(node);
+    }
+
+    private async Task RefreshRoot()
+    {
+        _loading = true;
+        _error = null;
+        _rootNodes.Clear();
+        _allFlatTags.Clear();
+        StateHasChanged();
+
+        try
+        {
+            var children = await Opc.BrowseChildrenAsync();
+            foreach (var child in children)
+            {
+                child.Depth = 0;
+                _rootNodes.Add(child);
+            }
+
+            _allFlatTags = await Opc.BrowseAllTagsAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private async Task ToggleExpand(BrowsedTag node)
+    {
+        if (!node.IsFolder) return;
+
+        if (node.IsExpanded)
+        {
+            node.IsExpanded = false;
+            return;
+        }
+
+        if (!node.ChildrenLoaded)
+        {
+            node.Children = await Opc.BrowseChildrenAsync(node.NodeId);
+            foreach (var child in node.Children)
+            {
+                child.Depth = node.Depth + 1;
+                child.BrowsePath = string.IsNullOrEmpty(node.BrowsePath)
+                    ? child.DisplayName
+                    : node.BrowsePath + "." + child.DisplayName;
+            }
+            node.ChildrenLoaded = true;
+        }
+
+        node.IsExpanded = true;
+        StateHasChanged();
+    }
+
+    private async Task SelectTag(BrowsedTag tag)
+    {
+        _selectedTag = tag;
+        _selectedValue = null;
+        _writeValue = "";
+        _writeStatus = "";
+
+        if (!tag.IsFolder)
+        {
+            await ReadSelectedValue();
+            StartValuePolling();
+        }
+        else
+        {
+            StopValuePolling();
+        }
+    }
+
+    private async Task ReadSelectedValue()
+    {
+        if (_selectedTag == null) return;
+        _selectedValue = await Opc.ReadTagValueAsync(_selectedTag.NodeId) ?? "(read error)";
+        StateHasChanged();
+    }
+
+    private async Task WriteSelectedValue()
+    {
+        if (_selectedTag == null || string.IsNullOrEmpty(_writeValue)) return;
+
+        _writing = true;
+        _writeStatus = "";
+        StateHasChanged();
+
+        var ok = await Opc.WriteTagValueAsync(_selectedTag.NodeId, _writeValue);
+        _writeOk = ok;
+        _writeStatus = ok ? "Written successfully" : "Write failed";
+        _writing = false;
+
+        if (ok)
+        {
+            _selectedValue = _writeValue;
+            _writeValue = "";
+        }
+
+        StateHasChanged();
+    }
+
+    private void StartValuePolling()
+    {
+        StopValuePolling();
+        _valueTimer = new System.Threading.Timer(async _ =>
+        {
+            if (_selectedTag != null && !_selectedTag.IsFolder)
+            {
+                var val = await Opc.ReadTagValueAsync(_selectedTag.NodeId);
+                if (val != null)
+                {
+                    _selectedValue = val;
+                    await InvokeAsync(StateHasChanged);
+                }
+            }
+        }, null, 1000, 1000);
+    }
+
+    private void StopValuePolling()
+    {
+        _valueTimer?.Dispose();
+        _valueTimer = null;
+    }
+
+    private List<BrowsedTag> GetFilteredTags()
+    {
+        if (string.IsNullOrEmpty(_searchText)) return _allFlatTags;
+        var terms = _searchText.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return _allFlatTags.Where(t =>
+            terms.All(term =>
+                t.BrowsePath.Contains(term, StringComparison.OrdinalIgnoreCase) ||
+                t.DisplayName.Contains(term, StringComparison.OrdinalIgnoreCase)))
+            .ToList();
+    }
+
+    private MarkupString HighlightMatch(string text)
+    {
+        if (string.IsNullOrEmpty(_searchText) || string.IsNullOrEmpty(text))
+            return new MarkupString(System.Net.WebUtility.HtmlEncode(text));
+
+        var encoded = System.Net.WebUtility.HtmlEncode(text);
+        foreach (var term in _searchText.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var encodedTerm = System.Net.WebUtility.HtmlEncode(term);
+            var idx = encoded.IndexOf(encodedTerm, StringComparison.OrdinalIgnoreCase);
+            if (idx >= 0)
+            {
+                var match = encoded.Substring(idx, encodedTerm.Length);
+                encoded = encoded.Remove(idx, match.Length)
+                    .Insert(idx, "<b class=\"rv-tagbrowser-hl\">" + match + "</b>");
+            }
+        }
+        return new MarkupString(encoded);
+    }
+
+    private void OnSearchKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+            ClearSearch();
+    }
+
+    private void ClearSearch()
+    {
+        _searchText = "";
+    }
+
+    public void Dispose()
+    {
+        StopValuePolling();
+    }
+}
