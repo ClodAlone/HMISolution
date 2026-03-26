@@ -1,4 +1,4 @@
-using ServerEditorWeb.Models;
+﻿using ServerEditorWeb.Models;
 
 namespace ServerEditorWeb.Services;
 
@@ -135,6 +135,7 @@ public class HelpService
             ("notifications", "Alarm Notifications", "🔔"),
             ("tagbrowser", "Runtime Tag Browser", "🏷️"),
             ("restapi", "REST API", "🌐"),
+            ("ratelimiting", "Rate Limiting", "🛡️"),
         };
 
         if (locale != "en" && _tocTitles.TryGetValue(locale, out var titles))
@@ -195,6 +196,7 @@ public class HelpService
             ["notifications"] = "Alarmbenachrichtigungen",
             ["tagbrowser"] = "Tag-Browser (Laufzeit)",
             ["restapi"] = "REST-API",
+            ["ratelimiting"] = "Ratenbegrenzung",
         },
         ["it"] = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -237,8 +239,9 @@ public class HelpService
             ["notifications"] = "Notifiche allarme",
             ["tagbrowser"] = "Browser tag (Runtime)",
             ["restapi"] = "API REST",
+            ["ratelimiting"] = "Limitazione velocità",
         },
-        ["fr"] = new(StringComparer.OrdinalIgnoreCase)
+        ["fr"] = new()
         {
             ["welcome"] = "Prise en main",
             ["project"] = "Structure du projet",
@@ -279,6 +282,7 @@ public class HelpService
             ["notifications"] = "Notifications d'alarme",
             ["tagbrowser"] = "Navigateur de tags (Runtime)",
             ["restapi"] = "API REST",
+            ["ratelimiting"] = "Limitation de debit",
         },
         ["ja"] = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -321,6 +325,7 @@ public class HelpService
             ["notifications"] = "アラーム通知",
             ["tagbrowser"] = "タグブラウザー（ランタイム）",
             ["restapi"] = "REST API",
+            ["ratelimiting"] = "レート制限",
         },
         ["zh"] = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -363,6 +368,7 @@ public class HelpService
             ["notifications"] = "报警通知",
             ["tagbrowser"] = "标签浏览器（运行时）",
             ["restapi"] = "REST API",
+            ["ratelimiting"] = "速率限制",
         },
     };
 
@@ -1281,6 +1287,48 @@ POST http://localhost:14841/api/variables/Plant.Output
 GET http://localhost:14841/api/alarms
 POST http://localhost:14841/api/alarms/acknowledge
 ```
+"""),
+        ["ratelimiting"] = new("🛡️ Rate Limiting", """
+## Rate Limiting / Throttling
+
+Protects the server from excessive requests by enforcing per-client
+sliding-window limits on four endpoints.
+
+### Protected Endpoints
+| Endpoint | Key | Default Limit | Response |
+|----------|-----|---------------|----------|
+| **REST API** | Client IP | 100 / window | HTTP 429 Too Many Requests |
+| **Diagnostics HTTP** | Client IP | 60 / window | HTTP 429 Too Many Requests |
+| **OPC UA Writes** | Session ID | 200 / window | `BadTooManyOperations` |
+| **Login Attempts** | Username | 10 / window | `BadTooManyOperations` |
+
+### How It Works
+- Each client is tracked independently using a **sliding time window**
+  (default 60 seconds).
+- When a request arrives, the limiter counts how many requests the client
+  has made within the current window.
+- If the count exceeds the configured maximum, the request is rejected
+  immediately.
+- Expired entries are automatically cleaned up every 60 seconds.
+
+### Configuration
+Enable rate limiting in **Server Settings → Rate Limiting**:
+
+| Property | Description | Default |
+|----------|-------------|---------|
+| **Enabled** | Master switch for all rate limits | `false` |
+| **WindowSeconds** | Sliding window duration | `60` |
+| **ApiMaxRequestsPerWindow** | REST API limit per IP | `100` |
+| **OpcUaWriteMaxPerWindow** | OPC UA write limit per session | `200` |
+| **LoginMaxAttemptsPerWindow** | Login limit per username | `10` |
+| **DiagnosticsMaxRequestsPerWindow** | Diagnostics limit per IP | `60` |
+
+### Tips
+- Set a limit to **0** (or leave negative) to disable limiting for that
+  specific endpoint while keeping others active.
+- Monitor HTTP 429 responses in the diagnostics panel to tune limits.
+- For high-throughput SCADA systems, increase `OpcUaWriteMaxPerWindow`
+  to avoid throttling legitimate bulk writes.
 """),
     };
 

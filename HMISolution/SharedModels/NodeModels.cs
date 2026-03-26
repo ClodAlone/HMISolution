@@ -339,6 +339,12 @@ namespace SharedModels
 
         /// <summary>Server redundancy / high-availability configuration.</summary>
         public RedundancyConfig? Redundancy { get; set; }
+
+        /// <summary>
+        /// Rate limiting configuration to protect OPC UA and web endpoints from abuse.
+        /// When configured, limits the number of requests per client within a sliding time window.
+        /// </summary>
+        public RateLimitConfig? RateLimit { get; set; }
     }
 
     /// <summary>
@@ -1597,6 +1603,49 @@ namespace SharedModels
         /// Empty = no authentication required (not recommended for production).
         /// </summary>
         public string ApiKey { get; set; } = "";
+    }
+
+    // ─── Feature: Rate Limiting / Throttling ─────────────────────
+
+    /// <summary>
+    /// Rate limiting configuration to protect OPC UA and web endpoints from abuse.
+    /// Uses a sliding-window algorithm per client IP / session to throttle excessive requests.
+    /// </summary>
+    public class RateLimitConfig
+    {
+        /// <summary>Whether rate limiting is enabled. Default: false.</summary>
+        public bool Enabled { get; set; }
+
+        /// <summary>
+        /// Maximum REST API requests per client IP within the time window.
+        /// 0 = unlimited. Default: 100.
+        /// </summary>
+        public int ApiMaxRequestsPerWindow { get; set; } = 100;
+
+        /// <summary>
+        /// Maximum OPC UA write operations per session within the time window.
+        /// 0 = unlimited. Default: 200.
+        /// </summary>
+        public int OpcUaWriteMaxPerWindow { get; set; } = 200;
+
+        /// <summary>
+        /// Maximum login attempts per client within the time window.
+        /// Protects against brute-force password attacks.
+        /// 0 = unlimited. Default: 10.
+        /// </summary>
+        public int LoginMaxAttemptsPerWindow { get; set; } = 10;
+
+        /// <summary>
+        /// Maximum diagnostics endpoint requests per client IP within the time window.
+        /// 0 = unlimited. Default: 60.
+        /// </summary>
+        public int DiagnosticsMaxRequestsPerWindow { get; set; } = 60;
+
+        /// <summary>
+        /// Sliding window duration in seconds. All rate limits use this shared window.
+        /// Default: 60 (1 minute).
+        /// </summary>
+        public int WindowSeconds { get; set; } = 60;
     }
 
     // ─── Feature: Redundancy / High Availability ─────────────────────

@@ -64,6 +64,10 @@ namespace SimpleOpcFileServer
         private BaseDataVariableState<string>? _diagVariable;
         private System.Threading.Timer? _diagTimer;
 
+        // Rate limiters for endpoint protection
+        private RateLimiter? _writeRateLimiter;
+        private RateLimiter? _loginRateLimiter;
+
         public SimpleFileServerNodeManager(IServerInternal server, ApplicationConfiguration configuration, string configPath)
         : base(server, configuration, NodeNamespaceUri)
         {
@@ -88,6 +92,22 @@ namespace SimpleOpcFileServer
         {
             if (nodesToWrite == null) throw new ArgumentNullException(nameof(nodesToWrite));
             if (errors == null) throw new ArgumentNullException(nameof(errors));
+
+            // Rate limiting: throttle excessive writes per session
+            if (_writeRateLimiter != null && context?.SessionId != null)
+            {
+                var sessionKey = context.SessionId.ToString();
+                if (!_writeRateLimiter.IsAllowed(sessionKey))
+                {
+                    _eventLogger?.LogSystem("Warning", $"OPC UA write rate limit exceeded for session {sessionKey}");
+                    for (int j = 0; j < nodesToWrite.Count; j++)
+                    {
+                        nodesToWrite[j].Processed = true;
+                        errors[j] = StatusCodes.BadTooManyOperations;
+                    }
+                    return;
+                }
+            }
 
             for (int i = 0; i < nodesToWrite.Count; i++)
             {
@@ -369,6 +389,10 @@ namespace SimpleOpcFileServer
             // Cleanup REST API (new one created in LoadModel)
             if (_restApi != null) { _restApi.Dispose(); _restApi = null; }
 
+            // Cleanup rate limiters (new ones created in LoadModel)
+            _writeRateLimiter?.Dispose(); _writeRateLimiter = null;
+            _loginRateLimiter?.Dispose(); _loginRateLimiter = null;
+
             // Cleanup shelving timers
             lock (_shelvingLock)
             {
@@ -409,6 +433,15 @@ namespace SimpleOpcFileServer
             if (args.NewIdentity is UserNameIdentityToken userNameToken)
             {
                 var username = userNameToken.UserName;
+
+                // Rate limiting: throttle excessive login attempts per username
+                if (_loginRateLimiter != null && !_loginRateLimiter.IsAllowed(username ?? "unknown"))
+                {
+                    _eventLogger?.LogAuth("Warning", username ?? "unknown",
+                        $"Login rate limit exceeded for user '{username}' — too many attempts");
+                    throw new ServiceResultException(StatusCodes.BadTooManyOperations,
+                        "Too many login attempts. Please try again later.");
+                }
 
                 if (_users.TryGetValue(username, out var userConfig))
                 {
@@ -738,13 +771,23 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                                // ─── Diagnostics OPC UA node (always created, license-exempt) ───
                           CreateDiagnosticsNode(references);
 
-                               // ─── REST API for external integration ───
-                               if (nodeModel.Server?.Api != null && nodeModel.Server.Api.Enabled)
-                               {
-                                   _restApi = new RestApiService(this, nodeModel.Server.Api, _eventLogger, _auditTrailLogger);
-                                   _restApi.Start();
+                                        // ─── REST API for external integration ───
+                                        if (nodeModel.Server?.Api != null && nodeModel.Server.Api.Enabled)
+                                        {
+                                            _restApi = new RestApiService(this, nodeModel.Server.Api, _eventLogger, _auditTrailLogger, nodeModel.Server?.RateLimit);
+                                            _restApi.Start();
+                                        }
+
+                                        // ─── Rate limiters for OPC UA endpoints ───
+                                        if (nodeModel.Server?.RateLimit is { Enabled: true } rl)
+                                        {
+                                            var window = TimeSpan.FromSeconds(rl.WindowSeconds);
+                                            if (rl.OpcUaWriteMaxPerWindow > 0)
+                                                _writeRateLimiter = new RateLimiter(rl.OpcUaWriteMaxPerWindow, window);
+                                            if (rl.LoginMaxAttemptsPerWindow > 0)
+                                                _loginRateLimiter = new RateLimiter(rl.LoginMaxAttemptsPerWindow, window);
+                                        }
                                }
-                       }
 
                                // ─── Alarm shelving OPC UA methods ───
                           CreateAlarmShelvingMethods(references);
@@ -2600,6 +2643,8 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 _notificationManager?.Dispose();
                 _redundancyManager?.Dispose();
                 _restApi?.Dispose();
+                _writeRateLimiter?.Dispose();
+                _loginRateLimiter?.Dispose();
                 _eventLogger?.Dispose();
                 lock (_shelvingLock)
                 {

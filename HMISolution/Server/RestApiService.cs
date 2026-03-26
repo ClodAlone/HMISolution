@@ -42,14 +42,25 @@ public sealed class RestApiService : IDisposable
     private TcpListener? _listener;
     private CancellationTokenSource? _cts;
     private Task? _listenTask;
+    private RateLimiter? _rateLimiter;
 
     public RestApiService(SimpleFileServerNodeManager nodeManager, ApiConfig config,
-        EventLogger? eventLogger, AuditTrailLogger? auditLogger)
+        EventLogger? eventLogger, AuditTrailLogger? auditLogger,
+        RateLimitConfig? rateLimitConfig = null)
     {
         _nodeManager = nodeManager;
         _config = config;
         _eventLogger = eventLogger;
         _auditLogger = auditLogger;
+
+        if (rateLimitConfig is { Enabled: true, ApiMaxRequestsPerWindow: > 0 })
+        {
+            _rateLimiter = new RateLimiter(
+                rateLimitConfig.ApiMaxRequestsPerWindow,
+                TimeSpan.FromSeconds(rateLimitConfig.WindowSeconds));
+            Log.Information("REST API rate limiting enabled: {Max} requests per {Window}s",
+                rateLimitConfig.ApiMaxRequestsPerWindow, rateLimitConfig.WindowSeconds);
+        }
     }
 
     public void Start()
@@ -113,14 +124,27 @@ public sealed class RestApiService : IDisposable
                     var keyFromHeader = GetHeaderValue(request, "X-API-Key");
                     var keyFromQuery = GetQueryParam(query, "apiKey");
                     if (!_config.ApiKey.Equals(keyFromHeader, StringComparison.Ordinal) &&
-                        !_config.ApiKey.Equals(keyFromQuery, StringComparison.Ordinal))
-                    {
-                        await SendJsonResponse(stream, 401, new { error = "Unauthorized — invalid or missing API key" });
-                        return;
+                            !_config.ApiKey.Equals(keyFromQuery, StringComparison.Ordinal))
+                        {
+                            await SendJsonResponse(stream, 401, new { error = "Unauthorized — invalid or missing API key" });
+                            return;
+                        }
                     }
-                }
 
-                await RouteRequest(stream, method, path, query, body);
+                    // Rate limiting per client IP
+                    if (_rateLimiter != null)
+                    {
+                        var clientIp = ((IPEndPoint?)client.Client.RemoteEndPoint)?.Address.ToString() ?? "unknown";
+                        if (!_rateLimiter.IsAllowed(clientIp))
+                        {
+                            var remaining = _rateLimiter.GetRemaining(clientIp);
+                            Log.Warning("REST API rate limit exceeded for {ClientIp}", clientIp);
+                            await SendJsonResponse(stream, 429, new { error = "Too many requests — rate limit exceeded", retryAfterSeconds = _rateLimiter.Window.TotalSeconds });
+                            return;
+                        }
+                    }
+
+                    await RouteRequest(stream, method, path, query, body);
             }
         }
         catch (Exception ex)
@@ -806,6 +830,7 @@ public sealed class RestApiService : IDisposable
             400 => "Bad Request",
             401 => "Unauthorized",
             404 => "Not Found",
+            429 => "Too Many Requests",
             500 => "Internal Server Error",
             _ => "OK"
         };
@@ -834,5 +859,6 @@ public sealed class RestApiService : IDisposable
         _cts?.Cancel();
         try { _listener?.Stop(); } catch { }
         _cts?.Dispose();
+        _rateLimiter?.Dispose();
     }
 }

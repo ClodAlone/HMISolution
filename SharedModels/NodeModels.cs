@@ -390,6 +390,9 @@ namespace SharedModels
 
         /// <summary>Server redundancy / high-availability configuration.</summary>
         public RedundancyConfig? Redundancy { get; set; }
+
+        /// <summary>Rate limiting / throttling configuration.</summary>
+        public RateLimitConfig? RateLimit { get; set; }
     }
 
     /// <summary>
@@ -1989,6 +1992,32 @@ namespace SharedModels
         /// Maximum allowed replication lag in seconds before raising a warning. Default 30.
         /// </summary>
         public int MaxReplicationLagSeconds { get; set; } = 30;
+    }
+
+    // --- Feature: Rate Limiting / Throttling ---
+
+    /// <summary>
+    /// Configures per-endpoint rate limiting to protect OPC UA and web endpoints from abuse.
+    /// </summary>
+    public class RateLimitConfig
+    {
+        /// <summary>Whether rate limiting is active.</summary>
+        public bool Enabled { get; set; }
+
+        /// <summary>Maximum REST API requests per window. 0 = unlimited.</summary>
+        public int ApiMaxRequestsPerWindow { get; set; } = 100;
+
+        /// <summary>Maximum OPC UA write operations per window. 0 = unlimited.</summary>
+        public int OpcUaWriteMaxPerWindow { get; set; } = 200;
+
+        /// <summary>Maximum login attempts per window. 0 = unlimited.</summary>
+        public int LoginMaxAttemptsPerWindow { get; set; } = 10;
+
+        /// <summary>Maximum diagnostics endpoint requests per window. 0 = unlimited.</summary>
+        public int DiagnosticsMaxRequestsPerWindow { get; set; } = 60;
+
+        /// <summary>Sliding window duration in seconds. Default 60.</summary>
+        public int WindowSeconds { get; set; } = 60;
     }
 
     // --- Feature: Calculated / Virtual Tags ---

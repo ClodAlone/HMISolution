@@ -1,5 +1,6 @@
 using ServerEditorWeb.Components;
 using ServerEditorWeb.Services;
+using System.Threading.RateLimiting;
 
 // Install crash reporter before anything else
 var crashDir = Path.Combine(AppContext.BaseDirectory, "crash_reports");
@@ -37,6 +38,20 @@ builder.Services.AddSingleton<DriverTestService>();
 builder.Services.AddSingleton<CertificateService>();
 builder.Services.AddSingleton<BackupService>();
 
+builder.Services.AddRateLimiter(options =>
+{
+    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(ctx =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 200,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 10
+            }));
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+});
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -46,6 +61,7 @@ if (!app.Environment.IsDevelopment())
 }
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 
+app.UseRateLimiter();
 app.UseAntiforgery();
 
 app.MapStaticAssets();
