@@ -94,7 +94,7 @@ else
 <div class="rv-app @(Project.IsKiosk ? "rv-kiosk" : "") @(NavStyle == "sidebar" ? "rv-nav-sidebar" : "")">
     @if (!Project.IsKiosk || Project.Settings.ShowNavigationBar)
     {
-        @* -- Top bar -- *@
+        @* -- Full top bar (normal mode, or kiosk with ShowNavigationBar) -- *@
         <div class="rv-topbar">
             <span class="rv-title">Runtime Viewer</span>
 
@@ -141,18 +141,50 @@ else
                     <span class="rv-badge" style="background:#555;color:#ccc;" title="@Auth.Group">@Auth.Username</span>
                     <button class="rv-btn" style="background:#dc3545;" @onclick="DoLogout">Logout</button>
                 }
-                                <button class="rv-btn" style="background:@(_bestFit ? "#2563eb" : "#374151"); font-size:10px;"
+                <button class="rv-btn" style="background:@(_bestFit ? "#2563eb" : "#374151"); font-size:10px;"
                         @onclick="() => _bestFit = !_bestFit" title="@(_bestFit ? "Switch to actual size (scrollable)" : "Switch to best fit (scale to viewport)")">@(_bestFit ? "▣ Fit" : "▢ 1:1")</button>
-<button class="rv-btn" style="background:@(_showDiag ? "#2563eb" : "#374151"); font-size:10px;"
+                <button class="rv-btn" style="background:@(_showDiag ? "#2563eb" : "#374151"); font-size:10px;"
                         @onclick="ToggleDiag" title="OPC Diagnostics">🔍 Diag</button>
-<button class="rv-btn" style="background:@(_showTagBrowser ? "#2563eb" : "#374151"); font-size:10px;"
-                        @onclick="ToggleTagBrowser" title="Tag Browser">&#x1F3F7;&#xFE0F; Tags</button>
+                @if (Project.Settings.EnableTagBrowser)
+                {
+                    <button class="rv-btn" style="background:@(_showTagBrowser ? "#2563eb" : "#374151"); font-size:10px;"
+                            @onclick="ToggleTagBrowser" title="Tag Browser">&#x1F3F7;&#xFE0F; Tags</button>
+                }
             </div>
+        </div>
+    }
+    else if (Project.IsKiosk && NavigableScreens.Count > 1 && NavStyle != "bottom")
+    {
+        @* -- Kiosk: minimal navigation bar (nav only, no status chrome) -- *@
+        <div class="rv-topbar rv-topbar-minimal">
+            @if (NavStyle == "hamburger")
+            {
+                <button class="rv-hamburger-btn" @onclick="() => _hamburgerOpen = true" title="Navigation">&#x2630;</button>
+            }
+            else
+            {
+                <div class="rv-screen-tabs">
+                    @foreach (var scr in NavigableScreens)
+                    {
+                        var s = scr;
+                        <button class="rv-tab @(s == _currentScreen ? "active" : "")"
+                                @onclick="() => DoNavigateScreen(s.Name)">
+                            @s.Name
+                        </button>
+                    }
+                </div>
+            }
+            @if (_loginRequired)
+            {
+                <span style="flex:1;"></span>
+                <span class="rv-badge" style="background:#555;color:#ccc;font-size:10px;">@Auth.Username</span>
+                <button class="rv-btn" style="background:#dc3545;font-size:10px;" @onclick="DoLogout">Logout</button>
+            }
         </div>
     }
     else if (_loginRequired)
     {
-        @* Kiosk mode: small floating logout button *@
+        @* Kiosk mode: small floating logout button (no navigation needed) *@
         <div class="rv-kiosk-logout">
             <span class="small" style="color:#aaa;">@Auth.Username</span>
             <button class="rv-btn" style="background:#dc3545;font-size:10px;" @onclick="DoLogout">Logout</button>

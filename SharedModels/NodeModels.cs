@@ -338,6 +338,13 @@ namespace SharedModels
         [AllowedStringValues("tabs", "sidebar", "hamburger", "bottom")]
         public string NavigationStyle { get; set; } = "tabs";
 
+        /// <summary>
+        /// When true, the runtime viewer shows the Tag Browser button in the top bar,
+        /// allowing operators to browse, search, read, and write OPC UA tags live.
+        /// Default: true.
+        /// </summary>
+        public bool EnableTagBrowser { get; set; } = true;
+
         /// <summary>Configuration for the server event log (alarms, auth, driver, system events).</summary>
         public EventLogConfig? EventLog { get; set; }
 

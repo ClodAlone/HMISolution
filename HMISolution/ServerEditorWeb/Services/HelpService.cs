@@ -38,6 +38,7 @@ public class HelpService
             PlcProgramNode => "plcprogram",
             ScreenGroupNode => "screens",
             ScreenNode => "screen",
+            CalculatedGroupNode or CalculatedNode => "calculatedvars",
             RecipeGroupNode or RecipeNode => "recipe",
             SchedulerGroupNode or SchedulerNode => "scheduler",
             ReportGroupNode or ReportNode => "report",
@@ -99,6 +100,7 @@ public class HelpService
             ("project", "Project Structure", "📁"),
             ("variables", "Variables", "🏷️"),
             ("variable", "Variable Properties", "🏷️"),
+            ("calculatedvars", "Calculated / Virtual Tags", "🔢"),
             ("folder", "Folders", "📂"),
             ("scripts", "Scripts", "⚡"),
             ("script", "Script Editor", "⚡"),
@@ -158,6 +160,7 @@ public class HelpService
             ["project"] = "Projektstruktur",
             ["variables"] = "Variablen",
             ["variable"] = "Variableneigenschaften",
+            ["calculatedvars"] = "Berechnete / Virtuelle Tags",
             ["folder"] = "Ordner",
             ["scripts"] = "Skripte",
             ["script"] = "Skript-Editor",
@@ -199,6 +202,7 @@ public class HelpService
             ["project"] = "Struttura progetto",
             ["variables"] = "Variabili",
             ["variable"] = "Proprietà variabile",
+            ["calculatedvars"] = "Tag calcolati / virtuali",
             ["folder"] = "Cartelle",
             ["scripts"] = "Script",
             ["script"] = "Editor script",
@@ -240,6 +244,7 @@ public class HelpService
             ["project"] = "Structure du projet",
             ["variables"] = "Variables",
             ["variable"] = "Propriétés de variable",
+            ["calculatedvars"] = "Tags calculés / virtuels",
             ["folder"] = "Dossiers",
             ["scripts"] = "Scripts",
             ["script"] = "Éditeur de scripts",
@@ -281,6 +286,7 @@ public class HelpService
             ["project"] = "プロジェクト構造",
             ["variables"] = "変数",
             ["variable"] = "変数プロパティ",
+            ["calculatedvars"] = "計算タグ / 仮想タグ",
             ["folder"] = "フォルダー",
             ["scripts"] = "スクリプト",
             ["script"] = "スクリプトエディター",
@@ -322,6 +328,7 @@ public class HelpService
             ["project"] = "项目结构",
             ["variables"] = "变量",
             ["variable"] = "变量属性",
+            ["calculatedvars"] = "计算标签 / 虚拟标签",
             ["folder"] = "文件夹",
             ["scripts"] = "脚本",
             ["script"] = "脚本编辑器",
@@ -427,6 +434,21 @@ Example: `Plant.Furnace.Temperature` → OPC UA NodeId `"Plant.Furnace.Temperatu
 - **Retentive** — Persist value across server restarts
 - **Statistics** — Track Min/Max/Average/Count at runtime
 - **Initial Value** — Set a starting value when the server starts
+- **Engineering Unit** — Label (e.g. "°C", "bar") exposed as OPC UA EngineeringUnits
+- **Scaling** — Linear raw→engineering conversion with optional clamping
+
+### Calculated / Virtual Tags
+Calculated variables are virtual OPC UA tags whose values are computed from expressions
+or aggregate functions referencing other variables. They appear under the **Calculated**
+group in the project tree.
+
+- **Expression mode** — Write a C# expression: `Read("Tank1.Level") + Read("Tank2.Level")`
+- **Aggregate mode** — Built-in functions: Avg, Sum, Min, Max, Count, RateOfChange,
+  Delta, RunningAvg, RunningMin, RunningMax, StdDev
+- **Interval** — Evaluation cycle in milliseconds (default 1000)
+- **Type** — Output data type (Double, Int32, Boolean, String)
+- **Folder** — OPC UA folder where the tag is created (default `_Calculated`)
+- **Engineering Unit** — Optional unit label for the computed value
 """),
 
         ["variable"] = new("🏷️ Variable Properties", """
@@ -444,9 +466,66 @@ Select a variable and use the **Properties** panel to configure:
 | **Alarm** | Configure alarm thresholds or conditions |
 | **Data Logging** | Enable change-of-value logging |
 | **Statistics** | Enable Min/Max/Avg tracking |
+| **Engineering Unit** | Unit label (°C, bar, %, m³/h) shown in OPC UA |
+| **Scaling** | Linear raw↔engineering conversion |
+
+### Scaling
+Configure linear scaling between raw sensor values and engineering units:
+- **Raw Min / Raw Max** — Input range from the sensor or PLC
+- **Eng Min / Eng Max** — Desired engineering range
+- **Clamp** — Optionally clamp the output to [Eng Min, Eng Max]
+- Formula: `Eng = (Raw - RawMin) / (RawMax - RawMin) × (EngMax - EngMin) + EngMin`
 
 ### Driver Bindings
 Variables can be bound to external devices via drivers (Modbus, S7, OPC UA Client, etc.). Driver-specific properties appear in the JSON view.
+"""),
+
+        ["calculatedvars"] = new("🔢 Calculated / Virtual Tags", """
+## Calculated / Virtual Tags
+
+Calculated variables are virtual OPC UA tags computed from expressions or aggregate
+functions. They do not have a physical sensor — their value is derived from other tags.
+
+### Creating Calculated Variables
+1. Select the **Calculated** group in the project tree
+2. Click the ➕ button in the toolbar to add a new calculated variable
+3. Configure the expression or aggregate function in the Properties panel
+
+### Expression Mode
+Write a C# expression using `Read("path")` to reference other variables:
+```
+Read("Tank1.Level") + Read("Tank2.Level")
+Math.Round(Read("Sensor.TempC") * 1.8 + 32, 2)
+Read("Motor.Running") ? Read("Motor.Speed") : 0
+```
+
+### Aggregate Mode
+Select a built-in function and one or more source paths (semicolon-separated):
+
+| Function | Description |
+|----------|-------------|
+| **Avg** | Average of sampled values |
+| **Sum** | Sum across multiple tags |
+| **Min** / **Max** | Minimum or maximum across tags |
+| **Count** | Number of samples |
+| **RateOfChange** | Derivative (change per second) |
+| **Delta** | Difference between last two values |
+| **RunningAvg** / **RunningMin** / **RunningMax** | Windowed aggregates |
+| **StdDev** | Standard deviation over the window |
+
+### Properties
+| Property | Description | Default |
+|----------|-------------|---------|
+| **Name** | Variable name in the OPC address space | |
+| **Expression** | C# expression (or leave empty for aggregate) | |
+| **Type** | Output data type | Double |
+| **Interval** | Evaluation cycle (ms) | 1000 |
+| **Enabled** | Active/inactive toggle | true |
+| **Folder** | OPC UA folder path | _Calculated |
+| **Engineering Unit** | Unit label | |
+| **Aggregate Function** | Built-in function name | |
+| **Aggregate Source Path** | Source variable path(s) | |
+| **Aggregate Window** | Rolling window in seconds | 300 |
 """),
 
         ["folder"] = new("📂 Folders", """
@@ -709,6 +788,18 @@ The server listens on the configured endpoint URL (default: `opc.tcp://localhost
 - **Diagnostics Port** — HTTP API for performance metrics (default 14841)
 - **Cloud Relay** — Connect through a SignalR cloud hub
 - **Crash Email** — SMTP configuration for crash report notifications
+- **Enable Tag Browser** — Show/hide the 🏷️ Tags button in RuntimeViewer (default on)
+
+### Runtime Auto-Reconnect
+When the RuntimeViewer fails to connect to the OPC UA server, it automatically
+retries every 5 seconds. The toolbar shows a **Reconnecting...** badge with
+**Stop** (halt retries) and **Retry Now** (try immediately) buttons. When the
+connection succeeds, the timer stops and a success toast appears.
+
+### Runtime Locale Switching
+Assign a **ChangeLanguage** command to any screen button. Set the **Value** to a
+language code (e.g. "en", "de", "it"). When clicked at runtime, all localized
+labels (widget text, screen tabs, popup titles) switch to the new language instantly.
 """),
 
         ["serverpanel"] = new("🖥️ Server Panel", """
@@ -730,9 +821,25 @@ Manage the OPC UA server process directly from the editor.
 The Strings editor manages translated text for multi-language HMI applications.
 
 ### How It Works
-- Define string entries with a unique ID and translations per language
-- Reference strings in screen labels using the `@StringId` prefix
-- The RuntimeViewer resolves strings based on the active language
+1. Define string entries with a unique **Key** and translations per language
+2. Reference strings in widget labels or screen names using the `@` prefix (e.g. `@btn_start`)
+3. The RuntimeViewer resolves all `@`-prefixed text based on the active language
+
+### Where Strings Are Resolved
+- **Widget labels** — All symbol text on every screen
+- **Screen names** — Navigation tabs, hamburger menu, bottom tabs, popup/modal headers
+- **Page title** — Browser tab title follows the active screen name
+- **Animated text** — Individual messages in animtext widgets
+
+### Changing Language at Runtime
+Add a **ChangeLanguage** command to any button symbol:
+1. In the screen editor, select a button and open Commands
+2. Set Action = **Change Language**, Value = language code (e.g. `de`, `it`, `fr`)
+3. At runtime, clicking the button switches **all** text instantly
+
+### Fallback Behavior
+If a translation is missing for the active language, the first available
+translation is used. If no translations exist, the key itself is displayed.
 """),
 
         ["images"] = new("🖼️ Image Resources", """
@@ -1249,6 +1356,16 @@ Beispiel: `Plant.Furnace.Temperature` → OPC-UA-NodeId `"Plant.Furnace.Temperat
 - **Retentiv** — Wert über Serverneustarts hinweg beibehalten
 - **Statistik** — Min/Max/Durchschnitt/Anzahl zur Laufzeit verfolgen
 - **Anfangswert** — Startwert beim Serverstart festlegen
+- **Einheit** — Einheitslabel (z.B. °C, bar) als OPC UA EngineeringUnits
+- **Skalierung** — Lineare Roh→Technik-Umrechnung mit optionaler Begrenzung
+
+### Berechnete / Virtuelle Tags
+Berechnete Variablen sind virtuelle OPC-UA-Tags, deren Wert durch Ausdrücke
+oder Aggregatfunktionen berechnet wird. Sie erscheinen unter der Gruppe **Calculated**.
+
+- **Ausdrucksmodus** — C#-Ausdruck mit `Read("Pfad")`
+- **Aggregatmodus** — Avg, Sum, Min, Max, Count, RateOfChange, Delta, RunningAvg usw.
+- **Intervall** — Auswertungszyklus in Millisekunden (Standard 1000)
 """),
             ["variable"] = new("🏷️ Variableneigenschaften", """
 ## Variableneigenschaften
@@ -1265,6 +1382,8 @@ Wählen Sie eine Variable aus und verwenden Sie das **Eigenschaften**-Panel zur 
 | **Alarm** | Alarmschwellen oder -bedingungen konfigurieren |
 | **Datenprotokoll** | Wertänderungs-Protokollierung aktivieren |
 | **Statistik** | Min/Max/Durchschnitt-Verfolgung aktivieren |
+| **Einheit** | Einheitslabel (°C, bar, %) in OPC UA |
+| **Skalierung** | Lineare Roh↔Technik-Umrechnung |
 
 ### Treiberbindungen
 Variablen können über Treiber (Modbus, S7, OPC-UA-Client usw.) an externe Geräte gebunden werden. Treiberspezifische Eigenschaften erscheinen in der JSON-Ansicht.
@@ -1516,6 +1635,15 @@ Der Server lauscht auf der konfigurierten Endpunkt-URL (Standard: `opc.tcp://loc
 - **Diagnoseport** — HTTP-API für Leistungsmetriken (Standard 14841)
 - **Cloud-Relay** — Verbindung über einen SignalR-Cloud-Hub
 - **Absturz-E-Mail** — SMTP-Konfiguration für Absturzbenachrichtigungen
+- **Tag-Browser aktivieren** — 🏷️ Tags-Schaltfläche im RuntimeViewer anzeigen/ausblenden
+
+### Automatische Wiederverbindung
+Bei Verbindungsverlust verbindet sich der RuntimeViewer alle 5 Sekunden automatisch neu.
+Die Toolbar zeigt **Verbinde...** mit **Stop** und **Jetzt versuchen**-Schaltflächen.
+
+### Sprachumschaltung zur Laufzeit
+Weisen Sie einem Button den Befehl **ChangeLanguage** mit Sprachcode als Wert zu.
+Alle lokalisierten Texte wechseln sofort beim Klick.
 """),
             ["serverpanel"] = new("🖥️ Server-Panel", """
 ## Server-Panel
@@ -1538,6 +1666,15 @@ Der String-Editor verwaltet übersetzte Texte für mehrsprachige HMI-Anwendungen
 - String-Einträge mit eindeutiger ID und Übersetzungen pro Sprache definieren
 - Strings in Bildschirmbeschriftungen mit dem Präfix `@StringId` referenzieren
 - Der RuntimeViewer löst Strings basierend auf der aktiven Sprache auf
+
+### Wo Strings aufgelöst werden
+- **Widget-Labels** — Alle Symboltexte auf jedem Bildschirm
+- **Bildschirmnamen** — Navigations-Tabs, Hamburger-Menü, Popup-/Modalüberschriften
+- **Seitentitel** — Browser-Tab-Titel folgt dem aktiven Bildschirmnamen
+
+### Sprache zur Laufzeit wechseln
+Button-Befehl **ChangeLanguage** mit Sprachcode (z.B. `de`, `en`) zuweisen.
+Beim Klick wechseln alle Texte sofort.
 """),
             ["images"] = new("🖼️ Bildressourcen", """
 ## Bildressourcen
@@ -1834,6 +1971,14 @@ Esempio: `Plant.Furnace.Temperature` → OPC UA NodeId `"Plant.Furnace.Temperatu
 - **Retentiva** — Mantieni il valore tra i riavvii del server
 - **Statistiche** — Traccia Min/Max/Media/Conteggio a runtime
 - **Valore iniziale** — Imposta un valore di partenza all'avvio del server
+- **Unità ingegneristica** — Etichetta (es. °C, bar) esposta come OPC UA EngineeringUnits
+- **Scalatura** — Conversione lineare grezzo→ingegneristica con limite opzionale
+
+### Tag calcolati / virtuali
+Variabili virtuali calcolate da espressioni o funzioni aggregate.
+- **Espressione** — C# con `Read("percorso")`
+- **Aggregato** — Avg, Sum, Min, Max, Count, RateOfChange, Delta, RunningAvg ecc.
+- **Intervallo** — Ciclo di valutazione (predefinito 1000 ms)
 """),
             ["variable"] = new("🏷️ Proprietà variabile", """
 ## Proprietà variabile
@@ -1850,6 +1995,8 @@ Seleziona una variabile e usa il pannello **Proprietà** per configurare:
 | **Allarme** | Configura soglie o condizioni di allarme |
 | **Log dati** | Abilita la registrazione delle modifiche |
 | **Statistiche** | Abilita il tracciamento Min/Max/Media |
+| **Unità ingegneristica** | Etichetta unità (°C, bar, %) in OPC UA |
+| **Scalatura** | Conversione lineare grezzo↔ingegneristica |
 
 ### Binding driver
 Le variabili possono essere collegate a dispositivi esterni tramite driver (Modbus, S7, OPC UA Client, ecc.). Le proprietà specifiche del driver appaiono nella vista JSON.
@@ -2101,6 +2248,14 @@ Il server ascolta sull'URL dell'endpoint configurato (predefinito: `opc.tcp://lo
 - **Porta diagnostica** — API HTTP per metriche prestazionali (predefinito 14841)
 - **Relay cloud** — Connessione tramite hub cloud SignalR
 - **Email crash** — Configurazione SMTP per notifiche crash
+- **Abilita Tag Browser** — Mostra/nascondi il pulsante 🏷️ Tags nel RuntimeViewer
+
+### Riconnessione automatica
+In caso di errore di connessione, il RuntimeViewer riprova automaticamente ogni 5 secondi.
+
+### Cambio lingua a runtime
+Assegnare il comando **ChangeLanguage** con codice lingua ad un pulsante.
+Tutti i testi localizzati cambiano istantaneamente al clic.
 """),
             ["serverpanel"] = new("🖥️ Pannello server", """
 ## Pannello server
@@ -2123,6 +2278,13 @@ L'editor Stringhe gestisce i testi tradotti per applicazioni HMI multilingua.
 - Definisci voci stringa con ID univoco e traduzioni per lingua
 - Fai riferimento alle stringhe nelle etichette delle schermate usando il prefisso `@StringId`
 - Il RuntimeViewer risolve le stringhe in base alla lingua attiva
+
+### Dove vengono risolte le stringhe
+- **Etichette widget** — Tutti i testi dei simboli su ogni schermata
+- **Nomi schermata** — Tab di navigazione, menu hamburger, intestazioni popup/modali
+
+### Cambio lingua a runtime
+Comando **ChangeLanguage** su un pulsante con codice lingua (es. `it`, `en`).
 """),
             ["images"] = new("🖼️ Risorse immagine", """
 ## Risorse immagine
@@ -2419,6 +2581,14 @@ Exemple : `Plant.Furnace.Temperature` → OPC UA NodeId `"Plant.Furnace.Temperat
 - **Rémanent** — Conserver la valeur entre les redémarrages du serveur
 - **Statistiques** — Suivre Min/Max/Moyenne/Compteur en temps réel
 - **Valeur initiale** — Définir une valeur de démarrage au lancement du serveur
+- **Unité d'ingénierie** — Label (ex. °C, bar) exposé comme OPC UA EngineeringUnits
+- **Mise à l'échelle** — Conversion linéaire brut→ingénierie avec limitation optionnelle
+
+### Tags calculés / virtuels
+Variables virtuelles calculées à partir d'expressions ou de fonctions d'agrégation.
+- **Expression** — Expression C# avec `Read("chemin")`
+- **Agrégation** — Avg, Sum, Min, Max, Count, RateOfChange, Delta, RunningAvg etc.
+- **Intervalle** — Cycle d'évaluation (défaut 1000 ms)
 """),
             ["variable"] = new("🏷️ Propriétés de variable", """
 ## Propriétés de variable
@@ -2435,6 +2605,8 @@ Sélectionnez une variable et utilisez le panneau **Propriétés** pour configur
 | **Alarme** | Configurer les seuils ou conditions d'alarme |
 | **Journalisation** | Activer l'enregistrement des changements de valeurs |
 | **Statistiques** | Activer le suivi Min/Max/Moyenne |
+| **Unité d'ingénierie** | Label d'unité (°C, bar, %) dans OPC UA |
+| **Mise à l'échelle** | Conversion linéaire brut↔ingénierie |
 
 ### Liaisons de pilotes
 Les variables peuvent être liées à des appareils externes via des pilotes (Modbus, S7, OPC UA Client, etc.). Les propriétés spécifiques au pilote apparaissent dans la vue JSON.
@@ -2686,6 +2858,14 @@ Le serveur écoute sur l'URL du point de terminaison configuré (défaut : `opc.
 - **Port de diagnostic** — API HTTP pour les métriques de performance (défaut 14841)
 - **Relais cloud** — Connexion via un hub cloud SignalR
 - **Email de crash** — Configuration SMTP pour les notifications de crash
+- **Activer Tag Browser** — Afficher/masquer le bouton 🏷️ Tags dans le RuntimeViewer
+
+### Reconnexion automatique
+En cas d'échec de connexion, le RuntimeViewer retente automatiquement toutes les 5 secondes.
+
+### Changement de langue en temps réel
+Attribuez la commande **ChangeLanguage** avec un code langue à un bouton.
+Tous les textes localisés changent instantanément au clic.
 """),
             ["serverpanel"] = new("🖥️ Panneau serveur", """
 ## Panneau serveur
@@ -2708,6 +2888,13 @@ L'éditeur de Chaînes gère les textes traduits pour les applications IHM multi
 - Définir des entrées de chaînes avec un ID unique et des traductions par langue
 - Référencer les chaînes dans les étiquettes d'écran avec le préfixe `@StringId`
 - Le RuntimeViewer résout les chaînes en fonction de la langue active
+
+### Où les chaînes sont résolues
+- **Labels de widgets** — Tous les textes de symboles sur chaque écran
+- **Noms d'écran** — Onglets de navigation, menu hamburger, en-têtes popup/modaux
+
+### Changement de langue en temps réel
+Commande **ChangeLanguage** sur un bouton avec code langue (ex. `fr`, `en`).
 """),
             ["images"] = new("🖼️ Ressources d'images", """
 ## Ressources d'images
@@ -3004,6 +3191,14 @@ Configurez les flux de caméras IP pour la vidéo en direct sur les écrans IHM.
 - **保持** — サーバー再起動時に値を保持
 - **統計** — ランタイムで最小/最大/平均/カウントを追跡
 - **初期値** — サーバー起動時の開始値を設定
+- **エンジニアリング単位** — ラベル（例：°C、bar）をOPC UA EngineeringUnitsとして公開
+- **スケーリング** — リニア生値→工学値変換（オプションでクランプ可能）
+
+### 計算タグ / 仮想タグ
+式または集計関数から計算される仮想OPC UAタグ。**Calculated**グループに表示されます。
+- **式モード** — `Read("パス")`を使用するC#式
+- **集計モード** — Avg、Sum、Min、Max、Count、RateOfChange、Delta、RunningAvg等
+- **間隔** — 評価サイクル（デフォルト1000 ms）
 """),
             ["variable"] = new("🏷️ 変数プロパティ", """
 ## 変数プロパティ
@@ -3020,6 +3215,8 @@ Configurez les flux de caméras IP pour la vidéo en direct sur les écrans IHM.
 | **アラーム** | アラームしきい値または条件を設定 |
 | **データログ** | 値変更の記録を有効化 |
 | **統計** | 最小/最大/平均の追跡を有効化 |
+| **エンジニアリング単位** | 単位ラベル（°C、bar、%）をOPC UAで公開 |
+| **スケーリング** | リニア生値↔工学値変換 |
 
 ### ドライバーバインディング
 変数はドライバー（Modbus、S7、OPC UAクライアントなど）を介して外部デバイスにバインドできます。ドライバー固有のプロパティはJSONビューに表示されます。
@@ -3271,6 +3468,14 @@ HMIレイアウトを作成するためのビジュアル画面デザイナー�
 - **診断ポート** — パフォーマンスメトリクスのHTTP API（デフォルト14841）
 - **クラウドリレー** — SignalRクラウドハブ経由の接続
 - **クラッシュメール** — クラッシュ通知のSMTP設定
+- **タグブラウザー有効化** — RuntimeViewerの🏷️タグボタンの表示/非表示
+
+### 自動再接続
+接続失敗時、RuntimeViewerは5秒ごとに自動的に再試行します。
+
+### ランタイム言語切り替え
+ボタンに**ChangeLanguage**コマンドを割り当て、値に言語コード（例：`ja`、`en`）を設定します。
+クリック時にすべてのローカライズテキストが即座に切り替わります。
 """),
             ["serverpanel"] = new("🖥️ サーバーパネル", """
 ## サーバーパネル
@@ -3293,6 +3498,13 @@ HMIレイアウトを作成するためのビジュアル画面デザイナー�
 - 一意のIDと言語ごとの翻訳で文字列エントリを定義
 - 画面ラベルで`@StringId`プレフィックスを使用して文字列を参照
 - RuntimeViewerがアクティブな言語に基づいて文字列を解決
+
+### 文字列が解決される場所
+- **ウィジェットラベル** — すべての画面のシンボルテキスト
+- **画面名** — ナビゲーションタブ、ハンバーガーメニュー、ポップアップ/モーダルヘッダー
+
+### ランタイム言語切り替え
+ボタンに**ChangeLanguage**コマンドと言語コード（例：`ja`、`en`）を割り当て。
 """),
             ["images"] = new("🖼️ 画像リソース", """
 ## 画像リソース
@@ -3589,6 +3801,14 @@ HMI画面のライブビデオ用IPカメラストリームを設定します。
 - **保持** — 在服务器重启时保持值
 - **统计** — 在运行时跟踪最小/最大/平均/计数
 - **初始值** — 设置服务器启动时的起始值
+- **工程单位** — 标签（如°C、bar）作为OPC UA EngineeringUnits公开
+- **缩放** — 线性原始值→工程值转换，可选限幅
+
+### 计算标签 / 虚拟标签
+通过表达式或聚合函数计算的虚拟OPC UA标签。显示在**Calculated**组下。
+- **表达式模式** — 使用`Read("路径")`的C#表达式
+- **聚合模式** — Avg、Sum、Min、Max、Count、RateOfChange、Delta、RunningAvg等
+- **间隔** — 评估周期（默认1000毫秒）
 """),
             ["variable"] = new("🏷️ 变量属性", """
 ## 变量属性
@@ -3605,6 +3825,8 @@ HMI画面のライブビデオ用IPカメラストリームを設定します。
 | **报警** | 配置报警阈值或条件 |
 | **数据记录** | 启用值变化记录 |
 | **统计** | 启用最小/最大/平均跟踪 |
+| **工程单位** | 单位标签（°C、bar、%）在OPC UA中公开 |
+| **缩放** | 线性原始值↔工程值转换 |
 
 ### 驱动绑定
 变量可以通过驱动程序（Modbus、S7、OPC UA客户端等）绑定到外部设备。驱动程序特定属性显示在JSON视图中。
@@ -3856,6 +4078,14 @@ ST 'Plant.Alarm'
 - **诊断端口** — 性能指标的HTTP API（默认14841）
 - **云中继** — 通过SignalR云集线器连接
 - **崩溃邮件** — 崩溃通知的SMTP配置
+- **启用标签浏览器** — 在RuntimeViewer中显示/隐藏🏷️标签按钮
+
+### 自动重连
+连接失败时，RuntimeViewer每5秒自动重试。
+
+### 运行时语言切换
+为按钮分配**ChangeLanguage**命令，值设为语言代码（如`zh`、`en`）。
+点击时所有本地化文本立即切换。
 """),
             ["serverpanel"] = new("🖥️ 服务器面板", """
 ## 服务器面板
@@ -3878,6 +4108,13 @@ ST 'Plant.Alarm'
 - 使用唯一ID和每种语言的翻译定义字符串条目
 - 在画面标签中使用`@StringId`前缀引用字符串
 - RuntimeViewer根据活动语言解析字符串
+
+### 字符串解析位置
+- **控件标签** — 每个画面上的所有符号文本
+- **画面名称** — 导航标签、汉堡菜单、弹出/模态标题
+
+### 运行时语言切换
+为按钮分配**ChangeLanguage**命令和语言代码（如`zh`、`en`）。
 """),
             ["images"] = new("🖼️ 图像资源", """
 ## 图像资源
