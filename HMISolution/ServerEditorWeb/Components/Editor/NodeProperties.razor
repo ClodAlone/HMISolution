@@ -1,4 +1,4 @@
-@using ServerEditorWeb.Models
+﻿@using ServerEditorWeb.Models
 @using ServerEditorWeb.Services
 @using SharedModels
 @implements IDisposable
@@ -1256,6 +1256,55 @@ else if (Node is ServerSettingsNode ssNode)
                 <input class="form-check-input" type="checkbox" @bind="redCfg.AutoSwitchback" @bind:after="OnChanged" />
                 <label class="form-check-label">Auto Switchback</label>
                 <div class="form-text">Automatically return to standby when primary recovers.</div>
+            </div>
+        }
+
+        @* Rate Limiting Throttling *@
+        <hr />
+        <h6>🛡️ Rate Limiting</h6>
+        <div class="mb-2">
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox"
+                       checked="@(ssNode.Settings.RateLimit != null)"
+                       @onchange="e => { if ((bool)(e.Value ?? false)) ssNode.Settings.RateLimit ??= new SharedModels.RateLimitConfig(); else ssNode.Settings.RateLimit = null; OnChanged(); }" />
+                <label class="form-check-label">Enable Rate Limiting</label>
+            </div>
+            <div class="form-text">Protect OPC UA and web endpoints from abuse with per-client throttling.</div>
+        </div>
+        @if (ssNode.Settings.RateLimit is { } rlCfg)
+        {
+            <div class="mb-2 form-check">
+                <input class="form-check-input" type="checkbox" @bind="rlCfg.Enabled" @bind:after="OnChanged" />
+                <label class="form-check-label">Active</label>
+            </div>
+            <div class="mb-2">
+                <label class="form-label small">Window (seconds)</label>
+                <input type="number" min="1" class="form-control form-control-sm" @bind="rlCfg.WindowSeconds" @bind:after="OnChanged" />
+                <div class="form-text">Sliding window duration. Default: 60.</div>
+            </div>
+            <div class="row g-2 mb-2">
+                <div class="col-6">
+                    <label class="form-label small">REST API max/window</label>
+                    <input type="number" min="0" class="form-control form-control-sm" @bind="rlCfg.ApiMaxRequestsPerWindow" @bind:after="OnChanged" />
+                    <div class="form-text">0 = unlimited</div>
+                </div>
+                <div class="col-6">
+                    <label class="form-label small">OPC UA writes max/window</label>
+                    <input type="number" min="0" class="form-control form-control-sm" @bind="rlCfg.OpcUaWriteMaxPerWindow" @bind:after="OnChanged" />
+                    <div class="form-text">0 = unlimited</div>
+                </div>
+            </div>
+            <div class="row g-2 mb-2">
+                <div class="col-6">
+                    <label class="form-label small">Login attempts max/window</label>
+                    <input type="number" min="0" class="form-control form-control-sm" @bind="rlCfg.LoginMaxAttemptsPerWindow" @bind:after="OnChanged" />
+                    <div class="form-text">0 = unlimited</div>
+                </div>
+                <div class="col-6">
+                    <label class="form-label small">Diagnostics max/window</label>
+                    <input type="number" min="0" class="form-control form-control-sm" @bind="rlCfg.DiagnosticsMaxRequestsPerWindow" @bind:after="OnChanged" />
+                    <div class="form-text">0 = unlimited</div>
+                </div>
             </div>
         }
     </div>
