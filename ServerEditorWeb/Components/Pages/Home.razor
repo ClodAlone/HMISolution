@@ -1,4 +1,4 @@
-@page "/"
+﻿@page "/"
 @rendermode InteractiveServer
 @using Microsoft.JSInterop
 @using ServerEditorWeb.Models
@@ -104,10 +104,6 @@ else
                         </div>
                         <div class="menu-item" @onclick="SaveAsMenu" @onclick:stopPropagation>
                             <span class="menu-icon">💾</span><span class="menu-label">@L["menu.file.saveAs"]</span><span class="menu-shortcut">Ctrl+Shift+S</span>
-                        </div>
-                        <div class="menu-separator"></div>
-                        <div class="menu-item @(string.IsNullOrEmpty(Editor.CurrentFilePath) ? "disabled" : "")" @onclick="CreateSnapshotMenu" @onclick:stopPropagation>
-                            <span class="menu-icon">📸</span><span class="menu-label">Create Snapshot</span>
                         </div>
                     </div>
                 }
@@ -295,9 +291,9 @@ else
 
         @* Edit operations *@
         <button class="iconbar-btn" title="@($"{L["toolbar.undo"]}{(UndoRedo.UndoDescription != null ? $" — {UndoRedo.UndoDescription}" : "")} (Ctrl+Z)")" @onclick="PerformUndo"
-                disabled="@(!UndoRedo.CanUndo && !IsCodeEditorActive())">&#x21A9;&#xFE0F;</button>
+                disabled="@(!UndoRedo.CanUndo)">&#x21A9;&#xFE0F;</button>
         <button class="iconbar-btn" title="@($"{L["toolbar.redo"]}{(UndoRedo.RedoDescription != null ? $" — {UndoRedo.RedoDescription}" : "")} (Ctrl+Y)")" @onclick="PerformRedo"
-                disabled="@(!UndoRedo.CanRedo && !IsCodeEditorActive())">&#x21AA;&#xFE0F;</button>
+                disabled="@(!UndoRedo.CanRedo)">&#x21AA;&#xFE0F;</button>
         <button class="iconbar-btn" title="@($"{L["toolbar.copy"]} (Ctrl+C)")" @onclick="() => Editor.CopySelected(Clipboard)"
                 disabled="@(!CanCopySelection())">📋</button>
         <button class="iconbar-btn" title="@($"{L["toolbar.paste"]} (Ctrl+V)")" @onclick="() => Editor.PasteFromClipboard(Clipboard)"
@@ -347,7 +343,7 @@ else
                     OnDoubleClick="OnNodeDoubleClick"
                     OnAddFolder="OnAddFolder" OnAddVariable="OnAddVariable" OnAddScript="OnAddScript"
                     OnAddPlcProgram="OnAddPlcProgram" OnAddRecipe="OnAddRecipe" OnAddScheduler="OnAddScheduler" OnAddReport="OnAddReport"
-                    OnAddCalculated="OnAddCalculated" OnAddScreen="OnAddScreen" OnAddUserGroup="OnAddUserGroup" OnAddUser="OnAddUser"
+                    OnAddScreen="OnAddScreen" OnAddUserGroup="OnAddUserGroup" OnAddUser="OnAddUser"
                     OnDelete="OnDelete"
                     OnCopy="OnCopyNode" OnPaste="OnPasteNode"
                     OnSetActiveProject="OnSetActiveProject" OnCloseProject="OnCloseProject"
@@ -454,14 +450,6 @@ else
                 {
                     <ReportEditorPanel Node="Editor.SelectedItem" OnPropertyChanged="OnPropertyChanged" />
                 }
-                else if (context.Id == "certificates")
-                {
-                    <CertificatePanel />
-                }
-                else if (context.Id == "backups")
-                {
-                    <BackupPanel />
-                }
                 else if (context.Id == "crashes")
                 {
                     <CrashReportsPanel />
@@ -477,6 +465,10 @@ else
                 else if (context.Id == "problems")
                 {
                     <ProblemsPanel @ref="_problemsPanel" OnNavigate="OnProblemNavigate" />
+                }
+                else if (context.Id == "scriptdebugwatch")
+                {
+                    <ScriptDebugWatchPanel />
                 }
                 else if (context.Id == "help")
                 {
@@ -738,7 +730,6 @@ else
     [Inject] private UndoRedoService UndoRedo { get; set; } = default!;
     [Inject] private PropertyGridService PropertyGrid { get; set; } = default!;
     [Inject] private EditorLocalizationService L { get; set; } = default!;
-    [Inject] private BackupService BackupSvc { get; set; } = default!;
 
     private LogViewerService _serverLogService = new();
     private LogViewerService _appLogService = new();
@@ -821,14 +812,13 @@ else
         new() { Id = "plceditor", Title = "PLC Editor", Icon = "⚙", Zone = "center" },
         new() { Id = "scheduler", Title = "Scheduler Editor", Icon = "📅", Zone = "center" },
         new() { Id = "report", Title = "Report Designer", Icon = "📄", Zone = "center" },
-        new() { Id = "certificates", Title = "Certificates", Icon = "🔐", Zone = "center" },
-        new() { Id = "backups", Title = "Backups", Icon = "💾", Zone = "center" },
         new() { Id = "serverlog", Title = "Server Logs", Icon = "📋", Zone = "bottom" },
         new() { Id = "applog", Title = "App Log", Icon = "📒", Zone = "bottom" },
         new() { Id = "crashes", Title = "Crash Reports", Icon = "🐛", Zone = "bottom" },
         new() { Id = "xref", Title = "Cross Reference", Icon = "🔗", Zone = "bottom" },
         new() { Id = "watch", Title = "Watch Table", Icon = "👁️", Zone = "bottom" },
         new() { Id = "problems", Title = "Problems", Icon = "⚠️", Zone = "bottom" },
+        new() { Id = "scriptdebugwatch", Title = "Debug Watch", Icon = "🔍", Zone = "bottom" },
         new() { Id = "help", Title = "Help", Icon = "❓", Zone = "right" },
     ];
 
@@ -846,7 +836,7 @@ private void OnAddPlcProgram(TreeNode node) { Editor.SelectNode(node); Editor.Ad
 private void OnAddRecipe(TreeNode node) { Editor.SelectNode(node); Editor.AddRecipe(); }
 private void OnAddScheduler(TreeNode node) { Editor.SelectNode(node); Editor.AddScheduler(); }
     private void OnAddReport(TreeNode node) { Editor.SelectNode(node); Editor.AddReport(); }
-    private void OnAddCalculated(TreeNode node) { Editor.SelectNode(node); Editor.AddCalculated(); }
+private void OnAddCalculated(TreeNode node) { Editor.SelectNode(node); Editor.AddCalculated(); }
 private void OnAddScreen(TreeNode node) { Editor.SelectNode(node); Editor.AddScreen(); }
 private void OnAddUserGroup(TreeNode node) { Editor.SelectNode(node); Editor.AddUserGroup(); }
 private void OnAddUser(TreeNode node) { Editor.SelectNode(node); Editor.AddUser(); }
@@ -999,7 +989,6 @@ private void UnsavedDialogCancel()
         {
             _selectedFile = Editor.CurrentFilePath;
             SetupLogDirectory();
-            BackupSvc.ConfigureScheduledBackup();
         }
 
         _requiresLogin = AuthService.IsLoginRequired(Editor.RootModel);
@@ -1118,10 +1107,7 @@ private void UnsavedDialogCancel()
         var (success, msg) = Editor.Save();
         ShowToast(success, msg);
         if (success)
-        {
             _appLogService.AddLog("INF", msg);
-            BackupSvc.OnProjectSaved();
-        }
     }
 
     private void SaveAs()
@@ -1137,7 +1123,6 @@ private void UnsavedDialogCancel()
             _availableFiles = Editor.GetAvailableFiles();
             _appLogService.AddLog("INF", msg);
             SetupLogDirectory();
-            BackupSvc.OnProjectSaved();
         }
     }
 
@@ -1237,14 +1222,6 @@ private void UnsavedDialogCancel()
     private void LoadFileMenu() { CloseMenus(); OpenFileBrowser(); }
     private void SaveMenu() { CloseMenus(); Save(); }
     private void SaveAsMenu() { CloseMenus(); _saveAsPath = Editor.CurrentFilePath ?? ""; _showSaveAsDialog = true; }
-    private void CreateSnapshotMenu()
-    {
-        CloseMenus();
-        if (string.IsNullOrEmpty(Editor.CurrentFilePath)) return;
-        var (success, msg) = BackupSvc.CreateSnapshot();
-        ShowToast(success, msg);
-        if (success) _appLogService.AddLog("INF", msg);
-    }
     private void AddFolderMenu() { CloseMenus(); AddFolder(); }
     private void AddVariableMenu() { CloseMenus(); AddVariable(); }
     private void AddScriptMenu() { CloseMenus(); AddScript(); }
@@ -1350,37 +1327,22 @@ private void UnsavedDialogCancel()
         Editor.MarkChanged();
     }
 
-    private async Task PerformUndo()
+    private void PerformUndo()
     {
-        if (IsCodeEditorActive())
-        {
-            await JS.InvokeVoidAsync("codeEditor.activeUndo");
-            return;
-        }
         if (UndoRedo.Undo())
         {
             Editor.MarkChanged();
         }
     }
 
-    private async Task PerformRedo()
+    private void PerformRedo()
     {
-        if (IsCodeEditorActive())
-        {
-            await JS.InvokeVoidAsync("codeEditor.activeRedo");
-            return;
-        }
         if (UndoRedo.Redo())
         {
             Editor.MarkChanged();
         }
     }
 
-    private bool IsCodeEditorActive()
-    {
-        return Editor.SelectedItem is ScriptNode
-            || (Editor.SelectedItem is PlcProgramNode pn && !pn.PlcProgram.Language.Equals("LD", StringComparison.OrdinalIgnoreCase));
-    }
 
     // ─── Auth helpers ───────────────────────────────────────
 
@@ -1608,7 +1570,16 @@ private void UnsavedDialogCancel()
                     Enabled = anim.Enabled,
                     Property = anim.Property,
                     Trigger = anim.Trigger,
+                    TriggerVariable = anim.TriggerVariable,
+                    TriggerCondition = anim.TriggerCondition,
+                    Keyframes = anim.Keyframes.Select(k => new AnimationKeyframe
+                    {
+                        Percent = k.Percent,
+                        Value = k.Value,
+                        Easing = k.Easing
+                    }).ToList(),
                     DurationMs = anim.DurationMs,
+                    DelayMs = anim.DelayMs,
                     Easing = anim.Easing,
                     RepeatCount = anim.RepeatCount,
                     AutoReverse = anim.AutoReverse
@@ -1619,8 +1590,6 @@ private void UnsavedDialogCancel()
         screen.Symbols.Add(sym);
         Editor.MarkChanged();
         _dockContainer?.ShowPanel("screen", "center");
-        if (_screenEditorPanel != null)
-            _ = _screenEditorPanel.ScrollToSymbolAsync(sym);
     }
 
     private void OnToolboxSymbolSelected(string type)
@@ -1711,17 +1680,17 @@ private void UnsavedDialogCancel()
     }
 
     [JSInvokable]
-    public async Task OnKeyboardUndo()
+    public void OnKeyboardUndo()
     {
-        await PerformUndo();
-        StateHasChanged();
+        PerformUndo();
+        InvokeAsync(StateHasChanged);
     }
 
     [JSInvokable]
-    public async Task OnKeyboardRedo()
+    public void OnKeyboardRedo()
     {
-        await PerformRedo();
-        StateHasChanged();
+        PerformRedo();
+        InvokeAsync(StateHasChanged);
     }
 
     [JSInvokable]

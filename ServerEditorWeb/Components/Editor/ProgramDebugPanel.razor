@@ -10,6 +10,10 @@
             @_debugInfo.Status
         </span>
         <span class="text-secondary">#@_debugInfo.CycleCount</span>
+        @if (_debugInfo.DebugSession is { State: ScriptDebugState.Paused } sess)
+        {
+            <span class="badge bg-warning text-dark">Paused L@(sess.PausedAtLine + 1)</span>
+        }
         @if (!string.IsNullOrEmpty(_debugInfo.LastError))
         {
             <span class="text-danger ms-2" title="@_debugInfo.LastError">
@@ -66,9 +70,11 @@ else if (IsServerRunning && !string.IsNullOrEmpty(ProgramName))
     [Parameter] public string SourceCode { get; set; } = "";
     [Parameter] public string Height { get; set; } = "300px";
     [Parameter] public ElementReference EditorElement { get; set; }
+    [Parameter] public EventCallback<ScriptDebugSession?> OnDebugSessionChanged { get; set; }
 
     [Inject] private IJSRuntime JS { get; set; } = default!;
     [Inject] private ServerDiagnosticsClient DiagClient { get; set; } = default!;
+    [Inject] private ScriptDebugService DebugService { get; set; } = default!;
     [Inject] private ServerProcessService ServerProcess { get; set; } = default!;
     [Inject] private NodeEditorService Editor { get; set; } = default!;
     [Inject] private AuthService Auth { get; set; } = default!;
@@ -77,6 +83,7 @@ else if (IsServerRunning && !string.IsNullOrEmpty(ProgramName))
     private System.Threading.Timer? _refreshTimer;
     private int _lineCount;
     private Dictionary<int, List<string>>? _scriptLineMap;
+    private ScriptDebugState _lastDebugState = ScriptDebugState.Detached;
 
     private bool IsServerRunning => ServerRunning || ServerProcess.IsServerRunning;
     private bool HasEditorElement => !EditorElement.Equals(default(ElementReference));
@@ -99,7 +106,6 @@ else if (IsServerRunning && !string.IsNullOrEmpty(ProgramName))
     {
         _lineCount = string.IsNullOrEmpty(SourceCode) ? 0 : SourceCode.Split('\n').Length;
         _scriptLineMap = null;
-        UpdateDebugInfo();
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -150,33 +156,52 @@ else if (IsServerRunning && !string.IsNullOrEmpty(ProgramName))
         if (!IsServerRunning || string.IsNullOrEmpty(ProgramName))
         {
             _debugInfo = null;
+            NotifyDebugSessionChanged(null);
             return;
         }
-        try
-        {
-            var endpointUrl = Editor.ServerEndpointUrl;
-            string? user = null, pass = null;
-            if (Editor.RootModel?.Server?.EnableAnonymous == false && Auth.IsAuthenticated)
-            {
-                user = Auth.Username;
-                pass = Auth.OpcPassword;
-            }
-            await DiagClient.PollAsync(endpointUrl, user, pass);
-        }
-        catch { }
-        UpdateDebugInfo();
-    }
 
-    private void UpdateDebugInfo()
-    {
-        if (!IsServerRunning || string.IsNullOrEmpty(ProgramName))
+        // Direct HTTP poll (reliable for debug data)
+        ServerDiagnostics? snapshot = null;
+        try { snapshot = await DebugService.PollDiagnosticsAsync(); } catch { }
+
+        if (snapshot == null)
         {
-            _debugInfo = null;
-            return;
+            // Fallback: OPC UA
+            try
+            {
+                var endpointUrl = Editor.ServerEndpointUrl;
+                string? user = null, pass = null;
+                if (Editor.RootModel?.Server?.EnableAnonymous == false && Auth.IsAuthenticated)
+                {
+                    user = Auth.Username;
+                    pass = Auth.OpcPassword;
+                }
+                await DiagClient.PollAsync(endpointUrl, user, pass);
+                snapshot = DiagClient.Latest;
+            }
+            catch { }
         }
-        _debugInfo = DiagClient.Latest?.ProgramDebug?
+
+        _debugInfo = snapshot?.ProgramDebug?
             .FirstOrDefault(d => d.Category == Category
                 && d.Name.Equals(ProgramName, StringComparison.OrdinalIgnoreCase));
+
+        var session = _debugInfo?.DebugSession;
+        NotifyDebugSessionChanged(session);
+
+        var isDebugging = session != null && session.State != ScriptDebugState.Detached;
+        var interval = isDebugging ? 500 : 2000;
+        _refreshTimer?.Change(interval, interval);
+    }
+
+    private void NotifyDebugSessionChanged(ScriptDebugSession? session)
+    {
+        var newState = session?.State ?? ScriptDebugState.Detached;
+        if (newState != _lastDebugState || newState == ScriptDebugState.Paused)
+        {
+            _lastDebugState = newState;
+            _ = InvokeAsync(() => OnDebugSessionChanged.InvokeAsync(session));
+        }
     }
 
     private string? GetAnnotation(int line)

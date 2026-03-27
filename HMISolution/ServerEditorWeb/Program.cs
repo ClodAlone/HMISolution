@@ -1,6 +1,6 @@
-using System.Threading.RateLimiting;
 using ServerEditorWeb.Components;
 using ServerEditorWeb.Services;
+using System.Threading.RateLimiting;
 
 // Install crash reporter before anything else
 var crashDir = Path.Combine(AppContext.BaseDirectory, "crash_reports");
@@ -11,25 +11,6 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
-
-// Rate limiting to protect web endpoints from abuse
-builder.Services.AddRateLimiter(options =>
-{
-    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-
-    // Global fixed-window limiter per client IP
-    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
-    {
-        var clientIp = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-        return RateLimitPartition.GetFixedWindowLimiter(clientIp, _ => new FixedWindowRateLimiterOptions
-        {
-            PermitLimit = 200,
-            Window = TimeSpan.FromMinutes(1),
-            QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
-            QueueLimit = 10
-        });
-    });
-});
 
 builder.Services.AddSingleton<NodeEditorService>();
 builder.Services.AddSingleton<ServerProcessService>();
@@ -54,6 +35,23 @@ builder.Services.AddSingleton<LicenseService>();
 builder.Services.AddSingleton<HelpService>();
 builder.Services.AddSingleton<EditorLocalizationService>();
 builder.Services.AddSingleton<DriverTestService>();
+builder.Services.AddSingleton<CertificateService>();
+builder.Services.AddSingleton<BackupService>();
+builder.Services.AddSingleton<ScriptDebugService>();
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(ctx =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 200,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 10
+            }));
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+});
 
 var app = builder.Build();
 
@@ -65,7 +63,6 @@ if (!app.Environment.IsDevelopment())
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 
 app.UseRateLimiter();
-
 app.UseAntiforgery();
 
 app.MapStaticAssets();

@@ -1,4 +1,4 @@
-﻿@using Microsoft.JSInterop
+@using Microsoft.JSInterop
 @using SharedModels
 @using ServerEditorWeb.Services
 @implements IDisposable
@@ -26,6 +26,29 @@
                 {
                     <span class="small @(_syntaxSuccess ? "text-success" : "text-danger")">@_syntaxResult</span>
                 }
+
+                @if (ServerProcess.IsServerRunning)
+                {
+                    <span class="border-start ms-1 me-1" style="height:20px"></span>
+                    @if (_debugState == ScriptDebugState.Paused)
+                    {
+                        <button class="btn btn-sm btn-success" title="Continue" @onclick="() => SendDebugCommand(ScriptDebugCommand.Continue)">▶</button>
+                        <button class="btn btn-sm btn-outline-primary" title="Step Over" @onclick="() => SendDebugCommand(ScriptDebugCommand.StepOver)">⏭</button>
+                    }
+                    else
+                    {
+                        <button class="btn btn-sm btn-outline-warning" title="Pause" @onclick="() => SendDebugCommand(ScriptDebugCommand.Pause)">⏸</button>
+                    }
+                    <button class="btn btn-sm btn-outline-danger" title="Detach" @onclick="() => SendDebugCommand(ScriptDebugCommand.Detach)">⏹</button>
+                    @if (_debugState == ScriptDebugState.Paused)
+                    {
+                        <span class="badge bg-warning text-dark">Paused @(_pausedLine >= 0 ? $"line {_pausedLine + 1}" : "")</span>
+                    }
+                    else if (_debugState == ScriptDebugState.Stepping)
+                    {
+                        <span class="badge bg-info">Stepping</span>
+                    }
+                }
             </div>
         </div>
 
@@ -34,11 +57,14 @@
             <CodeEditor @ref="_editor" @bind-Value="script.Code" @bind-Value:after="OnCodeChanged"
                         Language="@GetEditorLanguage(script.Language)" Height="100%"
                         Completions="_completions"
-                        Initialized="StateHasChanged" />
+                        EnableBreakpoints="true"
+                        BreakpointsChanged="OnBreakpointsChanged"
+                        Initialized="OnEditorInitialized" />
             <ProgramDebugPanel Category="Script" ProgramName="@script.Name"
                               ServerRunning="ServerProcess.IsServerRunning"
                               SourceCode="@script.Code" Height="100%"
-                              EditorElement="@(_editor?.EditorElement ?? default)" />
+                              EditorElement="@(_editor?.EditorElement ?? default)"
+                              OnDebugSessionChanged="OnDebugSessionUpdated" />
         </div>
     }
 </div>
@@ -76,6 +102,7 @@
     [Inject] private SyntaxCheckService SyntaxChecker { get; set; } = default!;
     [Inject] private ServerProcessService ServerProcess { get; set; } = default!;
     [Inject] private NodeEditorService Editor { get; set; } = default!;
+    [Inject] private ScriptDebugService DebugService { get; set; } = default!;
 
     private CodeEditor? _editor;
     private ScriptNode? _scriptNode;
@@ -84,6 +111,11 @@
     private bool _syntaxSuccess;
     private bool _checkingSyntax;
     private List<CodeEditor.CompletionItem> _completions = new();
+    private int[] _breakpointLines = [];
+    private ScriptDebugState _debugState = ScriptDebugState.Detached;
+    private int _pausedLine = -1;
+    private bool _needsBreakpointRestore;
+    private string? _debugError;
 
     private ScriptConfig? GetScript()
     {
@@ -98,6 +130,8 @@
         {
             _lastScript = script;
             _syntaxResult = "";
+            _breakpointLines = script?.Breakpoints?.ToArray() ?? [];
+            _needsBreakpointRestore = true;
             RebuildCompletions();
         }
     }
@@ -179,5 +213,108 @@
             ? "vb" : "csharp";
     }
 
-    public void Dispose() { }
+    private async Task OnBreakpointsChanged(int[] lines)
+    {
+        _breakpointLines = lines;
+        var script = GetScript();
+        if (script != null)
+        {
+            script.Breakpoints = lines.ToList();
+            await OnPropertyChanged.InvokeAsync();
+
+            if (ServerProcess.IsServerRunning)
+            {
+                try
+                {
+                    await DebugService.SetBreakpointsAsync(script.Name, lines.ToList());
+                    _debugError = null;
+                }
+                catch (Exception ex)
+                {
+                    _debugError = $"Set breakpoints failed: {ex.Message}";
+                    StateHasChanged();
+                }
+            }
+        }
+    }
+
+    private async Task SendDebugCommand(ScriptDebugCommand command)
+    {
+        var script = GetScript();
+        if (script == null) return;
+        try
+        {
+            await DebugService.SendCommandAsync(script.Name, command);
+            _debugError = null;
+        }
+        catch (Exception ex)
+        {
+            _debugError = $"Debug cmd failed: {ex.Message}";
+            StateHasChanged();
+        }
+    }
+
+    private async Task OnDebugSessionUpdated(ScriptDebugSession? session)
+    {
+        var prevState = _debugState;
+        var prevLine = _pausedLine;
+        _debugState = session?.State ?? ScriptDebugState.Detached;
+        _pausedLine = session?.PausedAtLine ?? -1;
+
+        if (_editor != null)
+        {
+            if (_debugState == ScriptDebugState.Paused && _pausedLine >= 0)
+                await _editor.SetCurrentDebugLineAsync(_pausedLine);
+            else if (prevState == ScriptDebugState.Paused)
+                await _editor.ClearCurrentDebugLineAsync();
+        }
+        StateHasChanged();
+    }
+
+    protected override void OnInitialized()
+    {
+        ServerProcess.StateChanged += OnServerStateChanged;
+    }
+
+    private async void OnServerStateChanged()
+    {
+        await InvokeAsync(async () =>
+        {
+            if (ServerProcess.IsServerRunning)
+                await PushBreakpointsToServerAsync();
+            StateHasChanged();
+        });
+    }
+
+    private async Task OnEditorInitialized()
+    {
+        if (_needsBreakpointRestore && _editor != null && _breakpointLines.Length > 0)
+        {
+            _needsBreakpointRestore = false;
+            await _editor.SetBreakpointsAsync(_breakpointLines);
+            if (ServerProcess.IsServerRunning)
+                await PushBreakpointsToServerAsync();
+        }
+        StateHasChanged();
+    }
+
+    private async Task PushBreakpointsToServerAsync()
+    {
+        var script = GetScript();
+        if (script == null || _breakpointLines.Length == 0) return;
+        try
+        {
+            await DebugService.SetBreakpointsAsync(script.Name, _breakpointLines.ToList());
+            _debugError = null;
+        }
+        catch (Exception ex)
+        {
+            _debugError = $"Set breakpoints failed: {ex.Message}";
+        }
+    }
+
+    public void Dispose()
+    {
+        ServerProcess.StateChanged -= OnServerStateChanged;
+    }
 }

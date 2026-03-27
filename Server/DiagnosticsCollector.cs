@@ -23,6 +23,7 @@ namespace SimpleOpcFileServer
         private TcpListener? _listener;
         private CancellationTokenSource? _cts;
         private Task? _listenerTask;
+        private RateLimiter? _rateLimiter;
 
         // Process-level CPU tracking
         private TimeSpan _lastCpuTime;
@@ -31,6 +32,22 @@ namespace SimpleOpcFileServer
         private bool _cpuInitialized;
 
         public static DiagnosticsCollector Instance { get; } = new();
+
+        /// <summary>
+        /// Configure rate limiting for the diagnostics endpoint.
+        /// Call before Start() to enable throttling.
+        /// </summary>
+        public void ConfigureRateLimit(RateLimitConfig? config)
+        {
+            if (config is { Enabled: true, DiagnosticsMaxRequestsPerWindow: > 0 })
+            {
+                _rateLimiter = new RateLimiter(
+                    config.DiagnosticsMaxRequestsPerWindow,
+                    TimeSpan.FromSeconds(config.WindowSeconds));
+                Log.Information("Diagnostics rate limiting enabled: {Max} requests per {Window}s",
+                    config.DiagnosticsMaxRequestsPerWindow, config.WindowSeconds);
+            }
+        }
 
         /// <summary>
         /// Start the HTTP diagnostics endpoint on the given port. Port 0 = disabled.
@@ -52,7 +69,6 @@ namespace SimpleOpcFileServer
                 Log.Warning("Diagnostics endpoint disabled: {Error}", ex.Message);
             }
         }
-
         /// <summary>
         /// Record a completed execution cycle for a subsystem.
         /// </summary>
@@ -107,7 +123,6 @@ namespace SimpleOpcFileServer
             var key = info.Category + ":" + info.Name;
             _debugSnapshots[key] = info;
         }
-
         public ServerDiagnostics BuildSnapshot()
         {
             SampleProcessCpu();
@@ -140,7 +155,14 @@ namespace SimpleOpcFileServer
             }
 
             foreach (var kvp2 in _debugSnapshots)
-                diag.ProgramDebug.Add(kvp2.Value);
+            {
+                var info = kvp2.Value;
+                // Always refresh debug session from ScriptDebugger so paused state is visible
+                // even when the script execution cycle is blocked at a breakpoint.
+                if (info.Category == "Script")
+                    info.DebugSession = ScriptDebugger.Instance.GetSessionInfo(info.Name);
+                diag.ProgramDebug.Add(info);
+            }
 
             return diag;
         }
@@ -174,7 +196,6 @@ namespace SimpleOpcFileServer
             }
             catch { }
         }
-
         private async Task ListenLoop(CancellationToken ct)
         {
             while (!ct.IsCancellationRequested)
@@ -204,10 +225,76 @@ namespace SimpleOpcFileServer
 
                     var stream = client.GetStream();
 
-                    // Read the HTTP request (we don't really parse it, just drain it)
-                    var buffer = new byte[1024];
-                    try { _ = stream.Read(buffer, 0, buffer.Length); } catch { }
+                    // Read the full HTTP request headers + possibly body
+                    var ms = new System.IO.MemoryStream();
+                    var buffer = new byte[4096];
+                    int bytesRead;
+                    int headerEnd = -1;
+                    do
+                    {
+                        try { bytesRead = stream.Read(buffer, 0, buffer.Length); } catch { bytesRead = 0; }
+                        if (bytesRead == 0) break;
+                        ms.Write(buffer, 0, bytesRead);
+                        var soFar = Encoding.UTF8.GetString(ms.GetBuffer(), 0, (int)ms.Length);
+                        headerEnd = soFar.IndexOf("\r\n\r\n", StringComparison.Ordinal);
+                    }
+                    while (headerEnd < 0 && ms.Length < 65536);
 
+                    var raw = Encoding.UTF8.GetString(ms.GetBuffer(), 0, (int)ms.Length);
+                    if (headerEnd < 0) headerEnd = raw.Length;
+
+                    var headers = raw[..headerEnd];
+                    string body = (headerEnd + 4 <= raw.Length) ? raw[(headerEnd + 4)..] : "";
+
+                    // Rate limiting per client IP
+                    if (_rateLimiter != null)
+                    {
+                        var clientIp = ((IPEndPoint?)client.Client.RemoteEndPoint)?.Address.ToString() ?? "unknown";
+                        if (!_rateLimiter.IsAllowed(clientIp))
+                        {
+                            Log.Warning("Diagnostics rate limit exceeded for {ClientIp}", clientIp);
+                            var errorBody = "{\"error\":\"Too many requests\"}";
+                            var errorBytes = Encoding.UTF8.GetBytes(errorBody);
+                            var errorHeader = $"HTTP/1.1 429 Too Many Requests\r\nContent-Type: application/json\r\nContent-Length: {errorBytes.Length}\r\nConnection: close\r\n\r\n";
+                            stream.Write(Encoding.ASCII.GetBytes(errorHeader));
+                            stream.Write(errorBytes);
+                            stream.Flush();
+                            return;
+                        }
+                    }
+
+                    // Handle CORS preflight
+                    if (headers.StartsWith("OPTIONS ", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var corsResp = "HTTP/1.1 204 No Content\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET, POST, OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type\r\nConnection: close\r\n\r\n";
+                        stream.Write(Encoding.ASCII.GetBytes(corsResp));
+                        stream.Flush();
+                        return;
+                    }
+
+                    // Route POST to debug command handler
+                    if (headers.StartsWith("POST ", StringComparison.OrdinalIgnoreCase))
+                    {
+                        int contentLength = 0;
+                        foreach (var line in headers.Split("\r\n"))
+                        {
+                            if (line.StartsWith("Content-Length:", StringComparison.OrdinalIgnoreCase))
+                            {
+                                int.TryParse(line["Content-Length:".Length..].Trim(), out contentLength);
+                                break;
+                            }
+                        }
+                        while (Encoding.UTF8.GetByteCount(body) < contentLength)
+                        {
+                            try { bytesRead = stream.Read(buffer, 0, buffer.Length); } catch { bytesRead = 0; }
+                            if (bytesRead == 0) break;
+                            body += Encoding.UTF8.GetString(buffer, 0, bytesRead);
+                        }
+                        HandleDebugPost(headers, body, stream);
+                        return;
+                    }
+
+                    // Default: GET - return diagnostics snapshot
                     var snapshot = BuildSnapshot();
                     var jsonBytes = JsonSerializer.SerializeToUtf8Bytes(snapshot, DiagnosticsJsonContext.Default.ServerDiagnostics);
 
@@ -225,11 +312,76 @@ namespace SimpleOpcFileServer
             }
         }
 
+
+        private static readonly JsonSerializerOptions _debugJsonOptions = new()
+        {
+            PropertyNameCaseInsensitive = true,
+            Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() }
+        };
+
+        private void HandleDebugPost(string headers, string body, NetworkStream stream)
+        {
+            try
+            {
+                var firstLine = headers.Split('\n')[0];
+                var parts = firstLine.Split(' ');
+                var path = parts.Length > 1 ? parts[1] : "";
+
+                Log.Debug("[ScriptDebug] POST {Path} body={Body}", path, body);
+
+                string responseJson;
+
+                if (path.StartsWith("/debug/breakpoints", StringComparison.OrdinalIgnoreCase))
+                {
+                    var req = JsonSerializer.Deserialize<SetBreakpointsRequest>(body, _debugJsonOptions);
+                    if (req != null && !string.IsNullOrEmpty(req.ScriptName))
+                    {
+                        ScriptDebugger.Instance.SetBreakpoints(req.ScriptName, req.Lines ?? new());
+                        responseJson = "{\"ok\":true}";
+                    }
+                    else
+                    {
+                        responseJson = "{\"error\":\"Invalid request\"}";
+                    }
+                }
+                else if (path.StartsWith("/debug/command", StringComparison.OrdinalIgnoreCase))
+                {
+                    var req = JsonSerializer.Deserialize<DebugCommandRequest>(body, _debugJsonOptions);
+                    if (req != null && !string.IsNullOrEmpty(req.ScriptName))
+                    {
+                        ScriptDebugger.Instance.SendCommand(req.ScriptName, req.Command);
+                        responseJson = "{\"ok\":true}";
+                    }
+                    else
+                    {
+                        responseJson = "{\"error\":\"Invalid request\"}";
+                    }
+                }
+                else
+                {
+                    responseJson = "{\"error\":\"Unknown debug endpoint\"}";
+                }
+
+                var responseBytes = Encoding.UTF8.GetBytes(responseJson);
+                var respHeader = $"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: {responseBytes.Length}\r\nConnection: close\r\n\r\n";
+                stream.Write(Encoding.ASCII.GetBytes(respHeader));
+                stream.Write(responseBytes);
+                stream.Flush();
+            }
+            catch (Exception ex)
+            {
+                Log.Debug("Debug endpoint error: {Error}", ex.Message);
+                var errBody = Encoding.UTF8.GetBytes("{\"error\":\"Internal error\"}");
+                var errHeader = $"HTTP/1.1 500 Internal Server Error\r\nContent-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: {errBody.Length}\r\nConnection: close\r\n\r\n";
+                try { stream.Write(Encoding.ASCII.GetBytes(errHeader)); stream.Write(errBody); stream.Flush(); } catch { }
+            }
+        }
         public void Dispose()
         {
             _cts?.Cancel();
             try { _listener?.Stop(); } catch { }
             _cts?.Dispose();
+            _rateLimiter?.Dispose();
         }
 
         private class SubsystemMetrics
@@ -247,5 +399,8 @@ namespace SimpleOpcFileServer
     }
 
     [System.Text.Json.Serialization.JsonSerializable(typeof(ServerDiagnostics))]
+    [System.Text.Json.Serialization.JsonSerializable(typeof(ScriptDebugSession))]
+    [System.Text.Json.Serialization.JsonSerializable(typeof(ScriptDebugState))]
+    [System.Text.Json.Serialization.JsonSerializable(typeof(ScriptBreakpoint))]
     internal partial class DiagnosticsJsonContext : System.Text.Json.Serialization.JsonSerializerContext { }
 }

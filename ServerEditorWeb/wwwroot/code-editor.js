@@ -1,5 +1,5 @@
 window.codeEditor = {
-    create: function (element, dotNetRef, value, language, height) {
+    create: function (element, dotNetRef, value, language, height, enableBreakpoints) {
         if (element._cm) return;
 
         var mode = language === 'csharp' ? 'text/x-csharp'
@@ -52,10 +52,14 @@ window.codeEditor = {
             }
         };
 
+        var gutters = ['CodeMirror-linenumbers'];
+        if (enableBreakpoints) gutters.unshift('breakpoints');
+
         var editor = CodeMirror(element, {
             value: value || '',
             mode: mode,
             lineNumbers: true,
+            gutters: gutters,
             matchBrackets: true,
             autoCloseBrackets: true,
             tabSize: 4,
@@ -98,6 +102,26 @@ window.codeEditor = {
                 }
             }
         });
+
+        element._breakpoints = new Set();
+        element._enableBreakpoints = !!enableBreakpoints;
+
+        if (enableBreakpoints) {
+            editor.on('gutterClick', function (cm, line, gutter) {
+                if (gutter !== 'breakpoints') return;
+                var bps = element._breakpoints;
+                if (bps.has(line)) {
+                    bps.delete(line);
+                    cm.setGutterMarker(line, 'breakpoints', null);
+                } else {
+                    bps.add(line);
+                    cm.setGutterMarker(line, 'breakpoints', codeEditor._makeBreakpointMarker());
+                }
+                if (dotNetRef) {
+                    dotNetRef.invokeMethodAsync('OnBreakpointsChanged', Array.from(bps).sort(function(a,b){return a-b;}));
+                }
+            });
+        }
 
         element._cm = editor;
         element._cmSuppress = function (fn) { suppressed = true; fn(); suppressed = false; };
@@ -248,15 +272,70 @@ window.codeEditor = {
         return false;
     },
 
+    setBreakpoints: function (element, lines) {
+        var editor = element._cm;
+        if (!editor) return;
+        var bps = element._breakpoints || new Set();
+        // Clear existing markers
+        bps.forEach(function (ln) {
+            editor.setGutterMarker(ln, 'breakpoints', null);
+        });
+        bps.clear();
+        if (lines) {
+            for (var i = 0; i < lines.length; i++) {
+                var ln = lines[i];
+                if (ln >= 0 && ln < editor.lineCount()) {
+                    bps.add(ln);
+                    editor.setGutterMarker(ln, 'breakpoints', codeEditor._makeBreakpointMarker());
+                }
+            }
+        }
+        element._breakpoints = bps;
+    },
+
+    getBreakpoints: function (element) {
+        return element._breakpoints ? Array.from(element._breakpoints).sort(function(a,b){return a-b;}) : [];
+    },
+
+    setCurrentDebugLine: function (element, line) {
+        var editor = element._cm;
+        if (!editor) return;
+        codeEditor.clearCurrentDebugLine(element);
+        if (line >= 0 && line < editor.lineCount()) {
+            editor.addLineClass(line, 'wrap', 'debug-current-line');
+            element._currentDebugLine = line;
+            editor.scrollIntoView({ line: line, ch: 0 }, 60);
+        }
+    },
+
+    clearCurrentDebugLine: function (element) {
+        var editor = element._cm;
+        if (!editor) return;
+        if (element._currentDebugLine != null) {
+            editor.removeLineClass(element._currentDebugLine, 'wrap', 'debug-current-line');
+            element._currentDebugLine = null;
+        }
+    },
+
+    _makeBreakpointMarker: function () {
+        var marker = document.createElement('div');
+        marker.className = 'breakpoint-marker';
+        marker.innerHTML = '\u25CF';
+        return marker;
+    },
+
     destroy: function (element) {
         var editor = element._cm;
         if (!editor) return;
         codeEditor.clearDebugAnnotations(element);
+        codeEditor.clearCurrentDebugLine(element);
         var wrapper = editor.getWrapperElement();
         if (wrapper && wrapper.parentNode) wrapper.parentNode.removeChild(wrapper);
         element._cm = null;
         element._cmSuppress = null;
         element._completions = null;
         element._hintFn = null;
+        element._breakpoints = null;
+        element._enableBreakpoints = false;
     }
 };

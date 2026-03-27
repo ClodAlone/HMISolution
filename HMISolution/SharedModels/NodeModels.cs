@@ -92,6 +92,48 @@ namespace SharedModels
         public bool Enabled { get; set; }
     }
 
+    /// <summary>Linear scaling: raw driver values ↔ engineering units (linear interpolation).</summary>
+    public class ScalingConfig
+    {
+        /// <summary>Raw value corresponding to the engineering minimum.</summary>
+        public double RawMin { get; set; }
+
+        /// <summary>Raw value corresponding to the engineering maximum.</summary>
+        public double RawMax { get; set; } = 100;
+
+        /// <summary>Engineering value at the low end of the scale.</summary>
+        public double EngMin { get; set; }
+
+        /// <summary>Engineering value at the high end of the scale.</summary>
+        public double EngMax { get; set; } = 100;
+
+        /// <summary>When true, clamp the engineering value to [EngMin, EngMax].</summary>
+        public bool ClampEnabled { get; set; }
+
+        /// <summary>Applies forward scaling: raw → engineering.</summary>
+        public double RawToEng(double raw)
+        {
+            double range = RawMax - RawMin;
+            if (Math.Abs(range) < 1e-15) return EngMin;
+            double eng = (raw - RawMin) / range * (EngMax - EngMin) + EngMin;
+            if (ClampEnabled)
+            {
+                double lo = Math.Min(EngMin, EngMax);
+                double hi = Math.Max(EngMin, EngMax);
+                eng = Math.Clamp(eng, lo, hi);
+            }
+            return eng;
+        }
+
+        /// <summary>Applies reverse scaling: engineering → raw.</summary>
+        public double EngToRaw(double eng)
+        {
+            double range = EngMax - EngMin;
+            if (Math.Abs(range) < 1e-15) return RawMin;
+            return (eng - EngMin) / range * (RawMax - RawMin) + RawMin;
+        }
+    }
+
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public enum AlarmTriggerType
     {
@@ -140,14 +182,11 @@ namespace SharedModels
         /// </summary>
         public double Hysteresis { get; set; }
 
-        /// <summary>Whether operators can shelve (temporarily suppress) this alarm at runtime.</summary>
-        public bool AllowShelving { get; set; }
-
-        /// <summary>Maximum shelving duration in minutes. 0 = unlimited. Default 60.</summary>
-        public int MaxShelvingMinutes { get; set; } = 60;
-
-        /// <summary>Notification configuration for this alarm (email, webhook, escalation).</summary>
-        public AlarmNotificationConfig? Notification { get; set; }
+        /// <summary>
+        /// When true, alarm activation triggers notifications via the configured channels
+        /// (Email, Telegram, WhatsApp) in the server's AlarmNotification settings.
+        /// </summary>
+        public bool NotifyOnActivation { get; set; }
     }
 
     public class DataLoggingConfig
@@ -208,6 +247,9 @@ namespace SharedModels
 
         /// <summary>Optional folder path for editor organization (e.g. "Alarms/Temperature"). Ignored by the server.</summary>
         public string Group { get; set; } = "";
+
+        /// <summary>0-based line numbers where breakpoints are set. Persisted with the project.</summary>
+        public List<int> Breakpoints { get; set; } = new();
     }
 
     /// <summary>
@@ -328,22 +370,31 @@ namespace SharedModels
         /// </summary>
         public CloudRelayConfig? CloudRelay { get; set; }
 
-        /// <summary>Audit trail configuration for operator action logging (FDA 21 CFR Part 11 compliance).</summary>
-        public AuditTrailConfig? AuditTrail { get; set; }
+        /// <summary>
+        /// Alarm notification configuration. Defines delivery channels (Email, Telegram, WhatsApp)
+        /// used when an alarm with NotifyOnActivation fires.
+        /// </summary>
+        public AlarmNotificationConfig? AlarmNotification { get; set; }
 
-        /// <summary>Global notification configuration (SMTP, webhook defaults) used by alarm notifications.</summary>
-        public NotificationsConfig? Notifications { get; set; }
+        /// <summary>
+        /// GDS (Global Discovery Server) configuration for OPC UA certificate management.
+        /// When configured, the server can register with a GDS and receive CA-signed certificates.
+        /// </summary>
+        public GdsConfig? Gds { get; set; }
 
-        /// <summary>REST API configuration for external integration (MES/ERP, dashboards, mobile).</summary>
+        /// <summary>
+        /// Automated backup/snapshot configuration. When enabled, the editor creates
+        /// ZIP snapshots of the project on save and/or on a schedule.
+        /// </summary>
+        public BackupConfig? Backup { get; set; }
+
+        /// <summary>REST API configuration (exposes variables, alarms, recipes to external systems).</summary>
         public ApiConfig? Api { get; set; }
 
         /// <summary>Server redundancy / high-availability configuration.</summary>
         public RedundancyConfig? Redundancy { get; set; }
 
-        /// <summary>
-        /// Rate limiting configuration to protect OPC UA and web endpoints from abuse.
-        /// When configured, limits the number of requests per client within a sliding time window.
-        /// </summary>
+        /// <summary>Rate limiting / throttling configuration.</summary>
         public RateLimitConfig? RateLimit { get; set; }
     }
 
@@ -410,6 +461,158 @@ namespace SharedModels
     }
 
     /// <summary>
+    /// Configuration for OPC UA Global Discovery Server (GDS) integration.
+    /// </summary>
+    public class GdsConfig
+    {
+        /// <summary>OPC UA endpoint URL of the GDS (e.g. "opc.tcp://gds.example.com:58810/GlobalDiscoveryServer").</summary>
+        public string EndpointUrl { get; set; } = "";
+
+        /// <summary>Username for GDS authentication (optional — leave empty for anonymous).</summary>
+        public string UserName { get; set; } = "";
+
+        /// <summary>Password for GDS authentication.</summary>
+        public string Password { get; set; } = "";
+    }
+
+    /// <summary>
+    /// Configuration for automated project backup snapshots.
+    /// </summary>
+    public class BackupConfig
+    {
+        /// <summary>Whether automated backups are enabled.</summary>
+        public bool Enabled { get; set; }
+
+        /// <summary>Create a snapshot automatically each time the project is saved.</summary>
+        public bool SnapshotOnSave { get; set; } = true;
+
+        /// <summary>
+        /// Interval in minutes for scheduled snapshots (0 = disabled).
+        /// When > 0, a snapshot is created every N minutes while the project is open.
+        /// </summary>
+        public int ScheduleMinutes { get; set; }
+
+        /// <summary>
+        /// Maximum number of snapshots to keep. Oldest snapshots beyond this limit
+        /// are automatically deleted. Default: 20.
+        /// </summary>
+        public int MaxSnapshots { get; set; } = 20;
+    }
+
+    /// <summary>
+    /// Configuration for alarm notifications delivered via Email, Telegram, and/or WhatsApp
+    /// when an alarm with NotifyOnActivation fires.
+    /// </summary>
+    public class AlarmNotificationConfig
+    {
+        /// <summary>Whether alarm notifications are globally enabled.</summary>
+        public bool Enabled { get; set; }
+
+        /// <summary>
+        /// Minimum severity threshold (1–1000) for sending notifications.
+        /// Alarms below this severity are silently ignored. Default 1 (all alarms).
+        /// </summary>
+        public ushort MinSeverity { get; set; } = 1;
+
+        /// <summary>
+        /// Cooldown period in seconds between repeated notifications for the same alarm.
+        /// Prevents notification flooding during alarm flickering. Default 60 seconds.
+        /// </summary>
+        public int CooldownSeconds { get; set; } = 60;
+
+        /// <summary>Email channel configuration.</summary>
+        public EmailNotificationChannel? Email { get; set; }
+
+        /// <summary>Telegram Bot API channel configuration.</summary>
+        public TelegramNotificationChannel? Telegram { get; set; }
+
+        /// <summary>WhatsApp Cloud API channel configuration.</summary>
+        public WhatsAppNotificationChannel? WhatsApp { get; set; }
+    }
+
+    /// <summary>
+    /// Email notification channel using SMTP.
+    /// </summary>
+    public class EmailNotificationChannel
+    {
+        /// <summary>Whether email notifications are enabled.</summary>
+        public bool Enabled { get; set; }
+
+        /// <summary>SMTP server host (e.g. "smtp.gmail.com").</summary>
+        public string SmtpHost { get; set; } = "";
+
+        /// <summary>SMTP port (e.g. 587 for TLS, 465 for SSL).</summary>
+        public int SmtpPort { get; set; } = 587;
+
+        /// <summary>Use TLS/SSL for the SMTP connection.</summary>
+        public bool UseSsl { get; set; } = true;
+
+        /// <summary>SMTP username (often the sender email address).</summary>
+        public string Username { get; set; } = "";
+
+        /// <summary>SMTP password or app password.</summary>
+        public string Password { get; set; } = "";
+
+        /// <summary>Sender email address.</summary>
+        public string From { get; set; } = "";
+
+        /// <summary>Recipient email address(es), comma-separated.</summary>
+        public string To { get; set; } = "";
+    }
+
+    /// <summary>
+    /// Telegram Bot API notification channel.
+    /// Requires a bot token from &#64;BotFather and a chat ID.
+    /// </summary>
+    public class TelegramNotificationChannel
+    {
+        /// <summary>Whether Telegram notifications are enabled.</summary>
+        public bool Enabled { get; set; }
+
+        /// <summary>Telegram Bot API token (e.g. "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11").</summary>
+        public string BotToken { get; set; } = "";
+
+        /// <summary>
+        /// Target chat ID(s), comma-separated.
+        /// Can be a user, group, or channel ID (e.g. "-1001234567890").
+        /// </summary>
+        public string ChatId { get; set; } = "";
+
+        /// <summary>When true, sends with parse_mode=HTML for formatted messages.</summary>
+        public bool UseHtml { get; set; } = true;
+    }
+
+    /// <summary>
+    /// WhatsApp Cloud API notification channel.
+    /// Requires a Meta/WhatsApp Business account with Cloud API access.
+    /// </summary>
+    public class WhatsAppNotificationChannel
+    {
+        /// <summary>Whether WhatsApp notifications are enabled.</summary>
+        public bool Enabled { get; set; }
+
+        /// <summary>WhatsApp Cloud API access token.</summary>
+        public string AccessToken { get; set; } = "";
+
+        /// <summary>WhatsApp Business Phone Number ID (from Meta Business Manager).</summary>
+        public string PhoneNumberId { get; set; } = "";
+
+        /// <summary>
+        /// Recipient phone number(s) in E.164 format, comma-separated (e.g. "+1234567890").
+        /// </summary>
+        public string To { get; set; } = "";
+
+        /// <summary>
+        /// Optional pre-approved message template name. When set, sends a template message
+        /// instead of a free-form text (required for initiating conversations).
+        /// </summary>
+        public string TemplateName { get; set; } = "";
+
+        /// <summary>Language code for the template (e.g. "en_US"). Default "en_US".</summary>
+        public string TemplateLanguage { get; set; } = "en_US";
+    }
+
+    /// <summary>
     /// Configuration for the server event journal stored in a SQLite database.
     /// Records alarms, user authentication, driver events, and system events.
     /// </summary>
@@ -460,16 +663,17 @@ namespace SharedModels
         /// <summary>When true (default), this screen appears in the runtime navigation bar/menu.</summary>
         public bool ShowInNavigation { get; set; } = true;
 
-        /// <summary>Show an alignment grid on the SVG editor canvas.</summary>
+        // --- Editor grid / snap settings ---
+        /// <summary>Show the alignment grid in the editor canvas.</summary>
         public bool ShowGrid { get; set; }
 
-        /// <summary>Grid spacing in pixels for the SVG editor grid overlay.</summary>
+        /// <summary>Grid cell size in pixels (editor only).</summary>
         public int EditorGridSize { get; set; } = 20;
 
-        /// <summary>When true, objects snap to the grid while being moved.</summary>
+        /// <summary>Snap moved/resized symbols to the grid.</summary>
         public bool SnapToGrid { get; set; }
 
-        /// <summary>When true, moving objects snap to other objects' edges/centers (smart alignment guides).</summary>
+        /// <summary>Enable smart-snap alignment guides between symbols.</summary>
         public bool SmartSnap { get; set; }
 
         public List<ScreenSymbol> Symbols { get; set; } = new();
@@ -478,7 +682,7 @@ namespace SharedModels
     public class ScreenSymbol
     {
         public string Id { get; set; } = "";
-        public string Type { get; set; } = "rect"; // rect, circle, ellipse, text, line, gauge, indicator, svg, alarmlist, hdachart, hdagrid, eventlog, editbox, ipcamera, recipe, weeklyplanner, screenembed, reportviewer, imagemap, trend, switch, rotaryswitch, knob, hslider, vslider, button, animtext
+        public string Type { get; set; } = "rect"; // rect, circle, ellipse, text, line, gauge, indicator, svg, alarmlist, hdachart, hdagrid, eventlog, editbox, ipcamera, recipe, weeklyplanner, screenembed, reportviewer, imagemap, trend, progressbar, numericdisplay, ledarray, pipe, tank, dropdown, datatable, sparkline, motorcontrol, valve, alarmbanner, colorzone, conveyor, piechart, barchart, navbutton, heatexchanger, popup, setpointramp, flowmeter, xyplot, pdfviewer, switch, rotaryswitch, knob, hslider, vslider, button, animtext
         public double X { get; set; }
         public double Y { get; set; }
         public double Width { get; set; } = 80;
@@ -791,73 +995,341 @@ namespace SharedModels
         /// <summary>Report definition name (must match a ReportConfig.Name).</summary>
         public string ReportName { get; set; } = "";
 
-        // â”€â”€ Lamp â”€â”€
-        /// <summary>Lamp on-state glow color. Default "#fbbf24" (warm yellow).</summary>
-        public string LampOnColor { get; set; } = "#fbbf24";
-        /// <summary>Lamp off-state color. Default "#334155".</summary>
-        public string LampOffColor { get; set; } = "#334155";
-        /// <summary>Lamp glass/bulb body color. Default "#fef3c7".</summary>
-        public string LampGlassColor { get; set; } = "#fef3c7";
-        /// <summary>Lamp base/socket color. Default "#78716c".</summary>
-        public string LampBaseColor { get; set; } = "#78716c";
-        /// <summary>Lamp style: "bulb", "led", "fluorescent". Default "bulb".</summary>
-        public string LampStyle { get; set; } = "bulb";
+        // ── Progress Bar ──
+        /// <summary>Progress bar orientation: "horizontal" or "vertical".</summary>
+        public string ProgressBarOrientation { get; set; } = "horizontal";
+        /// <summary>Fill color for the progress portion.</summary>
+        public string ProgressBarFillColor { get; set; } = "#22c55e";
+        /// <summary>Background/track color.</summary>
+        public string ProgressBarTrackColor { get; set; } = "#334155";
+        /// <summary>Whether to show percentage text overlay.</summary>
+        public bool ProgressBarShowText { get; set; } = true;
+        /// <summary>Minimum scale value (default 0).</summary>
+        public double ProgressBarMin { get; set; } = 0;
+        /// <summary>Maximum scale value (default 100).</summary>
+        public double ProgressBarMax { get; set; } = 100;
+        /// <summary>Border radius in px.</summary>
+        public int ProgressBarBorderRadius { get; set; } = 4;
 
-        // â”€â”€ Light (fixture) â”€â”€
-        /// <summary>Light on-state color. Default "#fbbf24".</summary>
-        public string LightOnColor { get; set; } = "#fbbf24";
-        /// <summary>Light off-state color. Default "#334155".</summary>
-        public string LightOffColor { get; set; } = "#334155";
-        /// <summary>Light fixture body color. Default "#64748b".</summary>
-        public string LightBodyColor { get; set; } = "#64748b";
-        /// <summary>Light style: "ceiling", "wall", "spot". Default "ceiling".</summary>
-        public string LightStyle { get; set; } = "ceiling";
-        /// <summary>Show light beam/cone effect when on. Default true.</summary>
-        public bool LightShowBeam { get; set; } = true;
+        // ── Numeric Display ──
+        /// <summary>Number of decimal places.</summary>
+        public int NumericDisplayDecimals { get; set; } = 1;
+        /// <summary>Engineering unit label (e.g. "°C", "bar").</summary>
+        public string NumericDisplayUnit { get; set; } = "";
+        /// <summary>Text color.</summary>
+        public string NumericDisplayColor { get; set; } = "#e2e8f0";
+        /// <summary>Background color.</summary>
+        public string NumericDisplayBackground { get; set; } = "#1e293b";
+        /// <summary>Low warning threshold; value below this shows warning color.</summary>
+        public double NumericDisplayLowWarn { get; set; } = -1;
+        /// <summary>High warning threshold; value above this shows warning color.</summary>
+        public double NumericDisplayHighWarn { get; set; } = -1;
+        /// <summary>Warning-zone color.</summary>
+        public string NumericDisplayWarnColor { get; set; } = "#f59e0b";
 
-        // â”€â”€ Wire â”€â”€
-        /// <summary>Wire color when energized. Default "#ef4444" (red).</summary>
-        public string WireEnergizedColor { get; set; } = "#ef4444";
-        /// <summary>Wire color when de-energized. Default "#64748b".</summary>
-        public string WireDeadColor { get; set; } = "#64748b";
-        /// <summary>Wire thickness in px. Default 3.</summary>
-        public double WireThickness { get; set; } = 3;
-        /// <summary>Wire orientation: "horizontal", "vertical", "corner-tl", "corner-tr", "corner-bl", "corner-br". Default "horizontal".</summary>
-        public string WireOrientation { get; set; } = "horizontal";
-        /// <summary>Show energy flow animation dots. Default true.</summary>
-        public bool WireShowFlow { get; set; } = true;
+        // ── LED Array ──
+        /// <summary>Number of LEDs in the array.</summary>
+        public int LedArrayCount { get; set; } = 8;
+        /// <summary>Layout: "row" or "column".</summary>
+        public string LedArrayLayout { get; set; } = "row";
+        /// <summary>LED color when bit is ON.</summary>
+        public string LedArrayOnColor { get; set; } = "#22c55e";
+        /// <summary>LED color when bit is OFF.</summary>
+        public string LedArrayOffColor { get; set; } = "#334155";
+        /// <summary>LED shape: "circle" or "square".</summary>
+        public string LedArrayShape { get; set; } = "circle";
 
-        // â”€â”€ Transformer â”€â”€
-        /// <summary>Primary coil color. Default "#3b82f6".</summary>
-        public string TransformerPrimaryColor { get; set; } = "#3b82f6";
-        /// <summary>Secondary coil color. Default "#22c55e".</summary>
-        public string TransformerSecondaryColor { get; set; } = "#22c55e";
-        /// <summary>Core/body color. Default "#64748b".</summary>
-        public string TransformerCoreColor { get; set; } = "#64748b";
-        /// <summary>Orientation: "horizontal" or "vertical". Default "vertical".</summary>
-        public string TransformerOrientation { get; set; } = "vertical";
-        /// <summary>Show voltage labels. Default true.</summary>
-        public bool TransformerShowLabels { get; set; } = true;
-        /// <summary>Variable path for primary voltage.</summary>
-        public string TransformerPrimaryPath { get; set; } = "";
-        /// <summary>Variable path for secondary voltage.</summary>
-        public string TransformerSecondaryPath { get; set; } = "";
+        // ── Pipe ──
+        /// <summary>Flow direction: "left-right", "right-left", "top-bottom", "bottom-top".</summary>
+        public string PipeFlowDirection { get; set; } = "left-right";
+        /// <summary>Pipe body color.</summary>
+        public string PipeColor { get; set; } = "#64748b";
+        /// <summary>Fluid/flow indicator color.</summary>
+        public string PipeFluidColor { get; set; } = "#3b82f6";
+        /// <summary>Pipe wall thickness in px.</summary>
+        public double PipeThickness { get; set; } = 6;
+        /// <summary>Animate the flow when value is truthy.</summary>
+        public bool PipeAnimate { get; set; } = true;
 
-        // â”€â”€ Battery â”€â”€
-        /// <summary>Battery charge color (full). Default "#22c55e".</summary>
-        public string BatteryFullColor { get; set; } = "#22c55e";
-        /// <summary>Battery low-charge color. Default "#ef4444".</summary>
-        public string BatteryLowColor { get; set; } = "#ef4444";
-        /// <summary>Battery body/case color. Default "#334155".</summary>
-        public string BatteryCaseColor { get; set; } = "#334155";
-        /// <summary>Orientation: "horizontal" or "vertical". Default "vertical".</summary>
-        public string BatteryOrientation { get; set; } = "vertical";
-        /// <summary>Show charge percentage text. Default true.</summary>
-        public bool BatteryShowLevel { get; set; } = true;
-        /// <summary>Number of segments/cells. Default 4.</summary>
-        public int BatterySegments { get; set; } = 4;
-        /// <summary>Low battery threshold percentage (0-100). Default 20.</summary>
-        public double BatteryLowThreshold { get; set; } = 20;
+        // ── Tank ──
+        /// <summary>Tank fill color.</summary>
+        public string TankFillColor { get; set; } = "#3b82f6";
+        /// <summary>Tank body/shell color.</summary>
+        public string TankBodyColor { get; set; } = "#1e293b";
+        /// <summary>Scale minimum (empty).</summary>
+        public double TankMin { get; set; } = 0;
+        /// <summary>Scale maximum (full).</summary>
+        public double TankMax { get; set; } = 100;
+        /// <summary>Show level percentage text.</summary>
+        public bool TankShowLevel { get; set; } = true;
+        /// <summary>Engineering unit label.</summary>
+        public string TankUnit { get; set; } = "%";
+
+        // ── Dropdown ──
+        /// <summary>Semicolon-separated options: "Label=Value;Label2=Value2".</summary>
+        public string DropdownOptions { get; set; } = "";
+        /// <summary>Background color for the select element.</summary>
+        public string DropdownBackground { get; set; } = "#1e293b";
+        /// <summary>Text color.</summary>
+        public string DropdownTextColor { get; set; } = "#e2e8f0";
+
+        // ── Data Table ──
+        /// <summary>Semicolon-separated column definitions: "Header=VarPath;Header2=VarPath2".</summary>
+        public string DataTableColumns { get; set; } = "";
+        /// <summary>Header background color.</summary>
+        public string DataTableHeaderBg { get; set; } = "#1e293b";
+        /// <summary>Row background color.</summary>
+        public string DataTableRowBg { get; set; } = "#0f172a";
+        /// <summary>Text color.</summary>
+        public string DataTableTextColor { get; set; } = "#e2e8f0";
+        /// <summary>Show grid borders.</summary>
+        public bool DataTableShowBorders { get; set; } = true;
+
+        // ── Sparkline ──
+        /// <summary>Line color.</summary>
+        public string SparklineColor { get; set; } = "#3b82f6";
+        /// <summary>Number of data points to retain.</summary>
+        public int SparklineMaxPoints { get; set; } = 50;
+        /// <summary>Show current value text.</summary>
+        public bool SparklineShowValue { get; set; } = true;
+        /// <summary>Fill area under the line.</summary>
+        public bool SparklineFillArea { get; set; }
+        /// <summary>Line stroke width.</summary>
+        public double SparklineStrokeWidth { get; set; } = 1.5;
+
+        // ── Motor Control ──
+        /// <summary>Motor symbol type: "motor", "pump", "fan".</summary>
+        public string MotorControlStyle { get; set; } = "motor";
+        /// <summary>Color when running.</summary>
+        public string MotorControlRunColor { get; set; } = "#22c55e";
+        /// <summary>Color when stopped.</summary>
+        public string MotorControlStopColor { get; set; } = "#64748b";
+        /// <summary>Color when faulted.</summary>
+        public string MotorControlFaultColor { get; set; } = "#ef4444";
+        /// <summary>Variable path for fault state.</summary>
+        public string MotorControlFaultPath { get; set; } = "";
+        /// <summary>Show RPM or speed value.</summary>
+        public bool MotorControlShowSpeed { get; set; }
+        /// <summary>Variable path for speed/RPM.</summary>
+        public string MotorControlSpeedPath { get; set; } = "";
+
+        // ── Valve ──
+        /// <summary>Valve type: "gate", "ball", "butterfly".</summary>
+        public string ValveStyle { get; set; } = "gate";
+        /// <summary>Color when open.</summary>
+        public string ValveOpenColor { get; set; } = "#22c55e";
+        /// <summary>Color when closed.</summary>
+        public string ValveClosedColor { get; set; } = "#ef4444";
+        /// <summary>Color for intermediate/traveling state.</summary>
+        public string ValveTransitColor { get; set; } = "#f59e0b";
+        /// <summary>Orientation: "horizontal" or "vertical".</summary>
+        public string ValveOrientation { get; set; } = "horizontal";
+        /// <summary>Variable path for position feedback (0-100%).</summary>
+        public string ValvePositionPath { get; set; } = "";
+
+        // ── Alarm Banner ──
+        /// <summary>Banner display style: "compact" or "detailed".</summary>
+        public string AlarmBannerStyle { get; set; } = "compact";
+        /// <summary>Show alarm count badge.</summary>
+        public bool AlarmBannerShowCount { get; set; } = true;
+        /// <summary>Flash on critical alarm.</summary>
+        public bool AlarmBannerFlash { get; set; } = true;
+
+        // ── Color Zone ──
+        /// <summary>Default background color when no rule matches.</summary>
+        public string ColorZoneDefault { get; set; } = "#334155";
+        /// <summary>Border radius in px.</summary>
+        public int ColorZoneBorderRadius { get; set; } = 4;
+        /// <summary>Semicolon-separated color rules: ">80 #ef4444;>=20 #22c55e;>=0 #3b82f6".</summary>
+        public string ColorZoneRules { get; set; } = "";
+        /// <summary>Show value text overlay.</summary>
+        public bool ColorZoneShowValue { get; set; }
+
+        // ── Conveyor ──
+        /// <summary>Conveyor orientation: "horizontal" or "vertical".</summary>
+        public string ConveyorOrientation { get; set; } = "horizontal";
+        /// <summary>Belt/roller color.</summary>
+        public string ConveyorBeltColor { get; set; } = "#475569";
+        /// <summary>Running-state indicator color.</summary>
+        public string ConveyorRunColor { get; set; } = "#22c55e";
+        /// <summary>Fault-state indicator color.</summary>
+        public string ConveyorFaultColor { get; set; } = "#ef4444";
+        /// <summary>Animation speed multiplier (1 = normal).</summary>
+        public double ConveyorSpeed { get; set; } = 1;
+        /// <summary>Variable path for fault state (1/true = fault).</summary>
+        public string ConveyorFaultPath { get; set; } = "";
+
+        // ── Pie Chart ──
+        /// <summary>Pie chart style: "pie" or "doughnut".</summary>
+        public string PieChartStyle { get; set; } = "pie";
+        /// <summary>Inner radius ratio for doughnut (0-0.9).</summary>
+        public double PieChartInnerRadius { get; set; } = 0.5;
+        /// <summary>Show legend alongside chart.</summary>
+        public bool PieChartShowLegend { get; set; } = true;
+        /// <summary>Show percentage labels on slices.</summary>
+        public bool PieChartShowPercentage { get; set; }
+        /// <summary>Slice definitions: "Label=VarPath #color;...".</summary>
+        public string PieChartSlices { get; set; } = "";
+
+        // ── Bar Chart ──
+        /// <summary>Bar orientation: "vertical" or "horizontal".</summary>
+        public string BarChartOrientation { get; set; } = "vertical";
+        /// <summary>Maximum scale value.</summary>
+        public double BarChartMax { get; set; } = 100;
+        /// <summary>Show value labels on bars.</summary>
+        public bool BarChartShowValues { get; set; } = true;
+        /// <summary>Show grid lines.</summary>
+        public bool BarChartShowGrid { get; set; } = true;
+        /// <summary>Bar definitions: "Label=VarPath #color;...".</summary>
+        public string BarChartBars { get; set; } = "";
+
+        // ── Nav Button ──
+        /// <summary>Target screen name/path for navigation.</summary>
+        public string NavButtonTarget { get; set; } = "";
+        /// <summary>Button style: "filled", "outline", "ghost".</summary>
+        public string NavButtonStyle { get; set; } = "filled";
+        /// <summary>Icon character/emoji displayed on button.</summary>
+        public string NavButtonIcon { get; set; } = ">";
+        /// <summary>Icon position: "left", "right", "none".</summary>
+        public string NavButtonIconPosition { get; set; } = "left";
+        /// <summary>Button background color. Default "#3b82f6".</summary>
+        public string NavButtonColor { get; set; } = "#3b82f6";
+        /// <summary>Button text color. Default "#ffffff".</summary>
+        public string NavButtonTextColor { get; set; } = "#ffffff";
+
+        // ── Heat Exchanger ──
+        /// <summary>Hot-side color. Default "#ef4444".</summary>
+        public string HeatExchangerHotColor { get; set; } = "#ef4444";
+        /// <summary>Cold-side color. Default "#3b82f6".</summary>
+        public string HeatExchangerColdColor { get; set; } = "#3b82f6";
+        /// <summary>Shell body color. Default "#64748b".</summary>
+        public string HeatExchangerBodyColor { get; set; } = "#64748b";
+        /// <summary>Show temperature labels on hot/cold sides.</summary>
+        public bool HeatExchangerShowTemps { get; set; } = true;
+        /// <summary>Variable path for hot-side inlet temperature.</summary>
+        public string HeatExchangerHotInPath { get; set; } = "";
+        /// <summary>Variable path for cold-side inlet temperature.</summary>
+        public string HeatExchangerColdInPath { get; set; } = "";
+        /// <summary>Orientation: "horizontal" or "vertical".</summary>
+        public string HeatExchangerOrientation { get; set; } = "horizontal";
+
+        // ── Popup ──
+        /// <summary>Trigger mode: "hover", "click", or "variable".</summary>
+        public string PopupTrigger { get; set; } = "hover";
+        /// <summary>Content text displayed inside the popup.</summary>
+        public string PopupContent { get; set; } = "";
+        /// <summary>Popup width in pixels.</summary>
+        public double PopupWidth { get; set; } = 200;
+        /// <summary>Popup height in pixels.</summary>
+        public double PopupHeight { get; set; } = 120;
+        /// <summary>Popup background color.</summary>
+        public string PopupBackground { get; set; } = "#1e293b";
+        /// <summary>Popup border color.</summary>
+        public string PopupBorderColor { get; set; } = "#475569";
+        /// <summary>Position relative to parent: "top", "bottom", "left", "right".</summary>
+        public string PopupPosition { get; set; } = "top";
+        /// <summary>Semicolon-separated variable paths shown inside popup.</summary>
+        public string PopupVariables { get; set; } = "";
+
+        // ── Setpoint Ramp ──
+        /// <summary>Current-value line color.</summary>
+        public string SetpointColor { get; set; } = "#22c55e";
+        /// <summary>Target-value line color.</summary>
+        public string SetpointTargetColor { get; set; } = "#f97316";
+        /// <summary>Variable path for ramp rate.</summary>
+        public string SetpointRatePath { get; set; } = "";
+        /// <summary>Variable path for target setpoint.</summary>
+        public string SetpointTargetPath { get; set; } = "";
+        /// <summary>Scale minimum.</summary>
+        public double SetpointMin { get; set; } = 0;
+        /// <summary>Scale maximum.</summary>
+        public double SetpointMax { get; set; } = 100;
+        /// <summary>Show ramp rate value.</summary>
+        public bool SetpointShowRate { get; set; } = true;
+        /// <summary>Engineering unit label.</summary>
+        public string SetpointUnit { get; set; } = "";
+
+        // ── Flow Meter ──
+        /// <summary>Visual style: "circular", "digital".</summary>
+        public string FlowMeterStyle { get; set; } = "circular";
+        /// <summary>Body/gauge color.</summary>
+        public string FlowMeterBodyColor { get; set; } = "#334155";
+        /// <summary>Flow indicator color.</summary>
+        public string FlowMeterFlowColor { get; set; } = "#3b82f6";
+        /// <summary>Variable path for totalizer value.</summary>
+        public string FlowMeterTotalizerPath { get; set; } = "";
+        /// <summary>Flow rate engineering unit.</summary>
+        public string FlowMeterUnit { get; set; } = "L/min";
+        /// <summary>Totalizer engineering unit.</summary>
+        public string FlowMeterTotalizerUnit { get; set; } = "L";
+        /// <summary>Show totalizer readout.</summary>
+        public bool FlowMeterShowTotalizer { get; set; } = true;
+        /// <summary>Orientation: "horizontal" or "vertical".</summary>
+        public string FlowMeterOrientation { get; set; } = "horizontal";
+
+        // ── XY Plot ──
+        /// <summary>Variable path for X-axis data.</summary>
+        public string XYPlotXPath { get; set; } = "";
+        /// <summary>Variable path for Y-axis data.</summary>
+        public string XYPlotYPath { get; set; } = "";
+        /// <summary>Trace line color.</summary>
+        public string XYPlotColor { get; set; } = "#3b82f6";
+        /// <summary>Max data points to retain.</summary>
+        public int XYPlotMaxPoints { get; set; } = 200;
+        /// <summary>Show grid lines.</summary>
+        public bool XYPlotShowGrid { get; set; } = true;
+        /// <summary>Show axis lines and labels.</summary>
+        public bool XYPlotShowAxes { get; set; } = true;
+        /// <summary>Plot background color.</summary>
+        public string XYPlotBackground { get; set; } = "#0f172a";
+        /// <summary>Trace stroke width.</summary>
+        public double XYPlotStrokeWidth { get; set; } = 1.5;
+        /// <summary>X-axis label text.</summary>
+        public string XYPlotXLabel { get; set; } = "X";
+        /// <summary>Y-axis label text.</summary>
+        public string XYPlotYLabel { get; set; } = "Y";
+
+        // ── PDF Viewer ──
+        /// <summary>PDF source type: "url" or "embedded".</summary>
+        public string PdfViewerSource { get; set; } = "url";
+        /// <summary>URL of the PDF document.</summary>
+        public string PdfViewerUrl { get; set; } = "";
+        /// <summary>Show the PDF toolbar.</summary>
+        public bool PdfViewerShowToolbar { get; set; } = true;
+        /// <summary>Background color for the viewer frame.</summary>
+        public string PdfViewerBackground { get; set; } = "#1e293b";
+
+        // ── Additional aliases / properties used by prior widget code ──
+        public bool ProgressBarShowValue { get; set; } = true;
+        public string NumericDisplayFormat { get; set; } = "F1";
+        public int NumericDisplayDigits { get; set; } = 5;
+        public string LedArrayOrientation { get; set; } = "horizontal";
+        public string LedArrayLabels { get; set; } = "";
+        public string PipeFlowColor { get; set; } = "#3b82f6";
+        public bool PipeShowFlow { get; set; } = true;
+        public double PipeFlowSpeed { get; set; } = 1;
+        public string PipeOrientation { get; set; } = "horizontal";
+        public string TankLiquidColor { get; set; } = "#3b82f6";
+        public string TankStyle { get; set; } = "rectangular";
+        public string MotorRunColor { get; set; } = "#22c55e";
+        public string MotorStopColor { get; set; } = "#64748b";
+        public string MotorFaultColor { get; set; } = "#ef4444";
+        public string MotorFaultPath { get; set; } = "";
+        public bool MotorAnimateRotation { get; set; } = true;
+        public string MotorStyle { get; set; } = "motor";
+        public int SparklinePoints { get; set; } = 50;
+        public string DropdownValues { get; set; } = "";
+        public string DataTableBackground { get; set; } = "#0f172a";
+        public bool DataTableShowHeader { get; set; } = true;
+        public int DataTableMaxRows { get; set; } = 10;
+        public string ConveyorFrameColor { get; set; } = "#334155";
+        public bool ConveyorAnimate { get; set; } = true;
+        public string PieChartBackground { get; set; } = "#0f172a";
+        public bool PieChartShowLabels { get; set; } = true;
+        public string BarChartBackground { get; set; } = "#0f172a";
+        public double BarChartMaxValue { get; set; } = 100;
+
+
 
     }
 
@@ -917,8 +1389,7 @@ namespace SharedModels
         /// Login, Logout,
         /// AcknowledgeAllAlarms, ResetAllAlarms,
         /// ChangeLanguage,
-        /// GenerateReport,
-        /// NumericPad, AlphaNumericPad
+        /// GenerateReport
         /// </summary>
         public string Action { get; set; } = "NavigateScreen";
 
@@ -1124,6 +1595,9 @@ namespace SharedModels
 
         /// <summary>Per-line debug annotations: 0-based line number -> display text (variable values at that line).</summary>
         public Dictionary<int, string> LineAnnotations { get; set; } = new();
+
+        /// <summary>Active debug session state (breakpoints, pause state, watch variables). Null when not debugging.</summary>
+        public ScriptDebugSession? DebugSession { get; set; }
     }
 
     // ─── Scheduler ───────────────────────────────────────────
@@ -1457,138 +1931,11 @@ namespace SharedModels
         public string FileNamePattern { get; set; } = "{ReportName}_{DateTime}";
     }
 
-    // ─── Feature: Tag Scaling / Engineering Units ────────────────────
+    // --- Feature: REST API Configuration ---
 
     /// <summary>
-    /// Linear scaling configuration for converting between raw (driver) and engineering (display) values.
-    /// Formula: EngValue = (RawValue - RawMin) / (RawMax - RawMin) * (EngMax - EngMin) + EngMin
-    /// </summary>
-    public class ScalingConfig
-    {
-        /// <summary>Raw value corresponding to the engineering minimum.</summary>
-        public double RawMin { get; set; }
-
-        /// <summary>Raw value corresponding to the engineering maximum.</summary>
-        public double RawMax { get; set; } = 100;
-
-        /// <summary>Engineering value at the low end of the scale.</summary>
-        public double EngMin { get; set; }
-
-        /// <summary>Engineering value at the high end of the scale.</summary>
-        public double EngMax { get; set; } = 100;
-
-        /// <summary>When true, clamp the engineering value to [EngMin, EngMax].</summary>
-        public bool ClampEnabled { get; set; }
-
-        /// <summary>
-        /// Applies forward scaling: raw → engineering.
-        /// </summary>
-        public double RawToEng(double raw)
-        {
-            double range = RawMax - RawMin;
-            if (Math.Abs(range) < 1e-15) return EngMin;
-            double eng = (raw - RawMin) / range * (EngMax - EngMin) + EngMin;
-            if (ClampEnabled)
-            {
-                double lo = Math.Min(EngMin, EngMax);
-                double hi = Math.Max(EngMin, EngMax);
-                eng = Math.Clamp(eng, lo, hi);
-            }
-            return eng;
-        }
-
-        /// <summary>
-        /// Applies reverse scaling: engineering → raw.
-        /// </summary>
-        public double EngToRaw(double eng)
-        {
-            double range = EngMax - EngMin;
-            if (Math.Abs(range) < 1e-15) return RawMin;
-            return (eng - EngMin) / range * (RawMax - RawMin) + RawMin;
-        }
-    }
-
-    // ─── Feature: Alarm Notification ─────────────────────────────────
-
-    /// <summary>
-    /// Per-alarm notification configuration. When an alarm activates, the server
-    /// can send emails, call webhooks, and escalate if not acknowledged in time.
-    /// </summary>
-    public class AlarmNotificationConfig
-    {
-        /// <summary>Send email notification when the alarm activates.</summary>
-        public bool EmailEnabled { get; set; }
-
-        /// <summary>Comma-separated email recipients for this alarm.</summary>
-        public string EmailRecipients { get; set; } = "";
-
-        /// <summary>Send HTTP POST webhook when the alarm activates.</summary>
-        public bool WebhookEnabled { get; set; }
-
-        /// <summary>Webhook URL to POST alarm JSON to. Empty = use server default.</summary>
-        public string WebhookUrl { get; set; } = "";
-
-        /// <summary>
-        /// Escalation time in minutes. If the alarm is not acknowledged within this time,
-        /// a second notification is sent to the escalation recipients. 0 = no escalation.
-        /// </summary>
-        public int EscalationMinutes { get; set; }
-
-        /// <summary>Comma-separated escalation email recipients.</summary>
-        public string EscalationRecipients { get; set; } = "";
-    }
-
-    // ─── Feature: Audit Trail ────────────────────────────────────────
-
-    /// <summary>
-    /// Configuration for the operator audit trail.
-    /// Records who wrote which value, acknowledged which alarm, loaded which recipe, etc.
-    /// Stored in a separate SQLite database for compliance (FDA 21 CFR Part 11).
-    /// </summary>
-    public class AuditTrailConfig
-    {
-        /// <summary>Whether audit trail logging is enabled. Default true when section is present.</summary>
-        public bool Enabled { get; set; } = true;
-
-        /// <summary>Path to the SQLite database file (relative to nodes.json). Default "audit.db".</summary>
-        public string DbPath { get; set; } = "audit.db";
-
-        /// <summary>Maximum age of audit records in days. 0 = keep forever. Default 365.</summary>
-        public int MaxAgeDays { get; set; } = 365;
-    }
-
-    // ─── Feature: Notification System ────────────────────────────────
-
-    /// <summary>
-    /// Global notification configuration used as defaults for alarm notifications.
-    /// </summary>
-    public class NotificationsConfig
-    {
-        /// <summary>SMTP configuration for sending alarm email notifications.</summary>
-        public SmtpNotificationConfig? Smtp { get; set; }
-
-        /// <summary>Default webhook URL for alarm notifications. Per-alarm config overrides this.</summary>
-        public string DefaultWebhookUrl { get; set; } = "";
-    }
-
-    /// <summary>
-    /// SMTP settings for the notification system.
-    /// </summary>
-    public class SmtpNotificationConfig
-    {
-        public string Host { get; set; } = "";
-        public int Port { get; set; } = 587;
-        public bool UseSsl { get; set; } = true;
-        public string Username { get; set; } = "";
-        public string Password { get; set; } = "";
-        public string FromAddress { get; set; } = "";
-    }
-
-    // ─── Feature: REST API ───────────────────────────────────────────
-
-    /// <summary>
-    /// Configuration for the REST API endpoint that enables external integration.
-    /// Exposes variable read/write, alarm status, event log, and data export.
+    /// REST API configuration for exposing variables, alarms, recipes, and reports
+    /// to external systems (MES, ERP, dashboards) via HTTP.
     /// </summary>
     public class ApiConfig
     {
@@ -1605,50 +1952,7 @@ namespace SharedModels
         public string ApiKey { get; set; } = "";
     }
 
-    // ─── Feature: Rate Limiting / Throttling ─────────────────────
-
-    /// <summary>
-    /// Rate limiting configuration to protect OPC UA and web endpoints from abuse.
-    /// Uses a sliding-window algorithm per client IP / session to throttle excessive requests.
-    /// </summary>
-    public class RateLimitConfig
-    {
-        /// <summary>Whether rate limiting is enabled. Default: false.</summary>
-        public bool Enabled { get; set; }
-
-        /// <summary>
-        /// Maximum REST API requests per client IP within the time window.
-        /// 0 = unlimited. Default: 100.
-        /// </summary>
-        public int ApiMaxRequestsPerWindow { get; set; } = 100;
-
-        /// <summary>
-        /// Maximum OPC UA write operations per session within the time window.
-        /// 0 = unlimited. Default: 200.
-        /// </summary>
-        public int OpcUaWriteMaxPerWindow { get; set; } = 200;
-
-        /// <summary>
-        /// Maximum login attempts per client within the time window.
-        /// Protects against brute-force password attacks.
-        /// 0 = unlimited. Default: 10.
-        /// </summary>
-        public int LoginMaxAttemptsPerWindow { get; set; } = 10;
-
-        /// <summary>
-        /// Maximum diagnostics endpoint requests per client IP within the time window.
-        /// 0 = unlimited. Default: 60.
-        /// </summary>
-        public int DiagnosticsMaxRequestsPerWindow { get; set; } = 60;
-
-        /// <summary>
-        /// Sliding window duration in seconds. All rate limits use this shared window.
-        /// Default: 60 (1 minute).
-        /// </summary>
-        public int WindowSeconds { get; set; } = 60;
-    }
-
-    // ─── Feature: Redundancy / High Availability ─────────────────────
+    // --- Feature: Redundancy / High Availability ---
 
     /// <summary>
     /// Server redundancy configuration for high-availability deployments.
@@ -1670,8 +1974,7 @@ namespace SharedModels
         public int HeartbeatIntervalSeconds { get; set; } = 5;
 
         /// <summary>
-        /// Number of consecutive missed heartbeats before triggering failover.
-        /// Failover timeout = HeartbeatIntervalSeconds × FailoverMissedHeartbeats. Default 3.
+        /// Number of consecutive missed heartbeats before triggering failover. Default 3.
         /// </summary>
         public int FailoverMissedHeartbeats { get; set; } = 3;
 
@@ -1683,21 +1986,13 @@ namespace SharedModels
 
         /// <summary>
         /// When true, standby automatically switches back to standby role when the primary recovers.
-        /// When false, manual intervention is required for switchback. Default false.
         /// </summary>
         public bool AutoSwitchback { get; set; }
 
         /// <summary>
         /// OPC UA endpoint URLs for both servers, exposed to clients for reconnection on failover.
-        /// Example: ["opc.tcp://server1:4840", "opc.tcp://server2:4840"]
         /// </summary>
         public List<string> ServerUrls { get; set; } = new();
-
-        /// <summary>
-        /// Connection string for the partner's database (used for replication health checks).
-        /// Leave empty to skip database replication monitoring.
-        /// </summary>
-        public string? PartnerDatabaseConnectionString { get; set; }
 
         /// <summary>
         /// Maximum allowed replication lag in seconds before raising a warning. Default 30.
@@ -1705,12 +2000,37 @@ namespace SharedModels
         public int MaxReplicationLagSeconds { get; set; } = 30;
     }
 
-    // ─── Feature: Calculated / Virtual Tags ──────────────────────────
+    // --- Feature: Rate Limiting / Throttling ---
+
+    /// <summary>
+    /// Configures per-endpoint rate limiting to protect OPC UA and web endpoints from abuse.
+    /// </summary>
+    public class RateLimitConfig
+    {
+        /// <summary>Whether rate limiting is active.</summary>
+        public bool Enabled { get; set; }
+
+        /// <summary>Maximum REST API requests per window. 0 = unlimited.</summary>
+        public int ApiMaxRequestsPerWindow { get; set; } = 100;
+
+        /// <summary>Maximum OPC UA write operations per window. 0 = unlimited.</summary>
+        public int OpcUaWriteMaxPerWindow { get; set; } = 200;
+
+        /// <summary>Maximum login attempts per window. 0 = unlimited.</summary>
+        public int LoginMaxAttemptsPerWindow { get; set; } = 10;
+
+        /// <summary>Maximum diagnostics endpoint requests per window. 0 = unlimited.</summary>
+        public int DiagnosticsMaxRequestsPerWindow { get; set; } = 60;
+
+        /// <summary>Sliding window duration in seconds. Default 60.</summary>
+        public int WindowSeconds { get; set; } = 60;
+    }
+
+    // --- Feature: Calculated / Virtual Tags ---
 
     /// <summary>
     /// Configuration for a calculated (virtual) variable whose value is computed
     /// from an expression referencing other OPC variables.
-    /// Evaluated cyclically at the configured interval.
     /// </summary>
     public class CalculatedVariableConfig
     {
@@ -1718,8 +2038,6 @@ namespace SharedModels
 
         /// <summary>
         /// C# expression that computes the value. Use Read("path") to reference OPC variables.
-        /// Examples: "Read(\"Tank1.Level\") + Read(\"Tank2.Level\")",
-        /// "Math.Round(Read(\"Sensor.Temperature\") * 1.8 + 32, 2)"
         /// Leave empty when using AggregateFunction instead.
         /// </summary>
         public string Expression { get; set; } = "";
@@ -1733,32 +2051,23 @@ namespace SharedModels
         /// <summary>Whether this calculated variable is active.</summary>
         public bool Enabled { get; set; } = true;
 
-        /// <summary>Folder path where the variable is created (e.g. "Calculated" or "Plant.Calculated").</summary>
+        /// <summary>Folder path where the variable is created. Default "_Calculated".</summary>
         public string FolderPath { get; set; } = "_Calculated";
 
         /// <summary>Engineering unit label.</summary>
         public string EngineeringUnit { get; set; } = "";
 
         /// <summary>
-        /// Built-in aggregate function to apply instead of a custom expression.
-        /// When set, AggregateSourcePath must also be specified.
+        /// Built-in aggregate function instead of a custom expression.
         /// Supported: "Avg", "Sum", "Min", "Max", "Count", "RateOfChange", "Delta",
         /// "RunningAvg", "RunningMin", "RunningMax", "StdDev".
-        /// Leave empty to use Expression instead.
         /// </summary>
         public string AggregateFunction { get; set; } = "";
 
-        /// <summary>
-        /// Variable path(s) to aggregate. For single-source aggregates (Avg, RateOfChange, etc.)
-        /// specify one path. For multi-source aggregates (Sum, Min, Max across tags)
-        /// specify a semicolon-separated list: "Tank1.Level;Tank2.Level;Tank3.Level".
-        /// </summary>
+        /// <summary>Variable path(s) to aggregate. Semicolon-separated for multi-source.</summary>
         public string AggregateSourcePath { get; set; } = "";
 
-        /// <summary>
-        /// Rolling window size in seconds for time-based aggregates (RunningAvg, RunningMin,
-        /// RunningMax, StdDev). Samples outside this window are discarded. Default 300 (5 min).
-        /// </summary>
+        /// <summary>Rolling window size in seconds for time-based aggregates. Default 300.</summary>
         public int AggregateWindowSeconds { get; set; } = 300;
     }
 }

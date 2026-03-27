@@ -247,6 +247,9 @@ namespace SharedModels
 
         /// <summary>Optional folder path for editor organization (e.g. "Alarms/Temperature"). Ignored by the server.</summary>
         public string Group { get; set; } = "";
+
+        /// <summary>0-based line numbers where breakpoints are set. Persisted with the project.</summary>
+        public List<int> Breakpoints { get; set; } = new();
     }
 
     /// <summary>
@@ -1592,6 +1595,9 @@ namespace SharedModels
 
         /// <summary>Per-line debug annotations: 0-based line number -> display text (variable values at that line).</summary>
         public Dictionary<int, string> LineAnnotations { get; set; } = new();
+
+        /// <summary>Active debug session state (breakpoints, pause state, watch variables). Null when not debugging.</summary>
+        public ScriptDebugSession? DebugSession { get; set; }
     }
 
     // ─── Scheduler ───────────────────────────────────────────

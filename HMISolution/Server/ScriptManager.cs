@@ -111,6 +111,8 @@ namespace SimpleOpcFileServer
         private readonly CancellationToken _token;
         private Task? _task;
         private Script<object>? _compiledCSharpScript;
+        private Script<object>? _compiledDebugScript;
+        private bool _lastDebugActive;
         private (Assembly assembly, MethodInfo method)? _compiledVbScript;
 
         public ScriptRunner(ScriptConfig config, SimpleFileServerNodeManager nodeManager, ScriptManager scriptManager, CancellationToken token)
@@ -129,12 +131,15 @@ namespace SimpleOpcFileServer
         {
             _task = Task.Run(async () =>
             {
+                long cycleCount = 0;
                 while (!_token.IsCancellationRequested)
                 {
+                    cycleCount++;
                     var sw = System.Diagnostics.Stopwatch.StartNew();
+                    ScriptGlobals? globals = null;
                     try
                     {
-                        var globals = new ScriptGlobals(_nodeManager, _scriptManager);
+                        globals = new ScriptGlobals(_nodeManager, _scriptManager, _config.Name, _token);
 
                         if (IsVb)
                             await RunVbAsync(globals);
@@ -143,11 +148,13 @@ namespace SimpleOpcFileServer
 
                         sw.Stop();
                         DiagnosticsCollector.Instance.RecordCycle("Script", _config.Name, sw.Elapsed.TotalMilliseconds);
+                        RecordDebugSnapshot(globals, cycleCount, "Running", null);
                     }
                     catch (Exception ex)
                     {
                         sw.Stop();
                         DiagnosticsCollector.Instance.RecordCycle("Script", _config.Name, sw.Elapsed.TotalMilliseconds, error: ex.Message);
+                        RecordDebugSnapshot(globals, cycleCount, "Error", ex.Message);
                         Log.Error(ex, Strings.Script_ExecutionError, _config.Name, ex.Message);
                     }
 
@@ -175,17 +182,44 @@ namespace SimpleOpcFileServer
 
         private async Task RunCSharpAsync(ScriptGlobals globals)
         {
-            if (_compiledCSharpScript == null)
-            {
-                var options = ScriptOptions.Default
-                    .AddReferences(typeof(SimpleFileServerNodeManager).Assembly)
-                    .AddImports("System", "System.Collections.Generic", "System.Linq");
+            bool debugActive = ScriptDebugger.Instance.HasActiveSession(_config.Name);
 
-                _compiledCSharpScript = CSharpScript.Create(_config.Code, options, typeof(ScriptGlobals));
-                _compiledCSharpScript.Compile();
+            // Invalidate cached debug script if debug mode changed
+            if (debugActive != _lastDebugActive)
+            {
+                _compiledDebugScript = null;
+                _lastDebugActive = debugActive;
             }
 
-            await _compiledCSharpScript.RunAsync(globals, cancellationToken: _token);
+            if (debugActive)
+            {
+                if (_compiledDebugScript == null)
+                {
+                    var instrumentedCode = ScriptDebugger.InstrumentSource(_config.Code);
+                    var options = ScriptOptions.Default
+                        .AddReferences(typeof(SimpleFileServerNodeManager).Assembly)
+                        .AddImports("System", "System.Collections.Generic", "System.Linq");
+
+                    _compiledDebugScript = CSharpScript.Create(instrumentedCode, options, typeof(ScriptGlobals));
+                    _compiledDebugScript.Compile();
+                }
+
+                await _compiledDebugScript.RunAsync(globals, cancellationToken: _token);
+            }
+            else
+            {
+                if (_compiledCSharpScript == null)
+                {
+                    var options = ScriptOptions.Default
+                        .AddReferences(typeof(SimpleFileServerNodeManager).Assembly)
+                        .AddImports("System", "System.Collections.Generic", "System.Linq");
+
+                    _compiledCSharpScript = CSharpScript.Create(_config.Code, options, typeof(ScriptGlobals));
+                    _compiledCSharpScript.Compile();
+                }
+
+                await _compiledCSharpScript.RunAsync(globals, cancellationToken: _token);
+            }
         }
 
         private Task RunVbAsync(ScriptGlobals globals)
@@ -284,6 +318,27 @@ End Module";
             return refs.Values.ToList();
         }
 
+        private void RecordDebugSnapshot(ScriptGlobals? globals, long cycleCount, string status, string? error)
+        {
+            var info = new SharedModels.ProgramDebugInfo
+            {
+                Category = "Script",
+                Name = _config.Name,
+                CycleCount = cycleCount,
+                Status = status,
+                LastError = error
+            };
+            if (globals != null)
+            {
+                foreach (var kvp in globals.DebugReads)
+                    info.Variables["[read] " + kvp.Key] = kvp.Value;
+                foreach (var kvp in globals.DebugWrites)
+                    info.Variables["[write] " + kvp.Key] = kvp.Value;
+            }
+            info.DebugSession = ScriptDebugger.Instance.GetSessionInfo(_config.Name);
+            DiagnosticsCollector.Instance.RecordDebug(info);
+        }
+
         public void Stop() { }
     }
 
@@ -291,16 +346,39 @@ End Module";
     {
         private readonly SimpleFileServerNodeManager _manager;
         private readonly ScriptManager _scriptManager;
+        private readonly string _scriptName;
+        private readonly CancellationToken _ct;
 
-        public ScriptGlobals(SimpleFileServerNodeManager manager, ScriptManager scriptManager)
+        /// <summary>Tracks variable reads/writes for debug visualization.</summary>
+        internal Dictionary<string, string> DebugReads { get; } = new(StringComparer.OrdinalIgnoreCase);
+        internal Dictionary<string, string> DebugWrites { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+        public ScriptGlobals(SimpleFileServerNodeManager manager, ScriptManager scriptManager,
+            string scriptName = "", CancellationToken ct = default)
         {
             _manager = manager;
             _scriptManager = scriptManager;
+            _scriptName = scriptName;
+            _ct = ct;
+        }
+
+        /// <summary>
+        /// Debug checkpoint injected at each source line when debugging.
+        /// Checks breakpoints and blocks execution if paused.
+        /// </summary>
+        public void __DebugCheckpoint(int line)
+        {
+            var allVars = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var kvp in DebugReads) allVars["[read] " + kvp.Key] = kvp.Value;
+            foreach (var kvp in DebugWrites) allVars["[write] " + kvp.Key] = kvp.Value;
+            ScriptDebugger.Instance.CheckBreakpoint(_scriptName, line, allVars, _ct);
         }
 
         public object? Read(string variableName)
         {
-            return _manager.ReadVariable(variableName);
+            var val = _manager.ReadVariable(variableName);
+            DebugReads[variableName] = val?.ToString() ?? "null";
+            return val;
         }
 
         public double ReadDouble(string variableName)
@@ -326,6 +404,7 @@ End Module";
         public void Write(string variableName, object value)
         {
             _manager.WriteVariable(variableName, value);
+            DebugWrites[variableName] = value?.ToString() ?? "null";
         }
 
         /// <summary>
