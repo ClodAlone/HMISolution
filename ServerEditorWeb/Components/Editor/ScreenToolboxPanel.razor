@@ -30,8 +30,12 @@
                 <div class="toolbox-items">
                     @foreach (var item in category.Items)
                     {
+                        var capturedItem = item;
                         <div class="toolbox-item-wrap">
                             <button class="toolbox-item @item.CssClass"
+                                    draggable="true"
+                                    @ondragstart="() => OnDragStart(capturedItem.Type)"
+                                    @ondragend="OnDragEnd"
                                     @onclick="() => OnItemClicked(item.Type)"
                                     @onmouseenter="() => ShowPreview(item)"
                                     @onmouseleave="HidePreview"
@@ -87,6 +91,12 @@
     }
 
     private async Task OnItemClicked(string type) => await OnSymbolTypeSelected.InvokeAsync(type);
+
+    /// <summary>Currently dragged toolbox widget type, readable by drop targets.</summary>
+    public static string? DraggedToolboxType { get; private set; }
+
+    private void OnDragStart(string type) { DraggedToolboxType = type; }
+    private void OnDragEnd() { DraggedToolboxType = null; }
 
     private void OnSearchChanged()
     {
@@ -218,6 +228,10 @@
                 builder.AddMarkupContent(10, "<rect x=\"20\" y=\"15\" width=\"120\" height=\"50\" rx=\"6\" fill=\"#22c55e\" opacity=\"0.3\" class=\"tbx-anim-pulse\"/><rect x=\"20\" y=\"15\" width=\"120\" height=\"50\" rx=\"6\" fill=\"none\" stroke=\"#22c55e\" stroke-width=\"2\" class=\"tbx-anim-pulse\"/><text x=\"80\" y=\"44\" text-anchor=\"middle\" fill=\"#e2e8f0\" font-size=\"11\">Zone OK</text>");
                 break;
 
+            case "alarmanalytics":
+                builder.AddMarkupContent(10, "<rect x='10' y='8' width='140' height='64' rx='4' fill='#0f172a' stroke='#334155' stroke-width='1'/><text x='80' y='22' text-anchor='middle' fill='#e2e8f0' font-size='9' font-weight='bold'>📊 Analytics</text><line x1='14' y1='28' x2='146' y2='28' stroke='#334155' stroke-width='1'/><rect x='14' y='32' width='28' height='16' rx='2' fill='#1e293b' stroke='#334155' stroke-width='0.5'/><text x='28' y='43' text-anchor='middle' fill='#3b82f6' font-size='8' font-weight='bold'>42</text><text x='28' y='51' text-anchor='middle' fill='#64748b' font-size='4'>ACT</text><rect x='46' y='32' width='28' height='16' rx='2' fill='#1e293b' stroke='#334155' stroke-width='0.5'/><text x='60' y='43' text-anchor='middle' fill='#22c55e' font-size='8' font-weight='bold'>38</text><text x='60' y='51' text-anchor='middle' fill='#64748b' font-size='4'>ACK</text><rect x='78' y='32' width='28' height='16' rx='2' fill='#1e293b' stroke='#334155' stroke-width='0.5'/><text x='92' y='43' text-anchor='middle' fill='#f59e0b' font-size='8' font-weight='bold'>12s</text><text x='92' y='51' text-anchor='middle' fill='#64748b' font-size='4'>MTTA</text><rect x='14' y='55' width='64' height='5' rx='1' fill='#1e293b'/><rect x='14' y='55' width='44' height='5' rx='1' fill='#dc3545'/><rect x='14' y='62' width='64' height='5' rx='1' fill='#1e293b'/><rect x='14' y='62' width='30' height='5' rx='1' fill='#e35d6a'/>");
+                break;
+
             default:
                 builder.AddMarkupContent(10, $"<text x=\"80\" y=\"35\" text-anchor=\"middle\" fill=\"#94a3b8\" font-size=\"28\">{item.Icon}</text><text x=\"80\" y=\"60\" text-anchor=\"middle\" fill=\"#64748b\" font-size=\"10\">{item.Label}</text>");
                 break;
@@ -279,6 +293,7 @@
             new("piechart",  "P", "Pie Chart",   "Pie or doughnut chart from multiple variables",        "item-data"),
             new("barchart",  "B", "Bar Chart",   "Bar chart comparing multiple variable values",          "item-data"),
             new("xyplot",     "X", "XY Plot",      "XY scatter/line plot from two variable axes",          "item-data"),
+            new("alarmanalytics", "📊", "Alarm Analytics", "Dashboard with top-10 alarms, MTTA, flood detection", "item-data"),
         ]),
         new("Electrical", "⚡",
         [

@@ -1,0 +1,253 @@
+@using ServerEditorWeb.Services
+@using SharedModels
+@implements IDisposable
+
+<div class="alarm-analytics-panel">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <h6 class="mb-0">📊 Alarm Analytics</h6>
+        <div class="d-flex gap-1 align-items-center">
+            @if (_snapshot != null)
+            {
+                <span class="badge bg-secondary" style="font-size: 9px;">Window: @(_snapshot.WindowMinutes) min</span>
+            }
+            <button class="btn btn-sm btn-outline-secondary" @onclick="Refresh" disabled="@_loading">↻ Refresh</button>
+        </div>
+    </div>
+
+    @if (_error != null)
+    {
+        <div class="text-muted small text-center py-3">
+            <div style="font-size: 24px;">⚠️</div>
+            <div class="mt-1">@_error</div>
+        </div>
+    }
+    else if (_loading && _snapshot == null)
+    {
+        <div class="text-muted small text-center py-3">
+            <span class="spinner-border spinner-border-sm me-1"></span> Loading alarm analytics…
+        </div>
+    }
+    else if (_snapshot == null)
+    {
+        <div class="text-muted small text-center py-4">
+            <div style="font-size: 32px;">📊</div>
+            <div class="mt-1">No alarm analytics available. Start the server to begin collecting data.</div>
+        </div>
+    }
+    else
+    {
+        @* ── Flood detection banner ── *@
+        @if (_snapshot.IsFloodDetected)
+        {
+            <div class="alert alert-danger d-flex align-items-center gap-2 py-2 mb-2" style="font-size: 12px;">
+                <span style="font-size: 18px;">🚨</span>
+                <div>
+                    <strong>Alarm Flood Detected!</strong>
+                    <span class="ms-1">@_snapshot.FloodWindowActivations activations in the last @_snapshot.FloodWindowSeconds s (threshold: @_snapshot.FloodThreshold)</span>
+                </div>
+            </div>
+        }
+
+        @* ── KPI cards ── *@
+        <div class="d-flex gap-2 mb-3 flex-wrap">
+            <div class="kpi-card">
+                <div class="kpi-value">@_snapshot.TotalActivations</div>
+                <div class="kpi-label">Activations</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-value">@_snapshot.TotalAcknowledgements</div>
+                <div class="kpi-label">Acknowledgements</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-value">@FormatMtta(_snapshot.MeanTimeToAcknowledgeSeconds)</div>
+                <div class="kpi-label">Mean Time to Ack</div>
+            </div>
+            <div class="kpi-card @(_snapshot.IsFloodDetected ? "kpi-flood" : "")">
+                <div class="kpi-value">@_snapshot.FloodWindowActivations / @_snapshot.FloodThreshold</div>
+                <div class="kpi-label">Flood (@(_snapshot.FloodWindowSeconds)s)</div>
+            </div>
+        </div>
+
+        @* ── Top-10 most frequent alarms ── *@
+        <h6 class="mb-1" style="font-size: 12px;">🔝 Top-10 Most Frequent Alarms</h6>
+        @if (_snapshot.TopAlarms.Count == 0)
+        {
+            <div class="text-muted small text-center py-2">No alarm activations in the current window.</div>
+        }
+        else
+        {
+            <div class="table-responsive" style="max-height: 320px; overflow-y: auto;">
+                <table class="table table-sm table-hover mb-0" style="font-size: 11px;">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width: 30px;">#</th>
+                            <th>Variable Path</th>
+                            <th>Message</th>
+                            <th style="width: 60px; text-align: right;">Count</th>
+                            <th style="width: 80px; text-align: right;">Avg Ack</th>
+                            <th style="width: 80px;">Bar</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @{ int rank = 0; int maxCount = _snapshot.TopAlarms.Max(a => a.ActivationCount); }
+                        @foreach (var alarm in _snapshot.TopAlarms)
+                        {
+                            rank++;
+                            double pct = maxCount > 0 ? (double)alarm.ActivationCount / maxCount * 100 : 0;
+                            <tr>
+                                <td class="text-muted">@rank</td>
+                                <td class="font-monospace" style="font-size: 10px; word-break: break-all;">@alarm.VariablePath</td>
+                                <td>@alarm.Message</td>
+                                <td style="text-align: right; font-weight: 600;">@alarm.ActivationCount</td>
+                                <td style="text-align: right;">@FormatMtta(alarm.AvgAcknowledgeSeconds)</td>
+                                <td>
+                                    <div style="background: #e9ecef; border-radius: 3px; height: 14px; overflow: hidden;">
+                                        <div style="background: @BarColor(rank); width: @($"{pct:F0}")%; height: 100%; border-radius: 3px; transition: width 0.3s;"></div>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    }
+</div>
+
+<style>
+    .alarm-analytics-panel {
+        padding: 8px 12px;
+        height: 100%;
+        overflow-y: auto;
+    }
+
+    .kpi-card {
+        flex: 1 1 100px;
+        min-width: 100px;
+        background: var(--bs-body-bg, #fff);
+        border: 1px solid var(--bs-border-color, #dee2e6);
+        border-radius: 6px;
+        padding: 8px 12px;
+        text-align: center;
+    }
+
+    .kpi-value {
+        font-size: 18px;
+        font-weight: 700;
+        line-height: 1.2;
+    }
+
+    .kpi-label {
+        font-size: 10px;
+        color: var(--bs-secondary-color, #6c757d);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .kpi-flood {
+        border-color: var(--bs-danger, #dc3545);
+        background: rgba(220, 53, 69, 0.08);
+    }
+
+    .kpi-flood .kpi-value {
+        color: var(--bs-danger, #dc3545);
+    }
+</style>
+
+@code {
+    [Inject] private ServerDiagnosticsClient DiagClient { get; set; } = default!;
+    [Inject] private ScriptDebugService DebugService { get; set; } = default!;
+    [Inject] private NodeEditorService Editor { get; set; } = default!;
+    [Inject] private AuthService Auth { get; set; } = default!;
+
+    private AlarmAnalyticsSnapshot? _snapshot;
+    private bool _loading;
+    private string? _error;
+    private Timer? _refreshTimer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Refresh();
+        _refreshTimer = new Timer(async _ =>
+        {
+            await InvokeAsync(async () =>
+            {
+                await Refresh();
+                StateHasChanged();
+            });
+        }, null, 5000, 5000);
+    }
+
+    private async Task Refresh()
+    {
+        _loading = true;
+
+        try
+        {
+            // Try direct HTTP first, then fall back to OPC UA
+            ServerDiagnostics? snapshot = null;
+            try { snapshot = await DebugService.PollDiagnosticsAsync(); } catch { }
+
+            if (snapshot == null)
+            {
+                try
+                {
+                    var endpointUrl = Editor.ServerEndpointUrl;
+                    string? user = null, pass = null;
+                    if (Editor.RootModel?.Server?.EnableAnonymous == false && Auth.IsAuthenticated)
+                    {
+                        user = Auth.Username;
+                        pass = Auth.OpcPassword;
+                    }
+                    await DiagClient.PollAsync(endpointUrl, user, pass);
+                    snapshot = DiagClient.Latest;
+                }
+                catch { }
+            }
+
+            if (snapshot?.AlarmAnalytics != null)
+            {
+                _snapshot = snapshot.AlarmAnalytics;
+                _error = null;
+            }
+            else if (snapshot != null)
+            {
+                _error = "Server is running but alarm analytics data is not available.";
+            }
+            else
+            {
+                _error = "Cannot connect to server. Start the server to view alarm analytics.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static string FormatMtta(double? seconds)
+    {
+        if (seconds == null) return "—";
+        var ts = TimeSpan.FromSeconds(seconds.Value);
+        if (ts.TotalHours >= 1) return $"{ts.TotalHours:F1}h";
+        if (ts.TotalMinutes >= 1) return $"{ts.TotalMinutes:F1}m";
+        return $"{ts.TotalSeconds:F0}s";
+    }
+
+    private static string BarColor(int rank) => rank switch
+    {
+        1 => "#dc3545",
+        2 => "#e35d6a",
+        3 => "#fd7e14",
+        _ => "#6c757d"
+    };
+
+    public void Dispose()
+    {
+        _refreshTimer?.Dispose();
+    }
+}

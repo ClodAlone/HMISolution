@@ -78,7 +78,11 @@
         {
             var item = sym;
             var animClass = GetGridAnimClass(item);
-            <div class="symbol-library-item @animClass" @onclick="() => OnSymbolSelected.InvokeAsync(item)" title="@item.Name">
+            <div class="symbol-library-item @animClass"
+                 draggable="true"
+                 @ondragstart="() => OnLibraryDragStart(item)"
+                 @ondragend="OnLibraryDragEnd"
+                 @onclick="() => OnSymbolSelected.InvokeAsync(item)" title="@item.Name">
                 <div class="symbol-library-preview">
                     @((MarkupString)item.SvgContent)
                 </div>
@@ -140,6 +144,12 @@
     [Inject] private IJSRuntime JS { get; set; } = default!;
 
     [Parameter] public EventCallback<SymbolLibraryItem> OnSymbolSelected { get; set; }
+
+    /// <summary>Currently dragged library symbol, readable by drop targets.</summary>
+    public static SymbolLibraryItem? DraggedLibraryItem { get; private set; }
+
+    private void OnLibraryDragStart(SymbolLibraryItem item) { DraggedLibraryItem = item; }
+    private void OnLibraryDragEnd() { DraggedLibraryItem = null; }
 
     private string? _selectedCategory;
     private string _searchText = "";

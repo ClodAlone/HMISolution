@@ -61,7 +61,9 @@
 
         @* Responsive Grid Canvas *@
         var bgData = ResolveImageData(screen.BackgroundImageId);
-        <div class="responsive-canvas" style="background: @screen.Background;@(string.IsNullOrEmpty(bgData) ? "" : $" background-image: url('{bgData}'); background-size: cover; background-position: center;") gap: @(screen.GridGap)px; grid-template-columns: repeat(@screen.GridColumns, 1fr);">
+        <div class="responsive-canvas" style="background: @screen.Background;@(string.IsNullOrEmpty(bgData) ? "" : $" background-image: url('{bgData}'); background-size: cover; background-position: center;") gap: @(screen.GridGap)px; grid-template-columns: repeat(@screen.GridColumns, 1fr);"
+             ondragover="event.preventDefault();"
+             @ondrop="OnGridDrop">
             @foreach (var sym in screen.Symbols.OrderBy(s => s.Order))
             {
                 var s = sym;
@@ -319,6 +321,9 @@
                             case "pdfviewer":
                                 <div class="responsive-placeholder">PDF Viewer</div>
                                 break;
+                            case "alarmanalytics":
+                                <div class="responsive-placeholder">📊 Alarm Analytics (top-10, MTTA, flood detection)</div>
+                                break;
                             default:
                                 <div class="responsive-placeholder">@s.Type</div>
                                 break;
@@ -406,6 +411,77 @@
             _hdaVarsText = string.Join("\n", sym.HdaVariablePaths);
 
         Editor.SetScreenSelection(sym, new HashSet<ScreenSymbol> { sym });
+    }
+
+    private void OnGridDrop()
+    {
+        var screen = GetScreen();
+        if (screen == null) return;
+
+        if (ScreenToolboxPanel.DraggedToolboxType is { } toolboxType)
+        {
+            AddWidget(screen, toolboxType);
+            return;
+        }
+
+        if (SymbolLibraryPanel.DraggedLibraryItem is { } libItem)
+        {
+            AddLibraryWidget(screen, libItem);
+        }
+    }
+
+    private void AddLibraryWidget(ScreenConfig screen, SymbolLibraryItem item)
+    {
+        var sym = new ScreenSymbol
+        {
+            Id = $"sym_{_nextId++}",
+            Type = "svg",
+            Width = item.DefaultWidth,
+            Height = item.DefaultHeight,
+            Label = item.Name,
+            SvgContent = item.SvgContent,
+            Fill = "none",
+            Stroke = "#333333",
+            ColSpan = GetDefaultColSpan("svg"),
+            RowSpan = 1,
+            RowHeight = GetDefaultRowHeight("svg"),
+            Order = screen.Symbols.Count
+        };
+
+        if (item.Animations.Count > 0)
+        {
+            foreach (var anim in item.Animations)
+            {
+                sym.Animations.Add(new SymbolAnimation
+                {
+                    Id = Guid.NewGuid().ToString("N")[..8],
+                    Name = anim.Name,
+                    Enabled = anim.Enabled,
+                    Property = anim.Property,
+                    Trigger = anim.Trigger,
+                    TriggerVariable = anim.TriggerVariable,
+                    TriggerCondition = anim.TriggerCondition,
+                    Keyframes = anim.Keyframes.Select(k => new AnimationKeyframe
+                    {
+                        Percent = k.Percent,
+                        Value = k.Value,
+                        Easing = k.Easing
+                    }).ToList(),
+                    DurationMs = anim.DurationMs,
+                    DelayMs = anim.DelayMs,
+                    Easing = anim.Easing,
+                    RepeatCount = anim.RepeatCount,
+                    AutoReverse = anim.AutoReverse
+                });
+            }
+        }
+
+        screen.Symbols.Add(sym);
+        Editor.MarkChanged();
+        _selectedSymbol = sym;
+        _selectedIndex = screen.Symbols.Count - 1;
+        Editor.SetScreenSelection(sym, new HashSet<ScreenSymbol> { sym });
+        StateHasChanged();
     }
 
     private void AddWidget(ScreenConfig screen, string type)
@@ -586,7 +662,7 @@
         "text" or "indicator" or "editbox" => 3,
         "gauge" => 4,
         "rect" or "circle" or "ellipse" => 3,
-        "alarmlist" or "hdachart" or "hdagrid" or "eventlog" => 12,
+        "alarmlist" or "hdachart" or "hdagrid" or "eventlog" or "alarmanalytics" => 12,
         "ipcamera" => 6,
         "recipe" => 6,
         "svg" => 4,
@@ -604,6 +680,7 @@
         "gauge" => 120,
         "rect" or "circle" or "ellipse" => 100,
         "alarmlist" or "hdachart" or "hdagrid" or "eventlog" => 280,
+        "alarmanalytics" => 300,
         "ipcamera" => 260,
         "recipe" => 320,
         "svg" => 150,
@@ -620,7 +697,7 @@
         "gauge" => 80,
         "indicator" => 30,
         "editbox" => 160,
-        "alarmlist" or "hdachart" or "hdagrid" or "eventlog" => 500,
+        "alarmlist" or "hdachart" or "hdagrid" or "eventlog" or "alarmanalytics" => 500,
         "ipcamera" => 320,
         "recipe" => 280,
         "imagemap" => 120,
@@ -637,7 +714,7 @@
         "indicator" => 30,
         "editbox" => 32,
         "alarmlist" => 250,
-        "hdachart" or "hdagrid" or "eventlog" => 220,
+        "hdachart" or "hdagrid" or "eventlog" or "alarmanalytics" => 220,
         "ipcamera" => 240,
         "recipe" => 300,
         "imagemap" => 120,
@@ -655,6 +732,7 @@
         "hdagrid" => "HDA Grid",
         "eventlog" => "Event Log",
         "trend" => "Trend",
+        "alarmanalytics" => "Alarm Analytics",
         "button" => "Button",
         "animtext" => "Animated Text",
         _ => ""
@@ -666,6 +744,7 @@
         "alarmlist" => "#1a1a2e",
         "hdachart" or "hdagrid" => "#111827",
         "eventlog" => "#0f172a",
+        "alarmanalytics" => "#0f172a",
         "editbox" => "#1e293b",
         "ipcamera" => "#0a0a0a",
         "recipe" => "#1a1a2e",
@@ -689,6 +768,7 @@
         "hdachart" => "📊",
         "hdagrid" => "📋",
         "eventlog" => "📓",
+        "alarmanalytics" => "📊",
         "editbox" => "✏️",
         "ipcamera" => "📷",
         "recipe" => "📦",
@@ -712,6 +792,7 @@
         "hdachart" => "HDA Chart",
         "hdagrid" => "HDA Grid",
         "eventlog" => "Event Log",
+        "alarmanalytics" => "Alarm Analytics",
         "editbox" => "EditBox",
         "ipcamera" => "Camera",
         "recipe" => "Recipe",

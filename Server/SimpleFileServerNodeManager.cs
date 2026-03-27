@@ -42,6 +42,14 @@ namespace SimpleOpcFileServer
         // Alarm tracking
         private readonly Dictionary<string, AlarmConditionInfo> _alarmConditions = new();
 
+        // Alarm analytics — in-memory ring buffer for activation / acknowledgement events
+        private readonly List<AlarmAnalyticsEvent> _alarmAnalyticsLog = new();
+        private readonly object _analyticsLock = new();
+        private const int AlarmAnalyticsMaxEvents = 10_000;
+        private const int AlarmAnalyticsWindowMinutes = 60;
+        private const int AlarmFloodWindowSeconds = 60;
+        private const int AlarmFloodThreshold = 10;
+
         // Event journal
         private EventLogger? _eventLogger;
 
@@ -558,6 +566,9 @@ namespace SimpleOpcFileServer
                      _eventLogger.LogSystem("Info", "Server", $"Server started — configuration loaded. {lastActiveText}");
                      DiagnosticsCollector.Instance.Register("EventLogger", "EventLog");
                  }
+
+                 // Register alarm analytics provider for diagnostics snapshots
+                 DiagnosticsCollector.Instance.AlarmAnalyticsProvider = BuildAlarmAnalytics;
 
                  // Alarm notifications (Email, Telegram, WhatsApp)
                  var notifCfg = nodeModel.Server?.AlarmNotification;
@@ -1270,6 +1281,127 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             public bool IsActive { get; set; }
         }
 
+        // ─── Alarm analytics helpers ─────────────────────────────────────
+
+        private enum AlarmAnalyticsEventKind { Activated, Acknowledged }
+
+        private sealed class AlarmAnalyticsEvent
+        {
+            public DateTime TimeUtc { get; init; }
+            public AlarmAnalyticsEventKind Kind { get; init; }
+            public string VariablePath { get; init; } = "";
+            public string Message { get; init; } = "";
+        }
+
+        private void RecordAlarmAnalyticsEvent(AlarmAnalyticsEventKind kind, string variablePath, string message)
+        {
+            lock (_analyticsLock)
+            {
+                _alarmAnalyticsLog.Add(new AlarmAnalyticsEvent
+                {
+                    TimeUtc = DateTime.UtcNow,
+                    Kind = kind,
+                    VariablePath = variablePath,
+                    Message = message
+                });
+
+                // Trim oldest events when buffer exceeds max
+                if (_alarmAnalyticsLog.Count > AlarmAnalyticsMaxEvents)
+                    _alarmAnalyticsLog.RemoveRange(0, _alarmAnalyticsLog.Count - AlarmAnalyticsMaxEvents);
+            }
+        }
+
+        /// <summary>Build the alarm analytics snapshot from the in-memory ring buffer.</summary>
+        internal AlarmAnalyticsSnapshot BuildAlarmAnalytics()
+        {
+            lock (_analyticsLock)
+            {
+                var cutoff = DateTime.UtcNow.AddMinutes(-AlarmAnalyticsWindowMinutes);
+                var windowEvents = _alarmAnalyticsLog.Where(e => e.TimeUtc >= cutoff).ToList();
+
+                var activations = windowEvents.Where(e => e.Kind == AlarmAnalyticsEventKind.Activated).ToList();
+                var acks = windowEvents.Where(e => e.Kind == AlarmAnalyticsEventKind.Acknowledged).ToList();
+
+                // Top-10 most frequent alarm sources
+                var topAlarms = activations
+                    .GroupBy(e => e.VariablePath)
+                    .Select(g =>
+                    {
+                        // Compute per-source MTTA: for each ack, find the closest preceding activation
+                        var sourceActs = activations.Where(a => a.VariablePath == g.Key).OrderBy(a => a.TimeUtc).ToList();
+                        var sourceAcks = acks.Where(a => a.VariablePath == g.Key).OrderBy(a => a.TimeUtc).ToList();
+                        double? avgAckSec = null;
+                        if (sourceAcks.Count > 0 && sourceActs.Count > 0)
+                        {
+                            var deltas = new List<double>();
+                            int actIdx = 0;
+                            foreach (var ack in sourceAcks)
+                            {
+                                // Find latest activation before this ack
+                                while (actIdx + 1 < sourceActs.Count && sourceActs[actIdx + 1].TimeUtc <= ack.TimeUtc)
+                                    actIdx++;
+                                if (sourceActs[actIdx].TimeUtc <= ack.TimeUtc)
+                                    deltas.Add((ack.TimeUtc - sourceActs[actIdx].TimeUtc).TotalSeconds);
+                            }
+                            if (deltas.Count > 0)
+                                avgAckSec = Math.Round(deltas.Average(), 1);
+                        }
+
+                        return new AlarmFrequencyEntry
+                        {
+                            VariablePath = g.Key,
+                            Message = g.First().Message,
+                            ActivationCount = g.Count(),
+                            AvgAcknowledgeSeconds = avgAckSec
+                        };
+                    })
+                    .OrderByDescending(e => e.ActivationCount)
+                    .Take(10)
+                    .ToList();
+
+                // Global MTTA
+                double? globalMtta = null;
+                if (acks.Count > 0 && activations.Count > 0)
+                {
+                    var allActs = activations.OrderBy(a => a.TimeUtc).ToList();
+                    var deltas = new List<double>();
+                    foreach (var group in acks.GroupBy(a => a.VariablePath))
+                    {
+                        var srcActs = allActs.Where(a => a.VariablePath == group.Key).ToList();
+                        if (srcActs.Count == 0) continue;
+                        int ai = 0;
+                        foreach (var ack in group.OrderBy(a => a.TimeUtc))
+                        {
+                            while (ai + 1 < srcActs.Count && srcActs[ai + 1].TimeUtc <= ack.TimeUtc)
+                                ai++;
+                            if (srcActs[ai].TimeUtc <= ack.TimeUtc)
+                                deltas.Add((ack.TimeUtc - srcActs[ai].TimeUtc).TotalSeconds);
+                        }
+                    }
+                    if (deltas.Count > 0)
+                        globalMtta = Math.Round(deltas.Average(), 1);
+                }
+
+                // Flood detection — count activations in the last N seconds
+                var floodCutoff = DateTime.UtcNow.AddSeconds(-AlarmFloodWindowSeconds);
+                int floodCount = activations.Count(e => e.TimeUtc >= floodCutoff);
+
+                return new AlarmAnalyticsSnapshot
+                {
+                    Timestamp = DateTime.UtcNow,
+                    TotalActivations = activations.Count,
+                    TotalAcknowledgements = acks.Count,
+                    TopAlarms = topAlarms,
+                    MeanTimeToAcknowledgeSeconds = globalMtta,
+                    IsFloodDetected = floodCount >= AlarmFloodThreshold,
+                    FloodWindowActivations = floodCount,
+                    FloodThreshold = AlarmFloodThreshold,
+                    FloodWindowSeconds = AlarmFloodWindowSeconds,
+                    WindowMinutes = AlarmAnalyticsWindowMinutes
+                };
+            }
+        }
+
         private void CreateAlarmCondition(BaseDataVariableState variableState, AlarmConfig alarmConfig, string variablePath, BaseObjectState parent)
         {
             if (alarmConfig.TriggerType == AlarmTriggerType.Condition)
@@ -1595,6 +1727,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 Utils.Trace("ALARM-REPORTED: {0} message={1}", info.VariablePath, message);
                 _eventLogger?.LogAlarm(severity >= 800 ? "Critical" : "Warning", info.VariablePath, message,
                     $"Value={val:G6} HH={highHigh} H={cfg.HighLimit} L={cfg.LowLimit} LL={lowLow} Hyst={hyst}");
+                RecordAlarmAnalyticsEvent(AlarmAnalyticsEventKind.Activated, info.VariablePath, message);
 
                 if (cfg.NotifyOnActivation)
                     _notificationService?.NotifyAlarmActivated(info.VariablePath, message, severity);
@@ -1667,6 +1800,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 ReportAlarmEvent(alarm);
                 _eventLogger?.LogAlarm(cfg.ConditionSeverity >= 800 ? "Critical" : "Warning",
                     info.VariablePath, message, $"Operator={cfg.Operator} Compare={cfg.CompareValue} Value={valueStr} Hyst={cfg.Hysteresis}");
+                RecordAlarmAnalyticsEvent(AlarmAnalyticsEventKind.Activated, info.VariablePath, message);
 
                 if (cfg.NotifyOnActivation)
                     _notificationService?.NotifyAlarmActivated(info.VariablePath, message, cfg.ConditionSeverity);
@@ -1744,6 +1878,10 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 _eventLogger?.LogAlarm("Info", ackCondition.ConditionName.Value ?? "Alarm",
                     $"Alarm acknowledged: {ackCondition.ConditionName.Value}",
                     comment?.Text);
+
+                var ackPath = _alarmConditions.FirstOrDefault(kv => kv.Value.AlarmState == ackCondition as AlarmConditionState).Key
+                    ?? ackCondition.ConditionName.Value ?? "Alarm";
+                RecordAlarmAnalyticsEvent(AlarmAnalyticsEventKind.Acknowledged, ackPath, $"Acknowledged: {ackCondition.ConditionName.Value}");
             }
 
             return ServiceResult.Good;

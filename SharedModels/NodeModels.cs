@@ -1544,6 +1544,67 @@ namespace SharedModels
 
         /// <summary>Live debug snapshots for running PLC programs and scripts.</summary>
         public List<ProgramDebugInfo> ProgramDebug { get; set; } = new();
+
+        /// <summary>Alarm analytics snapshot (top-N, MTTA, flood detection). Null when no alarm data is available.</summary>
+        public AlarmAnalyticsSnapshot? AlarmAnalytics { get; set; }
+    }
+
+    // ─── Alarm Analytics ─────────────────────────────────────────
+
+    /// <summary>
+    /// Aggregated alarm analytics: top-N most-frequent alarms, mean-time-to-acknowledge,
+    /// and alarm-flood detection over a sliding window.
+    /// </summary>
+    public class AlarmAnalyticsSnapshot
+    {
+        /// <summary>UTC timestamp when the snapshot was computed.</summary>
+        public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+
+        /// <summary>Total alarm activations tracked in the current window.</summary>
+        public int TotalActivations { get; set; }
+
+        /// <summary>Total alarm acknowledgements tracked in the current window.</summary>
+        public int TotalAcknowledgements { get; set; }
+
+        /// <summary>Top-10 most frequently activated alarms.</summary>
+        public List<AlarmFrequencyEntry> TopAlarms { get; set; } = new();
+
+        /// <summary>
+        /// Mean-time-to-acknowledge in seconds across all alarms that were acknowledged in the window.
+        /// Null when no acknowledgements were recorded.
+        /// </summary>
+        public double? MeanTimeToAcknowledgeSeconds { get; set; }
+
+        /// <summary>Whether an alarm flood is currently detected.</summary>
+        public bool IsFloodDetected { get; set; }
+
+        /// <summary>Number of alarm activations in the most recent flood-detection window (e.g. last 60 s).</summary>
+        public int FloodWindowActivations { get; set; }
+
+        /// <summary>Flood-detection threshold (activations per FloodWindowSeconds).</summary>
+        public int FloodThreshold { get; set; }
+
+        /// <summary>Size of the flood-detection sliding window in seconds.</summary>
+        public int FloodWindowSeconds { get; set; }
+
+        /// <summary>Sliding analytics window size in minutes.</summary>
+        public int WindowMinutes { get; set; }
+    }
+
+    /// <summary>A single alarm source with its activation count in the analytics window.</summary>
+    public class AlarmFrequencyEntry
+    {
+        /// <summary>Variable path of the alarm source.</summary>
+        public string VariablePath { get; set; } = "";
+
+        /// <summary>Alarm message template.</summary>
+        public string Message { get; set; } = "";
+
+        /// <summary>Number of activations in the window.</summary>
+        public int ActivationCount { get; set; }
+
+        /// <summary>Average time-to-acknowledge in seconds for this source. Null if never acknowledged.</summary>
+        public double? AvgAcknowledgeSeconds { get; set; }
     }
 
     /// <summary>

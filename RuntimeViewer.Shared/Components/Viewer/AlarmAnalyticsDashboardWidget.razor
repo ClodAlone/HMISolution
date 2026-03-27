@@ -1,0 +1,239 @@
+@using SharedModels
+@using RuntimeViewer.Shared.Services
+@implements IDisposable
+
+<div class="alarm-analytics-widget" style="width: 100%; height: 100%; display: flex; flex-direction: column; font-family: var(--widget-font-family, sans-serif); font-size: var(--widget-font-size, 11px); font-weight: var(--widget-font-weight, normal); font-style: var(--widget-font-style, normal); background: var(--analytics-bg, #0f172a); color: var(--analytics-text, #e2e8f0); border: 1px solid var(--analytics-border, #334155); border-radius: 4px; overflow: hidden;">
+    @* Header *@
+    <div style="display: flex; align-items: center; padding: 4px 8px; background: #1e293b; border-bottom: 1px solid #334155; flex-shrink: 0; gap: 6px;">
+        <span style="font-weight: bold; font-size: 12px;">📊 Alarm Analytics</span>
+        @if (_snapshot != null)
+        {
+            <span style="font-size: 9px; color: #64748b; margin-left: auto;">Window: @(_snapshot.WindowMinutes) min</span>
+        }
+        <button class="analytics-btn" @onclick="Refresh" disabled="@_loading" title="Refresh">🔄</button>
+    </div>
+
+    @* Content *@
+    <div style="flex: 1; overflow-y: auto; padding: 6px 8px;">
+        @if (_loading && _snapshot == null)
+        {
+            <div style="text-align: center; padding: 20px; color: #64748b;">
+                <span>⏳ Loading alarm analytics…</span>
+            </div>
+        }
+        else if (_error != null)
+        {
+            <div style="text-align: center; padding: 20px; color: #64748b;">
+                <div style="font-size: 20px;">⚠️</div>
+                <div style="margin-top: 4px; font-size: 10px;">@_error</div>
+            </div>
+        }
+        else if (_snapshot == null)
+        {
+            <div style="text-align: center; padding: 20px; color: #64748b;">
+                <div style="font-size: 24px;">📊</div>
+                <div style="margin-top: 4px;">No alarm analytics available.</div>
+            </div>
+        }
+        else
+        {
+            @* Flood detection banner *@
+            @if (_snapshot.IsFloodDetected)
+            {
+                <div style="background: rgba(220,53,69,0.2); border: 1px solid #dc3545; border-radius: 4px; padding: 4px 8px; margin-bottom: 6px; display: flex; align-items: center; gap: 6px; font-size: 11px;">
+                    <span style="font-size: 16px;">🚨</span>
+                    <div>
+                        <strong style="color: #f87171;">Alarm Flood!</strong>
+                        <span style="color: #fca5a5; margin-left: 4px;">@_snapshot.FloodWindowActivations activations in @(_snapshot.FloodWindowSeconds)s (threshold: @_snapshot.FloodThreshold)</span>
+                    </div>
+                </div>
+            }
+
+            @* KPI cards *@
+            <div style="display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap;">
+                <div class="analytics-kpi">
+                    <div class="analytics-kpi-value">@_snapshot.TotalActivations</div>
+                    <div class="analytics-kpi-label">Activations</div>
+                </div>
+                <div class="analytics-kpi">
+                    <div class="analytics-kpi-value">@_snapshot.TotalAcknowledgements</div>
+                    <div class="analytics-kpi-label">Acks</div>
+                </div>
+                <div class="analytics-kpi">
+                    <div class="analytics-kpi-value">@FormatMtta(_snapshot.MeanTimeToAcknowledgeSeconds)</div>
+                    <div class="analytics-kpi-label">MTTA</div>
+                </div>
+                <div class="analytics-kpi @(_snapshot.IsFloodDetected ? "analytics-kpi-flood" : "")">
+                    <div class="analytics-kpi-value">@_snapshot.FloodWindowActivations / @_snapshot.FloodThreshold</div>
+                    <div class="analytics-kpi-label">Flood</div>
+                </div>
+            </div>
+
+            @* Top-10 table *@
+            <div style="font-weight: bold; font-size: 11px; margin-bottom: 4px;">🔝 Top-10 Most Frequent</div>
+            @if (_snapshot.TopAlarms.Count == 0)
+            {
+                <div style="text-align: center; padding: 8px; color: #64748b; font-size: 10px;">No alarm activations in window.</div>
+            }
+            else
+            {
+                <table class="analytics-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 22px;">#</th>
+                            <th>Source</th>
+                            <th>Message</th>
+                            <th style="width: 40px; text-align: right;">Cnt</th>
+                            <th style="width: 50px; text-align: right;">Avg Ack</th>
+                            <th style="width: 60px;">Bar</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @{ int rank = 0; int maxCount = _snapshot.TopAlarms.Max(a => a.ActivationCount); }
+                        @foreach (var alarm in _snapshot.TopAlarms)
+                        {
+                            rank++;
+                            double pct = maxCount > 0 ? (double)alarm.ActivationCount / maxCount * 100 : 0;
+                            <tr>
+                                <td style="color: #64748b;">@rank</td>
+                                <td style="font-family: monospace; font-size: 9px; word-break: break-all;">@alarm.VariablePath</td>
+                                <td>@alarm.Message</td>
+                                <td style="text-align: right; font-weight: 600;">@alarm.ActivationCount</td>
+                                <td style="text-align: right;">@FormatMtta(alarm.AvgAcknowledgeSeconds)</td>
+                                <td>
+                                    <div style="background: #1e293b; border-radius: 2px; height: 10px; overflow: hidden;">
+                                        <div style="background: @BarColor(rank); width: @($"{pct:F0}")%; height: 100%; border-radius: 2px;"></div>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        }
+    </div>
+</div>
+
+<style>
+    .analytics-btn {
+        background: transparent;
+        border: 1px solid #475569;
+        color: #94a3b8;
+        border-radius: 3px;
+        padding: 1px 6px;
+        cursor: pointer;
+        font-size: 10px;
+    }
+    .analytics-btn:hover { background: #334155; color: #e2e8f0; }
+    .analytics-btn:disabled { opacity: 0.5; cursor: default; }
+
+    .analytics-kpi {
+        flex: 1 1 60px;
+        min-width: 60px;
+        background: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 4px;
+        padding: 4px 6px;
+        text-align: center;
+    }
+    .analytics-kpi-value { font-size: 14px; font-weight: 700; line-height: 1.2; }
+    .analytics-kpi-label { font-size: 8px; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; }
+    .analytics-kpi-flood { border-color: #dc3545; background: rgba(220,53,69,0.15); }
+    .analytics-kpi-flood .analytics-kpi-value { color: #f87171; }
+
+    .analytics-table { width: 100%; border-collapse: collapse; font-size: 10px; }
+    .analytics-table th { background: #1e293b; color: #94a3b8; padding: 3px 4px; border-bottom: 1px solid #334155; font-weight: 600; text-align: left; font-size: 9px; }
+    .analytics-table td { padding: 2px 4px; border-bottom: 1px solid #1e293b; }
+    .analytics-table tr:hover { background: rgba(59,130,246,0.08); }
+</style>
+
+@code {
+    [Inject] private OpcRuntimeClient Opc { get; set; } = default!;
+
+    private AlarmAnalyticsSnapshot? _snapshot;
+    private bool _loading;
+    private string? _error;
+    private System.Threading.Timer? _refreshTimer;
+
+    private static readonly System.Text.Json.JsonSerializerOptions _jsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+        Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() }
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Refresh();
+        _refreshTimer = new System.Threading.Timer(async _ =>
+        {
+            await InvokeAsync(async () =>
+            {
+                await Refresh();
+                StateHasChanged();
+            });
+        }, null, 5000, 5000);
+    }
+
+    private async Task Refresh()
+    {
+        if (!Opc.IsConnected) { _error = "Not connected to server."; return; }
+        _loading = true;
+
+        try
+        {
+            // Read the _Diagnostics.Json variable via OPC UA
+            var json = await Opc.ReadTagValueAsync($"ns=2;s=_Diagnostics.Json");
+            if (!string.IsNullOrEmpty(json))
+            {
+                var diag = System.Text.Json.JsonSerializer.Deserialize<ServerDiagnostics>(json, _jsonOptions);
+                if (diag?.AlarmAnalytics != null)
+                {
+                    _snapshot = diag.AlarmAnalytics;
+                    _error = null;
+                }
+                else if (diag != null)
+                {
+                    _error = "Server running but no alarm analytics data.";
+                }
+                else
+                {
+                    _error = "Could not parse diagnostics.";
+                }
+            }
+            else
+            {
+                _error = "Diagnostics variable not available.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static string FormatMtta(double? seconds)
+    {
+        if (seconds == null) return "—";
+        var ts = TimeSpan.FromSeconds(seconds.Value);
+        if (ts.TotalHours >= 1) return $"{ts.TotalHours:F1}h";
+        if (ts.TotalMinutes >= 1) return $"{ts.TotalMinutes:F1}m";
+        return $"{ts.TotalSeconds:F0}s";
+    }
+
+    private static string BarColor(int rank) => rank switch
+    {
+        1 => "#dc3545",
+        2 => "#e35d6a",
+        3 => "#fd7e14",
+        _ => "#64748b"
+    };
+
+    public void Dispose()
+    {
+        _refreshTimer?.Dispose();
+    }
+}

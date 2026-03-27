@@ -119,7 +119,9 @@
 
         <div class="screen-editor-body">
             @* SVG Canvas *@
-            <div class="screen-canvas-wrap">
+            <div class="screen-canvas-wrap"
+                 ondragover="event.preventDefault();"
+                 @ondrop="OnCanvasDrop">
                 <svg xmlns="http://www.w3.org/2000/svg"
                      width="@screen.Width" height="@screen.Height"
                      class="screen-canvas"
@@ -1014,8 +1016,15 @@
                                             @RenderSvgText(sym.Width / 2, sym.Height * 0.45, "middle", "middle", "#64748b", ScaledFontSize(10, sym), "PDF")
                                             @RenderSvgText(sym.Width / 2, sym.Height * 0.9, "middle", null, "#475569", 8, "PDF Viewer")
                                             break;
+                                        case "alarmanalytics":
+                                            <rect width="@sym.Width" height="@sym.Height"
+                                                  fill="#0f172a" stroke="@sym.Stroke" stroke-width="@sym.StrokeWidth" rx="4" />
+                                            @RenderSvgText(sym.Width / 2, 16, "middle", "middle", "#e2e8f0", ScaledFontSize(11, sym), "📊 Alarm Analytics")
+                                            <line x1="4" y1="26" x2="@(sym.Width - 4)" y2="26" stroke="#334155" stroke-width="1" />
+                                            @RenderSvgText(sym.Width / 2, 40, "middle", "middle", "#64748b", ScaledFontSize(9, sym), "(top-10, MTTA, flood detection at runtime)")
+                                            break;
                             }
-                            @if (!string.IsNullOrEmpty(labelText ?? sym.Label) && sym.Type is not "text" and not "button" and not "animtext" and not "numericdisplay" and not "progressbar" and not "dropdown" and not "sparkline" and not "colorzone" and not "alarmbanner" and not "conveyor" and not "piechart" and not "barchart" and not "navbutton" and not "heatexchanger" and not "popup" and not "setpointramp" and not "flowmeter" and not "xyplot" and not "pdfviewer")
+                            @if (!string.IsNullOrEmpty(labelText ?? sym.Label) && sym.Type is not "text" and not "button" and not "animtext" and not "numericdisplay" and not "progressbar" and not "dropdown" and not "sparkline" and not "colorzone" and not "alarmbanner" and not "conveyor" and not "piechart" and not "barchart" and not "navbutton" and not "heatexchanger" and not "popup" and not "setpointramp" and not "flowmeter" and not "xyplot" and not "pdfviewer" and not "alarmanalytics")
                             {
                                 @RenderSvgText(sym.Width / 2, sym.Height + 14, "middle", null, "#333", 11, labelText ?? sym.Label, sym)
                             }
@@ -1259,6 +1268,78 @@
         }
     }
 
+    private void OnCanvasDrop()
+    {
+        var screen = GetScreen();
+        if (screen == null) return;
+
+        // Handle toolbox drag
+        if (ScreenToolboxPanel.DraggedToolboxType is { } toolboxType)
+        {
+            AddSymbol(screen, toolboxType);
+            return;
+        }
+
+        // Handle symbol library drag
+        if (SymbolLibraryPanel.DraggedLibraryItem is { } libItem)
+        {
+            AddLibrarySymbol(screen, libItem);
+        }
+    }
+
+    private void AddLibrarySymbol(ScreenConfig screen, SymbolLibraryItem item)
+    {
+        var sym = new ScreenSymbol
+        {
+            Id = $"sym_{_nextId++}",
+            Type = "svg",
+            X = 50 + screen.Symbols.Count * 20 % Math.Max(1, screen.Width - 100),
+            Y = 50 + screen.Symbols.Count * 20 % Math.Max(1, screen.Height - 80),
+            Width = item.DefaultWidth,
+            Height = item.DefaultHeight,
+            Label = item.Name,
+            SvgContent = item.SvgContent,
+            Fill = "none",
+            Stroke = "#333333"
+        };
+
+        if (item.Animations.Count > 0)
+        {
+            foreach (var anim in item.Animations)
+            {
+                sym.Animations.Add(new SymbolAnimation
+                {
+                    Id = Guid.NewGuid().ToString("N")[..8],
+                    Name = anim.Name,
+                    Enabled = anim.Enabled,
+                    Property = anim.Property,
+                    Trigger = anim.Trigger,
+                    TriggerVariable = anim.TriggerVariable,
+                    TriggerCondition = anim.TriggerCondition,
+                    Keyframes = anim.Keyframes.Select(k => new AnimationKeyframe
+                    {
+                        Percent = k.Percent,
+                        Value = k.Value,
+                        Easing = k.Easing
+                    }).ToList(),
+                    DurationMs = anim.DurationMs,
+                    DelayMs = anim.DelayMs,
+                    Easing = anim.Easing,
+                    RepeatCount = anim.RepeatCount,
+                    AutoReverse = anim.AutoReverse
+                });
+            }
+        }
+
+        screen.Symbols.Add(sym);
+        Editor.MarkChanged();
+        _selectedSymbols.Clear();
+        _selectedSymbol = sym;
+        _selectedSymbols.Add(sym);
+        NotifySelectionChanged();
+        StateHasChanged();
+    }
+
     public void AddSymbol(ScreenConfig screen, string type)
     {
         var sym = new ScreenSymbol
@@ -1267,10 +1348,10 @@
             Type = type,
             X = 50 + screen.Symbols.Count * 20 % (screen.Width - 100),
             Y = 50 + screen.Symbols.Count * 20 % (screen.Height - 80),
-            Width = type == "text" ? 120 : type == "line" ? 100 : type is "alarmlist" or "hdachart" or "hdagrid" or "eventlog" ? 500 : type == "editbox" ? 160 : type == "ipcamera" ? 320 : type == "recipe" ? 280 : type == "weeklyplanner" ? 500 : type == "reportviewer" ? 360 : type == "screenembed" ? 400 : type == "switch" ? 60 : type == "rotaryswitch" ? 80 : type == "knob" ? 100 : type == "hslider" ? 200 : type == "vslider" ? 40 : type == "button" ? 120 : type == "animtext" ? 240 : type == "progressbar" ? 200 : type == "numericdisplay" ? 140 : type == "ledarray" ? 240 : type == "pipe" ? 200 : type == "tank" ? 80 : type == "motorcontrol" ? 80 : type == "valve" ? 60 : type == "sparkline" ? 160 : type == "colorzone" ? 120 : type == "dropdown" ? 160 : type == "datatable" ? 400 : type == "alarmbanner" ? 300 : type == "conveyor" ? 200 : type == "piechart" ? 200 : type == "barchart" ? 200 : type == "navbutton" ? 140 : type == "heatexchanger" ? 120 : type == "popup" ? 100 : type == "setpointramp" ? 200 : type == "flowmeter" ? 80 : type == "xyplot" ? 300 : type == "pdfviewer" ? 400 : 80,
-            Height = type == "text" ? 30 : type == "line" ? 2 : type == "indicator" ? 30 : type == "alarmlist" ? 250 : type is "hdachart" or "hdagrid" or "eventlog" ? 220 : type == "editbox" ? 32 : type == "ipcamera" ? 240 : type == "recipe" ? 300 : type == "weeklyplanner" ? 280 : type == "reportviewer" ? 200 : type == "screenembed" ? 300 : type == "switch" ? 30 : type == "rotaryswitch" ? 80 : type == "knob" ? 100 : type == "hslider" ? 40 : type == "vslider" ? 200 : type == "button" ? 36 : type == "animtext" ? 40 : type == "progressbar" ? 28 : type == "numericdisplay" ? 60 : type == "ledarray" ? 32 : type == "pipe" ? 20 : type == "tank" ? 120 : type == "motorcontrol" ? 80 : type == "valve" ? 40 : type == "sparkline" ? 40 : type == "colorzone" ? 60 : type == "dropdown" ? 32 : type == "datatable" ? 200 : type == "alarmbanner" ? 40 : type == "conveyor" ? 50 : type == "piechart" ? 200 : type == "barchart" ? 160 : type == "navbutton" ? 40 : type == "heatexchanger" ? 80 : type == "popup" ? 60 : type == "setpointramp" ? 60 : type == "flowmeter" ? 80 : type == "xyplot" ? 250 : type == "pdfviewer" ? 500 : 40,
+            Width = type == "text" ? 120 : type == "line" ? 100 : type is "alarmlist" or "hdachart" or "hdagrid" or "eventlog" ? 500 : type == "editbox" ? 160 : type == "ipcamera" ? 320 : type == "recipe" ? 280 : type == "weeklyplanner" ? 500 : type == "reportviewer" ? 360 : type == "screenembed" ? 400 : type == "switch" ? 60 : type == "rotaryswitch" ? 80 : type == "knob" ? 100 : type == "hslider" ? 200 : type == "vslider" ? 40 : type == "button" ? 120 : type == "animtext" ? 240 : type == "progressbar" ? 200 : type == "numericdisplay" ? 140 : type == "ledarray" ? 240 : type == "pipe" ? 200 : type == "tank" ? 80 : type == "motorcontrol" ? 80 : type == "valve" ? 60 : type == "sparkline" ? 160 : type == "colorzone" ? 120 : type == "dropdown" ? 160 : type == "datatable" ? 400 : type == "alarmbanner" ? 300 : type == "conveyor" ? 200 : type == "piechart" ? 200 : type == "barchart" ? 200 : type == "navbutton" ? 140 : type == "heatexchanger" ? 120 : type == "popup" ? 100 : type == "setpointramp" ? 200 : type == "flowmeter" ? 80 : type == "xyplot" ? 300 : type == "pdfviewer" ? 400 : type == "alarmanalytics" ? 500 : 80,
+            Height = type == "text" ? 30 : type == "line" ? 2 : type == "indicator" ? 30 : type == "alarmlist" ? 250 : type is "hdachart" or "hdagrid" or "eventlog" ? 220 : type == "editbox" ? 32 : type == "ipcamera" ? 240 : type == "recipe" ? 300 : type == "weeklyplanner" ? 280 : type == "reportviewer" ? 200 : type == "screenembed" ? 300 : type == "switch" ? 30 : type == "rotaryswitch" ? 80 : type == "knob" ? 100 : type == "hslider" ? 40 : type == "vslider" ? 200 : type == "button" ? 36 : type == "animtext" ? 40 : type == "progressbar" ? 28 : type == "numericdisplay" ? 60 : type == "ledarray" ? 32 : type == "pipe" ? 20 : type == "tank" ? 120 : type == "motorcontrol" ? 80 : type == "valve" ? 40 : type == "sparkline" ? 40 : type == "colorzone" ? 60 : type == "dropdown" ? 32 : type == "datatable" ? 200 : type == "alarmbanner" ? 40 : type == "conveyor" ? 50 : type == "piechart" ? 200 : type == "barchart" ? 160 : type == "navbutton" ? 40 : type == "heatexchanger" ? 80 : type == "popup" ? 60 : type == "setpointramp" ? 60 : type == "flowmeter" ? 80 : type == "xyplot" ? 250 : type == "pdfviewer" ? 500 : type == "alarmanalytics" ? 300 : 40,
             Label = type == "text" ? "Label" : type == "alarmlist" ? "Alarm List" : type == "hdachart" ? "HDA Chart" : type == "hdagrid" ? "HDA Grid" : type == "eventlog" ? "Event Log" : type == "editbox" ? "" : type == "ipcamera" ? "" : type == "recipe" ? "" : type == "weeklyplanner" ? "" : type == "reportviewer" ? "" : type == "screenembed" ? "Embedded Screen" : type == "switch" ? "" : type == "rotaryswitch" ? "" : type is "knob" or "hslider" or "vslider" ? "" : type == "button" ? "Button" : type == "animtext" ? "Animated Text" : type is "progressbar" or "numericdisplay" or "ledarray" or "pipe" ? "" : "",
-            Fill = type == "indicator" ? "#44cc44" : type == "alarmlist" ? "#1a1a2e" : type is "hdachart" or "hdagrid" ? "#111827" : type == "eventlog" ? "#0f172a" : type == "editbox" ? "#1e293b" : type == "ipcamera" ? "#0a0a0a" : type == "recipe" ? "#1a1a2e" : type is "weeklyplanner" or "reportviewer" ? "#1a1a2e" : type == "screenembed" ? "#0f172a" : type == "switch" ? "#34c759" : type == "rotaryswitch" ? "#2d2d2d" : type == "knob" ? "#3a3a3a" : type is "hslider" or "vslider" ? "#1a1a2e" : type == "button" ? "#3b82f6" : type == "animtext" ? "#00e5ff" : type == "progressbar" ? "#3b82f6" : type == "numericdisplay" ? "#00e5ff" : type == "ledarray" ? "#22c55e" : type == "pipe" ? "#64748b" : type == "tank" ? "#3b82f6" : type == "motorcontrol" ? "#22c55e" : type == "valve" ? "#22c55e" : type == "sparkline" ? "#3b82f6" : type == "colorzone" ? "#334155" : type == "dropdown" ? "#1e293b" : type == "datatable" ? "#111827" : type == "alarmbanner" ? "#1e293b" : type == "conveyor" ? "#475569" : type == "piechart" ? "#0f172a" : type == "barchart" ? "#0f172a" : type == "navbutton" ? "#3b82f6" : type == "heatexchanger" ? "#64748b" : type == "popup" ? "#1e293b" : type == "setpointramp" ? "#0f172a" : type == "flowmeter" ? "#334155" : type == "xyplot" ? "#0f172a" : type == "pdfviewer" ? "#1e293b" : "#4a90d9"
+            Fill = type == "indicator" ? "#44cc44" : type == "alarmlist" ? "#1a1a2e" : type is "hdachart" or "hdagrid" ? "#111827" : type == "eventlog" ? "#0f172a" : type == "editbox" ? "#1e293b" : type == "ipcamera" ? "#0a0a0a" : type == "recipe" ? "#1a1a2e" : type is "weeklyplanner" or "reportviewer" ? "#1a1a2e" : type == "screenembed" ? "#0f172a" : type == "switch" ? "#34c759" : type == "rotaryswitch" ? "#2d2d2d" : type == "knob" ? "#3a3a3a" : type is "hslider" or "vslider" ? "#1a1a2e" : type == "button" ? "#3b82f6" : type == "animtext" ? "#00e5ff" : type == "progressbar" ? "#3b82f6" : type == "numericdisplay" ? "#00e5ff" : type == "ledarray" ? "#22c55e" : type == "pipe" ? "#64748b" : type == "tank" ? "#3b82f6" : type == "motorcontrol" ? "#22c55e" : type == "valve" ? "#22c55e" : type == "sparkline" ? "#3b82f6" : type == "colorzone" ? "#334155" : type == "dropdown" ? "#1e293b" : type == "datatable" ? "#111827" : type == "alarmbanner" ? "#1e293b" : type == "conveyor" ? "#475569" : type == "piechart" ? "#0f172a" : type == "barchart" ? "#0f172a" : type == "navbutton" ? "#3b82f6" : type == "heatexchanger" ? "#64748b" : type == "popup" ? "#1e293b" : type == "setpointramp" ? "#0f172a" : type == "flowmeter" ? "#334155" : type == "xyplot" ? "#0f172a" : type == "pdfviewer" ? "#1e293b" : type == "alarmanalytics" ? "#0f172a" : "#4a90d9"
         };
 
         if (type == "gauge")
@@ -1652,6 +1733,12 @@
             sym.PdfViewerSource = "url";
             sym.PdfViewerShowToolbar = true;
         }
+        if (type == "alarmanalytics")
+        {
+            sym.Stroke = "#334155";
+            sym.StrokeWidth = 1;
+            sym.Label = "Alarm Analytics";
+        }
 
         // Set responsive grid defaults when in responsive mode
         if (screen.LayoutMode == "responsive")
@@ -1706,7 +1793,7 @@
         "pdfviewer" => 12,
         "ipcamera" or "recipe" => 6,
         "weeklyplanner" or "reportviewer" or "screenembed" => 8,
-        "alarmlist" or "hdachart" or "hdagrid" or "eventlog" or "trend" => 12,
+        "alarmlist" or "hdachart" or "hdagrid" or "eventlog" or "trend" or "alarmanalytics" => 12,
         _ => 4
     };
 
@@ -1716,6 +1803,7 @@
         "indicator" => 80,
         "gauge" or "svg" => 150,
         "alarmlist" or "hdachart" or "hdagrid" or "eventlog" => 280,
+        "alarmanalytics" => 300,
         "trend" => 300,
         "ipcamera" => 260,
         "recipe" => 320,

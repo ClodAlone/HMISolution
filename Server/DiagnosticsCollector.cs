@@ -31,6 +31,12 @@ namespace SimpleOpcFileServer
         private double _cpuPercent;
         private bool _cpuInitialized;
 
+        /// <summary>
+        /// Optional delegate that returns an alarm analytics snapshot.
+        /// Set by the node manager after construction.
+        /// </summary>
+        public Func<AlarmAnalyticsSnapshot>? AlarmAnalyticsProvider { get; set; }
+
         public static DiagnosticsCollector Instance { get; } = new();
 
         /// <summary>
@@ -163,6 +169,10 @@ namespace SimpleOpcFileServer
                     info.DebugSession = ScriptDebugger.Instance.GetSessionInfo(info.Name);
                 diag.ProgramDebug.Add(info);
             }
+
+            // Alarm analytics
+            try { diag.AlarmAnalytics = AlarmAnalyticsProvider?.Invoke(); }
+            catch { /* non-critical */ }
 
             return diag;
         }
@@ -402,5 +412,7 @@ namespace SimpleOpcFileServer
     [System.Text.Json.Serialization.JsonSerializable(typeof(ScriptDebugSession))]
     [System.Text.Json.Serialization.JsonSerializable(typeof(ScriptDebugState))]
     [System.Text.Json.Serialization.JsonSerializable(typeof(ScriptBreakpoint))]
+    [System.Text.Json.Serialization.JsonSerializable(typeof(AlarmAnalyticsSnapshot))]
+    [System.Text.Json.Serialization.JsonSerializable(typeof(AlarmFrequencyEntry))]
     internal partial class DiagnosticsJsonContext : System.Text.Json.Serialization.JsonSerializerContext { }
 }
