@@ -1271,33 +1271,47 @@
         }
     }
 
-    private void OnCanvasDrop()
+    private async Task OnCanvasDrop(DragEventArgs e)
     {
         var screen = GetScreen();
         if (screen == null) return;
 
+        // Compute drop position relative to the SVG canvas
+        double dropX = -1, dropY = -1;
+        try
+        {
+            var rect = await JS.InvokeAsync<double[]>("eval",
+                "(function(){ var r = document.querySelector('.screen-canvas')?.getBoundingClientRect(); return r ? [r.left, r.top] : [0,0]; })()");
+            if (rect is { Length: 2 })
+            {
+                dropX = e.ClientX - rect[0];
+                dropY = e.ClientY - rect[1];
+            }
+        }
+        catch { /* fallback to auto-position */ }
+
         // Handle toolbox drag
         if (ScreenToolboxPanel.DraggedToolboxType is { } toolboxType)
         {
-            AddSymbol(screen, toolboxType);
+            AddSymbol(screen, toolboxType, dropX, dropY);
             return;
         }
 
         // Handle symbol library drag
         if (SymbolLibraryPanel.DraggedLibraryItem is { } libItem)
         {
-            AddLibrarySymbol(screen, libItem);
+            AddLibrarySymbol(screen, libItem, dropX, dropY);
         }
     }
 
-    private void AddLibrarySymbol(ScreenConfig screen, SymbolLibraryItem item)
+    private void AddLibrarySymbol(ScreenConfig screen, SymbolLibraryItem item, double dropX = -1, double dropY = -1)
     {
         var sym = new ScreenSymbol
         {
             Id = $"sym_{_nextId++}",
             Type = "svg",
-            X = 50 + screen.Symbols.Count * 20 % Math.Max(1, screen.Width - 100),
-            Y = 50 + screen.Symbols.Count * 20 % Math.Max(1, screen.Height - 80),
+            X = dropX >= 0 ? (int)(dropX - item.DefaultWidth / 2.0) : 50 + screen.Symbols.Count * 20 % Math.Max(1, screen.Width - 100),
+            Y = dropY >= 0 ? (int)(dropY - item.DefaultHeight / 2.0) : 50 + screen.Symbols.Count * 20 % Math.Max(1, screen.Height - 80),
             Width = item.DefaultWidth,
             Height = item.DefaultHeight,
             Label = item.Name,
@@ -1343,7 +1357,7 @@
         StateHasChanged();
     }
 
-    public void AddSymbol(ScreenConfig screen, string type)
+    public void AddSymbol(ScreenConfig screen, string type, double dropX = -1, double dropY = -1)
     {
         var sym = new ScreenSymbol
         {
@@ -1356,6 +1370,13 @@
             Label = type == "text" ? "Label" : type == "alarmlist" ? "Alarm List" : type == "hdachart" ? "HDA Chart" : type == "hdagrid" ? "HDA Grid" : type == "eventlog" ? "Event Log" : type == "editbox" ? "" : type == "ipcamera" ? "" : type == "recipe" ? "" : type == "weeklyplanner" ? "" : type == "reportviewer" ? "" : type == "screenembed" ? "Embedded Screen" : type == "switch" ? "" : type == "rotaryswitch" ? "" : type is "knob" or "hslider" or "vslider" ? "" : type == "button" ? "Button" : type == "animtext" ? "Animated Text" : type is "progressbar" or "numericdisplay" or "ledarray" or "pipe" ? "" : "",
             Fill = type == "indicator" ? "#44cc44" : type == "alarmlist" ? "#1a1a2e" : type is "hdachart" or "hdagrid" ? "#111827" : type == "eventlog" ? "#0f172a" : type == "editbox" ? "#1e293b" : type == "ipcamera" ? "#0a0a0a" : type == "recipe" ? "#1a1a2e" : type is "weeklyplanner" or "reportviewer" ? "#1a1a2e" : type == "screenembed" ? "#0f172a" : type == "switch" ? "#34c759" : type == "rotaryswitch" ? "#2d2d2d" : type == "knob" ? "#3a3a3a" : type is "hslider" or "vslider" ? "#1a1a2e" : type == "button" ? "#3b82f6" : type == "animtext" ? "#00e5ff" : type == "progressbar" ? "#3b82f6" : type == "numericdisplay" ? "#00e5ff" : type == "ledarray" ? "#22c55e" : type == "pipe" ? "#64748b" : type == "tank" ? "#3b82f6" : type == "motorcontrol" ? "#22c55e" : type == "valve" ? "#22c55e" : type == "sparkline" ? "#3b82f6" : type == "colorzone" ? "#334155" : type == "dropdown" ? "#1e293b" : type == "datatable" ? "#111827" : type == "alarmbanner" ? "#1e293b" : type == "conveyor" ? "#475569" : type == "piechart" ? "#0f172a" : type == "barchart" ? "#0f172a" : type == "navbutton" ? "#3b82f6" : type == "heatexchanger" ? "#64748b" : type == "popup" ? "#1e293b" : type == "setpointramp" ? "#0f172a" : type == "flowmeter" ? "#334155" : type == "xyplot" ? "#0f172a" : type == "pdfviewer" ? "#1e293b" : type == "alarmanalytics" ? "#0f172a" : type == "kpiwidget" ? "#0f172a" : "#4a90d9"
         };
+
+        // Override position when dropped at a specific location
+        if (dropX >= 0 && dropY >= 0)
+        {
+            sym.X = (int)(dropX - sym.Width / 2.0);
+            sym.Y = (int)(dropY - sym.Height / 2.0);
+        }
 
         if (type == "gauge")
         {
