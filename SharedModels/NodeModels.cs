@@ -406,6 +406,13 @@ namespace SharedModels
         /// predictive alarms when abnormal patterns are detected.
         /// </summary>
         public AnomalyDetectionSettings? AnomalyDetection { get; set; }
+
+        /// <summary>
+        /// Natural language query configuration. When enabled, operators can ask
+        /// plain-English questions about historical data (e.g. "What was the max temperature yesterday?")
+        /// and receive AI-powered answers.
+        /// </summary>
+        public NaturalLanguageQueryConfig? NaturalLanguageQuery { get; set; }
     }
 
     /// <summary>
@@ -2279,5 +2286,34 @@ namespace SharedModels
 
         /// <summary>Human-readable description.</summary>
         public string Message { get; set; } = "";
+    }
+
+    /// <summary>
+    /// Configuration for the Natural Language Query feature.
+    /// Allows operators to ask plain-English questions about historical process data
+    /// and receive AI-powered answers using OpenAI, Gemini, or a local Ollama model.
+    /// </summary>
+    public class NaturalLanguageQueryConfig
+    {
+        /// <summary>Whether the NL query widget is available in the runtime viewer.</summary>
+        public bool Enabled { get; set; }
+
+        /// <summary>AI engine to use: "OpenAI", "Gemini", or "Ollama". Default: "Ollama".</summary>
+        public string Engine { get; set; } = "Ollama";
+
+        /// <summary>Model name for Ollama (e.g. "mistral", "llama3") or overridden OpenAI model.</summary>
+        public string Model { get; set; } = "mistral";
+
+        /// <summary>Base URL for the Ollama API. Default: "http://localhost:11434".</summary>
+        public string OllamaBaseUrl { get; set; } = "http://localhost:11434";
+
+        /// <summary>Maximum historical data points per variable in AI context. Default: 500.</summary>
+        public int MaxDataPoints { get; set; } = 500;
+
+        /// <summary>Default time range in minutes when not specified by the user. Default: 1440 (24h).</summary>
+        public int DefaultTimeRangeMinutes { get; set; } = 1440;
+
+        /// <summary>Placeholder text shown in the query input box.</summary>
+        public string Placeholder { get; set; } = "Ask about your process data...";
     }
 }

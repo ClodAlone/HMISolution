@@ -24,6 +24,7 @@ builder.Services.AddScoped<RuntimeAuthService>();
 builder.Services.AddScoped<LocalizationService>();
 builder.Services.AddSingleton<HdaReaderService>();
 builder.Services.AddSingleton<EventLogReaderService>();
+builder.Services.AddSingleton<NaturalLanguageQueryService>();
 
 var app = builder.Build();
 
