@@ -1329,8 +1329,22 @@ namespace SharedModels
         public string BarChartBackground { get; set; } = "#0f172a";
         public double BarChartMaxValue { get; set; } = 100;
 
-
-
+        // ─── KPI Widget properties (Type == "kpiwidget") ────────────
+        public string KpiMode { get; set; } = "oee";
+        public string KpiTitle { get; set; } = "";
+        public string KpiUnit { get; set; } = "%";
+        public string KpiBackground { get; set; } = "#0f172a";
+        public string KpiGaugeColor { get; set; } = "#22c55e";
+        public double KpiTargetValue { get; set; } = 100;
+        public bool KpiShowTitle { get; set; } = true;
+        public bool KpiShowValue { get; set; } = true;
+        public bool KpiShowTarget { get; set; } = true;
+        public string KpiAvailabilityPath { get; set; } = "";
+        public string KpiPerformancePath { get; set; } = "";
+        public string KpiQualityPath { get; set; } = "";
+        public string KpiUptimePath { get; set; } = "";
+        public string KpiThroughputPath { get; set; } = "";
+        public string KpiThroughputTargetPath { get; set; } = "";
     }
 
     /// <summary>

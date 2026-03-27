@@ -682,7 +682,7 @@ namespace SharedModels
     public class ScreenSymbol
     {
         public string Id { get; set; } = "";
-        public string Type { get; set; } = "rect"; // rect, circle, ellipse, text, line, gauge, indicator, svg, alarmlist, hdachart, hdagrid, eventlog, editbox, ipcamera, recipe, weeklyplanner, screenembed, reportviewer, imagemap, trend, progressbar, numericdisplay, ledarray, pipe, tank, dropdown, datatable, sparkline, motorcontrol, valve, alarmbanner, colorzone, conveyor, piechart, barchart, navbutton, heatexchanger, popup, setpointramp, flowmeter, xyplot, pdfviewer, switch, rotaryswitch, knob, hslider, vslider, button, animtext
+        public string Type { get; set; } = "rect"; // rect, circle, ellipse, text, line, gauge, indicator, svg, alarmlist, hdachart, hdagrid, eventlog, editbox, ipcamera, recipe, weeklyplanner, screenembed, reportviewer, imagemap, trend, progressbar, numericdisplay, ledarray, pipe, tank, dropdown, datatable, sparkline, motorcontrol, valve, alarmbanner, colorzone, conveyor, piechart, barchart, navbutton, heatexchanger, popup, setpointramp, flowmeter, xyplot, pdfviewer, switch, rotaryswitch, knob, hslider, vslider, button, animtext, kpiwidget
         public double X { get; set; }
         public double Y { get; set; }
         public double Width { get; set; } = 80;
@@ -1329,7 +1329,54 @@ namespace SharedModels
         public string BarChartBackground { get; set; } = "#0f172a";
         public double BarChartMaxValue { get; set; } = 100;
 
+        // ─── KPI Widget properties (Type == "kpiwidget") ────────────
+        /// <summary>KPI mode: "oee" (Overall Equipment Effectiveness), "uptime" (uptime %), "throughput" (throughput counter).</summary>
+        public string KpiMode { get; set; } = "oee";
 
+        /// <summary>Widget title shown above the gauge. Empty = auto (mode name).</summary>
+        public string KpiTitle { get; set; } = "";
+
+        /// <summary>Unit suffix displayed after the value (e.g. "%", "pcs/h").</summary>
+        public string KpiUnit { get; set; } = "%";
+
+        /// <summary>Background color for the KPI card.</summary>
+        public string KpiBackground { get; set; } = "#0f172a";
+
+        /// <summary>Primary gauge arc color.</summary>
+        public string KpiGaugeColor { get; set; } = "#22c55e";
+
+        /// <summary>Target value for the KPI (100 for percentages, production target for throughput).</summary>
+        public double KpiTargetValue { get; set; } = 100;
+
+        /// <summary>Show the title label.</summary>
+        public bool KpiShowTitle { get; set; } = true;
+
+        /// <summary>Show the numeric value readout.</summary>
+        public bool KpiShowValue { get; set; } = true;
+
+        /// <summary>Show the target reference line/value.</summary>
+        public bool KpiShowTarget { get; set; } = true;
+
+        // ── OEE mode variable paths ──
+        /// <summary>Variable path for Availability % (0–100). Used when KpiMode == "oee".</summary>
+        public string KpiAvailabilityPath { get; set; } = "";
+
+        /// <summary>Variable path for Performance % (0–100). Used when KpiMode == "oee".</summary>
+        public string KpiPerformancePath { get; set; } = "";
+
+        /// <summary>Variable path for Quality % (0–100). Used when KpiMode == "oee".</summary>
+        public string KpiQualityPath { get; set; } = "";
+
+        // ── Uptime mode variable path ──
+        /// <summary>Variable path for uptime % (0–100). Used when KpiMode == "uptime".</summary>
+        public string KpiUptimePath { get; set; } = "";
+
+        // ── Throughput mode variable paths ──
+        /// <summary>Variable path for the current throughput counter. Used when KpiMode == "throughput".</summary>
+        public string KpiThroughputPath { get; set; } = "";
+
+        /// <summary>Variable path for the throughput target. Used when KpiMode == "throughput". Empty = use KpiTargetValue.</summary>
+        public string KpiThroughputTargetPath { get; set; } = "";
 
     }
 

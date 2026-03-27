@@ -5833,9 +5833,283 @@ else
             builder.CloseElement();
         }
         builder.CloseElement();
+
+
+    // ─── KPI Widget (SVG-based for absolute layout) ─────────────────
+    private RenderFragment RenderKpiWidget(ScreenSymbol sym, string? liveValue) => builder =>
+    {
+        int seq = 0;
+        var w = sym.Width; var h = sym.Height;
+        var mode = (sym.KpiMode ?? "oee").ToLowerInvariant();
+        var bg = string.IsNullOrEmpty(sym.KpiBackground) ? "#0f172a" : sym.KpiBackground;
+        var gaugeColor = string.IsNullOrEmpty(sym.KpiGaugeColor) ? "#22c55e" : sym.KpiGaugeColor;
+        var unit = sym.KpiUnit ?? "%";
+        var target = sym.KpiTargetValue > 0 ? sym.KpiTargetValue : 100;
+
+        // compute KPI value
+        double kpiValue = 0;
+        double availability = 0, performance = 0, quality = 0;
+        if (mode == "oee")
+        {
+            availability = ParseOpc(Opc.GetValue(sym.KpiAvailabilityPath));
+            performance = ParseOpc(Opc.GetValue(sym.KpiPerformancePath));
+            quality = ParseOpc(Opc.GetValue(sym.KpiQualityPath));
+            kpiValue = availability * performance * quality / 10000.0;
+        }
+        else if (mode == "uptime")
+        {
+            kpiValue = ParseOpc(Opc.GetValue(sym.KpiUptimePath));
+        }
+        else // throughput
+        {
+            kpiValue = ParseOpc(Opc.GetValue(sym.KpiThroughputPath));
+            if (!string.IsNullOrEmpty(sym.KpiThroughputTargetPath))
+            {
+                var t = ParseOpc(Opc.GetValue(sym.KpiThroughputTargetPath));
+                if (t > 0) target = t;
+            }
+        }
+
+        // title
+        var title = !string.IsNullOrEmpty(sym.KpiTitle) ? sym.KpiTitle
+            : mode == "oee" ? "OEE" : mode == "uptime" ? "Uptime" : "Throughput";
+
+        // background
+        builder.OpenElement(seq++, "rect");
+        builder.AddAttribute(seq++, "width", w); builder.AddAttribute(seq++, "height", h);
+        builder.AddAttribute(seq++, "rx", 8); builder.AddAttribute(seq++, "fill", bg);
+        builder.AddAttribute(seq++, "stroke", "#334155"); builder.AddAttribute(seq++, "stroke-width", 1);
+        builder.CloseElement();
+
+        // arc gauge
+        var cx = w / 2.0;
+        var gaugeY = h * 0.52;
+        var r = Math.Min(w, h) * 0.32;
+        if (r < 15) r = 15;
+        var pct = target > 0 ? Math.Clamp(kpiValue / target, 0, 1) : 0;
+        var startAngle = Math.PI * 0.75;
+        var sweep = Math.PI * 1.5;
+        var trackEnd = startAngle + sweep;
+        var valueEnd = startAngle + sweep * pct;
+
+        // track arc
+        var tx1 = cx + r * Math.Cos(startAngle); var ty1 = gaugeY + r * Math.Sin(startAngle);
+        var tx2 = cx + r * Math.Cos(trackEnd); var ty2 = gaugeY + r * Math.Sin(trackEnd);
+        builder.OpenElement(seq++, "path");
+        builder.AddAttribute(seq++, "d", $"M {F(tx1)} {F(ty1)} A {F(r)} {F(r)} 0 1 1 {F(tx2)} {F(ty2)}");
+        builder.AddAttribute(seq++, "fill", "none"); builder.AddAttribute(seq++, "stroke", "#334155");
+        builder.AddAttribute(seq++, "stroke-width", Math.Max(6, r * 0.15)); builder.AddAttribute(seq++, "stroke-linecap", "round");
+        builder.CloseElement();
+
+        // value arc
+        if (pct > 0.001)
+        {
+            var vx1 = cx + r * Math.Cos(startAngle); var vy1 = gaugeY + r * Math.Sin(startAngle);
+            var vx2 = cx + r * Math.Cos(valueEnd); var vy2 = gaugeY + r * Math.Sin(valueEnd);
+            var largeArc = (valueEnd - startAngle) > Math.PI ? 1 : 0;
+            builder.OpenElement(seq++, "path");
+            builder.AddAttribute(seq++, "d", $"M {F(vx1)} {F(vy1)} A {F(r)} {F(r)} 0 {largeArc} 1 {F(vx2)} {F(vy2)}");
+            builder.AddAttribute(seq++, "fill", "none"); builder.AddAttribute(seq++, "stroke", gaugeColor);
+            builder.AddAttribute(seq++, "stroke-width", Math.Max(6, r * 0.15)); builder.AddAttribute(seq++, "stroke-linecap", "round");
+            builder.CloseElement();
+        }
+
+        // title
+        if (sym.KpiShowTitle)
+        {
+            builder.OpenElement(seq++, "text");
+            builder.AddAttribute(seq++, "x", F(cx)); builder.AddAttribute(seq++, "y", F(h * 0.13));
+            builder.AddAttribute(seq++, "text-anchor", "middle"); builder.AddAttribute(seq++, "fill", "#94a3b8");
+            builder.AddAttribute(seq++, "font-size", Math.Max(10, h * 0.08));
+            builder.AddContent(seq++, title);
+            builder.CloseElement();
+        }
+
+        // center value
+        if (sym.KpiShowValue)
+        {
+            var displayVal = mode == "throughput" ? kpiValue.ToString("N0", System.Globalization.CultureInfo.InvariantCulture)
+                : kpiValue.ToString("F1", System.Globalization.CultureInfo.InvariantCulture);
+            builder.OpenElement(seq++, "text");
+            builder.AddAttribute(seq++, "x", F(cx)); builder.AddAttribute(seq++, "y", F(gaugeY + r * 0.15));
+            builder.AddAttribute(seq++, "text-anchor", "middle"); builder.AddAttribute(seq++, "fill", gaugeColor);
+            builder.AddAttribute(seq++, "font-size", Math.Max(14, r * 0.55)); builder.AddAttribute(seq++, "font-weight", "bold");
+            builder.AddContent(seq++, displayVal + unit);
+            builder.CloseElement();
+        }
+
+        // target line
+        if (sym.KpiShowTarget && mode != "throughput")
+        {
+            builder.OpenElement(seq++, "text");
+            builder.AddAttribute(seq++, "x", F(cx)); builder.AddAttribute(seq++, "y", F(gaugeY + r * 0.55));
+            builder.AddAttribute(seq++, "text-anchor", "middle"); builder.AddAttribute(seq++, "fill", "#64748b");
+            builder.AddAttribute(seq++, "font-size", Math.Max(9, h * 0.06));
+            builder.AddContent(seq++, $"Target: {target:F0}{unit}");
+            builder.CloseElement();
+        }
+
+        // OEE sub-factors
+        if (mode == "oee")
+        {
+            var subY = h * 0.88;
+            var subFontSize = Math.Max(8, h * 0.055);
+            var spacing = w / 4.0;
+            string[] labels = ["A", "P", "Q"];
+            double[] vals = [availability, performance, quality];
+            for (int i = 0; i < 3; i++)
+            {
+                var sx = spacing * (i + 0.5) + spacing * 0.25;
+                builder.OpenElement(seq++, "text");
+                builder.AddAttribute(seq++, "x", F(sx)); builder.AddAttribute(seq++, "y", F(subY));
+                builder.AddAttribute(seq++, "text-anchor", "middle"); builder.AddAttribute(seq++, "fill", "#94a3b8");
+                builder.AddAttribute(seq++, "font-size", subFontSize);
+                builder.AddContent(seq++, $"{labels[i]}: {vals[i]:F1}%");
+                builder.CloseElement();
+            }
+        }
+
+        // throughput: counter / target
+        if (mode == "throughput" && sym.KpiShowTarget)
+        {
+            builder.OpenElement(seq++, "text");
+            builder.AddAttribute(seq++, "x", F(cx)); builder.AddAttribute(seq++, "y", F(gaugeY + r * 0.55));
+            builder.AddAttribute(seq++, "text-anchor", "middle"); builder.AddAttribute(seq++, "fill", "#64748b");
+            builder.AddAttribute(seq++, "font-size", Math.Max(9, h * 0.06));
+            builder.AddContent(seq++, $"Target: {target:N0}");
+            builder.CloseElement();
+        }
     };
 
-        public async ValueTask DisposeAsync()
+    // ─── KPI Widget (HTML-based for responsive layout) ──────────────
+    private RenderFragment RenderResponsiveKpiWidget(ScreenSymbol sym, string? liveValue) => builder =>
+    {
+        int seq = 0;
+        var mode = (sym.KpiMode ?? "oee").ToLowerInvariant();
+        var bg = string.IsNullOrEmpty(sym.KpiBackground) ? "#0f172a" : sym.KpiBackground;
+        var gaugeColor = string.IsNullOrEmpty(sym.KpiGaugeColor) ? "#22c55e" : sym.KpiGaugeColor;
+        var unit = sym.KpiUnit ?? "%";
+        var target = sym.KpiTargetValue > 0 ? sym.KpiTargetValue : 100;
+
+        double kpiValue = 0;
+        double availability = 0, performance = 0, quality = 0;
+        if (mode == "oee")
+        {
+            availability = ParseOpc(Opc.GetValue(sym.KpiAvailabilityPath));
+            performance = ParseOpc(Opc.GetValue(sym.KpiPerformancePath));
+            quality = ParseOpc(Opc.GetValue(sym.KpiQualityPath));
+            kpiValue = availability * performance * quality / 10000.0;
+        }
+        else if (mode == "uptime")
+        {
+            kpiValue = ParseOpc(Opc.GetValue(sym.KpiUptimePath));
+        }
+        else
+        {
+            kpiValue = ParseOpc(Opc.GetValue(sym.KpiThroughputPath));
+            if (!string.IsNullOrEmpty(sym.KpiThroughputTargetPath))
+            {
+                var t = ParseOpc(Opc.GetValue(sym.KpiThroughputTargetPath));
+                if (t > 0) target = t;
+            }
+        }
+
+        var title = !string.IsNullOrEmpty(sym.KpiTitle) ? sym.KpiTitle
+            : mode == "oee" ? "OEE" : mode == "uptime" ? "Uptime" : "Throughput";
+        var pct = target > 0 ? Math.Clamp(kpiValue / target, 0, 1) : 0;
+        var displayVal = mode == "throughput" ? kpiValue.ToString("N0", System.Globalization.CultureInfo.InvariantCulture)
+            : kpiValue.ToString("F1", System.Globalization.CultureInfo.InvariantCulture);
+
+        // arc gauge SVG parameters
+        var r = 45.0; var strokeW = 8.0;
+        var cx = 55.0; var cy = 55.0;
+        var startAngle = Math.PI * 0.75; var sweep = Math.PI * 1.5;
+        var trackEnd = startAngle + sweep;
+        var valueEnd = startAngle + sweep * pct;
+        var tx1 = cx + r * Math.Cos(startAngle); var ty1 = cy + r * Math.Sin(startAngle);
+        var tx2 = cx + r * Math.Cos(trackEnd); var ty2 = cy + r * Math.Sin(trackEnd);
+
+        builder.OpenElement(seq++, "div");
+        builder.AddAttribute(seq++, "style",
+            $"background:{bg};border:1px solid #334155;border-radius:8px;padding:12px;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#e2e8f0;font-family:sans-serif;");
+
+        // title
+        if (sym.KpiShowTitle)
+        {
+            builder.OpenElement(seq++, "div");
+            builder.AddAttribute(seq++, "style", "color:#94a3b8;font-size:13px;margin-bottom:4px;");
+            builder.AddContent(seq++, title);
+            builder.CloseElement();
+        }
+
+        // SVG arc gauge
+        builder.OpenElement(seq++, "svg");
+        builder.AddAttribute(seq++, "viewBox", "0 0 110 110");
+        builder.AddAttribute(seq++, "style", "width:110px;height:110px;");
+
+        // track
+        builder.OpenElement(seq++, "path");
+        builder.AddAttribute(seq++, "d", $"M {F(tx1)} {F(ty1)} A {F(r)} {F(r)} 0 1 1 {F(tx2)} {F(ty2)}");
+        builder.AddAttribute(seq++, "fill", "none"); builder.AddAttribute(seq++, "stroke", "#334155");
+        builder.AddAttribute(seq++, "stroke-width", strokeW); builder.AddAttribute(seq++, "stroke-linecap", "round");
+        builder.CloseElement();
+
+        // value
+        if (pct > 0.001)
+        {
+            var vx1 = cx + r * Math.Cos(startAngle); var vy1 = cy + r * Math.Sin(startAngle);
+            var vx2 = cx + r * Math.Cos(valueEnd); var vy2 = cy + r * Math.Sin(valueEnd);
+            var largeArc = (valueEnd - startAngle) > Math.PI ? 1 : 0;
+            builder.OpenElement(seq++, "path");
+            builder.AddAttribute(seq++, "d", $"M {F(vx1)} {F(vy1)} A {F(r)} {F(r)} 0 {largeArc} 1 {F(vx2)} {F(vy2)}");
+            builder.AddAttribute(seq++, "fill", "none"); builder.AddAttribute(seq++, "stroke", gaugeColor);
+            builder.AddAttribute(seq++, "stroke-width", strokeW); builder.AddAttribute(seq++, "stroke-linecap", "round");
+            builder.CloseElement();
+        }
+
+        // center value text
+        if (sym.KpiShowValue)
+        {
+            builder.OpenElement(seq++, "text");
+            builder.AddAttribute(seq++, "x", "55"); builder.AddAttribute(seq++, "y", "60");
+            builder.AddAttribute(seq++, "text-anchor", "middle"); builder.AddAttribute(seq++, "fill", gaugeColor);
+            builder.AddAttribute(seq++, "font-size", "18"); builder.AddAttribute(seq++, "font-weight", "bold");
+            builder.AddContent(seq++, displayVal + unit);
+            builder.CloseElement();
+        }
+
+        builder.CloseElement(); // svg
+
+        // target
+        if (sym.KpiShowTarget)
+        {
+            builder.OpenElement(seq++, "div");
+            builder.AddAttribute(seq++, "style", "color:#64748b;font-size:11px;margin-top:4px;");
+            builder.AddContent(seq++, mode == "throughput" ? $"Target: {target:N0}" : $"Target: {target:F0}{unit}");
+            builder.CloseElement();
+        }
+
+        // OEE sub-factors
+        if (mode == "oee")
+        {
+            builder.OpenElement(seq++, "div");
+            builder.AddAttribute(seq++, "style", "display:flex;gap:12px;margin-top:6px;font-size:11px;color:#94a3b8;");
+            builder.OpenElement(seq++, "span"); builder.AddContent(seq++, $"A: {availability:F1}%"); builder.CloseElement();
+            builder.OpenElement(seq++, "span"); builder.AddContent(seq++, $"P: {performance:F1}%"); builder.CloseElement();
+            builder.OpenElement(seq++, "span"); builder.AddContent(seq++, $"Q: {quality:F1}%"); builder.CloseElement();
+            builder.CloseElement();
+        }
+
+        builder.CloseElement(); // div
+    };
+
+    private static double ParseOpc(string? raw)
+    {
+        if (string.IsNullOrEmpty(raw)) return 0;
+        return double.TryParse(raw, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : 0;
+    }
+
+    public async ValueTask DisposeAsync()
     {
         Opc.ValuesChanged -= OnValuesChanged;
         Localization.LanguageChanged -= OnLanguageChanged;
