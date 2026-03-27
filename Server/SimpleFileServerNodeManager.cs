@@ -1,4 +1,4 @@
-﻿using Opc.Ua;
+using Opc.Ua;
 using Opc.Ua.Server;
 using Serilog;
 using SharedModels;
@@ -55,6 +55,9 @@ namespace SimpleOpcFileServer
 
         // Alarm notification service (Email, Telegram, WhatsApp)
         private NotificationService? _notificationService;
+
+        // Anomaly detection service
+        private AnomalyDetectionService? _anomalyDetectionService;
 
         // Retentive variable storage
         private readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> _retentiveValues = new();
@@ -578,10 +581,21 @@ namespace SimpleOpcFileServer
                      _eventLogger?.LogSystem("Info", "Notification", "Alarm notification service started");
                  }
 
+                 // Anomaly detection service
+                 var anomalyCfg = nodeModel.Server?.AnomalyDetection;
+                 if (anomalyCfg is { Enabled: true })
+                 {
+                     _anomalyDetectionService = new AnomalyDetectionService(this, anomalyCfg, _eventLogger, _notificationService);
+                     _eventLogger?.LogSystem("Info", "AnomalyDetection", "Anomaly detection service created");
+                 }
+
                  if (nodeModel.Folder != null)
                  {
                      CreateFolder(nodeModel.Folder, null, references, "");
                  }
+
+                 // Start anomaly detection after variables are created
+                 _anomalyDetectionService?.Start();
 
                  // scripts
                  if (nodeModel.Scripts != null)
@@ -953,6 +967,12 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             if (variable.Alarm != null)
             {
                 CreateAlarmCondition(variableState, variable.Alarm, currentPath, parent);
+            }
+
+            // Register variable for anomaly detection
+            if (variable.AnomalyDetection is { Enabled: true } && _anomalyDetectionService != null && _logger != null)
+            {
+                _anomalyDetectionService.Register(currentPath, variable.AnomalyDetection, variable.Alarm, _logger);
             }
 
             // Create statistics sub-variables if Statistics.Enabled
@@ -1956,6 +1976,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 _schedulerManager?.Dispose();
                 _reportManager?.Dispose();
                 _notificationService?.Dispose();
+                _anomalyDetectionService?.Dispose();
                 _eventLogger?.Dispose();
                 foreach (var rw in _resourceWatchers) rw.Dispose();
                 _resourceWatchers.Clear();

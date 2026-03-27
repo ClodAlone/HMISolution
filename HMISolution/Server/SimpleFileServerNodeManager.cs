@@ -1,4 +1,4 @@
-﻿using Opc.Ua;
+using Opc.Ua;
 using Opc.Ua.Server;
 using Serilog;
 using SharedModels;
@@ -717,10 +717,21 @@ namespace SimpleOpcFileServer
                       _redundancyManager.Start();
                   }
 
+                 // Anomaly detection service
+                 var anomalyCfg = nodeModel.Server?.AnomalyDetection;
+                 if (anomalyCfg is { Enabled: true })
+                 {
+                     _anomalyDetectionService = new AnomalyDetectionService(this, anomalyCfg, _eventLogger, _notificationService);
+                     _eventLogger?.LogSystem("Info", "AnomalyDetection", "Anomaly detection service created");
+                 }
+
                   if (nodeModel.Folder != null)
                  {
                      CreateFolder(nodeModel.Folder, null, references, "");
                  }
+
+                 // Start anomaly detection after variables are created
+                 _anomalyDetectionService?.Start();
 
                  // scripts
                  if (nodeModel.Scripts != null)
@@ -1442,6 +1453,12 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             if (variable.Alarm != null)
             {
                 CreateAlarmCondition(variableState, variable.Alarm, currentPath, parent);
+            }
+
+            // Register variable for anomaly detection
+            if (variable.AnomalyDetection is { Enabled: true } && _anomalyDetectionService != null && _logger != null)
+            {
+                _anomalyDetectionService.Register(currentPath, variable.AnomalyDetection, variable.Alarm, _logger);
             }
 
             // Create statistics sub-variables if Statistics.Enabled
@@ -2641,6 +2658,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 _calculatedManager?.Dispose();
                 _auditTrailLogger?.Dispose();
                 _notificationManager?.Dispose();
+                _anomalyDetectionService?.Dispose();
                 _redundancyManager?.Dispose();
                 _restApi?.Dispose();
                 _writeRateLimiter?.Dispose();

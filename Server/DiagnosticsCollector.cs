@@ -37,6 +37,12 @@ namespace SimpleOpcFileServer
         /// </summary>
         public Func<AlarmAnalyticsSnapshot>? AlarmAnalyticsProvider { get; set; }
 
+        /// <summary>
+        /// Optional delegate that returns an anomaly detection snapshot.
+        /// Set by the anomaly detection service after construction.
+        /// </summary>
+        public Func<AnomalyDetectionSnapshot>? AlarmAnomalyProvider { get; set; }
+
         public static DiagnosticsCollector Instance { get; } = new();
 
         /// <summary>
@@ -172,6 +178,10 @@ namespace SimpleOpcFileServer
 
             // Alarm analytics
             try { diag.AlarmAnalytics = AlarmAnalyticsProvider?.Invoke(); }
+            catch { /* non-critical */ }
+
+            // Anomaly detection
+            try { diag.AnomalyDetection = AlarmAnomalyProvider?.Invoke(); }
             catch { /* non-critical */ }
 
             return diag;

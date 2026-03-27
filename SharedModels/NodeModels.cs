@@ -81,6 +81,9 @@ namespace SharedModels
         /// <summary>Engineering unit label (e.g. "°C", "bar", "%", "m³/h"). Exposed as OPC UA EngineeringUnits property.</summary>
         public string EngineeringUnit { get; set; } = "";
 
+        /// <summary>Optional anomaly detection configuration for this variable. Requires DataLogging to be enabled.</summary>
+        public AnomalyDetectionConfig? AnomalyDetection { get; set; }
+
         [JsonExtensionData]
         public Dictionary<string, JsonElement>? DriverConfigs { get; set; }
     }
@@ -396,6 +399,13 @@ namespace SharedModels
 
         /// <summary>Rate limiting / throttling configuration.</summary>
         public RateLimitConfig? RateLimit { get; set; }
+
+        /// <summary>
+        /// Anomaly detection configuration. When enabled, the server periodically analyses
+        /// historical data for variables with AnomalyDetection configured and generates
+        /// predictive alarms when abnormal patterns are detected.
+        /// </summary>
+        public AnomalyDetectionSettings? AnomalyDetection { get; set; }
     }
 
     /// <summary>
@@ -1561,6 +1571,9 @@ namespace SharedModels
 
         /// <summary>Alarm analytics snapshot (top-N, MTTA, flood detection). Null when no alarm data is available.</summary>
         public AlarmAnalyticsSnapshot? AlarmAnalytics { get; set; }
+
+        /// <summary>Anomaly detection snapshot. Null when the service is not enabled.</summary>
+        public AnomalyDetectionSnapshot? AnomalyDetection { get; set; }
     }
 
     // ─── Alarm Analytics ─────────────────────────────────────────
@@ -2144,5 +2157,127 @@ namespace SharedModels
 
         /// <summary>Rolling window size in seconds for time-based aggregates. Default 300.</summary>
         public int AggregateWindowSeconds { get; set; } = 300;
+    }
+
+    // --- Anomaly Detection ---
+
+    /// <summary>
+    /// Per-variable anomaly detection configuration.
+    /// Requires DataLogging to be enabled so historical data is available for analysis.
+    /// </summary>
+    public class AnomalyDetectionConfig
+    {
+        /// <summary>Whether anomaly detection is enabled for this variable.</summary>
+        public bool Enabled { get; set; }
+
+        /// <summary>
+        /// Z-score sensitivity threshold. A value is considered anomalous when its Z-score
+        /// (number of standard deviations from the rolling mean) exceeds this value.
+        /// Lower values = more sensitive. Default 3.0.
+        /// </summary>
+        public double Sensitivity { get; set; } = 3.0;
+
+        /// <summary>
+        /// Historical lookback window in minutes used to compute the rolling mean and
+        /// standard deviation baseline. Default 60.
+        /// </summary>
+        public int WindowMinutes { get; set; } = 60;
+
+        /// <summary>
+        /// When true and the variable has a limit alarm configured, the service computes
+        /// a linear trend and raises a predictive alarm if the trend projects that a
+        /// limit will be breached within <see cref="PredictionHorizonMinutes"/>.
+        /// </summary>
+        public bool EnableTrendPrediction { get; set; }
+
+        /// <summary>
+        /// Forecast horizon in minutes for trend-based limit prediction. Default 30.
+        /// </summary>
+        public int PredictionHorizonMinutes { get; set; } = 30;
+
+        /// <summary>
+        /// Cooldown in seconds between repeated anomaly notifications for this variable.
+        /// Prevents notification flooding. Default 300 (5 minutes).
+        /// </summary>
+        public int CooldownSeconds { get; set; } = 300;
+
+        /// <summary>Alarm severity (1-1000) assigned to anomaly alerts. Default 600.</summary>
+        public ushort Severity { get; set; } = 600;
+    }
+
+    /// <summary>
+    /// Server-level anomaly detection settings controlling the background analysis service.
+    /// </summary>
+    public class AnomalyDetectionSettings
+    {
+        /// <summary>Whether the anomaly detection service is globally enabled. Default false.</summary>
+        public bool Enabled { get; set; }
+
+        /// <summary>
+        /// Analysis interval in seconds - how often the service scans all configured
+        /// variables for anomalies. Default 30.
+        /// </summary>
+        public int IntervalSeconds { get; set; } = 30;
+
+        /// <summary>
+        /// Minimum number of historical data points required before analysis begins.
+        /// Prevents false positives during initial data collection. Default 10.
+        /// </summary>
+        public int MinSampleCount { get; set; } = 10;
+    }
+
+    /// <summary>
+    /// Diagnostics snapshot for anomaly detection, exposed via the /diag endpoint.
+    /// </summary>
+    public class AnomalyDetectionSnapshot
+    {
+        /// <summary>UTC timestamp when the snapshot was computed.</summary>
+        public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+
+        /// <summary>Number of variables being monitored for anomalies.</summary>
+        public int MonitoredVariables { get; set; }
+
+        /// <summary>Total number of anomalies detected since service start.</summary>
+        public long TotalAnomaliesDetected { get; set; }
+
+        /// <summary>Total number of trend-based predictive alarms raised since service start.</summary>
+        public long TotalPredictiveAlarms { get; set; }
+
+        /// <summary>Currently active anomaly entries.</summary>
+        public List<AnomalyEntry> ActiveAnomalies { get; set; } = new();
+    }
+
+    /// <summary>Describes a single detected anomaly or predictive alarm.</summary>
+    public class AnomalyEntry
+    {
+        /// <summary>Variable path of the anomalous source.</summary>
+        public string VariablePath { get; set; } = "";
+
+        /// <summary>Type of detection: "ZScore" or "TrendPrediction".</summary>
+        public string DetectionType { get; set; } = "";
+
+        /// <summary>Current value at the time of detection.</summary>
+        public double CurrentValue { get; set; }
+
+        /// <summary>Rolling mean of the historical baseline window.</summary>
+        public double Mean { get; set; }
+
+        /// <summary>Rolling standard deviation of the baseline window.</summary>
+        public double StdDev { get; set; }
+
+        /// <summary>Computed Z-score (for ZScore detections).</summary>
+        public double ZScore { get; set; }
+
+        /// <summary>Predicted time-to-breach in minutes (for TrendPrediction detections). Null if not applicable.</summary>
+        public double? PredictedMinutesToBreach { get; set; }
+
+        /// <summary>Which limit is predicted to be breached (e.g. "High", "Low"). Empty for ZScore.</summary>
+        public string PredictedLimit { get; set; } = "";
+
+        /// <summary>UTC time of detection.</summary>
+        public DateTime DetectedAtUtc { get; set; }
+
+        /// <summary>Human-readable description.</summary>
+        public string Message { get; set; } = "";
     }
 }
