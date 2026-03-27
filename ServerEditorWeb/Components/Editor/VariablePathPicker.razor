@@ -9,19 +9,23 @@
                @oninput="OnInput"
                @onkeydown="OnKeyDown"
                placeholder="@Placeholder" />
-        <button type="button" class="var-picker-toggle" tabindex="-1" @onclick="ToggleDropdown" title="Browse variables">▾</button>
+        <button type="button" class="var-picker-toggle" tabindex="-1"
+                @onmousedown="() => _preventClose = true" @onmousedown:preventDefault
+                @onclick="ToggleDropdown" title="Browse variables">&#x25BE;</button>
+        <button type="button" class="var-picker-browse" tabindex="-1"
+                @onclick="OpenTreePicker" title="Pick variable from tree">&#x1F4C2;</button>
     </div>
 
     @if (_showDropdown && _filteredPaths.Count > 0)
     {
-        <div class="var-picker-dropdown">
+        <div class="var-picker-dropdown" @onmousedown:preventDefault>
             @for (var i = 0; i < _filteredPaths.Count; i++)
             {
                 var item = _filteredPaths[i];
                 var idx = i;
                 <div class="var-picker-item @(idx == _highlightIndex ? "var-picker-item-hl" : "")"
                      @onmousedown="() => SelectItem(item)" @onmousedown:preventDefault>
-                    <span class="var-picker-item-icon">@(item.IsFolder ? "📁" : "📊")</span>
+                    <span class="var-picker-item-icon">@(item.IsFolder ? "&#x1F4C1;" : "&#x1F4CA;")</span>
                     <span class="var-picker-item-path">@item.Path</span>
                     @if (!item.IsFolder)
                     {
@@ -33,11 +37,42 @@
     }
 </div>
 
+@if (_showTreePicker)
+{
+    <div class="var-tree-overlay" @onclick="CloseTreePicker" @onclick:stopPropagation>
+        <div class="var-tree-dialog" @onclick:stopPropagation>
+            <div class="var-tree-header">
+                <span class="var-tree-title">Select Variable</span>
+                <button type="button" class="var-tree-close" @onclick="CloseTreePicker">&times;</button>
+            </div>
+            <div class="var-tree-filter">
+                <input type="text" class="form-control form-control-sm"
+                       placeholder="Filter variables..."
+                       @oninput="OnTreeFilterInput" />
+            </div>
+            <div class="var-tree-body">
+                @RenderTreeLevel(_treeRoots, 0)
+            </div>
+            <div class="var-tree-footer">
+                @if (!string.IsNullOrEmpty(_treeSelectedPath))
+                {
+                    <span class="var-tree-selected-label">@_treeSelectedPath</span>
+                }
+                <button type="button" class="btn btn-sm btn-primary"
+                        disabled="@(string.IsNullOrEmpty(_treeSelectedPath))"
+                        @onclick="ConfirmTreeSelection">OK</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary"
+                        @onclick="CloseTreePicker">Cancel</button>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     [Parameter] public string? Value { get; set; }
     [Parameter] public EventCallback<string?> ValueChanged { get; set; }
     [Parameter] public EventCallback OnChanged { get; set; }
-    [Parameter] public string Placeholder { get; set; } = "Select variable…";
+    [Parameter] public string Placeholder { get; set; } = "Select variable\u2026";
     [Parameter] public string InputStyle { get; set; } = "";
 
     [Inject] private NodeEditorService Editor { get; set; } = default!;
@@ -47,6 +82,15 @@
     private string _filter = "";
     private List<VarPathEntry> _allPaths = new();
     private List<VarPathEntry> _filteredPaths = new();
+    private bool _preventClose;
+    private CancellationTokenSource? _closeCts;
+
+    // Tree picker state
+    private bool _showTreePicker;
+    private string? _treeSelectedPath;
+    private string _treeFilter = "";
+    private List<TreeVarNode> _treeRoots = new();
+    private HashSet<string> _expandedTreeNodes = new();
 
     protected override void OnParametersSet()
     {
@@ -143,6 +187,10 @@
 
     private void OnFocusIn()
     {
+        // Cancel any pending close
+        _closeCts?.Cancel();
+        _closeCts = null;
+
         RebuildPaths();
         _filter = Value ?? "";
         _showDropdown = true;
@@ -150,14 +198,31 @@
 
     private async Task OnFocusOutDelayed()
     {
-        // Small delay to allow mousedown on dropdown items to fire first
-        await Task.Delay(200);
-        _showDropdown = false;
-        StateHasChanged();
+        if (_preventClose)
+        {
+            _preventClose = false;
+            return;
+        }
+
+        _closeCts?.Cancel();
+        _closeCts = new CancellationTokenSource();
+        var token = _closeCts.Token;
+
+        try
+        {
+            await Task.Delay(250, token);
+            if (!token.IsCancellationRequested)
+            {
+                _showDropdown = false;
+                StateHasChanged();
+            }
+        }
+        catch (TaskCanceledException) { /* focus returned, keep open */ }
     }
 
     private void ToggleDropdown()
     {
+        _preventClose = false;
         if (_showDropdown)
         {
             _showDropdown = false;
@@ -220,10 +285,241 @@
         }
     }
 
+    // ─── Tree picker ─────────────────────────────────────────
+
+    private void OpenTreePicker()
+    {
+        _showDropdown = false;
+        _treeSelectedPath = Value;
+        _treeFilter = "";
+        BuildTree();
+        _showTreePicker = true;
+    }
+
+    private void CloseTreePicker()
+    {
+        _showTreePicker = false;
+    }
+
+    private async Task ConfirmTreeSelection()
+    {
+        if (!string.IsNullOrEmpty(_treeSelectedPath))
+        {
+            Value = _treeSelectedPath;
+            await ValueChanged.InvokeAsync(Value);
+            await OnChanged.InvokeAsync();
+        }
+        _showTreePicker = false;
+    }
+
+    private void BuildTree()
+    {
+        _treeRoots = new List<TreeVarNode>();
+        _expandedTreeNodes.Clear();
+
+        var root = Editor.RootModel?.Folder;
+        if (root != null)
+        {
+            var rootNode = BuildFolderNode(root, "");
+            if (rootNode != null)
+                _treeRoots.Add(rootNode);
+        }
+
+        // Add calculated variables
+        var calcVars = Editor.RootModel?.CalculatedVariables;
+        if (calcVars?.Count > 0)
+        {
+            var calcFolder = new TreeVarNode { Name = "_Calculated", IsFolder = true, FullPath = "_Calculated" };
+            foreach (var cv in calcVars)
+            {
+                if (!cv.Enabled || string.IsNullOrWhiteSpace(cv.Name)) continue;
+                var folder = string.IsNullOrWhiteSpace(cv.FolderPath) ? "_Calculated" : cv.FolderPath;
+                calcFolder.Children.Add(new TreeVarNode
+                {
+                    Name = cv.Name,
+                    FullPath = $"{folder}.{cv.Name}",
+                    Type = cv.Type,
+                    IsFolder = false
+                });
+            }
+            if (calcFolder.Children.Count > 0)
+                _treeRoots.Add(calcFolder);
+        }
+
+        // Auto-expand to the currently selected value
+        if (!string.IsNullOrEmpty(Value))
+        {
+            ExpandToPath(Value);
+        }
+    }
+
+    private TreeVarNode BuildFolderNode(Folder folder, string prefix)
+    {
+        var folderPath = string.IsNullOrEmpty(prefix) ? folder.Name : $"{prefix}.{folder.Name}";
+        var node = new TreeVarNode { Name = folder.Name, FullPath = folderPath, IsFolder = true };
+
+        foreach (var sub in folder.Folders)
+        {
+            var child = BuildFolderNode(sub, folderPath);
+            if (child != null) node.Children.Add(child);
+        }
+
+        foreach (var v in folder.Variables)
+        {
+            node.Children.Add(new TreeVarNode
+            {
+                Name = v.Name,
+                FullPath = $"{folderPath}.{v.Name}",
+                Type = v.Type,
+                IsFolder = false
+            });
+        }
+
+        return node;
+    }
+
+    private void ExpandToPath(string path)
+    {
+        var parts = path.Split('.');
+        var current = "";
+        for (int i = 0; i < parts.Length - 1; i++)
+        {
+            current = i == 0 ? parts[i] : $"{current}.{parts[i]}";
+            _expandedTreeNodes.Add(current);
+        }
+    }
+
+    private void ToggleTreeNode(string fullPath)
+    {
+        if (!_expandedTreeNodes.Add(fullPath))
+            _expandedTreeNodes.Remove(fullPath);
+    }
+
+    private void SelectTreeVariable(string fullPath)
+    {
+        _treeSelectedPath = fullPath;
+    }
+
+    private void OnTreeFilterInput(ChangeEventArgs e)
+    {
+        _treeFilter = e.Value?.ToString() ?? "";
+        if (!string.IsNullOrWhiteSpace(_treeFilter))
+        {
+            // Auto-expand all folders when filtering
+            ExpandAllNodes(_treeRoots);
+        }
+    }
+
+    private void ExpandAllNodes(List<TreeVarNode> nodes)
+    {
+        foreach (var n in nodes)
+        {
+            if (n.IsFolder)
+            {
+                _expandedTreeNodes.Add(n.FullPath);
+                ExpandAllNodes(n.Children);
+            }
+        }
+    }
+
+    private bool NodeMatchesFilter(TreeVarNode node)
+    {
+        if (string.IsNullOrWhiteSpace(_treeFilter)) return true;
+        if (node.Name.Contains(_treeFilter, StringComparison.OrdinalIgnoreCase)) return true;
+        if (node.IsFolder)
+            return node.Children.Any(NodeMatchesFilter);
+        return false;
+    }
+
+    private RenderFragment RenderTreeLevel(List<TreeVarNode> nodes, int depth) => builder =>
+    {
+        int seq = 0;
+        foreach (var node in nodes)
+        {
+            if (!NodeMatchesFilter(node)) continue;
+
+            if (node.IsFolder)
+            {
+                var expanded = _expandedTreeNodes.Contains(node.FullPath);
+                var capturedNode = node;
+
+                builder.OpenElement(seq++, "div");
+                builder.AddAttribute(seq++, "class", "var-tree-node var-tree-folder");
+                builder.AddAttribute(seq++, "style", $"padding-left: {depth * 16 + 4}px;");
+                builder.AddAttribute(seq++, "onclick", Microsoft.AspNetCore.Components.EventCallback.Factory.Create(this, () => ToggleTreeNode(capturedNode.FullPath)));
+
+                builder.OpenElement(seq++, "span");
+                builder.AddAttribute(seq++, "class", "var-tree-chevron");
+                builder.AddContent(seq++, expanded ? "\u25BE" : "\u25B8");
+                builder.CloseElement();
+
+                builder.OpenElement(seq++, "span");
+                builder.AddAttribute(seq++, "class", "var-tree-icon");
+                builder.AddContent(seq++, "\U0001F4C1");
+                builder.CloseElement();
+
+                builder.OpenElement(seq++, "span");
+                builder.AddAttribute(seq++, "class", "var-tree-name");
+                builder.AddContent(seq++, capturedNode.Name);
+                builder.CloseElement();
+
+                builder.CloseElement();
+
+                if (expanded)
+                {
+                    builder.AddContent(seq++, RenderTreeLevel(capturedNode.Children, depth + 1));
+                }
+            }
+            else
+            {
+                var isSelected = node.FullPath == _treeSelectedPath;
+                var capturedNode = node;
+
+                builder.OpenElement(seq++, "div");
+                builder.AddAttribute(seq++, "class", $"var-tree-node var-tree-var{(isSelected ? " var-tree-var-selected" : "")}");
+                builder.AddAttribute(seq++, "style", $"padding-left: {depth * 16 + 4}px;");
+                builder.AddAttribute(seq++, "onclick", Microsoft.AspNetCore.Components.EventCallback.Factory.Create(this, () => SelectTreeVariable(capturedNode.FullPath)));
+                builder.AddAttribute(seq++, "ondblclick", Microsoft.AspNetCore.Components.EventCallback.Factory.Create(this, async () => { _treeSelectedPath = capturedNode.FullPath; await ConfirmTreeSelection(); }));
+
+                builder.OpenElement(seq++, "span");
+                builder.AddAttribute(seq++, "class", "var-tree-chevron");
+                builder.AddMarkupContent(seq++, "&nbsp;");
+                builder.CloseElement();
+
+                builder.OpenElement(seq++, "span");
+                builder.AddAttribute(seq++, "class", "var-tree-icon");
+                builder.AddContent(seq++, "\U0001F4CA");
+                builder.CloseElement();
+
+                builder.OpenElement(seq++, "span");
+                builder.AddAttribute(seq++, "class", "var-tree-name");
+                builder.AddContent(seq++, capturedNode.Name);
+                builder.CloseElement();
+
+                builder.OpenElement(seq++, "span");
+                builder.AddAttribute(seq++, "class", "var-tree-type");
+                builder.AddContent(seq++, capturedNode.Type);
+                builder.CloseElement();
+
+                builder.CloseElement();
+            }
+        }
+    };
+    // ─── Models ─────────────────────────────────────────────
+
     private class VarPathEntry
     {
         public string Path { get; set; } = "";
         public string Type { get; set; } = "";
         public bool IsFolder { get; set; }
+    }
+
+    private class TreeVarNode
+    {
+        public string Name { get; set; } = "";
+        public string FullPath { get; set; } = "";
+        public string Type { get; set; } = "";
+        public bool IsFolder { get; set; }
+        public List<TreeVarNode> Children { get; set; } = new();
     }
 }

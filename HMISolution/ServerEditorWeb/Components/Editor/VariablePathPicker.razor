@@ -1,4 +1,4 @@
-﻿@using SharedModels
+@using SharedModels
 @using ServerEditorWeb.Services
 
 <div class="var-picker" @onfocusin="OnFocusIn" @onfocusout="OnFocusOutDelayed">
@@ -47,7 +47,7 @@
     [Parameter] public string? Value { get; set; }
     [Parameter] public EventCallback<string?> ValueChanged { get; set; }
     [Parameter] public EventCallback OnChanged { get; set; }
-    [Parameter] public string Placeholder { get; set; } = "Select variable...";
+    [Parameter] public string Placeholder { get; set; } = "Select variable…";
     [Parameter] public string InputStyle { get; set; } = "";
 
     [Inject] private NodeEditorService Editor { get; set; } = default!;
@@ -74,6 +74,7 @@
             CollectPaths(root, "");
         }
 
+        // Include calculated / virtual variables
         var calcVars = Editor.RootModel?.CalculatedVariables;
         if (calcVars != null)
         {
@@ -82,6 +83,7 @@
                 if (!cv.Enabled || string.IsNullOrWhiteSpace(cv.Name)) continue;
                 var folder = string.IsNullOrWhiteSpace(cv.FolderPath) ? "_Calculated" : cv.FolderPath;
                 var fullPath = $"{folder}.{cv.Name}";
+                // Add folder entry once
                 if (!_allPaths.Any(p => p.IsFolder && p.Path == folder))
                 {
                     _allPaths.Add(new VarPathEntry { Path = folder, IsFolder = true });
@@ -102,6 +104,7 @@
     {
         var folderPath = string.IsNullOrEmpty(prefix) ? folder.Name : $"{prefix}.{folder.Name}";
 
+        // Add folder entry (for browsing context)
         if (!string.IsNullOrEmpty(prefix))
         {
             _allPaths.Add(new VarPathEntry { Path = folderPath, IsFolder = true });
@@ -127,6 +130,7 @@
     {
         if (string.IsNullOrWhiteSpace(_filter))
         {
+            // Show variables only (not folders) when no filter
             _filteredPaths = _allPaths.Where(p => !p.IsFolder).ToList();
         }
         else
@@ -153,7 +157,6 @@
     {
         _focusOutCts?.Cancel();
         _focusOutCts = null;
-
         RebuildPaths();
         _filter = Value ?? "";
         _showDropdown = true;
@@ -166,7 +169,6 @@
         _focusOutCts?.Cancel();
         var cts = new CancellationTokenSource();
         _focusOutCts = cts;
-
         try
         {
             await Task.Delay(250, cts.Token);
@@ -176,9 +178,7 @@
                 StateHasChanged();
             }
         }
-        catch (TaskCanceledException)
-        {
-        }
+        catch (TaskCanceledException) { }
     }
 
     private void ToggleDropdown()
@@ -195,27 +195,11 @@
         }
     }
 
-    private void OpenTreePopup()
-    {
-        _showDropdown = false;
-        _showTreePopup = true;
-    }
-
-    private async Task OnTreeSelect(string? path)
-    {
-        _showTreePopup = false;
-        if (!string.IsNullOrEmpty(path))
-        {
-            Value = path;
-            await ValueChanged.InvokeAsync(Value);
-            await OnChanged.InvokeAsync();
-        }
-    }
-
     private async Task SelectItem(VarPathEntry item)
     {
         if (item.IsFolder)
         {
+            // Selecting a folder filters to its children
             _filter = item.Path + ".";
             Value = _filter;
             await ValueChanged.InvokeAsync(Value);
