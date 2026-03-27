@@ -2315,5 +2315,8 @@ namespace SharedModels
 
         /// <summary>Placeholder text shown in the query input box.</summary>
         public string Placeholder { get; set; } = "Ask about your process data...";
+
+        /// <summary>Optional API key for OpenAI or Gemini. Falls back to OPENAI_API_KEY / GEMINI_API_KEY env var.</summary>
+        public string? ApiKey { get; set; }
     }
 }

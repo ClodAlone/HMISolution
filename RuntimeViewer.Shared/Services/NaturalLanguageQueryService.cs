@@ -298,7 +298,7 @@ public class NaturalLanguageQueryService
 
     private static async Task<string> CallOpenAiAsync(string prompt, NaturalLanguageQueryConfig cfg, CancellationToken ct)
     {
-        var apiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY") ?? "";
+        var apiKey = !string.IsNullOrEmpty(cfg.ApiKey) ? cfg.ApiKey : Environment.GetEnvironmentVariable("OPENAI_API_KEY") ?? "";
         if (string.IsNullOrEmpty(apiKey))
             return "OpenAI API key not configured. Set the OPENAI_API_KEY environment variable.";
 
@@ -329,7 +329,7 @@ public class NaturalLanguageQueryService
 
     private static async Task<string> CallGeminiAsync(string prompt, NaturalLanguageQueryConfig cfg, CancellationToken ct)
     {
-        var apiKey = Environment.GetEnvironmentVariable("GEMINI_API_KEY") ?? "";
+        var apiKey = !string.IsNullOrEmpty(cfg.ApiKey) ? cfg.ApiKey : Environment.GetEnvironmentVariable("GEMINI_API_KEY") ?? "";
         if (string.IsNullOrEmpty(apiKey))
             return "Gemini API key not configured. Set the GEMINI_API_KEY environment variable.";
 
