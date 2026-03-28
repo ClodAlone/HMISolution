@@ -2,7 +2,7 @@
 @using ServerEditorWeb.Services
 @using SharedModels
 @using Microsoft.JSInterop
-@implements IDisposable
+@implements IAsyncDisposable
 
 <div class="screen-editor-panel">
     @if (GetScreen() is not ScreenConfig screen)
@@ -2405,10 +2405,15 @@ private void DeleteSelected()
         OnChanged();
     }
 
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
         Opc.StateChanged -= OnOpcChanged;
         Editor.AnimationPreviewTick -= OnAnimationPreviewTick;
         _refreshTimer?.Dispose();
+        if (_canvasDropInitialized)
+        {
+            try { await JS.InvokeVoidAsync("canvasDrop.dispose"); } catch { }
+        }
+        _dotNetRef?.Dispose();
     }
 }

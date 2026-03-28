@@ -633,6 +633,11 @@ else
     <AboutDialog OnClose="() => _showAboutDialog = false" />
 }
 
+@if (_showNewProjectWizard)
+{
+    <NewProjectWizard OnCreated="OnNewProjectCreated" OnClose="() => _showNewProjectWizard = false" />
+}
+
 
 @if (_showUnlockDialog)
 {
@@ -741,6 +746,7 @@ else
     private ProblemsPanel? _problemsPanel;
     private HelpPanel? _helpPanel;
     private bool _showAboutDialog;
+    private bool _showNewProjectWizard;
 
     private string _selectedFile = "";
     private string[] _availableFiles = [];
@@ -1128,7 +1134,20 @@ private void UnsavedDialogCancel()
 
     private void NewFile()
     {
-        Editor.NewFile();
+        _showNewProjectWizard = true;
+    }
+
+    private void OnNewProjectCreated(NodeModel? model)
+    {
+        _showNewProjectWizard = false;
+        if (model != null)
+        {
+            Editor.NewFileFromModel(model);
+        }
+        else
+        {
+            Editor.NewFile();
+        }
         UndoRedo.Clear();
         _selectedFile = "";
         _appLogService.AddLog("INF", "New configuration created.");

@@ -1,0 +1,1075 @@
+﻿@using ServerEditorWeb.Services
+@using SharedModels
+@using System.Text.Json
+@using System.Text.Json.Serialization
+
+<div class="modal-backdrop show" @onclick="OnClose"></div>
+<div class="modal show d-block" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h6 class="modal-title">🚀 New Project</h6>
+                <button type="button" class="btn-close btn-close-sm" @onclick="OnClose"></button>
+            </div>
+            <div class="modal-body p-3">
+                @if (_step == WizardStep.ChooseMethod)
+                {
+                    <p class="text-muted small mb-3">Choose how you want to create your project:</p>
+
+                    <div class="d-flex gap-3 mb-3">
+                        <button class="wizard-method-card @(_method == CreateMethod.Template ? "active" : "")"
+                                @onclick="() => _method = CreateMethod.Template">
+                            <span class="wizard-method-icon">📋</span>
+                            <span class="wizard-method-title">From Template</span>
+                            <span class="wizard-method-desc">Start from a pre-built project template</span>
+                        </button>
+                        <button class="wizard-method-card @(_method == CreateMethod.Ai ? "active" : "")"
+                                @onclick="() => _method = CreateMethod.Ai">
+                            <span class="wizard-method-icon">🤖</span>
+                            <span class="wizard-method-title">AI Generated</span>
+                            <span class="wizard-method-desc">Describe your project and let AI build it</span>
+                        </button>
+                        <button class="wizard-method-card @(_method == CreateMethod.Blank ? "active" : "")"
+                                @onclick="() => _method = CreateMethod.Blank">
+                            <span class="wizard-method-icon">📄</span>
+                            <span class="wizard-method-title">Blank Project</span>
+                            <span class="wizard-method-desc">Start with an empty configuration</span>
+                        </button>
+                    </div>
+
+                    @if (_method == CreateMethod.Template)
+                    {
+                        <h6 class="mb-2">Select a Template</h6>
+                        <div class="wizard-template-grid">
+                            @foreach (var tmpl in _templates)
+                            {
+                                var t = tmpl;
+                                <button class="wizard-template-card @(_selectedTemplate == t.Id ? "active" : "")"
+                                        @onclick="() => _selectedTemplate = t.Id">
+                                    <span class="wizard-template-icon">@t.Icon</span>
+                                    <span class="wizard-template-name">@t.Name</span>
+                                    <span class="wizard-template-desc">@t.Description</span>
+                                    <span class="wizard-template-tags">
+                                        @foreach (var tag in t.Tags)
+                                        {
+                                            <span class="badge bg-secondary me-1" style="font-size: 9px;">@tag</span>
+                                        }
+                                    </span>
+                                </button>
+                            }
+                        </div>
+                    }
+                    else if (_method == CreateMethod.Ai)
+                    {
+                        <h6 class="mb-2">Describe Your Project</h6>
+                        <div class="mb-2">
+                            <label class="form-label small mb-1">AI Engine</label>
+                            <select class="form-select form-select-sm" style="width: 200px;"
+                                    @bind="_aiEngine">
+                                @foreach (var eng in Ai.AvailableEngines)
+                                {
+                                    <option value="@eng">@eng</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="mb-2">
+                            <textarea class="form-control form-control-sm" rows="5"
+                                      placeholder="Describe your HMI/SCADA project in natural language. For example:&#10;&#10;• A home automation system with lighting, HVAC, and security sensors for a 3-floor building&#10;• An industrial bottling line with 4 stations, conveyor belt monitoring, and alarm management&#10;• A solar farm monitoring system with 50 inverters, weather station, and energy dashboards"
+                                      @bind="_aiPrompt"></textarea>
+                        </div>
+                        <div class="d-flex gap-2 small text-muted">
+                            <span>💡</span>
+                            <span>The more detail you provide, the better the result. Include information about equipment, variables, screens, and alarms you need.</span>
+                        </div>
+                    }
+                }
+                else if (_step == WizardStep.Generating)
+                {
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-primary mb-3" role="status"></div>
+                        <p class="mb-1">Generating your project...</p>
+                        <p class="text-muted small">@_generationStatus</p>
+                    </div>
+                }
+                else if (_step == WizardStep.Error)
+                {
+                    <div class="alert alert-danger small mb-0">
+                        <strong>Error:</strong> @_errorMessage
+                    </div>
+                }
+            </div>
+            <div class="modal-footer py-2">
+                @if (_step == WizardStep.ChooseMethod)
+                {
+                    <button class="btn btn-sm btn-secondary" @onclick="OnClose">Cancel</button>
+                    <button class="btn btn-sm btn-primary" @onclick="Create"
+                            disabled="@(!CanCreate)">
+                        @if (_method == CreateMethod.Ai)
+                        {
+                            <span>🤖 Generate Project</span>
+                        }
+                        else
+                        {
+                            <span>✨ Create Project</span>
+                        }
+                    </button>
+                }
+                else if (_step == WizardStep.Error)
+                {
+                    <button class="btn btn-sm btn-secondary" @onclick="() => _step = WizardStep.ChooseMethod">Back</button>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public EventCallback<NodeModel?> OnCreated { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    [Inject] private AiService Ai { get; set; } = default!;
+
+    private enum WizardStep { ChooseMethod, Generating, Error }
+    private enum CreateMethod { Template, Ai, Blank }
+
+    private WizardStep _step = WizardStep.ChooseMethod;
+    private CreateMethod _method = CreateMethod.Template;
+    private string _selectedTemplate = "home-automation";
+    private string _aiEngine = "OpenAI";
+    private string _aiPrompt = "";
+    private string _generationStatus = "";
+    private string _errorMessage = "";
+
+    private bool CanCreate => _method switch
+    {
+        CreateMethod.Blank => true,
+        CreateMethod.Template => !string.IsNullOrEmpty(_selectedTemplate),
+        CreateMethod.Ai => !string.IsNullOrWhiteSpace(_aiPrompt),
+        _ => false
+    };
+
+    private record TemplateInfo(string Id, string Icon, string Name, string Description, string[] Tags);
+
+    private static readonly TemplateInfo[] _templates =
+    [
+        new("home-automation", "🏠", "Home Automation",
+            "Smart home with lighting, HVAC, security, and energy monitoring.",
+            ["KNX", "Modbus", "MQTT", "4 Screens"]),
+        new("industrial-line", "🏭", "Industrial Production Line",
+            "Manufacturing line with conveyors, motors, sensors, and alarm management.",
+            ["S7", "Modbus", "Alarms", "6 Screens"]),
+        new("building-management", "🏢", "Building Management (BMS)",
+            "Commercial building with HVAC zones, lighting schedules, and energy metering.",
+            ["BACnet", "Modbus", "Schedulers", "5 Screens"]),
+        new("energy-monitoring", "⚡", "Energy Monitoring",
+            "Power plant or solar farm with inverters, meters, and performance dashboards.",
+            ["Modbus", "HDA", "Charts", "4 Screens"]),
+        new("water-treatment", "💧", "Water Treatment",
+            "Water/wastewater plant with pumps, valves, flow meters, and chemical dosing.",
+            ["Modbus", "Alarms", "Trends", "5 Screens"]),
+        new("hvac-system", "❄️", "HVAC System",
+            "Heating, ventilation, and air conditioning with AHUs, chillers, and zone control.",
+            ["BACnet", "Modbus", "Schedules", "4 Screens"]),
+    ];
+
+    private async Task Create()
+    {
+        switch (_method)
+        {
+            case CreateMethod.Blank:
+                await OnCreated.InvokeAsync(null);
+                break;
+
+            case CreateMethod.Template:
+                var model = BuildTemplateModel(_selectedTemplate);
+                await OnCreated.InvokeAsync(model);
+                break;
+
+            case CreateMethod.Ai:
+                await GenerateWithAi();
+                break;
+        }
+    }
+
+    private async Task GenerateWithAi()
+    {
+        _step = WizardStep.Generating;
+        _generationStatus = $"Sending request to {_aiEngine}...";
+        StateHasChanged();
+
+        try
+        {
+            // Build a minimal starter JSON as the base
+            var baseModel = new NodeModel
+            {
+                Folder = new Folder { Name = "Root" },
+                Server = new ServerSettings(),
+                Screens = new List<ScreenConfig>()
+            };
+
+            var baseJson = JsonSerializer.Serialize(baseModel, new JsonSerializerOptions { WriteIndented = true });
+
+            var prompt = $"""
+                Create a complete OPC UA HMI/SCADA project based on this description:
+
+                {_aiPrompt}
+
+                Generate a full project configuration with:
+                1. A well-organized folder hierarchy with realistic variables (Double, Int32, Boolean types) including engineering units
+                2. Multiple screens with appropriate widgets (gauges, indicators, charts, alarm lists, trends)
+                3. Alarm configurations on critical variables (HighHigh, High, Low, LowLow thresholds)
+                4. At least one script for automation logic
+                5. Data logging on key process variables
+                6. Realistic initial values and appropriate variable access modes (Read, ReadWrite)
+
+                Make variable names clear and descriptive. Use a dark theme (#1a1a2e) for screen backgrounds.
+                """;
+
+            _generationStatus = "AI is generating your project...";
+            StateHasChanged();
+
+            var (newJson, comments) = await Ai.AskAsync(_aiEngine, prompt, baseJson);
+
+            if (string.IsNullOrWhiteSpace(newJson))
+            {
+                _step = WizardStep.Error;
+                _errorMessage = string.IsNullOrEmpty(comments) ? "AI returned an empty response." : comments;
+                return;
+            }
+
+            _generationStatus = "Parsing AI response...";
+            StateHasChanged();
+
+            var lenientOptions = new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true,
+                Converters = { new LenientStringConverter() }
+            };
+
+            var generatedModel = JsonSerializer.Deserialize<NodeModel>(newJson, lenientOptions);
+            if (generatedModel == null)
+            {
+                _step = WizardStep.Error;
+                _errorMessage = "Failed to parse the AI-generated configuration.";
+                return;
+            }
+
+            await OnCreated.InvokeAsync(generatedModel);
+        }
+        catch (Exception ex)
+        {
+            _step = WizardStep.Error;
+            _errorMessage = ex.Message;
+        }
+    }
+
+    /// <summary>Builds a navigation bar of navbuttons across the bottom of each screen.</summary>
+    private static void AddNavigationBar(List<ScreenConfig> screens)
+    {
+        const int btnHeight = 36;
+        const int btnGap = 6;
+        const int barPadding = 10;
+        const int barBottomMargin = 8;
+
+        foreach (var screen in screens)
+        {
+            var totalBtns = screens.Count;
+            var availableWidth = screen.Width - barPadding * 2 - (totalBtns - 1) * btnGap;
+            var btnWidth = (int)(availableWidth / totalBtns);
+            if (btnWidth > 180) btnWidth = 180;
+
+            var totalBarWidth = totalBtns * btnWidth + (totalBtns - 1) * btnGap;
+            var startX = (screen.Width - totalBarWidth) / 2.0;
+            var barY = screen.Height - btnHeight - barBottomMargin;
+
+            // Background bar
+            screen.Symbols.Add(new ScreenSymbol
+            {
+                Id = "sym_nav_bar",
+                Type = "rect",
+                X = 0, Y = barY - 6,
+                Width = screen.Width, Height = btnHeight + 18,
+                Fill = "#16213e", Stroke = "none", StrokeWidth = 0,
+                Label = ""
+            });
+
+            for (int i = 0; i < screens.Count; i++)
+            {
+                var target = screens[i];
+                var isCurrent = target.Name == screen.Name;
+                screen.Symbols.Add(new ScreenSymbol
+                {
+                    Id = $"sym_nav_{i}",
+                    Type = "navbutton",
+                    X = startX + i * (btnWidth + btnGap),
+                    Y = barY,
+                    Width = btnWidth,
+                    Height = btnHeight,
+                    Label = target.Name,
+                    NavButtonTarget = target.Name,
+                    NavButtonStyle = "filled",
+                    NavButtonIcon = "",
+                    NavButtonIconPosition = "none",
+                    NavButtonColor = isCurrent ? "#3b82f6" : "#2a3a5c",
+                    NavButtonTextColor = "#ffffff",
+                    FontSize = 11,
+                    FontWeight = isCurrent ? "bold" : "",
+                });
+            }
+        }
+    }
+    private static void AddScreenHeader(ScreenConfig screen, string icon, string title)
+    {
+        screen.Symbols.Add(new ScreenSymbol
+        {
+            Id = "sym_header_bg", Type = "rect",
+            X = 0, Y = 0, Width = screen.Width, Height = 44,
+            Fill = "#16213e", Stroke = "none", StrokeWidth = 0, Label = ""
+        });
+        screen.Symbols.Add(new ScreenSymbol
+        {
+            Id = "sym_header_title", Type = "text",
+            X = 16, Y = 8, Width = screen.Width - 32, Height = 30,
+            Fill = "transparent", Stroke = "none", StrokeWidth = 0,
+            Label = icon + " " + title,
+            FontSize = 18, FontWeight = "bold"
+        });
+    }
+
+    private static NodeModel BuildTemplateModel(string templateId)
+    {
+        return templateId switch
+        {
+            "home-automation" => BuildHomeAutomation(),
+            "industrial-line" => BuildIndustrialLine(),
+            "building-management" => BuildBuildingManagement(),
+            "energy-monitoring" => BuildEnergyMonitoring(),
+            "water-treatment" => BuildWaterTreatment(),
+            "hvac-system" => BuildHvacSystem(),
+            _ => new NodeModel { Folder = new Folder { Name = "Root" }, Server = new ServerSettings() }
+        };
+    }
+
+    private static NodeModel BuildHomeAutomation()
+    {
+        var model = new NodeModel
+        {
+            Folder = new Folder
+            {
+                Name = "Root",
+                Folders =
+                [
+                    new Folder
+                    {
+                        Name = "GroundFloor",
+                        Folders =
+                        [
+                            new Folder
+                            {
+                                Name = "Living",
+                                Variables =
+                                [
+                                    new Variable { Name = "LightsOn", Type = "Boolean", Access = "ReadWrite", Value = false },
+                                    new Variable { Name = "LightLevel", Type = "Double", Access = "ReadWrite", Value = 75.0, EngineeringUnit = "%" },
+                                    new Variable { Name = "Temperature", Type = "Double", Access = "Read", Value = 21.5, EngineeringUnit = "°C",
+                                        Alarm = new AlarmConfig { HighLimit = 28, LowLimit = 16 },
+                                        DataLogging = new DataLoggingConfig { Enabled = true } },
+                                    new Variable { Name = "Humidity", Type = "Double", Access = "Read", Value = 45.0, EngineeringUnit = "%",
+                                        DataLogging = new DataLoggingConfig { Enabled = true } },
+                                    new Variable { Name = "MotionDetected", Type = "Boolean", Access = "Read", Value = false },
+                                ]
+                            },
+                            new Folder
+                            {
+                                Name = "Kitchen",
+                                Variables =
+                                [
+                                    new Variable { Name = "LightsOn", Type = "Boolean", Access = "ReadWrite", Value = false },
+                                    new Variable { Name = "Temperature", Type = "Double", Access = "Read", Value = 22.0, EngineeringUnit = "°C" },
+                                    new Variable { Name = "SmokeSensor", Type = "Boolean", Access = "Read", Value = false,
+                                        Alarm = new AlarmConfig { HighLimit = 1 } },
+                                ]
+                            }
+                        ]
+                    },
+                    new Folder
+                    {
+                        Name = "FirstFloor",
+                        Folders =
+                        [
+                            new Folder
+                            {
+                                Name = "Bedroom",
+                                Variables =
+                                [
+                                    new Variable { Name = "LightsOn", Type = "Boolean", Access = "ReadWrite", Value = false },
+                                    new Variable { Name = "Temperature", Type = "Double", Access = "Read", Value = 20.0, EngineeringUnit = "°C" },
+                                    new Variable { Name = "BlindsPosition", Type = "Double", Access = "ReadWrite", Value = 100.0, EngineeringUnit = "%" },
+                                ]
+                            },
+                            new Folder
+                            {
+                                Name = "Bathroom",
+                                Variables =
+                                [
+                                    new Variable { Name = "LightsOn", Type = "Boolean", Access = "ReadWrite", Value = false },
+                                    new Variable { Name = "Temperature", Type = "Double", Access = "Read", Value = 23.0, EngineeringUnit = "°C" },
+                                    new Variable { Name = "WaterLeak", Type = "Boolean", Access = "Read", Value = false,
+                                        Alarm = new AlarmConfig { HighLimit = 1 } },
+                                ]
+                            }
+                        ]
+                    },
+                    new Folder
+                    {
+                        Name = "HVAC",
+                        Variables =
+                        [
+                            new Variable { Name = "Mode", Type = "Int32", Access = "ReadWrite", Value = 1 },
+                            new Variable { Name = "Setpoint", Type = "Double", Access = "ReadWrite", Value = 21.0, EngineeringUnit = "°C" },
+                            new Variable { Name = "OutdoorTemp", Type = "Double", Access = "Read", Value = 15.0, EngineeringUnit = "°C",
+                                DataLogging = new DataLoggingConfig { Enabled = true } },
+                            new Variable { Name = "HeatingOn", Type = "Boolean", Access = "Read", Value = false },
+                            new Variable { Name = "CoolingOn", Type = "Boolean", Access = "Read", Value = false },
+                            new Variable { Name = "EnergyToday", Type = "Double", Access = "Read", Value = 12.5, EngineeringUnit = "kWh",
+                                DataLogging = new DataLoggingConfig { Enabled = true } },
+                        ]
+                    },
+                    new Folder
+                    {
+                        Name = "Security",
+                        Variables =
+                        [
+                            new Variable { Name = "AlarmArmed", Type = "Boolean", Access = "ReadWrite", Value = true },
+                            new Variable { Name = "DoorLocked", Type = "Boolean", Access = "Read", Value = true },
+                            new Variable { Name = "IntrusionDetected", Type = "Boolean", Access = "Read", Value = false,
+                                Alarm = new AlarmConfig { HighLimit = 1 } },
+                        ]
+                    }
+                ]
+            },
+            Server = new ServerSettings(),
+            Screens =
+            [
+                new ScreenConfig { Name = "Overview", Width = 1200, Height = 800, Background = "#1a1a2e" },
+                new ScreenConfig { Name = "Ground Floor", Width = 1200, Height = 800, Background = "#1a1a2e" },
+                new ScreenConfig { Name = "HVAC Control", Width = 1200, Height = 800, Background = "#1a1a2e" },
+                new ScreenConfig { Name = "Alarms", Width = 1200, Height = 800, Background = "#1a1a2e" },
+            ]
+        };
+        // Add headers
+        AddScreenHeader(model.Screens[0], "\u2302", "Home Overview");
+        AddScreenHeader(model.Screens[1], "\u25A3", "Ground Floor");
+        AddScreenHeader(model.Screens[2], "❄", "HVAC Control");
+        AddScreenHeader(model.Screens[3], "\u26A0", "Alarms");
+        // Overview: gauges for temperatures
+        model.Screens[0].Symbols.Add(new ScreenSymbol { Id = "sym_g1", Type = "gauge", X = 60, Y = 70, Width = 200, Height = 200, Label = "Living Temp", VariablePath = "Root.GroundFloor.Living.Temperature", MinValue = 10, MaxValue = 35, GaugeUnit = "°C", Fill = "#3b82f6" });
+        model.Screens[0].Symbols.Add(new ScreenSymbol { Id = "sym_g2", Type = "gauge", X = 300, Y = 70, Width = 200, Height = 200, Label = "Kitchen Temp", VariablePath = "Root.GroundFloor.Kitchen.Temperature", MinValue = 10, MaxValue = 35, GaugeUnit = "°C", Fill = "#3b82f6" });
+        model.Screens[0].Symbols.Add(new ScreenSymbol { Id = "sym_g3", Type = "gauge", X = 540, Y = 70, Width = 200, Height = 200, Label = "Outdoor Temp", VariablePath = "Root.HVAC.OutdoorTemp", MinValue = -10, MaxValue = 45, GaugeUnit = "°C", Fill = "#10b981" });
+        model.Screens[0].Symbols.Add(new ScreenSymbol { Id = "sym_g4", Type = "gauge", X = 780, Y = 70, Width = 200, Height = 200, Label = "Humidity", VariablePath = "Root.GroundFloor.Living.Humidity", MinValue = 0, MaxValue = 100, GaugeUnit = "%", Fill = "#8b5cf6" });
+        model.Screens[0].Symbols.Add(new ScreenSymbol { Id = "sym_i1", Type = "indicator", X = 60, Y = 300, Width = 160, Height = 50, Label = "Heating", VariablePath = "Root.HVAC.HeatingOn", Fill = "#ef4444" });
+        model.Screens[0].Symbols.Add(new ScreenSymbol { Id = "sym_i2", Type = "indicator", X = 240, Y = 300, Width = 160, Height = 50, Label = "Cooling", VariablePath = "Root.HVAC.CoolingOn", Fill = "#3b82f6" });
+        model.Screens[0].Symbols.Add(new ScreenSymbol { Id = "sym_i3", Type = "indicator", X = 420, Y = 300, Width = 160, Height = 50, Label = "Alarm Armed", VariablePath = "Root.Security.AlarmArmed", Fill = "#f59e0b" });
+        model.Screens[0].Symbols.Add(new ScreenSymbol { Id = "sym_i4", Type = "indicator", X = 600, Y = 300, Width = 160, Height = 50, Label = "Door Locked", VariablePath = "Root.Security.DoorLocked", Fill = "#10b981" });
+        model.Screens[0].Symbols.Add(new ScreenSymbol { Id = "sym_nv1", Type = "numericdisplay", X = 60, Y = 380, Width = 240, Height = 60, Label = "Energy Today", VariablePath = "Root.HVAC.EnergyToday", Fill = "#1e293b", Stroke = "#334155", GaugeUnit = "kWh" });
+        // Ground Floor: indicators + switches
+        model.Screens[1].Symbols.Add(new ScreenSymbol { Id = "sym_sw1", Type = "switch", X = 60, Y = 70, Width = 120, Height = 50, Label = "Living Lights", VariablePath = "Root.GroundFloor.Living.LightsOn" });
+        model.Screens[1].Symbols.Add(new ScreenSymbol { Id = "sym_sw2", Type = "switch", X = 200, Y = 70, Width = 120, Height = 50, Label = "Kitchen Lights", VariablePath = "Root.GroundFloor.Kitchen.LightsOn" });
+        model.Screens[1].Symbols.Add(new ScreenSymbol { Id = "sym_sw3", Type = "switch", X = 340, Y = 70, Width = 120, Height = 50, Label = "Bedroom Lights", VariablePath = "Root.FirstFloor.Bedroom.LightsOn" });
+        model.Screens[1].Symbols.Add(new ScreenSymbol { Id = "sym_sl1", Type = "hslider", X = 60, Y = 150, Width = 250, Height = 40, Label = "Living Light Level", VariablePath = "Root.GroundFloor.Living.LightLevel", MinValue = 0, MaxValue = 100 });
+        model.Screens[1].Symbols.Add(new ScreenSymbol { Id = "sym_sl2", Type = "hslider", X = 60, Y = 220, Width = 250, Height = 40, Label = "Blinds Position", VariablePath = "Root.FirstFloor.Bedroom.BlindsPosition", MinValue = 0, MaxValue = 100 });
+        model.Screens[1].Symbols.Add(new ScreenSymbol { Id = "sym_i5", Type = "indicator", X = 60, Y = 290, Width = 160, Height = 50, Label = "Motion Detected", VariablePath = "Root.GroundFloor.Living.MotionDetected", Fill = "#f59e0b" });
+        model.Screens[1].Symbols.Add(new ScreenSymbol { Id = "sym_i6", Type = "indicator", X = 240, Y = 290, Width = 160, Height = 50, Label = "Smoke Sensor", VariablePath = "Root.GroundFloor.Kitchen.SmokeSensor", Fill = "#ef4444" });
+        model.Screens[1].Symbols.Add(new ScreenSymbol { Id = "sym_i7", Type = "indicator", X = 420, Y = 290, Width = 160, Height = 50, Label = "Water Leak", VariablePath = "Root.FirstFloor.Bathroom.WaterLeak", Fill = "#ef4444" });
+        // HVAC: setpoint + gauges
+        model.Screens[2].Symbols.Add(new ScreenSymbol { Id = "sym_g5", Type = "gauge", X = 60, Y = 70, Width = 220, Height = 220, Label = "Outdoor Temp", VariablePath = "Root.HVAC.OutdoorTemp", MinValue = -10, MaxValue = 45, GaugeUnit = "°C", Fill = "#10b981" });
+        model.Screens[2].Symbols.Add(new ScreenSymbol { Id = "sym_eb1", Type = "editbox", X = 320, Y = 70, Width = 200, Height = 50, Label = "Setpoint", VariablePath = "Root.HVAC.Setpoint", EditBoxStep = 0.5, EditBoxFormat = "F1" });
+        model.Screens[2].Symbols.Add(new ScreenSymbol { Id = "sym_i8", Type = "indicator", X = 320, Y = 140, Width = 160, Height = 50, Label = "Heating", VariablePath = "Root.HVAC.HeatingOn", Fill = "#ef4444" });
+        model.Screens[2].Symbols.Add(new ScreenSymbol { Id = "sym_i9", Type = "indicator", X = 500, Y = 140, Width = 160, Height = 50, Label = "Cooling", VariablePath = "Root.HVAC.CoolingOn", Fill = "#3b82f6" });
+        model.Screens[2].Symbols.Add(new ScreenSymbol { Id = "sym_hda1", Type = "hdachart", X = 60, Y = 320, Width = 700, Height = 300, Label = "Temperature Trend", HdaVariablePaths = new List<string> { "Root.GroundFloor.Living.Temperature", "Root.HVAC.OutdoorTemp" }, HdaTimeRangeMinutes = 60, Fill = "#1e293b", Stroke = "#334155" });
+        // Alarms screen
+        model.Screens[3].Symbols.Add(new ScreenSymbol { Id = "sym_al1", Type = "alarmlist", X = 20, Y = 60, Width = 1160, Height = 500, Label = "Active Alarms", Fill = "#1e293b", Stroke = "#334155" });
+        model.Screens[3].Symbols.Add(new ScreenSymbol { Id = "sym_el1", Type = "eventlog", X = 20, Y = 580, Width = 1160, Height = 150, Label = "Event Log", Fill = "#1e293b", Stroke = "#334155" });
+        AddNavigationBar(model.Screens);
+        return model;
+    }
+
+    private static NodeModel BuildIndustrialLine()
+    {
+        var model = new NodeModel
+        {
+            Folder = new Folder
+            {
+                Name = "Root",
+                Folders =
+                [
+                    new Folder
+                    {
+                        Name = "Conveyor",
+                        Variables =
+                        [
+                            new Variable { Name = "Running", Type = "Boolean", Access = "ReadWrite", Value = false },
+                            new Variable { Name = "Speed", Type = "Double", Access = "ReadWrite", Value = 0, EngineeringUnit = "m/min",
+                                Alarm = new AlarmConfig { HighHighLimit = 30, HighLimit = 25 },
+                                DataLogging = new DataLoggingConfig { Enabled = true } },
+                            new Variable { Name = "MotorCurrent", Type = "Double", Access = "Read", Value = 0, EngineeringUnit = "A",
+                                Alarm = new AlarmConfig { HighLimit = 15, HighHighLimit = 20 } },
+                            new Variable { Name = "ItemCount", Type = "Int32", Access = "Read", Value = 0 },
+                            new Variable { Name = "Fault", Type = "Boolean", Access = "Read", Value = false,
+                                Alarm = new AlarmConfig { HighLimit = 1 } },
+                        ]
+                    },
+                    new Folder
+                    {
+                        Name = "Station1_Fill",
+                        Variables =
+                        [
+                            new Variable { Name = "Active", Type = "Boolean", Access = "ReadWrite", Value = false },
+                            new Variable { Name = "FillLevel", Type = "Double", Access = "Read", Value = 0, EngineeringUnit = "%",
+                                DataLogging = new DataLoggingConfig { Enabled = true } },
+                            new Variable { Name = "ValveOpen", Type = "Boolean", Access = "ReadWrite", Value = false },
+                            new Variable { Name = "Temperature", Type = "Double", Access = "Read", Value = 25.0, EngineeringUnit = "°C",
+                                Alarm = new AlarmConfig { HighLimit = 80, LowLimit = 10 } },
+                        ]
+                    },
+                    new Folder
+                    {
+                        Name = "Station2_Seal",
+                        Variables =
+                        [
+                            new Variable { Name = "Active", Type = "Boolean", Access = "ReadWrite", Value = false },
+                            new Variable { Name = "PressureBar", Type = "Double", Access = "Read", Value = 0, EngineeringUnit = "bar",
+                                Alarm = new AlarmConfig { HighLimit = 8, LowLimit = 2 } },
+                            new Variable { Name = "CycleTime", Type = "Double", Access = "Read", Value = 0, EngineeringUnit = "s" },
+                            new Variable { Name = "Fault", Type = "Boolean", Access = "Read", Value = false,
+                                Alarm = new AlarmConfig { HighLimit = 1 } },
+                        ]
+                    },
+                    new Folder
+                    {
+                        Name = "Station3_Label",
+                        Variables =
+                        [
+                            new Variable { Name = "Active", Type = "Boolean", Access = "ReadWrite", Value = false },
+                            new Variable { Name = "LabelCount", Type = "Int32", Access = "Read", Value = 0 },
+                            new Variable { Name = "PrinterReady", Type = "Boolean", Access = "Read", Value = true },
+                        ]
+                    },
+                    new Folder
+                    {
+                        Name = "Station4_QualityCheck",
+                        Variables =
+                        [
+                            new Variable { Name = "Active", Type = "Boolean", Access = "ReadWrite", Value = false },
+                            new Variable { Name = "PassCount", Type = "Int32", Access = "Read", Value = 0 },
+                            new Variable { Name = "RejectCount", Type = "Int32", Access = "Read", Value = 0 },
+                            new Variable { Name = "CameraOnline", Type = "Boolean", Access = "Read", Value = true },
+                        ]
+                    },
+                    new Folder
+                    {
+                        Name = "Production",
+                        Variables =
+                        [
+                            new Variable { Name = "TotalProduced", Type = "Int32", Access = "Read", Value = 0,
+                                DataLogging = new DataLoggingConfig { Enabled = true } },
+                            new Variable { Name = "TotalRejected", Type = "Int32", Access = "Read", Value = 0 },
+                            new Variable { Name = "OEE", Type = "Double", Access = "Read", Value = 0, EngineeringUnit = "%",
+                                DataLogging = new DataLoggingConfig { Enabled = true } },
+                            new Variable { Name = "LineRunning", Type = "Boolean", Access = "ReadWrite", Value = false },
+                        ]
+                    }
+                ]
+            },
+            Server = new ServerSettings(),
+            Screens =
+            [
+                new ScreenConfig { Name = "Line Overview", Width = 1400, Height = 900, Background = "#1a1a2e" },
+                new ScreenConfig { Name = "Station Detail", Width = 1200, Height = 800, Background = "#1a1a2e" },
+                new ScreenConfig { Name = "Production KPIs", Width = 1200, Height = 800, Background = "#1a1a2e" },
+                new ScreenConfig { Name = "Trends", Width = 1200, Height = 800, Background = "#1a1a2e" },
+                new ScreenConfig { Name = "Alarms", Width = 1200, Height = 800, Background = "#1a1a2e" },
+                new ScreenConfig { Name = "Maintenance", Width = 1200, Height = 800, Background = "#1a1a2e" },
+            ]
+        };
+        AddScreenHeader(model.Screens[0], "\u2699", "Line Overview");
+        AddScreenHeader(model.Screens[1], "\u2692", "Station Detail");
+        AddScreenHeader(model.Screens[2], "\u2605", "Production KPIs");
+        AddScreenHeader(model.Screens[3], "\u2197", "Trends");
+        AddScreenHeader(model.Screens[4], "\u26A0", "Alarms");
+        AddScreenHeader(model.Screens[5], "\u2694", "Maintenance");
+        // Line Overview: conveyor indicators + production counters
+        model.Screens[0].Symbols.Add(new ScreenSymbol { Id = "sym_cv1", Type = "conveyor", X = 60, Y = 80, Width = 600, Height = 80, Label = "Main Conveyor", VariablePath = "Root.Conveyor.Running", Fill = "#3b82f6" });
+        model.Screens[0].Symbols.Add(new ScreenSymbol { Id = "sym_g1", Type = "gauge", X = 700, Y = 70, Width = 180, Height = 180, Label = "Speed", VariablePath = "Root.Conveyor.Speed", MinValue = 0, MaxValue = 30, GaugeUnit = "m/min", Fill = "#3b82f6" });
+        model.Screens[0].Symbols.Add(new ScreenSymbol { Id = "sym_i1", Type = "indicator", X = 60, Y = 200, Width = 140, Height = 45, Label = "Station 1 Fill", VariablePath = "Root.Station1_Fill.Active", Fill = "#10b981" });
+        model.Screens[0].Symbols.Add(new ScreenSymbol { Id = "sym_i2", Type = "indicator", X = 220, Y = 200, Width = 140, Height = 45, Label = "Station 2 Seal", VariablePath = "Root.Station2_Seal.Active", Fill = "#10b981" });
+        model.Screens[0].Symbols.Add(new ScreenSymbol { Id = "sym_i3", Type = "indicator", X = 380, Y = 200, Width = 140, Height = 45, Label = "Station 3 Label", VariablePath = "Root.Station3_Label.Active", Fill = "#10b981" });
+        model.Screens[0].Symbols.Add(new ScreenSymbol { Id = "sym_i4", Type = "indicator", X = 540, Y = 200, Width = 140, Height = 45, Label = "Station 4 QC", VariablePath = "Root.Station4_QualityCheck.Active", Fill = "#10b981" });
+        model.Screens[0].Symbols.Add(new ScreenSymbol { Id = "sym_nd1", Type = "numericdisplay", X = 60, Y = 280, Width = 200, Height = 55, Label = "Total Produced", VariablePath = "Root.Production.TotalProduced", Fill = "#1e293b", Stroke = "#334155" });
+        model.Screens[0].Symbols.Add(new ScreenSymbol { Id = "sym_nd2", Type = "numericdisplay", X = 280, Y = 280, Width = 200, Height = 55, Label = "OEE", VariablePath = "Root.Production.OEE", Fill = "#1e293b", Stroke = "#334155", GaugeUnit = "%" });
+        // Station Detail: gauges + bar
+        model.Screens[1].Symbols.Add(new ScreenSymbol { Id = "sym_g2", Type = "gauge", X = 60, Y = 70, Width = 200, Height = 200, Label = "Fill Level", VariablePath = "Root.Station1_Fill.FillLevel", MinValue = 0, MaxValue = 100, GaugeUnit = "%", Fill = "#3b82f6" });
+        model.Screens[1].Symbols.Add(new ScreenSymbol { Id = "sym_g3", Type = "gauge", X = 300, Y = 70, Width = 200, Height = 200, Label = "Pressure", VariablePath = "Root.Station2_Seal.PressureBar", MinValue = 0, MaxValue = 10, GaugeUnit = "bar", Fill = "#f59e0b" });
+        model.Screens[1].Symbols.Add(new ScreenSymbol { Id = "sym_g4", Type = "gauge", X = 540, Y = 70, Width = 200, Height = 200, Label = "Motor A", VariablePath = "Root.Conveyor.MotorCurrent", MinValue = 0, MaxValue = 25, GaugeUnit = "A", Fill = "#ef4444" });
+        // Production KPIs: numeric displays
+        model.Screens[2].Symbols.Add(new ScreenSymbol { Id = "sym_nd3", Type = "numericdisplay", X = 60, Y = 80, Width = 250, Height = 70, Label = "Total Produced", VariablePath = "Root.Production.TotalProduced", Fill = "#1e293b", Stroke = "#334155" });
+        model.Screens[2].Symbols.Add(new ScreenSymbol { Id = "sym_nd4", Type = "numericdisplay", X = 340, Y = 80, Width = 250, Height = 70, Label = "Total Rejected", VariablePath = "Root.Production.TotalRejected", Fill = "#1e293b", Stroke = "#334155" });
+        model.Screens[2].Symbols.Add(new ScreenSymbol { Id = "sym_pb1", Type = "progressbar", X = 60, Y = 180, Width = 530, Height = 40, Label = "OEE", VariablePath = "Root.Production.OEE", MinValue = 0, MaxValue = 100, Fill = "#10b981" });
+        // Trends
+        model.Screens[3].Symbols.Add(new ScreenSymbol { Id = "sym_hda1", Type = "hdachart", X = 30, Y = 60, Width = 1140, Height = 500, Label = "Production Trends", HdaVariablePaths = new List<string> { "Root.Conveyor.Speed", "Root.Station1_Fill.FillLevel", "Root.Production.OEE" }, HdaTimeRangeMinutes = 120, Fill = "#1e293b", Stroke = "#334155" });
+        // Alarms
+        model.Screens[4].Symbols.Add(new ScreenSymbol { Id = "sym_al1", Type = "alarmlist", X = 20, Y = 60, Width = 1160, Height = 450, Label = "Active Alarms", Fill = "#1e293b", Stroke = "#334155" });
+        model.Screens[4].Symbols.Add(new ScreenSymbol { Id = "sym_el1", Type = "eventlog", X = 20, Y = 530, Width = 1160, Height = 200, Label = "Event Log", Fill = "#1e293b", Stroke = "#334155" });
+        // Maintenance
+        model.Screens[5].Symbols.Add(new ScreenSymbol { Id = "sym_nd5", Type = "numericdisplay", X = 60, Y = 80, Width = 250, Height = 70, Label = "Conveyor Items", VariablePath = "Root.Conveyor.ItemCount", Fill = "#1e293b", Stroke = "#334155" });
+        model.Screens[5].Symbols.Add(new ScreenSymbol { Id = "sym_nd6", Type = "numericdisplay", X = 340, Y = 80, Width = 250, Height = 70, Label = "Label Count", VariablePath = "Root.Station3_Label.LabelCount", Fill = "#1e293b", Stroke = "#334155" });
+        model.Screens[5].Symbols.Add(new ScreenSymbol { Id = "sym_i5", Type = "indicator", X = 60, Y = 180, Width = 200, Height = 50, Label = "Camera Online", VariablePath = "Root.Station4_QualityCheck.CameraOnline", Fill = "#10b981" });
+        model.Screens[5].Symbols.Add(new ScreenSymbol { Id = "sym_i6", Type = "indicator", X = 280, Y = 180, Width = 200, Height = 50, Label = "Printer Ready", VariablePath = "Root.Station3_Label.PrinterReady", Fill = "#10b981" });
+        AddNavigationBar(model.Screens);
+        return model;
+    }
+
+    private static NodeModel BuildBuildingManagement()
+    {
+        var model = new NodeModel
+        {
+            Folder = new Folder
+            {
+                Name = "Root",
+                Folders =
+                [
+                    new Folder
+                    {
+                        Name = "HVAC",
+                        Folders =
+                        [
+                            new Folder { Name = "AHU1", Variables =
+                            [
+                                new Variable { Name = "SupplyAirTemp", Type = "Double", Access = "Read", Value = 22.0, EngineeringUnit = "°C",
+                                    DataLogging = new DataLoggingConfig { Enabled = true } },
+                                new Variable { Name = "ReturnAirTemp", Type = "Double", Access = "Read", Value = 23.5, EngineeringUnit = "°C" },
+                                new Variable { Name = "FanRunning", Type = "Boolean", Access = "ReadWrite", Value = true },
+                                new Variable { Name = "FanSpeed", Type = "Double", Access = "ReadWrite", Value = 60, EngineeringUnit = "%" },
+                                new Variable { Name = "FilterDiffPressure", Type = "Double", Access = "Read", Value = 120, EngineeringUnit = "Pa",
+                                    Alarm = new AlarmConfig { HighLimit = 300 } },
+                                new Variable { Name = "DamperPosition", Type = "Double", Access = "ReadWrite", Value = 50, EngineeringUnit = "%" },
+                            ]},
+                        ]
+                    },
+                    new Folder
+                    {
+                        Name = "Zones",
+                        Folders =
+                        [
+                            new Folder { Name = "Zone1_Office", Variables =
+                            [
+                                new Variable { Name = "Temperature", Type = "Double", Access = "Read", Value = 22.0, EngineeringUnit = "°C",
+                                    Alarm = new AlarmConfig { HighLimit = 27, LowLimit = 18 },
+                                    DataLogging = new DataLoggingConfig { Enabled = true } },
+                                new Variable { Name = "Setpoint", Type = "Double", Access = "ReadWrite", Value = 22.0, EngineeringUnit = "°C" },
+                                new Variable { Name = "CO2Level", Type = "Double", Access = "Read", Value = 450, EngineeringUnit = "ppm",
+                                    Alarm = new AlarmConfig { HighLimit = 1000 } },
+                                new Variable { Name = "Occupancy", Type = "Boolean", Access = "Read", Value = true },
+                            ]},
+                            new Folder { Name = "Zone2_MeetingRoom", Variables =
+                            [
+                                new Variable { Name = "Temperature", Type = "Double", Access = "Read", Value = 21.5, EngineeringUnit = "°C" },
+                                new Variable { Name = "Setpoint", Type = "Double", Access = "ReadWrite", Value = 22.0, EngineeringUnit = "°C" },
+                                new Variable { Name = "LightsOn", Type = "Boolean", Access = "ReadWrite", Value = false },
+                            ]},
+                        ]
+                    },
+                    new Folder
+                    {
+                        Name = "Lighting",
+                        Variables =
+                        [
+                            new Variable { Name = "LobbyLights", Type = "Double", Access = "ReadWrite", Value = 80, EngineeringUnit = "%" },
+                            new Variable { Name = "ParkingLights", Type = "Boolean", Access = "ReadWrite", Value = true },
+                            new Variable { Name = "EmergencyLights", Type = "Boolean", Access = "Read", Value = true },
+                        ]
+                    },
+                    new Folder
+                    {
+                        Name = "Energy",
+                        Variables =
+                        [
+                            new Variable { Name = "TotalPower", Type = "Double", Access = "Read", Value = 125.5, EngineeringUnit = "kW",
+                                DataLogging = new DataLoggingConfig { Enabled = true } },
+                            new Variable { Name = "TodayConsumption", Type = "Double", Access = "Read", Value = 850.0, EngineeringUnit = "kWh" },
+                            new Variable { Name = "WaterConsumption", Type = "Double", Access = "Read", Value = 12.5, EngineeringUnit = "m³" },
+                        ]
+                    }
+                ]
+            },
+            Server = new ServerSettings(),
+            Screens =
+            [
+                new ScreenConfig { Name = "Building Overview", Width = 1400, Height = 900, Background = "#1a1a2e" },
+                new ScreenConfig { Name = "HVAC Control", Width = 1200, Height = 800, Background = "#1a1a2e" },
+                new ScreenConfig { Name = "Zone Comfort", Width = 1200, Height = 800, Background = "#1a1a2e" },
+                new ScreenConfig { Name = "Energy Dashboard", Width = 1200, Height = 800, Background = "#1a1a2e" },
+                new ScreenConfig { Name = "Alarms", Width = 1200, Height = 800, Background = "#1a1a2e" },
+            ]
+        };
+        AddScreenHeader(model.Screens[0], "\u2302", "Building Overview");
+        AddScreenHeader(model.Screens[1], "\u2744", "HVAC Control");
+        AddScreenHeader(model.Screens[2], "\u2600", "Zone Comfort");
+        AddScreenHeader(model.Screens[3], "\u26A1", "Energy Dashboard");
+        AddScreenHeader(model.Screens[4], "\u26A0", "Alarms");
+        model.Screens[0].Symbols.Add(new ScreenSymbol { Id = "sym_g1", Type = "gauge", X = 60, Y = 80, Width = 200, Height = 200, Label = "Supply Air", VariablePath = "Root.HVAC.AHU1.SupplyAirTemp", MinValue = 10, MaxValue = 35, GaugeUnit = "\u00B0C", Fill = "#3b82f6" });
+        model.Screens[0].Symbols.Add(new ScreenSymbol { Id = "sym_g2", Type = "gauge", X = 290, Y = 80, Width = 200, Height = 200, Label = "Office Temp", VariablePath = "Root.Zones.Zone1_Office.Temperature", MinValue = 15, MaxValue = 30, GaugeUnit = "\u00B0C", Fill = "#10b981" });
+        model.Screens[0].Symbols.Add(new ScreenSymbol { Id = "sym_g3", Type = "gauge", X = 520, Y = 80, Width = 200, Height = 200, Label = "Meeting Room", VariablePath = "Root.Zones.Zone2_MeetingRoom.Temperature", MinValue = 15, MaxValue = 30, GaugeUnit = "\u00B0C", Fill = "#10b981" });
+        model.Screens[0].Symbols.Add(new ScreenSymbol { Id = "sym_nd1", Type = "numericdisplay", X = 800, Y = 80, Width = 250, Height = 60, Label = "Total Power", VariablePath = "Root.Energy.TotalPower", Fill = "#1e293b", Stroke = "#334155", GaugeUnit = "kW" });
+        model.Screens[0].Symbols.Add(new ScreenSymbol { Id = "sym_nd2", Type = "numericdisplay", X = 800, Y = 160, Width = 250, Height = 60, Label = "Today kWh", VariablePath = "Root.Energy.TodayConsumption", Fill = "#1e293b", Stroke = "#334155", GaugeUnit = "kWh" });
+        model.Screens[0].Symbols.Add(new ScreenSymbol { Id = "sym_i1", Type = "indicator", X = 60, Y = 310, Width = 160, Height = 45, Label = "AHU1 Fan", VariablePath = "Root.HVAC.AHU1.FanRunning", Fill = "#3b82f6" });
+        model.Screens[0].Symbols.Add(new ScreenSymbol { Id = "sym_i2", Type = "indicator", X = 240, Y = 310, Width = 160, Height = 45, Label = "Office Occupied", VariablePath = "Root.Zones.Zone1_Office.Occupancy", Fill = "#f59e0b" });
+        model.Screens[0].Symbols.Add(new ScreenSymbol { Id = "sym_i3", Type = "indicator", X = 420, Y = 310, Width = 160, Height = 45, Label = "Emergency Lights", VariablePath = "Root.Lighting.EmergencyLights", Fill = "#ef4444" });
+        model.Screens[0].Symbols.Add(new ScreenSymbol { Id = "sym_i4", Type = "indicator", X = 600, Y = 310, Width = 160, Height = 45, Label = "Parking Lights", VariablePath = "Root.Lighting.ParkingLights", Fill = "#10b981" });
+        model.Screens[1].Symbols.Add(new ScreenSymbol { Id = "sym_g4", Type = "gauge", X = 60, Y = 70, Width = 200, Height = 200, Label = "Supply Air", VariablePath = "Root.HVAC.AHU1.SupplyAirTemp", MinValue = 10, MaxValue = 35, GaugeUnit = "\u00B0C", Fill = "#3b82f6" });
+        model.Screens[1].Symbols.Add(new ScreenSymbol { Id = "sym_g5", Type = "gauge", X = 290, Y = 70, Width = 200, Height = 200, Label = "Return Air", VariablePath = "Root.HVAC.AHU1.ReturnAirTemp", MinValue = 10, MaxValue = 35, GaugeUnit = "\u00B0C", Fill = "#f59e0b" });
+        model.Screens[1].Symbols.Add(new ScreenSymbol { Id = "sym_g6", Type = "gauge", X = 520, Y = 70, Width = 200, Height = 200, Label = "Filter dP", VariablePath = "Root.HVAC.AHU1.FilterDiffPressure", MinValue = 0, MaxValue = 400, GaugeUnit = "Pa", Fill = "#ef4444" });
+        model.Screens[1].Symbols.Add(new ScreenSymbol { Id = "sym_sl1", Type = "hslider", X = 60, Y = 300, Width = 300, Height = 40, Label = "Fan Speed", VariablePath = "Root.HVAC.AHU1.FanSpeed", MinValue = 0, MaxValue = 100 });
+        model.Screens[1].Symbols.Add(new ScreenSymbol { Id = "sym_sl2", Type = "hslider", X = 60, Y = 370, Width = 300, Height = 40, Label = "Damper", VariablePath = "Root.HVAC.AHU1.DamperPosition", MinValue = 0, MaxValue = 100 });
+        model.Screens[1].Symbols.Add(new ScreenSymbol { Id = "sym_i5", Type = "indicator", X = 400, Y = 300, Width = 160, Height = 45, Label = "Fan Running", VariablePath = "Root.HVAC.AHU1.FanRunning", Fill = "#3b82f6" });
+        model.Screens[2].Symbols.Add(new ScreenSymbol { Id = "sym_g7", Type = "gauge", X = 60, Y = 70, Width = 200, Height = 200, Label = "Office Temp", VariablePath = "Root.Zones.Zone1_Office.Temperature", MinValue = 15, MaxValue = 30, GaugeUnit = "\u00B0C", Fill = "#10b981" });
+        model.Screens[2].Symbols.Add(new ScreenSymbol { Id = "sym_g8", Type = "gauge", X = 300, Y = 70, Width = 200, Height = 200, Label = "CO2 Level", VariablePath = "Root.Zones.Zone1_Office.CO2Level", MinValue = 0, MaxValue = 1500, GaugeUnit = "ppm", Fill = "#f59e0b" });
+        model.Screens[2].Symbols.Add(new ScreenSymbol { Id = "sym_g9", Type = "gauge", X = 540, Y = 70, Width = 200, Height = 200, Label = "Meeting Temp", VariablePath = "Root.Zones.Zone2_MeetingRoom.Temperature", MinValue = 15, MaxValue = 30, GaugeUnit = "\u00B0C", Fill = "#10b981" });
+        model.Screens[2].Symbols.Add(new ScreenSymbol { Id = "sym_eb1", Type = "editbox", X = 60, Y = 300, Width = 200, Height = 50, Label = "Office SP", VariablePath = "Root.Zones.Zone1_Office.Setpoint", EditBoxStep = 0.5, EditBoxFormat = "F1" });
+        model.Screens[2].Symbols.Add(new ScreenSymbol { Id = "sym_eb2", Type = "editbox", X = 300, Y = 300, Width = 200, Height = 50, Label = "Meeting SP", VariablePath = "Root.Zones.Zone2_MeetingRoom.Setpoint", EditBoxStep = 0.5, EditBoxFormat = "F1" });
+        model.Screens[2].Symbols.Add(new ScreenSymbol { Id = "sym_sw1", Type = "switch", X = 540, Y = 300, Width = 140, Height = 50, Label = "Meeting Lights", VariablePath = "Root.Zones.Zone2_MeetingRoom.LightsOn" });
+        model.Screens[2].Symbols.Add(new ScreenSymbol { Id = "sym_i6", Type = "indicator", X = 60, Y = 380, Width = 160, Height = 45, Label = "Occupied", VariablePath = "Root.Zones.Zone1_Office.Occupancy", Fill = "#f59e0b" });
+        model.Screens[3].Symbols.Add(new ScreenSymbol { Id = "sym_nd3", Type = "numericdisplay", X = 60, Y = 70, Width = 250, Height = 65, Label = "Total Power", VariablePath = "Root.Energy.TotalPower", Fill = "#1e293b", Stroke = "#334155", GaugeUnit = "kW" });
+        model.Screens[3].Symbols.Add(new ScreenSymbol { Id = "sym_nd4", Type = "numericdisplay", X = 340, Y = 70, Width = 250, Height = 65, Label = "Today Consumption", VariablePath = "Root.Energy.TodayConsumption", Fill = "#1e293b", Stroke = "#334155", GaugeUnit = "kWh" });
+        model.Screens[3].Symbols.Add(new ScreenSymbol { Id = "sym_nd5", Type = "numericdisplay", X = 620, Y = 70, Width = 250, Height = 65, Label = "Water Usage", VariablePath = "Root.Energy.WaterConsumption", Fill = "#1e293b", Stroke = "#334155" });
+        model.Screens[3].Symbols.Add(new ScreenSymbol { Id = "sym_sl3", Type = "hslider", X = 60, Y = 160, Width = 300, Height = 40, Label = "Lobby Lights", VariablePath = "Root.Lighting.LobbyLights", MinValue = 0, MaxValue = 100 });
+        model.Screens[3].Symbols.Add(new ScreenSymbol { Id = "sym_hda1", Type = "hdachart", X = 30, Y = 230, Width = 1140, Height = 350, Label = "Energy Trends", HdaVariablePaths = new List<string> { "Root.Energy.TotalPower", "Root.HVAC.AHU1.SupplyAirTemp", "Root.Zones.Zone1_Office.Temperature" }, HdaTimeRangeMinutes = 120, Fill = "#1e293b", Stroke = "#334155" });
+        model.Screens[4].Symbols.Add(new ScreenSymbol { Id = "sym_al1", Type = "alarmlist", X = 20, Y = 60, Width = 1160, Height = 450, Label = "Active Alarms", Fill = "#1e293b", Stroke = "#334155" });
+        model.Screens[4].Symbols.Add(new ScreenSymbol { Id = "sym_el1", Type = "eventlog", X = 20, Y = 530, Width = 1160, Height = 200, Label = "Event Log", Fill = "#1e293b", Stroke = "#334155" });
+        AddNavigationBar(model.Screens);
+        return model;
+    }
+
+    private static NodeModel BuildEnergyMonitoring()
+    {
+        var model = new NodeModel
+        {
+            Folder = new Folder
+            {
+                Name = "Root",
+                Folders =
+                [
+                    new Folder
+                    {
+                        Name = "Inverters",
+                        Folders =
+                        [
+                            new Folder { Name = "INV01", Variables =
+                            [
+                                new Variable { Name = "ACPower", Type = "Double", Access = "Read", Value = 45.2, EngineeringUnit = "kW",
+                                    DataLogging = new DataLoggingConfig { Enabled = true } },
+                                new Variable { Name = "DCVoltage", Type = "Double", Access = "Read", Value = 680, EngineeringUnit = "V" },
+                                new Variable { Name = "Efficiency", Type = "Double", Access = "Read", Value = 97.5, EngineeringUnit = "%" },
+                                new Variable { Name = "Temperature", Type = "Double", Access = "Read", Value = 42, EngineeringUnit = "°C",
+                                    Alarm = new AlarmConfig { HighLimit = 65, HighHighLimit = 75 } },
+                                new Variable { Name = "Online", Type = "Boolean", Access = "Read", Value = true },
+                                new Variable { Name = "EnergyToday", Type = "Double", Access = "Read", Value = 320.5, EngineeringUnit = "kWh",
+                                    DataLogging = new DataLoggingConfig { Enabled = true } },
+                            ]},
+                            new Folder { Name = "INV02", Variables =
+                            [
+                                new Variable { Name = "ACPower", Type = "Double", Access = "Read", Value = 44.8, EngineeringUnit = "kW",
+                                    DataLogging = new DataLoggingConfig { Enabled = true } },
+                                new Variable { Name = "Online", Type = "Boolean", Access = "Read", Value = true },
+                                new Variable { Name = "EnergyToday", Type = "Double", Access = "Read", Value = 315.0, EngineeringUnit = "kWh" },
+                            ]},
+                        ]
+                    },
+                    new Folder
+                    {
+                        Name = "WeatherStation",
+                        Variables =
+                        [
+                            new Variable { Name = "Irradiance", Type = "Double", Access = "Read", Value = 850, EngineeringUnit = "W/m²",
+                                DataLogging = new DataLoggingConfig { Enabled = true } },
+                            new Variable { Name = "AmbientTemp", Type = "Double", Access = "Read", Value = 28, EngineeringUnit = "°C" },
+                            new Variable { Name = "WindSpeed", Type = "Double", Access = "Read", Value = 3.5, EngineeringUnit = "m/s" },
+                            new Variable { Name = "ModuleTemp", Type = "Double", Access = "Read", Value = 45, EngineeringUnit = "°C" },
+                        ]
+                    },
+                    new Folder
+                    {
+                        Name = "Grid",
+                        Variables =
+                        [
+                            new Variable { Name = "TotalExport", Type = "Double", Access = "Read", Value = 90.0, EngineeringUnit = "kW",
+                                DataLogging = new DataLoggingConfig { Enabled = true } },
+                            new Variable { Name = "GridFrequency", Type = "Double", Access = "Read", Value = 50.01, EngineeringUnit = "Hz" },
+                            new Variable { Name = "GridVoltage", Type = "Double", Access = "Read", Value = 400, EngineeringUnit = "V" },
+                            new Variable { Name = "PowerFactor", Type = "Double", Access = "Read", Value = 0.99 },
+                        ]
+                    }
+                ]
+            },
+            Server = new ServerSettings(),
+            Screens =
+            [
+                new ScreenConfig { Name = "Plant Overview", Width = 1400, Height = 900, Background = "#1a1a2e" },
+                new ScreenConfig { Name = "Inverter Detail", Width = 1200, Height = 800, Background = "#1a1a2e" },
+                new ScreenConfig { Name = "Performance Charts", Width = 1200, Height = 800, Background = "#1a1a2e" },
+                new ScreenConfig { Name = "Alarms", Width = 1200, Height = 800, Background = "#1a1a2e" },
+            ]
+        };
+        AddScreenHeader(model.Screens[0], "\u26A1", "Plant Overview");
+        AddScreenHeader(model.Screens[1], "\u2699", "Inverter Detail");
+        AddScreenHeader(model.Screens[2], "\u2197", "Performance Charts");
+        AddScreenHeader(model.Screens[3], "\u26A0", "Alarms");
+        model.Screens[0].Symbols.Add(new ScreenSymbol { Id = "sym_g1", Type = "gauge", X = 60, Y = 80, Width = 200, Height = 200, Label = "INV01 Power", VariablePath = "Root.Inverters.INV01.ACPower", MinValue = 0, MaxValue = 60, GaugeUnit = "kW", Fill = "#3b82f6" });
+        model.Screens[0].Symbols.Add(new ScreenSymbol { Id = "sym_g2", Type = "gauge", X = 290, Y = 80, Width = 200, Height = 200, Label = "INV02 Power", VariablePath = "Root.Inverters.INV02.ACPower", MinValue = 0, MaxValue = 60, GaugeUnit = "kW", Fill = "#3b82f6" });
+        model.Screens[0].Symbols.Add(new ScreenSymbol { Id = "sym_g3", Type = "gauge", X = 520, Y = 80, Width = 200, Height = 200, Label = "Irradiance", VariablePath = "Root.WeatherStation.Irradiance", MinValue = 0, MaxValue = 1200, GaugeUnit = "W/m\u00B2", Fill = "#f59e0b" });
+        model.Screens[0].Symbols.Add(new ScreenSymbol { Id = "sym_nd1", Type = "numericdisplay", X = 800, Y = 80, Width = 250, Height = 60, Label = "Grid Export", VariablePath = "Root.Grid.TotalExport", Fill = "#1e293b", Stroke = "#334155", GaugeUnit = "kW" });
+        model.Screens[0].Symbols.Add(new ScreenSymbol { Id = "sym_nd2", Type = "numericdisplay", X = 800, Y = 160, Width = 250, Height = 60, Label = "Grid Freq", VariablePath = "Root.Grid.GridFrequency", Fill = "#1e293b", Stroke = "#334155", GaugeUnit = "Hz" });
+        model.Screens[0].Symbols.Add(new ScreenSymbol { Id = "sym_i1", Type = "indicator", X = 60, Y = 310, Width = 160, Height = 45, Label = "INV01 Online", VariablePath = "Root.Inverters.INV01.Online", Fill = "#10b981" });
+        model.Screens[0].Symbols.Add(new ScreenSymbol { Id = "sym_i2", Type = "indicator", X = 240, Y = 310, Width = 160, Height = 45, Label = "INV02 Online", VariablePath = "Root.Inverters.INV02.Online", Fill = "#10b981" });
+        model.Screens[0].Symbols.Add(new ScreenSymbol { Id = "sym_nd3", Type = "numericdisplay", X = 420, Y = 300, Width = 200, Height = 55, Label = "Ambient Temp", VariablePath = "Root.WeatherStation.AmbientTemp", Fill = "#1e293b", Stroke = "#334155", GaugeUnit = "\u00B0C" });
+        model.Screens[1].Symbols.Add(new ScreenSymbol { Id = "sym_g4", Type = "gauge", X = 60, Y = 70, Width = 200, Height = 200, Label = "AC Power", VariablePath = "Root.Inverters.INV01.ACPower", MinValue = 0, MaxValue = 60, GaugeUnit = "kW", Fill = "#3b82f6" });
+        model.Screens[1].Symbols.Add(new ScreenSymbol { Id = "sym_g5", Type = "gauge", X = 290, Y = 70, Width = 200, Height = 200, Label = "DC Voltage", VariablePath = "Root.Inverters.INV01.DCVoltage", MinValue = 0, MaxValue = 1000, GaugeUnit = "V", Fill = "#8b5cf6" });
+        model.Screens[1].Symbols.Add(new ScreenSymbol { Id = "sym_g6", Type = "gauge", X = 520, Y = 70, Width = 200, Height = 200, Label = "Efficiency", VariablePath = "Root.Inverters.INV01.Efficiency", MinValue = 90, MaxValue = 100, GaugeUnit = "%", Fill = "#10b981" });
+        model.Screens[1].Symbols.Add(new ScreenSymbol { Id = "sym_g7", Type = "gauge", X = 780, Y = 70, Width = 200, Height = 200, Label = "Temp", VariablePath = "Root.Inverters.INV01.Temperature", MinValue = 0, MaxValue = 80, GaugeUnit = "\u00B0C", Fill = "#ef4444" });
+        model.Screens[1].Symbols.Add(new ScreenSymbol { Id = "sym_nd4", Type = "numericdisplay", X = 60, Y = 300, Width = 250, Height = 60, Label = "Energy Today", VariablePath = "Root.Inverters.INV01.EnergyToday", Fill = "#1e293b", Stroke = "#334155", GaugeUnit = "kWh" });
+        model.Screens[2].Symbols.Add(new ScreenSymbol { Id = "sym_hda1", Type = "hdachart", X = 30, Y = 60, Width = 1140, Height = 350, Label = "Power Output", HdaVariablePaths = new List<string> { "Root.Inverters.INV01.ACPower", "Root.Inverters.INV02.ACPower", "Root.Grid.TotalExport" }, HdaTimeRangeMinutes = 240, Fill = "#1e293b", Stroke = "#334155" });
+        model.Screens[2].Symbols.Add(new ScreenSymbol { Id = "sym_hda2", Type = "hdachart", X = 30, Y = 430, Width = 1140, Height = 250, Label = "Weather", HdaVariablePaths = new List<string> { "Root.WeatherStation.Irradiance", "Root.WeatherStation.AmbientTemp" }, HdaTimeRangeMinutes = 240, Fill = "#1e293b", Stroke = "#334155" });
+        model.Screens[3].Symbols.Add(new ScreenSymbol { Id = "sym_al1", Type = "alarmlist", X = 20, Y = 60, Width = 1160, Height = 450, Label = "Active Alarms", Fill = "#1e293b", Stroke = "#334155" });
+        model.Screens[3].Symbols.Add(new ScreenSymbol { Id = "sym_el1", Type = "eventlog", X = 20, Y = 530, Width = 1160, Height = 200, Label = "Event Log", Fill = "#1e293b", Stroke = "#334155" });
+        AddNavigationBar(model.Screens);
+        return model;
+    }
+
+    private static NodeModel BuildWaterTreatment()
+    {
+        var model = new NodeModel
+        {
+            Folder = new Folder
+            {
+                Name = "Root",
+                Folders =
+                [
+                    new Folder
+                    {
+                        Name = "Intake",
+                        Variables =
+                        [
+                            new Variable { Name = "FlowRate", Type = "Double", Access = "Read", Value = 150, EngineeringUnit = "m³/h",
+                                DataLogging = new DataLoggingConfig { Enabled = true } },
+                            new Variable { Name = "Pump1Running", Type = "Boolean", Access = "ReadWrite", Value = true },
+                            new Variable { Name = "Pump2Running", Type = "Boolean", Access = "ReadWrite", Value = false },
+                            new Variable { Name = "WaterLevel", Type = "Double", Access = "Read", Value = 3.5, EngineeringUnit = "m",
+                                Alarm = new AlarmConfig { HighLimit = 4.5, LowLimit = 1.0 } },
+                        ]
+                    },
+                    new Folder
+                    {
+                        Name = "Treatment",
+                        Variables =
+                        [
+                            new Variable { Name = "pH", Type = "Double", Access = "Read", Value = 7.2,
+                                Alarm = new AlarmConfig { HighLimit = 8.5, LowLimit = 6.5 },
+                                DataLogging = new DataLoggingConfig { Enabled = true } },
+                            new Variable { Name = "Turbidity", Type = "Double", Access = "Read", Value = 0.8, EngineeringUnit = "NTU",
+                                Alarm = new AlarmConfig { HighLimit = 4.0 } },
+                            new Variable { Name = "Chlorine", Type = "Double", Access = "Read", Value = 1.2, EngineeringUnit = "mg/L",
+                                Alarm = new AlarmConfig { HighLimit = 2.0, LowLimit = 0.5 } },
+                            new Variable { Name = "DosingPumpOn", Type = "Boolean", Access = "ReadWrite", Value = true },
+                        ]
+                    },
+                    new Folder
+                    {
+                        Name = "Distribution",
+                        Variables =
+                        [
+                            new Variable { Name = "Pressure", Type = "Double", Access = "Read", Value = 3.8, EngineeringUnit = "bar",
+                                Alarm = new AlarmConfig { HighLimit = 6.0, LowLimit = 2.0 },
+                                DataLogging = new DataLoggingConfig { Enabled = true } },
+                            new Variable { Name = "PumpRunning", Type = "Boolean", Access = "ReadWrite", Value = true },
+                            new Variable { Name = "TotalFlow", Type = "Double", Access = "Read", Value = 25000, EngineeringUnit = "m³",
+                                DataLogging = new DataLoggingConfig { Enabled = true } },
+                        ]
+                    }
+                ]
+            },
+            Server = new ServerSettings(),
+            Screens =
+            [
+                new ScreenConfig { Name = "Plant Overview", Width = 1400, Height = 900, Background = "#1a1a2e" },
+                new ScreenConfig { Name = "Water Quality", Width = 1200, Height = 800, Background = "#1a1a2e" },
+                new ScreenConfig { Name = "Pumps & Valves", Width = 1200, Height = 800, Background = "#1a1a2e" },
+                new ScreenConfig { Name = "Trends", Width = 1200, Height = 800, Background = "#1a1a2e" },
+                new ScreenConfig { Name = "Alarms", Width = 1200, Height = 800, Background = "#1a1a2e" },
+            ]
+        };
+        AddScreenHeader(model.Screens[0], "\u2623", "Plant Overview");
+        AddScreenHeader(model.Screens[1], "\u2622", "Water Quality");
+        AddScreenHeader(model.Screens[2], "\u2699", "Pumps & Valves");
+        AddScreenHeader(model.Screens[3], "\u2197", "Trends");
+        AddScreenHeader(model.Screens[4], "\u26A0", "Alarms");
+        // Plant Overview: flow + levels + status
+        model.Screens[0].Symbols.Add(new ScreenSymbol { Id = "sym_g1", Type = "gauge", X = 60, Y = 80, Width = 200, Height = 200, Label = "Flow Rate", VariablePath = "Root.Intake.FlowRate", MinValue = 0, MaxValue = 300, GaugeUnit = "m\u00B3/h", Fill = "#3b82f6" });
+        model.Screens[0].Symbols.Add(new ScreenSymbol { Id = "sym_g2", Type = "gauge", X = 290, Y = 80, Width = 200, Height = 200, Label = "Water Level", VariablePath = "Root.Intake.WaterLevel", MinValue = 0, MaxValue = 5, GaugeUnit = "m", Fill = "#10b981" });
+        model.Screens[0].Symbols.Add(new ScreenSymbol { Id = "sym_g3", Type = "gauge", X = 520, Y = 80, Width = 200, Height = 200, Label = "Pressure", VariablePath = "Root.Distribution.Pressure", MinValue = 0, MaxValue = 8, GaugeUnit = "bar", Fill = "#8b5cf6" });
+        model.Screens[0].Symbols.Add(new ScreenSymbol { Id = "sym_nd1", Type = "numericdisplay", X = 800, Y = 80, Width = 250, Height = 60, Label = "Total Flow", VariablePath = "Root.Distribution.TotalFlow", Fill = "#1e293b", Stroke = "#334155", GaugeUnit = "m\u00B3" });
+        model.Screens[0].Symbols.Add(new ScreenSymbol { Id = "sym_i1", Type = "indicator", X = 60, Y = 310, Width = 160, Height = 45, Label = "Pump 1", VariablePath = "Root.Intake.Pump1Running", Fill = "#3b82f6" });
+        model.Screens[0].Symbols.Add(new ScreenSymbol { Id = "sym_i2", Type = "indicator", X = 240, Y = 310, Width = 160, Height = 45, Label = "Pump 2", VariablePath = "Root.Intake.Pump2Running", Fill = "#3b82f6" });
+        model.Screens[0].Symbols.Add(new ScreenSymbol { Id = "sym_i3", Type = "indicator", X = 420, Y = 310, Width = 160, Height = 45, Label = "Dosing Pump", VariablePath = "Root.Treatment.DosingPumpOn", Fill = "#10b981" });
+        model.Screens[0].Symbols.Add(new ScreenSymbol { Id = "sym_i4", Type = "indicator", X = 600, Y = 310, Width = 160, Height = 45, Label = "Dist Pump", VariablePath = "Root.Distribution.PumpRunning", Fill = "#3b82f6" });
+        // Water Quality
+        model.Screens[1].Symbols.Add(new ScreenSymbol { Id = "sym_g4", Type = "gauge", X = 60, Y = 70, Width = 200, Height = 200, Label = "pH", VariablePath = "Root.Treatment.pH", MinValue = 4, MaxValue = 10, GaugeUnit = "", Fill = "#10b981" });
+        model.Screens[1].Symbols.Add(new ScreenSymbol { Id = "sym_g5", Type = "gauge", X = 300, Y = 70, Width = 200, Height = 200, Label = "Turbidity", VariablePath = "Root.Treatment.Turbidity", MinValue = 0, MaxValue = 5, GaugeUnit = "NTU", Fill = "#f59e0b" });
+        model.Screens[1].Symbols.Add(new ScreenSymbol { Id = "sym_g6", Type = "gauge", X = 540, Y = 70, Width = 200, Height = 200, Label = "Chlorine", VariablePath = "Root.Treatment.Chlorine", MinValue = 0, MaxValue = 3, GaugeUnit = "mg/L", Fill = "#3b82f6" });
+        model.Screens[1].Symbols.Add(new ScreenSymbol { Id = "sym_pb1", Type = "progressbar", X = 60, Y = 300, Width = 500, Height = 40, Label = "Water Level", VariablePath = "Root.Intake.WaterLevel", MinValue = 0, MaxValue = 5, Fill = "#3b82f6" });
+        // Pumps & Valves
+        model.Screens[2].Symbols.Add(new ScreenSymbol { Id = "sym_sw1", Type = "switch", X = 60, Y = 70, Width = 140, Height = 50, Label = "Pump 1", VariablePath = "Root.Intake.Pump1Running" });
+        model.Screens[2].Symbols.Add(new ScreenSymbol { Id = "sym_sw2", Type = "switch", X = 220, Y = 70, Width = 140, Height = 50, Label = "Pump 2", VariablePath = "Root.Intake.Pump2Running" });
+        model.Screens[2].Symbols.Add(new ScreenSymbol { Id = "sym_sw3", Type = "switch", X = 380, Y = 70, Width = 140, Height = 50, Label = "Dosing", VariablePath = "Root.Treatment.DosingPumpOn" });
+        model.Screens[2].Symbols.Add(new ScreenSymbol { Id = "sym_sw4", Type = "switch", X = 540, Y = 70, Width = 140, Height = 50, Label = "Dist Pump", VariablePath = "Root.Distribution.PumpRunning" });
+        model.Screens[2].Symbols.Add(new ScreenSymbol { Id = "sym_g7", Type = "gauge", X = 60, Y = 150, Width = 200, Height = 200, Label = "Flow Rate", VariablePath = "Root.Intake.FlowRate", MinValue = 0, MaxValue = 300, GaugeUnit = "m\u00B3/h", Fill = "#3b82f6" });
+        model.Screens[2].Symbols.Add(new ScreenSymbol { Id = "sym_g8", Type = "gauge", X = 300, Y = 150, Width = 200, Height = 200, Label = "Dist Pressure", VariablePath = "Root.Distribution.Pressure", MinValue = 0, MaxValue = 8, GaugeUnit = "bar", Fill = "#8b5cf6" });
+        // Trends
+        model.Screens[3].Symbols.Add(new ScreenSymbol { Id = "sym_hda1", Type = "hdachart", X = 30, Y = 60, Width = 1140, Height = 300, Label = "Quality Trends", HdaVariablePaths = new List<string> { "Root.Treatment.pH", "Root.Treatment.Turbidity", "Root.Treatment.Chlorine" }, HdaTimeRangeMinutes = 120, Fill = "#1e293b", Stroke = "#334155" });
+        model.Screens[3].Symbols.Add(new ScreenSymbol { Id = "sym_hda2", Type = "hdachart", X = 30, Y = 380, Width = 1140, Height = 280, Label = "Flow & Pressure", HdaVariablePaths = new List<string> { "Root.Intake.FlowRate", "Root.Distribution.Pressure" }, HdaTimeRangeMinutes = 120, Fill = "#1e293b", Stroke = "#334155" });
+        // Alarms
+        model.Screens[4].Symbols.Add(new ScreenSymbol { Id = "sym_al1", Type = "alarmlist", X = 20, Y = 60, Width = 1160, Height = 450, Label = "Active Alarms", Fill = "#1e293b", Stroke = "#334155" });
+        model.Screens[4].Symbols.Add(new ScreenSymbol { Id = "sym_el1", Type = "eventlog", X = 20, Y = 530, Width = 1160, Height = 200, Label = "Event Log", Fill = "#1e293b", Stroke = "#334155" });
+        AddNavigationBar(model.Screens);
+        return model;
+    }
+
+    private static NodeModel BuildHvacSystem()
+    {
+        var model = new NodeModel
+        {
+            Folder = new Folder
+            {
+                Name = "Root",
+                Folders =
+                [
+                    new Folder
+                    {
+                        Name = "AHU1",
+                        Variables =
+                        [
+                            new Variable { Name = "SupplyAirTemp", Type = "Double", Access = "Read", Value = 22.0, EngineeringUnit = "°C",
+                                DataLogging = new DataLoggingConfig { Enabled = true } },
+                            new Variable { Name = "ReturnAirTemp", Type = "Double", Access = "Read", Value = 24.0, EngineeringUnit = "°C" },
+                            new Variable { Name = "OutsideAirTemp", Type = "Double", Access = "Read", Value = 32.0, EngineeringUnit = "°C" },
+                            new Variable { Name = "SupplyFanRunning", Type = "Boolean", Access = "ReadWrite", Value = true },
+                            new Variable { Name = "SupplyFanSpeed", Type = "Double", Access = "ReadWrite", Value = 70, EngineeringUnit = "%" },
+                            new Variable { Name = "ReturnFanRunning", Type = "Boolean", Access = "ReadWrite", Value = true },
+                            new Variable { Name = "CoolingValve", Type = "Double", Access = "ReadWrite", Value = 45, EngineeringUnit = "%" },
+                            new Variable { Name = "HeatingValve", Type = "Double", Access = "ReadWrite", Value = 0, EngineeringUnit = "%" },
+                            new Variable { Name = "FilterAlarm", Type = "Boolean", Access = "Read", Value = false,
+                                Alarm = new AlarmConfig { HighLimit = 1 } },
+                        ]
+                    },
+                    new Folder
+                    {
+                        Name = "Chiller",
+                        Variables =
+                        [
+                            new Variable { Name = "Running", Type = "Boolean", Access = "ReadWrite", Value = true },
+                            new Variable { Name = "SupplyWaterTemp", Type = "Double", Access = "Read", Value = 7.0, EngineeringUnit = "°C",
+                                DataLogging = new DataLoggingConfig { Enabled = true } },
+                            new Variable { Name = "ReturnWaterTemp", Type = "Double", Access = "Read", Value = 12.0, EngineeringUnit = "°C" },
+                            new Variable { Name = "PowerConsumption", Type = "Double", Access = "Read", Value = 85.0, EngineeringUnit = "kW",
+                                DataLogging = new DataLoggingConfig { Enabled = true } },
+                            new Variable { Name = "COP", Type = "Double", Access = "Read", Value = 4.2 },
+                            new Variable { Name = "Fault", Type = "Boolean", Access = "Read", Value = false,
+                                Alarm = new AlarmConfig { HighLimit = 1 } },
+                        ]
+                    },
+                    new Folder
+                    {
+                        Name = "Zones",
+                        Folders =
+                        [
+                            new Folder { Name = "Zone1", Variables =
+                            [
+                                new Variable { Name = "Temperature", Type = "Double", Access = "Read", Value = 22.5, EngineeringUnit = "°C",
+                                    Alarm = new AlarmConfig { HighLimit = 27, LowLimit = 18 } },
+                                new Variable { Name = "Setpoint", Type = "Double", Access = "ReadWrite", Value = 22.0, EngineeringUnit = "°C" },
+                                new Variable { Name = "VAVDamper", Type = "Double", Access = "ReadWrite", Value = 60, EngineeringUnit = "%" },
+                            ]},
+                            new Folder { Name = "Zone2", Variables =
+                            [
+                                new Variable { Name = "Temperature", Type = "Double", Access = "Read", Value = 23.0, EngineeringUnit = "°C" },
+                                new Variable { Name = "Setpoint", Type = "Double", Access = "ReadWrite", Value = 22.0, EngineeringUnit = "°C" },
+                                new Variable { Name = "VAVDamper", Type = "Double", Access = "ReadWrite", Value = 55, EngineeringUnit = "%" },
+                            ]},
+                        ]
+                    }
+                ]
+            },
+            Server = new ServerSettings(),
+            Screens =
+            [
+                new ScreenConfig { Name = "HVAC Overview", Width = 1400, Height = 900, Background = "#1a1a2e" },
+                new ScreenConfig { Name = "AHU Detail", Width = 1200, Height = 800, Background = "#1a1a2e" },
+                new ScreenConfig { Name = "Chiller Plant", Width = 1200, Height = 800, Background = "#1a1a2e" },
+                new ScreenConfig { Name = "Alarms & Trends", Width = 1200, Height = 800, Background = "#1a1a2e" },
+            ]
+        };
+        AddScreenHeader(model.Screens[0], "\u2744", "HVAC Overview");
+        AddScreenHeader(model.Screens[1], "\u2699", "AHU Detail");
+        AddScreenHeader(model.Screens[2], "\u2603", "Chiller Plant");
+        AddScreenHeader(model.Screens[3], "\u26A0", "Alarms & Trends");
+        // HVAC Overview: zone temps + AHU + chiller status
+        model.Screens[0].Symbols.Add(new ScreenSymbol { Id = "sym_g1", Type = "gauge", X = 60, Y = 80, Width = 200, Height = 200, Label = "Supply Air", VariablePath = "Root.AHU1.SupplyAirTemp", MinValue = 10, MaxValue = 35, GaugeUnit = "\u00B0C", Fill = "#3b82f6" });
+        model.Screens[0].Symbols.Add(new ScreenSymbol { Id = "sym_g2", Type = "gauge", X = 290, Y = 80, Width = 200, Height = 200, Label = "Zone 1 Temp", VariablePath = "Root.Zones.Zone1.Temperature", MinValue = 15, MaxValue = 30, GaugeUnit = "\u00B0C", Fill = "#10b981" });
+        model.Screens[0].Symbols.Add(new ScreenSymbol { Id = "sym_g3", Type = "gauge", X = 520, Y = 80, Width = 200, Height = 200, Label = "Zone 2 Temp", VariablePath = "Root.Zones.Zone2.Temperature", MinValue = 15, MaxValue = 30, GaugeUnit = "\u00B0C", Fill = "#10b981" });
+        model.Screens[0].Symbols.Add(new ScreenSymbol { Id = "sym_g4", Type = "gauge", X = 780, Y = 80, Width = 200, Height = 200, Label = "Outdoor", VariablePath = "Root.AHU1.OutsideAirTemp", MinValue = -10, MaxValue = 45, GaugeUnit = "\u00B0C", Fill = "#f59e0b" });
+        model.Screens[0].Symbols.Add(new ScreenSymbol { Id = "sym_i1", Type = "indicator", X = 60, Y = 310, Width = 160, Height = 45, Label = "Supply Fan", VariablePath = "Root.AHU1.SupplyFanRunning", Fill = "#3b82f6" });
+        model.Screens[0].Symbols.Add(new ScreenSymbol { Id = "sym_i2", Type = "indicator", X = 240, Y = 310, Width = 160, Height = 45, Label = "Return Fan", VariablePath = "Root.AHU1.ReturnFanRunning", Fill = "#3b82f6" });
+        model.Screens[0].Symbols.Add(new ScreenSymbol { Id = "sym_i3", Type = "indicator", X = 420, Y = 310, Width = 160, Height = 45, Label = "Chiller", VariablePath = "Root.Chiller.Running", Fill = "#10b981" });
+        model.Screens[0].Symbols.Add(new ScreenSymbol { Id = "sym_i4", Type = "indicator", X = 600, Y = 310, Width = 160, Height = 45, Label = "Filter Alarm", VariablePath = "Root.AHU1.FilterAlarm", Fill = "#ef4444" });
+        // AHU Detail
+        model.Screens[1].Symbols.Add(new ScreenSymbol { Id = "sym_g5", Type = "gauge", X = 60, Y = 70, Width = 200, Height = 200, Label = "Supply Air", VariablePath = "Root.AHU1.SupplyAirTemp", MinValue = 10, MaxValue = 35, GaugeUnit = "\u00B0C", Fill = "#3b82f6" });
+        model.Screens[1].Symbols.Add(new ScreenSymbol { Id = "sym_g6", Type = "gauge", X = 290, Y = 70, Width = 200, Height = 200, Label = "Return Air", VariablePath = "Root.AHU1.ReturnAirTemp", MinValue = 10, MaxValue = 35, GaugeUnit = "\u00B0C", Fill = "#f59e0b" });
+        model.Screens[1].Symbols.Add(new ScreenSymbol { Id = "sym_g7", Type = "gauge", X = 520, Y = 70, Width = 200, Height = 200, Label = "Outside Air", VariablePath = "Root.AHU1.OutsideAirTemp", MinValue = -10, MaxValue = 45, GaugeUnit = "\u00B0C", Fill = "#ef4444" });
+        model.Screens[1].Symbols.Add(new ScreenSymbol { Id = "sym_sl1", Type = "hslider", X = 60, Y = 300, Width = 300, Height = 40, Label = "Fan Speed", VariablePath = "Root.AHU1.SupplyFanSpeed", MinValue = 0, MaxValue = 100 });
+        model.Screens[1].Symbols.Add(new ScreenSymbol { Id = "sym_sl2", Type = "hslider", X = 60, Y = 370, Width = 300, Height = 40, Label = "Cooling Valve", VariablePath = "Root.AHU1.CoolingValve", MinValue = 0, MaxValue = 100 });
+        model.Screens[1].Symbols.Add(new ScreenSymbol { Id = "sym_sl3", Type = "hslider", X = 60, Y = 440, Width = 300, Height = 40, Label = "Heating Valve", VariablePath = "Root.AHU1.HeatingValve", MinValue = 0, MaxValue = 100 });
+        model.Screens[1].Symbols.Add(new ScreenSymbol { Id = "sym_eb1", Type = "editbox", X = 400, Y = 300, Width = 200, Height = 50, Label = "Zone 1 SP", VariablePath = "Root.Zones.Zone1.Setpoint", EditBoxStep = 0.5, EditBoxFormat = "F1" });
+        model.Screens[1].Symbols.Add(new ScreenSymbol { Id = "sym_eb2", Type = "editbox", X = 620, Y = 300, Width = 200, Height = 50, Label = "Zone 2 SP", VariablePath = "Root.Zones.Zone2.Setpoint", EditBoxStep = 0.5, EditBoxFormat = "F1" });
+        // Chiller Plant
+        model.Screens[2].Symbols.Add(new ScreenSymbol { Id = "sym_g8", Type = "gauge", X = 60, Y = 70, Width = 200, Height = 200, Label = "Supply Water", VariablePath = "Root.Chiller.SupplyWaterTemp", MinValue = 0, MaxValue = 15, GaugeUnit = "\u00B0C", Fill = "#3b82f6" });
+        model.Screens[2].Symbols.Add(new ScreenSymbol { Id = "sym_g9", Type = "gauge", X = 290, Y = 70, Width = 200, Height = 200, Label = "Return Water", VariablePath = "Root.Chiller.ReturnWaterTemp", MinValue = 0, MaxValue = 20, GaugeUnit = "\u00B0C", Fill = "#f59e0b" });
+        model.Screens[2].Symbols.Add(new ScreenSymbol { Id = "sym_nd1", Type = "numericdisplay", X = 520, Y = 70, Width = 200, Height = 60, Label = "Power", VariablePath = "Root.Chiller.PowerConsumption", Fill = "#1e293b", Stroke = "#334155", GaugeUnit = "kW" });
+        model.Screens[2].Symbols.Add(new ScreenSymbol { Id = "sym_nd2", Type = "numericdisplay", X = 520, Y = 150, Width = 200, Height = 60, Label = "COP", VariablePath = "Root.Chiller.COP", Fill = "#1e293b", Stroke = "#334155" });
+        model.Screens[2].Symbols.Add(new ScreenSymbol { Id = "sym_i5", Type = "indicator", X = 60, Y = 300, Width = 160, Height = 45, Label = "Chiller Running", VariablePath = "Root.Chiller.Running", Fill = "#10b981" });
+        model.Screens[2].Symbols.Add(new ScreenSymbol { Id = "sym_i6", Type = "indicator", X = 240, Y = 300, Width = 160, Height = 45, Label = "Chiller Fault", VariablePath = "Root.Chiller.Fault", Fill = "#ef4444" });
+        // Alarms & Trends
+        model.Screens[3].Symbols.Add(new ScreenSymbol { Id = "sym_al1", Type = "alarmlist", X = 20, Y = 60, Width = 1160, Height = 280, Label = "Active Alarms", Fill = "#1e293b", Stroke = "#334155" });
+        model.Screens[3].Symbols.Add(new ScreenSymbol { Id = "sym_hda1", Type = "hdachart", X = 20, Y = 360, Width = 1160, Height = 320, Label = "Temperature Trends", HdaVariablePaths = new List<string> { "Root.AHU1.SupplyAirTemp", "Root.Chiller.SupplyWaterTemp", "Root.Zones.Zone1.Temperature" }, HdaTimeRangeMinutes = 120, Fill = "#1e293b", Stroke = "#334155" });
+        AddNavigationBar(model.Screens);
+        return model;
+    }
+
+    /// <summary>Accepts JSON numbers/booleans when the target CLR type is string. AI models emit unquoted values.</summary>
+    private sealed class LenientStringConverter : JsonConverter<string>
+    {
+        public override string? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            return reader.TokenType switch
+            {
+                JsonTokenType.String => reader.GetString(),
+                JsonTokenType.Number => reader.TryGetInt64(out var l) ? l.ToString() : reader.GetDouble().ToString(System.Globalization.CultureInfo.InvariantCulture),
+                JsonTokenType.True => "true",
+                JsonTokenType.False => "false",
+                JsonTokenType.Null => null,
+                _ => throw new JsonException()
+            };
+        }
+
+        public override void Write(Utf8JsonWriter writer, string value, JsonSerializerOptions options)
+            => writer.WriteStringValue(value);
+    }
+}

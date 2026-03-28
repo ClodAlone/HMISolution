@@ -111,6 +111,15 @@ public class NodeEditorService
         NotifyStateChanged();
     }
 
+    public void NewFileFromModel(NodeModel model)
+    {
+        var proj = new ProjectNode(model, "") { Name = "New Project" };
+        AddProjectNode(proj);
+        ServerEndpointUrl = model.Server.EndpointUrl;
+        HasUnsavedChanges = true;
+        NotifyStateChanged();
+    }
+
     public string[] GetAvailableFiles()
     {
         // Look for nodes.json files in common locations

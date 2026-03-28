@@ -1,7 +1,7 @@
 @using ServerEditorWeb.Models
 @using ServerEditorWeb.Services
 @using SharedModels
-@implements IDisposable
+@implements IAsyncDisposable
 
 <div class="screen-editor-panel">
     @if (GetScreen() is not ScreenConfig screen)
@@ -119,9 +119,7 @@
 
         <div class="screen-editor-body">
             @* SVG Canvas *@
-            <div class="screen-canvas-wrap"
-                 ondragover="event.preventDefault();"
-                 @ondrop="OnCanvasDrop">
+            <div class="screen-canvas-wrap">
                 <svg xmlns="http://www.w3.org/2000/svg"
                      width="@screen.Width" height="@screen.Height"
                      class="screen-canvas"
@@ -1026,8 +1024,15 @@
                                         case "kpiwidget":
                                             @RenderKpiEditorPreview(sym)
                                             break;
+                                        case "nlquery":
+                                            <rect width="@sym.Width" height="@sym.Height"
+                                                  fill="#0f172a" stroke="@sym.Stroke" stroke-width="@sym.StrokeWidth" rx="4" />
+                                            @RenderSvgText(sym.Width / 2, 16, "middle", "middle", "#e2e8f0", ScaledFontSize(11, sym), "🤖 NL Query")
+                                            <line x1="4" y1="26" x2="@(sym.Width - 4)" y2="26" stroke="#334155" stroke-width="1" />
+                                            @RenderSvgText(sym.Width / 2, 40, "middle", "middle", "#64748b", ScaledFontSize(9, sym), "(AI-powered chat at runtime)")
+                                            break;
                             }
-                            @if (!string.IsNullOrEmpty(labelText ?? sym.Label) && sym.Type is not "text" and not "button" and not "animtext" and not "numericdisplay" and not "progressbar" and not "dropdown" and not "sparkline" and not "colorzone" and not "alarmbanner" and not "conveyor" and not "piechart" and not "barchart" and not "navbutton" and not "heatexchanger" and not "popup" and not "setpointramp" and not "flowmeter" and not "xyplot" and not "pdfviewer" and not "alarmanalytics" and not "kpiwidget")
+                            @if (!string.IsNullOrEmpty(labelText ?? sym.Label) && sym.Type is not "text" and not "button" and not "animtext" and not "numericdisplay" and not "progressbar" and not "dropdown" and not "sparkline" and not "colorzone" and not "alarmbanner" and not "conveyor" and not "piechart" and not "barchart" and not "navbutton" and not "heatexchanger" and not "popup" and not "setpointramp" and not "flowmeter" and not "xyplot" and not "pdfviewer" and not "alarmanalytics" and not "kpiwidget" and not "nlquery")
                             {
                                 @RenderSvgText(sym.Width / 2, sym.Height + 14, "middle", null, "#333", 11, labelText ?? sym.Label, sym)
                             }
@@ -1271,29 +1276,49 @@
         }
     }
 
-    private async Task OnCanvasDrop(DragEventArgs e)
+    // --- JS-based drag-and-drop (avoids chatty ondragover over SignalR) ---
+    private DotNetObjectReference<ScreenEditorPanel>? _dotNetRef;
+    private bool _canvasDropInitialized;
+    private TreeNode? _lastRenderedNode;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        var hasScreen = GetScreen() != null;
+        if (firstRender && hasScreen)
+        {
+            _dotNetRef = DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("canvasDrop.init", _dotNetRef);
+            _canvasDropInitialized = true;
+            _lastRenderedNode = Node;
+        }
+        else if (!_canvasDropInitialized && hasScreen)
+        {
+            // First time we have a screen after initial render
+            _dotNetRef ??= DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("canvasDrop.init", _dotNetRef);
+            _canvasDropInitialized = true;
+            _lastRenderedNode = Node;
+        }
+        else if (_canvasDropInitialized && hasScreen && _lastRenderedNode != Node)
+        {
+            // Screen changed - re-attach to the new SVG element
+            _lastRenderedNode = Node;
+            await JS.InvokeVoidAsync("canvasDrop.reinit");
+        }
+    }
+
+    [JSInvokable]
+    public void JsOnCanvasDrop(double dropX, double dropY)
     {
         var screen = GetScreen();
         if (screen == null) return;
-
-        // Compute drop position relative to the SVG canvas
-        double dropX = -1, dropY = -1;
-        try
-        {
-            var rect = await JS.InvokeAsync<double[]>("eval",
-                "(function(){ var r = document.querySelector('.screen-canvas')?.getBoundingClientRect(); return r ? [r.left, r.top] : [0,0]; })()");
-            if (rect is { Length: 2 })
-            {
-                dropX = e.ClientX - rect[0];
-                dropY = e.ClientY - rect[1];
-            }
-        }
-        catch { /* fallback to auto-position */ }
 
         // Handle toolbox drag
         if (ScreenToolboxPanel.DraggedToolboxType is { } toolboxType)
         {
             AddSymbol(screen, toolboxType, dropX, dropY);
+            ScreenToolboxPanel.DraggedToolboxType = null;
+            StateHasChanged();
             return;
         }
 
@@ -1301,6 +1326,8 @@
         if (SymbolLibraryPanel.DraggedLibraryItem is { } libItem)
         {
             AddLibrarySymbol(screen, libItem, dropX, dropY);
+            SymbolLibraryPanel.DraggedLibraryItem = null;
+            StateHasChanged();
         }
     }
 
@@ -1365,10 +1392,10 @@
             Type = type,
             X = 50 + screen.Symbols.Count * 20 % (screen.Width - 100),
             Y = 50 + screen.Symbols.Count * 20 % (screen.Height - 80),
-            Width = type == "text" ? 120 : type == "line" ? 100 : type is "alarmlist" or "hdachart" or "hdagrid" or "eventlog" ? 500 : type == "editbox" ? 160 : type == "ipcamera" ? 320 : type == "recipe" ? 280 : type == "weeklyplanner" ? 500 : type == "reportviewer" ? 360 : type == "screenembed" ? 400 : type == "switch" ? 60 : type == "rotaryswitch" ? 80 : type == "knob" ? 100 : type == "hslider" ? 200 : type == "vslider" ? 40 : type == "button" ? 120 : type == "animtext" ? 240 : type == "progressbar" ? 200 : type == "numericdisplay" ? 140 : type == "ledarray" ? 240 : type == "pipe" ? 200 : type == "tank" ? 80 : type == "motorcontrol" ? 80 : type == "valve" ? 60 : type == "sparkline" ? 160 : type == "colorzone" ? 120 : type == "dropdown" ? 160 : type == "datatable" ? 400 : type == "alarmbanner" ? 300 : type == "conveyor" ? 200 : type == "piechart" ? 200 : type == "barchart" ? 200 : type == "navbutton" ? 140 : type == "heatexchanger" ? 120 : type == "popup" ? 100 : type == "setpointramp" ? 200 : type == "flowmeter" ? 80 : type == "xyplot" ? 300 : type == "pdfviewer" ? 400 : type == "alarmanalytics" ? 500 : type == "kpiwidget" ? 200 : 80,
-            Height = type == "text" ? 30 : type == "line" ? 2 : type == "indicator" ? 30 : type == "alarmlist" ? 250 : type is "hdachart" or "hdagrid" or "eventlog" ? 220 : type == "editbox" ? 32 : type == "ipcamera" ? 240 : type == "recipe" ? 300 : type == "weeklyplanner" ? 280 : type == "reportviewer" ? 200 : type == "screenembed" ? 300 : type == "switch" ? 30 : type == "rotaryswitch" ? 80 : type == "knob" ? 100 : type == "hslider" ? 40 : type == "vslider" ? 200 : type == "button" ? 36 : type == "animtext" ? 40 : type == "progressbar" ? 28 : type == "numericdisplay" ? 60 : type == "ledarray" ? 32 : type == "pipe" ? 20 : type == "tank" ? 120 : type == "motorcontrol" ? 80 : type == "valve" ? 40 : type == "sparkline" ? 40 : type == "colorzone" ? 60 : type == "dropdown" ? 32 : type == "datatable" ? 200 : type == "alarmbanner" ? 40 : type == "conveyor" ? 50 : type == "piechart" ? 200 : type == "barchart" ? 160 : type == "navbutton" ? 40 : type == "heatexchanger" ? 80 : type == "popup" ? 60 : type == "setpointramp" ? 60 : type == "flowmeter" ? 80 : type == "xyplot" ? 250 : type == "pdfviewer" ? 500 : type == "alarmanalytics" ? 300 : type == "kpiwidget" ? 200 : 40,
+            Width = type == "text" ? 120 : type == "line" ? 100 : type is "alarmlist" or "hdachart" or "hdagrid" or "eventlog" ? 500 : type == "editbox" ? 160 : type == "ipcamera" ? 320 : type == "recipe" ? 280 : type == "weeklyplanner" ? 500 : type == "reportviewer" ? 360 : type == "screenembed" ? 400 : type == "switch" ? 60 : type == "rotaryswitch" ? 80 : type == "knob" ? 100 : type == "hslider" ? 200 : type == "vslider" ? 40 : type == "button" ? 120 : type == "animtext" ? 240 : type == "progressbar" ? 200 : type == "numericdisplay" ? 140 : type == "ledarray" ? 240 : type == "pipe" ? 200 : type == "tank" ? 80 : type == "motorcontrol" ? 80 : type == "valve" ? 60 : type == "sparkline" ? 160 : type == "colorzone" ? 120 : type == "dropdown" ? 160 : type == "datatable" ? 400 : type == "alarmbanner" ? 300 : type == "conveyor" ? 200 : type == "piechart" ? 200 : type == "barchart" ? 200 : type == "navbutton" ? 140 : type == "heatexchanger" ? 120 : type == "popup" ? 100 : type == "setpointramp" ? 200 : type == "flowmeter" ? 80 : type == "xyplot" ? 300 : type == "pdfviewer" ? 400 : type == "alarmanalytics" ? 500 : type == "kpiwidget" ? 200 : type == "nlquery" ? 400 : 80,
+            Height = type == "text" ? 30 : type == "line" ? 2 : type == "indicator" ? 30 : type == "alarmlist" ? 250 : type is "hdachart" or "hdagrid" or "eventlog" ? 220 : type == "editbox" ? 32 : type == "ipcamera" ? 240 : type == "recipe" ? 300 : type == "weeklyplanner" ? 280 : type == "reportviewer" ? 200 : type == "screenembed" ? 300 : type == "switch" ? 30 : type == "rotaryswitch" ? 80 : type == "knob" ? 100 : type == "hslider" ? 40 : type == "vslider" ? 200 : type == "button" ? 36 : type == "animtext" ? 40 : type == "progressbar" ? 28 : type == "numericdisplay" ? 60 : type == "ledarray" ? 32 : type == "pipe" ? 20 : type == "tank" ? 120 : type == "motorcontrol" ? 80 : type == "valve" ? 40 : type == "sparkline" ? 40 : type == "colorzone" ? 60 : type == "dropdown" ? 32 : type == "datatable" ? 200 : type == "alarmbanner" ? 40 : type == "conveyor" ? 50 : type == "piechart" ? 200 : type == "barchart" ? 160 : type == "navbutton" ? 40 : type == "heatexchanger" ? 80 : type == "popup" ? 60 : type == "setpointramp" ? 60 : type == "flowmeter" ? 80 : type == "xyplot" ? 250 : type == "pdfviewer" ? 500 : type == "alarmanalytics" ? 300 : type == "kpiwidget" ? 200 : type == "nlquery" ? 300 : 40,
             Label = type == "text" ? "Label" : type == "alarmlist" ? "Alarm List" : type == "hdachart" ? "HDA Chart" : type == "hdagrid" ? "HDA Grid" : type == "eventlog" ? "Event Log" : type == "editbox" ? "" : type == "ipcamera" ? "" : type == "recipe" ? "" : type == "weeklyplanner" ? "" : type == "reportviewer" ? "" : type == "screenembed" ? "Embedded Screen" : type == "switch" ? "" : type == "rotaryswitch" ? "" : type is "knob" or "hslider" or "vslider" ? "" : type == "button" ? "Button" : type == "animtext" ? "Animated Text" : type is "progressbar" or "numericdisplay" or "ledarray" or "pipe" ? "" : "",
-            Fill = type == "indicator" ? "#44cc44" : type == "alarmlist" ? "#1a1a2e" : type is "hdachart" or "hdagrid" ? "#111827" : type == "eventlog" ? "#0f172a" : type == "editbox" ? "#1e293b" : type == "ipcamera" ? "#0a0a0a" : type == "recipe" ? "#1a1a2e" : type is "weeklyplanner" or "reportviewer" ? "#1a1a2e" : type == "screenembed" ? "#0f172a" : type == "switch" ? "#34c759" : type == "rotaryswitch" ? "#2d2d2d" : type == "knob" ? "#3a3a3a" : type is "hslider" or "vslider" ? "#1a1a2e" : type == "button" ? "#3b82f6" : type == "animtext" ? "#00e5ff" : type == "progressbar" ? "#3b82f6" : type == "numericdisplay" ? "#00e5ff" : type == "ledarray" ? "#22c55e" : type == "pipe" ? "#64748b" : type == "tank" ? "#3b82f6" : type == "motorcontrol" ? "#22c55e" : type == "valve" ? "#22c55e" : type == "sparkline" ? "#3b82f6" : type == "colorzone" ? "#334155" : type == "dropdown" ? "#1e293b" : type == "datatable" ? "#111827" : type == "alarmbanner" ? "#1e293b" : type == "conveyor" ? "#475569" : type == "piechart" ? "#0f172a" : type == "barchart" ? "#0f172a" : type == "navbutton" ? "#3b82f6" : type == "heatexchanger" ? "#64748b" : type == "popup" ? "#1e293b" : type == "setpointramp" ? "#0f172a" : type == "flowmeter" ? "#334155" : type == "xyplot" ? "#0f172a" : type == "pdfviewer" ? "#1e293b" : type == "alarmanalytics" ? "#0f172a" : type == "kpiwidget" ? "#0f172a" : "#4a90d9"
+            Fill = type == "indicator" ? "#44cc44" : type == "alarmlist" ? "#1a1a2e" : type is "hdachart" or "hdagrid" ? "#111827" : type == "eventlog" ? "#0f172a" : type == "editbox" ? "#1e293b" : type == "ipcamera" ? "#0a0a0a" : type == "recipe" ? "#1a1a2e" : type is "weeklyplanner" or "reportviewer" ? "#1a1a2e" : type == "screenembed" ? "#0f172a" : type == "switch" ? "#34c759" : type == "rotaryswitch" ? "#2d2d2d" : type == "knob" ? "#3a3a3a" : type is "hslider" or "vslider" ? "#1a1a2e" : type == "button" ? "#3b82f6" : type == "animtext" ? "#00e5ff" : type == "progressbar" ? "#3b82f6" : type == "numericdisplay" ? "#00e5ff" : type == "ledarray" ? "#22c55e" : type == "pipe" ? "#64748b" : type == "tank" ? "#3b82f6" : type == "motorcontrol" ? "#22c55e" : type == "valve" ? "#22c55e" : type == "sparkline" ? "#3b82f6" : type == "colorzone" ? "#334155" : type == "dropdown" ? "#1e293b" : type == "datatable" ? "#111827" : type == "alarmbanner" ? "#1e293b" : type == "conveyor" ? "#475569" : type == "piechart" ? "#0f172a" : type == "barchart" ? "#0f172a" : type == "navbutton" ? "#3b82f6" : type == "heatexchanger" ? "#64748b" : type == "popup" ? "#1e293b" : type == "setpointramp" ? "#0f172a" : type == "flowmeter" ? "#334155" : type == "xyplot" ? "#0f172a" : type == "pdfviewer" ? "#1e293b" : type == "alarmanalytics" ? "#0f172a" : type == "kpiwidget" ? "#0f172a" : type == "nlquery" ? "#0f172a" : "#4a90d9"
         };
 
         // Override position when dropped at a specific location
@@ -1763,6 +1790,12 @@
             sym.StrokeWidth = 1;
             sym.Label = "Alarm Analytics";
         }
+        if (type == "nlquery")
+        {
+            sym.Stroke = "#334155";
+            sym.StrokeWidth = 1;
+            sym.Label = "NL Query";
+        }
         if (type == "kpiwidget")
         {
             sym.Stroke = "#334155";
@@ -1832,6 +1865,7 @@
         "weeklyplanner" or "reportviewer" or "screenembed" => 8,
         "alarmlist" or "hdachart" or "hdagrid" or "eventlog" or "trend" or "alarmanalytics" => 12,
         "kpiwidget" => 4,
+        "nlquery" => 6,
         _ => 4
     };
 
@@ -1842,6 +1876,7 @@
         "gauge" or "svg" => 150,
         "alarmlist" or "hdachart" or "hdagrid" or "eventlog" => 280,
         "alarmanalytics" => 300,
+        "nlquery" => 300,
         "trend" => 300,
         "ipcamera" => 260,
         "recipe" => 320,
@@ -3383,10 +3418,15 @@
         OnChanged();
     }
 
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
         Opc.StateChanged -= OnOpcChanged;
         Editor.AnimationPreviewTick -= OnAnimationPreviewTick;
         _refreshTimer?.Dispose();
+        if (_canvasDropInitialized)
+        {
+            try { await JS.InvokeVoidAsync("canvasDrop.dispose"); } catch { }
+        }
+        _dotNetRef?.Dispose();
     }
 }
