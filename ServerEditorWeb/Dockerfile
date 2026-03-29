@@ -14,6 +14,10 @@ RUN dotnet publish ServerEditorWeb/ServerEditorWeb.csproj -c Release -o /app/pub
 
 # ---------- runtime ----------
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
+
+LABEL org.opencontainers.image.source="https://github.com/ClodAlone/HMISolution"
+LABEL org.opencontainers.image.description="HMI Server Editor (Blazor Web UI)"
+
 WORKDIR /app
 
 COPY --from=build /app/publish .

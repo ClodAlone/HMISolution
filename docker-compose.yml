@@ -1,0 +1,36 @@
+# docker-compose.yml  –  Build & run HMI release images locally
+# Usage:
+#   docker compose build                     # build both images
+#   docker compose up -d                     # run both containers
+#   docker compose push                      # push to registry (after docker login)
+
+services:
+
+  server:
+    image: ghcr.io/clodalone/hmi-server:${TAG:-latest}
+    build:
+      context: .
+      dockerfile: Server/Dockerfile
+    ports:
+      - "4840:4840"
+      - "14841:14841"
+    volumes:
+      - server-data:/data
+    restart: unless-stopped
+
+  servereditor:
+    image: ghcr.io/clodalone/hmi-servereditor:${TAG:-latest}
+    build:
+      context: .
+      dockerfile: ServerEditorWeb/Dockerfile
+    ports:
+      - "8080:8080"
+    volumes:
+      - editor-data:/data
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+    restart: unless-stopped
+
+volumes:
+  server-data:
+  editor-data:

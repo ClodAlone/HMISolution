@@ -27,6 +27,10 @@ RUN dotnet publish Server/Server.csproj -c Release -o /app/publish
 
 # ---------- runtime ----------
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
+
+LABEL org.opencontainers.image.source="https://github.com/ClodAlone/HMISolution"
+LABEL org.opencontainers.image.description="HMI OPC-UA Server"
+
 WORKDIR /app
 
 COPY --from=build /app/publish .
