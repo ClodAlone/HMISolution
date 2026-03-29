@@ -239,6 +239,129 @@
     }
 </div>
 
+@* ─── Data Logging Configuration ───────────────────────── *@
+<div class="mb-2">
+    <div class="d-flex justify-content-between align-items-center mb-1">
+        <label class="form-label fw-bold small mb-0">📊 Data Logging</label>
+        @if (Variable.DataLogging == null || !Variable.DataLogging.Enabled)
+        {
+            <button class="btn btn-sm btn-outline-info py-0 px-1" style="font-size: 10px;"
+                    @onclick="EnableDataLogging">Enable</button>
+        }
+        else
+        {
+            <button class="btn btn-sm btn-outline-secondary py-0 px-1" style="font-size: 10px;"
+                    @onclick="DisableDataLogging">Remove</button>
+        }
+    </div>
+
+    @if (Variable.DataLogging is { Enabled: true })
+    {
+        <div class="card vde-card p-2 mb-1" style="border-color: var(--accent-color);">
+            <div class="row g-1 mb-1">
+                <div class="col-6">
+                    <label class="form-label mb-0 small" title="Minimum value change before a new sample is logged. Set to 0 to log every change.">
+                        Hysteresis <span class="vde-hint">ⓘ</span>
+                    </label>
+                    <input type="number" class="form-control form-control-sm" step="any" min="0"
+                           @bind="Variable.DataLogging.Hysteresis" @bind:after="OnDataLoggingChanged"
+                           placeholder="0" />
+                </div>
+            </div>
+            <div class="vde-desc">Records variable history to the configured database. Required for HDA charts and anomaly detection.</div>
+        </div>
+    }
+</div>
+
+@* ─── Anomaly Detection Configuration ──────────────────── *@
+<div class="mb-2">
+    <div class="d-flex justify-content-between align-items-center mb-1">
+        <label class="form-label fw-bold small mb-0">🔍 Anomaly Detection</label>
+        @if (Variable.AnomalyDetection == null || !Variable.AnomalyDetection.Enabled)
+        {
+            <button class="btn btn-sm btn-outline-danger py-0 px-1" style="font-size: 10px;"
+                    @onclick="EnableAnomalyDetection"
+                    disabled="@(Variable.DataLogging is not { Enabled: true })"
+                    title="@(Variable.DataLogging is { Enabled: true } ? "Enable anomaly detection" : "Enable Data Logging first")">Enable</button>
+        }
+        else
+        {
+            <button class="btn btn-sm btn-outline-secondary py-0 px-1" style="font-size: 10px;"
+                    @onclick="DisableAnomalyDetection">Remove</button>
+        }
+    </div>
+
+    @if (Variable.DataLogging is not { Enabled: true } && Variable.AnomalyDetection is not { Enabled: true })
+    {
+        <div class="vde-desc">Requires <strong>Data Logging</strong> to be enabled (needs historical data for analysis).</div>
+    }
+
+    @if (Variable.AnomalyDetection is { Enabled: true })
+    {
+        <div class="card vde-card p-2 mb-1" style="border-color: var(--danger-color);">
+            <div class="row g-1 mb-1">
+                <div class="col-4">
+                    <label class="form-label mb-0 small" title="Z-score threshold. Values exceeding this many standard deviations from the mean are flagged as anomalies. Lower = more sensitive. Default 3.0.">
+                        Sensitivity <span class="vde-hint">ⓘ</span>
+                    </label>
+                    <input type="number" class="form-control form-control-sm" step="0.1" min="0.5"
+                           @bind="Variable.AnomalyDetection.Sensitivity" @bind:after="OnAnomalyChanged" />
+                </div>
+                <div class="col-4">
+                    <label class="form-label mb-0 small" title="Historical lookback window in minutes for computing rolling mean and standard deviation. Default 60.">
+                        Window (min) <span class="vde-hint">ⓘ</span>
+                    </label>
+                    <input type="number" class="form-control form-control-sm" min="1"
+                           @bind="Variable.AnomalyDetection.WindowMinutes" @bind:after="OnAnomalyChanged" />
+                </div>
+                <div class="col-4">
+                    <label class="form-label mb-0 small" title="Cooldown between repeated notifications for this variable in seconds. Default 300 (5 min).">
+                        Cooldown (s) <span class="vde-hint">ⓘ</span>
+                    </label>
+                    <input type="number" class="form-control form-control-sm" min="0"
+                           @bind="Variable.AnomalyDetection.CooldownSeconds" @bind:after="OnAnomalyChanged" />
+                </div>
+            </div>
+            <div class="row g-1 mb-1">
+                <div class="col-4">
+                    <label class="form-label mb-0 small" title="OPC UA alarm severity (1–1000) for anomaly alerts. Default 600.">
+                        Severity <span class="vde-hint">ⓘ</span>
+                    </label>
+                    <input type="number" class="form-control form-control-sm" min="1" max="1000"
+                           @bind="Variable.AnomalyDetection.Severity" @bind:after="OnAnomalyChanged" />
+                </div>
+                <div class="col-8">
+                    <div class="form-check mt-3">
+                        <input class="form-check-input" type="checkbox" id="enableTrendPrediction"
+                               @bind="Variable.AnomalyDetection.EnableTrendPrediction" @bind:after="OnAnomalyChanged" />
+                        <label class="form-check-label small" for="enableTrendPrediction"
+                               title="Use linear regression on historical data to predict if a limit alarm will be breached within the prediction horizon.">
+                            📈 Trend Prediction <span class="vde-hint">ⓘ</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            @if (Variable.AnomalyDetection.EnableTrendPrediction)
+            {
+                <div class="row g-1 mb-1">
+                    <div class="col-6">
+                        <label class="form-label mb-0 small" title="How far ahead (in minutes) to project the linear trend to detect upcoming limit breaches. Default 30.">
+                            Prediction Horizon (min) <span class="vde-hint">ⓘ</span>
+                        </label>
+                        <input type="number" class="form-control form-control-sm" min="1"
+                               @bind="Variable.AnomalyDetection.PredictionHorizonMinutes" @bind:after="OnAnomalyChanged" />
+                    </div>
+                </div>
+                @if (Variable.Alarm == null)
+                {
+                    <div class="vde-desc" style="color: var(--warning-color);">⚠️ Trend prediction requires an <strong>Alarm</strong> with limit thresholds configured above.</div>
+                }
+            }
+            <div class="vde-desc">Detects abnormal values using Z-score analysis on historical data.</div>
+        </div>
+    }
+</div>
+
 <style>
     /* Theme-aware card styling */
     .vde-card {
@@ -395,6 +518,14 @@
     private void EnableAlarm() { Variable.Alarm = new AlarmConfig(); SyncJsonEditor(); OnChanged.InvokeAsync(); }
     private void DisableAlarm() { Variable.Alarm = null; SyncJsonEditor(); OnChanged.InvokeAsync(); }
     private void OnAlarmChanged() { SyncJsonEditor(); OnChanged.InvokeAsync(); }
+
+    private void EnableDataLogging() { Variable.DataLogging = new DataLoggingConfig { Enabled = true }; SyncJsonEditor(); OnChanged.InvokeAsync(); }
+    private void DisableDataLogging() { Variable.DataLogging = null; Variable.AnomalyDetection = null; SyncJsonEditor(); OnChanged.InvokeAsync(); }
+    private void OnDataLoggingChanged() { SyncJsonEditor(); OnChanged.InvokeAsync(); }
+
+    private void EnableAnomalyDetection() { Variable.AnomalyDetection = new AnomalyDetectionConfig { Enabled = true }; SyncJsonEditor(); OnChanged.InvokeAsync(); }
+    private void DisableAnomalyDetection() { Variable.AnomalyDetection = null; SyncJsonEditor(); OnChanged.InvokeAsync(); }
+    private void OnAnomalyChanged() { SyncJsonEditor(); OnChanged.InvokeAsync(); }
 
     // Helpers for onchange handlers that assign string fields
     private void SetString<T>(string driverKey, T config, Action<T, string> setter, ChangeEventArgs e)
