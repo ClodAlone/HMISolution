@@ -19,7 +19,6 @@ builder.Services.AddSingleton<ServerDiagnosticsClient>();
 builder.Services.AddScoped<GitService>();
 builder.Services.AddSingleton<AiService>();
 builder.Services.AddSingleton<SyntaxCheckService>();
-builder.Services.AddSingleton<DataLoggingReaderService>();
 builder.Services.AddSingleton<PropertyGridService>();
 builder.Services.AddSingleton<DockLayoutService>();
 builder.Services.AddSingleton<ThemeService>();

@@ -66,16 +66,31 @@ public class NodeEditorService
     public NodeEditorService()
     {
         LoadSettings();
+    }
 
-        // Restore all previously open projects
+    /// <summary>
+    /// True once the previous session has been fully restored.
+    /// </summary>
+    public bool IsSessionRestored { get; private set; }
+
+    /// <summary>
+    /// Restores previously open projects asynchronously so the UI can render first.
+    /// Call this once from OnAfterRenderAsync(firstRender).
+    /// </summary>
+    public async Task RestorePreviousSessionAsync(Action<string>? onProgress = null)
+    {
+        if (IsSessionRestored) return;
+        IsSessionRestored = true;
+
         if (_pendingOpenPaths.Count > 0)
         {
-            foreach (var path in _pendingOpenPaths)
+            for (int i = 0; i < _pendingOpenPaths.Count; i++)
             {
-                if (File.Exists(path))
-                    OpenProject(path);
+                var path = _pendingOpenPaths[i];
+                if (!File.Exists(path)) continue;
+                onProgress?.Invoke($"Restoring project {i + 1}/{_pendingOpenPaths.Count}: {Path.GetFileName(path)}\u2026");
+                await OpenProjectAsync(path, onProgress);
             }
-            // Restore active project
             if (!string.IsNullOrEmpty(_pendingActivePath))
             {
                 var active = _openProjects.FirstOrDefault(p =>
@@ -88,11 +103,16 @@ public class NodeEditorService
         {
             var first = RecentFiles[0];
             if (File.Exists(first))
-                OpenProject(first);
+            {
+                onProgress?.Invoke($"Restoring {Path.GetFileName(first)}\u2026");
+                await OpenProjectAsync(first, onProgress);
+            }
         }
+
+        NotifyStateChanged();
     }
 
-    // Populated by LoadSettings(), consumed by the constructor
+    // Populated by LoadSettings(), consumed by RestorePreviousSessionAsync
     private List<string> _pendingOpenPaths = new();
     private string? _pendingActivePath;
 
@@ -218,6 +238,80 @@ public class NodeEditorService
     }
 
     public (bool success, string message) LoadFromFile(string path) => OpenProject(path);
+
+    /// <summary>
+    /// Asynchronously opens a project file, reporting progress at each stage.
+    /// </summary>
+    public async Task<(bool success, string message)> OpenProjectAsync(string path, Action<string>? onProgress = null)
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(path))
+                return (false, "No path specified.");
+
+            string fullPath = Path.GetFullPath(path);
+
+            var existing = _openProjects.FirstOrDefault(p =>
+                string.Equals(p.FilePath, fullPath, StringComparison.OrdinalIgnoreCase));
+            if (existing != null)
+            {
+                SetActiveProject(existing);
+                return (true, $"{existing.Name} is already open.");
+            }
+
+            if (!File.Exists(path))
+                return (false, $"File not found: {path}");
+
+            var fileInfo = new FileInfo(path);
+            double sizeMb = fileInfo.Length / (1024.0 * 1024.0);
+            onProgress?.Invoke($"Reading file ({sizeMb:F1} MB)\u2026");
+
+            var json = await Task.Run(() => File.ReadAllText(path));
+
+            onProgress?.Invoke("Parsing project model\u2026");
+            var model = await Task.Run(() => JsonSerializer.Deserialize<NodeModel>(json));
+            if (model == null)
+                return (false, "Failed to parse JSON.");
+
+            int varCount = CountVariables(model.Folder);
+            onProgress?.Invoke($"Loading resources ({varCount:N0} variables)\u2026");
+
+            await Task.Run(() => ResourceFileManager.LoadExternalResources(model, path));
+            model.Server ??= new ServerSettings();
+
+            CrashReporter.ConfigureEmail(model.Server.CrashEmail);
+
+            var licFile = LicenseManager.FindLicenseFile(path);
+            LicenseManager.Validate(licFile);
+
+            onProgress?.Invoke("Building project tree\u2026");
+
+            var proj = new ProjectNode(model, fullPath);
+            AddProjectNode(proj);
+            ServerEndpointUrl = model.Server.EndpointUrl;
+
+            RecentFiles.Remove(fullPath);
+            RecentFiles.Insert(0, fullPath);
+            while (RecentFiles.Count > 10) RecentFiles.RemoveAt(RecentFiles.Count - 1);
+            SaveSettings();
+
+            return (true, $"Loaded {Path.GetFileName(path)}");
+        }
+        catch (Exception ex)
+        {
+            return (false, $"Error loading {path}: {ex.Message}");
+        }
+    }
+
+    private static int CountVariables(Folder? folder)
+    {
+        if (folder == null) return 0;
+        int count = folder.Variables?.Count ?? 0;
+        if (folder.Folders != null)
+            foreach (var sub in folder.Folders)
+                count += CountVariables(sub);
+        return count;
+    }
 
     /// <summary>
     /// Opens a project file and adds it to the tree. If already open, just activates it.

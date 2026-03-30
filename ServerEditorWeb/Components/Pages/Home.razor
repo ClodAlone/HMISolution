@@ -1,4 +1,4 @@
-@page "/"
+﻿@page "/"
 @rendermode InteractiveServer
 @using Microsoft.JSInterop
 @using ServerEditorWeb.Models
@@ -390,10 +390,6 @@ else
                 {
                     <OpcBrowsePanel EndpointUrl="@Editor.ServerEndpointUrl" />
                 }
-                else if (context.Id == "datalogging")
-                {
-                    <DataLoggingPanel NodesPath="@Editor.CurrentFilePath" />
-                }
                 else if (context.Id == "screen")
                 {
                     <ScreenEditorPanel @ref="_screenEditorPanel" Node="Editor.SelectedItem" OnPropertyChanged="OnPropertyChanged" />
@@ -625,6 +621,17 @@ else
     </div>
 }
 
+@if (_isLoadingProject)
+{
+    <div class="project-loading-overlay">
+        <div class="project-loading-card">
+            <div class="project-loading-spinner"></div>
+            <p class="mb-1 small text-muted">@_loadingFileName</p>
+            <p class="mb-0 small fw-semibold">@_loadingStatus</p>
+        </div>
+    </div>
+}
+
 @if (!string.IsNullOrEmpty(_toast))
 {
     <div class="toast-notification @(_toastSuccess ? "toast-success" : "toast-error")">
@@ -776,6 +783,11 @@ else
     private string? _openMenu;
     private bool _requiresLogin;
 
+    // Project loading overlay state
+    private bool _isLoadingProject;
+    private string _loadingStatus = "";
+    private string _loadingFileName = "";
+
     // Change password state
     private string _changePwCurrent = "";
     private string _changePwNew = "";
@@ -807,7 +819,6 @@ else
         new() { Id = "properties", Title = "Properties", Icon = "🏷️", Zone = "right" },
         new() { Id = "json", Title = "JSON / AI Editor", Icon = "📝", Zone = "center" },
         new() { Id = "screen", Title = "Screen Editor", Icon = "🖼️", Zone = "center" },
-        new() { Id = "datalogging", Title = "Data Logging", Icon = "📊", Zone = "center" },
         new() { Id = "server", Title = "Server", Icon = "🖥️", Zone = "center" },
         new() { Id = "git", Title = "Git", Icon = "🔀", Zone = "center" },
         new() { Id = "opc", Title = "OPC Browse", Icon = "🔌", Zone = "right" },
@@ -1013,6 +1024,27 @@ private void UnsavedDialogCancel()
             _shortcutRef = DotNetObjectReference.Create(this);
             await JS.InvokeVoidAsync("editorShortcuts.init", _shortcutRef);
 
+            // Restore previously open projects asynchronously
+            if (!Editor.IsSessionRestored)
+            {
+                _isLoadingProject = true;
+                _loadingStatus = "Restoring session\u2026";
+                StateHasChanged();
+
+                await Editor.RestorePreviousSessionAsync(status =>
+                {
+                    _loadingStatus = status;
+                    InvokeAsync(StateHasChanged);
+                });
+
+                _isLoadingProject = false;
+                _loadingStatus = "";
+                _loadingFileName = "";
+                _requiresLogin = AuthService.IsLoginRequired(Editor.RootModel);
+                SetupLogDirectory();
+                StateHasChanged();
+            }
+
             // Setup idle tracking for auto-logoff
             if (_requiresLogin)
             {
@@ -1092,16 +1124,38 @@ private void UnsavedDialogCancel()
         UndoRedo.RecordPropertyChange(target, property, oldValue, newValue);
     }
 
-    private void LoadFile()
+    private async Task LoadFile()
     {
         if (string.IsNullOrEmpty(_selectedFile)) return;
-        var (success, msg) = Editor.LoadFromFile(_selectedFile);
-        ShowToast(success, msg);
-        if (success)
+
+        _isLoadingProject = true;
+        _loadingFileName = Path.GetFileName(_selectedFile);
+        _loadingStatus = $"Opening {_loadingFileName}\u2026";
+        StateHasChanged();
+        await Task.Delay(50);
+
+        try
         {
-            UndoRedo.Clear();
-            SetupLogDirectory();
-            _requiresLogin = AuthService.IsLoginRequired(Editor.RootModel);
+            var (success, msg) = await Editor.OpenProjectAsync(_selectedFile, status =>
+            {
+                _loadingStatus = status;
+                InvokeAsync(StateHasChanged);
+            });
+
+            ShowToast(success, msg);
+            if (success)
+            {
+                UndoRedo.Clear();
+                SetupLogDirectory();
+                _requiresLogin = AuthService.IsLoginRequired(Editor.RootModel);
+            }
+        }
+        finally
+        {
+            _isLoadingProject = false;
+            _loadingStatus = "";
+            _loadingFileName = "";
+            StateHasChanged();
         }
     }
 
@@ -1258,11 +1312,11 @@ private void UnsavedDialogCancel()
     private async void ShowProblemsPanel() { CloseMenus(); _dockContainer?.ShowPanel("problems", "bottom"); _dockContainer?.ActivatePanel("problems"); if (_problemsPanel != null) await _problemsPanel.RunValidation(); }
     private void ShowAboutDialog() { CloseMenus(); _showAboutDialog = true; }
 
-    private void QuickLoadFile(string path)
+    private async Task QuickLoadFile(string path)
     {
         CloseMenus();
         _selectedFile = path;
-        LoadFile();
+        await LoadFile();
     }
 
     // ── File Browser ──────────────────────────────────────────────────
@@ -1305,12 +1359,12 @@ private void UnsavedDialogCancel()
         (_browseDirs, _browseFiles) = Editor.ListDirectory(_browsePath);
     }
 
-    private void BrowseLoadFile(string path)
+    private async Task BrowseLoadFile(string path)
     {
         if (string.IsNullOrEmpty(path)) return;
         _showFileBrowser = false;
         _selectedFile = path;
-        LoadFile();
+        await LoadFile();
     }
 
     private void TogglePanelMenu(DockPanelState panel)

@@ -621,6 +621,17 @@ else
     </div>
 }
 
+@if (_isLoadingProject)
+{
+    <div class="project-loading-overlay">
+        <div class="project-loading-card">
+            <div class="project-loading-spinner"></div>
+            <p class="mb-1 small text-muted">@_loadingFileName</p>
+            <p class="mb-0 small fw-semibold">@_loadingStatus</p>
+        </div>
+    </div>
+}
+
 @if (!string.IsNullOrEmpty(_toast))
 {
     <div class="toast-notification @(_toastSuccess ? "toast-success" : "toast-error")">
@@ -771,6 +782,11 @@ else
     // Menu state
     private string? _openMenu;
     private bool _requiresLogin;
+
+    // Project loading overlay state
+    private bool _isLoadingProject;
+    private string _loadingStatus = "";
+    private string _loadingFileName = "";
 
     // Change password state
     private string _changePwCurrent = "";
@@ -1087,16 +1103,38 @@ private void UnsavedDialogCancel()
         UndoRedo.RecordPropertyChange(target, property, oldValue, newValue);
     }
 
-    private void LoadFile()
+    private async Task LoadFile()
     {
         if (string.IsNullOrEmpty(_selectedFile)) return;
-        var (success, msg) = Editor.LoadFromFile(_selectedFile);
-        ShowToast(success, msg);
-        if (success)
+
+        _isLoadingProject = true;
+        _loadingFileName = Path.GetFileName(_selectedFile);
+        _loadingStatus = $"Opening {_loadingFileName}\u2026";
+        StateHasChanged();
+        await Task.Delay(50);
+
+        try
         {
-            UndoRedo.Clear();
-            SetupLogDirectory();
-            _requiresLogin = AuthService.IsLoginRequired(Editor.RootModel);
+            var (success, msg) = await Editor.OpenProjectAsync(_selectedFile, status =>
+            {
+                _loadingStatus = status;
+                InvokeAsync(StateHasChanged);
+            });
+
+            ShowToast(success, msg);
+            if (success)
+            {
+                UndoRedo.Clear();
+                SetupLogDirectory();
+                _requiresLogin = AuthService.IsLoginRequired(Editor.RootModel);
+            }
+        }
+        finally
+        {
+            _isLoadingProject = false;
+            _loadingStatus = "";
+            _loadingFileName = "";
+            StateHasChanged();
         }
     }
 
@@ -1253,11 +1291,11 @@ private void UnsavedDialogCancel()
     private async void ShowProblemsPanel() { CloseMenus(); _dockContainer?.ShowPanel("problems", "bottom"); _dockContainer?.ActivatePanel("problems"); if (_problemsPanel != null) await _problemsPanel.RunValidation(); }
     private void ShowAboutDialog() { CloseMenus(); _showAboutDialog = true; }
 
-    private void QuickLoadFile(string path)
+    private async Task QuickLoadFile(string path)
     {
         CloseMenus();
         _selectedFile = path;
-        LoadFile();
+        await LoadFile();
     }
 
     // ── File Browser ──────────────────────────────────────────────────
@@ -1300,12 +1338,12 @@ private void UnsavedDialogCancel()
         (_browseDirs, _browseFiles) = Editor.ListDirectory(_browsePath);
     }
 
-    private void BrowseLoadFile(string path)
+    private async Task BrowseLoadFile(string path)
     {
         if (string.IsNullOrEmpty(path)) return;
         _showFileBrowser = false;
         _selectedFile = path;
-        LoadFile();
+        await LoadFile();
     }
 
     private void TogglePanelMenu(DockPanelState panel)

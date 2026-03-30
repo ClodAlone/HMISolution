@@ -73,6 +73,33 @@ else if (Node is VariableNode variable)
             <div class="form-text">@L["prop.enableStatsHint"]</div>
         </div>
 
+        @* ── Data Logging ── *@
+        <div class="mb-3">
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox"
+                       checked="@(variable.Variable.DataLogging?.Enabled == true)"
+                       @onchange="e => { variable.Variable.DataLogging ??= new SharedModels.DataLoggingConfig(); variable.Variable.DataLogging.Enabled = (bool)(e.Value ?? false); if (!variable.Variable.DataLogging.Enabled) variable.Variable.DataLogging = null; OnChanged(); }" />
+                <label class="form-check-label">Enable Data Logging</label>
+            </div>
+            <div class="form-text">Record this variable's value changes to the data logging database.</div>
+        </div>
+        @if (variable.Variable.DataLogging is { Enabled: true } dlCfg)
+        {
+            <div class="mb-2">
+                <label class="form-label small">Hysteresis</label>
+                <input type="number" step="any" class="form-control form-control-sm"
+                       @bind="dlCfg.Hysteresis" @bind:after="OnChanged" />
+                <div class="form-text">Minimum change in value before a new sample is recorded. 0 = log every change.</div>
+            </div>
+            <div class="mb-2">
+                <label class="form-label small">Max Age (days)</label>
+                <input type="number" step="any" min="0" class="form-control form-control-sm"
+                       value="@(dlCfg.MaxAge?.TotalDays)"
+                       @onchange="e => { var d = double.TryParse(e.Value?.ToString(), out var v) && v > 0 ? v : (double?)null; dlCfg.MaxAge = d.HasValue ? TimeSpan.FromDays(d.Value) : null; OnChanged(); }" />
+                <div class="form-text">Automatically purge logged data older than this. Empty or 0 = keep forever.</div>
+            </div>
+        }
+
         @* ── Engineering Unit ── *@
         <div class="mb-3">
             <label class="form-label">Engineering Unit</label>
@@ -847,6 +874,82 @@ else if (Node is ServerSettingsNode ssNode)
             <div class="form-text">@L["prop.diagPortHint"]</div>
         </div>
 
+        @* ─── Data Logging Database ────────────────────────────── *@
+        <hr />
+        <h6>🗄️ Data Logging Database</h6>
+        <div class="form-text mb-2">
+            Configure the database used for historical data logging of variable values.
+        </div>
+        <div class="mb-2 form-check">
+            <input class="form-check-input" type="checkbox"
+                   checked="@(Editor.RootModel?.Database != null)"
+                   @onchange="e => { if ((bool)(e.Value ?? false)) EnsureDatabaseConfig(); else Editor.RootModel!.Database = null; OnChanged(); }" />
+            <label class="form-check-label">Enable Data Logging Database</label>
+        </div>
+        @if (Editor.RootModel?.Database is { } dbCfg)
+        {
+            <div class="mb-2">
+                <label class="form-label small">Provider</label>
+                <select class="form-select form-select-sm" @bind="dbCfg.Provider" @bind:after="OnChanged">
+                    <option value="Sqlite">SQLite (local file)</option>
+                    <option value="TimescaleDb">TimescaleDB (PostgreSQL)</option>
+                </select>
+                <div class="form-text">SQLite for simple/local deployments. TimescaleDB for production/multi-node.</div>
+            </div>
+            <div class="mb-2">
+                <label class="form-label small">Connection String</label>
+                <input type="text" class="form-control form-control-sm"
+                       @bind="dbCfg.ConnectionString" @bind:after="OnChanged"
+                       placeholder="@(dbCfg.Provider == "Sqlite" ? "Data Source=history.db" : "Host=localhost;Port=5432;Database=hmi;Username=postgres;Password=...")" />
+                <div class="form-text">
+                    @if (dbCfg.Provider == "Sqlite")
+                    {
+                        <span>Path to the SQLite file (relative to project folder).</span>
+                    }
+                    else
+                    {
+                        <span>Npgsql connection string to the TimescaleDB/PostgreSQL instance.</span>
+                    }
+                </div>
+            </div>
+            <div class="mb-2">
+                <label class="form-label small">Table Name</label>
+                <input type="text" class="form-control form-control-sm"
+                       @bind="dbCfg.TableName" @bind:after="OnChanged"
+                       placeholder="variable_data" />
+                <div class="form-text">Database table where logged values are stored. Default: <code>variable_data</code>.</div>
+            </div>
+        }
+
+        @* ─── Event Log ──────────────────────────────────────── *@
+        <hr />
+        <h6>📋 Event Log</h6>
+        <div class="form-text mb-2">
+            Server event log for alarms, authentication, driver events, and system messages.
+        </div>
+        <div class="mb-2 form-check">
+            <input class="form-check-input" type="checkbox"
+                   checked="@(ssNode.Settings.EventLog?.Enabled == true)"
+                   @onchange="e => { EnsureEventLogConfig(ssNode).Enabled = (bool)(e.Value ?? false); OnChanged(); }" />
+            <label class="form-check-label">Enable Event Log</label>
+        </div>
+        @if (ssNode.Settings.EventLog is { Enabled: true })
+        {
+            <div class="mb-2">
+                <label class="form-label small">Database Path</label>
+                <input type="text" class="form-control form-control-sm"
+                       @bind="ssNode.Settings.EventLog.DbPath" @bind:after="OnChanged"
+                       placeholder="events.db" />
+                <div class="form-text">SQLite file for event storage (relative to project folder). Default: <code>events.db</code>.</div>
+            </div>
+            <div class="mb-2">
+                <label class="form-label small">Max Age (days)</label>
+                <input type="number" class="form-control form-control-sm" min="0"
+                       @bind="ssNode.Settings.EventLog.MaxAgeDays" @bind:after="OnChanged" />
+                <div class="form-text">Events older than this are periodically purged. 0 = keep forever. Default: 90.</div>
+            </div>
+        }
+
         @* ─── Alarm Notifications ─────────────────────────────── *@
         <hr />
         <h6>📨 Alarm Notifications</h6>
@@ -1619,5 +1722,21 @@ else if (Node is UserNode uNode)
         if (string.IsNullOrEmpty(calcNode.Config.AggregateFunction))
             calcNode.Config.AggregateFunction = "Avg";
         OnChanged();
+    }
+
+    // ── Data Logging Database helper ──
+
+    private DatabaseConfig EnsureDatabaseConfig()
+    {
+        Editor.RootModel!.Database ??= new DatabaseConfig();
+        return Editor.RootModel.Database;
+    }
+
+    // ── Event Log helper ──
+
+    private EventLogConfig EnsureEventLogConfig(ServerSettingsNode ssNode)
+    {
+        ssNode.Settings.EventLog ??= new EventLogConfig();
+        return ssNode.Settings.EventLog;
     }
 }
