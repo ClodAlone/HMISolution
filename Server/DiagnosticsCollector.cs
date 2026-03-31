@@ -43,6 +43,12 @@ namespace SimpleOpcFileServer
         /// </summary>
         public Func<AnomalyDetectionSnapshot>? AlarmAnomalyProvider { get; set; }
 
+        /// <summary>
+        /// Optional delegate that returns system-level statistics (logging cache, alarm counts, driver states).
+        /// Set by the node manager after construction.
+        /// </summary>
+        public Func<SystemStats>? SystemStatsProvider { get; set; }
+
         public static DiagnosticsCollector Instance { get; } = new();
 
         /// <summary>
@@ -182,6 +188,10 @@ namespace SimpleOpcFileServer
 
             // Anomaly detection
             try { diag.AnomalyDetection = AlarmAnomalyProvider?.Invoke(); }
+            catch { /* non-critical */ }
+
+            // System stats (logging cache, alarms, drivers)
+            try { diag.System = SystemStatsProvider?.Invoke(); }
             catch { /* non-critical */ }
 
             return diag;
@@ -424,5 +434,8 @@ namespace SimpleOpcFileServer
     [System.Text.Json.Serialization.JsonSerializable(typeof(ScriptBreakpoint))]
     [System.Text.Json.Serialization.JsonSerializable(typeof(AlarmAnalyticsSnapshot))]
     [System.Text.Json.Serialization.JsonSerializable(typeof(AlarmFrequencyEntry))]
+    [System.Text.Json.Serialization.JsonSerializable(typeof(SystemStats))]
+    [System.Text.Json.Serialization.JsonSerializable(typeof(LoggerCacheStats))]
+    [System.Text.Json.Serialization.JsonSerializable(typeof(DriverSystemStats))]
     internal partial class DiagnosticsJsonContext : System.Text.Json.Serialization.JsonSerializerContext { }
 }

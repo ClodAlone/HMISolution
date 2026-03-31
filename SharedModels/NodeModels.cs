@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -75,10 +75,10 @@ namespace SharedModels
         /// <summary>Optional runtime statistics configuration (min, max, average tracking).</summary>
         public VariableStatisticsConfig? Statistics { get; set; }
 
-        /// <summary>Optional linear scaling configuration (raw ↔ engineering conversion).</summary>
+        /// <summary>Optional linear scaling configuration (raw â†” engineering conversion).</summary>
         public ScalingConfig? Scaling { get; set; }
 
-        /// <summary>Engineering unit label (e.g. "°C", "bar", "%", "m³/h"). Exposed as OPC UA EngineeringUnits property.</summary>
+        /// <summary>Engineering unit label (e.g. "Â°C", "bar", "%", "mÂ³/h"). Exposed as OPC UA EngineeringUnits property.</summary>
         public string EngineeringUnit { get; set; } = "";
 
         /// <summary>Optional anomaly detection configuration for this variable. Requires DataLogging to be enabled.</summary>
@@ -95,7 +95,7 @@ namespace SharedModels
         public bool Enabled { get; set; }
     }
 
-    /// <summary>Linear scaling: raw driver values ↔ engineering units (linear interpolation).</summary>
+    /// <summary>Linear scaling: raw driver values â†” engineering units (linear interpolation).</summary>
     public class ScalingConfig
     {
         /// <summary>Raw value corresponding to the engineering minimum.</summary>
@@ -113,7 +113,7 @@ namespace SharedModels
         /// <summary>When true, clamp the engineering value to [EngMin, EngMax].</summary>
         public bool ClampEnabled { get; set; }
 
-        /// <summary>Applies forward scaling: raw → engineering.</summary>
+        /// <summary>Applies forward scaling: raw â†’ engineering.</summary>
         public double RawToEng(double raw)
         {
             double range = RawMax - RawMin;
@@ -128,7 +128,7 @@ namespace SharedModels
             return eng;
         }
 
-        /// <summary>Applies reverse scaling: engineering → raw.</summary>
+        /// <summary>Applies reverse scaling: engineering â†’ raw.</summary>
         public double EngToRaw(double eng)
         {
             double range = EngMax - EngMin;
@@ -151,13 +151,13 @@ namespace SharedModels
         [JsonConverter(typeof(JsonStringEnumConverter))]
         public AlarmTriggerType TriggerType { get; set; } = AlarmTriggerType.Limit;
 
-        // ── Limit mode fields ──
+        // â”€â”€ Limit mode fields â”€â”€
         public double? HighHighLimit { get; set; }
         public double HighLimit { get; set; }
         public double LowLimit { get; set; }
         public double? LowLowLimit { get; set; }
 
-        // ── Condition mode fields ──
+        // â”€â”€ Condition mode fields â”€â”€
         /// <summary>
         /// Comparison operator for condition-based alarms.
         /// Supported: "==", "!=", "&gt;", "&gt;=", "&lt;", "&lt;=", "True", "False", "Changed".
@@ -170,16 +170,16 @@ namespace SharedModels
         /// </summary>
         public string CompareValue { get; set; } = "";
 
-        /// <summary>Severity (1–1000) when the condition alarm is active. Default 500.</summary>
+        /// <summary>Severity (1â€“1000) when the condition alarm is active. Default 500.</summary>
         public ushort ConditionSeverity { get; set; } = 500;
 
-        // ── Common fields ──
+        // â”€â”€ Common fields â”€â”€
         public string Message { get; set; } = "";
 
         /// <summary>
         /// Hysteresis (deadband) value to prevent alarm flickering.
         /// For Limit mode: alarm deactivates only when the value returns past the limit by this amount
-        /// (e.g. High alarm activates at HighLimit, deactivates at HighLimit − Hysteresis).
+        /// (e.g. High alarm activates at HighLimit, deactivates at HighLimit âˆ’ Hysteresis).
         /// For Condition mode with numeric operators: same deadband logic applies.
         /// A value of 0 disables hysteresis.
         /// </summary>
@@ -432,7 +432,7 @@ namespace SharedModels
 
         /// <summary>
         /// Shared API key used to authenticate bridge and viewer connections.
-        /// Sent as a query-string parameter (?apiKey=…) during the SignalR handshake.
+        /// Sent as a query-string parameter (?apiKey=â€¦) during the SignalR handshake.
         /// </summary>
         public string ApiKey { get; set; } = "";
     }
@@ -485,7 +485,7 @@ namespace SharedModels
         /// <summary>OPC UA endpoint URL of the GDS (e.g. "opc.tcp://gds.example.com:58810/GlobalDiscoveryServer").</summary>
         public string EndpointUrl { get; set; } = "";
 
-        /// <summary>Username for GDS authentication (optional — leave empty for anonymous).</summary>
+        /// <summary>Username for GDS authentication (optional â€” leave empty for anonymous).</summary>
         public string UserName { get; set; } = "";
 
         /// <summary>Password for GDS authentication.</summary>
@@ -526,7 +526,7 @@ namespace SharedModels
         public bool Enabled { get; set; }
 
         /// <summary>
-        /// Minimum severity threshold (1–1000) for sending notifications.
+        /// Minimum severity threshold (1â€“1000) for sending notifications.
         /// Alarms below this severity are silently ignored. Default 1 (all alarms).
         /// </summary>
         public ushort MinSeverity { get; set; } = 1;
@@ -777,23 +777,23 @@ namespace SharedModels
         /// <summary>When true, the EditBox widget shows a statistics bar (Min/Max/Avg) read from the variable's .Statistics.* OPC sub-variables.</summary>
         public bool EditBoxShowStatistics { get; set; }
 
-        // Animation bindings — evaluated at runtime
+        // Animation bindings â€” evaluated at runtime
         public string? FillBinding { get; set; }       // e.g., "value > 50 ? '#ff0000' : '#00ff00'"
         public string? VisibilityBinding { get; set; } // e.g., "value == true"
         public string? RotationBinding { get; set; }   // e.g., "value * 3.6"
-        public string? LabelBinding { get; set; }      // e.g., "value.ToString('F1') + ' °C'"
+        public string? LabelBinding { get; set; }      // e.g., "value.ToString('F1') + ' Â°C'"
         public double? MinValue { get; set; }
         public double? MaxValue { get; set; }
 
-        // ─── Gauge style properties (Type == "gauge") ────────────
+        // â”€â”€â”€ Gauge style properties (Type == "gauge") â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         /// <summary>
         /// Gauge visual style. Supported values:
-        /// "needle" — classic dial with rotating needle (default),
-        /// "arc" — arc/donut with filled progress stroke,
-        /// "semicircle" — 180° half-circle arc gauge,
-        /// "hbar" — horizontal bar fill,
-        /// "vbar" — vertical bar fill (bottom-up),
-        /// "thermometer" — vertical thermometer with bulb.
+        /// "needle" â€” classic dial with rotating needle (default),
+        /// "arc" â€” arc/donut with filled progress stroke,
+        /// "semicircle" â€” 180Â° half-circle arc gauge,
+        /// "hbar" â€” horizontal bar fill,
+        /// "vbar" â€” vertical bar fill (bottom-up),
+        /// "thermometer" â€” vertical thermometer with bulb.
         /// </summary>
         public string GaugeStyle { get; set; } = "needle";
 
@@ -806,7 +806,7 @@ namespace SharedModels
         /// <summary>Whether to show the numeric value readout. Default true.</summary>
         public bool GaugeShowValue { get; set; } = true;
 
-        /// <summary>Unit suffix shown after the value readout (e.g. "°C", "bar", "%"). Default "".</summary>
+        /// <summary>Unit suffix shown after the value readout (e.g. "Â°C", "bar", "%"). Default "".</summary>
         public string GaugeUnit { get; set; } = "";
 
         /// <summary>Color of the gauge scale/track background. Default "#e0e0e0".</summary>
@@ -844,7 +844,7 @@ namespace SharedModels
         /// </summary>
         public List<string> EmbeddedScreens { get; set; } = new();
 
-        // ─── Responsive layout properties ────────────────────────
+        // â”€â”€â”€ Responsive layout properties â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         /// <summary>Column span in the responsive grid (1-12).</summary>
         public int ColSpan { get; set; } = 4;
 
@@ -862,7 +862,7 @@ namespace SharedModels
         /// </summary>
         public List<ImageMapEntry> ImageMapEntries { get; set; } = new();
 
-        // ─── Realtime Trend properties (Type == "trend") ─────────
+        // â”€â”€â”€ Realtime Trend properties (Type == "trend") â”€â”€â”€â”€â”€â”€â”€â”€â”€
         /// <summary>Pen definitions for the Realtime Trend widget.</summary>
         public List<TrendPen> TrendPens { get; set; } = new();
 
@@ -975,11 +975,11 @@ namespace SharedModels
 
         /// <summary>
         /// Animation mode for the animated text widget. Supported values:
-        /// "scroll" — horizontal marquee scrolling (default),
-        /// "flash" — text and/or background color alternates between two colors,
-        /// "pulse" — smooth opacity pulsing,
-        /// "typewriter" — text appears letter-by-letter then resets,
-        /// "fade" — crossfade between messages in the list.
+        /// "scroll" â€” horizontal marquee scrolling (default),
+        /// "flash" â€” text and/or background color alternates between two colors,
+        /// "pulse" â€” smooth opacity pulsing,
+        /// "typewriter" â€” text appears letter-by-letter then resets,
+        /// "fade" â€” crossfade between messages in the list.
         /// </summary>
         public string AnimTextMode { get; set; } = "scroll";
 
@@ -1012,7 +1012,7 @@ namespace SharedModels
         /// <summary>Report definition name (must match a ReportConfig.Name).</summary>
         public string ReportName { get; set; } = "";
 
-        // ── Progress Bar ──
+        // â”€â”€ Progress Bar â”€â”€
         /// <summary>Progress bar orientation: "horizontal" or "vertical".</summary>
         public string ProgressBarOrientation { get; set; } = "horizontal";
         /// <summary>Fill color for the progress portion.</summary>
@@ -1028,10 +1028,10 @@ namespace SharedModels
         /// <summary>Border radius in px.</summary>
         public int ProgressBarBorderRadius { get; set; } = 4;
 
-        // ── Numeric Display ──
+        // â”€â”€ Numeric Display â”€â”€
         /// <summary>Number of decimal places.</summary>
         public int NumericDisplayDecimals { get; set; } = 1;
-        /// <summary>Engineering unit label (e.g. "°C", "bar").</summary>
+        /// <summary>Engineering unit label (e.g. "Â°C", "bar").</summary>
         public string NumericDisplayUnit { get; set; } = "";
         /// <summary>Text color.</summary>
         public string NumericDisplayColor { get; set; } = "#e2e8f0";
@@ -1044,7 +1044,7 @@ namespace SharedModels
         /// <summary>Warning-zone color.</summary>
         public string NumericDisplayWarnColor { get; set; } = "#f59e0b";
 
-        // ── LED Array ──
+        // â”€â”€ LED Array â”€â”€
         /// <summary>Number of LEDs in the array.</summary>
         public int LedArrayCount { get; set; } = 8;
         /// <summary>Layout: "row" or "column".</summary>
@@ -1056,7 +1056,7 @@ namespace SharedModels
         /// <summary>LED shape: "circle" or "square".</summary>
         public string LedArrayShape { get; set; } = "circle";
 
-        // ── Pipe ──
+        // â”€â”€ Pipe â”€â”€
         /// <summary>Flow direction: "left-right", "right-left", "top-bottom", "bottom-top".</summary>
         public string PipeFlowDirection { get; set; } = "left-right";
         /// <summary>Pipe body color.</summary>
@@ -1068,7 +1068,7 @@ namespace SharedModels
         /// <summary>Animate the flow when value is truthy.</summary>
         public bool PipeAnimate { get; set; } = true;
 
-        // ── Tank ──
+        // â”€â”€ Tank â”€â”€
         /// <summary>Tank fill color.</summary>
         public string TankFillColor { get; set; } = "#3b82f6";
         /// <summary>Tank body/shell color.</summary>
@@ -1082,7 +1082,7 @@ namespace SharedModels
         /// <summary>Engineering unit label.</summary>
         public string TankUnit { get; set; } = "%";
 
-        // ── Dropdown ──
+        // â”€â”€ Dropdown â”€â”€
         /// <summary>Semicolon-separated options: "Label=Value;Label2=Value2".</summary>
         public string DropdownOptions { get; set; } = "";
         /// <summary>Background color for the select element.</summary>
@@ -1090,7 +1090,7 @@ namespace SharedModels
         /// <summary>Text color.</summary>
         public string DropdownTextColor { get; set; } = "#e2e8f0";
 
-        // ── Data Table ──
+        // â”€â”€ Data Table â”€â”€
         /// <summary>Semicolon-separated column definitions: "Header=VarPath;Header2=VarPath2".</summary>
         public string DataTableColumns { get; set; } = "";
         /// <summary>Header background color.</summary>
@@ -1102,7 +1102,7 @@ namespace SharedModels
         /// <summary>Show grid borders.</summary>
         public bool DataTableShowBorders { get; set; } = true;
 
-        // ── Sparkline ──
+        // â”€â”€ Sparkline â”€â”€
         /// <summary>Line color.</summary>
         public string SparklineColor { get; set; } = "#3b82f6";
         /// <summary>Number of data points to retain.</summary>
@@ -1114,7 +1114,7 @@ namespace SharedModels
         /// <summary>Line stroke width.</summary>
         public double SparklineStrokeWidth { get; set; } = 1.5;
 
-        // ── Motor Control ──
+        // â”€â”€ Motor Control â”€â”€
         /// <summary>Motor symbol type: "motor", "pump", "fan".</summary>
         public string MotorControlStyle { get; set; } = "motor";
         /// <summary>Color when running.</summary>
@@ -1130,7 +1130,7 @@ namespace SharedModels
         /// <summary>Variable path for speed/RPM.</summary>
         public string MotorControlSpeedPath { get; set; } = "";
 
-        // ── Valve ──
+        // â”€â”€ Valve â”€â”€
         /// <summary>Valve type: "gate", "ball", "butterfly".</summary>
         public string ValveStyle { get; set; } = "gate";
         /// <summary>Color when open.</summary>
@@ -1144,7 +1144,7 @@ namespace SharedModels
         /// <summary>Variable path for position feedback (0-100%).</summary>
         public string ValvePositionPath { get; set; } = "";
 
-        // ── Alarm Banner ──
+        // â”€â”€ Alarm Banner â”€â”€
         /// <summary>Banner display style: "compact" or "detailed".</summary>
         public string AlarmBannerStyle { get; set; } = "compact";
         /// <summary>Show alarm count badge.</summary>
@@ -1152,7 +1152,7 @@ namespace SharedModels
         /// <summary>Flash on critical alarm.</summary>
         public bool AlarmBannerFlash { get; set; } = true;
 
-        // ── Color Zone ──
+        // â”€â”€ Color Zone â”€â”€
         /// <summary>Default background color when no rule matches.</summary>
         public string ColorZoneDefault { get; set; } = "#334155";
         /// <summary>Border radius in px.</summary>
@@ -1162,7 +1162,7 @@ namespace SharedModels
         /// <summary>Show value text overlay.</summary>
         public bool ColorZoneShowValue { get; set; }
 
-        // ── Conveyor ──
+        // â”€â”€ Conveyor â”€â”€
         /// <summary>Conveyor orientation: "horizontal" or "vertical".</summary>
         public string ConveyorOrientation { get; set; } = "horizontal";
         /// <summary>Belt/roller color.</summary>
@@ -1176,7 +1176,7 @@ namespace SharedModels
         /// <summary>Variable path for fault state (1/true = fault).</summary>
         public string ConveyorFaultPath { get; set; } = "";
 
-        // ── Pie Chart ──
+        // â”€â”€ Pie Chart â”€â”€
         /// <summary>Pie chart style: "pie" or "doughnut".</summary>
         public string PieChartStyle { get; set; } = "pie";
         /// <summary>Inner radius ratio for doughnut (0-0.9).</summary>
@@ -1188,7 +1188,7 @@ namespace SharedModels
         /// <summary>Slice definitions: "Label=VarPath #color;...".</summary>
         public string PieChartSlices { get; set; } = "";
 
-        // ── Bar Chart ──
+        // â”€â”€ Bar Chart â”€â”€
         /// <summary>Bar orientation: "vertical" or "horizontal".</summary>
         public string BarChartOrientation { get; set; } = "vertical";
         /// <summary>Maximum scale value.</summary>
@@ -1200,7 +1200,7 @@ namespace SharedModels
         /// <summary>Bar definitions: "Label=VarPath #color;...".</summary>
         public string BarChartBars { get; set; } = "";
 
-        // ── Nav Button ──
+        // â”€â”€ Nav Button â”€â”€
         /// <summary>Target screen name/path for navigation.</summary>
         public string NavButtonTarget { get; set; } = "";
         /// <summary>Button style: "filled", "outline", "ghost".</summary>
@@ -1214,7 +1214,7 @@ namespace SharedModels
         /// <summary>Button text color. Default "#ffffff".</summary>
         public string NavButtonTextColor { get; set; } = "#ffffff";
 
-        // ── Heat Exchanger ──
+        // â”€â”€ Heat Exchanger â”€â”€
         /// <summary>Hot-side color. Default "#ef4444".</summary>
         public string HeatExchangerHotColor { get; set; } = "#ef4444";
         /// <summary>Cold-side color. Default "#3b82f6".</summary>
@@ -1230,7 +1230,7 @@ namespace SharedModels
         /// <summary>Orientation: "horizontal" or "vertical".</summary>
         public string HeatExchangerOrientation { get; set; } = "horizontal";
 
-        // ── Popup ──
+        // â”€â”€ Popup â”€â”€
         /// <summary>Trigger mode: "hover", "click", or "variable".</summary>
         public string PopupTrigger { get; set; } = "hover";
         /// <summary>Content text displayed inside the popup.</summary>
@@ -1248,7 +1248,7 @@ namespace SharedModels
         /// <summary>Semicolon-separated variable paths shown inside popup.</summary>
         public string PopupVariables { get; set; } = "";
 
-        // ── Setpoint Ramp ──
+        // â”€â”€ Setpoint Ramp â”€â”€
         /// <summary>Current-value line color.</summary>
         public string SetpointColor { get; set; } = "#22c55e";
         /// <summary>Target-value line color.</summary>
@@ -1266,7 +1266,7 @@ namespace SharedModels
         /// <summary>Engineering unit label.</summary>
         public string SetpointUnit { get; set; } = "";
 
-        // ── Flow Meter ──
+        // â”€â”€ Flow Meter â”€â”€
         /// <summary>Visual style: "circular", "digital".</summary>
         public string FlowMeterStyle { get; set; } = "circular";
         /// <summary>Body/gauge color.</summary>
@@ -1284,7 +1284,7 @@ namespace SharedModels
         /// <summary>Orientation: "horizontal" or "vertical".</summary>
         public string FlowMeterOrientation { get; set; } = "horizontal";
 
-        // ── XY Plot ──
+        // â”€â”€ XY Plot â”€â”€
         /// <summary>Variable path for X-axis data.</summary>
         public string XYPlotXPath { get; set; } = "";
         /// <summary>Variable path for Y-axis data.</summary>
@@ -1306,7 +1306,7 @@ namespace SharedModels
         /// <summary>Y-axis label text.</summary>
         public string XYPlotYLabel { get; set; } = "Y";
 
-        // ── PDF Viewer ──
+        // â”€â”€ PDF Viewer â”€â”€
         /// <summary>PDF source type: "url" or "embedded".</summary>
         public string PdfViewerSource { get; set; } = "url";
         /// <summary>URL of the PDF document.</summary>
@@ -1316,7 +1316,7 @@ namespace SharedModels
         /// <summary>Background color for the viewer frame.</summary>
         public string PdfViewerBackground { get; set; } = "#1e293b";
 
-        // ── Additional aliases / properties used by prior widget code ──
+        // â”€â”€ Additional aliases / properties used by prior widget code â”€â”€
         public bool ProgressBarShowValue { get; set; } = true;
         public string NumericDisplayFormat { get; set; } = "F1";
         public int NumericDisplayDigits { get; set; } = 5;
@@ -1346,7 +1346,7 @@ namespace SharedModels
         public string BarChartBackground { get; set; } = "#0f172a";
         public double BarChartMaxValue { get; set; } = 100;
 
-        // ─── KPI Widget properties (Type == "kpiwidget") ────────────
+        // â”€â”€â”€ KPI Widget properties (Type == "kpiwidget") â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         public string KpiMode { get; set; } = "oee";
         public string KpiTitle { get; set; } = "";
         public string KpiUnit { get; set; } = "%";
@@ -1450,7 +1450,7 @@ namespace SharedModels
 
     /// <summary>
     /// A localized string entry. The Key is used as an ID (e.g., "btn_start"),
-    /// and Translations maps language codes to translated text (e.g., "en" → "Start", "de" → "Starten").
+    /// and Translations maps language codes to translated text (e.g., "en" â†’ "Start", "de" â†’ "Starten").
     /// </summary>
     public class LocalizedStringEntry
     {
@@ -1488,10 +1488,10 @@ namespace SharedModels
         /// <summary>Condition expression for the trigger variable, e.g. "value > 50".</summary>
         public string? TriggerCondition { get; set; }
 
-        // ─── Keyframes ──────────────────────────────────────
+        // â”€â”€â”€ Keyframes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         public List<AnimationKeyframe> Keyframes { get; set; } = new();
 
-        // ─── Timing ─────────────────────────────────────────
+        // â”€â”€â”€ Timing â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         public double DurationMs { get; set; } = 1000;
         public double DelayMs { get; set; }
 
@@ -1507,7 +1507,7 @@ namespace SharedModels
 
     public class AnimationKeyframe
     {
-        /// <summary>Position in the timeline 0–100 (percent).</summary>
+        /// <summary>Position in the timeline 0â€“100 (percent).</summary>
         public double Percent { get; set; }
 
         /// <summary>Value at this keyframe. Interpretation depends on the property being animated.</summary>
@@ -1541,7 +1541,7 @@ namespace SharedModels
         /// <summary>Path to the YOLO ONNX model file. Empty = use default bundled model.</summary>
         public string YoloModelPath { get; set; } = "";
 
-        /// <summary>Minimum confidence threshold for detections (0.0–1.0). Default 0.5.</summary>
+        /// <summary>Minimum confidence threshold for detections (0.0â€“1.0). Default 0.5.</summary>
         public double YoloConfidence { get; set; } = 0.5;
 
         /// <summary>
@@ -1575,7 +1575,7 @@ namespace SharedModels
         public string Password { get; set; } = "";
     }
 
-    // ─── Diagnostics ─────────────────────────────────────────
+    // â”€â”€â”€ Diagnostics â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /// <summary>
     /// Snapshot of server subsystem diagnostics, exposed via the /diag HTTP endpoint.
@@ -1596,9 +1596,44 @@ namespace SharedModels
 
         /// <summary>Anomaly detection snapshot. Null when the service is not enabled.</summary>
         public AnomalyDetectionSnapshot? AnomalyDetection { get; set; }
+
+        /// <summary>System-level statistics (logging cache, alarm counts, driver states). Null if not yet collected.</summary>
+        public SystemStats? System { get; set; }
     }
 
-    // ─── Alarm Analytics ─────────────────────────────────────────
+    // --- System Statistics ---
+
+    public class SystemStats
+    {
+        public LoggerCacheStats? LoggerCache { get; set; }
+        public int ActiveAlarmCount { get; set; }
+        public long TotalAlarmActivations { get; set; }
+        public long TotalAlarmAcknowledgements { get; set; }
+        public List<DriverSystemStats> Drivers { get; set; } = new();
+    }
+
+    public class LoggerCacheStats
+    {
+        public int CurrentCount { get; set; }
+        public int PeakCount { get; set; }
+        public int MaxSize { get; set; }
+        public long TotalEnqueued { get; set; }
+        public long TotalProcessed { get; set; }
+        public long TotalDropped { get; set; }
+        public bool HasOverflowed { get; set; }
+    }
+
+    public class DriverSystemStats
+    {
+        public string Name { get; set; } = "";
+        public string Status { get; set; } = "Idle";
+        public long CycleCount { get; set; }
+        public double LastCycleMs { get; set; }
+        public long PendingOperations { get; set; }
+        public string? LastError { get; set; }
+    }
+
+    // â”€â”€â”€ Alarm Analytics â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /// <summary>
     /// Aggregated alarm analytics: top-N most-frequent alarms, mean-time-to-acknowledge,
@@ -1710,7 +1745,7 @@ namespace SharedModels
         public ScriptDebugSession? DebugSession { get; set; }
     }
 
-    // ─── Scheduler ───────────────────────────────────────────
+    // â”€â”€â”€ Scheduler â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /// <summary>
     /// Configuration for a time-based scheduler that executes commands at scheduled times.
@@ -1754,8 +1789,8 @@ namespace SharedModels
 
     /// <summary>
     /// A weekly time slot defining an active period.
-    /// DayOfWeek 0=Sunday … 6=Saturday.
-    /// StartMinute and EndMinute are minutes from midnight (0–1440).
+    /// DayOfWeek 0=Sunday â€¦ 6=Saturday.
+    /// StartMinute and EndMinute are minutes from midnight (0â€“1440).
     /// </summary>
     public class WeeklyTimeSlot
     {
@@ -1814,13 +1849,13 @@ namespace SharedModels
             ["FR"] = new()
             {
                 new() { Name = "Jour de l'An", Month = 1, Day = 1 },
-                new() { Name = "Fête du Travail", Month = 5, Day = 1 },
+                new() { Name = "FÃªte du Travail", Month = 5, Day = 1 },
                 new() { Name = "Victoire 1945", Month = 5, Day = 8 },
-                new() { Name = "Fête nationale", Month = 7, Day = 14 },
+                new() { Name = "FÃªte nationale", Month = 7, Day = 14 },
                 new() { Name = "Assomption", Month = 8, Day = 15 },
                 new() { Name = "Toussaint", Month = 11, Day = 1 },
                 new() { Name = "Armistice", Month = 11, Day = 11 },
-                new() { Name = "Noël", Month = 12, Day = 25 },
+                new() { Name = "NoÃ«l", Month = 12, Day = 25 },
             },
             ["UK"] = new()
             {
@@ -1830,38 +1865,38 @@ namespace SharedModels
             },
             ["ES"] = new()
             {
-                new() { Name = "Año Nuevo", Month = 1, Day = 1 },
-                new() { Name = "Epifanía", Month = 1, Day = 6 },
-                new() { Name = "Día del Trabajo", Month = 5, Day = 1 },
-                new() { Name = "Asunción", Month = 8, Day = 15 },
+                new() { Name = "AÃ±o Nuevo", Month = 1, Day = 1 },
+                new() { Name = "EpifanÃ­a", Month = 1, Day = 6 },
+                new() { Name = "DÃ­a del Trabajo", Month = 5, Day = 1 },
+                new() { Name = "AsunciÃ³n", Month = 8, Day = 15 },
                 new() { Name = "Fiesta Nacional", Month = 10, Day = 12 },
                 new() { Name = "Todos los Santos", Month = 11, Day = 1 },
-                new() { Name = "Constitución", Month = 12, Day = 6 },
-                new() { Name = "Inmaculada Concepción", Month = 12, Day = 8 },
+                new() { Name = "ConstituciÃ³n", Month = 12, Day = 6 },
+                new() { Name = "Inmaculada ConcepciÃ³n", Month = 12, Day = 8 },
                 new() { Name = "Navidad", Month = 12, Day = 25 },
             },
             ["JP"] = new()
             {
-                new() { Name = "元日", Month = 1, Day = 1 },
-                new() { Name = "成人の日", Month = 1, Day = 8 },
-                new() { Name = "建国記念の日", Month = 2, Day = 11 },
-                new() { Name = "天皇誕生日", Month = 2, Day = 23 },
-                new() { Name = "昭和の日", Month = 4, Day = 29 },
-                new() { Name = "憲法記念日", Month = 5, Day = 3 },
-                new() { Name = "みどりの日", Month = 5, Day = 4 },
-                new() { Name = "こどもの日", Month = 5, Day = 5 },
-                new() { Name = "文化の日", Month = 11, Day = 3 },
-                new() { Name = "勤労感謝の日", Month = 11, Day = 23 },
+                new() { Name = "å…ƒæ—¥", Month = 1, Day = 1 },
+                new() { Name = "æˆäººã®æ—¥", Month = 1, Day = 8 },
+                new() { Name = "å»ºå›½è¨˜å¿µã®æ—¥", Month = 2, Day = 11 },
+                new() { Name = "å¤©çš‡èª•ç”Ÿæ—¥", Month = 2, Day = 23 },
+                new() { Name = "æ˜­å’Œã®æ—¥", Month = 4, Day = 29 },
+                new() { Name = "æ†²æ³•è¨˜å¿µæ—¥", Month = 5, Day = 3 },
+                new() { Name = "ã¿ã©ã‚Šã®æ—¥", Month = 5, Day = 4 },
+                new() { Name = "ã“ã©ã‚‚ã®æ—¥", Month = 5, Day = 5 },
+                new() { Name = "æ–‡åŒ–ã®æ—¥", Month = 11, Day = 3 },
+                new() { Name = "å‹¤åŠ´æ„Ÿè¬ã®æ—¥", Month = 11, Day = 23 },
             },
             ["BR"] = new()
             {
-                new() { Name = "Confraternização Universal", Month = 1, Day = 1 },
+                new() { Name = "ConfraternizaÃ§Ã£o Universal", Month = 1, Day = 1 },
                 new() { Name = "Tiradentes", Month = 4, Day = 21 },
                 new() { Name = "Dia do Trabalho", Month = 5, Day = 1 },
-                new() { Name = "Independência", Month = 9, Day = 7 },
+                new() { Name = "IndependÃªncia", Month = 9, Day = 7 },
                 new() { Name = "Nossa Sra. Aparecida", Month = 10, Day = 12 },
                 new() { Name = "Finados", Month = 11, Day = 2 },
-                new() { Name = "Proclamação da República", Month = 11, Day = 15 },
+                new() { Name = "ProclamaÃ§Ã£o da RepÃºblica", Month = 11, Day = 15 },
                 new() { Name = "Natal", Month = 12, Day = 25 },
             },
             ["CA"] = new()
@@ -1887,15 +1922,15 @@ namespace SharedModels
             },
             ["CN"] = new()
             {
-                new() { Name = "元旦", Month = 1, Day = 1 },
-                new() { Name = "劳动节", Month = 5, Day = 1 },
-                new() { Name = "国庆节", Month = 10, Day = 1 },
+                new() { Name = "å…ƒæ—¦", Month = 1, Day = 1 },
+                new() { Name = "åŠ³åŠ¨èŠ‚", Month = 5, Day = 1 },
+                new() { Name = "å›½åº†èŠ‚", Month = 10, Day = 1 },
             },
         };
 
         public static string[] AvailableLocales => [.. BuiltIn.Keys.Order()];
     }
-    // â”€â”€â”€ Report Configuration â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Report Configuration Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
     /// <summary>
     /// Configuration for a report definition that can be generated on demand or on schedule.
@@ -1950,7 +1985,7 @@ namespace SharedModels
         /// <summary>Text content or HTML (for Text sections).</summary>
         public string Content { get; set; } = "";
 
-        // â”€â”€â”€ Chart properties (Type == "Chart") â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Chart properties (Type == "Chart") Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
         /// <summary>Chart type: "Line", "Bar", "Area", "Pie". Default "Line".</summary>
         public string ChartType { get; set; } = "Line";
@@ -1976,7 +2011,7 @@ namespace SharedModels
         /// <summary>Show chart grid lines. Default true.</summary>
         public bool ChartShowGrid { get; set; } = true;
 
-        // â”€â”€â”€ Table properties (Type == "Table") â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Table properties (Type == "Table") Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
         /// <summary>Variable paths for table rows (each path becomes a row with name + current value).</summary>
         public List<string> TableVariablePaths { get; set; } = new();
@@ -1987,7 +2022,7 @@ namespace SharedModels
         /// <summary>Time range for table statistics in minutes. Default 60.</summary>
         public int TableTimeRangeMinutes { get; set; } = 60;
 
-        // â”€â”€â”€ Value properties (Type == "Value") â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Value properties (Type == "Value") Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
         /// <summary>Variable path for a single real-time value display.</summary>
         public string ValueVariablePath { get; set; } = "";
@@ -1998,7 +2033,7 @@ namespace SharedModels
         /// <summary>Format string for the value (e.g. "F2"). Default "".</summary>
         public string ValueFormat { get; set; } = "";
 
-        /// <summary>Engineering unit (e.g. "Â°C", "bar"). Default "".</summary>
+        /// <summary>Engineering unit (e.g. "Ã‚Â°C", "bar"). Default "".</summary>
         public string ValueUnit { get; set; } = "";
     }
 

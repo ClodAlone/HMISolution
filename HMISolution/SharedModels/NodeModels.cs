@@ -190,6 +190,15 @@ namespace SharedModels
         /// (Email, Telegram, WhatsApp) in the server's AlarmNotification settings.
         /// </summary>
         public bool NotifyOnActivation { get; set; }
+
+        /// <summary>Per-alarm notification overrides (recipients, webhook, escalation).</summary>
+        public AlarmNotificationConfig? Notification { get; set; }
+
+        /// <summary>Whether this alarm supports operator shelving. Default true.</summary>
+        public bool AllowShelving { get; set; } = true;
+
+        /// <summary>Maximum shelving duration in minutes. 0 = unlimited. Default 480 (8 hours).</summary>
+        public int MaxShelvingMinutes { get; set; } = 480;
     }
 
     public class DataLoggingConfig
@@ -406,6 +415,12 @@ namespace SharedModels
         /// predictive alarms when abnormal patterns are detected.
         /// </summary>
         public AnomalyDetectionSettings? AnomalyDetection { get; set; }
+
+        /// <summary>Global notification configuration (SMTP, webhooks) used by the NotificationManager.</summary>
+        public NotificationsConfig? Notifications { get; set; }
+
+        /// <summary>Audit trail configuration (records operator actions to SQLite).</summary>
+        public AuditTrailConfig? AuditTrail { get; set; }
     }
 
     /// <summary>
@@ -538,6 +553,26 @@ namespace SharedModels
 
         /// <summary>WhatsApp Cloud API channel configuration.</summary>
         public WhatsAppNotificationChannel? WhatsApp { get; set; }
+
+        // ─── Per-alarm notification overrides (used by NotificationManager) ───
+
+        /// <summary>Whether email notification is enabled for this alarm.</summary>
+        public bool EmailEnabled { get; set; }
+
+        /// <summary>Comma-separated email recipients for this alarm.</summary>
+        public string EmailRecipients { get; set; } = "";
+
+        /// <summary>Whether webhook notification is enabled for this alarm.</summary>
+        public bool WebhookEnabled { get; set; }
+
+        /// <summary>Webhook URL for this alarm. Falls back to global default if empty.</summary>
+        public string WebhookUrl { get; set; } = "";
+
+        /// <summary>Minutes before escalation if alarm is not acknowledged. 0 = no escalation.</summary>
+        public int EscalationMinutes { get; set; }
+
+        /// <summary>Comma-separated escalation email recipients.</summary>
+        public string EscalationRecipients { get; set; } = "";
     }
 
     /// <summary>
@@ -1622,6 +1657,80 @@ namespace SharedModels
 
         /// <summary>Anomaly detection snapshot (monitored variables, active anomalies).</summary>
         public AnomalyDetectionSnapshot? AnomalyDetection { get; set; }
+
+        /// <summary>System-level statistics (logging cache, alarm counts, driver states). Updated periodically.</summary>
+        public SystemStats? System { get; set; }
+    }
+
+    // ─── System Statistics ───────────────────────────────────────
+
+    /// <summary>
+    /// System-level statistics exposed as OPC UA variables under the _System folder.
+    /// Includes logging cache throughput, alarm counters, and per-driver status.
+    /// </summary>
+    public class SystemStats
+    {
+        /// <summary>Logging cache throughput statistics.</summary>
+        public LoggerCacheStats? LoggerCache { get; set; }
+
+        /// <summary>Number of currently active (uncleared) alarm conditions.</summary>
+        public int ActiveAlarmCount { get; set; }
+
+        /// <summary>Total alarm activations since server start.</summary>
+        public long TotalAlarmActivations { get; set; }
+
+        /// <summary>Total alarm acknowledgements since server start.</summary>
+        public long TotalAlarmAcknowledgements { get; set; }
+
+        /// <summary>Per-driver status and counters.</summary>
+        public List<DriverSystemStats> Drivers { get; set; } = new();
+    }
+
+    /// <summary>Logging cache throughput statistics snapshot.</summary>
+    public class LoggerCacheStats
+    {
+        /// <summary>Number of entries currently queued for processing.</summary>
+        public int CurrentCount { get; set; }
+
+        /// <summary>Highest queue depth observed since server start.</summary>
+        public int PeakCount { get; set; }
+
+        /// <summary>Maximum cache capacity before entries are dropped.</summary>
+        public int MaxSize { get; set; }
+
+        /// <summary>Total entries enqueued since server start.</summary>
+        public long TotalEnqueued { get; set; }
+
+        /// <summary>Total entries successfully processed (written to DB).</summary>
+        public long TotalProcessed { get; set; }
+
+        /// <summary>Total entries dropped because the cache was full.</summary>
+        public long TotalDropped { get; set; }
+
+        /// <summary>True if the cache has reached capacity at least once.</summary>
+        public bool HasOverflowed { get; set; }
+    }
+
+    /// <summary>Per-driver status and performance counters for the _System address space.</summary>
+    public class DriverSystemStats
+    {
+        /// <summary>Driver key (e.g. "Modbus", "S7").</summary>
+        public string Name { get; set; } = "";
+
+        /// <summary>Current driver status: Running, Idle, Error, Stopped.</summary>
+        public string Status { get; set; } = "Idle";
+
+        /// <summary>Total completed poll/receive cycles.</summary>
+        public long CycleCount { get; set; }
+
+        /// <summary>Duration of the last cycle in milliseconds.</summary>
+        public double LastCycleMs { get; set; }
+
+        /// <summary>Number of pending read/write operations queued in the driver.</summary>
+        public long PendingOperations { get; set; }
+
+        /// <summary>Last error message, if any.</summary>
+        public string? LastError { get; set; }
     }
 
     /// <summary>
@@ -2076,6 +2185,9 @@ namespace SharedModels
         /// Maximum allowed replication lag in seconds before raising a warning. Default 30.
         /// </summary>
         public int MaxReplicationLagSeconds { get; set; } = 30;
+
+        /// <summary>Connection string for the partner's database (used for replication health checks).</summary>
+        public string PartnerDatabaseConnectionString { get; set; } = "";
     }
 
     // --- Feature: Rate Limiting / Throttling ---
@@ -2284,5 +2396,211 @@ namespace SharedModels
 
         /// <summary>Human-readable description.</summary>
         public string Message { get; set; } = "";
+    }
+
+    // ─── Notifications ──────────────────────────────────────────
+
+    /// <summary>
+    /// Global notification settings: SMTP relay and default webhook URL.
+    /// </summary>
+    public class NotificationsConfig
+    {
+        /// <summary>SMTP relay settings for sending email notifications.</summary>
+        public SmtpConfig? Smtp { get; set; }
+
+        /// <summary>Default webhook URL used when a per-alarm webhook URL is not specified.</summary>
+        public string DefaultWebhookUrl { get; set; } = "";
+    }
+
+    /// <summary>SMTP relay configuration for outgoing email.</summary>
+    public class SmtpConfig
+    {
+        public string Host { get; set; } = "";
+        public int Port { get; set; } = 587;
+        public bool UseSsl { get; set; } = true;
+        public string Username { get; set; } = "";
+        public string Password { get; set; } = "";
+        public string FromAddress { get; set; } = "";
+    }
+
+    // ─── Audit Trail ────────────────────────────────────────────
+
+    /// <summary>Configuration for the audit trail logger.</summary>
+    public class AuditTrailConfig
+    {
+        /// <summary>Whether the audit trail is enabled.</summary>
+        public bool Enabled { get; set; } = true;
+
+        /// <summary>Path to the SQLite database file (relative to project).</summary>
+        public string DbPath { get; set; } = "audit_trail.db";
+
+        /// <summary>Maximum age in days before old entries are purged. Default 365.</summary>
+        public int MaxAgeDays { get; set; } = 365;
+    }
+
+    // ─── Licensing ──────────────────────────────────────────────
+
+    /// <summary>
+    /// Represents a signed license file. The <see cref="Signature"/> is an RSA-SHA256
+    /// signature over the canonical JSON of all other properties.
+    /// </summary>
+    public class License
+    {
+        /// <summary>Unique license identifier.</summary>
+        public string Id { get; set; } = "";
+
+        /// <summary>License tier: "Trial", "Starter", "Professional", "Enterprise".</summary>
+        public string Tier { get; set; } = "Trial";
+
+        /// <summary>Licensee name (company or individual).</summary>
+        public string LicensedTo { get; set; } = "";
+
+        /// <summary>Optional project/site name this license is valid for.</summary>
+        public string ProjectName { get; set; } = "";
+
+        /// <summary>Hardware fingerprint the license is locked to. Empty = not machine-locked.</summary>
+        public string MachineId { get; set; } = "";
+
+        /// <summary>Date the license was issued (UTC).</summary>
+        public DateTime IssuedUtc { get; set; } = DateTime.UtcNow;
+
+        /// <summary>Date the license expires (UTC). DateTime.MaxValue = perpetual.</summary>
+        public DateTime ExpiresUtc { get; set; } = DateTime.UtcNow.AddDays(30);
+
+        // ─── Feature limits ─────────────────────────────────────────────
+
+        /// <summary>Maximum number of OPC variables. 0 = unlimited.</summary>
+        public int MaxVariables { get; set; } = 20;
+
+        /// <summary>Maximum number of loaded drivers. 0 = unlimited.</summary>
+        public int MaxDrivers { get; set; } = 1;
+
+        /// <summary>Maximum number of scripts. 0 = unlimited.</summary>
+        public int MaxScripts { get; set; } = 2;
+
+        /// <summary>Maximum number of PLC programs. 0 = unlimited.</summary>
+        public int MaxPlcPrograms { get; set; } = 1;
+
+        /// <summary>Maximum number of screens. 0 = unlimited.</summary>
+        public int MaxScreens { get; set; } = 1;
+
+        /// <summary>Maximum number of recipes. 0 = unlimited.</summary>
+        public int MaxRecipes { get; set; }
+
+        /// <summary>Whether data logging (historian) is allowed.</summary>
+        public bool AllowDataLogging { get; set; }
+
+        /// <summary>Whether the AI assistant feature is allowed.</summary>
+        public bool AllowAi { get; set; }
+
+        /// <summary>RSA-SHA256 signature (Base64) over the canonical license payload.</summary>
+        public string Signature { get; set; } = "";
+    }
+
+    /// <summary>
+    /// Manages the current license state. In this simplified version the license
+    /// defaults to a Trial tier with basic limits.
+    /// </summary>
+    public static class LicenseManager
+    {
+        /// <summary>Current license holder.</summary>
+        public static LicenseState Current { get; } = new();
+
+        /// <summary>Search for a license file near the given config path.</summary>
+        public static string? FindLicenseFile(string configPath)
+        {
+            var dir = Path.GetDirectoryName(configPath) ?? ".";
+            var file = Path.Combine(dir, "license.json");
+            return File.Exists(file) ? file : null;
+        }
+
+        /// <summary>Validate a license file and return a status summary.</summary>
+        public static LicenseValidationResult Validate(string? licenseFile)
+        {
+            if (string.IsNullOrEmpty(licenseFile) || !File.Exists(licenseFile))
+            {
+                Current.License = null;
+                return new LicenseValidationResult { Tier = "Trial", Message = "No license file found – running in Trial mode." };
+            }
+
+            try
+            {
+                var json = File.ReadAllText(licenseFile);
+                var lic = System.Text.Json.JsonSerializer.Deserialize<License>(json);
+                if (lic == null)
+                    return new LicenseValidationResult { Tier = "Trial", Message = "Invalid license file." };
+
+                Current.License = lic;
+
+                if (lic.ExpiresUtc < DateTime.UtcNow)
+                    return new LicenseValidationResult { Tier = lic.Tier, LicensedTo = lic.LicensedTo, Message = "License expired." };
+
+                return new LicenseValidationResult { Tier = lic.Tier, LicensedTo = lic.LicensedTo, Message = "Valid" };
+            }
+            catch
+            {
+                Current.License = null;
+                return new LicenseValidationResult { Tier = "Trial", Message = "Failed to read license file." };
+            }
+        }
+
+        public class LicenseState
+        {
+            public License? License { get; set; }
+        }
+    }
+
+    /// <summary>Result of license validation.</summary>
+    public class LicenseValidationResult
+    {
+        public string Tier { get; set; } = "Trial";
+        public string LicensedTo { get; set; } = "";
+        public string Message { get; set; } = "";
+    }
+
+    /// <summary>
+    /// Installs a global crash reporter that captures unhandled exceptions to files.
+    /// </summary>
+    public static class CrashReporter
+    {
+        private static string? _crashDir;
+        private static CrashEmailConfig? _emailConfig;
+
+        public static void Install(string crashDir, string componentName)
+        {
+            _crashDir = crashDir;
+            if (!Directory.Exists(crashDir))
+                Directory.CreateDirectory(crashDir);
+
+            AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+            {
+                try
+                {
+                    var file = Path.Combine(crashDir, $"crash_{componentName}_{DateTime.UtcNow:yyyyMMdd_HHmmss}.txt");
+                    File.WriteAllText(file, e.ExceptionObject?.ToString() ?? "Unknown error");
+                }
+                catch { /* best-effort */ }
+            };
+        }
+
+        /// <summary>Configure email settings for crash report delivery.</summary>
+        public static void ConfigureEmail(CrashEmailConfig? config)
+        {
+            _emailConfig = config;
+        }
+
+        /// <summary>Write a crash report to disk (and optionally email it).</summary>
+        public static void Report(Exception ex, string severity = "Error")
+        {
+            try
+            {
+                var dir = _crashDir ?? Path.Combine(AppContext.BaseDirectory, "crash_reports");
+                if (!Directory.Exists(dir))
+                    Directory.CreateDirectory(dir);
+                var file = Path.Combine(dir, $"crash_{severity}_{DateTime.UtcNow:yyyyMMdd_HHmmss}.txt");
+                File.WriteAllText(file, ex.ToString());
+            }
+            catch { /* best-effort */ }
+        }
     }
 }

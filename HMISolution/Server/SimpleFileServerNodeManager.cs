@@ -1,4 +1,4 @@
-﻿using Opc.Ua;
+using Opc.Ua;
 using Opc.Ua.Server;
 using Serilog;
 using SharedModels;
@@ -8,6 +8,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace SimpleOpcFileServer
@@ -52,6 +53,9 @@ namespace SimpleOpcFileServer
         // Event journal
         private EventLogger? _eventLogger;
 
+        // Anomaly detection service
+        private AnomalyDetectionService? _anomalyDetectionService;
+
         // Retentive variable storage
         private readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> _retentiveValues = new();
         private string? _retentivePath;
@@ -63,6 +67,24 @@ namespace SimpleOpcFileServer
         // Diagnostics OPC UA node
         private BaseDataVariableState<string>? _diagVariable;
         private System.Threading.Timer? _diagTimer;
+
+        // System variables OPC UA nodes
+        private bool _systemNodesCreated;
+        private System.Threading.Timer? _systemTimer;
+        private BaseDataVariableState<int>? _sysCacheCount;
+        private BaseDataVariableState<int>? _sysCachePeak;
+        private BaseDataVariableState<int>? _sysCacheMax;
+        private BaseDataVariableState<long>? _sysCacheEnqueued;
+        private BaseDataVariableState<long>? _sysCacheProcessed;
+        private BaseDataVariableState<long>? _sysCacheDropped;
+        private BaseDataVariableState<bool>? _sysCacheOverflow;
+        private BaseDataVariableState<int>? _sysActiveAlarms;
+        private BaseDataVariableState<long>? _sysTotalActivations;
+        private BaseDataVariableState<long>? _sysTotalAcknowledgements;
+        private long _alarmActivationCount;
+        private long _alarmAcknowledgementCount;
+        private BaseDataVariableState<string>? _sysDriversJson;
+        private ExclusiveLimitAlarmState? _cacheOverflowAlarm;
 
         // Rate limiters for endpoint protection
         private RateLimiter? _writeRateLimiter;
@@ -99,7 +121,7 @@ namespace SimpleOpcFileServer
                 var sessionKey = context.SessionId.ToString();
                 if (!_writeRateLimiter.IsAllowed(sessionKey))
                 {
-                    _eventLogger?.LogSystem("Warning", $"OPC UA write rate limit exceeded for session {sessionKey}");
+                    _eventLogger?.LogSystem("Warning", "RateLimit", $"OPC UA write rate limit exceeded for session {sessionKey}");
                     for (int j = 0; j < nodesToWrite.Count; j++)
                     {
                         nodesToWrite[j].Processed = true;
@@ -701,12 +723,12 @@ namespace SimpleOpcFileServer
                       _redundancyManager.OnFailover += (reason) =>
                       {
                           _eventLogger?.LogSystem("Critical", "Redundancy", reason);
-                          _auditTrailLogger?.LogConfigChange("system", "Redundancy", "Standby", "Active (Failover)");
+                          _auditTrailLogger?.LogConfigChange("system", "Redundancy", "Standby -> Active (Failover)");
                       };
                       _redundancyManager.OnSwitchback += (reason) =>
                       {
                           _eventLogger?.LogSystem("Info", "Redundancy", reason);
-                          _auditTrailLogger?.LogConfigChange("system", "Redundancy", "Active (Failover)", "Standby");
+                          _auditTrailLogger?.LogConfigChange("system", "Redundancy", "Active (Failover) -> Standby");
                       };
                       _redundancyManager.OnReplicationStatusChanged += (status, healthy) =>
                       {
@@ -721,7 +743,7 @@ namespace SimpleOpcFileServer
                  var anomalyCfg = nodeModel.Server?.AnomalyDetection;
                  if (anomalyCfg is { Enabled: true })
                  {
-                     _anomalyDetectionService = new AnomalyDetectionService(this, anomalyCfg, _eventLogger, _notificationService);
+                     _anomalyDetectionService = new AnomalyDetectionService(this, anomalyCfg, _eventLogger, _notificationManager);
                      _eventLogger?.LogSystem("Info", "AnomalyDetection", "Anomaly detection service created");
                  }
 
@@ -782,6 +804,8 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                                // ─── Diagnostics OPC UA node (always created, license-exempt) ───
                           CreateDiagnosticsNode(references);
 
+
+                           CreateSystemVariablesNode(references);
                                // ─── Camera Detection OPC UA variables ───
                            CreateCameraDetectionVariables(nodeModel, references);
 
@@ -1181,6 +1205,221 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             }, null, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(2));
         }
 
+
+        /// <summary>
+        /// Creates a _System folder with OPC UA variables for logging cache, alarm counts, and driver status.
+        /// </summary>
+        private void CreateSystemVariablesNode(IList<IReference>? references)
+        {
+            if (_systemNodesCreated) return;
+            _systemNodesCreated = true;
+
+            var sysFolder = new FolderState(null);
+            sysFolder.NodeId = new NodeId("_System", _namespaceIndex);
+            sysFolder.BrowseName = new QualifiedName("_System", _namespaceIndex);
+            sysFolder.DisplayName = new LocalizedText("_System");
+            sysFolder.TypeDefinitionId = ObjectTypeIds.FolderType;
+            sysFolder.EventNotifier = EventNotifiers.SubscribeToEvents | EventNotifiers.HistoryRead;
+
+            sysFolder.AddReference(ReferenceTypeIds.Organizes, true, ObjectIds.ObjectsFolder);
+            references?.Add(new NodeStateReference(ReferenceTypeIds.Organizes, false, sysFolder.NodeId));
+            _rootNodeIds.Add(sysFolder.NodeId);
+            AddPredefinedNode(SystemContext, sysFolder);
+
+            // ── Logging subfolder ──
+            var logFolder = new FolderState(sysFolder);
+            logFolder.NodeId = new NodeId("_System.Logging", _namespaceIndex);
+            logFolder.BrowseName = new QualifiedName("Logging", _namespaceIndex);
+            logFolder.DisplayName = new LocalizedText("Logging");
+            logFolder.TypeDefinitionId = ObjectTypeIds.FolderType;
+            sysFolder.AddChild(logFolder);
+            AddPredefinedNode(SystemContext, logFolder);
+
+            _sysCacheCount = CreateSystemVariable<int>(logFolder, "CacheCount", DataTypeIds.Int32, 0);
+            _sysCachePeak = CreateSystemVariable<int>(logFolder, "CachePeak", DataTypeIds.Int32, 0);
+            _sysCacheMax = CreateSystemVariable<int>(logFolder, "CacheMaxSize", DataTypeIds.Int32, 0);
+            _sysCacheEnqueued = CreateSystemVariable<long>(logFolder, "TotalEnqueued", DataTypeIds.Int64, 0L);
+            _sysCacheProcessed = CreateSystemVariable<long>(logFolder, "TotalProcessed", DataTypeIds.Int64, 0L);
+            _sysCacheDropped = CreateSystemVariable<long>(logFolder, "TotalDropped", DataTypeIds.Int64, 0L);
+            _sysCacheOverflow = CreateSystemVariable<bool>(logFolder, "HasOverflowed", DataTypeIds.Boolean, false);
+
+            // ── Alarms subfolder ──
+            var alarmFolder = new FolderState(sysFolder);
+            alarmFolder.NodeId = new NodeId("_System.Alarms", _namespaceIndex);
+            alarmFolder.BrowseName = new QualifiedName("Alarms", _namespaceIndex);
+            alarmFolder.DisplayName = new LocalizedText("Alarms");
+            alarmFolder.TypeDefinitionId = ObjectTypeIds.FolderType;
+            sysFolder.AddChild(alarmFolder);
+            AddPredefinedNode(SystemContext, alarmFolder);
+
+            _sysActiveAlarms = CreateSystemVariable<int>(alarmFolder, "ActiveCount", DataTypeIds.Int32, 0);
+            _sysTotalActivations = CreateSystemVariable<long>(alarmFolder, "TotalActivations", DataTypeIds.Int64, 0L);
+            _sysTotalAcknowledgements = CreateSystemVariable<long>(alarmFolder, "TotalAcknowledgements", DataTypeIds.Int64, 0L);
+
+            // ── Drivers subfolder ──
+            var driverFolder = new FolderState(sysFolder);
+            driverFolder.NodeId = new NodeId("_System.Drivers", _namespaceIndex);
+            driverFolder.BrowseName = new QualifiedName("Drivers", _namespaceIndex);
+            driverFolder.DisplayName = new LocalizedText("Drivers");
+            driverFolder.TypeDefinitionId = ObjectTypeIds.FolderType;
+            sysFolder.AddChild(driverFolder);
+            AddPredefinedNode(SystemContext, driverFolder);
+
+            _sysDriversJson = CreateSystemVariable<string>(driverFolder, "DriversJson", DataTypeIds.String, "[]");
+
+            // ── Cache overflow alarm ──
+            var overflowAlarm = new ExclusiveLimitAlarmState(sysFolder);
+            overflowAlarm.NodeId = new NodeId("_System.CacheOverflowAlarm", _namespaceIndex);
+            overflowAlarm.BrowseName = new QualifiedName("CacheOverflowAlarm", _namespaceIndex);
+            overflowAlarm.DisplayName = new LocalizedText("CacheOverflowAlarm");
+            overflowAlarm.ConditionName.Value = "LoggingCacheOverflow";
+            overflowAlarm.Create(SystemContext, overflowAlarm.NodeId, overflowAlarm.BrowseName, null, false);
+
+            overflowAlarm.ActiveState.Value = new LocalizedText("en", "Inactive");
+            overflowAlarm.ActiveState.Id.Value = false;
+            overflowAlarm.AckedState.Value = new LocalizedText("en", "Acknowledged");
+            overflowAlarm.AckedState.Id.Value = true;
+            overflowAlarm.Severity.Value = (ushort)EventSeverity.High;
+            overflowAlarm.EnabledState.Value = new LocalizedText("en", "Enabled");
+            overflowAlarm.EnabledState.Id.Value = true;
+            overflowAlarm.Retain.Value = false;
+            overflowAlarm.Message.Value = new LocalizedText("Logging cache overflow — items are being dropped");
+
+            overflowAlarm.OnAcknowledge = OnAlarmAcknowledge;
+            sysFolder.AddChild(overflowAlarm);
+            AddPredefinedNode(SystemContext, overflowAlarm);
+            _cacheOverflowAlarm = overflowAlarm;
+
+            // Wire cache overflow event from logger
+            if (_logger is SqliteLogger sqlLogger)
+            {
+                var stats = sqlLogger.GetCacheStats();
+                if (stats != null)
+                {
+                    _sysCacheMax.Value = stats.MaxSize;
+                    _sysCacheMax.ClearChangeMasks(SystemContext, false);
+                }
+            }
+
+            // ── Wire SystemStatsProvider to DiagnosticsCollector ──
+            DiagnosticsCollector.Instance.SystemStatsProvider = BuildSystemStats;
+
+            // ── Timer to update system variables every 2 seconds ──
+            _systemTimer = new System.Threading.Timer(_ => UpdateSystemVariables(), null,
+                TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(2));
+        }
+
+        private BaseDataVariableState<T> CreateSystemVariable<T>(FolderState parent, string name, NodeId dataType, T defaultValue)
+        {
+            var parentId = parent.NodeId.Identifier?.ToString() ?? "_System";
+            var variable = new BaseDataVariableState<T>(parent);
+            variable.NodeId = new NodeId($"{parentId}.{name}", _namespaceIndex);
+            variable.BrowseName = new QualifiedName(name, _namespaceIndex);
+            variable.DisplayName = new LocalizedText(name);
+            variable.DataType = dataType;
+            variable.ValueRank = ValueRanks.Scalar;
+            variable.Value = defaultValue;
+            variable.AccessLevel = AccessLevels.CurrentRead;
+            variable.UserAccessLevel = AccessLevels.CurrentRead;
+            variable.Timestamp = DateTime.UtcNow;
+            variable.StatusCode = StatusCodes.Good;
+
+            parent.AddChild(variable);
+            AddPredefinedNode(SystemContext, variable);
+            return variable;
+        }
+
+        private SystemStats BuildSystemStats()
+        {
+            var cacheStats = _logger?.GetCacheStats();
+            int activeAlarms = 0;
+            foreach (var info in _alarmConditions.Values)
+            {
+                if (info.IsActive) activeAlarms++;
+            }
+
+            var driverStats = new List<DriverSystemStats>();
+            foreach (var d in _drivers)
+            {
+                var key = $"Driver:{d.Key}";
+                driverStats.Add(new DriverSystemStats
+                {
+                    Name = d.Key,
+                    Status = "Running"
+                });
+            }
+
+            return new SystemStats
+            {
+                LoggerCache = cacheStats,
+                ActiveAlarmCount = activeAlarms,
+                TotalAlarmActivations = Interlocked.Read(ref _alarmActivationCount),
+                TotalAlarmAcknowledgements = Interlocked.Read(ref _alarmAcknowledgementCount),
+                Drivers = driverStats
+            };
+        }
+
+        private void UpdateSystemVariables()
+        {
+            try
+            {
+                var stats = BuildSystemStats();
+
+                lock (Lock)
+                {
+                    if (stats.LoggerCache != null)
+                    {
+                        UpdateVariable(_sysCacheCount, stats.LoggerCache.CurrentCount);
+                        UpdateVariable(_sysCachePeak, stats.LoggerCache.PeakCount);
+                        UpdateVariable(_sysCacheMax, stats.LoggerCache.MaxSize);
+                        UpdateVariable(_sysCacheEnqueued, stats.LoggerCache.TotalEnqueued);
+                        UpdateVariable(_sysCacheProcessed, stats.LoggerCache.TotalProcessed);
+                        UpdateVariable(_sysCacheDropped, stats.LoggerCache.TotalDropped);
+                        UpdateVariable(_sysCacheOverflow, stats.LoggerCache.HasOverflowed);
+
+                        // Activate cache overflow alarm when items are being dropped
+                        if (stats.LoggerCache.HasOverflowed && _cacheOverflowAlarm != null
+                            && _cacheOverflowAlarm.ActiveState.Id.Value == false)
+                        {
+                            _cacheOverflowAlarm.SetActiveState(SystemContext, true);
+                            _cacheOverflowAlarm.SetAcknowledgedState(SystemContext, false);
+                            _cacheOverflowAlarm.Severity.Value = (ushort)EventSeverity.High;
+                            _cacheOverflowAlarm.Message.Value = new LocalizedText(
+                                $"Logging cache overflow: {stats.LoggerCache.TotalDropped} items dropped");
+                            _cacheOverflowAlarm.Time.Value = DateTime.UtcNow;
+                            _cacheOverflowAlarm.ReceiveTime.Value = DateTime.UtcNow;
+                            _cacheOverflowAlarm.EventId.Value = Guid.NewGuid().ToByteArray();
+                            _cacheOverflowAlarm.Retain.Value = true;
+                            ReportAlarmEvent(_cacheOverflowAlarm);
+                        }
+                    }
+
+                    UpdateVariable(_sysActiveAlarms, stats.ActiveAlarmCount);
+                    UpdateVariable(_sysTotalActivations, stats.TotalAlarmActivations);
+                    UpdateVariable(_sysTotalAcknowledgements, stats.TotalAlarmAcknowledgements);
+
+                    if (_sysDriversJson != null)
+                    {
+                        var json = System.Text.Json.JsonSerializer.Serialize(stats.Drivers);
+                        _sysDriversJson.Value = json;
+                        _sysDriversJson.Timestamp = DateTime.UtcNow;
+                        _sysDriversJson.ClearChangeMasks(SystemContext, false);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Serilog.Log.Debug(ex, "System variables update error: {Message}", ex.Message);
+            }
+        }
+
+        private void UpdateVariable<T>(BaseDataVariableState<T>? variable, T value)
+        {
+            if (variable == null) return;
+            variable.Value = value;
+            variable.Timestamp = DateTime.UtcNow;
+            variable.ClearChangeMasks(SystemContext, false);
+        }
 
         /// <summary>
         /// Creates OPC UA method nodes for shelving/unshelving alarms.
@@ -2211,6 +2450,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 alarm.SetActiveState(SystemContext, true);
                 alarm.SetAcknowledgedState(SystemContext, false);
                 alarm.SetConfirmedState(SystemContext, false);
+                Interlocked.Increment(ref _alarmActivationCount);
 
                 alarm.Severity.Value = severity;
                 alarm.Message.Value = new LocalizedText(message);
@@ -2260,7 +2500,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                     $"Transition=Active->{stateDesc} Acked={isAcked} Confirmed={isConfirmed}");
 
                 // Notification: cancel escalation on deactivation
-                _notificationManager?.NotifyAlarmCleared(info.VariablePath);
+                _notificationManager?.NotifyAlarmCleared(info.VariablePath, "Alarm cleared", info.Config.Notification);
             }
         }
 
@@ -2296,6 +2536,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 alarm.SetActiveState(SystemContext, true);
                 alarm.SetAcknowledgedState(SystemContext, false);
                 alarm.SetConfirmedState(SystemContext, false);
+                Interlocked.Increment(ref _alarmActivationCount);
 
                 alarm.Severity.Value = cfg.ConditionSeverity;
                 alarm.Message.Value = new LocalizedText(message);
@@ -2342,7 +2583,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                     $"Transition=Active->{stateDesc} Acked={isAcked} Confirmed={isConfirmed}");
 
                 // Notification: cancel escalation on deactivation
-                _notificationManager?.NotifyAlarmCleared(info.VariablePath);
+                _notificationManager?.NotifyAlarmCleared(info.VariablePath, "Condition alarm cleared", info.Config.Notification);
             }
         }
 
@@ -2375,6 +2616,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             if (condition is AcknowledgeableConditionState ackCondition)
             {
                 ackCondition.SetAcknowledgedState(context, true);
+                Interlocked.Increment(ref _alarmAcknowledgementCount);
                 if (comment != null && !string.IsNullOrEmpty(comment.Text))
                     ackCondition.Comment.Value = comment;
 
@@ -2754,6 +2996,8 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 }
                 foreach (var rw in _resourceWatchers) rw.Dispose();
                 _resourceWatchers.Clear();
+                _diagTimer?.Dispose();
+                _systemTimer?.Dispose();
             }
             base.Dispose(disposing);
         }
@@ -3085,6 +3329,33 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 if (DataType == DataTypeIds.UInt64) return (ulong)Math.Max(val, 0);
                 if (DataType == DataTypeIds.Float) return (float)val;
                 return val; // Double or fallback
+            }
+
+            /// <summary>
+            /// Converts a raw value (e.g. from JSON) to the CLR type matching the given OPC UA DataType NodeId.
+            /// Returns null if conversion fails.
+            /// </summary>
+            internal static object? ConvertValueToType(object? rawValue, NodeId dataType, ISystemContext context)
+            {
+                if (rawValue == null) return null;
+                string s = rawValue.ToString() ?? "";
+                var ci = System.Globalization.CultureInfo.InvariantCulture;
+                var ns = System.Globalization.NumberStyles.Any;
+
+                if (dataType == DataTypeIds.Boolean) return bool.TryParse(s, out var b) ? b : null;
+                if (dataType == DataTypeIds.SByte) return sbyte.TryParse(s, ns, ci, out var v) ? v : null;
+                if (dataType == DataTypeIds.Byte) return byte.TryParse(s, ns, ci, out var v) ? v : null;
+                if (dataType == DataTypeIds.Int16) return short.TryParse(s, ns, ci, out var v) ? v : null;
+                if (dataType == DataTypeIds.UInt16) return ushort.TryParse(s, ns, ci, out var v) ? v : null;
+                if (dataType == DataTypeIds.Int32) return int.TryParse(s, ns, ci, out var v) ? v : null;
+                if (dataType == DataTypeIds.UInt32) return uint.TryParse(s, ns, ci, out var v) ? v : null;
+                if (dataType == DataTypeIds.Int64) return long.TryParse(s, ns, ci, out var v) ? v : null;
+                if (dataType == DataTypeIds.UInt64) return ulong.TryParse(s, ns, ci, out var v) ? v : null;
+                if (dataType == DataTypeIds.Float) return float.TryParse(s, ns, ci, out var v) ? v : null;
+                if (dataType == DataTypeIds.Double) return double.TryParse(s, ns, ci, out var v) ? v : null;
+                if (dataType == DataTypeIds.String) return s;
+                if (dataType == DataTypeIds.DateTime) return DateTime.TryParse(s, out var v) ? v : null;
+                return s;
             }
         }
 

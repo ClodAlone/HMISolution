@@ -70,14 +70,14 @@ namespace SimpleOpcFileServer
                 await DeliverReportAsync(config, html);
 
                 sw.Stop();
-                DiagnosticsCollector.Instance.RecordCycle("Report", config.Name, sw.Elapsed);
+                DiagnosticsCollector.Instance.RecordCycle("Report", config.Name, sw.Elapsed.TotalMilliseconds);
                 Log.Information("Report '{Name}' generated in {Elapsed}ms.", config.Name, sw.ElapsedMilliseconds);
                 return html;
             }
             catch (Exception ex)
             {
                 sw.Stop();
-                DiagnosticsCollector.Instance.RecordCycle("Report", config.Name, sw.Elapsed);
+                DiagnosticsCollector.Instance.RecordCycle("Report", config.Name, sw.Elapsed.TotalMilliseconds);
                 Log.Error(ex, "Failed to generate report '{Name}'.", config.Name);
                 return null;
             }

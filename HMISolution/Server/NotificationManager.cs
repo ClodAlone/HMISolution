@@ -33,7 +33,7 @@ public sealed class NotificationManager : IDisposable
     /// <summary>
     /// Called when an alarm activates. Sends immediate notifications and schedules escalation.
     /// </summary>
-    public void OnAlarmActivated(string alarmPath, string message, ushort severity,
+    public void NotifyAlarmActivated(string alarmPath, string message, ushort severity,
         AlarmNotificationConfig? notifConfig)
     {
         if (notifConfig == null) return;
@@ -86,7 +86,7 @@ public sealed class NotificationManager : IDisposable
     /// <summary>
     /// Called when an alarm is acknowledged. Cancels pending escalation.
     /// </summary>
-    public void OnAlarmAcknowledged(string alarmPath)
+    public void CancelEscalation(string alarmPath)
     {
         _pendingEscalations.TryRemove(alarmPath, out _);
     }
@@ -94,7 +94,7 @@ public sealed class NotificationManager : IDisposable
     /// <summary>
     /// Called when an alarm deactivates (returns to normal). Sends clear notification.
     /// </summary>
-    public void OnAlarmCleared(string alarmPath, string message, AlarmNotificationConfig? notifConfig)
+    public void NotifyAlarmCleared(string alarmPath, string message, AlarmNotificationConfig? notifConfig)
     {
         _pendingEscalations.TryRemove(alarmPath, out _);
 

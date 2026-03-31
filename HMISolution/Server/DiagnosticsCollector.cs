@@ -34,6 +34,12 @@ namespace SimpleOpcFileServer
         public static DiagnosticsCollector Instance { get; } = new();
 
         /// <summary>
+        /// Optional delegate that returns system-level statistics (logging cache, alarm counts, driver states).
+        /// Set by the node manager after construction.
+        /// </summary>
+        public Func<SystemStats>? SystemStatsProvider { get; set; }
+
+        /// <summary>
         /// Configure rate limiting for the diagnostics endpoint.
         /// Call before Start() to enable throttling.
         /// </summary>
@@ -163,6 +169,8 @@ namespace SimpleOpcFileServer
                     info.DebugSession = ScriptDebugger.Instance.GetSessionInfo(info.Name);
                 diag.ProgramDebug.Add(info);
             }
+
+            diag.System = SystemStatsProvider?.Invoke();
 
             return diag;
         }
@@ -402,5 +410,8 @@ namespace SimpleOpcFileServer
     [System.Text.Json.Serialization.JsonSerializable(typeof(ScriptDebugSession))]
     [System.Text.Json.Serialization.JsonSerializable(typeof(ScriptDebugState))]
     [System.Text.Json.Serialization.JsonSerializable(typeof(ScriptBreakpoint))]
+    [System.Text.Json.Serialization.JsonSerializable(typeof(SystemStats))]
+    [System.Text.Json.Serialization.JsonSerializable(typeof(LoggerCacheStats))]
+    [System.Text.Json.Serialization.JsonSerializable(typeof(DriverSystemStats))]
     internal partial class DiagnosticsJsonContext : System.Text.Json.Serialization.JsonSerializerContext { }
 }

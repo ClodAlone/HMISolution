@@ -751,7 +751,7 @@ public sealed class RestApiService : IDisposable
 
         var data = _nodeManager.ReadHistoricalValues(variable, start, end, max);
         var points = data?.Select(d => new { timestamp = d.Timestamp, value = d.Value }).ToList()
-            ?? new List<object>();
+            ?? [];
 
         await SendJsonResponse(stream, 200, new { variable, start, end, count = points.Count, data = points });
     }
