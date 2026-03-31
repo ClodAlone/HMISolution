@@ -250,40 +250,6 @@
     }
 </div>
 
-@* ─── Data Logging Configuration ───────────────────────── *@
-<div class="mb-2">
-    <div class="d-flex justify-content-between align-items-center mb-1">
-        <label class="form-label fw-bold small mb-0">📊 Data Logging</label>
-        @if (Variable.DataLogging == null || !Variable.DataLogging.Enabled)
-        {
-            <button class="btn btn-sm btn-outline-info py-0 px-1" style="font-size: 10px;"
-                    @onclick="EnableDataLogging">Enable</button>
-        }
-        else
-        {
-            <button class="btn btn-sm btn-outline-secondary py-0 px-1" style="font-size: 10px;"
-                    @onclick="DisableDataLogging">Remove</button>
-        }
-    </div>
-
-    @if (Variable.DataLogging is { Enabled: true })
-    {
-        <div class="card vde-card p-2 mb-1" style="border-color: var(--accent-color);">
-            <div class="row g-1 mb-1">
-                <div class="col-6">
-                    <label class="form-label mb-0 small" title="Minimum value change before a new sample is logged. Set to 0 to log every change.">
-                        Hysteresis <span class="vde-hint">ⓘ</span>
-                    </label>
-                    <input type="number" class="form-control form-control-sm" step="any" min="0"
-                           @bind="Variable.DataLogging.Hysteresis" @bind:after="OnDataLoggingChanged"
-                           placeholder="0" />
-                </div>
-            </div>
-            <div class="vde-desc">Records variable history to the configured database. Required for HDA charts and anomaly detection.</div>
-        </div>
-    }
-</div>
-
 @* ─── Anomaly Detection Configuration ──────────────────── *@
 <div class="mb-2">
     <div class="d-flex justify-content-between align-items-center mb-1">
@@ -529,10 +495,6 @@
     private void EnableAlarm() { Variable.Alarm = new AlarmConfig(); SyncJsonEditor(); OnChanged.InvokeAsync(); }
     private void DisableAlarm() { Variable.Alarm = null; SyncJsonEditor(); OnChanged.InvokeAsync(); }
     private void OnAlarmChanged() { SyncJsonEditor(); OnChanged.InvokeAsync(); }
-
-    private void EnableDataLogging() { Variable.DataLogging = new DataLoggingConfig { Enabled = true }; SyncJsonEditor(); OnChanged.InvokeAsync(); }
-    private void DisableDataLogging() { Variable.DataLogging = null; Variable.AnomalyDetection = null; SyncJsonEditor(); OnChanged.InvokeAsync(); }
-    private void OnDataLoggingChanged() { SyncJsonEditor(); OnChanged.InvokeAsync(); }
 
     private void EnableAnomalyDetection() { Variable.AnomalyDetection = new AnomalyDetectionConfig { Enabled = true }; SyncJsonEditor(); OnChanged.InvokeAsync(); }
     private void DisableAnomalyDetection() { Variable.AnomalyDetection = null; SyncJsonEditor(); OnChanged.InvokeAsync(); }
