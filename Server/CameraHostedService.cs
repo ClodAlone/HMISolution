@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -23,6 +24,11 @@ public class CameraHostedService : BackgroundService
     private readonly CameraStreamService _cameraService;
     private HttpListener? _httpListener;
     private SimpleFileServerNodeManager? _nodeManager;
+
+    // Tracks last detection timestamp per prefix for Alive timeout
+    private readonly ConcurrentDictionary<string, DateTime> _lastDetectionTime = new();
+    private readonly ConcurrentDictionary<string, int> _detectionTimeouts = new();
+    private Timer? _aliveTimer;
 
     /// <summary>Port for the MJPEG streaming HTTP server.</summary>
     public int StreamPort { get; set; } = 8088;
@@ -59,12 +65,18 @@ public class CameraHostedService : BackgroundService
         // Start cameras
         foreach (var cam in cameras)
         {
+            if (!string.IsNullOrEmpty(cam.DetectionVariablePrefix) && cam.DetectionTimeoutSeconds > 0)
+                _detectionTimeouts[cam.DetectionVariablePrefix] = cam.DetectionTimeoutSeconds;
+
             _cameraService.StartCamera(cam, (prefix, label, confidence, count) =>
             {
                 WriteDetectionVariables(prefix, label, confidence, count);
             });
             _logger.LogInformation("Camera started: {Id} ({Protocol}) -> {Url}", cam.CameraId, cam.Protocol, cam.Url);
         }
+
+        // Start periodic timer to reset Alive when detections stop
+        _aliveTimer = new Timer(CheckDetectionAlive, null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
 
         // Start HTTP listener for MJPEG streams
         try
@@ -215,6 +227,13 @@ public class CameraHostedService : BackgroundService
                 _nodeManager.WriteVariable($"{prefix}.Confidence", Math.Round(confidence, 4));
             if (_nodeManager._variables.ContainsKey($"{prefix}.Count"))
                 _nodeManager.WriteVariable($"{prefix}.Count", count);
+
+            // Update alive heartbeat — mark as alive whenever a detection callback fires
+            if (_nodeManager._variables.ContainsKey($"{prefix}.Alive"))
+            {
+                _lastDetectionTime[prefix] = DateTime.UtcNow;
+                _nodeManager.WriteVariable($"{prefix}.Alive", true);
+            }
         }
         catch (Exception)
         {
@@ -222,8 +241,38 @@ public class CameraHostedService : BackgroundService
         }
     }
 
+    /// <summary>
+    /// Periodically checks each camera prefix; if no detection has arrived within
+    /// the configured timeout, sets the Alive variable to false.
+    /// </summary>
+    private void CheckDetectionAlive(object? state)
+    {
+        if (_nodeManager == null) return;
+
+        var now = DateTime.UtcNow;
+        foreach (var kvp in _detectionTimeouts)
+        {
+            var prefix = kvp.Key;
+            var timeoutSec = kvp.Value;
+
+            if (_lastDetectionTime.TryGetValue(prefix, out var lastTime))
+            {
+                if ((now - lastTime).TotalSeconds >= timeoutSec)
+                {
+                    try
+                    {
+                        if (_nodeManager._variables.ContainsKey($"{prefix}.Alive"))
+                            _nodeManager.WriteVariable($"{prefix}.Alive", false);
+                    }
+                    catch { }
+                }
+            }
+        }
+    }
+
     public override Task StopAsync(CancellationToken cancellationToken)
     {
+        _aliveTimer?.Dispose();
         _httpListener?.Stop();
         _cameraService.Dispose();
         return base.StopAsync(cancellationToken);

@@ -1,4 +1,4 @@
-using Opc.Ua;
+﻿using Opc.Ua;
 using Opc.Ua.Server;
 using Serilog;
 using SharedModels;
@@ -782,6 +782,9 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                                // ─── Diagnostics OPC UA node (always created, license-exempt) ───
                           CreateDiagnosticsNode(references);
 
+                               // ─── Camera Detection OPC UA variables ───
+                           CreateCameraDetectionVariables(nodeModel, references);
+
                                         // ─── REST API for external integration ───
                                         if (nodeModel.Server?.Api != null && nodeModel.Server.Api.Enabled)
                                         {
@@ -804,6 +807,86 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                           CreateAlarmShelvingMethods(references);
                  }
         
+        /// <summary>
+        /// Creates OPC UA address-space nodes for each configured camera's detection output.
+        /// For each camera with a non-empty DetectionVariablePrefix,
+        /// creates: {Prefix}.Label (String), {Prefix}.Confidence (Double),
+        /// {Prefix}.Count (Int32), and {Prefix}.Alive (Boolean).
+        /// </summary>
+        private void CreateCameraDetectionVariables(NodeModel nodeModel, IList<IReference>? references)
+        {
+            var cameras = new List<CameraConfig>();
+            if (nodeModel.Cameras != null)
+                cameras.AddRange(nodeModel.Cameras);
+
+            if (nodeModel.Screens != null)
+            {
+                foreach (var screen in nodeModel.Screens)
+                    foreach (var sym in screen.Symbols)
+                        if (sym.Type == "ipcamera" && sym.Camera != null
+                            && !string.IsNullOrEmpty(sym.Camera.CameraId)
+                            && !cameras.Any(c => c.CameraId == sym.Camera.CameraId))
+                            cameras.Add(sym.Camera);
+            }
+
+            if (cameras.Count == 0) return;
+
+            foreach (var cam in cameras)
+            {
+                var prefix = cam.DetectionVariablePrefix;
+                if (string.IsNullOrEmpty(prefix)) continue;
+
+                var lastDot = prefix.LastIndexOf('.');
+                FolderState parentFolder;
+                string varGroupName;
+                if (lastDot > 0)
+                {
+                    var folderPath = prefix[..lastDot];
+                    varGroupName = prefix[(lastDot + 1)..];
+                    parentFolder = CreateOrGetFolder(folderPath, references);
+                }
+                else
+                {
+                    varGroupName = prefix;
+                    parentFolder = CreateOrGetFolder("_Cameras", references);
+                }
+
+                var camFolder = new FolderState(parentFolder);
+                camFolder.NodeId = new NodeId(prefix, _namespaceIndex);
+                camFolder.BrowseName = new QualifiedName(varGroupName, _namespaceIndex);
+                camFolder.DisplayName = new LocalizedText(varGroupName);
+                camFolder.TypeDefinitionId = ObjectTypeIds.FolderType;
+                camFolder.ReferenceTypeId = ReferenceTypes.Organizes;
+                parentFolder.AddChild(camFolder);
+                AddPredefinedNode(SystemContext, camFolder);
+
+                CreateCameraVariable<string>(camFolder, prefix, "Label", DataTypeIds.String, "");
+                CreateCameraVariable<double>(camFolder, prefix, "Confidence", DataTypeIds.Double, 0.0);
+                CreateCameraVariable<int>(camFolder, prefix, "Count", DataTypeIds.Int32, 0);
+                CreateCameraVariable<bool>(camFolder, prefix, "Alive", DataTypeIds.Boolean, false);
+            }
+        }
+
+        private void CreateCameraVariable<T>(FolderState parent, string prefix, string name, NodeId dataType, T defaultValue)
+        {
+            var path = $"{prefix}.{name}";
+            var variable = new BaseDataVariableState<T>(parent);
+            variable.NodeId = new NodeId(path, _namespaceIndex);
+            variable.BrowseName = new QualifiedName(name, _namespaceIndex);
+            variable.DisplayName = new LocalizedText(name);
+            variable.DataType = dataType;
+            variable.ValueRank = ValueRanks.Scalar;
+            variable.Value = defaultValue;
+            variable.AccessLevel = AccessLevels.CurrentRead;
+            variable.UserAccessLevel = AccessLevels.CurrentRead;
+            variable.Timestamp = DateTime.UtcNow;
+            variable.StatusCode = StatusCodes.Good;
+
+            parent.AddChild(variable);
+            AddPredefinedNode(SystemContext, variable);
+            _variables[path] = variable;
+        }
+
         private void CreateRecipeVariables(List<RecipeConfig> recipes, IList<IReference>? references)
         {
             // Create a "Recipe" root folder

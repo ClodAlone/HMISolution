@@ -151,8 +151,7 @@ public class CameraStreamService : IDisposable
                     var modelPath = string.IsNullOrEmpty(config.YoloModelPath) ? "yolov8n.onnx" : config.YoloModelPath;
                     if (File.Exists(modelPath))
                     {
-                        _yoloSession = new InferenceSession(modelPath);
-                        _logger.LogInformation("YOLO model loaded: {Path}", modelPath);
+                        _yoloSession = CreateInferenceSession(modelPath, config, logger);
                     }
                     else
                     {
@@ -480,6 +479,35 @@ public class CameraStreamService : IDisposable
             float union = aArea + bArea - intersection;
 
             return union > 0 ? intersection / union : 0;
+        }
+
+        // ─── ONNX session factory (CPU / CUDA) ──────────────
+
+        private static InferenceSession CreateInferenceSession(string modelPath, CameraConfig config, ILogger logger)
+        {
+            if (config.UseCuda)
+            {
+                try
+                {
+                    var opts = new SessionOptions();
+                    opts.AppendExecutionProvider_CUDA(config.CudaDeviceId);
+                    opts.AppendExecutionProvider_CPU();        // fallback
+                    var session = new InferenceSession(modelPath, opts);
+                    logger.LogInformation("YOLO model loaded with CUDA (device {DeviceId}): {Path}", config.CudaDeviceId, modelPath);
+                    return session;
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex,
+                        "CUDA execution provider not available (missing NVIDIA drivers or CUDA toolkit). " +
+                        "Falling back to CPU for YOLO inference. Model: {Path}", modelPath);
+                }
+            }
+
+            // CPU-only path
+            var cpuSession = new InferenceSession(modelPath);
+            logger.LogInformation("YOLO model loaded (CPU): {Path}", modelPath);
+            return cpuSession;
         }
 
         public void Dispose()

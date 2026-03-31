@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -1579,6 +1579,21 @@ namespace SharedModels
         /// <summary>Draw bounding boxes on the stream output.</summary>
         public bool DrawDetections { get; set; } = true;
 
+        /// <summary>
+        /// Use CUDA (NVIDIA GPU) for YOLO inference acceleration.
+        /// Requires NVIDIA GPU with CUDA drivers installed. Falls back to CPU if unavailable.
+        /// </summary>
+        public bool UseCuda { get; set; }
+
+        /// <summary>CUDA GPU device ID when UseCuda is enabled. Default 0 (first GPU).</summary>
+        public int CudaDeviceId { get; set; }
+
+        /// <summary>
+        /// Seconds of silence before detection is considered dead and the Alive variable resets to false.
+        /// Default 10. Set 0 to disable heartbeat.
+        /// </summary>
+        public int DetectionTimeoutSeconds { get; set; } = 10;
+
         /// <summary>Optional username for camera authentication.</summary>
         public string Username { get; set; } = "";
 
@@ -2204,6 +2219,21 @@ namespace SharedModels
     /// <summary>
     /// Diagnostics snapshot for anomaly detection, exposed via the /diag endpoint.
     /// </summary>
+    /// <summary>
+    /// Alarm analytics snapshot (frequency, flood detection, top offenders).
+    /// </summary>
+    public class AlarmAnalyticsSnapshot
+    {
+        /// <summary>Total alarms raised in the current window.</summary>
+        public int TotalAlarms { get; set; }
+
+        /// <summary>Whether an alarm flood condition is detected.</summary>
+        public bool FloodDetected { get; set; }
+
+        /// <summary>Top offender variable paths by alarm frequency.</summary>
+        public List<string> TopOffenders { get; set; } = new();
+    }
+
     public class AnomalyDetectionSnapshot
     {
         /// <summary>UTC timestamp when the snapshot was computed.</summary>

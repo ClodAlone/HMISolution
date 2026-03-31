@@ -180,6 +180,9 @@ public class OpcUaServerApp
 {
     private OpcUaServer _server;
 
+    /// <summary>The custom node manager, available after the server has started.</summary>
+    public SimpleFileServerNodeManager? NodeManager => _server?.NodeManager;
+
     public void Stop()
     {
         _server?.Stop();
@@ -334,11 +337,16 @@ public class OpcUaServerApp
 public class OpcUaServer : StandardServer
 {
     private readonly string _configPath;
+    private SimpleFileServerNodeManager? _nodeManager;
+
+    /// <summary>The custom node manager instance, available after server start.</summary>
+    public SimpleFileServerNodeManager? NodeManager => _nodeManager;
+
     public OpcUaServer(string configPath) { _configPath = configPath; }
     protected override MasterNodeManager CreateMasterNodeManager(IServerInternal server, ApplicationConfiguration configuration)
     {
-        var nodeManagers = new List<INodeManager>();
-        nodeManagers.Add(new SimpleFileServerNodeManager(server, configuration, _configPath));
+        _nodeManager = new SimpleFileServerNodeManager(server, configuration, _configPath);
+        var nodeManagers = new List<INodeManager> { _nodeManager };
         return new MasterNodeManager(server, configuration, null, nodeManagers.ToArray());
     }
 }
