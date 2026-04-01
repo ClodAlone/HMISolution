@@ -1462,6 +1462,104 @@ else if (Node is ServerSettingsNode ssNode)
             }
             <button class="btn btn-sm btn-outline-primary" @onclick="() => AddMultiSiteSite(ssNode)">➕ Add Site</button>
         }
+
+        @* ── MQTT Sparkplug B ── *@
+        <hr />
+        <h6>📡 Sparkplug B (MQTT)</h6>
+        <div class="form-text mb-2">
+            Publish OPC variables as Sparkplug B metrics to an MQTT broker for SCADA interoperability (Ignition, AVEVA, etc.).
+        </div>
+        <div class="mb-2 form-check">
+            <input class="form-check-input" type="checkbox"
+                   checked="@(ssNode.Settings.Sparkplug?.Enabled == true)"
+                   @onchange="e => { EnsureSparkplugConfig(ssNode).Enabled = (bool)(e.Value ?? false); OnChanged(); }" />
+            <label class="form-check-label">Enable Sparkplug B Publisher</label>
+        </div>
+        @if (ssNode.Settings.Sparkplug is { Enabled: true } spCfg)
+        {
+            <div class="row g-2 mb-2">
+                <div class="col-8">
+                    <label class="form-label small">MQTT Broker</label>
+                    <input type="text" class="form-control form-control-sm"
+                           @bind="spCfg.Broker" @bind:after="OnChanged"
+                           placeholder="mqtt.factory.local" />
+                </div>
+                <div class="col-4">
+                    <label class="form-label small">Port</label>
+                    <input type="number" class="form-control form-control-sm" min="1" max="65535"
+                           @bind="spCfg.Port" @bind:after="OnChanged" />
+                </div>
+            </div>
+            <div class="row g-2 mb-2">
+                <div class="col-6">
+                    <label class="form-label small">Group ID</label>
+                    <input type="text" class="form-control form-control-sm"
+                           @bind="spCfg.GroupId" @bind:after="OnChanged"
+                           placeholder="Factory1" />
+                    <div class="form-text">Logical grouping of edge nodes</div>
+                </div>
+                <div class="col-6">
+                    <label class="form-label small">Edge Node ID</label>
+                    <input type="text" class="form-control form-control-sm"
+                           @bind="spCfg.EdgeNodeId" @bind:after="OnChanged"
+                           placeholder="HMI-Server-01" />
+                    <div class="form-text">Unique ID for this server</div>
+                </div>
+            </div>
+            <div class="row g-2 mb-2">
+                <div class="col-6">
+                    <label class="form-label small">Publish Interval (ms)</label>
+                    <input type="number" class="form-control form-control-sm" min="0"
+                           @bind="spCfg.PublishIntervalMs" @bind:after="OnChanged" />
+                    <div class="form-text">0 = on-change only</div>
+                </div>
+                <div class="col-6 d-flex align-items-end">
+                    <div class="form-check mb-0">
+                        <input class="form-check-input" type="checkbox"
+                               @bind="spCfg.PublishOnChange" @bind:after="OnChanged" />
+                        <label class="form-check-label small">Publish on change</label>
+                    </div>
+                </div>
+            </div>
+            <details class="mb-2">
+                <summary class="small">Authentication & TLS</summary>
+                <div class="row g-2 mt-1 mb-2">
+                    <div class="col-6">
+                        <label class="form-label small">Username</label>
+                        <input type="text" class="form-control form-control-sm"
+                               @bind="spCfg.Username" @bind:after="OnChanged" placeholder="(optional)" />
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label small">Password</label>
+                        <input type="password" class="form-control form-control-sm"
+                               @bind="spCfg.Password" @bind:after="OnChanged" placeholder="(optional)" />
+                    </div>
+                </div>
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox"
+                           @bind="spCfg.UseTls" @bind:after="OnChanged" />
+                    <label class="form-check-label small">Use TLS/SSL</label>
+                </div>
+            </details>
+            <details class="mb-2">
+                <summary class="small">Variable Filters</summary>
+                <div class="mt-1 mb-2">
+                    <label class="form-label small">Include Variables (one per line, * wildcard)</label>
+                    <textarea class="form-control form-control-sm" rows="3"
+                              value="@string.Join("\n", spCfg.IncludeVariables)"
+                              @onchange="e => { spCfg.IncludeVariables = ParseLines(e.Value?.ToString()); OnChanged(); }"
+                              placeholder="Empty = publish ALL variables&#10;Plant.*&#10;Line1.Motor.*"></textarea>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small">Exclude Variables (one per line, * wildcard)</label>
+                    <textarea class="form-control form-control-sm" rows="2"
+                              value="@string.Join("\n", spCfg.ExcludeVariables)"
+                              @onchange="e => { spCfg.ExcludeVariables = ParseLines(e.Value?.ToString()); OnChanged(); }"
+                              placeholder="Plant.Internal.*"></textarea>
+                </div>
+            </details>
+        }
+
     </div>
 }
 else if (Node is BatchNode batchNode)
@@ -1952,6 +2050,21 @@ else if (Node is UserNode uNode)
     {
         ssNode.Settings.NaturalLanguageQuery ??= new NaturalLanguageQueryConfig();
         return ssNode.Settings.NaturalLanguageQuery;
+    }
+
+    // ── Sparkplug B Config helper ──
+
+    private SparkplugConfig EnsureSparkplugConfig(ServerSettingsNode ssNode)
+    {
+        ssNode.Settings.Sparkplug ??= new SparkplugConfig();
+        return ssNode.Settings.Sparkplug;
+    }
+
+    private static List<string> ParseLines(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return new();
+        return text.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                   .Where(l => !string.IsNullOrEmpty(l)).ToList();
     }
 
     private void SetNlEngine(ServerSettingsNode ssNode, string? value)

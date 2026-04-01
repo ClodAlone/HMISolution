@@ -141,6 +141,7 @@ public class HelpService
             ("multisite", "Multi-Site Dashboard", "🌐"),
             ("mobile", "Mobile-Optimized View", "📱"),
             ("redundancy", "Redundancy / HA", "🔄"),
+            ("sparkplug", "Sparkplug B (MQTT)", "📡"),
         };
 
         if (locale != "en" && _tocTitles.TryGetValue(locale, out var titles))
@@ -205,6 +206,7 @@ public class HelpService
             ["multisite"] = "Multi-Standort-Dashboard",
             ["mobile"] = "Mobile Ansicht",
             ["redundancy"] = "Redundanz / Hochverfügbarkeit",
+            ["sparkplug"] = "Sparkplug B (MQTT)",
         },
         ["it"] = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -251,6 +253,7 @@ public class HelpService
             ["multisite"] = "Dashboard multi-sito",
             ["mobile"] = "Vista mobile ottimizzata",
             ["redundancy"] = "Ridondanza / Alta disponibilità",
+            ["sparkplug"] = "Sparkplug B (MQTT)",
         },
         ["fr"] = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -297,6 +300,7 @@ public class HelpService
             ["multisite"] = "Tableau de bord multi-sites",
             ["mobile"] = "Vue mobile optimisée",
             ["redundancy"] = "Redondance / Haute disponibilité",
+            ["sparkplug"] = "Sparkplug B (MQTT)",
         },
         ["ja"] = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -343,6 +347,7 @@ public class HelpService
             ["multisite"] = "マルチサイトダッシュボード",
             ["mobile"] = "モバイル最適化ビュー",
             ["redundancy"] = "冗長化 / 高可用性",
+            ["sparkplug"] = "Sparkplug B (MQTT)",
         },
         ["zh"] = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -389,6 +394,7 @@ public class HelpService
             ["multisite"] = "多站点仪表板",
             ["mobile"] = "移动端优化视图",
             ["redundancy"] = "冗余 / 高可用性",
+            ["sparkplug"] = "Sparkplug B (MQTT)",
         },
     };
 
@@ -419,6 +425,7 @@ This is a web-based editor for configuring the **Simple OPC File Server** — an
 - **Multi-Site Dashboard** — Aggregate data from multiple CloudRelay servers
 - **Mobile View** — Responsive layout optimized for tablets and phones
 - **Redundancy** — Primary/standby high-availability with automatic failover
+- **Sparkplug B** — Standard MQTT-based SCADA interoperability protocol
 
 ### Panels
 Use **View** menu to show/hide panels. Drag panel tabs to reorganize the layout.
@@ -1303,6 +1310,96 @@ Scripts can read these variables: `Read("_System.Redundancy.IsActive")`
 
 ### Diagnostics
 Redundancy status appears in the diagnostics endpoint (`/diag`) under the `Redundancy` section, showing role, partner status, missed heartbeats, and replication queue depth.
+"""),
+
+        ["sparkplug"] = new("📡 MQTT Sparkplug B", """
+## MQTT Sparkplug B
+
+Standard SCADA-over-MQTT protocol for interoperability with external systems like Ignition, AVEVA, or any Sparkplug B host application.
+
+The server supports **two modes**:
+
+### 1. Edge Node Publisher (Server → MQTT)
+The server publishes OPC UA variables as Sparkplug B metrics to an MQTT broker.
+
+#### Configuration (`Server.Sparkplug`)
+| Property | Description | Default |
+|---|---|---|
+| `Enabled` | Enable the publisher | `false` |
+| `Broker` | MQTT broker hostname or IP | — |
+| `Port` | MQTT broker port | `1883` |
+| `GroupId` | Sparkplug B Group ID | — |
+| `EdgeNodeId` | Unique edge node identifier | — |
+| `PublishIntervalMs` | Batch publish interval (0 = on-change only) | `1000` |
+| `PublishOnChange` | Publish immediately when a value changes | `true` |
+| `Username` / `Password` | Broker authentication | — |
+| `UseTls` | Enable TLS/SSL | `false` |
+| `IncludeVariables` | Path patterns to publish (empty = all). Supports `*` wildcard. | `[]` |
+| `ExcludeVariables` | Path patterns to exclude from publishing | `[]` |
+
+#### Sparkplug B Messages
+| Message | When | Content |
+|---|---|---|
+| **NBIRTH** | On connect | Full metric catalog with names, aliases, types, and current values |
+| **NDATA** | Periodically / on-change | Changed metric values (using compact aliases) |
+| **NDEATH** | On disconnect (LWT) | Signals this node is offline |
+| **NCMD** | From host | Rebirth command triggers a new NBIRTH |
+
+#### Example
+```json
+{
+  "Server": {
+    "Sparkplug": {
+      "Enabled": true,
+      "Broker": "mqtt.factory.local",
+      "Port": 1883,
+      "GroupId": "Factory1",
+      "EdgeNodeId": "HMI-Server-01",
+      "PublishIntervalMs": 1000,
+      "PublishOnChange": true,
+      "IncludeVariables": ["Plant.*"],
+      "ExcludeVariables": ["Plant.Internal.*"]
+    }
+  }
+}
+```
+
+### 2. Subscriber Driver (MQTT → Server)
+The `SparkplugB` driver subscribes to Sparkplug B topics and maps external metrics to OPC variables.
+
+#### Per-Variable Configuration
+Add a `SparkplugB` entry to the variable's driver configs:
+```json
+{
+  "Name": "ExternalPLC.Temperature",
+  "Type": "Double",
+  "SparkplugB": {
+    "Broker": "mqtt.local",
+    "Port": 1883,
+    "GroupId": "Plant1",
+    "NodeId": "PLC-01",
+    "DeviceId": "Furnace",
+    "MetricName": "Temperature"
+  }
+}
+```
+
+The driver automatically:
+- Subscribes to `DBIRTH` / `DDATA` / `DDEATH` topics
+- Registers metric aliases from BIRTH messages for efficient lookups
+- Updates OPC variable values from DATA messages (Protobuf decoded)
+- Sets variables to `Bad` status on DEATH messages
+
+### Redundancy Integration
+- The publisher **only runs on the active server** — standby does not publish
+- On failover promotion, the publisher starts automatically; on demotion, it stops
+- The subscriber driver runs on whichever server has its drivers active
+
+### Topic Namespace
+```
+spBv1.0/{group_id}/{message_type}/{edge_node_id}/{device_id}
+```
+Message types: `NBIRTH`, `NDEATH`, `DBIRTH`, `DDEATH`, `NDATA`, `DDATA`, `NCMD`, `DCMD`
 """),
     };
 

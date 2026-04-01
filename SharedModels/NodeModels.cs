@@ -416,6 +416,12 @@ namespace SharedModels
         /// and receive AI-powered answers.
         /// </summary>
         public NaturalLanguageQueryConfig? NaturalLanguageQuery { get; set; }
+
+        /// <summary>
+        /// MQTT Sparkplug B configuration. When enabled, the server acts as an edge node
+        /// and publishes OPC UA variables as Sparkplug B metrics for external SCADA systems.
+        /// </summary>
+        public SparkplugConfig? Sparkplug { get; set; }
     }
 
     /// <summary>
@@ -2302,6 +2308,65 @@ namespace SharedModels
         /// Default false (PLC programs only run on the active server).
         /// </summary>
         public bool PlcRunOnStandby { get; set; }
+    }
+
+    // --- Feature: MQTT Sparkplug B ---
+
+    /// <summary>
+    /// Configuration for the MQTT Sparkplug B edge-node publisher.
+    /// When enabled, the server publishes OPC UA variables as Sparkplug B metrics
+    /// on an MQTT broker, enabling interoperability with SCADA systems like
+    /// Ignition, AVEVA, or any Sparkplug B host application.
+    /// </summary>
+    public class SparkplugConfig
+    {
+        /// <summary>Enable the Sparkplug B publisher.</summary>
+        public bool Enabled { get; set; }
+
+        /// <summary>MQTT broker hostname or IP.</summary>
+        public string Broker { get; set; } = "";
+
+        /// <summary>MQTT broker port. Default 1883 (or 8883 for TLS).</summary>
+        public int Port { get; set; } = 1883;
+
+        /// <summary>Sparkplug B Group ID (logical grouping of edge nodes).</summary>
+        public string GroupId { get; set; } = "";
+
+        /// <summary>Sparkplug B Edge Node ID (unique identifier for this server instance).</summary>
+        public string EdgeNodeId { get; set; } = "";
+
+        /// <summary>
+        /// Publish interval in milliseconds. Metrics are batched and published at this rate.
+        /// Set to 0 for publish-on-change only. Default 1000 (1 second).
+        /// </summary>
+        public int PublishIntervalMs { get; set; } = 1000;
+
+        /// <summary>
+        /// When true, metrics are published immediately when a variable value changes,
+        /// in addition to the periodic interval. Default true.
+        /// </summary>
+        public bool PublishOnChange { get; set; } = true;
+
+        /// <summary>MQTT username for broker authentication (optional).</summary>
+        public string Username { get; set; } = "";
+
+        /// <summary>MQTT password for broker authentication (optional).</summary>
+        public string Password { get; set; } = "";
+
+        /// <summary>Use TLS/SSL for the MQTT connection.</summary>
+        public bool UseTls { get; set; }
+
+        /// <summary>
+        /// Variable path patterns to include. Empty = publish ALL variables.
+        /// Supports wildcard suffix: "Plant.*" matches "Plant.Temp", "Plant.Pressure", etc.
+        /// </summary>
+        public List<string> IncludeVariables { get; set; } = new();
+
+        /// <summary>
+        /// Variable path patterns to exclude from publishing.
+        /// Applied after IncludeVariables. Supports wildcard suffix.
+        /// </summary>
+        public List<string> ExcludeVariables { get; set; } = new();
     }
 
     // --- Feature: Rate Limiting / Throttling ---

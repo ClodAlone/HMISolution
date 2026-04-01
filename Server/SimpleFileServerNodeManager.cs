@@ -71,6 +71,9 @@ namespace SimpleOpcFileServer
         // Redundancy / HA service
         internal RedundancyService? _redundancy;
 
+        // Sparkplug B edge-node publisher
+        private SparkplugPublisher? _sparkplugPublisher;
+
         // Retentive variable storage
         private readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> _retentiveValues = new();
         private string? _retentivePath;
@@ -674,6 +677,14 @@ namespace SimpleOpcFileServer
                                  _plcManager.Initialize(_cachedPlcPrograms);
                                  _eventLogger?.LogSystem("Info", "Redundancy", "PLC programs started after promotion");
                              }
+
+                             // Start Sparkplug B publisher on promotion
+                             if (_sparkplugPublisher == null && nodeModel.Server?.Sparkplug is { Enabled: true } spCfgOnPromotion)
+                             {
+                                 _sparkplugPublisher = new SparkplugPublisher(spCfgOnPromotion, _variables, _redundancy, _eventLogger);
+                                 _ = _sparkplugPublisher.StartAsync();
+                                 _eventLogger?.LogSystem("Info", "Redundancy", "SparkplugB publisher started after promotion");
+                             }
                          }
                          else
                          {
@@ -696,6 +707,14 @@ namespace SimpleOpcFileServer
                                  _plcManager = null;
                                  _eventLogger?.LogSystem("Info", "Redundancy", "PLC programs stopped after demotion");
                              }
+
+                             // Stop Sparkplug B publisher on demotion
+                             if (_sparkplugPublisher != null)
+                             {
+                                 _sparkplugPublisher.Dispose();
+                                 _sparkplugPublisher = null;
+                                 _eventLogger?.LogSystem("Info", "Redundancy", "SparkplugB publisher stopped after demotion");
+                             }
                          }
                      };
 
@@ -711,6 +730,16 @@ namespace SimpleOpcFileServer
 
                  // Start anomaly detection after variables are created
                  _anomalyDetectionService?.Start();
+
+                 // Sparkplug B publisher (edge node)
+                 var spCfg = nodeModel.Server?.Sparkplug;
+                 if (spCfg is { Enabled: true })
+                 {
+                     _sparkplugPublisher?.Dispose();
+                     _sparkplugPublisher = new SparkplugPublisher(spCfg, _variables, _redundancy, _eventLogger);
+                     _ = _sparkplugPublisher.StartAsync();
+                     _eventLogger?.LogSystem("Info", "SparkplugB", "Publisher initialized");
+                 }
 
                  // scripts — skip on standby unless ScriptsRunOnStandby is set
                  if (nodeModel.Scripts != null && (_redundancy == null || _redundancy.ShouldRunScripts))
@@ -2347,6 +2376,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 _notificationService?.Dispose();
                 _batchManager?.Dispose();
                 _anomalyDetectionService?.Dispose();
+                _sparkplugPublisher?.Dispose();
                 _redundancy?.Dispose();
                 _eventLogger?.Dispose();
                 foreach (var rw in _resourceWatchers) rw.Dispose();
