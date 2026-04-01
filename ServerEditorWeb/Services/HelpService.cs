@@ -140,6 +140,7 @@ public class HelpService
             ("batch", "Batch / Sequence Manager", "🔄"),
             ("multisite", "Multi-Site Dashboard", "🌐"),
             ("mobile", "Mobile-Optimized View", "📱"),
+            ("redundancy", "Redundancy / HA", "🔄"),
         };
 
         if (locale != "en" && _tocTitles.TryGetValue(locale, out var titles))
@@ -203,6 +204,7 @@ public class HelpService
             ["batch"] = "Batch / Ablaufsteuerung",
             ["multisite"] = "Multi-Standort-Dashboard",
             ["mobile"] = "Mobile Ansicht",
+            ["redundancy"] = "Redundanz / Hochverfügbarkeit",
         },
         ["it"] = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -248,6 +250,7 @@ public class HelpService
             ["batch"] = "Batch / Gestore sequenze",
             ["multisite"] = "Dashboard multi-sito",
             ["mobile"] = "Vista mobile ottimizzata",
+            ["redundancy"] = "Ridondanza / Alta disponibilità",
         },
         ["fr"] = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -293,6 +296,7 @@ public class HelpService
             ["batch"] = "Batch / Gestionnaire de séquences",
             ["multisite"] = "Tableau de bord multi-sites",
             ["mobile"] = "Vue mobile optimisée",
+            ["redundancy"] = "Redondance / Haute disponibilité",
         },
         ["ja"] = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -338,6 +342,7 @@ public class HelpService
             ["batch"] = "バッチ / シーケンス管理",
             ["multisite"] = "マルチサイトダッシュボード",
             ["mobile"] = "モバイル最適化ビュー",
+            ["redundancy"] = "冗長化 / 高可用性",
         },
         ["zh"] = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -383,6 +388,7 @@ public class HelpService
             ["batch"] = "批次 / 序列管理",
             ["multisite"] = "多站点仪表板",
             ["mobile"] = "移动端优化视图",
+            ["redundancy"] = "冗余 / 高可用性",
         },
     };
 
@@ -412,6 +418,7 @@ This is a web-based editor for configuring the **Simple OPC File Server** — an
 - **Batch Sequences** — ISA-88-style step-based sequence control
 - **Multi-Site Dashboard** — Aggregate data from multiple CloudRelay servers
 - **Mobile View** — Responsive layout optimized for tablets and phones
+- **Redundancy** — Primary/standby high-availability with automatic failover
 
 ### Panels
 Use **View** menu to show/hide panels. Drag panel tabs to reorganize the layout.
@@ -744,6 +751,7 @@ The server listens on the configured endpoint URL (default: `opc.tcp://localhost
 - **Diagnostics Port** — HTTP API for performance metrics (default 14841)
 - **Cloud Relay** — Connect through a SignalR cloud hub
 - **Crash Email** — SMTP configuration for crash report notifications
+- **Redundancy** — High-availability configuration with primary/standby failover (see Redundancy topic)
 """),
 
         ["serverpanel"] = new("🖥️ Server Panel", """
@@ -1217,6 +1225,85 @@ Automatic padding for notched phones (iPhone X+) and rounded-corner devices usin
 ### Hamburger Navigation
 On small screens, tab navigation is automatically replaced by a hamburger menu. The hamburger button appears on mobile regardless of the configured NavigationStyle.
 """),
+
+        ["redundancy"] = new("🔄 Redundancy / High Availability", """
+## Redundancy / High Availability
+
+Configure two server instances (primary + standby) for automatic failover. When the active server goes down, the standby promotes itself and starts running drivers, scripts, and PLC programs.
+
+### Configuration (`Server.Redundancy`)
+| Property | Description | Default |
+|---|---|---|
+| `Enabled` | Enable redundancy | `false` |
+| `Role` | `"Primary"` or `"Standby"` | `"Primary"` |
+| `PartnerEndpoint` | HTTP address of the partner (e.g. `http://192.168.1.100:14841`) | — |
+| `HeartbeatIntervalSeconds` | How often to check the partner | `5` |
+| `FailoverMissedHeartbeats` | Missed beats before failover | `3` |
+| `StateSyncIntervalMs` | Interval for pushing state to standby (0 = disabled) | `10000` |
+| `AutoSwitchback` | Standby returns to standby role when primary recovers | `false` |
+| `ScriptsRunOnStandby` | Scripts execute on the standby server too | `false` |
+| `PlcRunOnStandby` | PLC programs execute on the standby server too | `false` |
+| `MaxReplicationLagSeconds` | Warning threshold for replication lag | `30` |
+
+### How It Works
+
+**Heartbeat**: Each server periodically sends `GET /redundancy/heartbeat` to the partner's diagnostics port. After N consecutive missed heartbeats, the standby promotes itself to active.
+
+**Active Server Behavior**:
+- Drivers **only run on the active server** — the standby does not poll PLCs or field devices
+- Scripts and PLC programs run on active only by default; set `ScriptsRunOnStandby` / `PlcRunOnStandby` to also run them on standby
+- Data logging happens on the active server and is replicated to standby
+
+**State Synchronization**:
+- Variable values, data-log entries, and event-log entries are pushed from active to standby every `StateSyncIntervalMs`
+- On standby, received values are applied to the OPC address space, and log/event entries are replayed into the local database
+
+**Gap-Fill on Restart**:
+When a server restarts after downtime, it automatically detects gaps in its data-log and event-log databases and requests the missing entries from the partner:
+- `GET /redundancy/history-gap?since=<timestamp>` — fills data-logging gaps
+- `GET /redundancy/event-gap?since=<timestamp>` — fills event-log gaps
+
+### System Variables
+When redundancy is enabled, the following read-only OPC variables are created under `_System.Redundancy`:
+
+| Variable | Type | Description |
+|---|---|---|
+| `_System.Redundancy.IsActive` | Boolean | `true` when this server is the active one |
+| `_System.Redundancy.ActiveRole` | String | `"Active"` or `"Standby"` |
+| `_System.Redundancy.ConfiguredRole` | String | `"Primary"` or `"Standby"` (from config) |
+| `_System.Redundancy.PartnerAlive` | Boolean | Whether the partner's heartbeat is responding |
+
+Scripts can read these variables: `Read("_System.Redundancy.IsActive")`
+
+### Example Configuration
+```json
+{
+  "Server": {
+    "Redundancy": {
+      "Enabled": true,
+      "Role": "Primary",
+      "PartnerEndpoint": "http://192.168.1.100:14841",
+      "HeartbeatIntervalSeconds": 5,
+      "FailoverMissedHeartbeats": 3,
+      "StateSyncIntervalMs": 10000,
+      "AutoSwitchback": true,
+      "ScriptsRunOnStandby": false,
+      "PlcRunOnStandby": false
+    }
+  }
+}
+```
+
+### Failover Sequence
+1. Primary goes down (crash, network loss, restart)
+2. Standby detects missed heartbeats (default: 3 × 5s = 15s)
+3. Standby promotes to **Active** — starts drivers, scripts, PLC
+4. System variable `_System.Redundancy.IsActive` changes to `true`
+5. When primary recovers (if `AutoSwitchback` = true), standby steps back down
+
+### Diagnostics
+Redundancy status appears in the diagnostics endpoint (`/diag`) under the `Redundancy` section, showing role, partner status, missed heartbeats, and replication queue depth.
+"""),
     };
 
     // ═══════════════════════════════════════════════════════════
@@ -1566,6 +1653,7 @@ Der Server lauscht auf der konfigurierten Endpunkt-URL (Standard: `opc.tcp://loc
 - **Diagnoseport** — HTTP-API für Leistungsmetriken (Standard 14841)
 - **Cloud-Relay** — Verbindung über einen SignalR-Cloud-Hub
 - **Absturz-E-Mail** — SMTP-Konfiguration für Absturzbenachrichtigungen
+- **Redundanz** — Hochverfügbarkeit mit Primär/Standby-Failover (siehe Redundanz-Thema)
 """),
             ["serverpanel"] = new("🖥️ Server-Panel", """
 ## Server-Panel
@@ -1958,6 +2046,38 @@ Der RuntimeViewer enthält responsive Layouts für Tablets und Telefone.
 ### Sichere Bereiche
 Automatisches Padding für Geräte mit Notch und abgerundeten Ecken.
 """),
+
+            ["redundancy"] = new("🔄 Redundanz / Hochverfügbarkeit", """
+## Redundanz / Hochverfügbarkeit
+
+Konfigurieren Sie zwei Serverinstanzen (Primär + Standby) für automatisches Failover. Wenn der aktive Server ausfällt, übernimmt der Standby automatisch Treiber, Skripte und SPS-Programme.
+
+### Konfiguration (`Server.Redundancy`)
+| Eigenschaft | Beschreibung | Standard |
+|---|---|---|
+| `Enabled` | Redundanz aktivieren | `false` |
+| `Role` | `"Primary"` oder `"Standby"` | `"Primary"` |
+| `PartnerEndpoint` | HTTP-Adresse des Partners | — |
+| `HeartbeatIntervalSeconds` | Prüfintervall | `5` |
+| `FailoverMissedHeartbeats` | Fehlende Beats vor Failover | `3` |
+| `StateSyncIntervalMs` | Sync-Intervall (0 = deaktiviert) | `10000` |
+| `AutoSwitchback` | Standby kehrt zur Standby-Rolle zurück wenn Primär wieder online | `false` |
+| `ScriptsRunOnStandby` | Skripte auch auf dem Standby ausführen | `false` |
+| `PlcRunOnStandby` | SPS-Programme auch auf dem Standby ausführen | `false` |
+
+### Funktionsweise
+- **Treiber** laufen nur auf dem aktiven Server
+- **Zustandssynchronisation**: Variablenwerte, Datenlog- und Ereignislog-Einträge werden periodisch vom Aktiven zum Standby repliziert
+- **Lückenfüllung beim Neustart**: Nach einem Neustart werden fehlende Einträge automatisch vom Partner angefordert
+
+### Systemvariablen
+| Variable | Typ | Beschreibung |
+|---|---|---|
+| `_System.Redundancy.IsActive` | Boolean | `true` wenn dieser Server der aktive ist |
+| `_System.Redundancy.ActiveRole` | String | `"Active"` oder `"Standby"` |
+| `_System.Redundancy.ConfiguredRole` | String | Konfigurierte Rolle |
+| `_System.Redundancy.PartnerAlive` | Boolean | Partner-Heartbeat erreichbar |
+"""),
         },
 
         // ───────────────────── ITALIAN ─────────────────────
@@ -2302,6 +2422,7 @@ Il server ascolta sull'URL dell'endpoint configurato (predefinito: `opc.tcp://lo
 - **Porta diagnostica** — API HTTP per metriche prestazionali (predefinito 14841)
 - **Relay cloud** — Connessione tramite hub cloud SignalR
 - **Email crash** — Configurazione SMTP per notifiche crash
+- **Ridondanza** — Alta disponibilità con failover primario/standby (vedi argomento Ridondanza)
 """),
             ["serverpanel"] = new("🖥️ Pannello server", """
 ## Pannello server
@@ -2684,6 +2805,38 @@ Il RuntimeViewer include layout responsivi per tablet e telefoni.
 ### Aree sicure
 Padding automatico per dispositivi con notch e angoli arrotondati.
 """),
+
+            ["redundancy"] = new("🔄 Ridondanza / Alta disponibilità", """
+## Ridondanza / Alta disponibilità
+
+Configura due istanze server (primario + standby) per il failover automatico. Quando il server attivo si disconnette, lo standby si promuove automaticamente e avvia driver, script e programmi PLC.
+
+### Configurazione (`Server.Redundancy`)
+| Proprietà | Descrizione | Predefinito |
+|---|---|---|
+| `Enabled` | Abilita la ridondanza | `false` |
+| `Role` | `"Primary"` o `"Standby"` | `"Primary"` |
+| `PartnerEndpoint` | Indirizzo HTTP del partner | — |
+| `HeartbeatIntervalSeconds` | Intervallo di controllo | `5` |
+| `FailoverMissedHeartbeats` | Battiti mancanti prima del failover | `3` |
+| `StateSyncIntervalMs` | Intervallo di sincronizzazione (0 = disabilitato) | `10000` |
+| `AutoSwitchback` | Lo standby torna al ruolo standby quando il primario si riprende | `false` |
+| `ScriptsRunOnStandby` | Gli script vengono eseguiti anche sullo standby | `false` |
+| `PlcRunOnStandby` | I programmi PLC vengono eseguiti anche sullo standby | `false` |
+
+### Come funziona
+- I **driver** funzionano solo sul server attivo
+- **Sincronizzazione dello stato**: valori variabili, log dati e log eventi vengono replicati periodicamente dall'attivo allo standby
+- **Riempimento lacune al riavvio**: dopo un riavvio, le voci mancanti vengono richieste automaticamente dal partner
+
+### Variabili di sistema
+| Variabile | Tipo | Descrizione |
+|---|---|---|
+| `_System.Redundancy.IsActive` | Boolean | `true` quando questo server è quello attivo |
+| `_System.Redundancy.ActiveRole` | String | `"Active"` o `"Standby"` |
+| `_System.Redundancy.ConfiguredRole` | String | Ruolo configurato |
+| `_System.Redundancy.PartnerAlive` | Boolean | Heartbeat del partner raggiungibile |
+"""),
         },
 
         // ───────────────────── FRENCH ─────────────────────
@@ -3028,6 +3181,7 @@ Le serveur écoute sur l'URL du point de terminaison configuré (défaut : `opc.
 - **Port de diagnostic** — API HTTP pour les métriques de performance (défaut 14841)
 - **Relais cloud** — Connexion via un hub cloud SignalR
 - **Email de crash** — Configuration SMTP pour les notifications de crash
+- **Redondance** — Haute disponibilité avec basculement primaire/veille (voir le sujet Redondance)
 """),
             ["serverpanel"] = new("🖥️ Panneau serveur", """
 ## Panneau serveur
@@ -3410,6 +3564,38 @@ Le RuntimeViewer inclut des mises en page réactives pour tablettes et télépho
 ### Zones sûres
 Rembourrage automatique pour les appareils à encoche et coins arrondis.
 """),
+
+            ["redundancy"] = new("🔄 Redondance / Haute disponibilité", """
+## Redondance / Haute disponibilité
+
+Configurez deux instances serveur (primaire + veille) pour le basculement automatique. Lorsque le serveur actif tombe en panne, le serveur de veille se promeut automatiquement et démarre les pilotes, scripts et programmes API.
+
+### Configuration (`Server.Redundancy`)
+| Propriété | Description | Par défaut |
+|---|---|---|
+| `Enabled` | Activer la redondance | `false` |
+| `Role` | `"Primary"` ou `"Standby"` | `"Primary"` |
+| `PartnerEndpoint` | Adresse HTTP du partenaire | — |
+| `HeartbeatIntervalSeconds` | Intervalle de vérification | `5` |
+| `FailoverMissedHeartbeats` | Battements manqués avant basculement | `3` |
+| `StateSyncIntervalMs` | Intervalle de synchronisation (0 = désactivé) | `10000` |
+| `AutoSwitchback` | Le serveur de veille revient à son rôle quand le primaire récupère | `false` |
+| `ScriptsRunOnStandby` | Les scripts s'exécutent aussi sur le serveur de veille | `false` |
+| `PlcRunOnStandby` | Les programmes API s'exécutent aussi sur le serveur de veille | `false` |
+
+### Fonctionnement
+- Les **pilotes** ne fonctionnent que sur le serveur actif
+- **Synchronisation d'état** : valeurs de variables, entrées de journal de données et d'événements sont répliquées périodiquement du serveur actif vers le serveur de veille
+- **Comblement des lacunes au redémarrage** : après un redémarrage, les entrées manquantes sont automatiquement demandées au partenaire
+
+### Variables système
+| Variable | Type | Description |
+|---|---|---|
+| `_System.Redundancy.IsActive` | Boolean | `true` quand ce serveur est le serveur actif |
+| `_System.Redundancy.ActiveRole` | String | `"Active"` ou `"Standby"` |
+| `_System.Redundancy.ConfiguredRole` | String | Rôle configuré |
+| `_System.Redundancy.PartnerAlive` | Boolean | Battement de cœur du partenaire accessible |
+"""),
         },
 
         // ───────────────────── JAPANESE ─────────────────────
@@ -3754,6 +3940,7 @@ HMIレイアウトを作成するためのビジュアル画面デザイナー�
 - **診断ポート** — パフォーマンスメトリクスのHTTP API（デフォルト14841）
 - **クラウドリレー** — SignalRクラウドハブ経由の接続
 - **クラッシュメール** — クラッシュ通知のSMTP設定
+- **冗長化** — プライマリ/スタンバイフェイルオーバーによる高可用性（冗長化トピック参照）
 """),
             ["serverpanel"] = new("🖥️ サーバーパネル", """
 ## サーバーパネル
@@ -4136,6 +4323,38 @@ RuntimeViewerには、タブレットやスマートフォン用のレスポン�
 ### セーフエリア
 ノッチや角丸デバイス用の自動パディング。
 """),
+
+            ["redundancy"] = new("🔄 冗長化 / 高可用性", """
+## 冗長化 / 高可用性
+
+2台のサーバーインスタンス（プライマリ＋スタンバイ）を構成し、自動フェイルオーバーを実現します。アクティブサーバーがダウンすると、スタンバイが自動的にアクティブに昇格し、ドライバー、スクリプト、PLCプログラムを開始します。
+
+### 設定 (`Server.Redundancy`)
+| プロパティ | 説明 | デフォルト |
+|---|---|---|
+| `Enabled` | 冗長化を有効にする | `false` |
+| `Role` | `"Primary"` または `"Standby"` | `"Primary"` |
+| `PartnerEndpoint` | パートナーのHTTPアドレス | — |
+| `HeartbeatIntervalSeconds` | チェック間隔 | `5` |
+| `FailoverMissedHeartbeats` | フェイルオーバーまでの失敗回数 | `3` |
+| `StateSyncIntervalMs` | 同期間隔（0 = 無効） | `10000` |
+| `AutoSwitchback` | プライマリ復帰時にスタンバイに戻る | `false` |
+| `ScriptsRunOnStandby` | スクリプトをスタンバイでも実行 | `false` |
+| `PlcRunOnStandby` | PLCプログラムをスタンバイでも実行 | `false` |
+
+### 動作
+- **ドライバー**はアクティブサーバーでのみ実行されます
+- **状態同期**: 変数値、データログ、イベントログがアクティブからスタンバイに定期的にレプリケーションされます
+- **再起動時のギャップ補填**: 再起動後、欠落したエントリーがパートナーから自動的に要求されます
+
+### システム変数
+| 変数 | 型 | 説明 |
+|---|---|---|
+| `_System.Redundancy.IsActive` | Boolean | このサーバーがアクティブの場合 `true` |
+| `_System.Redundancy.ActiveRole` | String | `"Active"` または `"Standby"` |
+| `_System.Redundancy.ConfiguredRole` | String | 設定されたロール |
+| `_System.Redundancy.PartnerAlive` | Boolean | パートナーのハートビートが応答中 |
+"""),
         },
 
         // ───────────────────── CHINESE ─────────────────────
@@ -4480,6 +4699,7 @@ ST 'Plant.Alarm'
 - **诊断端口** — 性能指标的HTTP API（默认14841）
 - **云中继** — 通过SignalR云集线器连接
 - **崩溃邮件** — 崩溃通知的SMTP配置
+- **冗余** — 主/备故障转移高可用性（参见冗余主题）
 """),
             ["serverpanel"] = new("🖥️ 服务器面板", """
 ## 服务器面板
@@ -4861,6 +5081,38 @@ RuntimeViewer包含适用于平板电脑和手机的响应式布局。
 
 ### 安全区域
 自动为刘海屏和圆角设备添加内边距。
+"""),
+
+            ["redundancy"] = new("🔄 冗余 / 高可用性", """
+## 冗余 / 高可用性
+
+配置两个服务器实例（主服务器 + 备用服务器）以实现自动故障转移。当活动服务器宕机时，备用服务器自动提升为活动状态，启动驱动程序、脚本和PLC程序。
+
+### 配置 (`Server.Redundancy`)
+| 属性 | 描述 | 默认值 |
+|---|---|---|
+| `Enabled` | 启用冗余 | `false` |
+| `Role` | `"Primary"` 或 `"Standby"` | `"Primary"` |
+| `PartnerEndpoint` | 伙伴服务器的HTTP地址 | — |
+| `HeartbeatIntervalSeconds` | 检查间隔 | `5` |
+| `FailoverMissedHeartbeats` | 故障转移前的失败次数 | `3` |
+| `StateSyncIntervalMs` | 同步间隔（0 = 禁用） | `10000` |
+| `AutoSwitchback` | 主服务器恢复时备用自动退回 | `false` |
+| `ScriptsRunOnStandby` | 脚本也在备用服务器上运行 | `false` |
+| `PlcRunOnStandby` | PLC程序也在备用服务器上运行 | `false` |
+
+### 工作原理
+- **驱动程序**仅在活动服务器上运行
+- **状态同步**：变量值、数据日志和事件日志条目定期从活动服务器复制到备用服务器
+- **重启时填补空缺**：重启后，缺失的条目会自动从伙伴服务器请求
+
+### 系统变量
+| 变量 | 类型 | 描述 |
+|---|---|---|
+| `_System.Redundancy.IsActive` | Boolean | 当此服务器为活动时为 `true` |
+| `_System.Redundancy.ActiveRole` | String | `"Active"` 或 `"Standby"` |
+| `_System.Redundancy.ConfiguredRole` | String | 配置的角色 |
+| `_System.Redundancy.PartnerAlive` | Boolean | 伙伴心跳是否可达 |
 """),
         },
     };
