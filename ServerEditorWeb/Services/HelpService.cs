@@ -44,6 +44,9 @@ public class HelpService
             UserGroupListNode or UserGroupNode => "usergroups",
             UserNode => "user",
             ServerSettingsNode => "server",
+            CalculatedGroupNode => "calculated",
+            AssetGroupNode or AssetNode => "asset",
+            BatchGroupNode or BatchNode => "batch",
             ResourceFolderNode rfn => rfn.ResourceKind switch
             {
                 "Script" => "scripts",
@@ -132,6 +135,11 @@ public class HelpService
             ("notifications", "Alarm Notifications", "🔔"),
             ("tagbrowser", "Runtime Tag Browser", "🏷️"),
             ("restapi", "REST API", "🌐"),
+            ("calculated", "Calculated Tags", "📐"),
+            ("asset", "Assets / Maintenance", "🔧"),
+            ("batch", "Batch / Sequence Manager", "🔄"),
+            ("multisite", "Multi-Site Dashboard", "🌐"),
+            ("mobile", "Mobile-Optimized View", "📱"),
         };
 
         if (locale != "en" && _tocTitles.TryGetValue(locale, out var titles))
@@ -190,6 +198,11 @@ public class HelpService
             ["notifications"] = "Alarmbenachrichtigungen",
             ["tagbrowser"] = "Tag-Browser (Laufzeit)",
             ["restapi"] = "REST-API",
+            ["calculated"] = "Berechnete Tags",
+            ["asset"] = "Anlagen / Wartung",
+            ["batch"] = "Batch / Ablaufsteuerung",
+            ["multisite"] = "Multi-Standort-Dashboard",
+            ["mobile"] = "Mobile Ansicht",
         },
         ["it"] = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -230,6 +243,11 @@ public class HelpService
             ["notifications"] = "Notifiche allarme",
             ["tagbrowser"] = "Browser tag (Runtime)",
             ["restapi"] = "API REST",
+            ["calculated"] = "Tag calcolati",
+            ["asset"] = "Asset / Manutenzione",
+            ["batch"] = "Batch / Gestore sequenze",
+            ["multisite"] = "Dashboard multi-sito",
+            ["mobile"] = "Vista mobile ottimizzata",
         },
         ["fr"] = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -270,6 +288,11 @@ public class HelpService
             ["notifications"] = "Notifications d'alarme",
             ["tagbrowser"] = "Navigateur de tags",
             ["restapi"] = "API REST",
+            ["calculated"] = "Tags calculés",
+            ["asset"] = "Actifs / Maintenance",
+            ["batch"] = "Batch / Gestionnaire de séquences",
+            ["multisite"] = "Tableau de bord multi-sites",
+            ["mobile"] = "Vue mobile optimisée",
         },
         ["ja"] = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -310,6 +333,11 @@ public class HelpService
             ["notifications"] = "アラーム通知",
             ["tagbrowser"] = "タグブラウザー",
             ["restapi"] = "REST API",
+            ["calculated"] = "演算タグ",
+            ["asset"] = "設備 / メンテナンス",
+            ["batch"] = "バッチ / シーケンス管理",
+            ["multisite"] = "マルチサイトダッシュボード",
+            ["mobile"] = "モバイル最適化ビュー",
         },
         ["zh"] = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -350,6 +378,11 @@ public class HelpService
             ["notifications"] = "报警通知",
             ["tagbrowser"] = "标签浏览器",
             ["restapi"] = "REST API",
+            ["calculated"] = "计算标签",
+            ["asset"] = "资产 / 维护",
+            ["batch"] = "批次 / 序列管理",
+            ["multisite"] = "多站点仪表板",
+            ["mobile"] = "移动端优化视图",
         },
     };
 
@@ -374,6 +407,11 @@ This is a web-based editor for configuring the **Simple OPC File Server** — an
 - **PLC Programs** — IEC 61131-3 Structured Text, Instruction List, or Ladder
 - **Recipes** — Named sets of variable values stored in SQLite
 - **Schedulers** — Weekly time-based variable automation
+- **Calculated Tags** — Derived values from expressions on other variables
+- **Assets** — Equipment runtime tracking and maintenance scheduling
+- **Batch Sequences** — ISA-88-style step-based sequence control
+- **Multi-Site Dashboard** — Aggregate data from multiple CloudRelay servers
+- **Mobile View** — Responsive layout optimized for tablets and phones
 
 ### Panels
 Use **View** menu to show/hide panels. Drag panel tabs to reorganize the layout.
@@ -393,6 +431,9 @@ A project file (`.json`) contains all configuration in a single file:
 - **Reports** — Auto-generated PDF/HTML reports with charts, tables, and values
 - **Users** — Authentication with groups, permissions, and auto-logoff
 - **Server Settings** — OPC endpoint, diagnostics, cloud relay, crash email
+- **Calculated Tags** — Derived values from expressions applied to other variables
+- **Assets** — Equipment runtime tracking, fault monitoring, and maintenance scheduling
+- **Batch Sequences** — ISA-88-style step sequences with transitions and control signals
 
 ### Multi-Project
 You can open multiple project files simultaneously. Right-click a project to set it as active.
@@ -1017,6 +1058,165 @@ When anonymous access is disabled, the API requires Basic authentication.
 ### Demo Project
 The RestApiDemo Blazor Web App provides 7 interactive pages demonstrating all API endpoints.
 """),
+
+        ["calculated"] = new("📐 Calculated Tags", """
+## Calculated Tags
+
+Calculated tags derive their value from expressions or formulas applied to other OPC variables.
+
+### Creating Calculated Tags
+1. Right-click the **Calculated Tags** group in the project tree
+2. Select **Add Calculated Tag**
+3. Configure the expression in the Properties panel
+
+### Use Cases
+- **Unit conversion** — Convert between Celsius/Fahrenheit, PSI/Bar, etc.
+- **Aggregation** — Average, sum, min/max across multiple variables
+- **Derived metrics** — OEE, efficiency percentages, energy per unit
+- **Scaling** — Apply linear scaling to raw sensor values
+
+### Expression Syntax
+Expressions reference other variables by path and support standard math operators.
+"""),
+
+        ["asset"] = new("🔧 Assets / Maintenance", """
+## Asset Management
+
+The Asset Manager tracks equipment runtime, maintenance schedules, and fault conditions.
+
+### Creating Assets
+1. Right-click the **Assets** group in the project tree
+2. Select **Add Asset**
+3. Configure running variable, fault signal, and maintenance rules
+
+### Properties
+| Property | Description |
+|---|---|
+| **Running Variable** | OPC path whose truthy value means the asset is running |
+| **Fault Variable** | Optional OPC path for a trip/fault signal |
+| **Runtime Hours** | Accumulated hours while running variable is true |
+| **Maintenance Interval** | Hours between scheduled maintenance |
+
+### Runtime OPC Variables
+Each asset publishes under `_Asset.{Name}.`:
+- `RuntimeHours` — Total accumulated running hours
+- `FaultActive` — Whether the fault signal is currently active
+- `MaintenanceDue` — Whether a maintenance schedule has elapsed
+"""),
+
+        ["batch"] = new("🔄 Batch / Sequence Manager", """
+## Batch / Sequence Manager (ISA-88)
+
+Define step-based sequences with transitions, timers, and status tracking. Inspired by the ISA-88 batch control standard.
+
+### Creating Sequences
+1. Right-click the **Batch Sequences** group in the project tree
+2. Select **Add Batch Sequence**
+3. Add steps and transitions in the Properties panel
+
+### Sequence States
+| State | Description |
+|---|---|
+| **Idle** | Waiting for start signal |
+| **Running** | Executing steps |
+| **Held** | Paused by hold signal |
+| **Complete** | All steps finished |
+| **Faulted** | A step timed out with no valid transition |
+| **Aborted** | Stopped by abort signal |
+
+### Steps
+Each step has:
+- **Entry Actions** — Commands executed when the step activates
+- **Exit Actions** — Commands executed when leaving the step
+- **Timeout** — Maximum seconds before auto-advancing or faulting
+- **Description** — Operator instructions
+
+### Transitions
+Transitions link steps and fire when conditions are met:
+- **Condition Variable** — OPC path evaluated with a comparison operator
+- **Operators** — True, False, ==, !=, >, <
+- **Dwell Time** — Minimum seconds the source step must be active
+
+### Control Signals
+| Signal | Description |
+|---|---|
+| **Start Variable** | Write true to begin the sequence |
+| **Abort Variable** | Write true to abort/stop |
+| **Hold Variable** | Write true to pause; release to resume |
+
+### Runtime OPC Variables
+Published under `_Batch.{Name}.`:
+- `State`, `CurrentStep`, `CurrentStepId`
+- `StepElapsed`, `TotalElapsed`, `StepIndex`
+- `Message`
+
+### Auto-Restart
+When enabled, the sequence automatically loops back to the first step after completion.
+"""),
+
+        ["multisite"] = new("🌐 Multi-Site Dashboard", """
+## Multi-Site Dashboard
+
+Aggregate data from multiple CloudRelay-connected servers into a single overview dashboard.
+
+### Configuration
+Configure under **Server Settings → Multi-Site Dashboard** in the editor:
+1. Enable the dashboard
+2. Add sites with their CloudRelay hub URL and API key
+3. Define KPIs per site — variable paths with labels, units, and thresholds
+
+### Site Properties
+| Property | Description |
+|---|---|
+| **Name** | Human-readable site name (e.g. "Plant A — Chicago") |
+| **Hub URL** | CloudRelay SignalR hub endpoint |
+| **API Key** | Shared authentication key |
+| **KPIs** | Variable paths to display with warning/alarm thresholds |
+
+### Dashboard Cards
+Each site displays as a card showing:
+- **Connection indicator** — Green (online), yellow (bridge offline), grey (disconnected)
+- **Active alarm count** with badge
+- **KPI values** with color-coded thresholds (blue=ok, yellow=warning, red=alarm)
+- **Last update timestamp**
+
+### Runtime Access
+Click the **🌐 Sites** button in the RuntimeViewer top bar to open the dashboard overlay.
+
+### Architecture
+Each site establishes its own independent SignalR connection to a CloudRelay hub. Connections auto-reconnect and refresh periodically.
+"""),
+
+        ["mobile"] = new("📱 Mobile-Optimized View", """
+## Mobile-Optimized Runtime View
+
+The RuntimeViewer includes responsive layouts for tablets and phones.
+
+### Responsive Breakpoints
+| Breakpoint | Behavior |
+|---|---|
+| **≤ 1024px** (tablet) | Tab nav hidden → hamburger menu, 2-column grid |
+| **≤ 600px** (phone) | Single-column grid, full-screen popups/modals |
+| **≤ 380px** (small phone) | Icon-only bottom nav, minimal chrome |
+| **Landscape** | Bottom nav hidden, compact topbar |
+
+### Touch Optimization
+- Minimum 44px tap targets (iOS guideline)
+- 16px font on inputs (prevents iOS auto-zoom)
+- Larger hamburger, close, and action buttons
+
+### PWA Support
+The RuntimeViewer is a Progressive Web App:
+- Install to home screen on iOS and Android
+- `apple-mobile-web-app-capable` and `theme-color` meta tags
+- Service worker for offline caching
+
+### Safe Areas
+Automatic padding for notched phones (iPhone X+) and rounded-corner devices using `env(safe-area-inset-*)`.
+
+### Hamburger Navigation
+On small screens, tab navigation is automatically replaced by a hamburger menu. The hamburger button appears on mobile regardless of the configured NavigationStyle.
+"""),
     };
 
     // ═══════════════════════════════════════════════════════════
@@ -1046,6 +1246,11 @@ Dies ist ein webbasierter Editor zur Konfiguration des **Simple OPC File Server*
 - **SPS-Programme** — IEC 61131-3 Strukturierter Text, Anweisungsliste oder Kontaktplan
 - **Rezepte** — Benannte Variablenwert-Sätze in SQLite gespeichert
 - **Zeitplaner** — Wöchentliche zeitbasierte Variablenautomatisierung
+- **Berechnete Tags** — Abgeleitete Werte aus Ausdrücken auf anderen Variablen
+- **Anlagen** — Betriebszeiterfassung und Wartungsplanung
+- **Batch-Sequenzen** — ISA-88-Ablaufsteuerung mit Schritten und Übergängen
+- **Multi-Standort-Dashboard** — Daten von mehreren CloudRelay-Servern aggregieren
+- **Mobile Ansicht** — Responsives Layout für Tablets und Telefone
 
 ### Panels
 Verwenden Sie das Menü **Ansicht**, um Panels ein-/auszublenden. Ziehen Sie Panel-Tabs, um das Layout anzupassen.
@@ -1061,6 +1266,9 @@ Eine Projektdatei (`.json`) enthält die gesamte Konfiguration in einer einzigen
 - **Bildschirme** — HMI-Bildschirme mit SVG/Responsive-Layouts und interaktiven Symbolen
 - **Rezepte** — Benannte Wertesätze, die in SQLite geladen/gespeichert werden können
 - **Zeitplaner** — Wöchentliche Zeitprogramme, die Werte nach Zeitplan schreiben
+- **Berechnete Tags** — Abgeleitete Werte aus Ausdrücken
+- **Anlagen** — Betriebszeiterfassung, Störungsüberwachung, Wartungsplanung
+- **Batch-Sequenzen** — ISA-88-Schrittsequenzen mit Übergängen und Steuersignalen
 - **Berichte** — Automatisch generierte PDF/HTML-Berichte mit Diagrammen, Tabellen und Werten
 - **Benutzer** — Authentifizierung mit Gruppen, Berechtigungen und Auto-Abmeldung
 - **Servereinstellungen** — OPC-Endpunkt, Diagnose, Cloud-Relay, Absturz-E-Mail
@@ -1635,7 +1843,122 @@ Der OPC-UA-Server bietet eine integrierte HTTP-REST-API auf dem Diagnoseport (St
 
 ### Demo-Projekt
 Die RestApiDemo Blazor Web App bietet 7 interaktive Seiten zur Demonstration aller API-Endpunkte.
-"""),        },
+"""),
+
+        ["calculated"] = new("📐 Berechnete Tags", """
+## Berechnete Tags
+
+Berechnete Tags leiten ihren Wert aus Ausdrücken oder Formeln ab, die auf andere OPC-Variablen angewendet werden.
+
+### Erstellen
+1. Rechtsklick auf die Gruppe **Berechnete Tags** im Projektbaum
+2. **Berechneten Tag hinzufügen** wählen
+3. Ausdruck im Eigenschaftspanel konfigurieren
+
+### Anwendungsfälle
+- **Einheitenumrechnung** — Celsius/Fahrenheit, PSI/Bar usw.
+- **Aggregation** — Mittelwert, Summe, Min/Max über mehrere Variablen
+- **Abgeleitete Kennzahlen** — OEE, Effizienz, Energie pro Einheit
+- **Skalierung** — Lineare Skalierung von Rohsensorwerten
+"""),
+
+        ["asset"] = new("🔧 Anlagen / Wartung", """
+## Anlagenverwaltung
+
+Der Asset-Manager verfolgt Betriebszeiten, Wartungspläne und Störungsbedingungen.
+
+### Anlage erstellen
+1. Rechtsklick auf die Gruppe **Anlagen** im Projektbaum
+2. **Anlage hinzufügen** wählen
+3. Laufvariable, Störsignal und Wartungsregeln konfigurieren
+
+### Eigenschaften
+| Eigenschaft | Beschreibung |
+|---|---|
+| **Laufvariable** | OPC-Pfad, dessen Wahrheitswert anzeigt, dass die Anlage läuft |
+| **Störvariable** | Optionaler OPC-Pfad für ein Stör-/Fehlersignal |
+| **Betriebsstunden** | Kumulierte Stunden während die Laufvariable wahr ist |
+| **Wartungsintervall** | Stunden zwischen geplanten Wartungen |
+
+### Laufzeit-OPC-Variablen
+Jede Anlage veröffentlicht unter `_Asset.{Name}.`:
+- `RuntimeHours` — Gesamte kumulierte Betriebsstunden
+- `FaultActive` — Ob das Störsignal aktiv ist
+- `MaintenanceDue` — Ob eine Wartung fällig ist
+"""),
+
+        ["batch"] = new("🔄 Batch / Ablaufsteuerung", """
+## Batch / Ablaufsteuerung (ISA-88)
+
+Definieren Sie schrittbasierte Sequenzen mit Übergängen, Timern und Statusverfolgung — angelehnt an den ISA-88 Standard.
+
+### Sequenz erstellen
+1. Rechtsklick auf **Batch-Sequenzen** im Projektbaum
+2. **Batch-Sequenz hinzufügen** wählen
+3. Schritte und Übergänge im Eigenschaftspanel konfigurieren
+
+### Zustände
+| Zustand | Beschreibung |
+|---|---|
+| **Idle** | Wartet auf Startsignal |
+| **Running** | Führt Schritte aus |
+| **Held** | Durch Haltesignal pausiert |
+| **Complete** | Alle Schritte abgeschlossen |
+| **Faulted** | Timeout ohne gültigen Übergang |
+| **Aborted** | Durch Abbruchsignal gestoppt |
+
+### Steuersignale
+- **Startvariable** — Wahr schreiben zum Starten
+- **Abbruchvariable** — Wahr schreiben zum Abbrechen
+- **Haltevariable** — Wahr schreiben zum Pausieren
+
+### Laufzeit-OPC-Variablen
+Veröffentlicht unter `_Batch.{Name}.`: State, CurrentStep, StepElapsed, TotalElapsed, Message
+"""),
+
+        ["multisite"] = new("🌐 Multi-Standort-Dashboard", """
+## Multi-Standort-Dashboard
+
+Daten von mehreren CloudRelay-verbundenen Servern in einer Übersicht aggregieren.
+
+### Konfiguration
+Unter **Servereinstellungen → Multi-Standort-Dashboard** im Editor:
+1. Dashboard aktivieren
+2. Standorte mit CloudRelay-Hub-URL und API-Schlüssel hinzufügen
+3. KPIs pro Standort definieren — Variablenpfade mit Labels, Einheiten und Schwellenwerten
+
+### Standortkarten
+Jeder Standort zeigt:
+- **Verbindungsindikator** — Grün (online), Gelb (Bridge offline), Grau (getrennt)
+- **Aktive Alarme** mit Badge
+- **KPI-Werte** mit farbkodierten Schwellenwerten
+- **Letzte Aktualisierung**
+
+### Zugriff
+Klicken Sie auf **🌐 Sites** in der RuntimeViewer-Leiste.
+"""),
+
+        ["mobile"] = new("📱 Mobile Ansicht", """
+## Mobile-optimierte Laufzeitansicht
+
+Der RuntimeViewer enthält responsive Layouts für Tablets und Telefone.
+
+### Responsive Haltepunkte
+| Haltepunkt | Verhalten |
+|---|---|
+| **≤ 1024px** (Tablet) | Tab-Navigation ausgeblendet → Hamburger-Menü, 2-Spalten-Raster |
+| **≤ 600px** (Telefon) | Einspaltiges Raster, Vollbild-Popups |
+| **≤ 380px** (Kleines Telefon) | Nur Icons in der unteren Navigation |
+
+### Touch-Optimierung
+- Mindestens 44px Tippziele
+- 16px Schriftgröße bei Eingaben (verhindert iOS-Auto-Zoom)
+- PWA-Unterstützung: Zum Startbildschirm hinzufügen
+
+### Sichere Bereiche
+Automatisches Padding für Geräte mit Notch und abgerundeten Ecken.
+"""),
+        },
 
         // ───────────────────── ITALIAN ─────────────────────
         ["it"] = new(StringComparer.OrdinalIgnoreCase)
@@ -1659,6 +1982,11 @@ Questo è un editor web per la configurazione del **Simple OPC File Server** —
 - **Programmi PLC** — IEC 61131-3 Testo Strutturato, Lista Istruzioni o Ladder
 - **Ricette** — Set di valori variabili con nome, salvati in SQLite
 - **Pianificatori** — Automazione variabili basata su programma settimanale
+- **Tag calcolati** — Valori derivati da espressioni su altre variabili
+- **Asset** — Tracciamento tempo di funzionamento e pianificazione manutenzione
+- **Sequenze batch** — Controllo sequenze a passi in stile ISA-88
+- **Dashboard multi-sito** — Aggregare dati da più server CloudRelay
+- **Vista mobile** — Layout responsivo ottimizzato per tablet e telefoni
 
 ### Pannelli
 Usa il menu **Visualizza** per mostrare/nascondere i pannelli. Trascina le schede dei pannelli per riorganizzare il layout.
@@ -1674,6 +2002,9 @@ Un file di progetto (`.json`) contiene tutta la configurazione in un unico file:
 - **Schermate** — Schermate HMI con layout SVG/Responsive e simboli interattivi
 - **Ricette** — Set di valori con nome che possono essere caricati/salvati in SQLite
 - **Pianificatori** — Programmi settimanali che scrivono valori a orario
+- **Tag calcolati** — Valori derivati da espressioni
+- **Asset** — Tracciamento runtime, monitoraggio guasti, pianificazione manutenzione
+- **Sequenze batch** — Sequenze a passi ISA-88 con transizioni e segnali di controllo
 - **Report** — Report PDF/HTML generati automaticamente con grafici, tabelle e valori
 - **Utenti** — Autenticazione con gruppi, permessi e disconnessione automatica
 - **Impostazioni server** — Endpoint OPC, diagnostica, relay cloud, email crash
@@ -2241,7 +2572,119 @@ Il server OPC UA espone un'API REST HTTP integrata sulla porta diagnostica (pred
 
 ### Progetto demo
 L'app RestApiDemo fornisce 7 pagine interattive che dimostrano tutti gli endpoint API.
-"""),        },
+"""),
+
+        ["calculated"] = new("📐 Tag calcolati", """
+## Tag calcolati
+
+I tag calcolati derivano il loro valore da espressioni o formule applicate ad altre variabili OPC.
+
+### Creazione
+1. Clic destro sul gruppo **Tag calcolati** nell'albero del progetto
+2. Selezionare **Aggiungi tag calcolato**
+3. Configurare l'espressione nel pannello Proprietà
+
+### Casi d'uso
+- **Conversione unità** — Celsius/Fahrenheit, PSI/Bar, ecc.
+- **Aggregazione** — Media, somma, min/max su più variabili
+- **Metriche derivate** — OEE, efficienza, energia per unità
+- **Scalatura** — Scalatura lineare dei valori grezzi dei sensori
+"""),
+
+        ["asset"] = new("🔧 Asset / Manutenzione", """
+## Gestione asset
+
+Il gestore asset tiene traccia dei tempi di funzionamento, dei piani di manutenzione e delle condizioni di guasto.
+
+### Creazione asset
+1. Clic destro sul gruppo **Asset** nell'albero del progetto
+2. Selezionare **Aggiungi asset**
+3. Configurare variabile di marcia, segnale di guasto e regole di manutenzione
+
+### Proprietà
+| Proprietà | Descrizione |
+|---|---|
+| **Variabile di marcia** | Percorso OPC il cui valore vero indica che l'asset è in funzione |
+| **Variabile di guasto** | Percorso OPC opzionale per un segnale di guasto |
+| **Ore di funzionamento** | Ore accumulate mentre la variabile di marcia è vera |
+| **Intervallo manutenzione** | Ore tra le manutenzioni programmate |
+
+### Variabili OPC di runtime
+Ogni asset pubblica sotto `_Asset.{Nome}.`: RuntimeHours, FaultActive, MaintenanceDue
+"""),
+
+        ["batch"] = new("🔄 Batch / Gestore sequenze", """
+## Batch / Gestore sequenze (ISA-88)
+
+Definire sequenze basate su passi con transizioni, timer e tracciamento dello stato.
+
+### Creazione sequenze
+1. Clic destro su **Sequenze batch** nell'albero del progetto
+2. Selezionare **Aggiungi sequenza batch**
+3. Aggiungere passi e transizioni nel pannello Proprietà
+
+### Stati della sequenza
+| Stato | Descrizione |
+|---|---|
+| **Idle** | In attesa del segnale di avvio |
+| **Running** | Esecuzione dei passi |
+| **Held** | In pausa dal segnale di attesa |
+| **Complete** | Tutti i passi completati |
+| **Faulted** | Timeout senza transizione valida |
+| **Aborted** | Fermato dal segnale di interruzione |
+
+### Segnali di controllo
+- **Variabile di avvio** — Scrivere vero per avviare
+- **Variabile di interruzione** — Scrivere vero per interrompere
+- **Variabile di attesa** — Scrivere vero per mettere in pausa
+
+### Variabili OPC di runtime
+Pubblicate sotto `_Batch.{Nome}.`: State, CurrentStep, StepElapsed, TotalElapsed, Message
+"""),
+
+        ["multisite"] = new("🌐 Dashboard multi-sito", """
+## Dashboard multi-sito
+
+Aggregare dati da più server connessi tramite CloudRelay in un'unica panoramica.
+
+### Configurazione
+In **Impostazioni server → Dashboard multi-sito** nell'editor:
+1. Abilitare il dashboard
+2. Aggiungere siti con URL hub CloudRelay e chiave API
+3. Definire KPI per sito con etichette, unità e soglie
+
+### Schede sito
+Ogni sito mostra:
+- **Indicatore di connessione** — Verde (online), Giallo (bridge offline), Grigio (disconnesso)
+- **Allarmi attivi** con badge
+- **Valori KPI** con soglie colorate
+- **Ultimo aggiornamento**
+
+### Accesso
+Fare clic su **🌐 Sites** nella barra del RuntimeViewer.
+"""),
+
+        ["mobile"] = new("📱 Vista mobile ottimizzata", """
+## Vista mobile ottimizzata
+
+Il RuntimeViewer include layout responsivi per tablet e telefoni.
+
+### Breakpoint responsivi
+| Breakpoint | Comportamento |
+|---|---|
+| **≤ 1024px** (Tablet) | Navigazione a schede nascosta → menu hamburger, griglia a 2 colonne |
+| **≤ 600px** (Telefono) | Griglia a colonna singola, popup a schermo intero |
+| **≤ 380px** (Telefono piccolo) | Solo icone nella navigazione inferiore |
+
+### Ottimizzazione touch
+- Obiettivi di tocco minimo 44px
+- Font 16px negli input (previene lo zoom automatico iOS)
+- Supporto PWA: installa sulla schermata iniziale
+
+### Aree sicure
+Padding automatico per dispositivi con notch e angoli arrotondati.
+"""),
+        },
 
         // ───────────────────── FRENCH ─────────────────────
         ["fr"] = new(StringComparer.OrdinalIgnoreCase)
@@ -2265,6 +2708,11 @@ Ceci est un éditeur web pour configurer le **Simple OPC File Server** — un se
 - **Programmes API** — IEC 61131-3 Texte Structuré, Liste d'Instructions ou Ladder
 - **Recettes** — Ensembles nommés de valeurs de variables stockés dans SQLite
 - **Planificateurs** — Automatisation hebdomadaire des variables basée sur le temps
+- **Tags calculés** — Valeurs dérivées d'expressions sur d'autres variables
+- **Actifs** — Suivi du temps de fonctionnement et planification de maintenance
+- **Séquences batch** — Contrôle séquentiel par étapes style ISA-88
+- **Tableau de bord multi-sites** — Agréger les données de plusieurs serveurs CloudRelay
+- **Vue mobile** — Mise en page réactive pour tablettes et téléphones
 
 ### Panneaux
 Utilisez le menu **Affichage** pour afficher/masquer les panneaux. Faites glisser les onglets pour réorganiser la disposition.
@@ -2280,6 +2728,9 @@ Un fichier de projet (`.json`) contient toute la configuration dans un seul fich
 - **Écrans** — Écrans IHM avec mises en page SVG/Responsive et symboles interactifs
 - **Recettes** — Ensembles de valeurs nommés pouvant être chargés/sauvegardés dans SQLite
 - **Planificateurs** — Programmes hebdomadaires qui écrivent des valeurs selon un horaire
+- **Tags calculés** — Valeurs dérivées d'expressions
+- **Actifs** — Suivi runtime, surveillance des pannes, planification de maintenance
+- **Séquences batch** — Séquences par étapes ISA-88 avec transitions et signaux de contrôle
 - **Rapports** — Rapports PDF/HTML générés automatiquement avec graphiques, tableaux et valeurs
 - **Utilisateurs** — Authentification avec groupes, permissions et déconnexion automatique
 - **Paramètres du serveur** — Point de terminaison OPC, diagnostics, relais cloud, email de crash
@@ -2847,7 +3298,119 @@ Le serveur OPC UA expose une API REST HTTP intégrée sur le port de diagnostic 
 
 ### Projet de démonstration
 L'application RestApiDemo fournit 7 pages interactives démontrant tous les points de terminaison.
-"""),        },
+"""),
+
+        ["calculated"] = new("📐 Tags calculés", """
+## Tags calculés
+
+Les tags calculés dérivent leur valeur d'expressions ou de formules appliquées à d'autres variables OPC.
+
+### Création
+1. Clic droit sur le groupe **Tags calculés** dans l'arborescence
+2. Sélectionner **Ajouter un tag calculé**
+3. Configurer l'expression dans le panneau Propriétés
+
+### Cas d'utilisation
+- **Conversion d'unités** — Celsius/Fahrenheit, PSI/Bar, etc.
+- **Agrégation** — Moyenne, somme, min/max sur plusieurs variables
+- **Métriques dérivées** — OEE, efficacité, énergie par unité
+- **Mise à l'échelle** — Mise à l'échelle linéaire des valeurs brutes
+"""),
+
+        ["asset"] = new("🔧 Actifs / Maintenance", """
+## Gestion des actifs
+
+Le gestionnaire d'actifs suit les temps de fonctionnement, les calendriers de maintenance et les conditions de panne.
+
+### Création d'un actif
+1. Clic droit sur le groupe **Actifs** dans l'arborescence
+2. Sélectionner **Ajouter un actif**
+3. Configurer la variable de marche, le signal de défaut et les règles de maintenance
+
+### Propriétés
+| Propriété | Description |
+|---|---|
+| **Variable de marche** | Chemin OPC dont la valeur vraie indique que l'actif fonctionne |
+| **Variable de défaut** | Chemin OPC optionnel pour un signal de panne |
+| **Heures de fonctionnement** | Heures accumulées pendant que la variable de marche est vraie |
+| **Intervalle de maintenance** | Heures entre les maintenances programmées |
+
+### Variables OPC d'exécution
+Chaque actif publie sous `_Asset.{Nom}.` : RuntimeHours, FaultActive, MaintenanceDue
+"""),
+
+        ["batch"] = new("🔄 Batch / Gestionnaire de séquences", """
+## Batch / Gestionnaire de séquences (ISA-88)
+
+Définir des séquences par étapes avec transitions, minuteries et suivi d'état.
+
+### Création de séquences
+1. Clic droit sur **Séquences batch** dans l'arborescence
+2. Sélectionner **Ajouter une séquence batch**
+3. Ajouter des étapes et transitions dans le panneau Propriétés
+
+### États de la séquence
+| État | Description |
+|---|---|
+| **Idle** | En attente du signal de démarrage |
+| **Running** | Exécution des étapes |
+| **Held** | En pause par le signal d'attente |
+| **Complete** | Toutes les étapes terminées |
+| **Faulted** | Timeout sans transition valide |
+| **Aborted** | Arrêté par le signal d'interruption |
+
+### Signaux de contrôle
+- **Variable de démarrage** — Écrire vrai pour démarrer
+- **Variable d'interruption** — Écrire vrai pour interrompre
+- **Variable d'attente** — Écrire vrai pour mettre en pause
+
+### Variables OPC d'exécution
+Publiées sous `_Batch.{Nom}.` : State, CurrentStep, StepElapsed, TotalElapsed, Message
+"""),
+
+        ["multisite"] = new("🌐 Tableau de bord multi-sites", """
+## Tableau de bord multi-sites
+
+Agréger les données de plusieurs serveurs connectés via CloudRelay dans un tableau de bord unique.
+
+### Configuration
+Sous **Paramètres du serveur → Tableau de bord multi-sites** dans l'éditeur :
+1. Activer le tableau de bord
+2. Ajouter des sites avec l'URL du hub CloudRelay et la clé API
+3. Définir les KPI par site avec étiquettes, unités et seuils
+
+### Cartes de site
+Chaque site affiche :
+- **Indicateur de connexion** — Vert (en ligne), Jaune (pont hors ligne), Gris (déconnecté)
+- **Alarmes actives** avec badge
+- **Valeurs KPI** avec seuils colorés
+- **Dernière mise à jour**
+
+### Accès
+Cliquez sur **🌐 Sites** dans la barre du RuntimeViewer.
+"""),
+
+        ["mobile"] = new("📱 Vue mobile optimisée", """
+## Vue mobile optimisée
+
+Le RuntimeViewer inclut des mises en page réactives pour tablettes et téléphones.
+
+### Points de rupture réactifs
+| Point de rupture | Comportement |
+|---|---|
+| **≤ 1024px** (Tablette) | Navigation par onglets masquée → menu hamburger, grille à 2 colonnes |
+| **≤ 600px** (Téléphone) | Grille à colonne unique, popups en plein écran |
+| **≤ 380px** (Petit téléphone) | Icônes uniquement dans la navigation inférieure |
+
+### Optimisation tactile
+- Cibles tactiles de 44px minimum
+- Police de 16px dans les champs de saisie (empêche le zoom automatique iOS)
+- Support PWA : installer sur l'écran d'accueil
+
+### Zones sûres
+Rembourrage automatique pour les appareils à encoche et coins arrondis.
+"""),
+        },
 
         // ───────────────────── JAPANESE ─────────────────────
         ["ja"] = new(StringComparer.OrdinalIgnoreCase)
@@ -2871,6 +3434,11 @@ L'application RestApiDemo fournit 7 pages interactives démontrant tous les poin
 - **PLCプログラム** — IEC 61131-3 構造化テキスト、命令リスト、またはラダー
 - **レシピ** — SQLiteに保存された名前付き変数値セット
 - **スケジューラー** — 週間時間ベースの変数自動化
+- **演算タグ** — 他の変数に対する式から導出された値
+- **設備** — 稼働時間追跡とメンテナンススケジュール
+- **バッチシーケンス** — ISA-88スタイルのステップベースシーケンス制御
+- **マルチサイトダッシュボード** — 複数のCloudRelayサーバーからデータを集約
+- **モバイルビュー** — タブレットとスマートフォン用レスポンシブレイアウト
 
 ### パネル
 **表示**メニューでパネルの表示/非表示を切り替えます。パネルタブをドラッグしてレイアウトを変更できます。
@@ -2886,6 +3454,9 @@ L'application RestApiDemo fournit 7 pages interactives démontrant tous les poin
 - **画面** — SVG/レスポンシブレイアウトとインタラクティブシンボルを持つHMI画面
 - **レシピ** — SQLiteにロード/保存できる名前付き値セット
 - **スケジューラー** — スケジュールに従って値を書き込む週間プログラム
+- **演算タグ** — 式から導出された値
+- **設備** — 稼働時間追跡、故障監視、メンテナンススケジュール
+- **バッチシーケンス** — ISA-88ステップシーケンス（遷移と制御信号付き）
 - **レポート** — グラフ、テーブル、値を含む自動生成PDF/HTMLレポート
 - **ユーザー** — グループ、権限、自動ログオフによる認証
 - **サーバー設定** — OPCエンドポイント、診断、クラウドリレー、クラッシュメール
@@ -3453,7 +4024,119 @@ OPC UAサーバーは診断ポート（デフォルト：14841）で組み込み
 
 ### デモプロジェクト
 RestApiDemoアプリはすべてのAPIエンドポイントを示す7つのインタラクティブページを提供します。
-"""),        },
+"""),
+
+        ["calculated"] = new("📐 演算タグ", """
+## 演算タグ
+
+演算タグは、他のOPC変数に適用される式や数式からその値を導出します。
+
+### 作成方法
+1. プロジェクトツリーの**演算タグ**グループを右クリック
+2. **演算タグの追加**を選択
+3. プロパティパネルで式を設定
+
+### 用途
+- **単位変換** — 摂氏/華氏、PSI/Bar など
+- **集計** — 複数変数の平均、合計、最小/最大
+- **派生メトリクス** — OEE、効率、単位あたりのエネルギー
+- **スケーリング** — センサー生値の線形スケーリング
+"""),
+
+        ["asset"] = new("🔧 設備 / メンテナンス", """
+## 設備管理
+
+アセットマネージャーは、稼働時間、メンテナンススケジュール、故障状態を追跡します。
+
+### 設備の作成
+1. プロジェクトツリーの**設備**グループを右クリック
+2. **設備の追加**を選択
+3. 稼働変数、故障信号、メンテナンスルールを設定
+
+### プロパティ
+| プロパティ | 説明 |
+|---|---|
+| **稼働変数** | 値がtrueの場合に設備が稼働中であることを示すOPCパス |
+| **故障変数** | 故障信号用のオプションOPCパス |
+| **稼働時間** | 稼働変数がtrueの間の累積時間 |
+| **メンテナンス間隔** | 定期メンテナンス間の時間 |
+
+### ランタイムOPC変数
+各設備は `_Asset.{名前}.` の下に公開: RuntimeHours, FaultActive, MaintenanceDue
+"""),
+
+        ["batch"] = new("🔄 バッチ / シーケンス管理", """
+## バッチ / シーケンス管理 (ISA-88)
+
+遷移、タイマー、ステータス追跡を備えたステップベースのシーケンスを定義します。
+
+### シーケンスの作成
+1. プロジェクトツリーの**バッチシーケンス**を右クリック
+2. **バッチシーケンスの追加**を選択
+3. プロパティパネルでステップと遷移を追加
+
+### シーケンス状態
+| 状態 | 説明 |
+|---|---|
+| **Idle** | 開始信号を待機中 |
+| **Running** | ステップを実行中 |
+| **Held** | ホールド信号により一時停止 |
+| **Complete** | すべてのステップが完了 |
+| **Faulted** | 有効な遷移なしでタイムアウト |
+| **Aborted** | 中止信号により停止 |
+
+### 制御信号
+- **開始変数** — trueを書き込んで開始
+- **中止変数** — trueを書き込んで中止
+- **ホールド変数** — trueを書き込んで一時停止
+
+### ランタイムOPC変数
+`_Batch.{名前}.` の下に公開: State, CurrentStep, StepElapsed, TotalElapsed, Message
+"""),
+
+        ["multisite"] = new("🌐 マルチサイトダッシュボード", """
+## マルチサイトダッシュボード
+
+複数のCloudRelay接続サーバーからのデータを単一の概要ダッシュボードに集約します。
+
+### 設定
+エディターの**サーバー設定 → マルチサイトダッシュボード**で設定:
+1. ダッシュボードを有効化
+2. CloudRelayハブURLとAPIキーでサイトを追加
+3. サイトごとにKPIを定義 — ラベル、単位、閾値付きの変数パス
+
+### サイトカード
+各サイトの表示:
+- **接続インジケーター** — 緑（オンライン）、黄（ブリッジオフライン）、灰（切断）
+- アクティブアラーム数（バッジ表示）
+- **KPI値** — 色分けされた閾値表示
+- **最終更新日時**
+
+### アクセス
+RuntimeViewerのツールバーで**🌐 Sites**をクリック。
+"""),
+
+        ["mobile"] = new("📱 モバイル最適化ビュー", """
+## モバイル最適化ランタイムビュー
+
+RuntimeViewerには、タブレットやスマートフォン用のレスポンシブレイアウトが含まれています。
+
+### レスポンシブブレークポイント
+| ブレークポイント | 動作 |
+|---|---|
+| **≤ 1024px**（タブレット） | タブナビ非表示 → ハンバーガーメニュー、2列グリッド |
+| **≤ 600px**（スマートフォン） | 1列グリッド、フルスクリーンポップアップ |
+| **≤ 380px**（小型スマートフォン） | 下部ナビはアイコンのみ |
+
+### タッチ最適化
+- 最小44pxのタップターゲット
+- 入力フィールドの16pxフォント（iOSの自動ズーム防止）
+- PWAサポート: ホーム画面に追加可能
+
+### セーフエリア
+ノッチや角丸デバイス用の自動パディング。
+"""),
+        },
 
         // ───────────────────── CHINESE ─────────────────────
         ["zh"] = new(StringComparer.OrdinalIgnoreCase)
@@ -3477,6 +4160,11 @@ RestApiDemoアプリはすべてのAPIエンドポイントを示す7つのイ�
 - **PLC程序** — IEC 61131-3 结构化文本、指令表或梯形图
 - **配方** — 存储在SQLite中的命名变量值集
 - **调度器** — 基于时间的每周变量自动化
+- **计算标签** — 基于其他变量的表达式得出的派生值
+- **资产** — 设备运行时间跟踪和维护调度
+- **批次序列** — ISA-88风格的基于步骤的序列控制
+- **多站点仪表板** — 聚合来自多个CloudRelay服务器的数据
+- **移动端视图** — 为平板电脑和手机优化的响应式布局
 
 ### 面板
 使用**视图**菜单显示/隐藏面板。拖动面板选项卡重新组织布局。
@@ -3492,6 +4180,9 @@ RestApiDemoアプリはすべてのAPIエンドポイントを示す7つのイ�
 - **画面** — 带有SVG/响应式布局和交互式符号的HMI画面
 - **配方** — 可加载/保存到SQLite的命名值集
 - **调度器** — 按计划写入值的每周程序
+- **计算标签** — 基于表达式的派生值
+- **资产** — 运行时间跟踪、故障监控、维护调度
+- **批次序列** — ISA-88步骤序列（含转换和控制信号）
 - **报表** — 带有图表、表格和值的自动生成PDF/HTML报表
 - **用户** — 带有组、权限和自动注销的身份验证
 - **服务器设置** — OPC端点、诊断、云中继、崩溃邮件
@@ -4059,7 +4750,119 @@ OPC UA服务器在诊断端口（默认：14841）上公开内置的HTTP REST AP
 
 ### 演示项目
 RestApiDemo应用提供7个交互式页面，演示所有API端点。
-"""),        },
+"""),
+
+        ["calculated"] = new("📐 计算标签", """
+## 计算标签
+
+计算标签通过对其他OPC变量应用表达式或公式来得出其值。
+
+### 创建方法
+1. 在项目树中右键单击**计算标签**组
+2. 选择**添加计算标签**
+3. 在属性面板中配置表达式
+
+### 应用场景
+- **单位转换** — 摄氏/华氏、PSI/Bar 等
+- **聚合** — 多个变量的平均值、总和、最小/最大值
+- **派生指标** — OEE、效率、单位能耗
+- **缩放** — 原始传感器值的线性缩放
+"""),
+
+        ["asset"] = new("🔧 资产 / 维护", """
+## 资产管理
+
+资产管理器跟踪设备运行时间、维护计划和故障状态。
+
+### 创建资产
+1. 在项目树中右键单击**资产**组
+2. 选择**添加资产**
+3. 配置运行变量、故障信号和维护规则
+
+### 属性
+| 属性 | 描述 |
+|---|---|
+| **运行变量** | 值为true时表示资产正在运行的OPC路径 |
+| **故障变量** | 用于故障信号的可选OPC路径 |
+| **运行小时数** | 运行变量为true期间的累计小时数 |
+| **维护间隔** | 计划维护之间的小时数 |
+
+### 运行时OPC变量
+每个资产在 `_Asset.{名称}.` 下发布: RuntimeHours, FaultActive, MaintenanceDue
+"""),
+
+        ["batch"] = new("🔄 批次 / 序列管理", """
+## 批次 / 序列管理 (ISA-88)
+
+定义基于步骤的序列，包含转换、定时器和状态跟踪。
+
+### 创建序列
+1. 在项目树中右键单击**批次序列**
+2. 选择**添加批次序列**
+3. 在属性面板中添加步骤和转换
+
+### 序列状态
+| 状态 | 描述 |
+|---|---|
+| **Idle** | 等待启动信号 |
+| **Running** | 正在执行步骤 |
+| **Held** | 被保持信号暂停 |
+| **Complete** | 所有步骤已完成 |
+| **Faulted** | 无有效转换导致超时 |
+| **Aborted** | 被中止信号停止 |
+
+### 控制信号
+- **启动变量** — 写入true以启动
+- **中止变量** — 写入true以中止
+- **保持变量** — 写入true以暂停
+
+### 运行时OPC变量
+在 `_Batch.{名称}.` 下发布: State, CurrentStep, StepElapsed, TotalElapsed, Message
+"""),
+
+        ["multisite"] = new("🌐 多站点仪表板", """
+## 多站点仪表板
+
+将来自多个CloudRelay连接服务器的数据聚合到单一概览仪表板中。
+
+### 配置
+在编辑器的**服务器设置 → 多站点仪表板**中配置:
+1. 启用仪表板
+2. 添加站点及其CloudRelay集线器URL和API密钥
+3. 为每个站点定义KPI — 带标签、单位和阈值的变量路径
+
+### 站点卡片
+每个站点显示:
+- **连接指示器** — 绿色（在线）、黄色（桥接离线）、灰色（断开）
+- 活动报警数量（带标记）
+- **KPI值** — 带颜色编码的阈值显示
+- **最后更新时间**
+
+### 访问方式
+在RuntimeViewer工具栏中点击**🌐 Sites**按钮。
+"""),
+
+        ["mobile"] = new("📱 移动端优化视图", """
+## 移动端优化运行时视图
+
+RuntimeViewer包含适用于平板电脑和手机的响应式布局。
+
+### 响应式断点
+| 断点 | 行为 |
+|---|---|
+| **≤ 1024px**（平板） | 标签导航隐藏 → 汉堡菜单，2列网格 |
+| **≤ 600px**（手机） | 单列网格，全屏弹窗 |
+| **≤ 380px**（小屏手机） | 底部导航仅显示图标 |
+
+### 触控优化
+- 最小44px点击目标
+- 输入框16px字体（防止iOS自动缩放）
+- PWA支持：添加到主屏幕
+
+### 安全区域
+自动为刘海屏和圆角设备添加内边距。
+"""),
+        },
     };
 }
 
