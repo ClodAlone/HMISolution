@@ -1,0 +1,108 @@
+@using SharedModels
+@using RuntimeViewer.Shared.Services
+@implements IDisposable
+
+<div class="rv-multisite-panel">
+    <div class="rv-multisite-header">
+        <span class="rv-multisite-title">🌐 Multi-Site Dashboard</span>
+        <span class="rv-multisite-badge">@Aggregator.Sites.Count site(s)</span>
+        @if (Aggregator.TotalActiveAlarms > 0)
+        {
+            <span class="rv-multisite-badge rv-multisite-badge-alarm">🔔 @Aggregator.TotalActiveAlarms alarm(s)</span>
+        }
+        <span style="flex:1;"></span>
+        <button class="rv-multisite-close" @onclick="OnClose" title="Close dashboard">✕</button>
+    </div>
+
+    <div class="rv-multisite-grid">
+        @foreach (var site in Aggregator.Sites)
+        {
+            <div class="rv-multisite-card @(GetCardClass(site))">
+                <div class="rv-multisite-card-header">
+                    <span class="rv-multisite-card-indicator @(GetIndicatorClass(site))"></span>
+                    <span class="rv-multisite-card-name">@site.Name</span>
+                    @if (site.ActiveAlarmCount > 0)
+                    {
+                        <span class="rv-multisite-card-alarm">🔔 @site.ActiveAlarmCount</span>
+                    }
+                </div>
+                <div class="rv-multisite-card-status">@site.Status</div>
+
+                @if (site.Kpis.Count > 0)
+                {
+                    <div class="rv-multisite-kpis">
+                        @foreach (var kpi in site.Kpis)
+                        {
+                            <div class="rv-multisite-kpi rv-multisite-kpi-@kpi.Level">
+                                <span class="rv-multisite-kpi-label">@kpi.Label</span>
+                                <span class="rv-multisite-kpi-value">@kpi.Value<span class="rv-multisite-kpi-unit">@kpi.Unit</span></span>
+                            </div>
+                        }
+                    </div>
+                }
+
+                @if (!string.IsNullOrEmpty(site.ErrorMessage))
+                {
+                    <div class="rv-multisite-card-error" title="@site.ErrorMessage">
+                        ⚠ @Truncate(site.ErrorMessage, 60)
+                    </div>
+                }
+
+                @if (site.LastUpdate != default)
+                {
+                    <div class="rv-multisite-card-time">
+                        Last update: @site.LastUpdate.ToLocalTime().ToString("HH:mm:ss")
+                    </div>
+                }
+            </div>
+        }
+
+        @if (Aggregator.Sites.Count == 0)
+        {
+            <div class="rv-multisite-empty">
+                <p>No sites configured.</p>
+                <p class="small text-muted">Add sites in the editor under Server Settings → Multi-Site Dashboard.</p>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Inject] private MultiSiteAggregator Aggregator { get; set; } = default!;
+
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        Aggregator.StateChanged += OnStateChanged;
+        await Aggregator.SubscribeAll();
+    }
+
+    private void OnStateChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    private static string GetCardClass(MultiSiteAggregator.SiteState site)
+    {
+        if (!site.IsConnected) return "rv-multisite-card-offline";
+        if (site.ActiveAlarmCount > 0) return "rv-multisite-card-alarm";
+        if (!site.BridgeOnline) return "rv-multisite-card-warn";
+        return "";
+    }
+
+    private static string GetIndicatorClass(MultiSiteAggregator.SiteState site)
+    {
+        if (!site.IsConnected) return "rv-indicator-offline";
+        if (!site.BridgeOnline) return "rv-indicator-warn";
+        return "rv-indicator-online";
+    }
+
+    private static string Truncate(string text, int max) =>
+        text.Length <= max ? text : text[..max] + "…";
+
+    public void Dispose()
+    {
+        Aggregator.StateChanged -= OnStateChanged;
+    }
+}

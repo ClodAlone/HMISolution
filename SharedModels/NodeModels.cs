@@ -375,6 +375,7 @@ namespace SharedModels
         /// </summary>
         public CloudRelayConfig? CloudRelay { get; set; }
 
+        public MultiSiteDashboardConfig? MultiSiteDashboard { get; set; }
         /// <summary>
         /// Alarm notification configuration. Defines delivery channels (Email, Telegram, WhatsApp)
         /// used when an alarm with NotifyOnActivation fires.
@@ -437,6 +438,69 @@ namespace SharedModels
         /// Sent as a query-string parameter (?apiKey=â€¦) during the SignalR handshake.
         /// </summary>
         public string ApiKey { get; set; } = "";
+    }
+
+    /// <summary>
+    /// Configuration for the multi-site dashboard that aggregates data from
+    /// multiple CloudRelay-connected servers into a single overview.
+    /// </summary>
+    public class MultiSiteDashboardConfig
+    {
+        /// <summary>Whether the multi-site dashboard is enabled.</summary>
+        public bool Enabled { get; set; }
+
+        /// <summary>Dashboard refresh interval in seconds. Default 5.</summary>
+        public int RefreshIntervalSeconds { get; set; } = 5;
+
+        /// <summary>List of remote sites to monitor.</summary>
+        public List<SiteConfig> Sites { get; set; } = new();
+    }
+
+    /// <summary>
+    /// A single remote site (CloudRelay-connected server) that the multi-site
+    /// dashboard aggregates into its overview.
+    /// </summary>
+    public class SiteConfig
+    {
+        /// <summary>Unique site identifier.</summary>
+        public string Id { get; set; } = "";
+
+        /// <summary>Human-readable site name (e.g. "Plant A — Chicago").</summary>
+        public string Name { get; set; } = "";
+
+        /// <summary>URL of the site's CloudRelay SignalR hub.</summary>
+        public string HubUrl { get; set; } = "";
+
+        /// <summary>API key for the site's CloudRelay hub.</summary>
+        public string ApiKey { get; set; } = "";
+
+        /// <summary>Whether this site is enabled in the dashboard.</summary>
+        public bool Enabled { get; set; } = true;
+
+        /// <summary>
+        /// Variable paths to display as KPIs on the dashboard card for this site.
+        /// Each entry maps a display label to an OPC variable path.
+        /// </summary>
+        public List<SiteKpi> Kpis { get; set; } = new();
+    }
+
+    /// <summary>A single KPI displayed on a site's dashboard card.</summary>
+    public class SiteKpi
+    {
+        /// <summary>Display label (e.g. "Temperature", "Production Count").</summary>
+        public string Label { get; set; } = "";
+
+        /// <summary>OPC variable path on the remote server.</summary>
+        public string VariablePath { get; set; } = "";
+
+        /// <summary>Unit suffix (e.g. "°C", "pcs", "%").</summary>
+        public string Unit { get; set; } = "";
+
+        /// <summary>Optional warning threshold. KPI turns yellow when value exceeds this.</summary>
+        public double? WarningThreshold { get; set; }
+
+        /// <summary>Optional alarm threshold. KPI turns red when value exceeds this.</summary>
+        public double? AlarmThreshold { get; set; }
     }
 
     /// <summary>

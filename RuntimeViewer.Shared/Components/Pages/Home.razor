@@ -154,6 +154,11 @@ else
                     <button class="rv-btn" style="background:@(_showTagBrowser ? "#2563eb" : "#374151"); font-size:10px;"
                             @onclick="ToggleTagBrowser" title="Tag Browser">&#x1F3F7;&#xFE0F; Tags</button>
                 }
+                @if (_multiSiteEnabled)
+                {
+                    <button class="rv-btn" style="background:@(_showMultiSite ? "#2563eb" : "#374151"); font-size:10px;"
+                            @onclick="ToggleMultiSite" title="Multi-Site Dashboard">🌐 Sites</button>
+                }
                 @if (_pushSupported)
                 {
                     <button class="rv-btn" style="background:@(_pushSubscribed ? "#2563eb" : "#374151"); font-size:10px;"
@@ -265,6 +270,14 @@ else
     @if (_showTagBrowser)
     {
         <TagBrowserPanel OnClose="ToggleTagBrowser" />
+    }
+
+    @* -- Multi-Site Dashboard -- *@
+    @if (_showMultiSite)
+    {
+        <div class="rv-viewport" style="position:absolute; inset:0; z-index:500; background:#1a1a1a;">
+            <MultiSiteDashboard OnClose="ToggleMultiSite" />
+        </div>
     }
 
     @* -- Canvas -- *@
@@ -444,6 +457,7 @@ else
     [Inject] private LocalizationService Localization { get; set; } = default!;
     [Inject] private PushNotificationInterop PushInterop { get; set; } = default!;
 
+    [Inject] private MultiSiteAggregator MultiSite { get; set; } = default!;
     private ScreenConfig? _currentScreen;
     private ScreenConfig? _popupScreen;
     private ScreenConfig? _modalScreen;
@@ -479,6 +493,8 @@ else
 
     // Tag Browser
     private bool _showTagBrowser;
+    private bool _showMultiSite;
+    private bool _multiSiteEnabled;
 
     // Diagnostics
     private bool _bestFit = true;
@@ -503,11 +519,18 @@ else
         Commands.RequestLogin += OnCommandLogin;
         Commands.RequestLogout += OnCommandLogout;
         Commands.ChangeLanguage += OnChangeLanguage;
+        var msCfg = Project.Settings.MultiSiteDashboard;
+        _multiSiteEnabled = msCfg is { Enabled: true, Sites.Count: > 0 };
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender && Project.IsKiosk)
+
+        if (firstRender && _multiSiteEnabled)
+        {
+            await MultiSite.InitializeAsync(Project.Settings.MultiSiteDashboard!);
+        }
         {
             _kioskModule = await JS.InvokeAsync<IJSObjectReference>("import", "./kiosk.js");
             _isFullscreen = await _kioskModule.InvokeAsync<bool>("isFullscreen");
@@ -870,6 +893,11 @@ else
         _showTagBrowser = !_showTagBrowser;
     }
 
+    private void ToggleMultiSite()
+    {
+        _showMultiSite = !_showMultiSite;
+    }
+
     // ─── Push Notification helpers ──────────────────────
     private async Task InitPushNotificationsAsync()
     {
@@ -1020,6 +1048,7 @@ else
         Commands.ChangeLanguage -= OnChangeLanguage;
         Opc.StateChanged -= OnDiagStateChanged;
         _idleTimer?.Dispose();
+        MultiSite?.Dispose();
         _diagTimer?.Dispose();
         _idleRef?.Dispose();
         if (_kioskModule != null)
