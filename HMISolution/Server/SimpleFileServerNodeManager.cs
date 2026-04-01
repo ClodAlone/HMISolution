@@ -100,6 +100,7 @@ namespace SimpleOpcFileServer
             if (server.SessionManager != null)
             {
                 server.SessionManager.ImpersonateUser += (s, e) => SessionManager_ImpersonateUser(s, e);
+                server.SessionManager.SessionClosing += SessionManager_SessionClosing;
             }
 
             InitializeDrivers();
@@ -506,6 +507,24 @@ namespace SimpleOpcFileServer
                 _eventLogger?.LogAuth("Info", "anonymous", "Anonymous session established");
                 return;
             }
+        }
+
+        /// <summary>
+        /// Called when an OPC UA session is closing. Logs the logout to the audit trail.
+        /// </summary>
+        private void SessionManager_SessionClosing(object? sender, SessionEventArgs e)
+        {
+            var session = e.Session;
+            if (session == null) return;
+
+            var username = "unknown";
+            try { username = session.Identity?.DisplayName ?? "anonymous"; } catch { }
+
+            // Skip logging anonymous session closures
+            if (username is "anonymous" or "unknown") return;
+
+            _eventLogger?.LogAuth("Info", username, $"User '{username}' session closed");
+            _auditTrailLogger?.LogLogout(username, session.Id?.ToString());
         }
 
         private bool IsIncrementalChange(NodeModel oldModel, NodeModel newModel, out List<(Variable, string)> newVariables)
@@ -984,6 +1003,14 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 if (!string.IsNullOrWhiteSpace(recipeName))
                 {
                     ExecuteRecipeAction(recipe.Name, action, recipeName);
+
+                    // Audit trail: log recipe operation with operator identity
+                    if (_auditTrailLogger != null)
+                    {
+                        var username = "unknown";
+                        try { username = context?.Session?.Identity?.DisplayName ?? "unknown"; } catch { }
+                        _auditTrailLogger.LogRecipeAction(username, recipe.Name, action, recipeName);
+                    }
                 }
                 return Opc.Ua.ServiceResult.Good;
             };
