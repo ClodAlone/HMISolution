@@ -782,6 +782,24 @@ else if (Node is ScreenNode screen)
             <label class="form-check-label">@L["prop.showInNav"]</label>
             <div class="form-text">@L["prop.showInNavHint"]</div>
         </div>
+        <div class="mb-3">
+            <label class="form-label">🔒 Allowed Groups</label>
+            <div class="form-text mb-1">Restrict this screen to specific user groups. If none are selected, all groups can see it.</div>
+            @foreach (var ug in (Editor.RootModel?.UserGroups ?? []))
+            {
+                var grp = ug;
+                var isChecked = screen.Screen.AllowedGroups.Contains(grp.Name, StringComparer.OrdinalIgnoreCase);
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" checked="@isChecked"
+                           @onchange="(e) => { ToggleScreenAllowedGroup(screen.Screen, grp.Name, (bool)(e.Value ?? false)); OnChanged(); }" />
+                    <label class="form-check-label small">@grp.Name</label>
+                </div>
+            }
+            @if ((Editor.RootModel?.UserGroups ?? []).Count == 0)
+            {
+                <div class="text-muted small fst-italic">No user groups defined.</div>
+            }
+        </div>
         <div class="text-muted">
             @L["prop.symbols"]: @screen.Screen.Symbols.Count
         </div>
@@ -1738,5 +1756,18 @@ else if (Node is UserNode uNode)
     {
         ssNode.Settings.EventLog ??= new EventLogConfig();
         return ssNode.Settings.EventLog;
+    }
+
+    private void ToggleScreenAllowedGroup(ScreenConfig screen, string groupName, bool isChecked)
+    {
+        if (isChecked)
+        {
+            if (!screen.AllowedGroups.Contains(groupName, StringComparer.OrdinalIgnoreCase))
+                screen.AllowedGroups.Add(groupName);
+        }
+        else
+        {
+            screen.AllowedGroups.RemoveAll(g => g.Equals(groupName, StringComparison.OrdinalIgnoreCase));
+        }
     }
 }

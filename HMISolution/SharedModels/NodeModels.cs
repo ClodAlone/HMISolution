@@ -758,6 +758,12 @@ namespace SharedModels
         /// <summary>When true (default), this screen appears in the runtime navigation bar/menu.</summary>
         public bool ShowInNavigation { get; set; } = true;
 
+        /// <summary>
+        /// User group names allowed to view this screen at runtime.
+        /// Empty list = visible to all groups (no restriction).
+        /// </summary>
+        public List<string> AllowedGroups { get; set; } = new();
+
         // --- Editor grid / snap settings ---
         /// <summary>Show the alignment grid in the editor canvas.</summary>
         public bool ShowGrid { get; set; }
@@ -905,6 +911,12 @@ namespace SharedModels
         /// Write = commands require write access; ReadWrite = both.
         /// </summary>
         public string RequiredAccess { get; set; } = "";
+
+        /// <summary>
+        /// User group names allowed to view this symbol at runtime.
+        /// Empty list = visible to all groups (no restriction).
+        /// </summary>
+        public List<string> AllowedGroups { get; set; } = new();
 
         /// <summary>Camera configuration for IP camera widgets (Type == "ipcamera").</summary>
         public CameraConfig? Camera { get; set; }

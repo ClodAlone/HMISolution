@@ -727,6 +727,12 @@ namespace SharedModels
         /// <summary>When true (default), this screen appears in the runtime navigation bar/menu.</summary>
         public bool ShowInNavigation { get; set; } = true;
 
+
+        /// <summary>
+        /// User group names allowed to view this screen at runtime.
+        /// Empty list = visible to all groups (no restriction).
+        /// </summary>
+        public List<string> AllowedGroups { get; set; } = new();
         // --- Editor grid / snap settings ---
         /// <summary>Show the alignment grid in the editor canvas.</summary>
         public bool ShowGrid { get; set; }
@@ -880,6 +886,12 @@ namespace SharedModels
 
         /// <summary>Recipe name to bind this widget to (Type == "recipe"). Must match a RecipeConfig.Name.</summary>
         public string RecipeName { get; set; } = "";
+
+        /// <summary>
+        /// User group names allowed to view this symbol at runtime.
+        /// Empty list = visible to all groups (no restriction).
+        /// </summary>
+        public List<string> AllowedGroups { get; set; } = new();
 
         /// <summary>Scheduler name to bind this widget to (Type == "weeklyplanner"). Must match a SchedulerConfig.Name.</summary>
         public string SchedulerName { get; set; } = "";

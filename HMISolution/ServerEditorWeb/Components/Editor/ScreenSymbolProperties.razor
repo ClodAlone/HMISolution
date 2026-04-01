@@ -1484,6 +1484,24 @@
                 <option value="ReadWrite">ReadWrite — read to see, write to interact</option>
             </select>
         </div>
+        <div class="mb-2">
+            <label class="form-label mb-0 small">Allowed Groups</label>
+            <div class="form-text mb-1" style="font-size: 9px;">Restrict this symbol to specific user groups. Empty = visible to all.</div>
+            @foreach (var ug in (Editor?.RootModel?.UserGroups ?? []))
+            {
+                var grp = ug;
+                var isChecked = _selectedSymbol.AllowedGroups.Contains(grp.Name, StringComparer.OrdinalIgnoreCase);
+                <div class="form-check" style="font-size: 10px;">
+                    <input class="form-check-input" type="checkbox" checked="@isChecked"
+                           @onchange="(e) => { ToggleSymbolAllowedGroup(grp.Name, (bool)(e.Value ?? false)); OnChanged(); }" />
+                    <label class="form-check-label">@grp.Name</label>
+                </div>
+            }
+            @if ((Editor?.RootModel?.UserGroups ?? []).Count == 0)
+            {
+                <div class="text-muted small fst-italic" style="font-size: 9px;">No user groups defined.</div>
+            }
+        </div>
 
         <hr class="my-2" />
         <h6 class="mb-2 small text-success">⚡ Commands (@_selectedSymbol.Commands.Count)</h6>
@@ -2317,5 +2335,19 @@ else
     public void Dispose()
     {
         Editor.ScreenSelectionChanged -= OnSelectionChanged;
+    }
+
+    private void ToggleSymbolAllowedGroup(string groupName, bool isChecked)
+    {
+        if (_selectedSymbol == null) return;
+        if (isChecked)
+        {
+            if (!_selectedSymbol.AllowedGroups.Contains(groupName, StringComparer.OrdinalIgnoreCase))
+                _selectedSymbol.AllowedGroups.Add(groupName);
+        }
+        else
+        {
+            _selectedSymbol.AllowedGroups.RemoveAll(g => g.Equals(groupName, StringComparison.OrdinalIgnoreCase));
+        }
     }
 }

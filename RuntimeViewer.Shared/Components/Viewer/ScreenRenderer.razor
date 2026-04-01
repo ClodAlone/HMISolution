@@ -25,6 +25,8 @@ else if (Screen.LayoutMode == "responsive")
             if (!visible) continue;
             if (!string.IsNullOrEmpty(sym.RequiredAccess) && !Auth.HasReadAccess(sym.RequiredAccess))
                 continue;
+            if (!Auth.IsGroupAllowed(sym.AllowedGroups))
+                continue;
 
             var hasCmd = sym.Commands.Count > 0;
             var isInputWidget = sym.Type is "knob" or "rotaryswitch" or "switch" or "hslider" or "vslider";
@@ -392,6 +394,10 @@ else
 
             // Access-level visibility: if symbol requires access and user lacks read → hide
             if (!string.IsNullOrEmpty(sym.RequiredAccess) && !Auth.HasReadAccess(sym.RequiredAccess))
+                continue;
+
+            // Group-based visibility: if symbol is restricted to specific groups, hide for others
+            if (!Auth.IsGroupAllowed(sym.AllowedGroups))
                 continue;
 
             var hasCmd = sym.Commands.Count > 0;

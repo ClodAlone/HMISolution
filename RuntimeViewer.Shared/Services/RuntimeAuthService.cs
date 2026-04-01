@@ -171,5 +171,19 @@ public class RuntimeAuthService
         if (!IsAuthenticated) return false;
         return AccessLevel is "Write" or "ReadWrite";
     }
+
+    /// <summary>
+    /// Check if the current user's group is in the allowed groups list.
+    /// Returns true if the list is empty (no restriction) or the user's group is included.
+    /// When login is not required, always returns true.
+    /// </summary>
+    public bool IsGroupAllowed(List<string>? allowedGroups)
+    {
+        if (allowedGroups == null || allowedGroups.Count == 0)
+            return true;
+        if (!IsAuthenticated || string.IsNullOrEmpty(Group))
+            return false;
+        return allowedGroups.Any(g => g.Equals(Group, StringComparison.OrdinalIgnoreCase));
+    }
 }
 

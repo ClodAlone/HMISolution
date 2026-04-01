@@ -136,10 +136,14 @@ else
                 }
                 <span class="rv-file" title="@Project.ConfigPath">@Path.GetFileName(Project.ConfigPath)</span>
 
-                @if (_loginRequired)
+                @if (Auth.IsAuthenticated)
                 {
                     <span class="rv-badge" style="background:#555;color:#ccc;" title="@Auth.Group">@Auth.Username</span>
                     <button class="rv-btn" style="background:#dc3545;" @onclick="DoLogout">Logout</button>
+                }
+                else if (_hasUsers)
+                {
+                    <button class="rv-btn" style="background:#555;" @onclick="ShowAccessLoginPrompt" title="Sign in to access restricted content">🔐 Login</button>
                 }
                 <button class="rv-btn" style="background:@(_bestFit ? "#2563eb" : "#374151"); font-size:10px;"
                         @onclick="() => _bestFit = !_bestFit" title="@(_bestFit ? "Switch to actual size (scrollable)" : "Switch to best fit (scale to viewport)")">@(_bestFit ? "▣ Fit" : "▢ 1:1")</button>
@@ -183,20 +187,32 @@ else
                     }
                 </div>
             }
-            @if (_loginRequired)
+            @if (Auth.IsAuthenticated)
             {
                 <span style="flex:1;"></span>
                 <span class="rv-badge" style="background:#555;color:#ccc;font-size:10px;">@Auth.Username</span>
                 <button class="rv-btn" style="background:#dc3545;font-size:10px;" @onclick="DoLogout">Logout</button>
             }
+            else if (_hasUsers)
+            {
+                <span style="flex:1;"></span>
+                <button class="rv-btn" style="background:#555;font-size:10px;" @onclick="ShowAccessLoginPrompt">🔐 Login</button>
+            }
         </div>
     }
-    else if (_loginRequired)
+    else if (Auth.IsAuthenticated)
     {
         @* Kiosk mode: small floating logout button (no navigation needed) *@
         <div class="rv-kiosk-logout">
             <span class="small" style="color:#aaa;">@Auth.Username</span>
             <button class="rv-btn" style="background:#dc3545;font-size:10px;" @onclick="DoLogout">Logout</button>
+        </div>
+    }
+    else if (_hasUsers)
+    {
+        @* Kiosk mode: small floating login button *@
+        <div class="rv-kiosk-logout">
+            <button class="rv-btn" style="background:#555;font-size:10px;" @onclick="ShowAccessLoginPrompt">🔐 Login</button>
         </div>
     }
 
@@ -440,6 +456,7 @@ else
 
     // Login state
     private bool _loginRequired;
+    private bool _hasUsers;
     private bool _showAccessLogin;
     private string _loginUsername = "";
     private string _loginPassword = "";
@@ -483,6 +500,7 @@ else
     {
         _loginRequired = RuntimeAuthService.IsLoginRequired(Project.Model);
         Commands.NavigateScreen += DoNavigateScreen;
+        _hasUsers = (Project.Model?.Users?.Count ?? 0) > 0;
         Commands.OpenScreenPopup += DoOpenPopup;
         Commands.OpenScreenModal += DoOpenModal;
         Commands.RequestLogin += OnCommandLogin;
@@ -567,6 +585,12 @@ else
 
         _currentScreen ??= Project.StartupScreen;
 
+        // If the resolved screen is restricted for the current user's group, fall back
+        if (_currentScreen != null && !Auth.IsGroupAllowed(_currentScreen.AllowedGroups))
+        {
+            _currentScreen = NavigableScreens.FirstOrDefault();
+        }
+
         if (!Opc.IsConnected && !_connecting && !string.IsNullOrEmpty(Project.Settings.EndpointUrl))
         {
             // When anonymous is disabled, wait for the user to log in first
@@ -611,8 +635,10 @@ else
     {
         InvokeAsync(() =>
         {
-            _popupScreen = Project.Screens.FirstOrDefault(s =>
+            var screen = Project.Screens.FirstOrDefault(s =>
                 s.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+            if (screen != null && !Auth.IsGroupAllowed(screen.AllowedGroups)) return;
+            _popupScreen = screen;
             StateHasChanged();
         });
     }
@@ -621,8 +647,10 @@ else
     {
         InvokeAsync(() =>
         {
-            _modalScreen = Project.Screens.FirstOrDefault(s =>
+            var screen = Project.Screens.FirstOrDefault(s =>
                 s.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+            if (screen != null && !Auth.IsGroupAllowed(screen.AllowedGroups)) return;
+            _modalScreen = screen;
             StateHasChanged();
         });
     }
@@ -980,7 +1008,9 @@ else
         _ => "\u2139\uFE0F"
     };
 
-    private List<ScreenConfig> NavigableScreens => Project.Screens.Where(s => s.ShowInNavigation).ToList();
+    private List<ScreenConfig> NavigableScreens => Project.Screens
+        .Where(s => s.ShowInNavigation && Auth.IsGroupAllowed(s.AllowedGroups))
+        .ToList();
     private string NavStyle => Project.Settings.NavigationStyle?.ToLowerInvariant() ?? "tabs";
 
     public async void Dispose()
