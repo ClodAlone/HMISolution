@@ -100,9 +100,20 @@ public sealed class EventLogger : IDisposable
 
     // ─── Core logging ───────────────────────────────────────────────────
 
+    /// <summary>
+    /// Optional callback invoked after each event is logged.
+    /// Used by redundancy to enqueue events for replication to the partner.
+    /// Parameters: category, severity, source, message, details.
+    /// </summary>
+    public Action<string, string, string, string, string?>? OnEventLogged { get; set; }
+
     private void Log(string category, string severity, string source, string message, string? details)
     {
         if (!_initialized) return;
+
+        // Notify replication hook (non-blocking, before async write)
+        try { OnEventLogged?.Invoke(category, severity, source, message, details); }
+        catch { /* replication hook must not break logging */ }
 
         Task.Run(() =>
         {
@@ -200,6 +211,114 @@ public sealed class EventLogger : IDisposable
             _connection?.Close();
             _connection?.Dispose();
             _connection = null;
+        }
+    }
+
+    // ─── Redundancy helpers ────────────────────────────────────────────
+
+    /// <summary>
+    /// Returns the UTC timestamp of the most recent event, or null if empty.
+    /// Used by redundancy to detect event history gaps after a restart.
+    /// </summary>
+    public DateTime? GetLatestEventTimestamp()
+    {
+        if (!_initialized) return null;
+        try
+        {
+            lock (_lock)
+            {
+                if (_connection == null) return null;
+                using var cmd = _connection.CreateCommand();
+                cmd.CommandText = $"SELECT MAX(time) FROM {TableName}";
+                var result = cmd.ExecuteScalar();
+                if (result is string s && DateTime.TryParse(s, null, System.Globalization.DateTimeStyles.RoundtripKind, out var dt))
+                    return dt;
+            }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Debug("GetLatestEventTimestamp error: {Error}", ex.Message);
+        }
+        return null;
+    }
+
+    /// <summary>Read all events after the given UTC time. Used by redundancy gap-fill.</summary>
+    public List<RedundancyService.EventEntry> ReadEventsSince(DateTime sinceUtc, int maxRows = 100_000)
+    {
+        var entries = new List<RedundancyService.EventEntry>();
+        if (!_initialized) return entries;
+        try
+        {
+            lock (_lock)
+            {
+                if (_connection == null) return entries;
+                using var cmd = _connection.CreateCommand();
+                cmd.CommandText = $"SELECT time, category, severity, source, message, details FROM {TableName} WHERE time > @since ORDER BY time ASC LIMIT @limit";
+                cmd.Parameters.AddWithValue("@since", sinceUtc.ToString("o"));
+                cmd.Parameters.AddWithValue("@limit", maxRows);
+                using var reader = cmd.ExecuteReader();
+                while (reader.Read())
+                {
+                    entries.Add(new RedundancyService.EventEntry
+                    {
+                        Time = DateTime.TryParse(reader.GetString(0), null, System.Globalization.DateTimeStyles.RoundtripKind, out var t) ? t : sinceUtc,
+                        Category = reader.GetString(1),
+                        Severity = reader.GetString(2),
+                        Source = reader.GetString(3),
+                        Message = reader.GetString(4),
+                        Details = reader.IsDBNull(5) ? null : reader.GetString(5)
+                    });
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Warning("ReadEventsSince error: {Error}", ex.Message);
+        }
+        return entries;
+    }
+
+    /// <summary>
+    /// Replay event entries received from the partner server during redundancy sync.
+    /// Inserts directly without duplicate checks (events are append-only and time-ordered).
+    /// </summary>
+    public void ReplayEvents(List<RedundancyService.EventEntry> events)
+    {
+        if (!_initialized || _connection == null || events.Count == 0) return;
+
+        lock (_lock)
+        {
+            try
+            {
+                using var tx = _connection.BeginTransaction();
+                using var cmd = _connection.CreateCommand();
+                cmd.CommandText = $"INSERT INTO {TableName} (time, category, severity, source, message, details) VALUES (@t, @cat, @sev, @src, @msg, @det)";
+
+                var pTime = cmd.Parameters.Add("@t", SqliteType.Text);
+                var pCat = cmd.Parameters.Add("@cat", SqliteType.Text);
+                var pSev = cmd.Parameters.Add("@sev", SqliteType.Text);
+                var pSrc = cmd.Parameters.Add("@src", SqliteType.Text);
+                var pMsg = cmd.Parameters.Add("@msg", SqliteType.Text);
+                var pDet = cmd.Parameters.Add("@det", SqliteType.Text);
+
+                foreach (var e in events)
+                {
+                    pTime.Value = e.Time.ToString("o");
+                    pCat.Value = e.Category;
+                    pSev.Value = e.Severity;
+                    pSrc.Value = e.Source;
+                    pMsg.Value = e.Message;
+                    pDet.Value = e.Details != null ? (object)e.Details : DBNull.Value;
+                    cmd.ExecuteNonQuery();
+                }
+
+                tx.Commit();
+                Serilog.Log.Debug("[Redundancy] Replayed {Count} event entries", events.Count);
+            }
+            catch (Exception ex)
+            {
+                Serilog.Log.Warning("[Redundancy] Event replay error: {Error}", ex.Message);
+            }
         }
     }
 }

@@ -24,6 +24,10 @@ namespace SimpleOpcFileServer
         private CancellationTokenSource? _cts;
         private Task? _listenerTask;
         private RateLimiter? _rateLimiter;
+        private RedundancyService? _redundancyService;
+
+        /// <summary>Set the redundancy service for routing /redundancy/* requests.</summary>
+        public void SetRedundancyService(RedundancyService service) => _redundancyService = service;
 
         // Process-level CPU tracking
         private TimeSpan _lastCpuTime;
@@ -194,6 +198,27 @@ namespace SimpleOpcFileServer
             try { diag.System = SystemStatsProvider?.Invoke(); }
             catch { /* non-critical */ }
 
+            // Redundancy diagnostics
+            if (_redundancyService != null)
+            {
+                try
+                {
+                    var rd = _redundancyService.GetDiagnostics();
+                    diag.Redundancy = new RedundancyDiagnosticsSnapshot
+                    {
+                        ConfiguredRole = rd.ConfiguredRole,
+                        ActiveRole = rd.ActiveRole,
+                        IsActive = rd.IsActive,
+                        PartnerEndpoint = rd.PartnerEndpoint,
+                        PartnerAlive = rd.PartnerAlive,
+                        LastPartnerHeartbeat = rd.LastPartnerHeartbeat,
+                        MissedHeartbeats = rd.MissedHeartbeats,
+                        ReplicationQueueSize = rd.ReplicationQueueSize
+                    };
+                }
+                catch { /* non-critical */ }
+            }
+
             return diag;
         }
 
@@ -302,7 +327,7 @@ namespace SimpleOpcFileServer
                         return;
                     }
 
-                    // Route POST to debug command handler
+                    // Route POST to debug or redundancy handler
                     if (headers.StartsWith("POST ", StringComparison.OrdinalIgnoreCase))
                     {
                         int contentLength = 0;
@@ -320,8 +345,28 @@ namespace SimpleOpcFileServer
                             if (bytesRead == 0) break;
                             body += Encoding.UTF8.GetString(buffer, 0, bytesRead);
                         }
+
+                        var postPath = headers.Split(' ').Length > 1 ? headers.Split(' ')[1] : "";
+                        if (postPath.StartsWith("/redundancy", StringComparison.OrdinalIgnoreCase) && _redundancyService != null)
+                        {
+                            var redJson = _redundancyService.HandleRequest("POST", postPath, body) ?? "{\"error\":\"Not found\"}";
+                            SendJsonResponse(stream, redJson);
+                            return;
+                        }
+
                         HandleDebugPost(headers, body, stream);
                         return;
+                    }
+
+                    // Route GET /redundancy/* to redundancy service
+                    {
+                        var getPath = headers.Split(' ').Length > 1 ? headers.Split(' ')[1] : "";
+                        if (getPath.StartsWith("/redundancy", StringComparison.OrdinalIgnoreCase) && _redundancyService != null)
+                        {
+                            var redJson = _redundancyService.HandleRequest("GET", getPath, "") ?? "{\"error\":\"Not found\"}";
+                            SendJsonResponse(stream, redJson);
+                            return;
+                        }
                     }
 
                     // Default: GET - return diagnostics snapshot
@@ -348,6 +393,15 @@ namespace SimpleOpcFileServer
             PropertyNameCaseInsensitive = true,
             Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() }
         };
+
+        private static void SendJsonResponse(NetworkStream stream, string json, int statusCode = 200, string statusText = "OK")
+        {
+            var responseBytes = Encoding.UTF8.GetBytes(json);
+            var header = $"HTTP/1.1 {statusCode} {statusText}\r\nContent-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: {responseBytes.Length}\r\nConnection: close\r\n\r\n";
+            stream.Write(Encoding.ASCII.GetBytes(header));
+            stream.Write(responseBytes);
+            stream.Flush();
+        }
 
         private void HandleDebugPost(string headers, string body, NetworkStream stream)
         {

@@ -1724,6 +1724,9 @@ namespace SharedModels
 
         /// <summary>System-level statistics (logging cache, alarm counts, driver states). Null if not yet collected.</summary>
         public SystemStats? System { get; set; }
+
+        /// <summary>Redundancy / HA diagnostics. Null when redundancy is not enabled.</summary>
+        public RedundancyDiagnosticsSnapshot? Redundancy { get; set; }
     }
 
     // --- System Statistics ---
@@ -1756,6 +1759,23 @@ namespace SharedModels
         public double LastCycleMs { get; set; }
         public long PendingOperations { get; set; }
         public string? LastError { get; set; }
+    }
+
+    // --- Redundancy Diagnostics ---
+
+    /// <summary>
+    /// Snapshot of redundancy / high-availability state for the diagnostics endpoint.
+    /// </summary>
+    public class RedundancyDiagnosticsSnapshot
+    {
+        public string ConfiguredRole { get; set; } = "";
+        public string ActiveRole { get; set; } = "";
+        public bool IsActive { get; set; }
+        public string PartnerEndpoint { get; set; } = "";
+        public bool PartnerAlive { get; set; }
+        public DateTime LastPartnerHeartbeat { get; set; }
+        public int MissedHeartbeats { get; set; }
+        public int ReplicationQueueSize { get; set; }
     }
 
     // â”€â”€â”€ Alarm Analytics â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -2268,6 +2288,20 @@ namespace SharedModels
         /// Maximum allowed replication lag in seconds before raising a warning. Default 30.
         /// </summary>
         public int MaxReplicationLagSeconds { get; set; } = 30;
+
+        /// <summary>
+        /// When true, scripts continue to run on the standby server.
+        /// Useful for monitoring/alerting scripts that should always execute.
+        /// Default false (scripts only run on the active server).
+        /// </summary>
+        public bool ScriptsRunOnStandby { get; set; }
+
+        /// <summary>
+        /// When true, PLC programs continue to run on the standby server.
+        /// Useful for diagnostic or simulation programs.
+        /// Default false (PLC programs only run on the active server).
+        /// </summary>
+        public bool PlcRunOnStandby { get; set; }
     }
 
     // --- Feature: Rate Limiting / Throttling ---

@@ -197,6 +197,103 @@ namespace SimpleOpcFileServer
             return val is double or float or int or long or short or ushort or uint or ulong or byte or sbyte or decimal;
         }
 
+
+        /// <summary>
+        /// Replay data-logging entries received from the primary server during redundancy sync.
+        /// Inserts directly without deadband/hysteresis checks.
+        /// </summary>
+        public void ReplayEntries(List<RedundancyService.LogEntry> entries)
+        {
+            if (!_initialized || _connection == null || entries.Count == 0) return;
+
+            lock (_lock)
+            {
+                try
+                {
+                    using var tx = _connection.BeginTransaction();
+                    using var cmd = _connection.CreateCommand();
+                    cmd.CommandText = $"INSERT INTO {_tableName} (time, variable_name, value, value_str, quality) VALUES ($time, $name, $val, $valstr, $quality)";
+
+                    var pTime = cmd.Parameters.Add("$time", Microsoft.Data.Sqlite.SqliteType.Text);
+                    var pName = cmd.Parameters.Add("$name", Microsoft.Data.Sqlite.SqliteType.Text);
+                    var pVal = cmd.Parameters.Add("$val", Microsoft.Data.Sqlite.SqliteType.Real);
+                    var pValStr = cmd.Parameters.Add("$valstr", Microsoft.Data.Sqlite.SqliteType.Text);
+                    var pQuality = cmd.Parameters.Add("$quality", Microsoft.Data.Sqlite.SqliteType.Integer);
+
+                    foreach (var entry in entries)
+                    {
+                        pTime.Value = entry.Time.ToString("o");
+                        pName.Value = entry.VariableName;
+                        pVal.Value = entry.NumericValue.HasValue ? (object)entry.NumericValue.Value : DBNull.Value;
+                        pValStr.Value = entry.StringValue != null ? (object)entry.StringValue : DBNull.Value;
+                        pQuality.Value = (long)entry.Quality;
+                        cmd.ExecuteNonQuery();
+                    }
+
+                    tx.Commit();
+                    Serilog.Log.Debug("[Redundancy] Replayed {Count} log entries to SQLite", entries.Count);
+                }
+                catch (Exception ex)
+                {
+                    Serilog.Log.Warning("[Redundancy] SQLite replay error: {Error}", ex.Message);
+                }
+            }
+        }
+
+        public DateTime? GetLatestTimestamp()
+        {
+            if (!_initialized || _connection == null) return null;
+            lock (_lock)
+            {
+                try
+                {
+                    using var cmd = _connection.CreateCommand();
+                    cmd.CommandText = $"SELECT MAX(time) FROM {_tableName}";
+                    var result = cmd.ExecuteScalar();
+                    if (result is string s && DateTime.TryParse(s, null, System.Globalization.DateTimeStyles.RoundtripKind, out var dt))
+                        return dt;
+                }
+                catch (Exception ex)
+                {
+                    Serilog.Log.Debug("GetLatestTimestamp error: {Error}", ex.Message);
+                }
+            }
+            return null;
+        }
+
+        public List<RedundancyService.LogEntry> ReadEntriesSince(DateTime sinceUtc, int maxRows = 100_000)
+        {
+            var entries = new List<RedundancyService.LogEntry>();
+            if (!_initialized || _connection == null) return entries;
+            lock (_lock)
+            {
+                try
+                {
+                    using var cmd = _connection.CreateCommand();
+                    cmd.CommandText = $"SELECT time, variable_name, value, value_str, quality FROM {_tableName} WHERE time > $since ORDER BY time ASC LIMIT $limit";
+                    cmd.Parameters.AddWithValue("$since", sinceUtc.ToString("o"));
+                    cmd.Parameters.AddWithValue("$limit", maxRows);
+                    using var reader = cmd.ExecuteReader();
+                    while (reader.Read())
+                    {
+                        entries.Add(new RedundancyService.LogEntry
+                        {
+                            Time = DateTime.TryParse(reader.GetString(0), null, System.Globalization.DateTimeStyles.RoundtripKind, out var t) ? t : sinceUtc,
+                            VariableName = reader.GetString(1),
+                            NumericValue = reader.IsDBNull(2) ? null : reader.GetDouble(2),
+                            StringValue = reader.IsDBNull(3) ? null : reader.GetString(3),
+                            Quality = reader.IsDBNull(4) ? 0u : (uint)reader.GetInt64(4)
+                        });
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Serilog.Log.Warning("ReadEntriesSince error: {Error}", ex.Message);
+                }
+            }
+            return entries;
+        }
+
         public void Dispose()
         {
             lock (_lock)

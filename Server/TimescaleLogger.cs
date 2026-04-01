@@ -206,6 +206,93 @@ namespace SimpleOpcFileServer
             return val is double || val is float || val is int || val is long || val is short || val is ushort || val is uint || val is ulong || val is byte || val is sbyte || val is decimal;
         }
 
+
+        /// <summary>
+        /// Replay data-logging entries received from the primary server during redundancy sync.
+        /// Inserts directly without deadband/hysteresis checks.
+        /// </summary>
+        public void ReplayEntries(List<RedundancyService.LogEntry> entries)
+        {
+            if (string.IsNullOrEmpty(_connectionString) || entries.Count == 0) return;
+
+            try
+            {
+                using var conn = new NpgsqlConnection(_connectionString);
+                conn.Open();
+
+                using var tx = conn.BeginTransaction();
+                foreach (var entry in entries)
+                {
+                    using var cmd = conn.CreateCommand();
+                    cmd.CommandText = $"INSERT INTO {_tableName} (time, variable_name, value, value_str, quality) VALUES (@time, @name, @val, @valstr, @quality)";
+                    cmd.Parameters.AddWithValue("time", entry.Time);
+                    cmd.Parameters.AddWithValue("name", entry.VariableName);
+                    cmd.Parameters.AddWithValue("val", entry.NumericValue.HasValue ? (object)entry.NumericValue.Value : DBNull.Value);
+                    cmd.Parameters.AddWithValue("valstr", entry.StringValue != null ? (object)entry.StringValue : DBNull.Value);
+                    cmd.Parameters.AddWithValue("quality", (long)entry.Quality);
+                    cmd.ExecuteNonQuery();
+                }
+                tx.Commit();
+
+                Serilog.Log.Debug("[Redundancy] Replayed {Count} log entries to TimescaleDB", entries.Count);
+            }
+            catch (Exception ex)
+            {
+                Serilog.Log.Warning("[Redundancy] TimescaleDB replay error: {Error}", ex.Message);
+            }
+        }
+
+        public DateTime? GetLatestTimestamp()
+        {
+            if (string.IsNullOrEmpty(_connectionString)) return null;
+            try
+            {
+                using var conn = new NpgsqlConnection(_connectionString);
+                conn.Open();
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = $"SELECT MAX(time) FROM {_tableName}";
+                var result = cmd.ExecuteScalar();
+                if (result is DateTime dt) return DateTime.SpecifyKind(dt, DateTimeKind.Utc);
+            }
+            catch (Exception ex)
+            {
+                Serilog.Log.Debug("GetLatestTimestamp error: {Error}", ex.Message);
+            }
+            return null;
+        }
+
+        public List<RedundancyService.LogEntry> ReadEntriesSince(DateTime sinceUtc, int maxRows = 100_000)
+        {
+            var entries = new List<RedundancyService.LogEntry>();
+            if (string.IsNullOrEmpty(_connectionString)) return entries;
+            try
+            {
+                using var conn = new NpgsqlConnection(_connectionString);
+                conn.Open();
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = $"SELECT time, variable_name, value, value_str, quality FROM {_tableName} WHERE time > @since ORDER BY time ASC LIMIT @limit";
+                cmd.Parameters.AddWithValue("since", sinceUtc);
+                cmd.Parameters.AddWithValue("limit", maxRows);
+                using var reader = cmd.ExecuteReader();
+                while (reader.Read())
+                {
+                    entries.Add(new RedundancyService.LogEntry
+                    {
+                        Time = reader.GetDateTime(0),
+                        VariableName = reader.GetString(1),
+                        NumericValue = reader.IsDBNull(2) ? null : reader.GetDouble(2),
+                        StringValue = reader.IsDBNull(3) ? null : reader.GetString(3),
+                        Quality = reader.IsDBNull(4) ? 0u : (uint)reader.GetInt64(4)
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                Serilog.Log.Warning("ReadEntriesSince error: {Error}", ex.Message);
+            }
+            return entries;
+        }
+
         public void Dispose()
         {
             // Nothing to dispose really connection is per call

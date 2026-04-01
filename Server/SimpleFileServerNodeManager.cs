@@ -34,6 +34,13 @@ namespace SimpleOpcFileServer
         private AssetManager? _assetManager;
         private BatchSequenceManager? _batchManager;
 
+        // Cached configs for deferred start on redundancy failover
+        private List<ScriptConfig>? _cachedScripts;
+        private List<PlcProgramConfig>? _cachedPlcPrograms;
+
+        // Redundancy system variable (_System.Redundancy.IsActive)
+        private BaseDataVariableState<bool>? _redundancyIsActiveVar;
+
         private readonly List<NodeId> _rootNodeIds = new();
         private FileSystemWatcher? _watcher;
         private System.Threading.Timer? _reloadTimer;
@@ -60,6 +67,9 @@ namespace SimpleOpcFileServer
 
         // Anomaly detection service
         private AnomalyDetectionService? _anomalyDetectionService;
+
+        // Redundancy / HA service
+        internal RedundancyService? _redundancy;
 
         // Retentive variable storage
         private readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> _retentiveValues = new();
@@ -154,6 +164,14 @@ namespace SimpleOpcFileServer
 
         private void InitializeDrivers()
         {
+            // Redundancy: drivers only run on the active server
+            if (_redundancy != null && !_redundancy.IsActive)
+            {
+                Utils.Trace("[Redundancy] Standby mode — skipping driver initialization.");
+                _eventLogger?.LogSystem("Info", "Redundancy", "Standby mode — drivers not started");
+                return;
+            }
+
             var loaded = DriverLoader.LoadDrivers(SystemContext);
             _drivers.AddRange(loaded);
             foreach (var d in loaded)
@@ -594,6 +612,98 @@ namespace SimpleOpcFileServer
                      _eventLogger?.LogSystem("Info", "AnomalyDetection", "Anomaly detection service created");
                  }
 
+                 // Redundancy / High Availability
+                 var redCfg = nodeModel.Server?.Redundancy;
+                 if (redCfg is { Enabled: true } && !string.IsNullOrEmpty(redCfg.PartnerEndpoint))
+                 {
+                     _redundancy?.Dispose();
+                     _redundancy = new RedundancyService(redCfg, _variables);
+                     _redundancy.SetLogger(_logger);
+                     _redundancy.SetEventLogger(_eventLogger);
+                     DiagnosticsCollector.Instance.SetRedundancyService(_redundancy);
+
+                     // Hook event logger to replicate events to standby
+                     if (_eventLogger != null)
+                     {
+                         var red = _redundancy;
+                         _eventLogger.OnEventLogged = (cat, sev, src, msg, det) =>
+                             red.EnqueueEventReplication(cat, sev, src, msg, det);
+                     }
+
+                     // When role changes, start/stop drivers, scripts, PLC accordingly
+                     _redundancy.RoleChanged += role =>
+                     {
+                         // Update system variables
+                         var now = DateTime.UtcNow;
+                         if (_redundancyIsActiveVar != null)
+                         {
+                             _redundancyIsActiveVar.Value = role == RedundancyRole.Active;
+                             _redundancyIsActiveVar.Timestamp = now;
+                             _redundancyIsActiveVar.ClearChangeMasks(SystemContext, false);
+                         }
+                         if (_variables.TryGetValue("_System.Redundancy.ActiveRole", out var roleVar))
+                         {
+                             roleVar.Value = role.ToString();
+                             roleVar.Timestamp = now;
+                             roleVar.ClearChangeMasks(SystemContext, false);
+                         }
+                         if (_variables.TryGetValue("_System.Redundancy.PartnerAlive", out var partnerVar))
+                         {
+                             partnerVar.Value = _redundancy.PartnerAlive;
+                             partnerVar.Timestamp = now;
+                             partnerVar.ClearChangeMasks(SystemContext, false);
+                         }
+
+                         if (role == RedundancyRole.Active)
+                         {
+                             _eventLogger?.LogSystem("Info", "Redundancy", "Now ACTIVE — starting drivers");
+                             InitializeDrivers();
+
+                             // Start scripts if not already running and not configured to run on standby
+                             if (_scriptManager == null && _cachedScripts != null && !redCfg.ScriptsRunOnStandby)
+                             {
+                                 _scriptManager = new ScriptManager(this);
+                                 _scriptManager.Initialize(_cachedScripts);
+                                 _eventLogger?.LogSystem("Info", "Redundancy", "Scripts started after promotion");
+                             }
+
+                             // Start PLC if not already running and not configured to run on standby
+                             if (_plcManager == null && _cachedPlcPrograms is { Count: > 0 } && !redCfg.PlcRunOnStandby)
+                             {
+                                 _plcManager = new PlcManager(this);
+                                 _plcManager.Initialize(_cachedPlcPrograms);
+                                 _eventLogger?.LogSystem("Info", "Redundancy", "PLC programs started after promotion");
+                             }
+                         }
+                         else
+                         {
+                             _eventLogger?.LogSystem("Info", "Redundancy", "Now STANDBY — stopping drivers");
+                             foreach (var d in _drivers) d.Dispose();
+                             _drivers.Clear();
+
+                             // Stop scripts unless configured to run on standby
+                             if (!redCfg.ScriptsRunOnStandby && _scriptManager != null)
+                             {
+                                 _scriptManager.Dispose();
+                                 _scriptManager = null;
+                                 _eventLogger?.LogSystem("Info", "Redundancy", "Scripts stopped after demotion");
+                             }
+
+                             // Stop PLC unless configured to run on standby
+                             if (!redCfg.PlcRunOnStandby && _plcManager != null)
+                             {
+                                 _plcManager.Dispose();
+                                 _plcManager = null;
+                                 _eventLogger?.LogSystem("Info", "Redundancy", "PLC programs stopped after demotion");
+                             }
+                         }
+                     };
+
+                     _redundancy.Start();
+                     DiagnosticsCollector.Instance.Register("Redundancy", redCfg.Role, status: _redundancy.ActiveRole.ToString());
+                     _eventLogger?.LogSystem("Info", "Redundancy", $"Service initialized — role: {_redundancy.ActiveRole}");
+                 }
+
                  if (nodeModel.Folder != null)
                  {
                      CreateFolder(nodeModel.Folder, null, references, "");
@@ -602,19 +712,24 @@ namespace SimpleOpcFileServer
                  // Start anomaly detection after variables are created
                  _anomalyDetectionService?.Start();
 
-                 // scripts
-                 if (nodeModel.Scripts != null)
+                 // scripts — skip on standby unless ScriptsRunOnStandby is set
+                 if (nodeModel.Scripts != null && (_redundancy == null || _redundancy.ShouldRunScripts))
                  {
                      _scriptManager = new ScriptManager(this);
                      _scriptManager.Initialize(nodeModel.Scripts);
                  }
+                 // Cache script configs for deferred start on failover
+                 _cachedScripts = nodeModel.Scripts;
 
-                 // PLC programs (IEC 61131-3 Structured Text)
-                 if (nodeModel.PlcPrograms != null && nodeModel.PlcPrograms.Count > 0)
+                 // PLC programs — skip on standby unless PlcRunOnStandby is set
+                 if (nodeModel.PlcPrograms != null && nodeModel.PlcPrograms.Count > 0
+                     && (_redundancy == null || _redundancy.ShouldRunPlc))
                  {
                      _plcManager = new PlcManager(this);
                      _plcManager.Initialize(nodeModel.PlcPrograms);
                  }
+                 // Cache PLC configs for deferred start on failover
+                 _cachedPlcPrograms = nodeModel.PlcPrograms;
 
                            // Recipes
                           if (nodeModel.Recipes != null && nodeModel.Recipes.Count > 0)
@@ -658,6 +773,10 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                   }
                               // ─── Diagnostics OPC UA node (always created, license-exempt) ───
                           CreateDiagnosticsNode(references);
+
+                          // ─── Redundancy system variable ───
+                          if (_redundancy != null)
+                              CreateRedundancySystemVariable(references);
                       }
                  }
         
@@ -952,6 +1071,113 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 }
                 catch { }
             }, null, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(2));
+        }
+
+        /// <summary>
+        /// Creates _System.Redundancy.IsActive (Boolean, read-only) in the OPC address space.
+        /// Updated automatically when the redundancy role changes.
+        /// </summary>
+        private void CreateRedundancySystemVariable(IList<IReference>? references)
+        {
+            if (_redundancyIsActiveVar != null) return;
+
+            var folder = new FolderState(null);
+            folder.NodeId = new NodeId("_System.Redundancy", _namespaceIndex);
+            folder.BrowseName = new QualifiedName("Redundancy", _namespaceIndex);
+            folder.DisplayName = new LocalizedText("Redundancy");
+            folder.TypeDefinitionId = ObjectTypeIds.FolderType;
+            folder.EventNotifier = EventNotifiers.None;
+
+            // Try to attach under an existing _System folder, otherwise create at root
+            var systemFolderId = new NodeId("_System", _namespaceIndex);
+            var systemFolder = FindPredefinedNode(systemFolderId, typeof(FolderState)) as FolderState;
+            if (systemFolder != null)
+            {
+                systemFolder.AddChild(folder);
+            }
+            else
+            {
+                // Create _System root folder
+                var sysRoot = new FolderState(null);
+                sysRoot.NodeId = systemFolderId;
+                sysRoot.BrowseName = new QualifiedName("_System", _namespaceIndex);
+                sysRoot.DisplayName = new LocalizedText("_System");
+                sysRoot.TypeDefinitionId = ObjectTypeIds.FolderType;
+                sysRoot.EventNotifier = EventNotifiers.None;
+                sysRoot.AddReference(ReferenceTypeIds.Organizes, true, ObjectIds.ObjectsFolder);
+                references?.Add(new NodeStateReference(ReferenceTypeIds.Organizes, false, sysRoot.NodeId));
+                _rootNodeIds.Add(sysRoot.NodeId);
+                AddPredefinedNode(SystemContext, sysRoot);
+                sysRoot.AddChild(folder);
+            }
+            AddPredefinedNode(SystemContext, folder);
+
+            // IsActive variable
+            var isActive = new BaseDataVariableState<bool>(folder);
+            isActive.NodeId = new NodeId("_System.Redundancy.IsActive", _namespaceIndex);
+            isActive.BrowseName = new QualifiedName("IsActive", _namespaceIndex);
+            isActive.DisplayName = new LocalizedText("IsActive");
+            isActive.DataType = DataTypeIds.Boolean;
+            isActive.ValueRank = ValueRanks.Scalar;
+            isActive.Value = _redundancy?.IsActive ?? true;
+            isActive.AccessLevel = AccessLevels.CurrentRead;
+            isActive.UserAccessLevel = AccessLevels.CurrentRead;
+            isActive.Timestamp = DateTime.UtcNow;
+            isActive.StatusCode = StatusCodes.Good;
+            folder.AddChild(isActive);
+            AddPredefinedNode(SystemContext, isActive);
+            _redundancyIsActiveVar = isActive;
+
+            // ConfiguredRole variable
+            var configuredRole = new BaseDataVariableState<string>(folder);
+            configuredRole.NodeId = new NodeId("_System.Redundancy.ConfiguredRole", _namespaceIndex);
+            configuredRole.BrowseName = new QualifiedName("ConfiguredRole", _namespaceIndex);
+            configuredRole.DisplayName = new LocalizedText("ConfiguredRole");
+            configuredRole.DataType = DataTypeIds.String;
+            configuredRole.ValueRank = ValueRanks.Scalar;
+            configuredRole.Value = _redundancy?.GetDiagnostics().ConfiguredRole ?? "";
+            configuredRole.AccessLevel = AccessLevels.CurrentRead;
+            configuredRole.UserAccessLevel = AccessLevels.CurrentRead;
+            configuredRole.Timestamp = DateTime.UtcNow;
+            configuredRole.StatusCode = StatusCodes.Good;
+            folder.AddChild(configuredRole);
+            AddPredefinedNode(SystemContext, configuredRole);
+
+            // PartnerAlive variable
+            var partnerAlive = new BaseDataVariableState<bool>(folder);
+            partnerAlive.NodeId = new NodeId("_System.Redundancy.PartnerAlive", _namespaceIndex);
+            partnerAlive.BrowseName = new QualifiedName("PartnerAlive", _namespaceIndex);
+            partnerAlive.DisplayName = new LocalizedText("PartnerAlive");
+            partnerAlive.DataType = DataTypeIds.Boolean;
+            partnerAlive.ValueRank = ValueRanks.Scalar;
+            partnerAlive.Value = _redundancy?.PartnerAlive ?? false;
+            partnerAlive.AccessLevel = AccessLevels.CurrentRead;
+            partnerAlive.UserAccessLevel = AccessLevels.CurrentRead;
+            partnerAlive.Timestamp = DateTime.UtcNow;
+            partnerAlive.StatusCode = StatusCodes.Good;
+            folder.AddChild(partnerAlive);
+            AddPredefinedNode(SystemContext, partnerAlive);
+
+            // ActiveRole variable
+            var activeRole = new BaseDataVariableState<string>(folder);
+            activeRole.NodeId = new NodeId("_System.Redundancy.ActiveRole", _namespaceIndex);
+            activeRole.BrowseName = new QualifiedName("ActiveRole", _namespaceIndex);
+            activeRole.DisplayName = new LocalizedText("ActiveRole");
+            activeRole.DataType = DataTypeIds.String;
+            activeRole.ValueRank = ValueRanks.Scalar;
+            activeRole.Value = _redundancy?.ActiveRole.ToString() ?? "Active";
+            activeRole.AccessLevel = AccessLevels.CurrentRead;
+            activeRole.UserAccessLevel = AccessLevels.CurrentRead;
+            activeRole.Timestamp = DateTime.UtcNow;
+            activeRole.StatusCode = StatusCodes.Good;
+            folder.AddChild(activeRole);
+            AddPredefinedNode(SystemContext, activeRole);
+
+            // Register these in _variables so scripts can Read() them
+            _variables["_System.Redundancy.IsActive"] = isActive;
+            _variables["_System.Redundancy.ConfiguredRole"] = configuredRole;
+            _variables["_System.Redundancy.PartnerAlive"] = partnerAlive;
+            _variables["_System.Redundancy.ActiveRole"] = activeRole;
         }
 
         private void CreateFolder(Folder folder, BaseObjectState? parent, IList<IReference>? references, string pathPrefix)
@@ -2121,6 +2347,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 _notificationService?.Dispose();
                 _batchManager?.Dispose();
                 _anomalyDetectionService?.Dispose();
+                _redundancy?.Dispose();
                 _eventLogger?.Dispose();
                 foreach (var rw in _resourceWatchers) rw.Dispose();
                 _resourceWatchers.Clear();
@@ -2339,6 +2566,24 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                                     _logger.Log(varState, _config);
                                     sw.Stop();
                                     DiagnosticsCollector.Instance.RecordCycle("DataLogger", _logger.GetType().Name, sw.Elapsed.TotalMilliseconds);
+
+                                    // Redundancy: enqueue for replication to standby
+                                    if (_manager._redundancy is { IsActive: true })
+                                    {
+                                        var val = varState.Value;
+                                        double? numVal = val switch
+                                        {
+                                            double d => d, float f => f, int i => i, long l => l,
+                                            short s => s, ushort us => us, uint ui => ui, byte b => b,
+                                            decimal dc => (double)dc, _ => null
+                                        };
+                                        _manager._redundancy.EnqueueLogReplication(
+                                            varState.NodeId.ToString(),
+                                            varState.Timestamp,
+                                            numVal,
+                                            numVal == null ? val?.ToString() : null,
+                                            varState.StatusCode.Code);
+                                    }
                                 }
                             }
                             catch (Exception ex)
