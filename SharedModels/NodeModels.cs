@@ -872,6 +872,12 @@ namespace SharedModels
         /// <summary>Maximum number of data points per series.</summary>
         public int HdaMaxPoints { get; set; } = 500;
 
+        /// <summary>
+        /// When true, each HDA series gets its own Y-axis (left for first, right for second),
+        /// enabling overlay comparison of variables with different scales.
+        /// </summary>
+        public bool HdaOverlayMode { get; set; }
+
         /// <summary>Maximum rows shown in the Event Log widget (Type == "eventlog"). Default 200.</summary>
         public int EventLogMaxRows { get; set; } = 200;
 
@@ -1512,6 +1518,15 @@ namespace SharedModels
 
         /// <summary>Line width in pixels. Default 1.5.</summary>
         public double LineWidth { get; set; } = 1.5;
+
+        /// <summary>Y-axis assignment: 0 = left (default), 1 = right. Enables independent scaling when pens use different axes.</summary>
+        public int YAxisId { get; set; }
+
+        /// <summary>Per-pen Y-axis minimum override. Null = auto-scale within its axis group.</summary>
+        public double? YMin { get; set; }
+
+        /// <summary>Per-pen Y-axis maximum override. Null = auto-scale within its axis group.</summary>
+        public double? YMax { get; set; }
     }
 
     /// <summary>

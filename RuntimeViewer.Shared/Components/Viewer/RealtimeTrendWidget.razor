@@ -45,11 +45,40 @@
                   stroke="#374151" stroke-width="1" />
 
             @* Y-axis labels *@
-            @for (int i = 0; i <= _gridYDivs; i++)
+            @if (_hasDualAxes)
             {
-                var y = _mTop + (_plotH * i / (double)_gridYDivs);
-                var val = _yMax - ((_yMax - _yMin) * i / (double)_gridYDivs);
-                @RenderSvgLabel(_mLeft - 4, y + 3, "end", "#6b7280", 8, Fmt(val))
+                @* Left Y-axis labels (color-matched to first left-axis pen) *@
+                var leftPenIdx = Pens.Select((p, i) => (p, i)).FirstOrDefault(x => x.p.YAxisId == 0);
+                var leftColor = GetPenColor(leftPenIdx.p, leftPenIdx.i);
+                @for (int i = 0; i <= _gridYDivs; i++)
+                {
+                    var y = _mTop + (_plotH * i / (double)_gridYDivs);
+                    var val = _yMax - ((_yMax - _yMin) * i / (double)_gridYDivs);
+                    @RenderSvgLabel(_mLeft - 4, y + 3, "end", leftColor, 8, Fmt(val))
+                }
+
+                @* Right Y-axis line *@
+                <line x1="@(_chartW - _mRight)" y1="@_mTop" x2="@(_chartW - _mRight)" y2="@(_chartH - _mBottom)"
+                      stroke="#374151" stroke-width="1" />
+
+                @* Right Y-axis labels (color-matched to first right-axis pen) *@
+                var rightPenIdx = Pens.Select((p, i) => (p, i)).FirstOrDefault(x => x.p.YAxisId == 1);
+                var rightColor = GetPenColor(rightPenIdx.p, rightPenIdx.i);
+                @for (int i = 0; i <= _gridYDivs; i++)
+                {
+                    var y = _mTop + (_plotH * i / (double)_gridYDivs);
+                    var val = _yMaxRight - ((_yMaxRight - _yMinRight) * i / (double)_gridYDivs);
+                    @RenderSvgLabel(_chartW - _mRight + 4, y + 3, "start", rightColor, 8, Fmt(val))
+                }
+            }
+            else
+            {
+                @for (int i = 0; i <= _gridYDivs; i++)
+                {
+                    var y = _mTop + (_plotH * i / (double)_gridYDivs);
+                    var val = _yMax - ((_yMax - _yMin) * i / (double)_gridYDivs);
+                    @RenderSvgLabel(_mLeft - 4, y + 3, "end", "#6b7280", 8, Fmt(val))
+                }
             }
 
             @* X-axis labels (time offsets) *@
@@ -70,7 +99,7 @@
                 if (buf.Length < 2) continue;
                 var color = GetPenColor(pen, p);
                 var lw = pen.LineWidth > 0 ? pen.LineWidth : 1.5;
-                var pts = BuildPolyline(buf);
+                var pts = BuildPolyline(buf, p);
                 <polyline points="@pts" fill="none" stroke="@color" stroke-width="@Fmt(lw)"
                           stroke-linejoin="round" vector-effect="non-scaling-stroke" />
             }
@@ -91,7 +120,7 @@
                     var val2 = InterpolateAtTime(buf2, cursorTime);
                     if (val2 == null) continue;
                     var color2 = GetPenColor(pen2, p);
-                    var cy = ValueToY(val2.Value);
+                    var cy = ValueToY(val2.Value, pen2.YAxisId);
 
                     <circle cx="@Fmt(cx)" cy="@Fmt(cy)" r="3" fill="@color2" stroke="white" stroke-width="0.5" />
                     @RenderSvgLabel(cx + 6, labelY, "start", color2, 8, $"{GetPenLabel(pen2)}: {Fmt(val2.Value)}")
@@ -117,6 +146,10 @@
                     @if (lastVal.HasValue)
                     {
                         <span style="color:#9ca3af;"> = @Fmt(lastVal.Value)</span>
+                    }
+                    @if (_hasDualAxes)
+                    {
+                        <span style="color:#555;font-size:9px;"> (@(pen.YAxisId == 0 ? "L" : "R"))</span>
                     }
                 </span>
             }
@@ -150,16 +183,22 @@
     private const int _chartW = 800;
     private const int _chartH = 280;
     private const int _mLeft = 55;
-    private const int _mRight = 8;
     private const int _mTop = 8;
     private const int _mBottom = 20;
-    private const int _plotW = _chartW - _mLeft - _mRight;
-    private const int _plotH = _chartH - _mTop - _mBottom;
     private const int _gridYDivs = 5;
     private const int _gridXDivs = 6;
 
+    private int _mRight => _hasDualAxes ? 55 : 8;
+    private int _plotW => _chartW - _mLeft - _mRight;
+    private const int _plotH = _chartH - _mTop - _mBottom;
+
     private double _yMin;
     private double _yMax;
+
+    // Dual-axis support
+    private bool _hasDualAxes;
+    private double _yMinRight;
+    private double _yMaxRight;
 
     private static readonly string[] _palette =
     [
@@ -170,6 +209,7 @@
     protected override void OnInitialized()
     {
         _timeWindowSec = TimeWindowSeconds > 0 ? TimeWindowSeconds : 60;
+        _hasDualAxes = Pens.Any(p => p.YAxisId == 1);
         EnsureBuffers();
         _sampleTimer = new System.Threading.Timer(_ =>
         {
@@ -241,24 +281,77 @@
 
     private void ComputeYRange()
     {
-        if (YMin.HasValue && YMax.HasValue)
+        if (!_hasDualAxes)
         {
-            _yMin = YMin.Value;
-            _yMax = YMax.Value;
-            return;
-        }
+            // Original shared-axis logic
+            if (YMin.HasValue && YMax.HasValue)
+            {
+                _yMin = YMin.Value;
+                _yMax = YMax.Value;
+                return;
+            }
 
+            var lo = double.MaxValue;
+            var hi = double.MinValue;
+            var snap = _buffers;
+            for (int b = 0; b < snap.Length; b++)
+            {
+                var arr = snap[b];
+                for (int j = 0; j < arr.Length; j++)
+                {
+                    if (arr[j].Value < lo) lo = arr[j].Value;
+                    if (arr[j].Value > hi) hi = arr[j].Value;
+                }
+            }
+
+            if (lo == double.MaxValue) { lo = 0; hi = 100; }
+            if (Math.Abs(hi - lo) < 0.001) { lo -= 1; hi += 1; }
+
+            var range = hi - lo;
+            lo -= range * 0.05;
+            hi += range * 0.05;
+
+            _yMin = YMin ?? lo;
+            _yMax = YMax ?? hi;
+        }
+        else
+        {
+            // Dual-axis: compute separate ranges for axis 0 (left) and axis 1 (right)
+            ComputeAxisRange(0, out _yMin, out _yMax);
+            ComputeAxisRange(1, out _yMinRight, out _yMaxRight);
+        }
+    }
+
+    private void ComputeAxisRange(int axisId, out double axisMin, out double axisMax)
+    {
         var lo = double.MaxValue;
         var hi = double.MinValue;
         var snap = _buffers;
-        for (int b = 0; b < snap.Length; b++)
+
+        // Check per-pen overrides first
+        double? overrideMin = null, overrideMax = null;
+        for (int p = 0; p < Pens.Count; p++)
         {
-            var arr = snap[b];
-            for (int j = 0; j < arr.Length; j++)
+            if (Pens[p].YAxisId != axisId) continue;
+            if (Pens[p].YMin.HasValue) overrideMin ??= Pens[p].YMin;
+            if (Pens[p].YMax.HasValue) overrideMax ??= Pens[p].YMax;
+
+            if (p < snap.Length)
             {
-                if (arr[j].Value < lo) lo = arr[j].Value;
-                if (arr[j].Value > hi) hi = arr[j].Value;
+                var arr = snap[p];
+                for (int j = 0; j < arr.Length; j++)
+                {
+                    if (arr[j].Value < lo) lo = arr[j].Value;
+                    if (arr[j].Value > hi) hi = arr[j].Value;
+                }
             }
+        }
+
+        // Fallback for axis 0 to global YMin/YMax parameters
+        if (axisId == 0)
+        {
+            overrideMin ??= YMin;
+            overrideMax ??= YMax;
         }
 
         if (lo == double.MaxValue) { lo = 0; hi = 100; }
@@ -268,8 +361,8 @@
         lo -= range * 0.05;
         hi += range * 0.05;
 
-        _yMin = YMin ?? lo;
-        _yMax = YMax ?? hi;
+        axisMin = overrideMin ?? lo;
+        axisMax = overrideMax ?? hi;
     }
 
     private Sample[] GetBuffer(int idx)
@@ -278,11 +371,13 @@
         return idx >= 0 && idx < snap.Length ? snap[idx] : [];
     }
 
-    private string BuildPolyline(Sample[] buf)
+    private string BuildPolyline(Sample[] buf, int penIndex)
     {
         var sb = new System.Text.StringBuilder();
         var now = DateTime.UtcNow;
-        var rangeY = _yMax - _yMin;
+        var axisId = penIndex < Pens.Count ? Pens[penIndex].YAxisId : 0;
+        var (yLo, yHi) = GetAxisRange(axisId);
+        var rangeY = yHi - yLo;
         if (rangeY == 0) rangeY = 1;
 
         foreach (var s in buf)
@@ -290,7 +385,7 @@
             var secAgo = (now - s.Time).TotalSeconds;
             if (secAgo > _timeWindowSec) continue;
             var xFrac = 1.0 - secAgo / _timeWindowSec;
-            var yFrac = (s.Value - _yMin) / rangeY;
+            var yFrac = (s.Value - yLo) / rangeY;
 
             var px = _mLeft + xFrac * _plotW;
             var py = _mTop + (1 - yFrac) * _plotH;
@@ -302,13 +397,17 @@
         return sb.ToString();
     }
 
-    private double ValueToY(double val)
+    private double ValueToY(double val, int axisId = 0)
     {
-        var rangeY = _yMax - _yMin;
+        var (yLo, yHi) = GetAxisRange(axisId);
+        var rangeY = yHi - yLo;
         if (rangeY == 0) rangeY = 1;
-        var yFrac = (val - _yMin) / rangeY;
+        var yFrac = (val - yLo) / rangeY;
         return _mTop + (1 - yFrac) * _plotH;
     }
+
+    private (double min, double max) GetAxisRange(int axisId) =>
+        _hasDualAxes && axisId == 1 ? (_yMinRight, _yMaxRight) : (_yMin, _yMax);
 
     private DateTime XToTime(double x)
     {
