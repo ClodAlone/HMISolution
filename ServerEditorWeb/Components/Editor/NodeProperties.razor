@@ -1,4 +1,4 @@
-﻿@using ServerEditorWeb.Models
+@using ServerEditorWeb.Models
 @using ServerEditorWeb.Services
 @using SharedModels
 @implements IDisposable
@@ -1413,6 +1413,99 @@ else if (Node is ServerSettingsNode ssNode)
         }
     </div>
 }
+else if (Node is AssetNode assetNode)
+{
+ <div class="properties-panel">
+    <h5>🔧 Asset / Equipment</h5>
+    <div class="mb-3">
+        <label class="form-label">Name</label>
+        <input type="text" class="form-control" @bind="assetNode.Name" @bind:after="OnChanged"
+               @onfocus="() => CaptureForUndo(assetNode, nameof(assetNode.Name))" />
+    </div>
+    <div class="mb-2 form-check">
+        <input class="form-check-input" type="checkbox" @bind="assetNode.Asset.Enabled" @bind:after="OnChanged" />
+        <label class="form-check-label">Enabled</label>
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Description</label>
+        <input type="text" class="form-control" @bind="assetNode.Asset.Description" @bind:after="OnChanged" placeholder="Location, model, serial..." />
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Running Variable Path</label>
+        <input type="text" class="form-control" @bind="assetNode.Asset.RunningVariablePath" @bind:after="OnChanged"
+               placeholder="e.g. Pumps.Pump01.Running" />
+        <div class="form-text">OPC variable that indicates the equipment is running (truthy = running).</div>
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Fault Variable Path</label>
+        <input type="text" class="form-control" @bind="assetNode.Asset.FaultVariablePath" @bind:after="OnChanged"
+               placeholder="e.g. Pumps.Pump01.Fault" />
+        <div class="form-text">Optional — truthy value indicates the equipment has faulted.</div>
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Initial Runtime Hours</label>
+        <input type="number" class="form-control" step="0.1" @bind="assetNode.Asset.InitialRuntimeHours" @bind:after="OnChanged" />
+        <div class="form-text">Starting runtime hours (e.g. from nameplate or previous system).</div>
+    </div>
+
+    <hr />
+    <h6>📋 Maintenance Schedules (@assetNode.Asset.MaintenanceSchedules.Count)</h6>
+    @for (int i = 0; i < assetNode.Asset.MaintenanceSchedules.Count; i++)
+    {
+        var idx = i;
+        var sched = assetNode.Asset.MaintenanceSchedules[idx];
+        <div class="border rounded p-2 mb-2" style="background: var(--surface-alt, #f8f8f8);">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+                <strong class="small">@(string.IsNullOrEmpty(sched.Name) ? "(unnamed)" : sched.Name)</strong>
+                <button class="btn btn-sm btn-outline-danger py-0 px-1" style="font-size: 9px;"
+                        @onclick="() => { assetNode.Asset.MaintenanceSchedules.RemoveAt(idx); OnChanged(); }">🗑</button>
+            </div>
+            <div class="row g-1 mb-1">
+                <div class="col-6">
+                    <label class="form-label mb-0 small">Name</label>
+                    <input type="text" class="form-control form-control-sm" @bind="sched.Name" @bind:after="OnChanged" placeholder="Oil Change" />
+                </div>
+                <div class="col-6">
+                    <label class="form-label mb-0 small">ID</label>
+                    <input type="text" class="form-control form-control-sm" @bind="sched.Id" @bind:after="OnChanged" placeholder="auto-generated" />
+                </div>
+            </div>
+            <div class="row g-1 mb-1">
+                <div class="col-4">
+                    <label class="form-label mb-0 small">Interval (hours)</label>
+                    <input type="number" class="form-control form-control-sm" step="1" @bind="sched.IntervalHours" @bind:after="OnChanged" />
+                </div>
+                <div class="col-4">
+                    <label class="form-label mb-0 small">Interval (days)</label>
+                    <input type="number" class="form-control form-control-sm" @bind="sched.IntervalDays" @bind:after="OnChanged" />
+                    <div class="form-text" style="font-size:9px;">0 = hours only</div>
+                </div>
+                <div class="col-4">
+                    <label class="form-label mb-0 small">Warning %</label>
+                    <input type="number" class="form-control form-control-sm" min="0" max="100" @bind="sched.WarningPercent" @bind:after="OnChanged" />
+                </div>
+            </div>
+            <div class="row g-1 mb-1">
+                <div class="col-6">
+                    <label class="form-label mb-0 small">Severity (1-1000)</label>
+                    <input type="number" class="form-control form-control-sm" min="1" max="1000" @bind="sched.Severity" @bind:after="OnChanged" />
+                </div>
+                <div class="col-6">
+                    <label class="form-label mb-0 small">Last Reset</label>
+                    <span class="form-control-plaintext small">@(sched.LastResetUtc?.ToString("g") ?? "Never")</span>
+                </div>
+            </div>
+        </div>
+    }
+    <button class="btn btn-sm btn-outline-primary" @onclick="() => AddMaintenanceSchedule(assetNode)">➕ Add Schedule</button>
+
+    <p class="text-muted small mt-3">
+        At runtime the server publishes <code>_Assets.@(assetNode.Asset.Name).RuntimeHours</code>,
+        <code>.ServiceDue</code>, <code>.NextServiceIn</code> etc. as OPC variables.
+        Write a schedule ID to <code>.ResetSchedule</code> to acknowledge maintenance.
+    </p>
+ </div>
+}
 else if (Node is CalculatedNode calcNode)
 {
     <div class="properties-panel">
@@ -1769,5 +1862,18 @@ else if (Node is UserNode uNode)
         {
             screen.AllowedGroups.RemoveAll(g => g.Equals(groupName, StringComparison.OrdinalIgnoreCase));
         }
+    }
+
+    private void AddMaintenanceSchedule(AssetNode node)
+    {
+        node.Asset.MaintenanceSchedules.Add(new MaintenanceSchedule
+        {
+            Id = Guid.NewGuid().ToString("N")[..8],
+            Name = "New Schedule",
+            IntervalHours = 500,
+            WarningPercent = 80,
+            Severity = 500
+        });
+        OnChanged();
     }
 }

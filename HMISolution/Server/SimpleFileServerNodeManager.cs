@@ -36,6 +36,7 @@ namespace SimpleOpcFileServer
         private NotificationManager? _notificationManager;
         private RedundancyManager? _redundancyManager;
         private CalculatedVariableManager? _calculatedManager;
+        private AssetManager? _assetManager;
         private RestApiService? _restApi;
 
         private readonly List<NodeId> _rootNodeIds = new();
@@ -399,6 +400,7 @@ namespace SimpleOpcFileServer
             if (_plcManager != null) { _plcManager.Dispose(); _plcManager = null; }
             if (_recipeManager != null) { _recipeManager.Dispose(); _recipeManager = null; }
             if (_calculatedManager != null) { _calculatedManager.Dispose(); _calculatedManager = null; }
+            if (_assetManager != null) { _assetManager.Dispose(); _assetManager = null; }
 
             // Cleanup audit trail (new one created in LoadModel)
             if (_auditTrailLogger != null) { _auditTrailLogger.Dispose(); _auditTrailLogger = null; }
@@ -824,6 +826,15 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                       _calculatedManager.Initialize(nodeModel.CalculatedVariables);
                   }
 
+
+                  // ─── Assets / Maintenance ───
+                  if (nodeModel.Assets != null && nodeModel.Assets.Count > 0)
+                  {
+                      CreateAssetVariables(nodeModel.Assets, references);
+                      _assetManager = new AssetManager(this);
+                      _assetManager.Initialize(nodeModel.Assets);
+                  }
+
                                // ─── Diagnostics OPC UA node (always created, license-exempt) ───
                           CreateDiagnosticsNode(references);
 
@@ -1180,6 +1191,106 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
         /// The editor reads this variable instead of using a separate HTTP endpoint.
         /// Safe to call on reload — skips if already created.
         /// </summary>
+
+        // ─── Asset Management OPC variables and alarms ────────────────────────
+
+        private void CreateAssetVariables(List<AssetConfig> assets, IList<IReference>? references)
+        {
+            var rootFolder = CreateOrGetFolder("_Assets", references);
+
+            foreach (var asset in assets)
+            {
+                if (!asset.Enabled) continue;
+
+                var folder = new FolderState(rootFolder)
+                {
+                    NodeId = new NodeId($"_Assets.{asset.Name}", _namespaceIndex),
+                    BrowseName = new QualifiedName(asset.Name, _namespaceIndex),
+                    DisplayName = new LocalizedText(asset.Name),
+                    TypeDefinitionId = ObjectTypeIds.FolderType
+                };
+                rootFolder.AddChild(folder);
+                AddPredefinedNode(SystemContext, folder);
+
+                var prefix = $"_Assets.{asset.Name}";
+                CreateSimpleVariable<bool>(folder, prefix, "Running", false);
+                CreateSimpleVariable<double>(folder, prefix, "RuntimeHours", asset.InitialRuntimeHours);
+                CreateSimpleVariable<bool>(folder, prefix, "Faulted", false);
+                CreateSimpleVariable<bool>(folder, prefix, "ServiceDue", false);
+                CreateSimpleVariable<double>(folder, prefix, "NextServiceIn", 0.0);
+                CreateSimpleVariable<string>(folder, prefix, "NextServiceName", "");
+
+                // Create a writable ResetSchedule variable — writing a schedule ID triggers reset
+                var resetPath = $"{prefix}.ResetSchedule";
+                var resetVar = new BaseDataVariableState<string>(folder)
+                {
+                    NodeId = new NodeId(resetPath, _namespaceIndex),
+                    BrowseName = new QualifiedName("ResetSchedule", _namespaceIndex),
+                    DisplayName = new LocalizedText("ResetSchedule"),
+                    DataType = DataTypeIds.String,
+                    ValueRank = ValueRanks.Scalar,
+                    Value = "",
+                    AccessLevel = AccessLevels.CurrentReadOrWrite,
+                    UserAccessLevel = AccessLevels.CurrentReadOrWrite,
+                    Timestamp = DateTime.UtcNow,
+                    StatusCode = StatusCodes.Good
+                };
+                resetVar.OnWriteValue = (ISystemContext ctx, NodeState node, NumericRange indexRange, QualifiedName dataEncoding, ref object value, ref StatusCode statusCode, ref DateTime timestamp) =>
+                {
+                    var schedId = value?.ToString() ?? "";
+                    if (!string.IsNullOrWhiteSpace(schedId))
+                    {
+                        _assetManager?.ResetSchedule(asset.Name, schedId);
+
+                        if (_auditTrailLogger != null)
+                        {
+                            var username = "unknown";
+                            try { username = ctx?.Session?.Identity?.DisplayName ?? "unknown"; } catch { }
+                            _auditTrailLogger.LogConfigChange(username, $"Asset:{asset.Name}", $"Reset schedule {schedId}");
+                        }
+                    }
+                    return Opc.Ua.ServiceResult.Good;
+                };
+                folder.AddChild(resetVar);
+                AddPredefinedNode(SystemContext, resetVar);
+                _variables[resetPath] = resetVar;
+            }
+        }
+
+        private void CreateSimpleVariable<T>(FolderState parent, string prefix, string name, T defaultValue)
+        {
+            var path = $"{prefix}.{name}";
+            var variable = new BaseDataVariableState<T>(parent)
+            {
+                NodeId = new NodeId(path, _namespaceIndex),
+                BrowseName = new QualifiedName(name, _namespaceIndex),
+                DisplayName = new LocalizedText(name),
+                DataType = Opc.Ua.TypeInfo.GetDataTypeId(typeof(T)),
+                ValueRank = ValueRanks.Scalar,
+                Value = defaultValue,
+                AccessLevel = AccessLevels.CurrentRead,
+                UserAccessLevel = AccessLevels.CurrentRead,
+                Timestamp = DateTime.UtcNow,
+                StatusCode = StatusCodes.Good
+            };
+            parent.AddChild(variable);
+            AddPredefinedNode(SystemContext, variable);
+            _variables[path] = variable;
+        }
+
+        /// <summary>Raise an asset maintenance alarm via the event logger.</summary>
+        internal void RaiseAssetAlarm(string assetName, string scheduleName, string message, ushort severity, bool isWarning)
+        {
+            var category = isWarning ? "Warning" : "Alarm";
+            _eventLogger?.LogAlarm(category, $"_Assets.{assetName}.{scheduleName}", message);
+            Log.Information("Asset alarm [{Category}] {Asset}/{Schedule}: {Message}", category, assetName, scheduleName, message);
+        }
+
+        /// <summary>Clear an asset maintenance alarm.</summary>
+        internal void ClearAssetAlarm(string assetName, string scheduleName)
+        {
+            _eventLogger?.LogAlarm("Info", $"_Assets.{assetName}.{scheduleName}", $"Service alarm cleared for {scheduleName} on {assetName}");
+        }
         private void CreateDiagnosticsNode(IList<IReference>? references)
         {
             // Only create once — the diagnostics node survives reloads
@@ -3012,6 +3123,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 _schedulerManager?.Dispose();
                 _reportManager?.Dispose();
                 _calculatedManager?.Dispose();
+                _assetManager?.Dispose();
                 _auditTrailLogger?.Dispose();
                 _notificationManager?.Dispose();
                 _anomalyDetectionService?.Dispose();

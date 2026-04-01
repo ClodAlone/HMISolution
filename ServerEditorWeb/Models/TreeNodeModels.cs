@@ -397,4 +397,30 @@ public class ProjectNode : TreeNode
         IsExpanded = true;
         IsLocked = !string.IsNullOrEmpty(model.ProjectPasswordHash);
     }
+
+}
+public class AssetGroupNode : TreeNode
+{
+    public override string TypeName => "AssetGroup";
+    public override string Icon => "🔧";
+
+    public AssetGroupNode()
+    {
+        Name = "Assets";
+    }
+}
+
+public class AssetNode : TreeNode
+{
+    public override string TypeName => "Asset";
+    public override string Icon => "⚙️";
+    public AssetConfig Asset { get; }
+
+    public AssetNode(AssetConfig asset)
+    {
+        Asset = asset;
+        Name = asset.Name;
+    }
+
+    public void SyncName() => Asset.Name = Name;
 }

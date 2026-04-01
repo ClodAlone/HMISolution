@@ -31,6 +31,7 @@ namespace SharedModels
         public List<SchedulerConfig> Schedulers { get; set; } = new();
         public List<ReportConfig> Reports { get; set; } = new();
         public List<CalculatedVariableConfig> CalculatedVariables { get; set; } = new();
+        public List<AssetConfig> Assets { get; set; } = new();
 
         /// <summary>
         /// PBKDF2-SHA256 hash of the project protection password.
@@ -2427,5 +2428,91 @@ namespace SharedModels
 
         /// <summary>Optional API key for OpenAI or Gemini. Falls back to OPENAI_API_KEY / GEMINI_API_KEY env var.</summary>
         public string? ApiKey { get; set; }
+    }
+
+    // --- Maintenance / Asset Management ---
+
+    /// <summary>
+    /// Configuration for an equipment asset tracked for runtime hours and preventive maintenance.
+    /// The server creates OPC variables under _Assets/{Name}/ for live status.
+    /// </summary>
+    public class AssetConfig
+    {
+        /// <summary>Unique asset name (e.g. "Pump-01", "Compressor-A").</summary>
+        public string Name { get; set; } = "";
+
+        /// <summary>Whether runtime tracking is active for this asset.</summary>
+        public bool Enabled { get; set; } = true;
+
+        /// <summary>
+        /// OPC variable path whose truthy value means the asset is running.
+        /// The manager accumulates runtime hours while this variable is true/non-zero.
+        /// </summary>
+        public string RunningVariablePath { get; set; } = "";
+
+        /// <summary>
+        /// Optional OPC variable path for a fault/trip signal.
+        /// When truthy, the manager logs a fault event and can trigger an alarm.
+        /// </summary>
+        public string FaultVariablePath { get; set; } = "";
+
+        /// <summary>Initial runtime hours (e.g. from a nameplate or previous system). Default 0.</summary>
+        public double InitialRuntimeHours { get; set; }
+
+        /// <summary>Preventive maintenance schedules for this asset.</summary>
+        public List<MaintenanceSchedule> MaintenanceSchedules { get; set; } = new();
+
+        /// <summary>Optional description / location notes.</summary>
+        public string Description { get; set; } = "";
+
+        /// <summary>Optional folder path for editor organization.</summary>
+        public string Group { get; set; } = "";
+    }
+
+    /// <summary>
+    /// A preventive maintenance schedule that triggers an alarm when service is due.
+    /// </summary>
+    public class MaintenanceSchedule
+    {
+        /// <summary>Unique ID for this schedule entry.</summary>
+        public string Id { get; set; } = "";
+
+        /// <summary>Human-readable name (e.g. "Oil Change", "Belt Inspection").</summary>
+        public string Name { get; set; } = "";
+
+        /// <summary>
+        /// Maintenance interval in runtime hours. When accumulated hours since last
+        /// reset reach this value, a "ServiceDue" alarm is raised.
+        /// </summary>
+        public double IntervalHours { get; set; } = 500;
+
+        /// <summary>
+        /// Maintenance interval in calendar days. When elapsed days since last reset
+        /// reach this value, a "ServiceDue" alarm is raised (whichever comes first).
+        /// 0 = disabled (hours-only).
+        /// </summary>
+        public int IntervalDays { get; set; }
+
+        /// <summary>
+        /// Warning threshold as a percentage (0-100) of the interval.
+        /// When remaining hours/days drop below this fraction, a warning alarm is raised.
+        /// Default 80 (warn at 80% of interval).
+        /// </summary>
+        public int WarningPercent { get; set; } = 80;
+
+        /// <summary>Alarm severity (1-1000) for the service-due alarm. Default 500.</summary>
+        public ushort Severity { get; set; } = 500;
+
+        /// <summary>
+        /// UTC timestamp of the last maintenance reset. Null = never serviced
+        /// (uses asset creation time as baseline).
+        /// </summary>
+        public DateTime? LastResetUtc { get; set; }
+
+        /// <summary>
+        /// Runtime hours at the time of the last maintenance reset.
+        /// Used to compute hours-since-service.
+        /// </summary>
+        public double LastResetRuntimeHours { get; set; }
     }
 }

@@ -508,6 +508,17 @@ public class NodeEditorService
         }
         proj.Children.Add(calcGroup);
 
+        var assetGroup = new AssetGroupNode() { Parent = proj };
+        if (proj.Model.Assets != null)
+        {
+            foreach (var asset in proj.Model.Assets)
+            {
+                var aNode = new AssetNode(asset) { Parent = assetGroup };
+                assetGroup.Children.Add(aNode);
+            }
+        }
+        proj.Children.Add(assetGroup);
+
         var screenGroup = new ScreenGroupNode() { Parent = proj };
         if (proj.Model.Screens != null)
         {
@@ -867,6 +878,24 @@ public class NodeEditorService
                 FolderPath = "_Calculated"
             };
             var newNode = new CalculatedNode(newCalc) { Parent = parent };
+            parent.Children.Add(newNode);
+            parent.IsExpanded = true;
+            SelectedItem = newNode;
+            HasUnsavedChanges = true;
+            NotifyStateChanged();
+        }
+    }
+
+    public void AddAsset()
+    {
+        if (SelectedItem is AssetGroupNode parent)
+        {
+            var newAsset = new AssetConfig
+            {
+                Name = "New Asset",
+                Enabled = true
+            };
+            var newNode = new AssetNode(newAsset) { Parent = parent };
             parent.Children.Add(newNode);
             parent.IsExpanded = true;
             SelectedItem = newNode;
@@ -1634,6 +1663,18 @@ public class NodeEditorService
                     {
                         cNode.SyncName();
                         _rootModel.CalculatedVariables.Add(cNode.Config);
+                    }
+                }
+            }
+            else if (root is AssetGroupNode assetGrpNode && _rootModel != null)
+            {
+                _rootModel.Assets.Clear();
+                foreach (var child in assetGrpNode.Children)
+                {
+                    if (child is AssetNode aNode)
+                    {
+                        aNode.SyncName();
+                        _rootModel.Assets.Add(aNode.Asset);
                     }
                 }
             }
