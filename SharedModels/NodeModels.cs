@@ -545,6 +545,53 @@ namespace SharedModels
 
         /// <summary>WhatsApp Cloud API channel configuration.</summary>
         public WhatsAppNotificationChannel? WhatsApp { get; set; }
+
+        /// <summary>Web Push (VAPID) notification channel for browser push notifications.</summary>
+        public WebPushNotificationChannel? WebPush { get; set; }
+    }
+
+    /// <summary>
+    /// Web Push (VAPID) notification channel configuration.
+    /// Sends browser push notifications to subscribed operators via the Web Push protocol (RFC 8291/8292).
+    /// VAPID keys can be generated with any standard tool (e.g. web-push generate-vapid-keys).
+    /// </summary>
+    public class WebPushNotificationChannel
+    {
+        /// <summary>Whether Web Push notifications are enabled.</summary>
+        public bool Enabled { get; set; }
+
+        /// <summary>
+        /// VAPID subject — a mailto: or https: URI identifying the application server
+        /// (e.g. "mailto:admin@example.com").
+        /// </summary>
+        public string VapidSubject { get; set; } = "";
+
+        /// <summary>Base64url-encoded VAPID public key (P-256 uncompressed point, 65 bytes).</summary>
+        public string VapidPublicKey { get; set; } = "";
+
+        /// <summary>Base64url-encoded VAPID private key (P-256 scalar, 32 bytes).</summary>
+        public string VapidPrivateKey { get; set; } = "";
+
+        /// <summary>
+        /// File path (relative to nodes.json) where browser push subscriptions are stored.
+        /// Default "push-subscriptions.json".
+        /// </summary>
+        public string SubscriptionsFile { get; set; } = "push-subscriptions.json";
+    }
+
+    /// <summary>
+    /// Represents a single browser push subscription (PushSubscription from the Push API).
+    /// </summary>
+    public class PushSubscriptionInfo
+    {
+        /// <summary>Push service endpoint URL.</summary>
+        public string Endpoint { get; set; } = "";
+
+        /// <summary>Base64url-encoded P-256 ECDH public key from the browser.</summary>
+        public string P256dh { get; set; } = "";
+
+        /// <summary>Base64url-encoded 16-byte authentication secret.</summary>
+        public string Auth { get; set; } = "";
     }
 
     /// <summary>

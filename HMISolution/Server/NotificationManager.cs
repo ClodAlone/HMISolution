@@ -10,7 +10,7 @@ using Serilog;
 namespace SimpleOpcFileServer;
 
 /// <summary>
-/// Manages alarm notifications: email, webhook, and escalation.
+/// Manages alarm notifications: email, webhook, web push, and escalation.
 /// When an alarm activates, the notification manager sends immediate notifications
 /// and schedules escalation if the alarm is not acknowledged within the configured time.
 /// </summary>
@@ -20,15 +20,36 @@ public sealed class NotificationManager : IDisposable
     private readonly ConcurrentDictionary<string, EscalationEntry> _pendingEscalations = new();
     private Timer? _escalationTimer;
     private readonly HttpClient _httpClient = new() { Timeout = TimeSpan.FromSeconds(30) };
+    private readonly WebPushSender? _webPushSender;
 
-    public NotificationManager(NotificationsConfig? globalConfig)
+    public NotificationManager(NotificationsConfig? globalConfig,
+        WebPushNotificationChannel? webPushConfig = null, string? projectDirectory = null)
     {
         _globalConfig = globalConfig;
+
+        if (webPushConfig is { Enabled: true } &&
+            !string.IsNullOrEmpty(webPushConfig.VapidPublicKey) &&
+            !string.IsNullOrEmpty(webPushConfig.VapidPrivateKey) &&
+            !string.IsNullOrEmpty(projectDirectory))
+        {
+            try
+            {
+                _webPushSender = new WebPushSender(webPushConfig, projectDirectory);
+                Log.Information("Web Push notifications enabled");
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Failed to initialize Web Push sender");
+            }
+        }
 
         // Check for pending escalations every 30 seconds
         _escalationTimer = new Timer(CheckEscalations, null,
             TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
     }
+
+    /// <summary>Exposes the WebPushSender for use by API endpoints (subscription management).</summary>
+    public WebPushSender? WebPush => _webPushSender;
 
     /// <summary>
     /// Called when an alarm activates. Sends immediate notifications and schedules escalation.
@@ -65,6 +86,16 @@ public sealed class NotificationManager : IDisposable
             {
                 _ = SendWebhookAsync(url, payload);
             }
+        }
+
+        // Send Web Push browser notifications
+        if (notifConfig.WebPushEnabled && _webPushSender != null)
+        {
+            var severityLabel = severity >= 800 ? "CRITICAL" : severity >= 500 ? "WARNING" : "INFO";
+            _ = _webPushSender.SendToAllAsync(
+                $"[{severityLabel}] Alarm: {alarmPath}",
+                $"{message} — Severity {severity}",
+                $"alarm-{alarmPath}");
         }
 
         // Schedule escalation
@@ -208,6 +239,7 @@ public sealed class NotificationManager : IDisposable
     {
         _escalationTimer?.Dispose();
         _httpClient.Dispose();
+        _webPushSender?.Dispose();
     }
 
     private class EscalationEntry

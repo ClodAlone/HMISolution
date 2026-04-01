@@ -25,6 +25,7 @@ builder.Services.AddScoped<LocalizationService>();
 builder.Services.AddSingleton<HdaReaderService>();
 builder.Services.AddSingleton<EventLogReaderService>();
 builder.Services.AddSingleton<NaturalLanguageQueryService>();
+builder.Services.AddScoped<PushNotificationInterop>();
 
 var app = builder.Build();
 
@@ -61,5 +62,38 @@ app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddAdditionalAssemblies(typeof(RuntimeViewer.Shared.Components.Routes).Assembly)
     .AddInteractiveServerRenderMode();
+
+// ─── Web Push subscription API endpoints ───
+var webPushConfig = project.Settings.AlarmNotification?.WebPush;
+if (webPushConfig is { Enabled: true } &&
+    !string.IsNullOrEmpty(webPushConfig.VapidPublicKey) &&
+    !string.IsNullOrEmpty(webPushConfig.VapidPrivateKey))
+{
+    var pushProjectDir = Path.GetDirectoryName(Path.GetFullPath(configPath)) ?? AppContext.BaseDirectory;
+    var pushStore = new SharedModels.WebPushSubscriptionStore(webPushConfig, pushProjectDir);
+
+    app.MapGet("/api/push/vapid-key", () => Results.Ok(new { publicKey = webPushConfig.VapidPublicKey }));
+
+    app.MapPost("/api/push/subscribe", (SharedModels.PushSubscriptionInfo sub) =>
+    {
+        if (string.IsNullOrEmpty(sub.Endpoint)) return Results.BadRequest("Endpoint required");
+        var subs = pushStore.Load();
+        if (!subs.Any(s => s.Endpoint == sub.Endpoint))
+        {
+            subs.Add(sub);
+            pushStore.Save(subs);
+        }
+        return Results.Ok();
+    });
+
+    app.MapPost("/api/push/unsubscribe", (SharedModels.PushSubscriptionInfo sub) =>
+    {
+        if (string.IsNullOrEmpty(sub.Endpoint)) return Results.BadRequest("Endpoint required");
+        var subs = pushStore.Load();
+        subs.RemoveAll(s => s.Endpoint == sub.Endpoint);
+        pushStore.Save(subs);
+        return Results.Ok();
+    });
+}
 
 app.Run();

@@ -677,7 +677,11 @@ namespace SimpleOpcFileServer
                      }
 
                      // Init Notification Manager
-                     _notificationManager = new NotificationManager(nodeModel.Server?.Notifications);
+                     var projectDir = Path.GetDirectoryName(Path.GetFullPath(_configPath)) ?? AppContext.BaseDirectory;
+                     _notificationManager = new NotificationManager(
+                         nodeModel.Server?.Notifications,
+                         nodeModel.Server?.AlarmNotification?.WebPush,
+                         projectDir);
                       DiagnosticsCollector.Instance.Register("Notifications", "AlarmNotifications");
 
                   // Init Redundancy Manager

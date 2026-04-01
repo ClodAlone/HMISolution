@@ -150,6 +150,15 @@ else
                     <button class="rv-btn" style="background:@(_showTagBrowser ? "#2563eb" : "#374151"); font-size:10px;"
                             @onclick="ToggleTagBrowser" title="Tag Browser">&#x1F3F7;&#xFE0F; Tags</button>
                 }
+                @if (_pushSupported)
+                {
+                    <button class="rv-btn" style="background:@(_pushSubscribed ? "#2563eb" : "#374151"); font-size:10px;"
+                            @onclick="TogglePushNotifications"
+                            disabled="@_pushBusy"
+                            title="@(_pushSubscribed ? "Disable push notifications" : "Enable push notifications")">
+                        🔔 @(_pushSubscribed ? "On" : "Off")
+                    </button>
+                }
             </div>
         </div>
     }
@@ -420,6 +429,7 @@ else
     [Inject] private IJSRuntime JS { get; set; } = default!;
     [Inject] private RuntimeAuthService Auth { get; set; } = default!;
     [Inject] private LocalizationService Localization { get; set; } = default!;
+    [Inject] private PushNotificationInterop PushInterop { get; set; } = default!;
 
     private ScreenConfig? _currentScreen;
     private ScreenConfig? _popupScreen;
@@ -463,6 +473,12 @@ else
     private System.Threading.Timer? _diagTimer;
     private ElementReference _diagScrollRef;
 
+    // Push Notifications
+    private bool _pushSupported;
+    private bool _pushSubscribed;
+    private bool _pushBusy;
+    private string? _vapidPublicKey;
+
     protected override void OnInitialized()
     {
         _loginRequired = RuntimeAuthService.IsLoginRequired(Project.Model);
@@ -501,6 +517,11 @@ else
 
             // Start idle check timer (every 5 seconds)
             _idleTimer = new System.Threading.Timer(CheckIdleTimeout, null, 5000, 5000);
+        }
+
+        if (firstRender)
+        {
+            await InitPushNotificationsAsync();
         }
     }
 
@@ -823,6 +844,85 @@ else
     {
         _showTagBrowser = !_showTagBrowser;
     }
+
+    // ─── Push Notification helpers ──────────────────────
+    private async Task InitPushNotificationsAsync()
+    {
+        try
+        {
+            var webPush = Project.Settings.AlarmNotification?.WebPush;
+            if (webPush is not { Enabled: true }) return;
+
+            _pushSupported = await PushInterop.IsSupportedAsync();
+            if (!_pushSupported) return;
+
+            await PushInterop.RegisterServiceWorkerAsync();
+
+            // Fetch VAPID public key from the server
+            using var http = new HttpClient { BaseAddress = new Uri(Nav.BaseUri) };
+            var resp = await http.GetFromJsonAsync<VapidKeyResponse>("/api/push/vapid-key");
+            _vapidPublicKey = resp?.PublicKey;
+            if (string.IsNullOrEmpty(_vapidPublicKey)) { _pushSupported = false; return; }
+
+            // Check if already subscribed
+            var existing = await PushInterop.GetSubscriptionAsync();
+            _pushSubscribed = existing != null;
+            StateHasChanged();
+        }
+        catch
+        {
+            _pushSupported = false;
+        }
+    }
+
+    private async Task TogglePushNotifications()
+    {
+        if (_pushBusy || string.IsNullOrEmpty(_vapidPublicKey)) return;
+        _pushBusy = true;
+        try
+        {
+            if (_pushSubscribed)
+            {
+                // Get current subscription to unregister from server
+                var current = await PushInterop.GetSubscriptionAsync();
+                if (current != null)
+                {
+                    using var http = new HttpClient { BaseAddress = new Uri(Nav.BaseUri) };
+                    await http.PostAsJsonAsync("/api/push/unsubscribe",
+                        new { current.Endpoint, current.P256dh, current.Auth });
+                }
+                await PushInterop.UnsubscribeAsync();
+                _pushSubscribed = false;
+                ShowToast("info", "Push notifications disabled");
+            }
+            else
+            {
+                var sub = await PushInterop.SubscribeAsync(_vapidPublicKey);
+                if (sub != null)
+                {
+                    using var http = new HttpClient { BaseAddress = new Uri(Nav.BaseUri) };
+                    await http.PostAsJsonAsync("/api/push/subscribe",
+                        new { sub.Endpoint, sub.P256dh, sub.Auth });
+                    _pushSubscribed = true;
+                    ShowToast("success", "Push notifications enabled");
+                }
+                else
+                {
+                    ShowToast("warning", "Notification permission denied");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowToast("error", "Push error", ex.Message);
+        }
+        finally
+        {
+            _pushBusy = false;
+        }
+    }
+
+    private record VapidKeyResponse(string PublicKey);
 
     private List<KeyValuePair<string, string>> GetCachedValues()
     {

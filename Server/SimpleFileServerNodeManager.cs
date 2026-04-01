@@ -573,11 +573,12 @@ namespace SimpleOpcFileServer
                  // Register alarm analytics provider for diagnostics snapshots
                  DiagnosticsCollector.Instance.AlarmAnalyticsProvider = BuildAlarmAnalytics;
 
-                 // Alarm notifications (Email, Telegram, WhatsApp)
+                 // Alarm notifications (Email, Telegram, WhatsApp, Web Push)
                  var notifCfg = nodeModel.Server?.AlarmNotification;
                  if (notifCfg is { Enabled: true })
                  {
-                     _notificationService = new NotificationService(notifCfg);
+                     var projectDir = Path.GetDirectoryName(Path.GetFullPath(_configPath)) ?? AppContext.BaseDirectory;
+                     _notificationService = new NotificationService(notifCfg, projectDir);
                      _eventLogger?.LogSystem("Info", "Notification", "Alarm notification service started");
                  }
 

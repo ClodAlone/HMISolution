@@ -25,12 +25,29 @@ namespace SimpleOpcFileServer
         private readonly HttpClient _httpClient;
         private readonly ConcurrentDictionary<string, DateTime> _cooldowns = new();
         private readonly CancellationTokenSource _cts = new();
+        private readonly WebPushSender? _webPushSender;
 
-        public NotificationService(AlarmNotificationConfig config)
+        public NotificationService(AlarmNotificationConfig config, string? projectDirectory = null)
         {
             _config = config ?? throw new ArgumentNullException(nameof(config));
             _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
             DiagnosticsCollector.Instance.Register("NotificationService", "AlarmNotification");
+
+            if (config.WebPush is { Enabled: true } wp &&
+                !string.IsNullOrEmpty(wp.VapidPublicKey) &&
+                !string.IsNullOrEmpty(wp.VapidPrivateKey) &&
+                !string.IsNullOrEmpty(projectDirectory))
+            {
+                try
+                {
+                    _webPushSender = new WebPushSender(wp, projectDirectory);
+                    Log.Information("Web Push notifications enabled");
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "Failed to initialize Web Push sender");
+                }
+            }
         }
 
         /// <summary>
@@ -67,6 +84,15 @@ namespace SimpleOpcFileServer
 
             if (_config.WhatsApp is { Enabled: true })
                 tasks.Add(SendWhatsAppAsync(variablePath, message, severity));
+
+            if (_webPushSender != null)
+            {
+                var severityLabel = severity >= 800 ? "CRITICAL" : severity >= 500 ? "WARNING" : "INFO";
+                tasks.Add(_webPushSender.SendToAllAsync(
+                    $"[{severityLabel}] Alarm: {variablePath}",
+                    $"{message} \u2014 Severity {severity}",
+                    $"alarm-{variablePath}"));
+            }
 
             try
             {
@@ -289,6 +315,7 @@ namespace SimpleOpcFileServer
             _cts.Cancel();
             _httpClient.Dispose();
             _cts.Dispose();
+            _webPushSender?.Dispose();
         }
     }
 }
