@@ -424,3 +424,19 @@ public class AssetNode : TreeNode
 
     public void SyncName() => Asset.Name = Name;
 }
+
+public class BatchGroupNode : TreeNode
+{
+    public override string TypeName => "BatchGroup";
+    public override string Icon => "🔄";
+    public BatchGroupNode() { Name = "Batch Sequences"; }
+}
+
+public class BatchNode : TreeNode
+{
+    public override string TypeName => "Batch";
+    public override string Icon => "▶️";
+    public BatchSequenceConfig Batch { get; }
+    public BatchNode(BatchSequenceConfig batch) { Batch = batch; Name = batch.Name; }
+    public void SyncName() => Batch.Name = Name;
+}

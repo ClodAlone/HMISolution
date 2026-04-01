@@ -1,4 +1,4 @@
-﻿using Opc.Ua;
+using Opc.Ua;
 using Opc.Ua.Server;
 using Serilog;
 using SharedModels;
@@ -32,6 +32,7 @@ namespace SimpleOpcFileServer
         private SchedulerManager? _schedulerManager;
         private ReportManager? _reportManager;
         private AssetManager? _assetManager;
+        private BatchSequenceManager? _batchManager;
 
         private readonly List<NodeId> _rootNodeIds = new();
         private FileSystemWatcher? _watcher;
@@ -342,6 +343,7 @@ namespace SimpleOpcFileServer
 
             if (_assetManager != null) { _assetManager.Dispose(); _assetManager = null; }
             _variables.Clear();
+            if (_batchManager != null) { _batchManager.Dispose(); _batchManager = null; }
             _users.Clear();
             _userGroups.Clear();
             _alarmConditions.Clear();
@@ -646,6 +648,14 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                       _assetManager = new AssetManager(this);
                       _assetManager.Initialize(nodeModel.Assets);
                   }
+
+                  // ─── Batch / Sequence Manager ───
+                  if (nodeModel.BatchSequences != null && nodeModel.BatchSequences.Count > 0)
+                  {
+                      CreateBatchVariables(nodeModel.BatchSequences, references);
+                      _batchManager = new BatchSequenceManager(this);
+                      _batchManager.Initialize(nodeModel.BatchSequences);
+                  }
                               // ─── Diagnostics OPC UA node (always created, license-exempt) ───
                           CreateDiagnosticsNode(references);
                       }
@@ -851,6 +861,42 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
         internal void ClearAssetAlarm(string assetName, string scheduleName)
         {
             _eventLogger?.LogAlarm("Info", $"_Assets.{assetName}.{scheduleName}", $"Service alarm cleared for {scheduleName} on {assetName}");
+        }
+
+        private void CreateBatchVariables(List<BatchSequenceConfig> sequences, IList<IReference>? references)
+        {
+            var rootFolder = new FolderState(null)
+            {
+                NodeId = new NodeId("_Batch", _namespaceIndex),
+                BrowseName = new QualifiedName("_Batch", _namespaceIndex),
+                DisplayName = new LocalizedText("Batch Sequences"),
+                TypeDefinitionId = ObjectTypeIds.FolderType
+            };
+            if (references != null)
+                rootFolder.AddReference(ReferenceTypeIds.Organizes, true, ObjectIds.ObjectsFolder);
+            AddPredefinedNode(SystemContext, rootFolder);
+
+            foreach (var seq in sequences)
+            {
+                if (!seq.Enabled) continue;
+                var folder = new FolderState(rootFolder)
+                {
+                    NodeId = new NodeId($"_Batch.{seq.Name}", _namespaceIndex),
+                    BrowseName = new QualifiedName(seq.Name, _namespaceIndex),
+                    DisplayName = new LocalizedText(seq.Name),
+                    TypeDefinitionId = ObjectTypeIds.FolderType
+                };
+                rootFolder.AddChild(folder);
+                AddPredefinedNode(SystemContext, folder);
+                var p = $"_Batch.{seq.Name}";
+                CreateAssetVar<string>(folder, p, "State", "Idle");
+                CreateAssetVar<string>(folder, p, "CurrentStep", "");
+                CreateAssetVar<string>(folder, p, "CurrentStepId", "");
+                CreateAssetVar<double>(folder, p, "StepElapsed", 0.0);
+                CreateAssetVar<double>(folder, p, "TotalElapsed", 0.0);
+                CreateAssetVar<int>(folder, p, "StepIndex", -1);
+                CreateAssetVar<string>(folder, p, "Message", "Idle");
+            }
         }
         private void CreateDiagnosticsNode(IList<IReference>? references)
         {
@@ -2073,6 +2119,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 _reportManager?.Dispose();
                 _assetManager?.Dispose();
                 _notificationService?.Dispose();
+                _batchManager?.Dispose();
                 _anomalyDetectionService?.Dispose();
                 _eventLogger?.Dispose();
                 foreach (var rw in _resourceWatchers) rw.Dispose();

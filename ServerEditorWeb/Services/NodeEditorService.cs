@@ -519,6 +519,17 @@ public class NodeEditorService
         }
         proj.Children.Add(assetGroup);
 
+        var batchGroup = new BatchGroupNode() { Parent = proj };
+        if (proj.Model.BatchSequences != null)
+        {
+            foreach (var batch in proj.Model.BatchSequences)
+            {
+                var bNode = new BatchNode(batch) { Parent = batchGroup };
+                batchGroup.Children.Add(bNode);
+            }
+        }
+        proj.Children.Add(batchGroup);
+
         var screenGroup = new ScreenGroupNode() { Parent = proj };
         if (proj.Model.Screens != null)
         {
@@ -896,6 +907,24 @@ public class NodeEditorService
                 Enabled = true
             };
             var newNode = new AssetNode(newAsset) { Parent = parent };
+            parent.Children.Add(newNode);
+            parent.IsExpanded = true;
+            SelectedItem = newNode;
+            HasUnsavedChanges = true;
+            NotifyStateChanged();
+        }
+    }
+
+    public void AddBatch()
+    {
+        if (SelectedItem is BatchGroupNode parent)
+        {
+            var newBatch = new BatchSequenceConfig
+            {
+                Name = "New Sequence",
+                Enabled = true
+            };
+            var newNode = new BatchNode(newBatch) { Parent = parent };
             parent.Children.Add(newNode);
             parent.IsExpanded = true;
             SelectedItem = newNode;
@@ -1675,6 +1704,18 @@ public class NodeEditorService
                     {
                         aNode.SyncName();
                         _rootModel.Assets.Add(aNode.Asset);
+                    }
+                }
+            }
+            else if (root is BatchGroupNode batchGrpNode && _rootModel != null)
+            {
+                _rootModel.BatchSequences.Clear();
+                foreach (var child in batchGrpNode.Children)
+                {
+                    if (child is BatchNode bNode)
+                    {
+                        bNode.SyncName();
+                        _rootModel.BatchSequences.Add(bNode.Batch);
                     }
                 }
             }

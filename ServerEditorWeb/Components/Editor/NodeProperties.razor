@@ -1413,6 +1413,86 @@ else if (Node is ServerSettingsNode ssNode)
         }
     </div>
 }
+else if (Node is BatchNode batchNode)
+{
+ <div class="properties-panel">
+    <h5>🔄 Batch Sequence</h5>
+    <div class="mb-3">
+        <label class="form-label">Name</label>
+        <input type="text" class="form-control" @bind="batchNode.Name" @bind:after="OnChanged" @onfocus="() => CaptureForUndo(batchNode, nameof(batchNode.Name))" />
+    </div>
+    <div class="mb-2 form-check">
+        <input class="form-check-input" type="checkbox" @bind="batchNode.Batch.Enabled" @bind:after="OnChanged" />
+        <label class="form-check-label">Enabled</label>
+    </div>
+    <div class="mb-2 form-check">
+        <input class="form-check-input" type="checkbox" @bind="batchNode.Batch.AutoRestart" @bind:after="OnChanged" />
+        <label class="form-check-label">Auto-Restart (loop)</label>
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Description</label>
+        <input type="text" class="form-control" @bind="batchNode.Batch.Description" @bind:after="OnChanged" />
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Start Variable Path</label>
+        <input type="text" class="form-control" @bind="batchNode.Batch.StartVariablePath" @bind:after="OnChanged" placeholder="Write true to start" />
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Abort Variable Path</label>
+        <input type="text" class="form-control" @bind="batchNode.Batch.AbortVariablePath" @bind:after="OnChanged" />
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Hold Variable Path</label>
+        <input type="text" class="form-control" @bind="batchNode.Batch.HoldVariablePath" @bind:after="OnChanged" placeholder="Optional" />
+    </div>
+    <hr />
+    <h6>📋 Steps (@batchNode.Batch.Steps.Count)</h6>
+    @for (int i = 0; i < batchNode.Batch.Steps.Count; i++)
+    {
+        var idx = i; var step = batchNode.Batch.Steps[idx];
+        <div class="border rounded p-2 mb-2" style="background: var(--surface-alt, #f8f8f8);">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+                <strong class="small">@(idx+1). @(string.IsNullOrEmpty(step.Name) ? "(unnamed)" : step.Name)</strong>
+                <div>
+                    @if (idx > 0) { <button class="btn btn-sm btn-outline-secondary py-0 px-1" style="font-size:9px;" @onclick="() => MoveStepUp(batchNode, idx)">▲</button> }
+                    @if (idx < batchNode.Batch.Steps.Count-1) { <button class="btn btn-sm btn-outline-secondary py-0 px-1" style="font-size:9px;" @onclick="() => MoveStepDown(batchNode, idx)">▼</button> }
+                    <button class="btn btn-sm btn-outline-danger py-0 px-1" style="font-size:9px;" @onclick="() => { batchNode.Batch.Steps.RemoveAt(idx); OnChanged(); }">🗑</button>
+                </div>
+            </div>
+            <div class="row g-1 mb-1">
+                <div class="col-5"><label class="form-label mb-0 small">Name</label><input type="text" class="form-control form-control-sm" @bind="step.Name" @bind:after="OnChanged" /></div>
+                <div class="col-4"><label class="form-label mb-0 small">ID</label><input type="text" class="form-control form-control-sm" @bind="step.Id" @bind:after="OnChanged" /></div>
+                <div class="col-3"><label class="form-label mb-0 small">Timeout(s)</label><input type="number" class="form-control form-control-sm" @bind="step.TimeoutSeconds" @bind:after="OnChanged" /></div>
+            </div>
+            <div class="mb-1"><label class="form-label mb-0 small">Description</label><input type="text" class="form-control form-control-sm" @bind="step.Description" @bind:after="OnChanged" /></div>
+        </div>
+    }
+    <button class="btn btn-sm btn-outline-primary mb-3" @onclick="() => AddBatchStep(batchNode)">➕ Add Step</button>
+    <hr />
+    <h6>🔀 Transitions (@batchNode.Batch.Transitions.Count)</h6>
+    @for (int i = 0; i < batchNode.Batch.Transitions.Count; i++)
+    {
+        var idx = i; var trans = batchNode.Batch.Transitions[idx];
+        <div class="border rounded p-2 mb-2" style="background: var(--surface-alt, #f8f8f8);">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+                <span class="small fw-bold">@GetStepName(batchNode, trans.FromStepId) → @GetStepName(batchNode, trans.ToStepId)</span>
+                <button class="btn btn-sm btn-outline-danger py-0 px-1" style="font-size:9px;" @onclick="() => { batchNode.Batch.Transitions.RemoveAt(idx); OnChanged(); }">🗑</button>
+            </div>
+            <div class="row g-1 mb-1">
+                <div class="col-6"><label class="form-label mb-0 small">From Step</label><select class="form-select form-select-sm" @bind="trans.FromStepId" @bind:after="OnChanged"><option value="">(select)</option>@foreach (var s in batchNode.Batch.Steps){<option value="@s.Id">@s.Name</option>}</select></div>
+                <div class="col-6"><label class="form-label mb-0 small">To Step</label><select class="form-select form-select-sm" @bind="trans.ToStepId" @bind:after="OnChanged"><option value="">(select)</option>@foreach (var s in batchNode.Batch.Steps){<option value="@s.Id">@s.Name</option>}</select></div>
+            </div>
+            <div class="row g-1 mb-1">
+                <div class="col-5"><label class="form-label mb-0 small">Condition Variable</label><input type="text" class="form-control form-control-sm" @bind="trans.ConditionVariablePath" @bind:after="OnChanged" placeholder="OPC path or empty" /></div>
+                <div class="col-3"><label class="form-label mb-0 small">Operator</label><select class="form-select form-select-sm" @bind="trans.ConditionOperator" @bind:after="OnChanged"><option value="True">True</option><option value="False">False</option><option value="==">==(eq)</option><option value="!=">!=(neq)</option><option value=">">&gt;</option><option value="<">&lt;</option></select></div>
+                <div class="col-4"><label class="form-label mb-0 small">Value / Delay(s)</label><div class="input-group input-group-sm"><input type="text" class="form-control form-control-sm" @bind="trans.ConditionValue" @bind:after="OnChanged" placeholder="Value" /><input type="number" class="form-control form-control-sm" style="max-width:60px" @bind="trans.DelaySeconds" @bind:after="OnChanged" title="Min dwell seconds" /></div></div>
+            </div>
+        </div>
+    }
+    <button class="btn btn-sm btn-outline-primary" @onclick="() => AddBatchTransition(batchNode)">➕ Add Transition</button>
+    <p class="text-muted small mt-3">At runtime: <code>_Batch.@(batchNode.Batch.Name).State</code>, <code>.CurrentStep</code>, <code>.StepElapsed</code> etc.</p>
+ </div>
+}
 else if (Node is AssetNode assetNode)
 {
  <div class="properties-panel">
@@ -1875,5 +1955,41 @@ else if (Node is UserNode uNode)
             Severity = 500
         });
         OnChanged();
+    }
+
+    private void AddBatchStep(BatchNode node)
+    {
+        node.Batch.Steps.Add(new BatchStep
+        {
+            Id = Guid.NewGuid().ToString("N")[..8],
+            Name = $"Step {node.Batch.Steps.Count + 1}"
+        });
+        OnChanged();
+    }
+
+    private void AddBatchTransition(BatchNode node)
+    {
+        node.Batch.Transitions.Add(new BatchTransition());
+        OnChanged();
+    }
+
+    private void MoveStepUp(BatchNode node, int idx)
+    {
+        if (idx <= 0) return;
+        (node.Batch.Steps[idx], node.Batch.Steps[idx - 1]) = (node.Batch.Steps[idx - 1], node.Batch.Steps[idx]);
+        OnChanged();
+    }
+
+    private void MoveStepDown(BatchNode node, int idx)
+    {
+        if (idx >= node.Batch.Steps.Count - 1) return;
+        (node.Batch.Steps[idx], node.Batch.Steps[idx + 1]) = (node.Batch.Steps[idx + 1], node.Batch.Steps[idx]);
+        OnChanged();
+    }
+
+    private string GetStepName(BatchNode node, string stepId)
+    {
+        var step = node.Batch.Steps.FirstOrDefault(s => s.Id == stepId);
+        return step?.Name ?? stepId;
     }
 }

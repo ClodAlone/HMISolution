@@ -32,6 +32,7 @@ namespace SharedModels
         public List<ReportConfig> Reports { get; set; } = new();
         public List<CalculatedVariableConfig> CalculatedVariables { get; set; } = new();
         public List<AssetConfig> Assets { get; set; } = new();
+        public List<BatchSequenceConfig> BatchSequences { get; set; } = new();
 
         /// <summary>
         /// PBKDF2-SHA256 hash of the project protection password.
@@ -2514,5 +2515,97 @@ namespace SharedModels
         /// Used to compute hours-since-service.
         /// </summary>
         public double LastResetRuntimeHours { get; set; }
+    }
+
+    // --- Batch / Sequence Manager (ISA-88 inspired) ---
+
+    /// <summary>
+    /// A step-based sequence definition. Each sequence contains an ordered list of steps
+    /// connected by transitions. The server runs the state machine and publishes live status.
+    /// </summary>
+    public class BatchSequenceConfig
+    {
+        public string Name { get; set; } = "";
+        public bool Enabled { get; set; } = true;
+        public string Description { get; set; } = "";
+
+        /// <summary>Ordered list of steps in this sequence.</summary>
+        public List<BatchStep> Steps { get; set; } = new();
+
+        /// <summary>Transitions between steps (evaluated in order).</summary>
+        public List<BatchTransition> Transitions { get; set; } = new();
+
+        /// <summary>Whether the sequence restarts automatically after completing the last step.</summary>
+        public bool AutoRestart { get; set; }
+
+        /// <summary>OPC variable path that starts the sequence when written to true.</summary>
+        public string StartVariablePath { get; set; } = "";
+
+        /// <summary>OPC variable path that aborts/stops the sequence when written to true.</summary>
+        public string AbortVariablePath { get; set; } = "";
+
+        /// <summary>OPC variable path that pauses/holds the sequence when written to true.</summary>
+        public string HoldVariablePath { get; set; } = "";
+    }
+
+    /// <summary>
+    /// A single step in a batch sequence (ISA-88 phase equivalent).
+    /// </summary>
+    public class BatchStep
+    {
+        /// <summary>Unique step identifier.</summary>
+        public string Id { get; set; } = "";
+
+        /// <summary>Human-readable step name.</summary>
+        public string Name { get; set; } = "";
+
+        /// <summary>Commands executed when this step becomes active.</summary>
+        public List<SymbolCommand> EntryActions { get; set; } = new();
+
+        /// <summary>Commands executed when this step completes (before transition).</summary>
+        public List<SymbolCommand> ExitActions { get; set; } = new();
+
+        /// <summary>
+        /// Maximum time in seconds this step may run. 0 = no timeout.
+        /// When exceeded, the sequence transitions to the next step or faults.
+        /// </summary>
+        public int TimeoutSeconds { get; set; }
+
+        /// <summary>Description / operator instructions for this step.</summary>
+        public string Description { get; set; } = "";
+    }
+
+    /// <summary>
+    /// A transition between two steps, evaluated when the source step is active.
+    /// The transition fires when its condition is met, advancing the sequence.
+    /// </summary>
+    public class BatchTransition
+    {
+        /// <summary>Source step ID (transition is evaluated while this step is active).</summary>
+        public string FromStepId { get; set; } = "";
+
+        /// <summary>Target step ID to advance to when the condition is met.</summary>
+        public string ToStepId { get; set; } = "";
+
+        /// <summary>
+        /// OPC variable path whose truthy value triggers the transition.
+        /// Leave empty for timer-only transitions (uses the source step timeout).
+        /// </summary>
+        public string ConditionVariablePath { get; set; } = "";
+
+        /// <summary>
+        /// Comparison operator for the condition variable: "==", "!=", "&gt;", "&lt;", "True", "False".
+        /// Default "True" (fires when variable is truthy).
+        /// </summary>
+        public string ConditionOperator { get; set; } = "True";
+
+        /// <summary>Comparison value (used with ==, !=, &gt;, &lt;). Ignored for True/False operators.</summary>
+        public string ConditionValue { get; set; } = "";
+
+        /// <summary>
+        /// Minimum dwell time in seconds the source step must be active before
+        /// this transition can fire, even if the condition is already met. 0 = immediate.
+        /// </summary>
+        public int DelaySeconds { get; set; }
     }
 }
