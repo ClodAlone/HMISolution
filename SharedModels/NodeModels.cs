@@ -1010,6 +1010,13 @@ namespace SharedModels
         public int HdaMaxPoints { get; set; } = 500;
 
         /// <summary>
+        /// Variable path prefix filter for HDA widgets (hdachart/hdagrid).
+        /// When set (e.g. "Area_0000"), the widget auto-discovers all data-logged variables
+        /// whose path starts with this prefix. Combined with explicit HdaVariablePaths if both are set.
+        /// </summary>
+        public string HdaVariableFilter { get; set; } = "";
+
+        /// <summary>
         /// When true, each HDA series gets its own Y-axis (left for first, right for second),
         /// enabling overlay comparison of variables with different scales.
         /// </summary>

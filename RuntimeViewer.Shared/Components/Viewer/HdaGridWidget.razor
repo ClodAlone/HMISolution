@@ -101,6 +101,7 @@
     [Parameter] public List<string> VariablePaths { get; set; } = new();
     [Parameter] public int TimeRangeMinutes { get; set; } = 60;
     [Parameter] public int MaxPoints { get; set; } = 500;
+    [Parameter] public string VariableFilter { get; set; } = "";
 
     [Inject] private HdaReaderService Hda { get; set; } = default!;
     [Inject] private DataExportService Export { get; set; } = default!;
@@ -130,7 +131,7 @@
 
     private async Task Reload()
     {
-        _variableNames = VariablePaths.Where(p => !string.IsNullOrWhiteSpace(p)).ToList();
+        _variableNames = ResolveVariablePaths();
         if (_variableNames.Count == 0) return;
 
         _loading = true;
@@ -181,6 +182,21 @@
 
         _loading = false;
         StateHasChanged();
+    }
+
+    private List<string> ResolveVariablePaths()
+    {
+        var paths = new HashSet<string>(VariablePaths.Where(p => !string.IsNullOrWhiteSpace(p)));
+        if (!string.IsNullOrWhiteSpace(VariableFilter))
+        {
+            var filter = VariableFilter.Trim();
+            foreach (var loggedPath in Hda.GetLoggedVariables())
+            {
+                if (loggedPath.StartsWith(filter, StringComparison.OrdinalIgnoreCase))
+                    paths.Add(loggedPath);
+            }
+        }
+        return paths.OrderBy(p => p).ToList();
     }
 
     private void StartAutoRefresh()
