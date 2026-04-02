@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.SignalR.Client;
 using Opc.Ua;
 using Opc.Ua.Client;
 using Opc.Ua.Configuration;
+using SharedModels;
 using SharedModels.CloudRelay;
 
 namespace CloudBridge;
@@ -26,11 +27,23 @@ public sealed class BridgeService : IDisposable
     private readonly Dictionary<string, string> _latestValues = new();
     private readonly object _lock = new();
 
-    public BridgeService(string opcEndpoint, string hubUrl, string apiKey)
+    // Store-and-forward
+    private readonly StoreAndForwardQueue? _spool;
+    private readonly StoreAndForwardConfig? _safConfig;
+    private Timer? _drainTimer;
+
+    public BridgeService(string opcEndpoint, string hubUrl, string apiKey,
+        StoreAndForwardConfig? safConfig = null, string? projectDir = null)
     {
         _opcEndpoint = opcEndpoint;
         _hubUrl = hubUrl;
         _apiKey = apiKey;
+        _safConfig = safConfig;
+
+        if (safConfig is { Enabled: true })
+        {
+            _spool = new StoreAndForwardQueue(safConfig, projectDir ?? AppContext.BaseDirectory);
+        }
     }
 
     public async Task RunAsync(CancellationToken ct)
@@ -41,7 +54,10 @@ public sealed class BridgeService : IDisposable
         // 2. Connect to the local OPC UA server
         await ConnectToOpcAsync();
 
-        // 3. Keep running, reconnecting as needed
+        // 3. Start the store-and-forward drain timer
+        StartDrainTimer();
+
+        // 4. Keep running, reconnecting as needed
         while (!ct.IsCancellationRequested)
         {
             try
@@ -364,7 +380,17 @@ public sealed class BridgeService : IDisposable
                 if (_pushCount <= 10 || _pushCount % 100 == 0)
                     Log($"Pushed {snapshot.Count} value(s) to cloud [#{_pushCount}]");
             }
-            catch (Exception ex) { Log($"Push error: {ex.Message}"); }
+            catch (Exception ex)
+            {
+                Log($"Push error: {ex.Message}");
+                // Spool failed push for later delivery
+                _spool?.Enqueue(snapshot);
+            }
+        }
+        else
+        {
+            // Hub is disconnected — spool the data for store-and-forward
+            _spool?.Enqueue(snapshot);
         }
     }
 
@@ -473,8 +499,46 @@ public sealed class BridgeService : IDisposable
         Console.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] {message}");
     }
 
+    // ─── Store-and-Forward Drain ─────────────────────────────
+
+    private long _drainCount;
+
+    private void StartDrainTimer()
+    {
+        if (_spool == null || _safConfig == null) return;
+
+        var intervalMs = Math.Max(500, _safConfig.DrainIntervalSeconds * 1000);
+        _drainTimer = new Timer(async _ => await DrainSpoolAsync(), null, intervalMs, intervalMs);
+        Log($"Store-and-forward drain timer started (interval: {intervalMs}ms, batch: {_safConfig.BatchSize})");
+    }
+
+    private async Task DrainSpoolAsync()
+    {
+        if (_spool == null || _hub?.State != HubConnectionState.Connected) return;
+
+        try
+        {
+            var batchSize = _safConfig?.BatchSize ?? 200;
+            var (values, ids) = _spool.Dequeue(batchSize);
+            if (values.Count == 0) return;
+
+            await _hub.SendAsync(HubMethods.ValuesUpdated, values);
+            _spool.Acknowledge(ids);
+
+            _drainCount += ids.Count;
+            var pending = _spool.GetPendingCount();
+            Log($"[SAF] Drained {ids.Count} spooled row(s) → cloud (total drained: {_drainCount}, pending: {pending})");
+        }
+        catch (Exception ex)
+        {
+            Log($"[SAF] Drain error (will retry): {ex.Message}");
+        }
+    }
+
     public void Dispose()
     {
+        _drainTimer?.Dispose();
+        _spool?.Dispose();
         try { _subscription?.Delete(true); } catch { }
         try { _session?.Close(); } catch { }
         _hub?.DisposeAsync().AsTask().Wait(TimeSpan.FromSeconds(2));

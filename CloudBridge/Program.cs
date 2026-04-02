@@ -31,15 +31,21 @@ if (json?.Server?.CloudRelay is not { Enabled: true } relayConfig
 var opcEndpoint = json.Server.EndpointUrl;
 var hubUrl = relayConfig.HubUrl;
 var apiKey = relayConfig.ApiKey;
+var safConfig = relayConfig.StoreAndForward;
+var projectDir = Path.GetDirectoryName(Path.GetFullPath(configPath)) ?? AppContext.BaseDirectory;
 
 Console.WriteLine($"  OPC UA endpoint : {opcEndpoint}");
 Console.WriteLine($"  Cloud relay hub : {hubUrl}");
+if (safConfig is { Enabled: true })
+    Console.WriteLine($"  Store & forward : {safConfig.SpoolPath} (max {safConfig.MaxRows} rows)");
+else
+    Console.WriteLine($"  Store & forward : disabled");
 Console.WriteLine();
 
 using var cts = new CancellationTokenSource();
 Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
 
-var bridge = new BridgeService(opcEndpoint, hubUrl, apiKey);
+var bridge = new BridgeService(opcEndpoint, hubUrl, apiKey, safConfig, projectDir);
 await bridge.RunAsync(cts.Token);
 
 return 0;

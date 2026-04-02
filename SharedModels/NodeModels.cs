@@ -444,6 +444,37 @@ namespace SharedModels
         /// Sent as a query-string parameter (?apiKey=â€¦) during the SignalR handshake.
         /// </summary>
         public string ApiKey { get; set; } = "";
+
+        /// <summary>
+        /// Store-and-forward configuration. When enabled, the CloudBridge spools
+        /// data to a local SQLite file during cloud outages and drains the queue
+        /// automatically when the connection is restored.
+        /// </summary>
+        public StoreAndForwardConfig? StoreAndForward { get; set; }
+    }
+
+    /// <summary>
+    /// Configuration for the edge-to-cloud store-and-forward queue.
+    /// </summary>
+    public class StoreAndForwardConfig
+    {
+        /// <summary>Whether store-and-forward is enabled. Default: true.</summary>
+        public bool Enabled { get; set; } = true;
+
+        /// <summary>
+        /// Path to the SQLite spool file. Relative paths are resolved from the project directory.
+        /// Default: "cloud_spool.db".
+        /// </summary>
+        public string SpoolPath { get; set; } = "cloud_spool.db";
+
+        /// <summary>Maximum number of rows to keep in the spool. Oldest rows are purged first. Default: 500 000.</summary>
+        public int MaxRows { get; set; } = 500_000;
+
+        /// <summary>Number of rows to send per drain batch. Default: 200.</summary>
+        public int BatchSize { get; set; } = 200;
+
+        /// <summary>Seconds between drain attempts while the hub is connected. Default: 2.</summary>
+        public int DrainIntervalSeconds { get; set; } = 2;
     }
 
     /// <summary>
