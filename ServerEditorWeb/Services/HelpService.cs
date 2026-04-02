@@ -1169,6 +1169,50 @@ Published under `_Batch.{Name}.`:
 When enabled, the sequence automatically loops back to the first step after completion.
 """),
 
+        ["cloudrelay"] = new("☁️ Cloud Relay", """
+## Cloud Relay
+
+Connect an edge OPC UA server to remote RuntimeViewer clients through a cloud SignalR hub.
+Both the CloudBridge and the viewers connect **outbound** — no inbound firewall ports required.
+
+### Configuration
+Configure under **Server Settings → Cloud Relay** in the editor:
+1. Enable Cloud Relay
+2. Set the Hub URL of the cloud SignalR relay (e.g. `https://myrelay.azurewebsites.net/relay`)
+3. Provide a shared API Key for authentication
+
+### Properties
+| Property | Description |
+|---|---|
+| **Enabled** | Turn cloud relay mode on/off |
+| **Hub URL** | SignalR hub endpoint — both bridge and viewers connect here |
+| **API Key** | Shared secret sent as `?apiKey=…` during handshake |
+
+### Store & Forward
+When enabled, the CloudBridge spools data to a local SQLite file during cloud outages
+and automatically drains the queue when connectivity is restored.
+
+| Property | Description |
+|---|---|
+| **Enabled** | Turn store-and-forward on/off (default: on) |
+| **Spool Path** | SQLite file path, relative to project folder (default: `cloud_spool.db`) |
+| **Max Rows** | Maximum spool size — oldest rows purged when exceeded (default: 500 000) |
+| **Batch Size** | Rows forwarded per drain cycle (default: 200) |
+| **Drain Interval** | Seconds between drain attempts while hub is connected (default: 2) |
+
+### Architecture
+```
+Local OPC UA Server ──► CloudBridge ──► Cloud SignalR Hub ◄── RuntimeViewer(s)
+                              │
+                   Store & Forward
+                   (SQLite spool)
+```
+
+The bridge reads OPC values and pushes them to the hub in real-time.
+If the hub connection drops, values are spooled locally and forwarded
+once the connection is restored — no data loss.
+"""),
+
         ["multisite"] = new("🌐 Multi-Site Dashboard", """
 ## Multi-Site Dashboard
 

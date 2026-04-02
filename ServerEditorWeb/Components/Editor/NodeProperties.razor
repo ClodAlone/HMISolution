@@ -1463,6 +1463,86 @@ else if (Node is ServerSettingsNode ssNode)
             <button class="btn btn-sm btn-outline-primary" @onclick="() => AddMultiSiteSite(ssNode)">➕ Add Site</button>
         }
 
+        @* ── Cloud Relay ── *@
+        <hr />
+        <h6>☁️ Cloud Relay</h6>
+        <div class="form-text mb-2">
+            Connect the edge server to a cloud SignalR relay hub. The CloudBridge forwards live OPC values
+            and alarms outbound — no inbound firewall ports required. Remote RuntimeViewer clients connect
+            through the same hub.
+        </div>
+        <div class="mb-2 form-check">
+            <input class="form-check-input" type="checkbox"
+                   checked="@(ssNode.Settings.CloudRelay?.Enabled == true)"
+                   @onchange="(e) => { EnsureCloudRelayConfig(ssNode).Enabled = (bool)(e.Value ?? false); OnChanged(); }" />
+            <label class="form-check-label">Enable Cloud Relay</label>
+        </div>
+        @if (ssNode.Settings.CloudRelay is { Enabled: true } cloudRelayCfg)
+        {
+            <div class="mb-2">
+                <label class="form-label small">Hub URL</label>
+                <input type="text" class="form-control form-control-sm"
+                       @bind="cloudRelayCfg.HubUrl" @bind:after="OnChanged"
+                       placeholder="https://myrelay.azurewebsites.net/relay" />
+                <div class="form-text">The SignalR hub endpoint. Both the bridge and viewers connect here.</div>
+            </div>
+            <div class="mb-2">
+                <label class="form-label small">API Key</label>
+                <input type="password" class="form-control form-control-sm"
+                       @bind="cloudRelayCfg.ApiKey" @bind:after="OnChanged"
+                       placeholder="Shared secret for authentication" />
+                <div class="form-text">Sent as <code>?apiKey=…</code> during the SignalR handshake.</div>
+            </div>
+
+            @* Store-and-Forward *@
+            <div class="card mt-2 mb-2">
+                <div class="card-header py-1 px-2 d-flex justify-content-between align-items-center" style="font-size: 12px;">
+                    <span>💾 Store &amp; Forward</span>
+                    <div class="form-check form-switch mb-0">
+                        <input class="form-check-input" type="checkbox"
+                               checked="@(cloudRelayCfg.StoreAndForward?.Enabled == true)"
+                               @onchange="(e) => { EnsureStoreAndForwardConfig(ssNode).Enabled = (bool)(e.Value ?? false); OnChanged(); }" />
+                    </div>
+                </div>
+                @if (cloudRelayCfg.StoreAndForward is { Enabled: true } safCfg)
+                {
+                    <div class="card-body p-2">
+                        <div class="form-text mb-2">
+                            When the cloud connection is lost, data is spooled to a local SQLite file and
+                            automatically forwarded when connectivity is restored.
+                        </div>
+                        <div class="mb-1">
+                            <label class="form-label mb-0 small">Spool File Path</label>
+                            <input type="text" class="form-control form-control-sm"
+                                   @bind="safCfg.SpoolPath" @bind:after="OnChanged"
+                                   placeholder="cloud_spool.db" />
+                            <div class="form-text">Relative to project folder. Default: <code>cloud_spool.db</code>.</div>
+                        </div>
+                        <div class="row g-2 mb-1">
+                            <div class="col-4">
+                                <label class="form-label mb-0 small">Max Rows</label>
+                                <input type="number" min="1000" class="form-control form-control-sm"
+                                       @bind="safCfg.MaxRows" @bind:after="OnChanged" />
+                                <div class="form-text">Oldest rows purged when exceeded.</div>
+                            </div>
+                            <div class="col-4">
+                                <label class="form-label mb-0 small">Batch Size</label>
+                                <input type="number" min="1" class="form-control form-control-sm"
+                                       @bind="safCfg.BatchSize" @bind:after="OnChanged" />
+                                <div class="form-text">Rows per drain cycle.</div>
+                            </div>
+                            <div class="col-4">
+                                <label class="form-label mb-0 small">Drain Interval (s)</label>
+                                <input type="number" min="1" class="form-control form-control-sm"
+                                       @bind="safCfg.DrainIntervalSeconds" @bind:after="OnChanged" />
+                                <div class="form-text">Seconds between drain attempts.</div>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+
         @* ── MQTT Sparkplug B ── *@
         <hr />
         <h6>📡 Sparkplug B (MQTT)</h6>
@@ -2110,6 +2190,18 @@ else if (Node is UserNode uNode)
             Enabled = true
         });
         OnChanged();
+    }
+
+    private CloudRelayConfig EnsureCloudRelayConfig(ServerSettingsNode ssNode)
+    {
+        ssNode.Settings.CloudRelay ??= new CloudRelayConfig();
+        return ssNode.Settings.CloudRelay;
+    }
+
+    private StoreAndForwardConfig EnsureStoreAndForwardConfig(ServerSettingsNode ssNode)
+    {
+        EnsureCloudRelayConfig(ssNode).StoreAndForward ??= new StoreAndForwardConfig();
+        return ssNode.Settings.CloudRelay!.StoreAndForward!;
     }
 
     private void ToggleScreenAllowedGroup(ScreenConfig screen, string groupName, bool isChecked)
