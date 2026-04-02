@@ -10,6 +10,7 @@
         <span style="flex: 1;"></span>
         <button class="hda-btn" @onclick="TogglePause" title="@(_paused ? "Resume" : "Pause")">@(_paused ? "▶" : "⏸")</button>
         <button class="hda-btn" @onclick="ClearBuffers" title="Clear history">🗑</button>
+        <button class="hda-btn" @onclick="ExportCsv" title="Export trend data to CSV">📥 CSV</button>
     </div>
 
     @* Chart *@
@@ -168,6 +169,7 @@
     [Parameter] public string Background { get; set; } = "#111827";
 
     [Inject] private OpcRuntimeClient Opc { get; set; } = default!;
+    [Inject] private IJSRuntime JS { get; set; } = default!;
 
     private record struct Sample(DateTime Time, double Value);
 
@@ -495,5 +497,45 @@
     public void Dispose()
     {
         _sampleTimer?.Dispose();
+    }
+
+    private async Task ExportCsv()
+    {
+        var snap = _buffers;
+        if (snap.Length == 0 || Pens.Count == 0) return;
+
+        var sb = new System.Text.StringBuilder();
+        sb.Append("Timestamp");
+        foreach (var pen in Pens)
+            sb.Append(',').Append(pen.VariablePath ?? "");
+        sb.AppendLine();
+
+        // Merge all samples by time
+        var allTimes = new SortedSet<DateTime>();
+        for (int i = 0; i < Math.Min(snap.Length, Pens.Count); i++)
+            foreach (var s in snap[i])
+                allTimes.Add(s.Time);
+
+        var lookups = new Dictionary<DateTime, double>[Math.Min(snap.Length, Pens.Count)];
+        for (int i = 0; i < lookups.Length; i++)
+            lookups[i] = snap[i].ToDictionary(s => s.Time, s => s.Value);
+
+        foreach (var time in allTimes)
+        {
+            sb.Append(time.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss.fff", System.Globalization.CultureInfo.InvariantCulture));
+            for (int i = 0; i < lookups.Length; i++)
+            {
+                sb.Append(',');
+                if (lookups[i].TryGetValue(time, out var val))
+                    sb.Append(val.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            }
+            sb.AppendLine();
+        }
+
+        var csv = sb.ToString();
+        var module = await JS.InvokeAsync<IJSObjectReference>("import", "./_content/RuntimeViewer.Shared/dataexport.js");
+        await module.InvokeVoidAsync("downloadText",
+            $"trend-{DateTime.Now:yyyyMMdd-HHmmss}.csv", "text/csv", csv);
+        await module.DisposeAsync();
     }
 }

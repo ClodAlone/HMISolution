@@ -35,6 +35,11 @@
         <button class="eventlog-btn" @onclick="ToggleAutoRefresh" title="@(_autoRefresh ? "Disable auto-refresh" : "Enable auto-refresh")">
             @(_autoRefresh ? "⏸" : "▶")
         </button>
+        @if (_events.Count > 0)
+        {
+            <button class="eventlog-btn" @onclick="ExportCsv" title="Export to CSV">📥 CSV</button>
+            <button class="eventlog-btn" @onclick="ExportHtml" title="Export printable report">🖨️</button>
+        }
     </div>
 
     @* Table *@
@@ -163,6 +168,8 @@
     [Parameter] public string Categories { get; set; } = "";
 
     [Inject] private EventLogReaderService Reader { get; set; } = default!;
+    [Inject] private DataExportService Export { get; set; } = default!;
+    [Inject] private IJSRuntime JS { get; set; } = default!;
 
     private List<EventLogEntry> _events = new();
     private bool _loading;
@@ -253,6 +260,29 @@
     public void Dispose()
     {
         _refreshTimer?.Dispose();
+    }
+
+    private async Task ExportCsv()
+    {
+        if (_events.Count == 0) return;
+        var csv = Export.EventsToCsv(_events);
+        if (!string.IsNullOrEmpty(csv))
+            await DownloadTextAsync($"events-{DateTime.Now:yyyyMMdd-HHmmss}.csv", "text/csv", csv);
+    }
+
+    private async Task ExportHtml()
+    {
+        if (_events.Count == 0) return;
+        var html = Export.EventsToHtml(_events, "Event Log Export");
+        if (!string.IsNullOrEmpty(html))
+            await DownloadTextAsync($"events-{DateTime.Now:yyyyMMdd-HHmmss}.html", "text/html", html);
+    }
+
+    private async Task DownloadTextAsync(string filename, string contentType, string text)
+    {
+        var module = await JS.InvokeAsync<IJSObjectReference>("import", "./_content/RuntimeViewer.Shared/dataexport.js");
+        await module.InvokeVoidAsync("downloadText", filename, contentType, text);
+        await module.DisposeAsync();
     }
 }
 

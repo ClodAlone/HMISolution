@@ -31,6 +31,11 @@
             <button class="hda-btn" @onclick="ToggleOverlay" style="background:@(_overlay ? "#2563eb" : "transparent");"
                     title="@(_overlay ? "Shared Y-axis" : "Overlay: independent Y-axes")">⇵ Overlay</button>
         }
+        @if (_series.Count > 0 && _series.Any(s => s.Points.Count > 0))
+        {
+            <button class="hda-btn" @onclick="ExportCsv" title="Export to CSV">📥 CSV</button>
+            <button class="hda-btn" @onclick="ExportHtml" title="Export printable report">🖨️</button>
+        }
     </div>
 
     @* Chart area *@
@@ -169,6 +174,8 @@
     [Parameter] public bool OverlayMode { get; set; }
 
     [Inject] private HdaReaderService Hda { get; set; } = default!;
+    [Inject] private DataExportService Export { get; set; } = default!;
+    [Inject] private IJSRuntime JS { get; set; } = default!;
 
     private ElementReference _chartRef;
     private List<HdaSeries> _series = new();
@@ -372,6 +379,27 @@
     public void Dispose()
     {
         _refreshTimer?.Dispose();
+    }
+
+    private async Task ExportCsv()
+    {
+        var csv = Export.HdaToCsv(_series);
+        if (!string.IsNullOrEmpty(csv))
+            await DownloadTextAsync($"hda-export-{DateTime.Now:yyyyMMdd-HHmmss}.csv", "text/csv", csv);
+    }
+
+    private async Task ExportHtml()
+    {
+        var html = Export.HdaToHtml(_series, "Historical Data Export");
+        if (!string.IsNullOrEmpty(html))
+            await DownloadTextAsync($"hda-export-{DateTime.Now:yyyyMMdd-HHmmss}.html", "text/html", html);
+    }
+
+    private async Task DownloadTextAsync(string filename, string contentType, string text)
+    {
+        var module = await JS.InvokeAsync<IJSObjectReference>("import", "./_content/RuntimeViewer.Shared/dataexport.js");
+        await module.InvokeVoidAsync("downloadText", filename, contentType, text);
+        await module.DisposeAsync();
     }
 }
 
