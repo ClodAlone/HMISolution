@@ -1,4 +1,4 @@
-﻿@page "/"
+@page "/"
 @page "/screen/{ScreenName}"
 @using SharedModels
 @using RuntimeViewer.Shared.Services
@@ -147,8 +147,8 @@ else
                     <span class="rv-badge" style="background:#555;color:#ccc;" title="@Auth.Group">@Auth.Username</span>
                     <button class="rv-btn" style="background:#dc3545;" @onclick="DoLogout">Logout</button>
                 }
-                                <button class="rv-btn" style="background:@(_bestFit ? "#2563eb" : "#374151"); font-size:10px;"
-                        @onclick="() => _bestFit = !_bestFit" title="@(_bestFit ? "Switch to actual size (scrollable)" : "Switch to best fit (scale to viewport)")">@(_bestFit ? "Ôûú Fit" : "Ôûó 1:1")</button>
+                                <button class="rv-btn" style="background:@(CurrentFitMode != "scroll" ? "#2563eb" : "#374151"); font-size:10px;"
+                        @onclick="CycleFitMode" title="@FitModeTooltip">@FitModeLabel</button>
 <button class="rv-btn" style="background:@(_showDiag ? "#2563eb" : "#374151"); font-size:10px;"
                         @onclick="ToggleDiag" title="OPC Diagnostics">­ƒöì Diag</button>
 @if (Project.Settings.EnableTagBrowser)
@@ -566,9 +566,44 @@ else
     private bool _reconnecting;
     private static readonly TimeSpan ReconnectInterval = TimeSpan.FromSeconds(5);
 
-    // Diagnostics
+    // Fit mode
     private bool _bestFit = true;
     private bool _showDiag;
+
+    private string CurrentFitMode => _currentScreen?.FitMode is "contain" or "fill" or "scroll"
+        ? _currentScreen.FitMode
+        : (_bestFit ? "contain" : "scroll");
+
+    private string FitModeLabel => CurrentFitMode switch
+    {
+        "contain" => "\u25a3 Contain",
+        "fill"    => "\u2b1c Fill",
+        "scroll"  => "\u2b13 1:1",
+        _         => "\u25a3 Contain"
+    };
+
+    private string FitModeTooltip => CurrentFitMode switch
+    {
+        "contain" => "Fit to viewport (maintain aspect ratio)",
+        "fill"    => "Stretch to fill viewport",
+        "scroll"  => "Actual size with scroll bars",
+        _         => ""
+    };
+
+    private void CycleFitMode()
+    {
+        if (_currentScreen == null) return;
+        _currentScreen.FitMode = CurrentFitMode switch
+        {
+            "contain" => "fill",
+            "fill"    => "scroll",
+            "scroll"  => "contain",
+            _         => "contain"
+        };
+        _bestFit = _currentScreen.FitMode != "scroll";
+    }
+
+    // Diagnostics
     private int _diagValueCount;
     private System.Threading.Timer? _diagTimer;
     private ElementReference _diagScrollRef;

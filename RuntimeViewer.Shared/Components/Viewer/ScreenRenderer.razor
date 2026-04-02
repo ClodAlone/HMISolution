@@ -356,12 +356,23 @@ else if (Screen.LayoutMode == "responsive")
 else
 {
     var bgDataSvg = ResolveImageData(Screen.BackgroundImageId);
+    var fitMode = EffectiveFitMode;
+    var useFixedSize = fitMode == "scroll" && !IsKiosk;
+    var par = fitMode switch
+    {
+        "fill"   => "none",
+        "scroll" => "xMidYMid meet",
+        _        => "xMidYMid meet"       // "contain" (default)
+    };
+    var fitCss = IsKiosk ? "rv-canvas-kiosk"
+               : fitMode == "scroll" ? ""
+               : "rv-canvas-bestfit";
     <svg xmlns="http://www.w3.org/2000/svg"
          viewBox="0 0 @Screen.Width @Screen.Height"
-         width="@(IsKiosk || BestFit ? null : Screen.Width)"
-         height="@(IsKiosk || BestFit ? null : Screen.Height)"
-         preserveAspectRatio="xMidYMid meet"
-         class="rv-canvas @(IsKiosk ? "rv-canvas-kiosk" : "") @(BestFit && !IsKiosk ? "rv-canvas-bestfit" : "")"
+         width="@(useFixedSize ? Screen.Width : null)"
+         height="@(useFixedSize ? Screen.Height : null)"
+         preserveAspectRatio="@par"
+         class="rv-canvas @fitCss"
          style="background: @Screen.Background;@(_isDraggingKnob || _isDraggingSlider ? " cursor: grabbing; user-select: none;" : "")"
          @ref="_svgRef">
 
@@ -709,7 +720,22 @@ else
     [Parameter] public bool IsKiosk { get; set; }
     [Parameter] public bool BestFit { get; set; }
     [Parameter] public EventCallback OnRequestLogin { get; set; }
-    [Inject] private OpcRuntimeClient Opc { get; set; } = default!;
+
+    /// <summary>
+    /// Effective fit mode: per-screen FitMode wins if set; BestFit parameter acts as legacy override.
+    /// </summary>
+    private string EffectiveFitMode
+    {
+        get
+        {
+            // Per-screen setting takes priority when explicitly set
+            var mode = Screen?.FitMode ?? "";
+            if (!string.IsNullOrEmpty(mode) && mode is "contain" or "fill" or "scroll")
+                return mode;
+            // Legacy fallback: BestFit parameter → "contain", else "scroll"
+            return BestFit ? "contain" : "scroll";
+        }
+    }    [Inject] private OpcRuntimeClient Opc { get; set; } = default!;
     [Inject] private CommandService Commands { get; set; } = default!;
     [Inject] private RuntimeAuthService Auth { get; set; } = default!;
     [Inject] private LocalizationService Localization { get; set; } = default!;

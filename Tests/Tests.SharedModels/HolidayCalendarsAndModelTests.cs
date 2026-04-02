@@ -267,6 +267,7 @@ public class NodeModelDefaultsTests
         Assert.Equal("", screen.Name);
         Assert.Equal(800, screen.Width);
         Assert.Equal(600, screen.Height);
+        Assert.Equal("contain", screen.FitMode);
         Assert.NotNull(screen.Symbols);
         Assert.Empty(screen.Symbols);
     }

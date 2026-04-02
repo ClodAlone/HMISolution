@@ -946,6 +946,15 @@ namespace SharedModels
         /// <summary>Enable smart-snap alignment guides between symbols.</summary>
         public bool SmartSnap { get; set; }
 
+        /// <summary>
+        /// How the screen canvas fits into the runtime viewport.
+        /// "contain" — scale to fit maintaining aspect ratio (default),
+        /// "fill" — stretch to fill the entire viewport (may distort),
+        /// "scroll" — display at actual pixel size with scroll bars.
+        /// </summary>
+        [AllowedStringValues("contain", "fill", "scroll")]
+        public string FitMode { get; set; } = "contain";
+
         public List<ScreenSymbol> Symbols { get; set; } = new();
     }
 
