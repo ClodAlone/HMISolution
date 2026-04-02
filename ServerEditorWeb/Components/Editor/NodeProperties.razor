@@ -879,6 +879,95 @@ else if (Node is ServerSettingsNode ssNode)
                    @onfocus="() => CaptureForUndo(ssNode.Settings, nameof(ssNode.Settings.RequireStrongPassword))" />
             <label class="form-check-label">@L["prop.requireStrongPw"]</label>
         </div>
+
+        @* ── External Authentication (OAuth) ── *@
+        <hr />
+        <h6>🔑 External Authentication (OAuth)</h6>
+        <div class="form-text mb-2">
+            Allow users to sign in with Google, Microsoft, Facebook, or GitHub.
+            External users are mapped to a local user by email, or assigned to a default group.
+        </div>
+        <div class="mb-2 form-check">
+            <input class="form-check-input" type="checkbox"
+                   checked="@(ssNode.Settings.ExternalAuth?.Enabled == true)"
+                   @onchange="(e) => { EnsureExternalAuthConfig(ssNode).Enabled = (bool)(e.Value ?? false); OnChanged(); }" />
+            <label class="form-check-label">Enable External Authentication</label>
+        </div>
+        @if (ssNode.Settings.ExternalAuth is { Enabled: true } extAuthCfg)
+        {
+            <div class="mb-2">
+                <label class="form-label small">Default Group (for unmapped users)</label>
+                <select class="form-select form-select-sm" @bind="extAuthCfg.DefaultGroup" @bind:after="OnChanged">
+                    <option value="">— Deny unmapped users —</option>
+                    @foreach (var grp in (Editor.RootModel?.UserGroups ?? []))
+                    {
+                        <option value="@grp.Name">@grp.Name</option>
+                    }
+                </select>
+                <div class="form-text">Group assigned to external users not in the local user list. Empty = deny access.</div>
+            </div>
+
+            @for (int pi = 0; pi < extAuthCfg.Providers.Count; pi++)
+            {
+                var idx = pi;
+                var prov = extAuthCfg.Providers[idx];
+                <div class="card mb-2">
+                    <div class="card-header py-1 px-2 d-flex justify-content-between align-items-center" style="font-size: 12px;">
+                        <span>
+                            @(prov.Name switch { "Google" => "🔵", "Microsoft" => "🟦", "Facebook" => "🔷", "GitHub" => "⬛", _ => "🔑" })
+                            @prov.Name
+                        </span>
+                        <div class="d-flex align-items-center gap-1">
+                            <div class="form-check form-switch mb-0">
+                                <input class="form-check-input" type="checkbox" @bind="prov.Enabled" @bind:after="OnChanged" />
+                            </div>
+                            <button class="btn btn-sm btn-outline-danger py-0 px-1" style="font-size: 9px;"
+                                    @onclick="() => { extAuthCfg.Providers.RemoveAt(idx); OnChanged(); }">🗑</button>
+                        </div>
+                    </div>
+                    @if (prov.Enabled)
+                    {
+                        <div class="card-body p-2">
+                            <div class="mb-1">
+                                <label class="form-label mb-0 small">Client ID</label>
+                                <input type="text" class="form-control form-control-sm"
+                                       @bind="prov.ClientId" @bind:after="OnChanged"
+                                       placeholder="From provider's developer console" />
+                            </div>
+                            <div class="mb-1">
+                                <label class="form-label mb-0 small">Client Secret</label>
+                                <input type="password" class="form-control form-control-sm"
+                                       @bind="prov.ClientSecret" @bind:after="OnChanged" />
+                            </div>
+                            <div class="mb-1">
+                                <label class="form-label mb-0 small">Allowed Domains (optional, comma-separated)</label>
+                                <input type="text" class="form-control form-control-sm"
+                                       @bind="prov.AllowedDomains" @bind:after="OnChanged"
+                                       placeholder="mycompany.com, partner.org" />
+                                <div class="form-text">Restrict to specific email domains. Empty = allow all.</div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+
+            <div class="input-group input-group-sm mb-2">
+                <select class="form-select form-select-sm" @bind="_newExternalProvider">
+                    <option value="">— Select provider —</option>
+                    @foreach (var name in new[] { "Google", "Microsoft", "Facebook", "GitHub" })
+                    {
+                        @if (!extAuthCfg.Providers.Any(p => p.Name == name))
+                        {
+                            <option value="@name">@name</option>
+                        }
+                    }
+                </select>
+                <button class="btn btn-sm btn-outline-primary"
+                        disabled="@string.IsNullOrEmpty(_newExternalProvider)"
+                        @onclick="() => AddExternalProvider(extAuthCfg)">➕ Add</button>
+            </div>
+        }
+
         <div class="mb-3 form-check">
             <input class="form-check-input" type="checkbox" @bind="ssNode.Settings.EnableTagBrowser" @bind:after="OnChanged"
                    @onfocus="() => CaptureForUndo(ssNode.Settings, nameof(ssNode.Settings.EnableTagBrowser))" />
@@ -1938,6 +2027,12 @@ else if (Node is UserGroupNode ugNode)
         <div class="mb-3 form-check">
             <input class="form-check-input" type="checkbox" @bind="ugNode.UserGroup.CanAccessEditor" @bind:after="OnChanged" @onfocus="() => CaptureForUndo(ugNode.UserGroup, nameof(ugNode.UserGroup.CanAccessEditor))" />
             <label class="form-check-label">@L["prop.canAccessEditor"]</label>
+            <div class="form-text">Allow users in this group to log in to the project editor.</div>
+        </div>
+        <div class="mb-3 form-check">
+            <input class="form-check-input" type="checkbox" @bind="ugNode.UserGroup.CanAccessRuntime" @bind:after="OnChanged" @onfocus="() => CaptureForUndo(ugNode.UserGroup, nameof(ugNode.UserGroup.CanAccessRuntime))" />
+            <label class="form-check-label">Can Access Runtime Viewer</label>
+            <div class="form-text">Allow users in this group to log in to the runtime viewer.</div>
         </div>
         <div class="text-muted">
             @L["section.users"]: @(ugNode.Children.OfType<UserNode>().Count())
@@ -1954,7 +2049,13 @@ else if (Node is UserNode uNode)
         </div>
         <div class="mb-3">
             <label class="form-label">@L["prop.group"]</label>
-            <input type="text" class="form-control" value="@uNode.User.Group" readonly />
+            <select class="form-select" value="@uNode.User.Group"
+                    @onchange="(e) => { uNode.User.Group = e.Value?.ToString() ?? string.Empty; OnChanged(); }">
+                @foreach (var grp in (Editor.RootModel?.UserGroups ?? []))
+                {
+                    <option value="@grp.Name">@grp.Name</option>
+                }
+            </select>
         </div>
         <div class="mb-3">
             <label class="form-label">@L["prop.password"]</label>
@@ -1969,6 +2070,51 @@ else if (Node is UserNode uNode)
             {
                 <span class="text-warning small">⚠ @L["prop.pwNotSet"]</span>
             }
+            <div class="mt-2">
+                <div class="input-group input-group-sm">
+                    <input type="password" class="form-control form-control-sm"
+                           @bind="_resetPassword" placeholder="New password" />
+                    <button class="btn btn-sm btn-outline-primary" @onclick="() => ResetUserPassword(uNode)"
+                            disabled="@string.IsNullOrWhiteSpace(_resetPassword)">Set Password</button>
+                </div>
+                @if (!string.IsNullOrEmpty(_resetPasswordMessage))
+                {
+                    <div class="form-text @(_resetPasswordSuccess ? "text-success" : "text-danger")">@_resetPasswordMessage</div>
+                }
+            </div>
+        </div>
+
+        <hr />
+        <h6>🔒 Session &amp; Security</h6>
+        <div class="mb-2">
+            <label class="form-label small">Auto Log-off (seconds of inactivity)</label>
+            <input type="number" min="0" class="form-control form-control-sm"
+                   @bind="uNode.User.AutoLogOffSeconds" @bind:after="OnChanged" />
+            <div class="form-text">Automatically lock the runtime viewer after this many seconds of inactivity. 0 = disabled.</div>
+        </div>
+        <div class="mb-2">
+            <label class="form-label small">Password Expiry (days)</label>
+            <input type="number" min="0" class="form-control form-control-sm"
+                   @bind="uNode.User.PasswordExpiryDays" @bind:after="OnChanged" />
+            <div class="form-text">Force password change after N days. 0 = never expires.</div>
+        </div>
+        <div class="mb-2 form-check">
+            <input class="form-check-input" type="checkbox" @bind="uNode.User.MustChangePasswordOnFirstLogin" @bind:after="OnChanged" />
+            <label class="form-check-label small">Must change password on first login</label>
+        </div>
+
+        <hr />
+        <h6>ℹ️ Status</h6>
+        <div class="small text-muted">
+            <div>Has logged in: @(uNode.User.HasLoggedInBefore ? "✅ Yes" : "❌ No")</div>
+            @if (uNode.User.PasswordChangedDate.HasValue)
+            {
+                <div>Password last changed: @uNode.User.PasswordChangedDate.Value.ToString("yyyy-MM-dd HH:mm") UTC</div>
+            }
+            else
+            {
+                <div>Password last changed: <em>never</em></div>
+            }
         </div>
     </div>
 }
@@ -1982,6 +2128,14 @@ else if (Node is UserNode uNode)
     [Inject] private EditorLocalizationService L { get; set; } = default!;
 
     private bool _showDriverJson;
+
+    // Password reset fields
+    private string _resetPassword = "";
+    private string _resetPasswordMessage = "";
+    private bool _resetPasswordSuccess;
+
+    // External auth provider add
+    private string _newExternalProvider = "";
 
     protected override void OnInitialized()
     {
@@ -2202,6 +2356,52 @@ else if (Node is UserNode uNode)
     {
         EnsureCloudRelayConfig(ssNode).StoreAndForward ??= new StoreAndForwardConfig();
         return ssNode.Settings.CloudRelay!.StoreAndForward!;
+    }
+
+    private ExternalAuthConfig EnsureExternalAuthConfig(ServerSettingsNode ssNode)
+    {
+        ssNode.Settings.ExternalAuth ??= new ExternalAuthConfig();
+        return ssNode.Settings.ExternalAuth;
+    }
+
+    private void AddExternalProvider(ExternalAuthConfig cfg)
+    {
+        if (string.IsNullOrEmpty(_newExternalProvider)) return;
+        if (cfg.Providers.Any(p => p.Name == _newExternalProvider)) return;
+        cfg.Providers.Add(new ExternalAuthProvider { Name = _newExternalProvider, Enabled = true });
+        _newExternalProvider = "";
+        OnChanged();
+    }
+
+    private void ResetUserPassword(UserNode uNode)
+    {
+        _resetPasswordMessage = "";
+        _resetPasswordSuccess = false;
+
+        if (string.IsNullOrWhiteSpace(_resetPassword))
+        {
+            _resetPasswordMessage = "Password cannot be empty.";
+            return;
+        }
+
+        var requireStrong = Editor.RootModel?.Server?.RequireStrongPassword ?? false;
+        if (requireStrong)
+        {
+            var (valid, error) = SharedModels.PasswordValidator.Validate(_resetPassword, true);
+            if (!valid)
+            {
+                _resetPasswordMessage = error!;
+                return;
+            }
+        }
+
+        uNode.User.PasswordHash = SharedModels.PasswordHasher.Hash(_resetPassword);
+        uNode.User.Password = "";
+        uNode.User.PasswordChangedDate = DateTime.UtcNow;
+        _resetPassword = "";
+        _resetPasswordMessage = "Password set successfully.";
+        _resetPasswordSuccess = true;
+        OnChanged();
     }
 
     private void ToggleScreenAllowedGroup(ScreenConfig screen, string groupName, bool isChecked)

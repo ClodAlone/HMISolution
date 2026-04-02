@@ -330,6 +330,13 @@ namespace SharedModels
         /// </summary>
         public bool RequireStrongPassword { get; set; }
 
+        /// <summary>
+        /// External authentication (OAuth / OpenID Connect) configuration.
+        /// When enabled, the runtime viewer login screen shows social login buttons
+        /// alongside the local username/password form.
+        /// </summary>
+        public ExternalAuthConfig? ExternalAuth { get; set; }
+
         /// <summary>Name of the screen to display on startup in the RuntimeViewer.</summary>
         public string StartupScreen { get; set; } = "";
 
@@ -475,6 +482,47 @@ namespace SharedModels
 
         /// <summary>Seconds between drain attempts while the hub is connected. Default: 2.</summary>
         public int DrainIntervalSeconds { get; set; } = 2;
+    }
+
+    /// <summary>
+    /// External authentication (OAuth / OpenID Connect) configuration.
+    /// Enables social login buttons on the runtime viewer login screen.
+    /// </summary>
+    public class ExternalAuthConfig
+    {
+        /// <summary>Whether external authentication is enabled.</summary>
+        public bool Enabled { get; set; }
+
+        /// <summary>
+        /// The user group to assign to externally authenticated users who are
+        /// not pre-mapped in the Users list. Empty = deny unmapped users.
+        /// </summary>
+        public string DefaultGroup { get; set; } = "";
+
+        /// <summary>OAuth providers (Google, Microsoft, GitHub, Facebook).</summary>
+        public List<ExternalAuthProvider> Providers { get; set; } = new();
+    }
+
+    /// <summary>A single OAuth / OIDC external authentication provider.</summary>
+    public class ExternalAuthProvider
+    {
+        /// <summary>Provider name: "Google", "Microsoft", "GitHub", or "Facebook".</summary>
+        public string Name { get; set; } = "";
+
+        /// <summary>Whether this provider is enabled.</summary>
+        public bool Enabled { get; set; }
+
+        /// <summary>OAuth Client ID (from the provider's developer console).</summary>
+        public string ClientId { get; set; } = "";
+
+        /// <summary>OAuth Client Secret.</summary>
+        public string ClientSecret { get; set; } = "";
+
+        /// <summary>
+        /// Optional: restrict to specific email domains (comma-separated).
+        /// E.g. "mycompany.com,partner.org". Empty = allow all.
+        /// </summary>
+        public string AllowedDomains { get; set; } = "";
     }
 
     /// <summary>

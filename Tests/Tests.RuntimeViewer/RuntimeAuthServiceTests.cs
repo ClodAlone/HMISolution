@@ -239,4 +239,103 @@ public class RuntimeAuthServiceTests
 
         Assert.Equal(1, fired);
     }
+
+    // ─── External (OAuth) Login Tests ────────────────────────
+
+    private static ExternalAuthConfig CreateExternalAuthConfig(string defaultGroup = "Viewers") => new()
+    {
+        Enabled = true,
+        DefaultGroup = defaultGroup,
+        Providers = new()
+        {
+            new ExternalAuthProvider { Name = "Google", Enabled = true, ClientId = "id", ClientSecret = "secret" }
+        }
+    };
+
+    [Fact]
+    public void LoginExternal_MappedUser_Succeeds()
+    {
+        var auth = new RuntimeAuthService();
+        var users = CreateUsers();
+        var groups = CreateGroups();
+        // "admin" is in the user list
+        var (success, _) = auth.LoginExternal("admin", "Admin User", "Google", users, groups, CreateExternalAuthConfig());
+
+        Assert.True(success);
+        Assert.True(auth.IsAuthenticated);
+        Assert.Equal("admin", auth.Username);
+        Assert.Equal("Admins", auth.Group);
+    }
+
+    [Fact]
+    public void LoginExternal_UnmappedUser_UsesDefaultGroup()
+    {
+        var auth = new RuntimeAuthService();
+        var users = CreateUsers();
+        var groups = CreateGroups();
+        var (success, _) = auth.LoginExternal("newuser@example.com", "New User", "Google", users, groups, CreateExternalAuthConfig("Viewers"));
+
+        Assert.True(success);
+        Assert.True(auth.IsAuthenticated);
+        Assert.Equal("newuser@example.com", auth.Username);
+        Assert.Equal("Viewers", auth.Group);
+        Assert.Equal("Read", auth.AccessLevel);
+    }
+
+    [Fact]
+    public void LoginExternal_UnmappedUser_NoDefaultGroup_Denied()
+    {
+        var auth = new RuntimeAuthService();
+        var users = CreateUsers();
+        var groups = CreateGroups();
+        var (success, message) = auth.LoginExternal("unknown@example.com", "Unknown", "Google", users, groups, CreateExternalAuthConfig(""));
+
+        Assert.False(success);
+        Assert.False(auth.IsAuthenticated);
+        Assert.Contains("no default group", message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void LoginExternal_DomainRestriction_Allowed()
+    {
+        var auth = new RuntimeAuthService();
+        var cfg = CreateExternalAuthConfig();
+        cfg.Providers[0].AllowedDomains = "example.com, other.com";
+        var (success, _) = auth.LoginExternal("user@example.com", "User", "Google", CreateUsers(), CreateGroups(), cfg);
+
+        Assert.True(success);
+    }
+
+    [Fact]
+    public void LoginExternal_DomainRestriction_Denied()
+    {
+        var auth = new RuntimeAuthService();
+        var cfg = CreateExternalAuthConfig();
+        cfg.Providers[0].AllowedDomains = "mycompany.com";
+        var (success, message) = auth.LoginExternal("user@external.com", "User", "Google", CreateUsers(), CreateGroups(), cfg);
+
+        Assert.False(success);
+        Assert.Contains("not allowed", message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void LoginExternal_EmptyEmail_Fails()
+    {
+        var auth = new RuntimeAuthService();
+        var (success, _) = auth.LoginExternal("", "No Email", "Google", CreateUsers(), CreateGroups(), CreateExternalAuthConfig());
+
+        Assert.False(success);
+        Assert.False(auth.IsAuthenticated);
+    }
+
+    [Fact]
+    public void LoginExternal_GroupWithoutRuntimeAccess_Denied()
+    {
+        var auth = new RuntimeAuthService();
+        var cfg = CreateExternalAuthConfig("NoRuntime");
+        var (success, message) = auth.LoginExternal("random@test.com", "Random", "Google", CreateUsers(), CreateGroups(), cfg);
+
+        Assert.False(success);
+        Assert.Contains("runtime viewer access", message, StringComparison.OrdinalIgnoreCase);
+    }
 }

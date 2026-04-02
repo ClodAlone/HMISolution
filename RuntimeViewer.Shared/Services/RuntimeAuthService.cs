@@ -101,6 +101,76 @@ public class RuntimeAuthService
     }
 
     /// <summary>
+    /// Authenticate an external (OAuth) user. Looks up the email in the local user list.
+    /// If not found and a default group is configured, creates a transient session.
+    /// </summary>
+    public (bool Success, string Message) LoginExternal(
+        string email, string displayName, string provider,
+        List<UserConfig> users, List<UserGroupConfig> groups,
+        ExternalAuthConfig authConfig)
+    {
+        if (string.IsNullOrWhiteSpace(email))
+            return (false, "External login did not provide an email address.");
+
+        // Check domain restriction on the provider
+        var provCfg = authConfig.Providers.FirstOrDefault(p =>
+            p.Name.Equals(provider, StringComparison.OrdinalIgnoreCase) && p.Enabled);
+        if (provCfg != null && !string.IsNullOrWhiteSpace(provCfg.AllowedDomains))
+        {
+            var domain = email.Contains('@') ? email.Split('@')[1] : "";
+            var allowed = provCfg.AllowedDomains
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (!allowed.Any(d => d.Equals(domain, StringComparison.OrdinalIgnoreCase)))
+                return (false, $"Email domain '{domain}' is not allowed for {provider} login.");
+        }
+
+        // Try to match to an existing local user by username (email)
+        var user = users.FirstOrDefault(u =>
+            u.Username.Equals(email, StringComparison.OrdinalIgnoreCase));
+
+        if (user != null)
+        {
+            var group = groups.FirstOrDefault(g =>
+                g.Name.Equals(user.Group, StringComparison.OrdinalIgnoreCase));
+            if (group == null)
+                return (false, $"User group '{user.Group}' not found.");
+            if (!group.CanAccessRuntime)
+                return (false, "Your user group does not have runtime viewer access.");
+
+            IsAuthenticated = true;
+            Username = user.Username;
+            Group = user.Group;
+            AccessLevel = group.AccessLevel;
+            AutoLogOffSeconds = user.AutoLogOffSeconds;
+            MustChangePassword = false;
+            _currentUserConfig = user;
+            StateChanged?.Invoke();
+            return (true, $"Welcome, {displayName}!");
+        }
+
+        // No local user — use default group if configured
+        if (string.IsNullOrWhiteSpace(authConfig.DefaultGroup))
+            return (false, $"No local account found for '{email}' and no default group is configured.");
+
+        var defaultGroup = groups.FirstOrDefault(g =>
+            g.Name.Equals(authConfig.DefaultGroup, StringComparison.OrdinalIgnoreCase));
+        if (defaultGroup == null)
+            return (false, $"Default group '{authConfig.DefaultGroup}' not found.");
+        if (!defaultGroup.CanAccessRuntime)
+            return (false, "The default group does not have runtime viewer access.");
+
+        IsAuthenticated = true;
+        Username = email;
+        Group = defaultGroup.Name;
+        AccessLevel = defaultGroup.AccessLevel;
+        AutoLogOffSeconds = 0;
+        MustChangePassword = false;
+        _currentUserConfig = null; // transient — not in the local user list
+        StateChanged?.Invoke();
+        return (true, $"Welcome, {displayName}!");
+    }
+
+    /// <summary>
     /// Change the current user's password. Returns (success, message).
     /// </summary>
     public (bool Success, string Message) ChangePassword(string currentPassword, string newPassword, string confirmPassword, bool requireStrong = false)
