@@ -1279,6 +1279,7 @@ namespace SimpleOpcFileServer
                 "READINT" => (double)(long)ToDouble(nodeManager.ReadVariable(evaluated.FirstOrDefault()?.ToString() ?? "")),
                 "WRITE" => EvalWrite(evaluated, nodeManager),
                 "RANDOM" => Random.Shared.NextDouble(),
+                "PID" => EvalPid(evaluated),
                 _ => throw new InvalidOperationException($"Unknown function: {name}")
             };
         }
@@ -1289,6 +1290,50 @@ namespace SimpleOpcFileServer
             var value = evaluated.ElementAtOrDefault(1);
             nodeManager.WriteVariable(path, value ?? 0.0);
             return null;
+        }
+
+        // ─── PID Function Block State ──────────────────────────
+        // PID(instanceName, pv, sp, kp, ki, kd, outMin, outMax)
+        // Returns the clamped PID output. State (integral, prevError) persists by instanceName.
+        private static readonly ConcurrentDictionary<string, (double integral, double prevError)> _pidStates = new();
+
+        private static object? EvalPid(List<object?> evaluated)
+        {
+            // Args: instanceName, pv, sp, kp, ki, kd, outMin, outMax
+            var name = evaluated.ElementAtOrDefault(0)?.ToString() ?? "pid0";
+            double pv     = ToDouble(evaluated.ElementAtOrDefault(1));
+            double sp     = ToDouble(evaluated.ElementAtOrDefault(2));
+            double kp     = ToDouble(evaluated.ElementAtOrDefault(3));
+            double ki     = ToDouble(evaluated.ElementAtOrDefault(4));
+            double kd     = ToDouble(evaluated.ElementAtOrDefault(5));
+            double outMin = evaluated.Count > 6 ? ToDouble(evaluated.ElementAtOrDefault(6)) : 0.0;
+            double outMax = evaluated.Count > 7 ? ToDouble(evaluated.ElementAtOrDefault(7)) : 100.0;
+
+            var state = _pidStates.GetOrAdd(name, _ => (0.0, 0.0));
+
+            double error = sp - pv;
+
+            // Integral with anti-windup
+            double integral = state.integral + error;
+            if (ki != 0)
+            {
+                if (integral * ki > outMax) integral = outMax / ki;
+                if (integral * ki < outMin) integral = outMin / ki;
+            }
+
+            // Derivative
+            double derivative = error - state.prevError;
+
+            // Output
+            double output = kp * error + ki * integral + kd * derivative;
+
+            // Clamp
+            if (output > outMax) output = outMax;
+            if (output < outMin) output = outMin;
+
+            _pidStates[name] = (integral, error);
+
+            return output;
         }
 
         /// <summary>
@@ -1629,7 +1674,7 @@ namespace SimpleOpcFileServer
 
     internal class LdElement
     {
-        public string Type { get; set; } = "";  // CONTACT, COIL, COIL_S, COIL_R, COMPARE, MOVE, ADD, SUB, MUL, DIV, TIMER, COUNTER
+        public string Type { get; set; } = "";  // CONTACT, COIL, COIL_S, COIL_R, COMPARE, MOVE, ADD, SUB, MUL, DIV, TIMER, COUNTER, PID
         public string Modifier { get; set; } = ""; // NO, NC for contacts; GT, LT, GE, LE, EQ, NE for compare
         public string Operand1 { get; set; } = "";
         public string Operand2 { get; set; } = "";
@@ -1750,6 +1795,22 @@ namespace SimpleOpcFileServer
                         });
                         break;
 
+                    case "PID":
+                        // PID pvVar spVar outVar kp ki kd [outMin outMax]
+                        if (currentRung == null) throw new InvalidOperationException("PID outside RUNG at line " + lineNum);
+                        if (parts.Length < 7) throw new InvalidOperationException($"PID requires pvVar spVar outVar kp ki kd at line {lineNum}");
+                        // Pack all params into Operand1 (semicolon-separated) and output var into Operand2
+                        // Operand1 = "pvVar;spVar;kp;ki;kd;outMin;outMax", Operand2 = outVar
+                        var pidOutMin = parts.Length > 7 ? parts[7] : "0";
+                        var pidOutMax = parts.Length > 8 ? parts[8] : "100";
+                        currentRung.Elements.Add(new LdElement
+                        {
+                            Type = "PID",
+                            Operand1 = $"{parts[1]};{parts[2]};{parts[4]};{parts[5]};{parts[6]};{pidOutMin};{pidOutMax}",
+                            Operand2 = parts[3]
+                        });
+                        break;
+
                     default:
                         throw new InvalidOperationException($"Unknown ladder element '{keyword}' at line {lineNum}");
                 }
@@ -1764,9 +1825,10 @@ namespace SimpleOpcFileServer
 
     internal static class LdInterpreter
     {
-        // Timer/counter state persists across cycles
+        // Timer/counter/PID state persists across cycles
         private static readonly ConcurrentDictionary<string, (DateTime startTime, bool running, bool done)> _timers = new();
         private static readonly ConcurrentDictionary<string, (int count, bool prevRung)> _counters = new();
+        private static readonly ConcurrentDictionary<string, (double integral, double prevError)> _pidStates = new();
 
         public static void Execute(LdProgram program, SimpleFileServerNodeManager nodeManager)
         {
@@ -1902,6 +1964,41 @@ namespace SimpleOpcFileServer
                             bool done = count >= preset;
                             WriteValue(key, done ? 1.0 : 0.0, nodeManager);
                             rungState = done;
+                            break;
+                        }
+
+                        case "PID":
+                        {
+                            // PID block: Operand1 = "pvVar;spVar;kp;ki;kd;outMin;outMax", Operand2 = outVar
+                            if (rungState)
+                            {
+                                var pidParts = elem.Operand1.Split(';');
+                                double pv     = ReadValue(pidParts[0], nodeManager);
+                                double sp     = ParseNumericOrRead(pidParts[1], nodeManager);
+                                double kp     = double.Parse(pidParts[2], System.Globalization.CultureInfo.InvariantCulture);
+                                double ki     = double.Parse(pidParts[3], System.Globalization.CultureInfo.InvariantCulture);
+                                double kd     = double.Parse(pidParts[4], System.Globalization.CultureInfo.InvariantCulture);
+                                double outMin = pidParts.Length > 5 ? double.Parse(pidParts[5], System.Globalization.CultureInfo.InvariantCulture) : 0;
+                                double outMax = pidParts.Length > 6 ? double.Parse(pidParts[6], System.Globalization.CultureInfo.InvariantCulture) : 100;
+
+                                var pidKey = elem.Operand2;
+                                var pidState = _pidStates.GetOrAdd(pidKey, _ => (0.0, 0.0));
+
+                                double error = sp - pv;
+                                double integral = pidState.integral + error;
+                                if (ki != 0)
+                                {
+                                    if (integral * ki > outMax) integral = outMax / ki;
+                                    if (integral * ki < outMin) integral = outMin / ki;
+                                }
+                                double derivative = error - pidState.prevError;
+                                double output = kp * error + ki * integral + kd * derivative;
+                                if (output > outMax) output = outMax;
+                                if (output < outMin) output = outMin;
+
+                                _pidStates[pidKey] = (integral, error);
+                                WriteValue(pidKey, output, nodeManager);
+                            }
                             break;
                         }
                     }

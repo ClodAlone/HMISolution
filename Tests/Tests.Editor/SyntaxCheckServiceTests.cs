@@ -408,6 +408,48 @@ public class SyntaxCheckServiceTests
     }
 
     [Fact]
+    public void CheckPlcSyntax_ValidLd_Pid()
+    {
+        var svc = CreateService();
+        var code = """
+            RUNG
+            PID Plant.Temp Plant.Setpoint Plant.HeaterOutput 1.5 0.3 0.1 0 100
+            END_RUNG
+            """;
+        var (ok, _) = svc.CheckPlcSyntax(code, "LD");
+        Assert.True(ok);
+    }
+
+    [Fact]
+    public void CheckPlcSyntax_InvalidLd_PidMissingArgs()
+    {
+        var svc = CreateService();
+        var code = """
+            RUNG
+            PID Plant.Temp Plant.Setpoint
+            END_RUNG
+            """;
+        var (ok, msg) = svc.CheckPlcSyntax(code, "LD");
+        Assert.False(ok);
+        Assert.Contains("PID requires", msg);
+    }
+
+    [Fact]
+    public void CheckPlcSyntax_ValidSt_PidFunction()
+    {
+        var svc = CreateService();
+        var code = """
+            VAR
+              output : REAL;
+            END_VAR
+            output := PID('loop1', Read('Plant.Temp'), 50.0, 1.5, 0.3, 0.1, 0, 100);
+            Write('Plant.Output', output);
+            """;
+        var (ok, _) = svc.CheckPlcSyntax(code, "ST");
+        Assert.True(ok);
+    }
+
+    [Fact]
     public void CheckPlcSyntax_ValidLd_Comments()
     {
         var svc = CreateService();

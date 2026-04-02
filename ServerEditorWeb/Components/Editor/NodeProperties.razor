@@ -254,6 +254,146 @@ else if (Node is PlcProgramNode plcNode)
                 <strong>PLC Editor</strong> panel to edit code with syntax checking and live debug annotations.
             </div>
         }
+
+        @* ── PID Auto-Tune Wizard ── *@
+        @if (plcNode.PlcProgram.Language.Equals("ST", StringComparison.OrdinalIgnoreCase))
+        {
+            <hr />
+            <h6>🎛️ PID Auto-Tune Wizard</h6>
+            <div class="form-text mb-2">
+                Automatically compute PID gains (Kp, Ki, Kd) using relay feedback, then generate
+                Structured Text code for the tuned controller.
+            </div>
+            <div class="mb-2 form-check">
+                <input class="form-check-input" type="checkbox"
+                       checked="@(plcNode.PlcProgram.PidAutoTune != null)"
+                       @onchange="(e) => { if ((bool)(e.Value ?? false)) plcNode.PlcProgram.PidAutoTune ??= new PidAutoTuneConfig(); else plcNode.PlcProgram.PidAutoTune = null; OnChanged(); }" />
+                <label class="form-check-label">Enable PID Auto-Tune</label>
+            </div>
+            @if (plcNode.PlcProgram.PidAutoTune is { } pidCfg)
+            {
+                <div class="card p-2 mb-2">
+                    <h6 class="small mb-2">Step 1 — Process Variables</h6>
+                    <div class="mb-1">
+                        <label class="form-label mb-0 small">Process Variable (PV) Path</label>
+                        <input type="text" class="form-control form-control-sm"
+                               @bind="pidCfg.ProcessVariablePath" @bind:after="OnChanged"
+                               placeholder="e.g. Plant.Furnace.Temperature" />
+                        <div class="form-text">OPC variable path of the sensor reading.</div>
+                    </div>
+                    <div class="mb-1">
+                        <label class="form-label mb-0 small">Output Path</label>
+                        <input type="text" class="form-control form-control-sm"
+                               @bind="pidCfg.OutputPath" @bind:after="OnChanged"
+                               placeholder="e.g. Plant.Furnace.HeaterPower" />
+                        <div class="form-text">OPC variable path for the controller output (actuator).</div>
+                    </div>
+                    <div class="mb-1">
+                        <label class="form-label mb-0 small">Setpoint Path (optional)</label>
+                        <input type="text" class="form-control form-control-sm"
+                               @bind="pidCfg.SetpointPath" @bind:after="OnChanged"
+                               placeholder="Leave empty to use constant below" />
+                    </div>
+                    <div class="row g-2 mb-1">
+                        <div class="col-6">
+                            <label class="form-label mb-0 small">Setpoint Value</label>
+                            <input type="number" step="0.1" class="form-control form-control-sm"
+                                   @bind="pidCfg.Setpoint" @bind:after="OnChanged" />
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label mb-0 small">PID Type</label>
+                            <select class="form-select form-select-sm" @bind="pidCfg.PidType" @bind:after="OnChanged">
+                                <option value="P">P (Proportional only)</option>
+                                <option value="PI">PI (Proportional + Integral)</option>
+                                <option value="PID">PID (Full)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <h6 class="small mt-2 mb-2">Step 2 — Relay Experiment Parameters</h6>
+                    <div class="row g-2 mb-1">
+                        <div class="col-4">
+                            <label class="form-label mb-0 small">Relay Amplitude</label>
+                            <input type="number" step="0.1" class="form-control form-control-sm"
+                                   @bind="pidCfg.RelayAmplitude" @bind:after="OnChanged" />
+                            <div class="form-text">Half-amplitude of relay output.</div>
+                        </div>
+                        <div class="col-4">
+                            <label class="form-label mb-0 small">Output Bias</label>
+                            <input type="number" step="0.1" class="form-control form-control-sm"
+                                   @bind="pidCfg.OutputBias" @bind:after="OnChanged" />
+                            <div class="form-text">Steady-state center output.</div>
+                        </div>
+                        <div class="col-4">
+                            <label class="form-label mb-0 small">Hysteresis</label>
+                            <input type="number" step="0.01" class="form-control form-control-sm"
+                                   @bind="pidCfg.Hysteresis" @bind:after="OnChanged" />
+                        </div>
+                    </div>
+                    <div class="row g-2 mb-1">
+                        <div class="col-6">
+                            <label class="form-label mb-0 small">Output Min</label>
+                            <input type="number" step="0.1" class="form-control form-control-sm"
+                                   @bind="pidCfg.OutputMin" @bind:after="OnChanged" />
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label mb-0 small">Output Max</label>
+                            <input type="number" step="0.1" class="form-control form-control-sm"
+                                   @bind="pidCfg.OutputMax" @bind:after="OnChanged" />
+                        </div>
+                    </div>
+
+                    <h6 class="small mt-2 mb-2">Step 3 — Compute Gains</h6>
+                    <div class="form-text mb-2">
+                        Click <strong>Calculate (Offline)</strong> to compute gains from manually observed oscillation data,
+                        or fill the fields above and use the server's live auto-tune endpoint at runtime.
+                    </div>
+                    <div class="row g-2 mb-2">
+                        <div class="col-4">
+                            <label class="form-label mb-0 small">Ultimate Gain (Ku)</label>
+                            <input type="number" step="0.001" class="form-control form-control-sm" @bind="_pidKu" />
+                        </div>
+                        <div class="col-4">
+                            <label class="form-label mb-0 small">Ultimate Period (Pu, sec)</label>
+                            <input type="number" step="0.01" class="form-control form-control-sm" @bind="_pidPu" />
+                        </div>
+                        <div class="col-4">
+                            <label class="form-label mb-0 small">Osc. Amplitude</label>
+                            <input type="number" step="0.01" class="form-control form-control-sm" @bind="_pidAmplitude" />
+                        </div>
+                    </div>
+                    <button class="btn btn-sm btn-primary mb-2"
+                            disabled="@(_pidKu <= 0 || _pidPu <= 0 || _pidAmplitude <= 0)"
+                            @onclick="() => ComputePidGains(plcNode)">
+                        🧮 Calculate (Ziegler–Nichols)
+                    </button>
+
+                    @if (!string.IsNullOrEmpty(_pidResultMessage))
+                    {
+                        <div class="alert @(_pidResultSuccess ? "alert-success" : "alert-danger") small py-1 px-2">
+                            @_pidResultMessage
+                        </div>
+                    }
+
+                    @if (pidCfg.LastKp > 0)
+                    {
+                        <h6 class="small mt-2 mb-1">Computed Gains</h6>
+                        <div class="d-flex gap-3 small mb-2">
+                            <span><strong>Kp</strong> = @pidCfg.LastKp</span>
+                            <span><strong>Ki</strong> = @pidCfg.LastKi</span>
+                            <span><strong>Kd</strong> = @pidCfg.LastKd</span>
+                        </div>
+                        <button class="btn btn-sm btn-outline-success"
+                                @onclick="() => GeneratePidCode(plcNode)">
+                            📝 Generate ST Code &amp; Apply
+                        </button>
+                        <div class="form-text mt-1">
+                            Replaces the PLC program code with a tuned PID controller. Paths marked <code>TODO_</code> must be updated.
+                        </div>
+                    }
+                </div>
+            }
+        }
     </div>
 }
 else if (Node is PlcGroupNode)
@@ -2137,6 +2277,13 @@ else if (Node is UserNode uNode)
     // External auth provider add
     private string _newExternalProvider = "";
 
+    // PID auto-tune wizard
+    private double _pidKu;
+    private double _pidPu;
+    private double _pidAmplitude;
+    private string _pidResultMessage = "";
+    private bool _pidResultSuccess;
+
     protected override void OnInitialized()
     {
         L.LocaleChanged += OnLocaleChanged;
@@ -2370,6 +2517,67 @@ else if (Node is UserNode uNode)
         if (cfg.Providers.Any(p => p.Name == _newExternalProvider)) return;
         cfg.Providers.Add(new ExternalAuthProvider { Name = _newExternalProvider, Enabled = true });
         _newExternalProvider = "";
+        OnChanged();
+    }
+
+    private void ComputePidGains(PlcProgramNode plcNode)
+    {
+        _pidResultMessage = "";
+        _pidResultSuccess = false;
+
+        var pidCfg = plcNode.PlcProgram.PidAutoTune;
+        if (pidCfg == null) return;
+
+        var result = PidAutoTuner.ComputeGains(_pidKu, _pidPu, _pidAmplitude, 0, pidCfg.PidType);
+        if (result.Success)
+        {
+            pidCfg.LastKp = result.Kp;
+            pidCfg.LastKi = result.Ki;
+            pidCfg.LastKd = result.Kd;
+            _pidResultMessage = $"Gains computed — Kp={result.Kp}, Ki={result.Ki}, Kd={result.Kd}";
+            _pidResultSuccess = true;
+            OnChanged();
+        }
+        else
+        {
+            _pidResultMessage = result.Message;
+        }
+    }
+
+    private void GeneratePidCode(PlcProgramNode plcNode)
+    {
+        var pidCfg = plcNode.PlcProgram.PidAutoTune;
+        if (pidCfg == null) return;
+
+        var result = new PidAutoTuner.TuneResult
+        {
+            Kp = pidCfg.LastKp,
+            Ki = pidCfg.LastKi,
+            Kd = pidCfg.LastKd,
+            UltimateGain = _pidKu,
+            UltimatePeriod = _pidPu
+        };
+
+        var code = PidAutoTuner.GenerateStCode(result, pidCfg.PidType);
+
+        // Replace placeholder paths with configured paths
+        if (!string.IsNullOrEmpty(pidCfg.SetpointPath))
+            code = code.Replace("Read('TODO_SETPOINT_PATH')", $"Read('{pidCfg.SetpointPath}')");
+        else
+            code = code.Replace("Read('TODO_SETPOINT_PATH')", pidCfg.Setpoint.ToString(System.Globalization.CultureInfo.InvariantCulture));
+
+        if (!string.IsNullOrEmpty(pidCfg.ProcessVariablePath))
+            code = code.Replace("Read('TODO_PV_PATH')", $"Read('{pidCfg.ProcessVariablePath}')");
+
+        if (!string.IsNullOrEmpty(pidCfg.OutputPath))
+            code = code.Replace("Write('TODO_OUTPUT_PATH'", $"Write('{pidCfg.OutputPath}'");
+
+        code = code.Replace("OutMin : REAL := 0.0;", $"OutMin : REAL := {pidCfg.OutputMin.ToString(System.Globalization.CultureInfo.InvariantCulture)};");
+        code = code.Replace("OutMax : REAL := 100.0;", $"OutMax : REAL := {pidCfg.OutputMax.ToString(System.Globalization.CultureInfo.InvariantCulture)};");
+
+        plcNode.PlcProgram.Code = code;
+        _pidResultMessage = "ST code generated and applied to the PLC program.";
+        _pidResultSuccess = true;
         OnChanged();
     }
 

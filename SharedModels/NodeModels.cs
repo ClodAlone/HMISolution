@@ -274,6 +274,55 @@ namespace SharedModels
 
         /// <summary>Optional folder path for editor organization (e.g. "Motion/Axis1"). Ignored by the server.</summary>
         public string Group { get; set; } = "";
+
+        /// <summary>PID auto-tune wizard configuration and last results. Null if not used.</summary>
+        public PidAutoTuneConfig? PidAutoTune { get; set; }
+    }
+
+    /// <summary>
+    /// Configuration for a PID auto-tune experiment stored alongside a PLC program.
+    /// Populated by the auto-tune wizard in the editor and used to generate ST code.
+    /// </summary>
+    public class PidAutoTuneConfig
+    {
+        /// <summary>OPC variable path for the process variable (sensor reading).</summary>
+        public string ProcessVariablePath { get; set; } = "";
+
+        /// <summary>OPC variable path for the controller output (actuator).</summary>
+        public string OutputPath { get; set; } = "";
+
+        /// <summary>OPC variable path for the setpoint. Optional — can be a constant.</summary>
+        public string SetpointPath { get; set; } = "";
+
+        /// <summary>Setpoint value (used when SetpointPath is empty).</summary>
+        public double Setpoint { get; set; } = 50;
+
+        /// <summary>Relay half-amplitude for the experiment.</summary>
+        public double RelayAmplitude { get; set; } = 10;
+
+        /// <summary>Output bias (steady-state output).</summary>
+        public double OutputBias { get; set; } = 50;
+
+        /// <summary>Hysteresis band.</summary>
+        public double Hysteresis { get; set; } = 0.5;
+
+        /// <summary>PID type: "P", "PI", or "PID".</summary>
+        public string PidType { get; set; } = "PID";
+
+        /// <summary>Output range minimum.</summary>
+        public double OutputMin { get; set; }
+
+        /// <summary>Output range maximum.</summary>
+        public double OutputMax { get; set; } = 100;
+
+        /// <summary>Last computed Kp.</summary>
+        public double LastKp { get; set; }
+
+        /// <summary>Last computed Ki.</summary>
+        public double LastKi { get; set; }
+
+        /// <summary>Last computed Kd.</summary>
+        public double LastKd { get; set; }
     }
 
     /// <summary>

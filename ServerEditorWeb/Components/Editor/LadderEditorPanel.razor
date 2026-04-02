@@ -31,6 +31,7 @@
                 <button class="btn btn-sm btn-outline-info" @onclick='() => AddElementToSelected("SUB")' title="Subtract Block" disabled="@(_selectedRungIndex < 0)">⟨SUB⟩</button>
                 <button class="btn btn-sm btn-outline-info" @onclick='() => AddElementToSelected("TIMER")' title="TON Timer" disabled="@(_selectedRungIndex < 0)">⏱ Timer</button>
                 <button class="btn btn-sm btn-outline-info" @onclick='() => AddElementToSelected("COUNTER")' title="CTU Counter" disabled="@(_selectedRungIndex < 0)"># Counter</button>
+                <button class="btn btn-sm btn-outline-info" @onclick='() => AddElementToSelected("PID")' title="PID Controller Block" disabled="@(_selectedRungIndex < 0)">🎛 PID</button>
                 <span class="mx-1">|</span>
                 <button class="btn btn-sm btn-outline-danger" @onclick="DeleteSelected" title="Delete Selected" disabled="@(_selectedRungIndex < 0)">🗑 Delete</button>
             </div>
@@ -145,6 +146,58 @@
                                @onchange="e => { selElem.Operand2 = e.Value?.ToString() ?? string.Empty; SyncToCode(); }"
                                placeholder="e.g. 5000" />
                     </div>
+                }
+                else if (selElem.Type == "PID")
+                {
+                    var pidParts = GetPidParams(selElem);
+                    <div class="mb-2">
+                        <label class="form-label form-label-sm">Process Variable (PV)</label>
+                        <input type="text" class="form-control form-control-sm" value="@pidParts[0]"
+                               @onchange="e => { SetPidParam(selElem, 0, e.Value?.ToString()); SyncToCode(); }"
+                               placeholder="e.g. Plant.Furnace.Temperature" />
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label form-label-sm">Setpoint (SP)</label>
+                        <input type="text" class="form-control form-control-sm" value="@pidParts[1]"
+                               @onchange="e => { SetPidParam(selElem, 1, e.Value?.ToString()); SyncToCode(); }"
+                               placeholder="Variable path or constant" />
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label form-label-sm">Output Variable</label>
+                        <input type="text" class="form-control form-control-sm" value="@selElem.Operand2"
+                               @onchange="e => { selElem.Operand2 = e.Value?.ToString() ?? string.Empty; SyncToCode(); }"
+                               placeholder="e.g. Plant.Furnace.HeaterPower" />
+                    </div>
+                    <div class="row g-1 mb-2">
+                        <div class="col-4">
+                            <label class="form-label form-label-sm">Kp</label>
+                            <input type="text" class="form-control form-control-sm" value="@pidParts[2]"
+                                   @onchange="e => { SetPidParam(selElem, 2, e.Value?.ToString()); SyncToCode(); }" />
+                        </div>
+                        <div class="col-4">
+                            <label class="form-label form-label-sm">Ki</label>
+                            <input type="text" class="form-control form-control-sm" value="@pidParts[3]"
+                                   @onchange="e => { SetPidParam(selElem, 3, e.Value?.ToString()); SyncToCode(); }" />
+                        </div>
+                        <div class="col-4">
+                            <label class="form-label form-label-sm">Kd</label>
+                            <input type="text" class="form-control form-control-sm" value="@pidParts[4]"
+                                   @onchange="e => { SetPidParam(selElem, 4, e.Value?.ToString()); SyncToCode(); }" />
+                        </div>
+                    </div>
+                    <div class="row g-1 mb-2">
+                        <div class="col-6">
+                            <label class="form-label form-label-sm">Out Min</label>
+                            <input type="text" class="form-control form-control-sm" value="@pidParts[5]"
+                                   @onchange="e => { SetPidParam(selElem, 5, e.Value?.ToString()); SyncToCode(); }" />
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label form-label-sm">Out Max</label>
+                            <input type="text" class="form-control form-control-sm" value="@pidParts[6]"
+                                   @onchange="e => { SetPidParam(selElem, 6, e.Value?.ToString()); SyncToCode(); }" />
+                        </div>
+                    </div>
+                    <div class="form-text">Runs a PID controller each scan cycle. Integral accumulates; derivative uses error delta.</div>
                 }
 
                 <button class="btn btn-sm btn-outline-danger mt-1" @onclick="DeleteSelectedElement">🗑 Delete Element</button>
@@ -505,6 +558,20 @@
                     case "TIMER" or "COUNTER":
                         sb.AppendLine($"{elem.Type} {elem.Operand1} {elem.Operand2}");
                         break;
+                    case "PID":
+                        {
+                            // Reconstruct: PID pvVar spVar outVar kp ki kd outMin outMax
+                            var pp = (elem.Operand1 ?? ";;0;0;0;0;100").Split(';');
+                            var pv = pp.ElementAtOrDefault(0) ?? "";
+                            var sp = pp.ElementAtOrDefault(1) ?? "";
+                            var kp = pp.ElementAtOrDefault(2) ?? "0";
+                            var ki = pp.ElementAtOrDefault(3) ?? "0";
+                            var kd = pp.ElementAtOrDefault(4) ?? "0";
+                            var oMin = pp.ElementAtOrDefault(5) ?? "0";
+                            var oMax = pp.ElementAtOrDefault(6) ?? "100";
+                            sb.AppendLine($"PID {pv} {sp} {elem.Operand2} {kp} {ki} {kd} {oMin} {oMax}");
+                        }
+                        break;
                 }
             }
             sb.AppendLine("END_RUNG");
@@ -573,6 +640,10 @@
                 elem.Operand1 = "CounterVar";
                 elem.Operand2 = "10";
                 break;
+            case "PID":
+                elem.Operand1 = "PV_Variable;SP_Variable;1.0;0.1;0.05;0;100";
+                elem.Operand2 = "Output_Variable";
+                break;
         }
 
         // Insert contacts/comparisons before output elements
@@ -581,7 +652,7 @@
         {
             for (int i = 0; i < rung.Elements.Count; i++)
             {
-                if (rung.Elements[i].Type is "COIL" or "COIL_S" or "COIL_R" or "MOVE" or "ADD" or "SUB" or "MUL" or "DIV" or "TIMER" or "COUNTER")
+                if (rung.Elements[i].Type is "COIL" or "COIL_S" or "COIL_R" or "MOVE" or "ADD" or "SUB" or "MUL" or "DIV" or "TIMER" or "COUNTER" or "PID")
                 {
                     insertIdx = i;
                     break;
@@ -683,6 +754,28 @@
         "DIV" => "Divide",
         "TIMER" => "TON Timer",
         "COUNTER" => "CTU Counter",
+        "PID" => "PID Controller",
         _ => type
     };
+
+    /// <summary>Update a semicolon-delimited parameter inside a PID element's Operand1.</summary>
+    private static void SetPidParam(LdElementModel elem, int index, string? value)
+    {
+        var parts = (elem.Operand1 ?? ";;0;0;0;0;100").Split(';');
+        // Ensure enough entries
+        while (parts.Length <= index)
+            parts = parts.Concat(new[] { "" }).ToArray();
+        parts[index] = value ?? "";
+        elem.Operand1 = string.Join(";", parts);
+    }
+
+    /// <summary>Get PID params as a 7-element string array from Operand1.</summary>
+    private static string[] GetPidParams(LdElementModel elem)
+    {
+        var parts = (elem.Operand1 ?? ";;0;0;0;0;100").Split(';');
+        var result = new string[7];
+        for (int i = 0; i < 7; i++)
+            result[i] = parts.ElementAtOrDefault(i) ?? (i >= 2 ? "0" : "");
+        return result;
+    }
 }

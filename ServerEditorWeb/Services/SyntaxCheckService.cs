@@ -562,7 +562,7 @@ internal static class LdSyntaxChecker
     private static readonly HashSet<string> _validElements = new(StringComparer.OrdinalIgnoreCase)
     {
         "CONTACT", "COIL", "COIL_S", "COIL_R", "COMPARE",
-        "MOVE", "ADD", "SUB", "MUL", "DIV", "TIMER", "COUNTER"
+        "MOVE", "ADD", "SUB", "MUL", "DIV", "TIMER", "COUNTER", "PID"
     };
 
     public static void Parse(string code)
@@ -639,6 +639,11 @@ internal static class LdSyntaxChecker
                 case "TIMER" or "COUNTER":
                     if (!inRung) throw new InvalidOperationException($"{keyword} outside RUNG at line {lineNum}");
                     if (parts.Length < 3) throw new InvalidOperationException($"{keyword} requires variable and preset at line {lineNum}");
+                    break;
+
+                case "PID":
+                    if (!inRung) throw new InvalidOperationException($"PID outside RUNG at line {lineNum}");
+                    if (parts.Length < 7) throw new InvalidOperationException($"PID requires pvVar spVar outVar kp ki kd at line {lineNum}");
                     break;
 
                 default:
