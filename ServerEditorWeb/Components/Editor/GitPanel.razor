@@ -6,7 +6,11 @@
 
     @if (!_gitService.IsGitRepository())
     {
-        <button class="btn btn-sm btn-outline-primary mb-2" @onclick="InitRepo">Initialize Git Repository</button>
+        <button class="btn btn-sm btn-outline-primary mb-2" @onclick="InitRepo" disabled="@_busy">Initialize Git Repository</button>
+    }
+    else if (!string.IsNullOrEmpty(_currentBranch))
+    {
+        <div class="mb-2 small"><strong>Branch:</strong> @_currentBranch &nbsp; <strong>Remote:</strong> @(string.IsNullOrEmpty(_remoteUrl) ? "(not set)" : _remoteUrl)</div>
     }
 
     <div class="mb-2">
@@ -18,7 +22,7 @@
         <input type="email" class="form-control form-control-sm" @bind="_userEmail" />
     </div>
     <button class="btn btn-sm btn-outline-secondary mb-3" @onclick="ConfigureUser"
-            disabled="@(string.IsNullOrWhiteSpace(_userName) || string.IsNullOrWhiteSpace(_userEmail))">
+            disabled="@(_busy || string.IsNullOrWhiteSpace(_userName) || string.IsNullOrWhiteSpace(_userEmail))">
         Set Identity
     </button>
 
@@ -27,7 +31,7 @@
         <input type="text" class="form-control form-control-sm" @bind="_remoteUrl" />
     </div>
     <button class="btn btn-sm btn-outline-secondary mb-3" @onclick="SetRemote"
-            disabled="@string.IsNullOrWhiteSpace(_remoteUrl)">
+            disabled="@(_busy || string.IsNullOrWhiteSpace(_remoteUrl))">
         Set Remote Origin
     </button>
 
@@ -36,10 +40,21 @@
         <input type="text" class="form-control form-control-sm" @bind="CommitMessage" />
     </div>
     <div class="d-flex gap-2 flex-wrap mb-2">
-        <button class="btn btn-sm btn-primary" @onclick="CommitAndPush" disabled="@(!_gitService.IsGitRepository())">Commit & Push</button>
-        <button class="btn btn-sm btn-outline-secondary" @onclick="Pull" disabled="@(!_gitService.IsGitRepository())">Pull</button>
-        <button class="btn btn-sm btn-outline-secondary" @onclick="GetStatus" disabled="@(!_gitService.IsGitRepository())">Status</button>
+        <button class="btn btn-sm btn-primary" @onclick="CommitAndPush" disabled="@(_busy || !_gitService.IsGitRepository())">
+            @if (_busy && _busyAction == "commitpush") { <span>⏳ Pushing…</span> } else { <span>Commit &amp; Push</span> }
+        </button>
+        <button class="btn btn-sm btn-outline-secondary" @onclick="Pull" disabled="@(_busy || !_gitService.IsGitRepository())">
+            @if (_busy && _busyAction == "pull") { <span>⏳ Pulling…</span> } else { <span>Pull</span> }
+        </button>
+        <button class="btn btn-sm btn-outline-secondary" @onclick="GetStatus" disabled="@(_busy || !_gitService.IsGitRepository())">
+            @if (_busy && _busyAction == "status") { <span>⏳</span> } else { <span>Status</span> }
+        </button>
     </div>
+
+    @if (_busy)
+    {
+        <div class="small text-muted mb-2">⏳ @_busyLabel</div>
+    }
 
     @if (!string.IsNullOrEmpty(_result))
     {
@@ -63,8 +78,12 @@
     private string _userEmail = "";
     private string _remoteUrl = "";
     private string _result = "";
+    private string _currentBranch = "";
     private bool _configLoaded;
     private bool _copied;
+    private bool _busy;
+    private string _busyAction = "";
+    private string _busyLabel = "";
 
     protected override async Task OnParametersSetAsync()
     {
@@ -81,55 +100,96 @@
             _userName = await _gitService.GetConfigValueAsync("user.name");
             _userEmail = await _gitService.GetConfigValueAsync("user.email");
             _remoteUrl = await _gitService.GetRemoteUrlAsync();
+            _currentBranch = await _gitService.GetCurrentBranchAsync();
         }
     }
 
     private async Task InitRepo()
     {
-        _result = await _gitService.InitRepoAsync();
+        await RunBusy("init", "Initializing repository…", async () =>
+        {
+            _result = await _gitService.InitRepoAsync();
+        });
     }
 
     private async Task ConfigureUser()
     {
-        _result = await _gitService.SetUserIdentityAsync(_userName, _userEmail);
+        await RunBusy("identity", "Setting user identity…", async () =>
+        {
+            _result = await _gitService.SetUserIdentityAsync(_userName, _userEmail);
+        });
     }
 
     private async Task SetRemote()
     {
-        _result = await _gitService.SetRemoteOriginAsync(_remoteUrl);
+        await RunBusy("remote", "Setting remote origin…", async () =>
+        {
+            _result = await _gitService.SetRemoteOriginAsync(_remoteUrl);
+        });
     }
 
     private async Task CommitAndPush()
     {
         if (string.IsNullOrEmpty(NodesPath)) return;
 
-        // Build a path relative to the git repo root so `git add` finds the file.
-        var fullPath = Path.GetFullPath(NodesPath);
-        var repoRoot = _gitService.WorkingDirectory;
-        var relativePath = string.IsNullOrEmpty(repoRoot)
-            ? Path.GetFileName(NodesPath)
-            : Path.GetRelativePath(repoRoot, fullPath).Replace('\\', '/');
-
-        var msg = string.IsNullOrWhiteSpace(CommitMessage) ? "Update nodes.json" : CommitMessage;
-        _result = await _gitService.CommitChangesAsync(relativePath, msg);
-
-        var isError = _result.StartsWith("Error", StringComparison.OrdinalIgnoreCase)
-                   || _result.StartsWith("Git execution failed", StringComparison.OrdinalIgnoreCase);
-        if (!isError)
+        await RunBusy("commitpush", "Committing changes…", async () =>
         {
-            var pushResult = await _gitService.PushAsync();
-            _result += "\n" + pushResult;
-        }
+            var fullPath = Path.GetFullPath(NodesPath);
+            var repoRoot = _gitService.WorkingDirectory;
+            var relativePath = string.IsNullOrEmpty(repoRoot)
+                ? Path.GetFileName(NodesPath)
+                : Path.GetRelativePath(repoRoot, fullPath).Replace('\\', '/');
+
+            var msg = string.IsNullOrWhiteSpace(CommitMessage) ? "Update nodes.json" : CommitMessage;
+            _result = await _gitService.CommitChangesAsync(relativePath, msg);
+
+            var isError = _result.StartsWith("Error", StringComparison.OrdinalIgnoreCase)
+                       || _result.StartsWith("Git execution failed", StringComparison.OrdinalIgnoreCase);
+            if (!isError)
+            {
+                _busyLabel = "Pushing to remote…";
+                StateHasChanged();
+                var pushResult = await _gitService.PushAsync();
+                _result += "\n" + pushResult;
+            }
+        });
     }
 
     private async Task Pull()
     {
-        _result = await _gitService.PullAsync();
+        await RunBusy("pull", "Pulling from remote…", async () =>
+        {
+            _result = await _gitService.PullAsync();
+        });
     }
 
     private async Task GetStatus()
     {
-        _result = await _gitService.GetStatusAsync();
+        await RunBusy("status", "Fetching status…", async () =>
+        {
+            _result = await _gitService.GetStatusAsync();
+        });
+    }
+
+    private async Task RunBusy(string action, string label, Func<Task> work)
+    {
+        _busy = true;
+        _busyAction = action;
+        _busyLabel = label;
+        _result = "";
+        StateHasChanged();
+        await Task.Yield(); // let the UI update before the blocking work
+
+        try
+        {
+            await work();
+        }
+        finally
+        {
+            _busy = false;
+            _busyAction = "";
+            _busyLabel = "";
+        }
     }
 
     private async Task CopyResult()

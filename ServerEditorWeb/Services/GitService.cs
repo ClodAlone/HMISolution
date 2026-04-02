@@ -12,7 +12,6 @@ public class GitService
     public void SetWorkingDirectory(string dir)
     {
         // Walk up the directory tree to find the actual git repository root.
-        // This handles cases where the project dir is a subfolder of the repo.
         var d = dir;
         while (!string.IsNullOrEmpty(d))
         {
@@ -22,10 +21,9 @@ public class GitService
                 return;
             }
             var parent = Directory.GetParent(d)?.FullName;
-            if (parent == d) break; // root
+            if (parent == d) break;
             d = parent;
         }
-        // No .git found — use the original directory (init will create one here)
         _workingDir = dir;
     }
 
@@ -40,13 +38,12 @@ public class GitService
 
         try
         {
-            // Stage the specific file. If it's a bare filename and the repo root
-            // differs from the original project dir, resolve the relative path.
             await RunGitCommandAsync($"add \"{filePath}\"");
-
-            // Also stage any other tracked-but-modified files so the commit
-            // captures a complete snapshot (e.g. external script/screen files).
             await RunGitCommandAsync("add -u");
+
+            var status = await RunGitCommandAsync("diff --cached --stat");
+            if (string.IsNullOrWhiteSpace(status))
+                return "No changes to commit — files are up to date.";
 
             return await RunGitCommandAsync($"commit -m \"{message}\"");
         }
@@ -60,8 +57,12 @@ public class GitService
     {
         if (!IsGitRepository()) return "Not a git repository.";
 
-        // Always use --set-upstream to handle both first push and subsequent pushes.
-        // Git silently succeeds if upstream is already set.
+        var tracking = await RunGitCommandAsync("rev-parse --abbrev-ref @{upstream}");
+        if (!string.IsNullOrWhiteSpace(tracking) && !tracking.StartsWith("Git execution failed"))
+        {
+            return await RunGitCommandAsync("push");
+        }
+
         var branch = (await RunGitCommandAsync("rev-parse --abbrev-ref HEAD")).Trim();
         if (string.IsNullOrEmpty(branch) || branch.StartsWith("Git execution failed"))
             branch = "master";
@@ -91,21 +92,21 @@ public class GitService
     {
         if (!IsGitRepository()) return "Not a git repository.";
 
-        try
+        if (!url.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
+            !url.StartsWith("https://", StringComparison.OrdinalIgnoreCase) &&
+            !url.StartsWith("git@", StringComparison.OrdinalIgnoreCase) &&
+            !url.StartsWith("ssh://", StringComparison.OrdinalIgnoreCase) &&
+            !url.StartsWith("git://", StringComparison.OrdinalIgnoreCase))
         {
-            return await RunGitCommandAsync($"remote add origin \"{url}\"");
+            return "Error: Invalid remote URL. Please use a full URL (e.g. https://github.com/user/repo.git).";
         }
-        catch
+
+        var result = await RunGitCommandAsync($"remote set-url origin \"{url}\"");
+        if (result.StartsWith("Git execution failed", StringComparison.OrdinalIgnoreCase))
         {
-            try
-            {
-                return await RunGitCommandAsync($"remote set-url origin \"{url}\"");
-            }
-            catch (Exception ex)
-            {
-                return $"Error setting remote: {ex.Message}";
-            }
+            result = await RunGitCommandAsync($"remote add origin \"{url}\"");
         }
+        return string.IsNullOrWhiteSpace(result) ? "Remote origin set successfully." : result;
     }
 
     public async Task<string> PullAsync()
@@ -120,7 +121,6 @@ public class GitService
         return await RunGitCommandAsync("status");
     }
 
-    /// <summary>Reads the current git config user.name (local, then global).</summary>
     public async Task<string> GetConfigValueAsync(string key)
     {
         if (!IsGitRepository()) return "";
@@ -128,13 +128,9 @@ public class GitService
         {
             return (await RunGitCommandAsync($"config {key}")).Trim();
         }
-        catch
-        {
-            return "";
-        }
+        catch { return ""; }
     }
 
-    /// <summary>Reads the remote origin URL, or "" if not set.</summary>
     public async Task<string> GetRemoteUrlAsync()
     {
         if (!IsGitRepository()) return "";
@@ -142,16 +138,19 @@ public class GitService
         {
             return (await RunGitCommandAsync("remote get-url origin")).Trim();
         }
-        catch
-        {
-            return "";
-        }
+        catch { return ""; }
     }
 
-    /// <summary>
-    /// Returns the commit log for a specific file (or the whole repo if filePath is null).
-    /// Each entry: "hash|ISO-date|author|subject"
-    /// </summary>
+    public async Task<string> GetCurrentBranchAsync()
+    {
+        if (!IsGitRepository()) return "";
+        try
+        {
+            return (await RunGitCommandAsync("rev-parse --abbrev-ref HEAD")).Trim();
+        }
+        catch { return ""; }
+    }
+
     public async Task<List<GitCommitInfo>> GetLogAsync(string? filePath = null, int maxCount = 50)
     {
         var result = new List<GitCommitInfo>();
@@ -176,15 +175,11 @@ public class GitService
                 });
             }
         }
-        catch { /* no commits yet or other git error */ }
+        catch { }
 
         return result;
     }
 
-    /// <summary>
-    /// Returns the contents of a file at a specific commit hash.
-    /// Returns null if the file doesn't exist at that commit.
-    /// </summary>
     public async Task<string?> ShowFileAtCommitAsync(string commitHash, string filePath)
     {
         if (!IsGitRepository()) return null;
@@ -200,8 +195,6 @@ public class GitService
 
     private async Task<string> RunGitCommandAsync(string arguments)
     {
-        var tcs = new TaskCompletionSource<string>();
-
         var process = new Process
         {
             StartInfo = new ProcessStartInfo
@@ -213,34 +206,41 @@ public class GitService
                 RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true
-            },
-            EnableRaisingEvents = true
-        };
-
-        process.Exited += (sender, args) =>
-        {
-            string output = process.StandardOutput.ReadToEnd();
-            string error = process.StandardError.ReadToEnd();
-            if (process.ExitCode == 0)
-            {
-                tcs.SetResult(output);
             }
-            else
-            {
-                if (string.IsNullOrWhiteSpace(error)) tcs.SetResult(output);
-                else tcs.SetException(new Exception(error));
-            }
-            process.Dispose();
         };
 
         try
         {
             process.Start();
-            return await tcs.Task;
+
+            // Read stdout and stderr asynchronously BEFORE WaitForExitAsync.
+            // Reading inside the Exited event causes deadlocks when output is large
+            // because the OS pipe buffer fills up and blocks the process from exiting.
+            var outputTask = process.StandardOutput.ReadToEndAsync();
+            var errorTask = process.StandardError.ReadToEndAsync();
+
+            await process.WaitForExitAsync();
+
+            var output = await outputTask;
+            var error = await errorTask;
+
+            if (process.ExitCode == 0)
+            {
+                return !string.IsNullOrWhiteSpace(output) ? output : (error ?? "");
+            }
+            else
+            {
+                var msg = !string.IsNullOrWhiteSpace(error) ? error : output;
+                return $"Git execution failed: {msg}";
+            }
         }
         catch (Exception ex)
         {
             return $"Git execution failed: {ex.Message}";
+        }
+        finally
+        {
+            process.Dispose();
         }
     }
 }

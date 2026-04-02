@@ -1,0 +1,295 @@
+@using SharedModels
+
+<div style="height: 100%; display: flex; flex-direction: column; overflow: hidden; font-size: 12px; color: var(--text-primary);">
+    @* Toolbar *@
+    <div style="padding: 6px 10px; border-bottom: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; background: var(--bg-secondary);">
+        <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+            <span style="font-weight: bold;">📊 Project Diff</span>
+            <button class="btn btn-sm btn-outline-secondary" @onclick="LoadCommits" disabled="@_loadingCommits"
+                    title="Load commit history">
+                @(_loadingCommits ? "⏳" : "🔄") Commits
+            </button>
+            @if (!string.IsNullOrEmpty(_error))
+            {
+                <span style="color: var(--danger-color); font-size: 11px;">@_error</span>
+            }
+        </div>
+
+        @if (_commits.Count > 0)
+        {
+            <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                <label style="white-space: nowrap; color: var(--text-muted);">Left (older):</label>
+                <select class="form-control form-control-sm" style="max-width: 360px; font-size: 11px;" @bind="_leftHash">
+                    <option value="(working)">📁 Working copy (current)</option>
+                    @foreach (var c in _commits)
+                    {
+                        <option value="@c.Hash">@c.DisplayText</option>
+                    }
+                </select>
+
+                <label style="white-space: nowrap; color: var(--text-muted);">Right (newer):</label>
+                <select class="form-control form-control-sm" style="max-width: 360px; font-size: 11px;" @bind="_rightHash">
+                    <option value="(working)">📁 Working copy (current)</option>
+                    @foreach (var c in _commits)
+                    {
+                        <option value="@c.Hash">@c.DisplayText</option>
+                    }
+                </select>
+
+                <button class="btn btn-sm btn-primary" @onclick="RunDiff" disabled="@_loading">
+                    @(_loading ? "⏳ Comparing…" : "⇄ Compare")
+                </button>
+            </div>
+        }
+    </div>
+
+    @* Results *@
+    <div style="flex: 1; overflow: auto; padding: 6px 10px;">
+        @if (_loading)
+        {
+            <div style="padding: 20px; text-align: center; color: var(--text-muted);">
+                <div style="font-size: 18px; margin-bottom: 8px;">⏳</div>
+                <div>@_progressMessage</div>
+            </div>
+        }
+        else if (_diffEntries == null)
+        {
+            <div style="padding: 20px; text-align: center; color: var(--text-muted);">
+                Select two commits and click <strong>Compare</strong> to see changes.
+            </div>
+        }
+        else if (_diffEntries.Count == 0)
+        {
+            <div style="padding: 20px; text-align: center; color: var(--success-color);">✅ No differences found — the two versions are identical.</div>
+        }
+        else
+        {
+            @* Summary bar *@
+            <div style="display: flex; gap: 12px; margin-bottom: 8px; padding: 4px 8px; background: var(--bg-tertiary); border-radius: 4px; font-size: 11px;">
+                <span style="color: var(--success-color);">+ @_diffEntries.Count(e => e.Kind == DiffKind.Added) added</span>
+                <span style="color: var(--danger-color);">− @_diffEntries.Count(e => e.Kind == DiffKind.Removed) removed</span>
+                <span style="color: var(--warning-color);">~ @_diffEntries.Count(e => e.Kind == DiffKind.Modified) modified</span>
+                <span style="color: var(--text-muted);">│ Total: @_diffEntries.Count change(s)</span>
+            </div>
+
+            @* Filter buttons *@
+            <div style="display: flex; gap: 4px; margin-bottom: 8px; flex-wrap: wrap;">
+                <button class="btn btn-sm @(_filterKind == null ? "btn-outline-primary" : "btn-outline-secondary")"
+                        @onclick="() => _filterKind = null">All</button>
+                <button class="btn btn-sm @(_filterKind == DiffKind.Added ? "btn-outline-success" : "btn-outline-secondary")"
+                        @onclick="() => _filterKind = DiffKind.Added">+ Added</button>
+                <button class="btn btn-sm @(_filterKind == DiffKind.Removed ? "btn-outline-danger" : "btn-outline-secondary")"
+                        @onclick="() => _filterKind = DiffKind.Removed">− Removed</button>
+                <button class="btn btn-sm @(_filterKind == DiffKind.Modified ? "btn-outline-warning" : "btn-outline-secondary")"
+                        @onclick="() => _filterKind = DiffKind.Modified">~ Modified</button>
+            </div>
+
+            @* Grouped diff entries *@
+            @foreach (var group in FilteredEntries.GroupBy(e => e.Category).OrderBy(g => g.Key))
+            {
+                <div style="margin-bottom: 10px;">
+                    <div style="font-weight: bold; padding: 3px 6px; background: var(--bg-hover); border-radius: 3px; margin-bottom: 3px; color: var(--text-primary);">
+                        @CategoryIcon(group.Key) @group.Key
+                        <span style="color: var(--text-muted); font-weight: normal;">(@group.Count())</span>
+                    </div>
+                    @foreach (var entry in group.OrderBy(e => e.Kind).ThenBy(e => e.Name))
+                    {
+                        <div style="padding: 2px 8px 2px 18px; font-family: 'Cascadia Code', 'Consolas', monospace; font-size: 11px; color: var(--text-primary);">
+                            <span style="display: inline-block; width: 16px; font-weight: bold; @KindColor(entry.Kind)">@entry.Icon</span>
+                            @entry.Name
+                            @if (!string.IsNullOrEmpty(entry.Detail))
+                            {
+                                <span style="color: var(--text-muted); margin-left: 8px;">@entry.Detail</span>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public string NodesPath { get; set; } = "";
+    [Parameter] public NodeModel? CurrentModel { get; set; }
+
+    [Inject] private GitService Git { get; set; } = default!;
+    [Inject] private ProjectDiffService Diff { get; set; } = default!;
+
+    private List<GitCommitInfo> _commits = new();
+    private string _leftHash = "";
+    private string _rightHash = "(working)";
+    private bool _loadingCommits;
+    private bool _loading;
+    private string _error = "";
+    private string _progressMessage = "";
+    private List<DiffEntry>? _diffEntries;
+    private DiffKind? _filterKind;
+
+    /// <summary>File path relative to the git repo root (e.g. "Server/nodes.json").</summary>
+    private string _relativeFilePath = "";
+
+    private IEnumerable<DiffEntry> FilteredEntries =>
+        _diffEntries == null
+            ? Enumerable.Empty<DiffEntry>()
+            : _filterKind.HasValue
+                ? _diffEntries.Where(e => e.Kind == _filterKind.Value)
+                : _diffEntries;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!string.IsNullOrEmpty(NodesPath) && _commits.Count == 0)
+        {
+            var dir = Path.GetDirectoryName(Path.GetFullPath(NodesPath));
+            if (dir != null)
+            {
+                Git.SetWorkingDirectory(dir);
+                if (Git.IsGitRepository())
+                {
+                    var repoRoot = Git.WorkingDirectory;
+                    _relativeFilePath = Path.GetRelativePath(repoRoot, Path.GetFullPath(NodesPath))
+                                            .Replace('\\', '/');
+                    await LoadCommits();
+                }
+            }
+        }
+    }
+
+    private async Task LoadCommits()
+    {
+        _error = "";
+        _loadingCommits = true;
+        StateHasChanged();
+        await Task.Yield();
+
+        try
+        {
+            var dir = Path.GetDirectoryName(Path.GetFullPath(NodesPath));
+            if (dir != null) Git.SetWorkingDirectory(dir);
+
+            var repoRoot = Git.WorkingDirectory;
+            _relativeFilePath = Path.GetRelativePath(repoRoot, Path.GetFullPath(NodesPath))
+                                    .Replace('\\', '/');
+
+            _commits = await Git.GetLogAsync(_relativeFilePath, 100);
+
+            if (_commits.Count == 0)
+                _error = "No commits found for this file.";
+            else if (_commits.Count >= 2)
+            {
+                _leftHash = _commits[1].Hash;
+                _rightHash = _commits[0].Hash;
+            }
+            else if (_commits.Count == 1)
+            {
+                _leftHash = _commits[0].Hash;
+                _rightHash = "(working)";
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loadingCommits = false;
+        }
+    }
+
+    private async Task RunDiff()
+    {
+        _error = "";
+        _loading = true;
+        _diffEntries = null;
+        _filterKind = null;
+        _progressMessage = "Loading left version…";
+        StateHasChanged();
+        await Task.Yield();
+
+        try
+        {
+            var leftLabel = _leftHash == "(working)" ? "working copy" : _leftHash[..Math.Min(7, _leftHash.Length)];
+            var rightLabel = _rightHash == "(working)" ? "working copy" : _rightHash[..Math.Min(7, _rightHash.Length)];
+
+            _progressMessage = $"Loading left version ({leftLabel})…";
+            StateHasChanged();
+            await Task.Yield();
+            var leftModel = await LoadModel(_leftHash);
+
+            if (leftModel == null)
+            {
+                _error = $"Could not load left version ({leftLabel}). File may not exist at that commit.";
+                return;
+            }
+
+            _progressMessage = $"Loading right version ({rightLabel})…";
+            StateHasChanged();
+            await Task.Yield();
+            var rightModel = await LoadModel(_rightHash);
+
+            if (rightModel == null)
+            {
+                _error = $"Could not load right version ({rightLabel}). File may not exist at that commit.";
+                return;
+            }
+
+            _progressMessage = "Comparing models…";
+            StateHasChanged();
+            await Task.Yield();
+            _diffEntries = Diff.Compare(leftModel, rightModel);
+        }
+        catch (Exception ex)
+        {
+            _error = $"Diff error: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+            _progressMessage = "";
+        }
+    }
+
+    private async Task<NodeModel?> LoadModel(string hashOrWorking)
+    {
+        if (hashOrWorking == "(working)")
+        {
+            if (CurrentModel != null) return CurrentModel;
+            if (File.Exists(NodesPath))
+            {
+                var json = await File.ReadAllTextAsync(NodesPath);
+                return Diff.Parse(json);
+            }
+            return null;
+        }
+
+        var content = await Git.ShowFileAtCommitAsync(hashOrWorking, _relativeFilePath);
+        return content != null ? Diff.Parse(content) : null;
+    }
+
+    private static string CategoryIcon(string category) => category switch
+    {
+        "Variable" => "📦",
+        "Screen" => "🖼️",
+        "Screen Symbols" => "🔷",
+        "Script" => "📜",
+        "PLC Program" => "⚙",
+        "Recipe" => "🧪",
+        "Scheduler" => "📅",
+        "Report" => "📄",
+        "User" => "👤",
+        "User Group" => "👥",
+        "String" => "🌐",
+        "Image" => "🖼️",
+        "Calculated Variable" => "🔢",
+        "Server Settings" => "🖥️",
+        _ => "📋"
+    };
+
+    private static string KindColor(DiffKind kind) => kind switch
+    {
+        DiffKind.Added => "color: var(--success-color);",
+        DiffKind.Removed => "color: var(--danger-color);",
+        DiffKind.Modified => "color: var(--warning-color);",
+        _ => ""
+    };
+}
