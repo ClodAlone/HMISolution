@@ -752,7 +752,7 @@ public class NodeEditorService
             var newNode = new VariableNode(newVar) { Parent = parent };
             parent.Children.Add(newNode);
             parent.IsExpanded = true;
-            SelectedItem = newNode;
+            SetSingleSelection(newNode);
             HasUnsavedChanges = true;
             NotifyStateChanged();
         }
@@ -769,7 +769,7 @@ public class NodeEditorService
             var newNode = new ScriptNode(newScript) { Parent = parent };
             parent.Children.Add(newNode);
             parent.IsExpanded = true;
-            SelectedItem = newNode;
+            SetSingleSelection(newNode);
             HasUnsavedChanges = true;
             NotifyStateChanged();
         }
@@ -792,7 +792,7 @@ public class NodeEditorService
             var newNode = new PlcProgramNode(newPlc) { Parent = parent };
             parent.Children.Add(newNode);
             parent.IsExpanded = true;
-            SelectedItem = newNode;
+            SetSingleSelection(newNode);
             HasUnsavedChanges = true;
             NotifyStateChanged();
         }
@@ -809,7 +809,7 @@ public class NodeEditorService
             var newNode = new ScreenNode(newScreen) { Parent = parent };
             parent.Children.Add(newNode);
             parent.IsExpanded = true;
-            SelectedItem = newNode;
+            SetSingleSelection(newNode);
             HasUnsavedChanges = true;
             NotifyStateChanged();
         }
@@ -828,7 +828,7 @@ public class NodeEditorService
             var newNode = new RecipeNode(newRecipe) { Parent = parent };
             parent.Children.Add(newNode);
             parent.IsExpanded = true;
-            SelectedItem = newNode;
+            SetSingleSelection(newNode);
             HasUnsavedChanges = true;
             NotifyStateChanged();
         }
@@ -849,7 +849,7 @@ public class NodeEditorService
             var newNode = new SchedulerNode(newScheduler) { Parent = parent };
             parent.Children.Add(newNode);
             parent.IsExpanded = true;
-            SelectedItem = newNode;
+            SetSingleSelection(newNode);
             HasUnsavedChanges = true;
             NotifyStateChanged();
         }
@@ -869,7 +869,7 @@ public class NodeEditorService
             var newNode = new ReportNode(newReport) { Parent = parent };
             parent.Children.Add(newNode);
             parent.IsExpanded = true;
-            SelectedItem = newNode;
+            SetSingleSelection(newNode);
             HasUnsavedChanges = true;
             NotifyStateChanged();
         }
@@ -927,14 +927,14 @@ public class NodeEditorService
             var newNode = new BatchNode(newBatch) { Parent = parent };
             parent.Children.Add(newNode);
             parent.IsExpanded = true;
-            SelectedItem = newNode;
+            SetSingleSelection(newNode);
             HasUnsavedChanges = true;
             NotifyStateChanged();
         }
     }
 
     /// <summary>
-    /// Adds a resource folder under the current selection (Script/PLC/Screen group or folder).
+    /// Adds a resource folder
     /// </summary>
     public void AddResourceFolder()
     {
@@ -960,7 +960,7 @@ public class NodeEditorService
             var insertIdx = parent.Children.Count(c => c is ResourceFolderNode);
             parent.Children.Insert(insertIdx, folder);
             parent.IsExpanded = true;
-            SelectedItem = folder;
+            SetSingleSelection(folder);
             HasUnsavedChanges = true;
             NotifyStateChanged();
         }
@@ -974,7 +974,7 @@ public class NodeEditorService
             var newNode = new UserGroupNode(newGroup) { Parent = parent };
             parent.Children.Add(newNode);
             parent.IsExpanded = true;
-            SelectedItem = newNode;
+            SetSingleSelection(newNode);
             _rootModel?.UserGroups.Add(newGroup);
             HasUnsavedChanges = true;
             NotifyStateChanged();
@@ -990,7 +990,7 @@ public class NodeEditorService
             var newNode = new UserNode(newUser) { Parent = groupNode };
             groupNode.Children.Add(newNode);
             groupNode.IsExpanded = true;
-            SelectedItem = newNode;
+            SetSingleSelection(newNode);
             _rootModel?.Users.Add(newUser);
             HasUnsavedChanges = true;
             NotifyStateChanged();
