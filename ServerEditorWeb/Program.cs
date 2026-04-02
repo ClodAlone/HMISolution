@@ -17,6 +17,7 @@ builder.Services.AddSingleton<ServerProcessService>();
 builder.Services.AddSingleton<RuntimeViewerProcessService>();
 builder.Services.AddSingleton<ServerDiagnosticsClient>();
 builder.Services.AddScoped<GitService>();
+builder.Services.AddSingleton<ProjectDiffService>();
 builder.Services.AddSingleton<AiService>();
 builder.Services.AddSingleton<SyntaxCheckService>();
 builder.Services.AddSingleton<PropertyGridService>();

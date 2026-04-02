@@ -1,4 +1,5 @@
 @using ServerEditorWeb.Services
+@inject IJSRuntime JS
 
 <div class="git-panel">
     <h6>Git Integration</h6>
@@ -42,7 +43,13 @@
 
     @if (!string.IsNullOrEmpty(_result))
     {
-        <pre class="mt-2 p-2 bg-light border rounded small">@_result</pre>
+        <div class="mt-2 position-relative">
+            <button class="btn btn-sm btn-outline-secondary position-absolute" style="top:4px;right:4px;padding:1px 6px;font-size:10px;z-index:1;"
+                    @onclick="CopyResult" title="Copy to clipboard">
+                @(_copied ? "✓ Copied" : "📋 Copy")
+            </button>
+            <pre class="p-2 bg-light border rounded small" style="user-select:text;-webkit-user-select:text;white-space:pre-wrap;word-break:break-all;max-height:300px;overflow:auto;">@_result</pre>
+        </div>
     }
 </div>
 
@@ -56,14 +63,24 @@
     private string _userEmail = "";
     private string _remoteUrl = "";
     private string _result = "";
+    private bool _configLoaded;
+    private bool _copied;
 
-    protected override void OnParametersSet()
+    protected override async Task OnParametersSetAsync()
     {
         if (!string.IsNullOrEmpty(NodesPath))
         {
             var dir = Path.GetDirectoryName(Path.GetFullPath(NodesPath));
             if (dir != null)
                 _gitService.SetWorkingDirectory(dir);
+        }
+
+        if (_gitService.IsGitRepository() && !_configLoaded)
+        {
+            _configLoaded = true;
+            _userName = await _gitService.GetConfigValueAsync("user.name");
+            _userEmail = await _gitService.GetConfigValueAsync("user.email");
+            _remoteUrl = await _gitService.GetRemoteUrlAsync();
         }
     }
 
@@ -85,10 +102,20 @@
     private async Task CommitAndPush()
     {
         if (string.IsNullOrEmpty(NodesPath)) return;
-        var fileName = Path.GetFileName(NodesPath);
+
+        // Build a path relative to the git repo root so `git add` finds the file.
+        var fullPath = Path.GetFullPath(NodesPath);
+        var repoRoot = _gitService.WorkingDirectory;
+        var relativePath = string.IsNullOrEmpty(repoRoot)
+            ? Path.GetFileName(NodesPath)
+            : Path.GetRelativePath(repoRoot, fullPath).Replace('\\', '/');
+
         var msg = string.IsNullOrWhiteSpace(CommitMessage) ? "Update nodes.json" : CommitMessage;
-        _result = await _gitService.CommitChangesAsync(fileName, msg);
-        if (!_result.StartsWith("Error"))
+        _result = await _gitService.CommitChangesAsync(relativePath, msg);
+
+        var isError = _result.StartsWith("Error", StringComparison.OrdinalIgnoreCase)
+                   || _result.StartsWith("Git execution failed", StringComparison.OrdinalIgnoreCase);
+        if (!isError)
         {
             var pushResult = await _gitService.PushAsync();
             _result += "\n" + pushResult;
@@ -103,5 +130,18 @@
     private async Task GetStatus()
     {
         _result = await _gitService.GetStatusAsync();
+    }
+
+    private async Task CopyResult()
+    {
+        if (string.IsNullOrEmpty(_result)) return;
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", _result);
+            _copied = true;
+            StateHasChanged();
+            _ = Task.Delay(2000).ContinueWith(_ => InvokeAsync(() => { _copied = false; StateHasChanged(); }));
+        }
+        catch { /* clipboard API not available */ }
     }
 }
