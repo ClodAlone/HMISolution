@@ -344,6 +344,7 @@ else
                     OnAddFolder="OnAddFolder" OnAddVariable="OnAddVariable" OnAddScript="OnAddScript"
                     OnAddPlcProgram="OnAddPlcProgram" OnAddRecipe="OnAddRecipe" OnAddScheduler="OnAddScheduler" OnAddReport="OnAddReport" OnAddCalculated="OnAddCalculated" OnAddAsset="OnAddAsset" OnAddBatch="OnAddBatch"
                     OnAddScreen="OnAddScreen" OnAddUserGroup="OnAddUserGroup" OnAddUser="OnAddUser"
+                    OnRename="OnRenameNode"
                     OnDelete="OnDelete"
                     OnCopy="OnCopyNode" OnPaste="OnPasteNode"
                     OnSetActiveProject="OnSetActiveProject" OnCloseProject="OnCloseProject"
@@ -741,6 +742,22 @@ else
     <NewProjectWizard OnCreated="OnNewProjectCreated" OnClose="() => _showNewProjectWizard = false" />
 }
 
+@if (_renameDialogVisible && _renameNode != null)
+{
+    <div style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center">
+        <div style="background:#1e1e1e;border:1px solid #444;border-radius:8px;padding:20px;min-width:350px">
+            <h4 style="margin:0 0 12px;color:#ddd">Rename @_renameNode.TypeName</h4>
+            <input type="text" @bind="_renameText" @bind:event="oninput"
+                   @onkeydown="OnRenameKeyDown"
+                   style="width:100%;padding:6px 10px;background:#2d2d2d;border:1px solid #555;color:#eee;border-radius:4px;font-size:14px" />
+            <div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end">
+                <button @onclick="CancelRename" style="padding:6px 16px;background:#444;color:#ccc;border:none;border-radius:4px;cursor:pointer">Cancel</button>
+                <button @onclick="CommitRename" style="padding:6px 16px;background:#2563eb;color:#fff;border:none;border-radius:4px;cursor:pointer">Rename</button>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     [Inject] private NodeEditorService Editor { get; set; } = default!;
     [Inject] private ClipboardService Clipboard { get; set; } = default!;
@@ -869,6 +886,50 @@ private void OnAddAsset(TreeNode node) { Editor.SelectNode(node); Editor.AddAsse
 private void OnAddBatch(TreeNode node) { Editor.SelectNode(node); Editor.AddBatch(); }
 private void OnAddUserGroup(TreeNode node) { Editor.SelectNode(node); Editor.AddUserGroup(); }
 private void OnAddUser(TreeNode node) { Editor.SelectNode(node); Editor.AddUser(); }
+// ─── Rename ─────────────────────────────────────────────
+private TreeNode? _renameNode;
+private string _renameText = "";
+private bool _renameDialogVisible;
+private int _renameRefCount;
+
+private void OnRenameNode(TreeNode node)
+{
+    if (node is not (VariableNode or FolderNode)) return;
+    _renameNode = node;
+    _renameText = node.Name;
+    _renameRefCount = 0;
+    _renameDialogVisible = true;
+}
+
+private void CommitRename()
+{
+    if (_renameNode != null && !string.IsNullOrWhiteSpace(_renameText) && _renameText != _renameNode.Name)
+    {
+        _renameRefCount = Editor.RenameVariableOrFolder(_renameNode, _renameText.Trim());
+        var msg = _renameRefCount > 0
+            ? $"Renamed. Updated {_renameRefCount} reference(s) across the project."
+            : "Renamed. No references found to update.";
+        _renameDialogVisible = false;
+        _renameNode = null;
+        ShowToast(true, msg);
+        return;
+    }
+    _renameDialogVisible = false;
+    _renameNode = null;
+}
+
+private void OnRenameKeyDown(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs e)
+{
+    if (e.Key == "Enter") CommitRename();
+    else if (e.Key == "Escape") CancelRename();
+}
+
+private void CancelRename()
+{
+    _renameDialogVisible = false;
+    _renameNode = null;
+}
+
 private void OnDelete(TreeNode node)
 {
     // If the right-clicked node is part of multi-selection, delete all selected
@@ -1409,6 +1470,12 @@ private void UnsavedDialogCancel()
     private void OnPropertyChanged()
     {
         if (GuardLocked()) return;
+
+        // Detect name changes made via the PropertyGrid and propagate references automatically
+        var renameMsg = Editor.DetectAndPropagateRenames();
+        if (renameMsg != null)
+            ShowToast(true, renameMsg);
+
         Editor.MarkChanged();
     }
 

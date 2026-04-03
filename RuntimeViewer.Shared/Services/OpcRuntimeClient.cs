@@ -120,7 +120,14 @@ public class OpcRuntimeClient : IDisposable
                         StorePath = $"{pkiRoot}/rejected"
                     }
                 },
-                TransportQuotas = new TransportQuotas { OperationTimeout = 15000 },
+                TransportQuotas = new TransportQuotas
+                {
+                    OperationTimeout = 15000,
+                    MaxMessageSize = 16 * 1024 * 1024,
+                    MaxBufferSize = 16 * 1024 * 1024,
+                    MaxStringLength = 4 * 1024 * 1024,
+                    MaxByteStringLength = 4 * 1024 * 1024
+                },
                 ClientConfiguration = new ClientConfiguration { DefaultSessionTimeout = 60000 },
                 TraceConfiguration = new TraceConfiguration()
             };
@@ -237,7 +244,9 @@ public class OpcRuntimeClient : IDisposable
         }
     }
 
-    public void MonitorVariables(IEnumerable<string> variablePaths, ushort namespaceIndex = 2)
+    private const string ServerNamespaceUri = "http://simpleopcfileserver.org/UA";
+
+    public void MonitorVariables(IEnumerable<string> variablePaths, ushort namespaceIndex = 0)
     {
         if (_subscription == null || _session == null)
         {
@@ -245,20 +254,51 @@ public class OpcRuntimeClient : IDisposable
             return;
         }
 
-        var pathList = variablePaths.Where(p => !string.IsNullOrEmpty(p)).ToList();
-        Log($"MONITOR: Setting up {pathList.Count} variable(s) with ns={namespaceIndex}");
-
-        // Remove existing monitored items â€” snapshot to a list first to avoid
-        // modifying the subscription's internal collection while iterating it.
-        var existing = _subscription.MonitoredItems.ToList();
-        if (existing.Count > 0)
+        // Resolve namespace index dynamically from the session's namespace table
+        if (namespaceIndex == 0 && _session != null)
         {
-            Log($"MONITOR: Removing {existing.Count} existing monitored item(s)");
-            _subscription.RemoveItems(existing);
-            _subscription.ApplyChanges();
+            var nsIdx = _session.NamespaceUris.GetIndex(ServerNamespaceUri);
+            if (nsIdx >= 0)
+                namespaceIndex = (ushort)nsIdx;
+            else
+                namespaceIndex = 2; // fallback
+            Log($"MONITOR: Resolved namespace '{ServerNamespaceUri}' to index {namespaceIndex}");
         }
 
-        foreach (var path in pathList)
+        var desiredPaths = new HashSet<string>(variablePaths.Where(p => !string.IsNullOrEmpty(p)));
+
+        // Build set of currently monitored paths
+        var currentPaths = new HashSet<string>(_subscription.MonitoredItems.Select(m => m.DisplayName));
+
+        // Compute diff
+        var toRemove = currentPaths.Where(p => !desiredPaths.Contains(p)).ToList();
+        var toAdd = desiredPaths.Where(p => !currentPaths.Contains(p)).ToList();
+
+        if (toRemove.Count == 0 && toAdd.Count == 0)
+        {
+            Log("MONITOR: No changes needed.");
+            return;
+        }
+
+        Log($"MONITOR: Diff: +{toAdd.Count} add, -{toRemove.Count} remove (desired={desiredPaths.Count}, current={currentPaths.Count})");
+
+        // Remove items no longer needed
+        if (toRemove.Count > 0)
+        {
+            var itemsToRemove = _subscription.MonitoredItems
+                .Where(m => toRemove.Contains(m.DisplayName)).ToList();
+            _subscription.RemoveItems(itemsToRemove);
+
+            // Clear stale cached values
+            lock (_lock)
+            {
+                foreach (var p in toRemove)
+                    _values.Remove(p);
+            }
+        }
+
+        // Add new items
+        foreach (var path in toAdd)
         {
             var nodeId = new NodeId(path, namespaceIndex);
             var item = new MonitoredItem(_subscription.DefaultItem)
@@ -280,10 +320,48 @@ public class OpcRuntimeClient : IDisposable
         foreach (var mi in _subscription.MonitoredItems)
         {
             var statusName = mi.Status?.Error?.StatusCode.ToString() ?? "Good";
-            Log($"  ITEM: \"{mi.DisplayName}\" â†’ NodeId={mi.StartNodeId} | Created={mi.Status?.Created} | Status={statusName}");
+            Log($"  ITEM: \"{mi.DisplayName}\" -> NodeId={mi.StartNodeId} | Created={mi.Status?.Created} | Status={statusName}");
         }
 
-        Log($"MONITOR: âœ“ ApplyChanges done. {_subscription.MonitoredItemCount} active monitored item(s)");
+        Log($"MONITOR: Done. {_subscription.MonitoredItemCount} active monitored item(s)");
+    }
+
+    /// <summary>
+    /// Pre-subscribes variables for a predicted next screen without removing existing items.
+    /// These items are tagged so they can be identified and replaced when the actual screen loads.
+    /// </summary>
+    public void PreconnectVariables(IEnumerable<string> variablePaths)
+    {
+        if (_subscription == null || _session == null) return;
+
+        ushort nsIndex = 0;
+        var nsIdx = _session.NamespaceUris.GetIndex(ServerNamespaceUri);
+        nsIndex = nsIdx >= 0 ? (ushort)nsIdx : (ushort)2;
+
+        var currentPaths = new HashSet<string>(_subscription.MonitoredItems.Select(m => m.DisplayName));
+        var toAdd = variablePaths.Where(p => !string.IsNullOrEmpty(p) && !currentPaths.Contains(p)).ToList();
+
+        if (toAdd.Count == 0) return;
+
+        Log($"PRECONNECT: Adding {toAdd.Count} predicted item(s)");
+
+        foreach (var path in toAdd)
+        {
+            var nodeId = new NodeId(path, nsIndex);
+            var item = new MonitoredItem(_subscription.DefaultItem)
+            {
+                DisplayName = path,
+                StartNodeId = nodeId,
+                SamplingInterval = 1000,
+                QueueSize = 1,
+                DiscardOldest = true
+            };
+            item.Notification += OnMonitoredItemNotification;
+            _subscription.AddItem(item);
+        }
+
+        _subscription.ApplyChanges();
+        Log($"PRECONNECT: Done. {_subscription.MonitoredItemCount} total item(s)");
     }
 
     private int _notificationCount;

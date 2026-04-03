@@ -127,7 +127,14 @@ public class OpcClientService : IDisposable
                             StorePath = "%LocalApplicationData%/ServerEditorWeb/pki/rejected"
                         }
                     },
-                    TransportQuotas = new TransportQuotas { OperationTimeout = 15000 },
+                    TransportQuotas = new TransportQuotas
+                    {
+                        OperationTimeout = 15000,
+                        MaxMessageSize = 16 * 1024 * 1024,
+                        MaxBufferSize = 16 * 1024 * 1024,
+                        MaxStringLength = 4 * 1024 * 1024,
+                        MaxByteStringLength = 4 * 1024 * 1024
+                    },
                     ClientConfiguration = new ClientConfiguration { DefaultSessionTimeout = 60000 },
                     TraceConfiguration = new TraceConfiguration()
                 };

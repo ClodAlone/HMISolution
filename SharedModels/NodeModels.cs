@@ -478,6 +478,14 @@ namespace SharedModels
         /// and publishes OPC UA variables as Sparkplug B metrics for external SCADA systems.
         /// </summary>
         public SparkplugConfig? Sparkplug { get; set; }
+
+        /// <summary>
+        /// When enabled, the runtime viewer learns screen navigation patterns and
+        /// pre-subscribes OPC UA variables for the predicted next screen, reducing
+        /// latency when the user navigates. The model is persisted between sessions.
+        /// Default: false.
+        /// </summary>
+        public bool EnablePredictivePreconnect { get; set; }
     }
 
     /// <summary>

@@ -774,6 +774,8 @@ else
     private DotNetObjectReference<ScreenRenderer>? _dotnetRef;
     private bool _jsDragActive;
     private volatile bool _valuesDirty;
+    private string? _lastMonitoredScreenName;
+    private HashSet<string> _lastMonitoredPaths = new();
 
     /// <summary>Builds inline CSS for widget font overrides from the symbol config.
     /// Emits both direct font properties (for CSS inheritance) and custom properties (for explicit var() usage).</summary>
@@ -872,8 +874,15 @@ else
                 }
             }
 
-            var distinctPaths = paths.Distinct().ToList();
-            Opc.MonitorVariables(distinctPaths);
+            var distinctPaths = new HashSet<string>(paths);
+
+            // Only re-subscribe if the screen or variable set actually changed
+            if (Screen.Name != _lastMonitoredScreenName || !distinctPaths.SetEquals(_lastMonitoredPaths))
+            {
+                _lastMonitoredScreenName = Screen.Name;
+                _lastMonitoredPaths = distinctPaths;
+                Opc.MonitorVariables(distinctPaths);
+            }
         }
     }
 
@@ -5642,6 +5651,11 @@ else
 
     public async ValueTask DisposeAsync()
     {
+        // Unsubscribe monitored items for this screen
+        _lastMonitoredScreenName = null;
+        _lastMonitoredPaths.Clear();
+        Opc.MonitorVariables(Enumerable.Empty<string>());
+
         Opc.ValuesChanged -= OnValuesChanged;
         Localization.LanguageChanged -= OnLanguageChanged;
         _refreshTimer?.Dispose();

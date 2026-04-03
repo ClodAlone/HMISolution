@@ -469,6 +469,7 @@ else
 
     [Inject] private ProjectService Project { get; set; } = default!;
     [Inject] private OpcRuntimeClient Opc { get; set; } = default!;
+    [Inject] private NavigationPredictorService NavPredictor { get; set; } = default!;
     [Inject] private CommandService Commands { get; set; } = default!;
     [Inject] private NavigationManager Nav { get; set; } = default!;
     [Inject] private IJSRuntime JS { get; set; } = default!;
@@ -535,6 +536,8 @@ else
     {
         _loginRequired = RuntimeAuthService.IsLoginRequired(Project.Model);
         Commands.NavigateScreen += DoNavigateScreen;
+        if (Project.Settings.EnablePredictivePreconnect)
+            NavPredictor.SetProject(Project.ConfigPath);
         _hasUsers = (Project.Model?.Users?.Count ?? 0) > 0;
         Commands.OpenScreenPopup += DoOpenPopup;
         Commands.OpenScreenModal += DoOpenModal;
@@ -644,6 +647,10 @@ else
             _currentScreen = NavigableScreens.FirstOrDefault();
         }
 
+        // Record navigation for predictive pre-connection learning
+        if (_currentScreen != null && Project.Settings.EnablePredictivePreconnect)
+            NavPredictor.RecordNavigation(_currentScreen.Name);
+
         if (!Opc.IsConnected && !_connecting && !string.IsNullOrEmpty(Project.Settings.EndpointUrl))
         {
             // When anonymous is disabled, wait for the user to log in first
@@ -678,6 +685,15 @@ else
     {
         InvokeAsync(() =>
         {
+            // Record navigation for predictive pre-connection
+            if (Project.Settings.EnablePredictivePreconnect)
+            {
+                NavPredictor.RecordNavigation(name);
+                var predicted = NavPredictor.GetPredictedVariablePaths(Project.Screens);
+                if (predicted.Count > 0 && Opc.IsConnected)
+                    Opc.PreconnectVariables(predicted);
+            }
+
             ShowToast("info", "Navigate", $"Switching to {name}");
             Nav.NavigateTo($"/screen/{Uri.EscapeDataString(name)}");
             StateHasChanged();

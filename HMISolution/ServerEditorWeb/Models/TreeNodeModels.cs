@@ -23,13 +23,24 @@ public class FolderNode : TreeNode
     public override string Icon => "📁";
     public Folder Folder { get; }
 
+    /// <summary>Name before the last edit — used to detect renames and propagate.</summary>
+    public string PreviousName { get; private set; }
+
     public FolderNode(Folder folder)
     {
         Folder = folder;
         Name = folder.Name;
+        PreviousName = folder.Name;
     }
 
-    public void SyncName() => Folder.Name = Name;
+    public void SyncName()
+    {
+        PreviousName = Folder.Name;  // snapshot before applying
+        Folder.Name = Name;
+    }
+
+    /// <summary>Accepts the current name as the baseline (call after propagation).</summary>
+    public void AcceptName() => PreviousName = Name;
 }
 
 public class VariableGroupNode : TreeNode
@@ -49,6 +60,9 @@ public class VariableNode : TreeNode
     public override string Icon => "🏷️";
     public Variable Variable { get; }
 
+    /// <summary>Name before the last edit — used to detect renames and propagate.</summary>
+    public string PreviousName { get; private set; }
+
     public static readonly string[] AvailableTypes = ["Double", "Int32", "Boolean", "String", "DateTime", "Float", "Int16", "UInt16", "UInt32"];
 
     private string _driverSettingsJson = "{}";
@@ -57,6 +71,7 @@ public class VariableNode : TreeNode
     {
         Variable = variable;
         Name = variable.Name;
+        PreviousName = variable.Name;
 
         if (variable.DriverConfigs is { Count: > 0 })
         {
@@ -64,7 +79,14 @@ public class VariableNode : TreeNode
         }
     }
 
-    public void SyncName() => Variable.Name = Name;
+    public void SyncName()
+    {
+        PreviousName = Variable.Name;  // snapshot before applying
+        Variable.Name = Name;
+    }
+
+    /// <summary>Accepts the current name as the baseline (call after propagation).</summary>
+    public void AcceptName() => PreviousName = Name;
 
     public string DriverSettingsJson
     {

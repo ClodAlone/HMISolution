@@ -1450,6 +1450,57 @@ public class NodeEditorService
         NotifyStateChanged();
     }
 
+    /// <summary>
+    /// Renames a variable or folder and propagates the change across all references
+    /// in screens, scripts, PLC programs, recipes, reports, schedulers, etc.
+    /// Returns the number of references that were updated.
+    /// </summary>
+    public int RenameVariableOrFolder(TreeNode node, string newName)
+    {
+        if (_rootModel == null || string.IsNullOrWhiteSpace(newName))
+            return 0;
+
+        string oldPath = GetFullPath(node);
+        string oldName = node.Name;
+        int refCount = 0;
+
+        // Apply the name change on the tree/model node
+        node.Name = newName;
+        if (node is VariableNode vn) vn.SyncName();
+        else if (node is FolderNode fn) fn.SyncName();
+
+        // Compute new full path
+        string newPath = GetFullPath(node);
+
+        // Propagate rename across all project references
+        if (!oldPath.Equals(newPath, StringComparison.OrdinalIgnoreCase))
+            refCount = VariableRenameService.RenameAll(_rootModel, oldPath, newPath);
+
+        HasUnsavedChanges = true;
+        NotifyStateChanged();
+
+        return refCount;
+    }
+
+    /// <summary>
+    /// Computes the dotted full path for a tree node by walking up the parent chain.
+    /// e.g. "Plant.Area1.Temperature"
+    /// </summary>
+    public static string GetFullPath(TreeNode node)
+    {
+        var parts = new List<string>();
+        var current = node;
+        while (current != null)
+        {
+            // Only include FolderNodes and VariableNodes in the path
+            if (current is FolderNode or VariableNode)
+                parts.Add(current.Name);
+            current = current.Parent;
+        }
+        parts.Reverse();
+        return string.Join(".", parts);
+    }
+
     private void ReloadViewModels()
     {
         if (ActiveProject != null)

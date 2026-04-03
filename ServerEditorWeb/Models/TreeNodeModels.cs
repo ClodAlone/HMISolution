@@ -23,13 +23,18 @@ public class FolderNode : TreeNode
     public override string Icon => "📁";
     public Folder Folder { get; }
 
+    /// <summary>Name before the last edit, used to detect renames.</summary>
+    public string PreviousName { get; private set; }
+
     public FolderNode(Folder folder)
     {
         Folder = folder;
         Name = folder.Name;
+        PreviousName = folder.Name;
     }
 
-    public void SyncName() => Folder.Name = Name;
+    public void SyncName() { PreviousName = Folder.Name; Folder.Name = Name; }
+    public void AcceptName() => PreviousName = Name;
 }
 
 public class VariableGroupNode : TreeNode
@@ -53,10 +58,14 @@ public class VariableNode : TreeNode
 
     private string _driverSettingsJson = "{}";
 
+    /// <summary>Name before the last edit, used to detect renames.</summary>
+    public string PreviousName { get; private set; }
+
     public VariableNode(Variable variable)
     {
         Variable = variable;
         Name = variable.Name;
+        PreviousName = variable.Name;
 
         if (variable.DriverConfigs is { Count: > 0 })
         {
@@ -64,7 +73,8 @@ public class VariableNode : TreeNode
         }
     }
 
-    public void SyncName() => Variable.Name = Name;
+    public void SyncName() { PreviousName = Variable.Name; Variable.Name = Name; }
+    public void AcceptName() => PreviousName = Name;
 
     public string DriverSettingsJson
     {

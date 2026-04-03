@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
@@ -256,7 +256,14 @@ public class OpcUaServerApp
                     StorePath = $"{pkiRoot}/rejected"
                 }
             },
-            TransportQuotas = new TransportQuotas { OperationTimeout = 15000 },
+            TransportQuotas = new TransportQuotas
+            {
+                OperationTimeout = 15000,
+                MaxMessageSize = 16 * 1024 * 1024,
+                MaxBufferSize = 16 * 1024 * 1024,
+                MaxStringLength = 4 * 1024 * 1024,
+                MaxByteStringLength = 4 * 1024 * 1024
+            },
             ServerConfiguration = new ServerConfiguration
             {
                 BaseAddresses = new StringCollection { endpointUrl },

@@ -1511,6 +1511,104 @@ public class NodeEditorService
         NotifyStateChanged();
     }
 
+    /// <summary>
+    /// Renames a variable or folder and propagates the change across all references
+    /// in screens, scripts, PLC programs, recipes, reports, schedulers, etc.
+    /// Returns the number of references that were updated.
+    /// </summary>
+    /// <summary>
+    /// Renames a variable or folder (from the rename dialog) and propagates all references.
+    /// </summary>
+    public int RenameVariableOrFolder(TreeNode node, string newName)
+    {
+        if (_rootModel == null || string.IsNullOrWhiteSpace(newName))
+            return 0;
+
+        string oldPath = GetFullPath(node);
+
+        node.Name = newName;
+        if (node is VariableNode vn) { vn.SyncName(); vn.AcceptName(); }
+        else if (node is FolderNode fn) { fn.SyncName(); fn.AcceptName(); }
+
+        string newPath = GetFullPath(node);
+        int refCount = 0;
+        if (!oldPath.Equals(newPath, StringComparison.OrdinalIgnoreCase))
+            refCount = VariableRenameService.RenameAll(_rootModel, oldPath, newPath);
+
+        HasUnsavedChanges = true;
+        NotifyStateChanged();
+        return refCount;
+    }
+
+    /// <summary>
+    /// Checks all selected tree nodes for name changes (e.g. from PropertyGrid edits)
+    /// and propagates renames automatically. Returns a message if any renames were propagated.
+    /// </summary>
+    public string? DetectAndPropagateRenames()
+    {
+        if (_rootModel == null) return null;
+
+        int totalRefs = 0;
+        int renamedItems = 0;
+
+        foreach (var node in SelectedItems)
+        {
+            if (node is VariableNode vn && vn.Name != vn.PreviousName)
+            {
+                var oldPath = GetFullPathWithName(vn, vn.PreviousName);
+                vn.SyncName();
+                var newPath = GetFullPath(vn);
+                vn.AcceptName();
+                if (!oldPath.Equals(newPath, StringComparison.OrdinalIgnoreCase))
+                { totalRefs += VariableRenameService.RenameAll(_rootModel, oldPath, newPath); renamedItems++; }
+            }
+            else if (node is FolderNode fn && fn.Name != fn.PreviousName)
+            {
+                var oldPath = GetFullPathWithName(fn, fn.PreviousName);
+                fn.SyncName();
+                var newPath = GetFullPath(fn);
+                fn.AcceptName();
+                if (!oldPath.Equals(newPath, StringComparison.OrdinalIgnoreCase))
+                { totalRefs += VariableRenameService.RenameAll(_rootModel, oldPath, newPath); renamedItems++; }
+            }
+        }
+
+        if (renamedItems == 0) return null;
+        return totalRefs > 0
+            ? $"Updated {totalRefs} reference(s) for {renamedItems} renamed item(s)."
+            : $"Renamed {renamedItems} item(s). No references to update.";
+    }
+
+    /// <summary>Computes the full path but substitutes the node's name with a specific value.</summary>
+    private static string GetFullPathWithName(TreeNode node, string nameOverride)
+    {
+        var parts = new List<string>();
+        var current = node.Parent;
+        while (current != null)
+        {
+            if (current is FolderNode or VariableNode)
+                parts.Add(current.Name);
+            current = current.Parent;
+        }
+        parts.Reverse();
+        parts.Add(nameOverride);
+        return string.Join(".", parts);
+    }
+
+    public static string GetFullPath(TreeNode node)
+    {
+        var parts = new List<string>();
+        var current = node;
+        while (current != null)
+        {
+            if (current is FolderNode or VariableNode)
+                parts.Add(current.Name);
+            current = current.Parent;
+        }
+        parts.Reverse();
+        return string.Join(".", parts);
+    }
+
     private void ReloadViewModels()
     {
         if (ActiveProject != null)

@@ -31,6 +31,7 @@ builder.Services.AddSingleton<NaturalLanguageQueryService>();
 builder.Services.AddSingleton<DataExportService>();
 builder.Services.AddScoped<PushNotificationInterop>();
 builder.Services.AddScoped<MultiSiteAggregator>();
+builder.Services.AddSingleton<NavigationPredictorService>();
 
 // ─── External Authentication (OAuth) ───
 // Schemes are registered unconditionally; actual client IDs/secrets are read
