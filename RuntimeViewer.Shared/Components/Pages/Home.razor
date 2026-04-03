@@ -301,7 +301,22 @@ else
 
     @* -- Canvas -- *@
     <div class="rv-viewport">
-        @if (_currentScreen != null)
+        @if (ScreenPreload.Enabled && _currentScreen != null)
+        {
+            @* Pre-loaded screens: render all cached screens, toggle visibility via CSS *@
+            @foreach (var cached in ScreenPreload.Cache)
+            {
+                var screen = Project.Screens.FirstOrDefault(s => s.Name.Equals(cached.Name, StringComparison.OrdinalIgnoreCase));
+                if (screen != null)
+                {
+                    var isVisible = ScreenPreload.IsVisible(cached.Name);
+                    <div style="@(isVisible ? "" : "display:none")">
+                        <ScreenRenderer Screen="screen" IsKiosk="Project.IsKiosk" BestFit="_bestFit" OnRequestLogin="ShowAccessLoginPrompt" />
+                    </div>
+                }
+            }
+        }
+        else if (_currentScreen != null)
         {
             <ScreenRenderer Screen="_currentScreen" IsKiosk="Project.IsKiosk" BestFit="_bestFit" OnRequestLogin="ShowAccessLoginPrompt" />
         }
@@ -470,6 +485,7 @@ else
     [Inject] private ProjectService Project { get; set; } = default!;
     [Inject] private OpcRuntimeClient Opc { get; set; } = default!;
     [Inject] private NavigationPredictorService NavPredictor { get; set; } = default!;
+    [Inject] private ScreenPreloadService ScreenPreload { get; set; } = default!;
     [Inject] private CommandService Commands { get; set; } = default!;
     [Inject] private NavigationManager Nav { get; set; } = default!;
     [Inject] private IJSRuntime JS { get; set; } = default!;
@@ -650,6 +666,16 @@ else
         // Record navigation for predictive pre-connection learning
         if (_currentScreen != null && Project.Settings.EnablePredictivePreconnect)
             NavPredictor.RecordNavigation(_currentScreen.Name);
+
+        // Update screen preload cache
+        if (_currentScreen != null)
+        {
+            ScreenPreload.Enabled = Project.Settings.EnableScreenPreloading;
+            var predictedScreens = Project.Settings.EnablePredictivePreconnect
+                ? NavPredictor.GetPredictedScreenNames()
+                : [];
+            ScreenPreload.Navigate(_currentScreen.Name, predictedScreens);
+        }
 
         if (!Opc.IsConnected && !_connecting && !string.IsNullOrEmpty(Project.Settings.EndpointUrl))
         {

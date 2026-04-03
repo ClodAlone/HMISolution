@@ -486,6 +486,13 @@ namespace SharedModels
         /// Default: false.
         /// </summary>
         public bool EnablePredictivePreconnect { get; set; }
+
+        /// <summary>
+        /// When enabled, the runtime viewer pre-loads predicted next screens in the background
+        /// (hidden), so navigation is nearly instant. Cached screens are evicted under memory pressure.
+        /// Default: false.
+        /// </summary>
+        public bool EnableScreenPreloading { get; set; }
     }
 
     /// <summary>

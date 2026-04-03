@@ -58,6 +58,14 @@ public class NavigationPredictorService
         _currentScreen = screenName;
         UpdatePrediction();
     }
+    /// <summary>Returns the predicted next screen name(s), ordered by probability.</summary>
+    public List<string> GetPredictedScreenNames()
+    {
+        if (string.IsNullOrEmpty(PredictedNextScreen) || PredictionConfidence < MinConfidence)
+            return [];
+        return [PredictedNextScreen];
+    }
+
     /// <summary>Returns variable paths the predicted next screen would need.</summary>
     public List<string> GetPredictedVariablePaths(IReadOnlyList<SharedModels.ScreenConfig> screens)
     {
