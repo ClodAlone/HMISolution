@@ -48,6 +48,20 @@ namespace SimpleOpcFileServer
         private NodeModel? _lastModel;
         private readonly string _configPath;
 
+        /// <summary>
+        /// Resolves a relative database file path to the Data subfolder next to the config file.
+        /// Creates the Data directory if it doesn't exist.
+        /// </summary>
+        private string ResolveDataPath(string relativePath)
+        {
+            if (Path.IsPathRooted(relativePath) || relativePath.Contains(":memory:"))
+                return relativePath;
+            var configDir = Path.GetDirectoryName(Path.GetFullPath(_configPath)) ?? ".";
+            var dataDir = Path.Combine(configDir, "Data");
+            Directory.CreateDirectory(dataDir);
+            return Path.GetFullPath(Path.Combine(dataDir, relativePath));
+        }
+
         // Alarm tracking
         private readonly Dictionary<string, AlarmConditionInfo> _alarmConditions = new();
 
@@ -561,7 +575,7 @@ namespace SimpleOpcFileServer
                      if (db.Provider.Equals("Sqlite", StringComparison.OrdinalIgnoreCase)
                          || db.Provider.Equals("SQLite", StringComparison.OrdinalIgnoreCase))
                      {
-                         _logger = new SqliteLogger(db.ConnectionString, db.TableName);
+                         _logger = new SqliteLogger(ResolveDataPath(db.ConnectionString), db.TableName);
                          }
                          else
                          {
@@ -575,13 +589,7 @@ namespace SimpleOpcFileServer
                  var evtCfg = nodeModel.Server?.EventLog;
                  if (evtCfg == null || evtCfg.Enabled)
                  {
-                     var dbPath = evtCfg?.DbPath ?? "events.db";
-                     if (!Path.IsPathRooted(dbPath))
-                     {
-                         var dir = Path.GetDirectoryName(Path.GetFullPath(_configPath));
-                         if (!string.IsNullOrEmpty(dir))
-                             dbPath = Path.Combine(dir, dbPath);
-                     }
+                     var dbPath = ResolveDataPath(evtCfg?.DbPath ?? "events.db");
                      var maxAge = evtCfg?.MaxAgeDays ?? 90;
                      _eventLogger = new EventLogger(dbPath, maxAge);
 

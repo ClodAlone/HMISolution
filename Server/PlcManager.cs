@@ -59,6 +59,9 @@ namespace SimpleOpcFileServer
         private List<IlInstruction>? _compiledIl;
         private LdProgram? _compiledLd;
 
+        private int _consecutiveErrors;
+        private const int MaxBackoffMs = 30_000;
+
         public PlcProgramRunner(PlcProgramConfig config, SimpleFileServerNodeManager nodeManager, CancellationToken token)
         {
             _config = config;
@@ -107,18 +110,25 @@ namespace SimpleOpcFileServer
                         sw.Stop();
                         DiagnosticsCollector.Instance.RecordCycle("PlcProgram", _config.Name, sw.Elapsed.TotalMilliseconds);
                         RecordDebugSnapshot(debug, cycleCount, "Running", null);
+                        _consecutiveErrors = 0;
                     }
                     catch (Exception ex)
                     {
                         sw.Stop();
+                        _consecutiveErrors++;
                         DiagnosticsCollector.Instance.RecordCycle("PlcProgram", _config.Name, sw.Elapsed.TotalMilliseconds, error: ex.Message);
                         RecordDebugSnapshot(debug, cycleCount, "Error", ex.Message);
-                        Log.Error(ex, "PLC '{Name}': execution error: {Message}", _config.Name, ex.Message);
+                        if (_consecutiveErrors == 1 || _consecutiveErrors % 10 == 0)
+                            Log.Error(ex, "PLC '{Name}': execution error: {Message}", _config.Name, ex.Message);
                     }
 
                     try
                     {
-                        await Task.Delay(_config.IntervalMs, _token);
+                        var delay = _config.IntervalMs;
+                        if (_consecutiveErrors > 1)
+                            delay = Math.Min(delay * (1 << Math.Min(_consecutiveErrors - 1, 10)), MaxBackoffMs);
+
+                        await Task.Delay(delay, _token);
                     }
                     catch (OperationCanceledException) { break; }
                 }

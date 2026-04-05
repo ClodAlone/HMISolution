@@ -10,11 +10,11 @@
 }
 else if (Screen.LayoutMode == "responsive")
 {
-    @* ─── Responsive HTML Grid Layout ─────────────────────── *@
+    @* â”€â”€â”€ Responsive HTML Grid Layout â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ *@
     var bgDataResp = ResolveImageData(Screen.BackgroundImageId);
     <div class="rv-responsive-grid @(IsKiosk ? "rv-responsive-kiosk" : "")"
          style="background: @Screen.Background;@(string.IsNullOrEmpty(bgDataResp) ? "" : $" background-image: url('{bgDataResp}'); background-size: cover; background-position: center;") gap: @(Screen.GridGap)px; grid-template-columns: repeat(@Screen.GridColumns, 1fr);">
-        @foreach (var sym in Screen.Symbols.OrderBy(s => s.Order))
+        @foreach (var sym in GetSortedSymbols())
         {
             var liveValue = Opc.GetValue(sym.VariablePath ?? "");
             var fillColor = EvalFillBinding(sym, liveValue);
@@ -349,7 +349,7 @@ else if (Screen.LayoutMode == "responsive")
 
                 @if (isLocked)
                 {
-                    <span class="rv-responsive-lock">🔒</span>
+                    <span class="rv-responsive-lock">ðŸ”’</span>
                 }
             </div>
         }
@@ -406,7 +406,7 @@ else
 
             if (!visible) continue;
 
-            // Access-level visibility: if symbol requires access and user lacks read → hide
+            // Access-level visibility: if symbol requires access and user lacks read â†’ hide
             if (!string.IsNullOrEmpty(sym.RequiredAccess) && !Auth.HasReadAccess(sym.RequiredAccess))
                 continue;
 
@@ -700,7 +700,7 @@ else
                     @RenderSvgText(sym.Width / 2, sym.Height + 14, "middle", null, "#333", 11, resolvedLabel, sym)
                 }
 
-                @* Hover highlight outline — shown via CSS :hover *@
+                @* Hover highlight outline â€” shown via CSS :hover *@
                 @if (hasCmd)
                 {
                     <rect class="rv-hover-outline" x="-2" y="-2" width="@(sym.Width + 4)" height="@(sym.Height + 4)"
@@ -711,7 +711,7 @@ else
                 @* Lock icon for symbols requiring write access the user doesn't have *@
                 @if (isLocked)
                 {
-                    @RenderSvgText(sym.Width - 2, 12, "end", null, "#dc3545", 12, "🔒")
+                    @RenderSvgText(sym.Width - 2, 12, "end", null, "#dc3545", 12, "ðŸ”’")
                 }
                 </g>
             </g></LiveSymbol>
@@ -736,7 +736,7 @@ else
             var mode = Screen?.FitMode ?? "";
             if (!string.IsNullOrEmpty(mode) && mode is "contain" or "fill" or "scroll")
                 return mode;
-            // Legacy fallback: BestFit parameter → "contain", else "scroll"
+            // Legacy fallback: BestFit parameter â†’ "contain", else "scroll"
             return BestFit ? "contain" : "scroll";
         }
     }    [Inject] private OpcRuntimeClient Opc { get; set; } = default!;
@@ -754,7 +754,30 @@ else
     private string? ResolveImageData(string? imageId)
     {
         if (string.IsNullOrEmpty(imageId)) return null;
-        return Project.Model?.Images?.FirstOrDefault(i => i.Id == imageId)?.Data;
+        var cache = GetImageCache();
+        return cache != null && cache.TryGetValue(imageId, out var data) ? data : null;
+    }
+
+    private Dictionary<string, string>? GetImageCache()
+    {
+        var images = Project.Model?.Images;
+
+        if (images == null) { _imageCache = null; return null; }
+        if (_imageCache != null && ReferenceEquals(images, _imageCacheSource)) return _imageCache;
+        _imageCache = new Dictionary<string, string>(images.Count, StringComparer.Ordinal);
+        foreach (var img in images)
+            _imageCache.TryAdd(img.Id, img.Data);
+        _imageCacheSource = images;
+        return _imageCache;
+    }
+
+    private List<ScreenSymbol> GetSortedSymbols()
+    {
+        if (_sortedSymbols != null && _sortedSymbolsScreenName == Screen?.Name)
+            return _sortedSymbols;
+        _sortedSymbolsScreenName = Screen?.Name;
+        _sortedSymbols = Screen?.Symbols?.OrderBy(s => s.Order).ToList() ?? new();
+        return _sortedSymbols;
     }
     private readonly Dictionary<string, double> _gaugeDisplayPct = new();
     private const double _gaugeLerpSpeed = 0.18;
@@ -776,33 +799,37 @@ else
     private volatile bool _valuesDirty;
     private string? _lastMonitoredScreenName;
     private HashSet<string> _lastMonitoredPaths = new();
+    private Dictionary<string, string>? _imageCache;
+    private List<ImageResource>? _imageCacheSource;
+    private List<ScreenSymbol>? _sortedSymbols;
+    private string? _sortedSymbolsScreenName;
+    private Dictionary<string, string>? _fontStyleCache;
 
     /// <summary>Builds inline CSS for widget font overrides from the symbol config.
-    /// Emits both direct font properties (for CSS inheritance) and custom properties (for explicit var() usage).</summary>
-    private static string WidgetFontStyle(ScreenSymbol sym)
+    /// Result is cached per symbol Id since font properties are immutable at runtime.</summary>
+    private string WidgetFontStyle(ScreenSymbol sym)
     {
-        var sb = new System.Text.StringBuilder();
-        if (!string.IsNullOrEmpty(sym.FontFamily))
-        {
-            sb.Append($"font-family: {sym.FontFamily}; ");
-            sb.Append($"--widget-font-family: {sym.FontFamily}; ");
-        }
-        if (sym.FontSize > 0)
-        {
-            sb.Append($"font-size: {sym.FontSize}px; ");
-            sb.Append($"--widget-font-size: {sym.FontSize}px; ");
-        }
-        if (!string.IsNullOrEmpty(sym.FontWeight))
-        {
-            sb.Append($"font-weight: {sym.FontWeight}; ");
-            sb.Append($"--widget-font-weight: {sym.FontWeight}; ");
-        }
-        if (!string.IsNullOrEmpty(sym.FontStyle))
-        {
-            sb.Append($"font-style: {sym.FontStyle}; ");
-            sb.Append($"--widget-font-style: {sym.FontStyle}; ");
-        }
-        return sb.ToString();
+        _fontStyleCache ??= new Dictionary<string, string>(StringComparer.Ordinal);
+        if (_fontStyleCache.TryGetValue(sym.Id, out var cached))
+            return cached;
+
+        bool hasFamily = !string.IsNullOrEmpty(sym.FontFamily);
+        bool hasSize = sym.FontSize > 0;
+        bool hasWeight = !string.IsNullOrEmpty(sym.FontWeight);
+        bool hasStyle = !string.IsNullOrEmpty(sym.FontStyle);
+
+        string result;
+        if (!hasFamily && !hasSize && !hasWeight && !hasStyle)
+            result = string.Empty;
+        else
+            result = string.Concat(
+                hasFamily ? string.Concat("font-family: ", sym.FontFamily, "; --widget-font-family: ", sym.FontFamily, "; ") : "",
+                hasSize ? string.Concat("font-size: ", sym.FontSize.ToString(), "px; --widget-font-size: ", sym.FontSize.ToString(), "px; ") : "",
+                hasWeight ? string.Concat("font-weight: ", sym.FontWeight, "; --widget-font-weight: ", sym.FontWeight, "; ") : "",
+                hasStyle ? string.Concat("font-style: ", sym.FontStyle, "; --widget-font-style: ", sym.FontStyle, "; ") : "");
+
+        _fontStyleCache[sym.Id] = result;
+        return result;
     }
 
     protected override void OnInitialized()
@@ -889,7 +916,7 @@ else
     private void OnValuesChanged()
     {
         // Signal the timer to re-render on its next tick.
-        // Do NOT call StateHasChanged here — it would fire on every
+        // Do NOT call StateHasChanged here â€” it would fire on every
         // OPC notification and create a render storm.
         _valuesDirty = true;
     }
@@ -899,7 +926,7 @@ else
         InvokeAsync(StateHasChanged);
     }
 
-    // ─── Mouse interaction ──────────────────────────────────
+    // â”€â”€â”€ Mouse interaction â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private async Task OnSymbolMouseDown(MouseEventArgs e, ScreenSymbol sym)
     {
@@ -1148,7 +1175,7 @@ else
             var cy = sym.Y + sym.Height / 2.0;
             var currentAngle = Math.Atan2(svgPt.X - cx, -(svgPt.Y - cy)) * 180.0 / Math.PI;
 
-            // Use incremental delta from previous angle to avoid ±180° wrapping
+            // Use incremental delta from previous angle to avoid Â±180Â° wrapping
             var delta = currentAngle - _knobPrevAngle;
             if (delta > 180) delta -= 360;
             if (delta < -180) delta += 360;
@@ -1156,7 +1183,7 @@ else
 
             var min = sym.MinValue ?? 0;
             var max = sym.MaxValue ?? 100;
-            // Map 300° rotation range to full value range
+            // Map 300Â° rotation range to full value range
             var valueDelta = delta / 300.0 * (max - min);
             _knobCurrentValue = Math.Clamp(_knobCurrentValue + valueDelta, min, max);
             ThrottledDragWrite(sym.VariablePath, _knobCurrentValue.ToString("F2", System.Globalization.CultureInfo.InvariantCulture));
@@ -1202,7 +1229,7 @@ else
     }
 
 
-    // ─── Formatting ─────────────────────────────────────────
+    // â”€â”€â”€ Formatting â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private static string F(double v) => v.ToString("F1", System.Globalization.CultureInfo.InvariantCulture);
 
@@ -1220,7 +1247,7 @@ else
         return $"<svg xmlns='http://www.w3.org/2000/svg' style='width:100%;height:100%' preserveAspectRatio='xMidYMid meet'>{svg}</svg>";
     }
 
-    // ─── Binding evaluations ────────────────────────────────
+    // â”€â”€â”€ Binding evaluations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private double? ParseNumericValue(string? val)
     {
@@ -1301,11 +1328,9 @@ else
         {
             if (sym.LabelBinding.Contains("value"))
             {
-                var result = sym.LabelBinding.Replace("value", liveValue);
-                result = result.Replace("+ '", "").Replace("' +", "").Replace("'", "")
-                    .Replace("+", "").Replace("  ", " ").Trim();
-                if (!string.IsNullOrEmpty(result))
-                    return $"{liveValue} {result.Replace(liveValue, "").Trim()}".Trim();
+                var suffix = ExtractLabelSuffix(sym.LabelBinding, liveValue);
+                if (suffix.Length > 0)
+                    return string.Concat(liveValue, " ", suffix);
                 return liveValue;
             }
         }
@@ -1313,54 +1338,124 @@ else
         return liveValue;
     }
 
+    private static string ExtractLabelSuffix(string binding, string liveValue)
+    {
+        Span<char> buf = stackalloc char[binding.Length];
+        int pos = 0;
+        for (int i = 0; i < binding.Length; i++)
+        {
+            char c = binding[i];
+            if (c == '+' || c == '\'') continue;
+            buf[pos++] = c;
+        }
+        var cleaned = buf[..pos].Trim();
+        int idx = cleaned.IndexOf("value".AsSpan(), StringComparison.Ordinal);
+        if (idx >= 0)
+        {
+            var before = cleaned[..idx];
+            var after = cleaned[(idx + 5)..];
+            before.CopyTo(buf);
+            after.CopyTo(buf[before.Length..]);
+            cleaned = buf[..(before.Length + after.Length)];
+        }
+        Span<char> result = stackalloc char[cleaned.Length];
+        int wp = 0;
+        bool lastSpace = false;
+        for (int i = 0; i < cleaned.Length; i++)
+        {
+            if (cleaned[i] == ' ') { if (!lastSpace) { result[wp++] = ' '; lastSpace = true; } }
+            else { result[wp++] = cleaned[i]; lastSpace = false; }
+        }
+        return new string(result[..wp].Trim());
+    }
+
     private string? EvalSimpleCondition(string binding, string liveValue, double? numVal)
     {
         var qIdx = binding.IndexOf('?');
         var cIdx = binding.IndexOf(':', qIdx + 1);
         if (qIdx < 0 || cIdx < 0) return null;
-        var condition = binding[..qIdx].Trim();
-        var trueVal = binding[(qIdx + 1)..cIdx].Trim().Trim('\'', '"', ' ');
-        var falseVal = binding[(cIdx + 1)..].Trim().Trim('\'', '"', ' ');
-        return EvalSimpleBool(condition, liveValue, numVal) ? trueVal : falseVal;
+
+        // Use spans to avoid intermediate substring/trim allocations
+        var bindSpan = binding.AsSpan();
+        var condSpan = bindSpan[..qIdx].Trim();
+        var trueSpan = TrimQuotes(bindSpan[(qIdx + 1)..cIdx].Trim());
+        var falseSpan = TrimQuotes(bindSpan[(cIdx + 1)..].Trim());
+
+        // EvalSimpleBool already accepts string but internally works on span;
+        // pass the pre-trimmed condition as a string only once
+        bool result = EvalSimpleBool(condSpan.ToString(), liveValue, numVal);
+        // Materialize only the chosen branch
+        return result ? trueSpan.ToString() : falseSpan.ToString();
+    }
+
+    private static ReadOnlySpan<char> TrimQuotes(ReadOnlySpan<char> span)
+    {
+        if (span.Length >= 2)
+        {
+            char first = span[0];
+            if ((first == '\'' || first == '"' || first == ' ') && span[^1] == first)
+                span = span[1..^1];
+        }
+        return span.Trim();
     }
 
     private bool EvalSimpleBool(string condition, string liveValue, double? numVal)
     {
-        condition = condition.Trim();
-        if (condition.Contains("=="))
+        var span = condition.AsSpan().Trim();
+        // Single-pass operator detection: scan for two-char operators first, then single-char
+        int opIdx = -1;
+        int opLen = 0;
+        for (int i = 0; i < span.Length - 1; i++)
         {
-            var parts = condition.Split("==", 2);
-            var right = parts[1].Trim().Trim('\'', '"');
-            if (right.Equals("true", StringComparison.OrdinalIgnoreCase))
+            char c = span[i];
+            char c1 = span[i + 1];
+            if (c == '=' && c1 == '=') { opIdx = i; opLen = 2; break; }
+            if (c == '!' && c1 == '=') { opIdx = i; opLen = 2; break; }
+            if (c == '>' && c1 == '=') { opIdx = i; opLen = 2; break; }
+            if (c == '<' && c1 == '=') { opIdx = i; opLen = 2; break; }
+            if (opIdx < 0 && (c == '>' || c == '<')) { opIdx = i; opLen = 1; }
+        }
+        if (opIdx < 0) return true;
+
+        var rightSpan = span[(opIdx + opLen)..].Trim();
+        // Trim quotes from right operand
+        if (rightSpan.Length >= 2 && (rightSpan[0] == '\'' || rightSpan[0] == '"') && rightSpan[^1] == rightSpan[0])
+            rightSpan = rightSpan[1..^1];
+
+        if (opLen == 2 && span[opIdx] == '=')
+        {
+            // == operator: string/bool/numeric equality
+            if (rightSpan.Equals("true", StringComparison.OrdinalIgnoreCase))
                 return liveValue.Equals("True", StringComparison.OrdinalIgnoreCase) || liveValue == "1";
-            if (right.Equals("false", StringComparison.OrdinalIgnoreCase))
+            if (rightSpan.Equals("false", StringComparison.OrdinalIgnoreCase))
                 return liveValue.Equals("False", StringComparison.OrdinalIgnoreCase) || liveValue == "0";
-            if (numVal.HasValue && double.TryParse(right, System.Globalization.NumberStyles.Any,
+            if (numVal.HasValue && double.TryParse(rightSpan, System.Globalization.NumberStyles.Any,
                     System.Globalization.CultureInfo.InvariantCulture, out var rn))
                 return Math.Abs(numVal.Value - rn) < 0.0001;
-            return liveValue == right;
+            return liveValue.AsSpan().SequenceEqual(rightSpan);
         }
-        if (numVal.HasValue)
-        {
-            if (condition.Contains(">=")) return TryCompare(condition, ">=", numVal.Value, (a, b) => a >= b);
-            if (condition.Contains("<=")) return TryCompare(condition, "<=", numVal.Value, (a, b) => a <= b);
-            if (condition.Contains('>')) return TryCompare(condition, ">", numVal.Value, (a, b) => a > b);
-            if (condition.Contains('<')) return TryCompare(condition, "<", numVal.Value, (a, b) => a < b);
-            if (condition.Contains("!=")) return TryCompare(condition, "!=", numVal.Value, (a, b) => Math.Abs(a - b) > 0.0001);
-        }
-        return true;
-    }
 
-    private static bool TryCompare(string expr, string op, double value, Func<double, double, bool> compare)
-    {
-        var parts = expr.Split(op, 2);
-        if (parts.Length == 2 && double.TryParse(parts[1].Trim(), System.Globalization.NumberStyles.Any,
+        // Numeric comparison operators
+        if (!numVal.HasValue) return true;
+        if (!double.TryParse(rightSpan, System.Globalization.NumberStyles.Any,
                 System.Globalization.CultureInfo.InvariantCulture, out var threshold))
-            return compare(value, threshold);
-        return true;
+            return true;
+
+        double val = numVal.Value;
+        if (opLen == 2)
+        {
+            return span[opIdx] switch
+            {
+                '!' => Math.Abs(val - threshold) > 0.0001,
+                '>' => val >= threshold,
+                '<' => val <= threshold,
+                _ => true
+            };
+        }
+        return span[opIdx] == '>' ? val > threshold : val < threshold;
     }
 
-    // ─── SVG text helper ────────────────────────────────────
+    // â”€â”€â”€ SVG text helper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /// <summary>
     /// Resolves the active image from an imagemap widget's entry list.
@@ -1432,7 +1527,7 @@ else
         builder.CloseElement();
     };
 
-    // ─── Library SVG symbol renderer ────────────────────────
+    // â”€â”€â”€ Library SVG symbol renderer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private RenderFragment RenderLibrarySvg(ScreenSymbol sym) => builder =>
     {
@@ -1455,7 +1550,7 @@ else
         builder.CloseElement();
     };
 
-    // ─── Toggle Switch rendering ────────────────────────────
+    // â”€â”€â”€ Toggle Switch rendering â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private RenderFragment RenderToggleSwitch(ScreenSymbol sym, string? liveValue) => builder =>
     {
@@ -1511,7 +1606,7 @@ else
         builder.CloseElement();
     };
 
-    // ─── Rotary Switch rendering ────────────────────────────
+    // â”€â”€â”€ Rotary Switch rendering â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private RenderFragment RenderRotarySwitch(ScreenSymbol sym, string? liveValue) => builder =>
     {
@@ -1612,7 +1707,7 @@ else
     };
 
 
-    // ─── Knob rendering ──────────────────────────────────────
+    // â”€â”€â”€ Knob rendering â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private RenderFragment RenderKnob(ScreenSymbol sym, string? liveValue) => builder =>
     {
@@ -1729,7 +1824,7 @@ else
         }
     };
 
-    // ─── Horizontal Slider rendering ──────────────────────────
+    // â”€â”€â”€ Horizontal Slider rendering â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private RenderFragment RenderHSlider(ScreenSymbol sym, string? liveValue) => builder =>
     {
@@ -1842,7 +1937,7 @@ else
         }
     };
 
-    // ─── Vertical Slider rendering ──────────────────────────
+    // â”€â”€â”€ Vertical Slider rendering â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private RenderFragment RenderVSlider(ScreenSymbol sym, string? liveValue) => builder =>
     {
@@ -1955,7 +2050,7 @@ else
         }
     };
 
-    // ─── Command Button rendering (SVG canvas) ─────────────────
+    // â”€â”€â”€ Command Button rendering (SVG canvas) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private RenderFragment RenderButton(ScreenSymbol sym, string? label) => builder =>
     {
@@ -2116,7 +2211,7 @@ else
         }
     };
 
-    // ─── Command Button rendering (responsive HTML) ─────────────
+    // â”€â”€â”€ Command Button rendering (responsive HTML) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private RenderFragment RenderResponsiveButton(ScreenSymbol sym, string? label) => builder =>
     {
@@ -2193,7 +2288,7 @@ else
         builder.CloseElement();
     };
 
-    // ─── Gauge rendering ────────────────────────────────────
+    // â”€â”€â”€ Gauge rendering â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private RenderFragment RenderGauge(ScreenSymbol sym, string fill, string? liveValue) => builder =>
     {
@@ -2223,7 +2318,7 @@ else
         return (numVal, min, max, pct, valText);
     }
 
-    // ── Needle (classic dial, 270° sweep) ───────────────────
+    // â”€â”€ Needle (classic dial, 270Â° sweep) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     private void RenderGaugeNeedle(Microsoft.AspNetCore.Components.Rendering.RenderTreeBuilder builder, ScreenSymbol sym, string fill, string? liveValue)
     {
         int seq = 0;
@@ -2314,7 +2409,7 @@ else
         }
     }
 
-    // ── Arc (donut ring, 270° sweep) ────────────────────────
+    // â”€â”€ Arc (donut ring, 270Â° sweep) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     private void RenderGaugeArc(Microsoft.AspNetCore.Components.Rendering.RenderTreeBuilder builder, ScreenSymbol sym, string fill, string? liveValue)
     {
         int seq = 0;
@@ -2385,7 +2480,7 @@ else
         }
     }
 
-    // ── Semicircle (180° half-circle) ───────────────────────
+    // â”€â”€ Semicircle (180Â° half-circle) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     private void RenderGaugeSemicircle(Microsoft.AspNetCore.Components.Rendering.RenderTreeBuilder builder, ScreenSymbol sym, string fill, string? liveValue)
     {
         int seq = 0;
@@ -2396,7 +2491,7 @@ else
         var sw = Math.Max(6, r * 0.18);
         var halfCirc = Math.PI * r;
 
-        // Track arc (180°)
+        // Track arc (180Â°)
         builder.OpenElement(seq++, "circle");
         builder.AddAttribute(seq++, "cx", cx); builder.AddAttribute(seq++, "cy", cy);
         builder.AddAttribute(seq++, "r", r); builder.AddAttribute(seq++, "fill", "none");
@@ -2464,7 +2559,7 @@ else
         }
     }
 
-    // ── Horizontal bar ──────────────────────────────────────
+    // â”€â”€ Horizontal bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     private void RenderGaugeHBar(Microsoft.AspNetCore.Components.Rendering.RenderTreeBuilder builder, ScreenSymbol sym, string fill, string? liveValue)
     {
         int seq = 0;
@@ -2531,7 +2626,7 @@ else
         }
     }
 
-    // ── Vertical bar (bottom-up) ────────────────────────────
+    // â”€â”€ Vertical bar (bottom-up) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     private void RenderGaugeVBar(Microsoft.AspNetCore.Components.Rendering.RenderTreeBuilder builder, ScreenSymbol sym, string fill, string? liveValue)
     {
         int seq = 0;
@@ -2599,7 +2694,7 @@ else
         }
     }
 
-    // ── Thermometer ─────────────────────────────────────────
+    // â”€â”€ Thermometer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     private void RenderGaugeThermometer(Microsoft.AspNetCore.Components.Rendering.RenderTreeBuilder builder, ScreenSymbol sym, string fill, string? liveValue)
     {
         int seq = 0;
@@ -2712,9 +2807,9 @@ else
         return sched?.SlotMinutes ?? 60;
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // ANIMATION SYSTEM — CSS @keyframes generation for symbol animations
-    // ═══════════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ANIMATION SYSTEM â€” CSS @keyframes generation for symbol animations
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
     /// <summary>
     /// Evaluates whether an OnVariable-triggered animation's condition is currently met.
@@ -2781,7 +2876,7 @@ else
                                 double.TryParse(parts[0].Trim(), System.Globalization.NumberStyles.Any, _ci, out var px) &&
                                 double.TryParse(parts[1].Trim(), System.Globalization.NumberStyles.Any, _ci, out var py))
                             {
-                                // Absolute translate — replaces the SVG transform on the outer <g>
+                                // Absolute translate â€” replaces the SVG transform on the outer <g>
                                 sb.Append($"transform: translate({px.ToString("F1", _ci)}px, {py.ToString("F1", _ci)}px); ");
                             }
                             break;
@@ -2927,7 +3022,7 @@ else
     };
 
 
-    // ─── Animated Text rendering (SVG canvas via foreignObject) ─────────────
+    // â”€â”€â”€ Animated Text rendering (SVG canvas via foreignObject) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private RenderFragment RenderAnimText(ScreenSymbol sym, string resolvedLabel) => builder =>
     {
@@ -3052,7 +3147,7 @@ else
         }
         else
         {
-            // flash, pulse, typewriter — show current message
+            // flash, pulse, typewriter â€” show current message
             builder.OpenElement(seq++, "div");
             builder.AddAttribute(seq++, "class", $"{uniqueId}_container");
             if (messages.Count > 1)
@@ -3071,7 +3166,7 @@ else
         builder.CloseElement(); // foreignObject
     };
 
-    // ─── Animated Text rendering (responsive HTML) ─────────────
+    // â”€â”€â”€ Animated Text rendering (responsive HTML) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private RenderFragment RenderResponsiveAnimText(ScreenSymbol sym, string resolvedLabel) => builder =>
     {
@@ -3203,12 +3298,12 @@ else
                 _jsModule = await JS.InvokeAsync<IJSObjectReference>(
                     "import", $"./_content/RuntimeViewer.Shared/screenrenderer.js?v={cacheBuster}");
             }
-            catch { /* JS module not available — slider drag disabled */ }
+            catch { /* JS module not available â€” slider drag disabled */ }
         }
     }
 
 
-    // â”€â”€â”€ Progress Bar rendering â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Progress Bar rendering Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
     private RenderFragment RenderProgressBar(ScreenSymbol sym, string? liveValue) => builder =>
     {
         int seq = 0;
@@ -3269,7 +3364,7 @@ else
         }
     };
 
-    // â”€â”€â”€ Numeric Display rendering â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Numeric Display rendering Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
     private RenderFragment RenderNumericDisplay(ScreenSymbol sym, string? liveValue) => builder =>
     {
         int seq = 0;
@@ -3322,7 +3417,7 @@ else
         }
     };
 
-    // â”€â”€â”€ LED Array rendering â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ LED Array rendering Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
     private RenderFragment RenderLedArray(ScreenSymbol sym, string? liveValue) => builder =>
     {
         int seq = 0;
@@ -3375,7 +3470,7 @@ else
         }
     };
 
-    // â”€â”€â”€ Pipe rendering â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Pipe rendering Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
     private RenderFragment RenderPipe(ScreenSymbol sym, string? liveValue) => builder =>
     {
         int seq = 0;
@@ -3539,7 +3634,7 @@ else
         }
     };
 
-    // â”€â”€â”€ Responsive Progress Bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Responsive Progress Bar Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
     private RenderFragment RenderResponsiveProgressBar(ScreenSymbol sym, string? liveValue) => builder =>
     {
         int seq = 0;
@@ -3575,7 +3670,7 @@ else
         builder.CloseElement();
     };
 
-    // â”€â”€â”€ Responsive Numeric Display â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Responsive Numeric Display Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
     private RenderFragment RenderResponsiveNumericDisplay(ScreenSymbol sym, string? liveValue) => builder =>
     {
         int seq = 0;
@@ -3608,7 +3703,7 @@ else
         builder.CloseElement();
     };
 
-    // â”€â”€â”€ Responsive LED Array â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Responsive LED Array Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
     private RenderFragment RenderResponsiveLedArray(ScreenSymbol sym, string? liveValue) => builder =>
     {
         int seq = 0;
@@ -3635,7 +3730,7 @@ else
         builder.CloseElement();
     };
 
-    // â”€â”€â”€ Responsive Pipe â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Responsive Pipe Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
     private RenderFragment RenderResponsivePipe(ScreenSymbol sym, string? liveValue) => builder =>
     {
         int seq = 0;
@@ -3698,7 +3793,7 @@ else
         }
     };
 
-    // ─── Tank rendering ────────────────────────────────────────
+    // â”€â”€â”€ Tank rendering â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     private RenderFragment RenderTank(ScreenSymbol sym, string? liveValue) => builder =>
     {
         int seq = 0;
@@ -3750,7 +3845,7 @@ else
         }
     };
 
-    // ─── Motor Control rendering ───────────────────────────────
+    // â”€â”€â”€ Motor Control rendering â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     private RenderFragment RenderMotorControl(ScreenSymbol sym, string? liveValue) => builder =>
     {
         int seq = 0;
@@ -3808,7 +3903,7 @@ else
         builder.CloseElement();
     };
 
-    // ─── Valve rendering ───────────────────────────────────────
+    // â”€â”€â”€ Valve rendering â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     private RenderFragment RenderValve(ScreenSymbol sym, string? liveValue) => builder =>
     {
         int seq = 0;
@@ -3868,7 +3963,7 @@ else
         }
     };
 
-    // ─── Sparkline rendering ───────────────────────────────────
+    // â”€â”€â”€ Sparkline rendering â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     private RenderFragment RenderSparkline(ScreenSymbol sym, string? liveValue) => builder =>
     {
         int seq = 0;
@@ -3948,7 +4043,7 @@ else
         }
     };
 
-    // ─── Color Zone rendering ──────────────────────────────────
+    // â”€â”€â”€ Color Zone rendering â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     private RenderFragment RenderColorZone(ScreenSymbol sym, string? liveValue) => builder =>
     {
         int seq = 0;
@@ -4005,7 +4100,7 @@ else
         return result;
     }
 
-    // ─── Alarm Banner rendering ────────────────────────────────
+    // â”€â”€â”€ Alarm Banner rendering â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     private RenderFragment RenderAlarmBanner(ScreenSymbol sym, string? liveValue) => builder =>
     {
         int seq = 0;
@@ -4074,7 +4169,7 @@ else
         builder.CloseElement();
     };
 
-    // ─── Dropdown rendering (SVG: static preview) ──────────────
+    // â”€â”€â”€ Dropdown rendering (SVG: static preview) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     private RenderFragment RenderDropdown(ScreenSymbol sym, string? liveValue) => builder =>
     {
         int seq = 0;
@@ -4109,7 +4204,7 @@ else
         builder.CloseElement();
     };
 
-    // ─── Data Table rendering (SVG via foreignObject) ──────────
+    // â”€â”€â”€ Data Table rendering (SVG via foreignObject) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     private RenderFragment RenderDataTable(ScreenSymbol sym, string? liveValue) => builder =>
     {
         int seq = 0;
@@ -4210,7 +4305,7 @@ else
         }
     }
 
-    // ─── Responsive versions ───────────────────────────────────
+    // â”€â”€â”€ Responsive versions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private RenderFragment RenderResponsiveTank(ScreenSymbol sym, string? liveValue) => builder =>
     {
@@ -4774,7 +4869,7 @@ else
 
 
 
-    // ── Heat Exchanger (SVG) ──
+    // â”€â”€ Heat Exchanger (SVG) â”€â”€
     private RenderFragment RenderHeatExchanger(ScreenSymbol sym, string? liveValue) => builder =>
     {
         int seq = 0;
@@ -4874,7 +4969,7 @@ else
         }
     };
 
-    // ── Popup (SVG) ──
+    // â”€â”€ Popup (SVG) â”€â”€
     private RenderFragment RenderPopup(ScreenSymbol sym, string? liveValue) => builder =>
     {
         int seq = 0;
@@ -4915,7 +5010,7 @@ else
         }
     };
 
-    // ── Setpoint Ramp (SVG) ──
+    // â”€â”€ Setpoint Ramp (SVG) â”€â”€
     private RenderFragment RenderSetpointRamp(ScreenSymbol sym, string? liveValue) => builder =>
     {
         int seq = 0;
@@ -4972,7 +5067,7 @@ else
         builder.AddAttribute(seq++, "x", F(w - 10)); builder.AddAttribute(seq++, "y", F(14));
         builder.AddAttribute(seq++, "text-anchor", "end");
         builder.AddAttribute(seq++, "fill", sym.SetpointTargetColor); builder.AddAttribute(seq++, "font-size", 10);
-        builder.AddContent(seq++, $"→ {F(target)} {sym.SetpointUnit}");
+        builder.AddContent(seq++, $"â†’ {F(target)} {sym.SetpointUnit}");
         builder.CloseElement();
 
         if (sym.SetpointShowRate && !string.IsNullOrEmpty(sym.SetpointRatePath))
@@ -4987,7 +5082,7 @@ else
         }
     };
 
-    // ── Flow Meter (SVG) ──
+    // â”€â”€ Flow Meter (SVG) â”€â”€
     private RenderFragment RenderFlowMeter(ScreenSymbol sym, string? liveValue) => builder =>
     {
         int seq = 0;
@@ -5054,12 +5149,12 @@ else
             builder.AddAttribute(seq++, "x", F(cx)); builder.AddAttribute(seq++, "y", F(h - 3));
             builder.AddAttribute(seq++, "text-anchor", "middle"); builder.AddAttribute(seq++, "fill", "#64748b");
             builder.AddAttribute(seq++, "font-size", 8);
-            builder.AddContent(seq++, $"Σ {totVal} {sym.FlowMeterTotalizerUnit}");
+            builder.AddContent(seq++, $"Î£ {totVal} {sym.FlowMeterTotalizerUnit}");
             builder.CloseElement();
         }
     };
 
-    // ── XY Plot (SVG) ──
+    // â”€â”€ XY Plot (SVG) â”€â”€
     private RenderFragment RenderXYPlot(ScreenSymbol sym, string? liveValue) => builder =>
     {
         int seq = 0;
@@ -5147,7 +5242,7 @@ else
         builder.CloseElement();
     };
 
-    // ── PDF Viewer (SVG) ──
+    // â”€â”€ PDF Viewer (SVG) â”€â”€
     private RenderFragment RenderPdfViewer(ScreenSymbol sym, string? liveValue) => builder =>
     {
         int seq = 0;
@@ -5179,7 +5274,7 @@ else
             builder.AddAttribute(seq++, "x", F(w / 2.0)); builder.AddAttribute(seq++, "y", F(h / 2.0 - 10));
             builder.AddAttribute(seq++, "text-anchor", "middle"); builder.AddAttribute(seq++, "dominant-baseline", "middle");
             builder.AddAttribute(seq++, "fill", "#64748b"); builder.AddAttribute(seq++, "font-size", 24);
-            builder.AddContent(seq++, "📄");
+            builder.AddContent(seq++, "ðŸ“„");
             builder.CloseElement();
             builder.OpenElement(seq++, "text");
             builder.AddAttribute(seq++, "x", F(w / 2.0)); builder.AddAttribute(seq++, "y", F(h / 2.0 + 16));
@@ -5190,7 +5285,7 @@ else
         }
     };
 
-    // ── Responsive Heat Exchanger ──
+    // â”€â”€ Responsive Heat Exchanger â”€â”€
     private RenderFragment RenderResponsiveHeatExchanger(ScreenSymbol sym, string? liveValue) => builder =>
     {
         int seq = 0;
@@ -5219,7 +5314,7 @@ else
         builder.CloseElement();
     };
 
-    // ── Responsive Popup ──
+    // â”€â”€ Responsive Popup â”€â”€
     private RenderFragment RenderResponsivePopup(ScreenSymbol sym, string? liveValue) => builder =>
     {
         int seq = 0;
@@ -5251,7 +5346,7 @@ else
         builder.CloseElement();
     };
 
-    // ── Responsive Setpoint Ramp ──
+    // â”€â”€ Responsive Setpoint Ramp â”€â”€
     private RenderFragment RenderResponsiveSetpointRamp(ScreenSymbol sym, string? liveValue) => builder =>
     {
         int seq = 0;
@@ -5270,7 +5365,7 @@ else
         builder.OpenElement(seq++, "span"); builder.AddAttribute(seq++, "style", $"color:{sym.SetpointColor};font-weight:700;");
         builder.AddContent(seq++, $"{F(current)} {sym.SetpointUnit}"); builder.CloseElement();
         builder.OpenElement(seq++, "span"); builder.AddAttribute(seq++, "style", $"color:{sym.SetpointTargetColor};");
-        builder.AddContent(seq++, $"→ {F(target)} {sym.SetpointUnit}"); builder.CloseElement();
+        builder.AddContent(seq++, $"â†’ {F(target)} {sym.SetpointUnit}"); builder.CloseElement();
         builder.CloseElement();
 
         // Progress bar
@@ -5292,7 +5387,7 @@ else
         builder.CloseElement();
     };
 
-    // ── Responsive Flow Meter ──
+    // â”€â”€ Responsive Flow Meter â”€â”€
     private RenderFragment RenderResponsiveFlowMeter(ScreenSymbol sym, string? liveValue) => builder =>
     {
         int seq = 0;
@@ -5322,7 +5417,7 @@ else
         builder.CloseElement();
     };
 
-    // ── Responsive XY Plot ──
+    // â”€â”€ Responsive XY Plot â”€â”€
     private RenderFragment RenderResponsiveXYPlot(ScreenSymbol sym, string? liveValue) => builder =>
     {
         int seq = 0;
@@ -5349,7 +5444,7 @@ else
         builder.CloseElement();
     };
 
-    // ── Responsive PDF Viewer ──
+    // â”€â”€ Responsive PDF Viewer â”€â”€
     private RenderFragment RenderResponsivePdfViewer(ScreenSymbol sym, string? liveValue) => builder =>
     {
         int seq = 0;
@@ -5375,7 +5470,7 @@ else
     };
 
 
-    // ─── KPI Widget (SVG-based for absolute layout) ─────────────────
+    // â”€â”€â”€ KPI Widget (SVG-based for absolute layout) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     private RenderFragment RenderKpiWidget(ScreenSymbol sym, string? liveValue) => builder =>
     {
         int seq = 0;
@@ -5521,7 +5616,7 @@ else
         }
     };
 
-    // ─── KPI Widget (HTML-based for responsive layout) ──────────────
+    // â”€â”€â”€ KPI Widget (HTML-based for responsive layout) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     private RenderFragment RenderResponsiveKpiWidget(ScreenSymbol sym, string? liveValue) => builder =>
     {
         int seq = 0;

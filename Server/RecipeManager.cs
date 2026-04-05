@@ -123,7 +123,7 @@ namespace SimpleOpcFileServer
             if (string.IsNullOrWhiteSpace(dbPath))
                 dbPath = Path.Combine("recipes", ResourceFileManager.SanitizeFileName(_config.Name) + ".db");
             if (!Path.IsPathRooted(dbPath))
-                dbPath = Path.Combine(_configDir, dbPath);
+                dbPath = Path.Combine(_configDir, "Data", dbPath);
 
             Directory.CreateDirectory(Path.GetDirectoryName(dbPath)!);
 

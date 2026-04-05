@@ -115,6 +115,15 @@ namespace SimpleOpcFileServer
         private bool _lastDebugActive;
         private (Assembly assembly, MethodInfo method)? _compiledVbScript;
 
+        // Static compilation cache: survives ScriptRunner/ScriptManager disposal (e.g. redundancy failover)
+        // so scripts are compiled only once per process lifetime. Script<object> is immutable and thread-safe.
+        private static readonly ConcurrentDictionary<string, Script<object>> s_compilationCache = new();
+        private static readonly ConcurrentDictionary<string, (Assembly assembly, MethodInfo method)> s_vbCompilationCache = new();
+
+        // Error backoff: prevents tight-loop re-execution on persistent script failures
+        private int _consecutiveErrors;
+        private const int MaxBackoffMs = 30_000;
+
         public ScriptRunner(ScriptConfig config, SimpleFileServerNodeManager nodeManager, ScriptManager scriptManager, CancellationToken token)
         {
             _config = config;
@@ -149,20 +158,30 @@ namespace SimpleOpcFileServer
                         sw.Stop();
                         DiagnosticsCollector.Instance.RecordCycle("Script", _config.Name, sw.Elapsed.TotalMilliseconds);
                         RecordDebugSnapshot(globals, cycleCount, "Running", null);
+                        _consecutiveErrors = 0;
                     }
                     catch (Exception ex)
                     {
                         sw.Stop();
+                        _consecutiveErrors++;
                         DiagnosticsCollector.Instance.RecordCycle("Script", _config.Name, sw.Elapsed.TotalMilliseconds, error: ex.Message);
                         RecordDebugSnapshot(globals, cycleCount, "Error", ex.Message);
-                        Log.Error(ex, Strings.Script_ExecutionError, _config.Name, ex.Message);
+
+                        // Only log the first occurrence and every 10th repeat to avoid Serilog flooding
+                        if (_consecutiveErrors == 1 || _consecutiveErrors % 10 == 0)
+                            Log.Error(ex, Strings.Script_ExecutionError, _config.Name, ex.Message);
                     }
 
                     if (_config.IntervalMs > 0)
                     {
+                        // Apply exponential backoff on persistent errors
+                        var delay = _config.IntervalMs;
+                        if (_consecutiveErrors > 1)
+                            delay = Math.Min(delay * (1 << Math.Min(_consecutiveErrors - 1, 10)), MaxBackoffMs);
+
                         try
                         {
-                            await Task.Delay(_config.IntervalMs, _token);
+                            await Task.Delay(delay, _token);
                         }
                         catch (OperationCanceledException) { break; }
                     }
@@ -178,6 +197,20 @@ namespace SimpleOpcFileServer
                     }
                 }
             }, _token);
+        }
+
+        private static Script<object> GetOrCompileCSharp(string code, string cacheKey)
+        {
+            return s_compilationCache.GetOrAdd(cacheKey, _ =>
+            {
+                var options = ScriptOptions.Default
+                    .AddReferences(typeof(SimpleFileServerNodeManager).Assembly)
+                    .AddImports("System", "System.Collections.Generic", "System.Linq");
+
+                var script = CSharpScript.Create(code, options, typeof(ScriptGlobals));
+                script.Compile();
+                return script;
+            });
         }
 
         private async Task RunCSharpAsync(ScriptGlobals globals)
@@ -196,12 +229,8 @@ namespace SimpleOpcFileServer
                 if (_compiledDebugScript == null)
                 {
                     var instrumentedCode = ScriptDebugger.InstrumentSource(_config.Code);
-                    var options = ScriptOptions.Default
-                        .AddReferences(typeof(SimpleFileServerNodeManager).Assembly)
-                        .AddImports("System", "System.Collections.Generic", "System.Linq");
-
-                    _compiledDebugScript = CSharpScript.Create(instrumentedCode, options, typeof(ScriptGlobals));
-                    _compiledDebugScript.Compile();
+                    // Debug scripts use a separate cache key prefix to avoid collisions
+                    _compiledDebugScript = GetOrCompileCSharp(instrumentedCode, "dbg:" + _config.Code);
                 }
 
                 await _compiledDebugScript.RunAsync(globals, cancellationToken: _token);
@@ -210,12 +239,7 @@ namespace SimpleOpcFileServer
             {
                 if (_compiledCSharpScript == null)
                 {
-                    var options = ScriptOptions.Default
-                        .AddReferences(typeof(SimpleFileServerNodeManager).Assembly)
-                        .AddImports("System", "System.Collections.Generic", "System.Linq");
-
-                    _compiledCSharpScript = CSharpScript.Create(_config.Code, options, typeof(ScriptGlobals));
-                    _compiledCSharpScript.Compile();
+                    _compiledCSharpScript = GetOrCompileCSharp(_config.Code, _config.Code);
                 }
 
                 await _compiledCSharpScript.RunAsync(globals, cancellationToken: _token);
@@ -225,7 +249,7 @@ namespace SimpleOpcFileServer
         private Task RunVbAsync(ScriptGlobals globals)
         {
             if (_compiledVbScript == null)
-                _compiledVbScript = CompileVbScript(_config.Code);
+                _compiledVbScript = s_vbCompilationCache.GetOrAdd(_config.Code, code => CompileVbScript(code));
 
             var (_, method) = _compiledVbScript.Value;
             method.Invoke(null, [globals]);

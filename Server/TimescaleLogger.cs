@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Concurrent;
+using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 using Npgsql;
 using Opc.Ua;
@@ -15,6 +17,20 @@ namespace SimpleOpcFileServer
         private readonly ConcurrentDictionary<string, object> _lastLoggedValues = new();
         private readonly ConcurrentDictionary<string, DateTime> _lastCleanupTimes = new();
         private bool _tablesCreated = false;
+
+        private readonly Channel<WriteEntry> _writeChannel = Channel.CreateBounded<WriteEntry>(
+            new BoundedChannelOptions(10_000)
+            {
+                FullMode = BoundedChannelFullMode.DropOldest,
+                SingleReader = true,
+                SingleWriter = false
+            });
+        private Task? _writerTask;
+        private readonly CancellationTokenSource _cts = new();
+        private const int BatchFlushIntervalMs = 100;
+        private const int MaxBatchSize = 500;
+
+        private readonly record struct WriteEntry(string NodeIdId, DateTime Timestamp, object Value, bool IsNumeric, uint Quality, TimeSpan? MaxAge);
 
         public TimescaleLogger(string connectionString, string tableName)
         {
@@ -57,6 +73,7 @@ namespace SimpleOpcFileServer
                 }
 
                 _tablesCreated = true;
+                _writerTask = Task.Run(WriterLoopAsync);
                 Serilog.Log.Information(Strings.Timescale_Initialized);
             }
             catch (Exception ex)
@@ -91,67 +108,115 @@ namespace SimpleOpcFileServer
                 }
             }
 
-            // Log it
-            // Fire and forget task to avoid blocking driver thread
-            Task.Run(() => LogToDb(variable, value, config.MaxAge));
-            
+            string nodeIdId = variable.NodeId.Identifier.ToString()!;
+            _writeChannel.Writer.TryWrite(new WriteEntry(
+                nodeIdId,
+                DateTime.UtcNow,
+                value,
+                IsNumeric(value),
+                (uint)variable.StatusCode.Code,
+                config.MaxAge));
+
             _lastLoggedValues[key] = value;
         }
 
-        private void LogToDb(BaseDataVariableState variable, object value, TimeSpan? maxAge)
+        private async Task WriterLoopAsync()
+        {
+            var batch = new List<WriteEntry>(MaxBatchSize);
+            var reader = _writeChannel.Reader;
+
+            try
+            {
+                while (!_cts.Token.IsCancellationRequested)
+                {
+                    batch.Clear();
+
+                    if (await reader.WaitToReadAsync(_cts.Token))
+                    {
+                        while (batch.Count < MaxBatchSize && reader.TryRead(out var entry))
+                            batch.Add(entry);
+                    }
+
+                    if (batch.Count == 0) continue;
+
+                    if (batch.Count < MaxBatchSize / 2)
+                    {
+                        await Task.Delay(BatchFlushIntervalMs, _cts.Token);
+                        while (batch.Count < MaxBatchSize && reader.TryRead(out var entry))
+                            batch.Add(entry);
+                    }
+
+                    FlushBatch(batch);
+                }
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                Serilog.Log.Error(ex, "TimescaleDB writer loop error: {Message}", ex.Message);
+            }
+
+            batch.Clear();
+            while (reader.TryRead(out var entry))
+                batch.Add(entry);
+            if (batch.Count > 0)
+                FlushBatch(batch);
+        }
+
+        private void FlushBatch(List<WriteEntry> batch)
         {
             try
             {
                 using var conn = new NpgsqlConnection(_connectionString);
                 conn.Open();
-                
-                string nodeIdId = variable.NodeId.Identifier.ToString();
+                using var tx = conn.BeginTransaction();
 
-                // Cleanup if maxAge is set
-                if (maxAge.HasValue)
+                using var cmd = new NpgsqlCommand(
+                    $"INSERT INTO {_tableName} (time, variable_name, value, value_str, quality) VALUES (@t, @n, @v, @s, @q)", conn);
+                var pTime = cmd.Parameters.Add(new NpgsqlParameter("t", NpgsqlTypes.NpgsqlDbType.TimestampTz));
+                var pName = cmd.Parameters.Add(new NpgsqlParameter("n", NpgsqlTypes.NpgsqlDbType.Text));
+                var pVal = cmd.Parameters.Add(new NpgsqlParameter("v", NpgsqlTypes.NpgsqlDbType.Double));
+                var pValStr = cmd.Parameters.Add(new NpgsqlParameter("s", NpgsqlTypes.NpgsqlDbType.Text));
+                var pQuality = cmd.Parameters.Add(new NpgsqlParameter("q", NpgsqlTypes.NpgsqlDbType.Integer));
+                cmd.Prepare();
+
+                foreach (var entry in batch)
                 {
-                    // Clean only occasionally or always? Always is safest for this requirement.
-                    // But deleting on every insert is heavy.
-                    // Maybe optimize later. For now, just execute delete.
-                    
-                    var now = DateTime.UtcNow;
-                    var interval = maxAge.Value.TotalMinutes < 10 ? maxAge.Value : TimeSpan.FromMinutes(5);
-                    
-                    if (!_lastCleanupTimes.ContainsKey(nodeIdId) || (now - _lastCleanupTimes[nodeIdId]) > interval)
+                    if (entry.MaxAge.HasValue)
                     {
-                        using var cleanCmd = new NpgsqlCommand($"DELETE FROM {_tableName} WHERE variable_name = @n AND time < @t_limit", conn);
-                        cleanCmd.Parameters.AddWithValue("n", nodeIdId ?? variable.DisplayName.Text);
-                        cleanCmd.Parameters.AddWithValue("t_limit", now - maxAge.Value);
-                        cleanCmd.ExecuteNonQuery();
-                        
-                        _lastCleanupTimes[nodeIdId] = now;
+                        var interval = entry.MaxAge.Value.TotalMinutes < 10 ? entry.MaxAge.Value : TimeSpan.FromMinutes(5);
+                        if (!_lastCleanupTimes.ContainsKey(entry.NodeIdId) || (entry.Timestamp - _lastCleanupTimes[entry.NodeIdId]) > interval)
+                        {
+                            using var cleanCmd = new NpgsqlCommand($"DELETE FROM {_tableName} WHERE variable_name = @n AND time < @t_limit", conn);
+                            cleanCmd.Parameters.AddWithValue("n", entry.NodeIdId);
+                            cleanCmd.Parameters.AddWithValue("t_limit", entry.Timestamp - entry.MaxAge.Value);
+                            cleanCmd.ExecuteNonQuery();
+                            _lastCleanupTimes[entry.NodeIdId] = entry.Timestamp;
+                        }
                     }
+
+                    pTime.Value = entry.Timestamp;
+                    pName.Value = entry.NodeIdId;
+
+                    if (entry.IsNumeric)
+                    {
+                        pVal.Value = Convert.ToDouble(entry.Value);
+                        pValStr.Value = DBNull.Value;
+                    }
+                    else
+                    {
+                        pVal.Value = DBNull.Value;
+                        pValStr.Value = entry.Value.ToString() ?? "";
+                    }
+
+                    pQuality.Value = (int)entry.Quality;
+                    cmd.ExecuteNonQuery();
                 }
 
-                using var cmd = new NpgsqlCommand($"INSERT INTO {_tableName} (time, variable_name, value, value_str, quality) VALUES (@t, @n, @v, @s, @q)", conn);
-                cmd.Parameters.AddWithValue("t", DateTime.UtcNow); 
-                // Use NodeId Identifier (string path) to be unique
-                // var nodeIdId = variable.NodeId.Identifier.ToString(); // Already defined above
-                cmd.Parameters.AddWithValue("n", nodeIdId ?? variable.DisplayName.Text);
-                
-                if (IsNumeric(value))
-                {
-                    cmd.Parameters.AddWithValue("v", Convert.ToDouble(value));
-                    cmd.Parameters.AddWithValue("s", DBNull.Value);
-                }
-                else
-                {
-                    cmd.Parameters.AddWithValue("v", DBNull.Value);
-                    cmd.Parameters.AddWithValue("s", value.ToString() ?? "");
-                }
-                
-                cmd.Parameters.AddWithValue("q", variable.StatusCode.Code);
-                
-                cmd.ExecuteNonQuery();
+                tx.Commit();
             }
             catch (Exception ex)
             {
-                Serilog.Log.Error(ex, Strings.Timescale_LogkError, ex.Message);
+                Serilog.Log.Error(ex, "TimescaleDB batch flush error: {Message}", ex.Message);
             }
         }
 
@@ -295,7 +360,10 @@ namespace SimpleOpcFileServer
 
         public void Dispose()
         {
-            // Nothing to dispose really connection is per call
+            _cts.Cancel();
+            _writeChannel.Writer.TryComplete();
+            _writerTask?.Wait(TimeSpan.FromSeconds(5));
+            _cts.Dispose();
         }
     }
 }

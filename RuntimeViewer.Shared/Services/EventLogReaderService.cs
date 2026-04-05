@@ -120,7 +120,11 @@ public class EventLogReaderService
         {
             var dir = Path.GetDirectoryName(Path.GetFullPath(_project.ConfigPath));
             if (!string.IsNullOrEmpty(dir))
-                dbPath = Path.Combine(dir, dbPath);
+            {
+                // Check Data subfolder first (new convention), then root (backward compat)
+                var dataPath = Path.Combine(dir, "Data", dbPath);
+                dbPath = File.Exists(dataPath) ? dataPath : Path.Combine(dir, dbPath);
+            }
         }
 
         return dbPath;

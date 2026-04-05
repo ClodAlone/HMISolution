@@ -35,6 +35,13 @@ namespace SimpleOpcFileServer
         private double _cpuPercent;
         private bool _cpuInitialized;
 
+        // Cached process metrics — avoids expensive OS syscalls on every request
+        private Process? _cachedProcess;
+        private DateTime _lastProcessSample;
+        private long _cachedMemoryMB;
+        private int _cachedThreadCount;
+        private static readonly TimeSpan ProcessSampleInterval = TimeSpan.FromSeconds(1);
+
         /// <summary>
         /// Optional delegate that returns an alarm analytics snapshot.
         /// Set by the node manager after construction.
@@ -147,15 +154,14 @@ namespace SimpleOpcFileServer
         }
         public ServerDiagnostics BuildSnapshot()
         {
-            SampleProcessCpu();
+            SampleProcessMetrics();
 
-            var process = Process.GetCurrentProcess();
             var diag = new ServerDiagnostics
             {
                 Timestamp = DateTime.UtcNow,
                 ProcessCpuPercent = Math.Round(_cpuPercent, 1),
-                MemoryMB = process.WorkingSet64 / (1024 * 1024),
-                ThreadCount = process.Threads.Count
+                MemoryMB = _cachedMemoryMB,
+                ThreadCount = _cachedThreadCount
             };
 
             foreach (var kvp in _metrics)
@@ -222,13 +228,17 @@ namespace SimpleOpcFileServer
             return diag;
         }
 
-        private void SampleProcessCpu()
+        private void SampleProcessMetrics()
         {
             try
             {
-                var process = Process.GetCurrentProcess();
                 var now = DateTime.UtcNow;
-                var cpuTime = process.TotalProcessorTime;
+                if ((now - _lastProcessSample) < ProcessSampleInterval && _cpuInitialized)
+                    return;
+
+                // Reuse cached Process handle — only used for TotalProcessorTime (no Refresh needed)
+                _cachedProcess ??= Process.GetCurrentProcess();
+                var cpuTime = _cachedProcess.TotalProcessorTime;
 
                 if (_cpuInitialized)
                 {
@@ -248,6 +258,12 @@ namespace SimpleOpcFileServer
 
                 _lastCpuTime = cpuTime;
                 _lastCpuSample = now;
+
+                // Environment.WorkingSet avoids the expensive Process.Refresh() + EnsureState syscall
+                _cachedMemoryMB = Environment.WorkingSet / (1024 * 1024);
+                // ThreadPool.ThreadCount is lightweight; avoids full OS thread enumeration
+                _cachedThreadCount = ThreadPool.ThreadCount;
+                _lastProcessSample = now;
             }
             catch { }
         }

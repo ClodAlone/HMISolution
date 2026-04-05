@@ -49,11 +49,12 @@ public class HdaReaderService
         var endTime = DateTime.UtcNow;
         var startTime = timeRangeMinutes > 0 ? endTime.AddMinutes(-timeRangeMinutes) : DateTime.MinValue;
 
-        foreach (var path in variablePaths)
-        {
-            var series = await Task.Run(() => ReadSeries(connInfo, path, startTime, endTime, maxPoints));
-            result.Add(series);
-        }
+        // Read all series concurrently sharing a single connection open
+        var tasks = variablePaths.Select(path =>
+            Task.Run(() => ReadSeries(connInfo, path, startTime, endTime, maxPoints))).ToList();
+
+        var series = await Task.WhenAll(tasks);
+        result.AddRange(series);
 
         return result;
     }
@@ -176,7 +177,10 @@ public class HdaReaderService
             if (db.ConnectionString == ":memory:") return null;
             var dir = Path.GetDirectoryName(Path.GetFullPath(_project.ConfigPath));
             if (dir == null) return null;
-            var fullPath = Path.GetFullPath(Path.Combine(dir, db.ConnectionString));
+            // Check Data subfolder first (new convention), then root (backward compat)
+            var dataPath = Path.GetFullPath(Path.Combine(dir, "Data", db.ConnectionString));
+            var rootPath = Path.GetFullPath(Path.Combine(dir, db.ConnectionString));
+            var fullPath = File.Exists(dataPath) ? dataPath : rootPath;
             if (!File.Exists(fullPath)) return null;
             return new ConnectionInfo
             {

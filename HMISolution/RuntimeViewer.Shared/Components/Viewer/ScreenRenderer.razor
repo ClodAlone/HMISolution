@@ -14,7 +14,7 @@ else if (Screen.LayoutMode == "responsive")
     var bgDataResp = ResolveImageData(Screen.BackgroundImageId);
     <div class="rv-responsive-grid @(IsKiosk ? "rv-responsive-kiosk" : "")"
          style="background: @Screen.Background;@(string.IsNullOrEmpty(bgDataResp) ? "" : $" background-image: url('{bgDataResp}'); background-size: cover; background-position: center;") gap: @(Screen.GridGap)px; grid-template-columns: repeat(@Screen.GridColumns, 1fr);">
-        @foreach (var sym in Screen.Symbols.OrderBy(s => s.Order))
+        @foreach (var sym in GetSortedSymbols())
         {
             var liveValue = Opc.GetValue(sym.VariablePath ?? "");
             var fillColor = EvalFillBinding(sym, liveValue);
@@ -727,7 +727,21 @@ else
     private string? ResolveImageData(string? imageId)
     {
         if (string.IsNullOrEmpty(imageId)) return null;
-        return Project.Model?.Images?.FirstOrDefault(i => i.Id == imageId)?.Data;
+        var cache = GetImageCache();
+        return cache != null && cache.TryGetValue(imageId, out var data) ? data : null;
+    }
+
+    private Dictionary<string, string>? GetImageCache()
+    {
+        var images = Project.Model?.Images;
+        var modelId = Project.Model?.Name;
+        if (images == null) { _imageCache = null; return null; }
+        if (_imageCache != null && _imageCacheModelId == modelId) return _imageCache;
+        _imageCache = new Dictionary<string, string>(images.Count, StringComparer.Ordinal);
+        foreach (var img in images)
+            _imageCache.TryAdd(img.Id, img.Data);
+        _imageCacheModelId = modelId;
+        return _imageCache;
     }
     private readonly Dictionary<string, double> _gaugeDisplayPct = new();
     private const double _gaugeLerpSpeed = 0.18;
@@ -752,28 +766,19 @@ else
     /// Emits both direct font properties (for CSS inheritance) and custom properties (for explicit var() usage).</summary>
     private static string WidgetFontStyle(ScreenSymbol sym)
     {
-        var sb = new System.Text.StringBuilder();
-        if (!string.IsNullOrEmpty(sym.FontFamily))
-        {
-            sb.Append($"font-family: {sym.FontFamily}; ");
-            sb.Append($"--widget-font-family: {sym.FontFamily}; ");
-        }
-        if (sym.FontSize > 0)
-        {
-            sb.Append($"font-size: {sym.FontSize}px; ");
-            sb.Append($"--widget-font-size: {sym.FontSize}px; ");
-        }
-        if (!string.IsNullOrEmpty(sym.FontWeight))
-        {
-            sb.Append($"font-weight: {sym.FontWeight}; ");
-            sb.Append($"--widget-font-weight: {sym.FontWeight}; ");
-        }
-        if (!string.IsNullOrEmpty(sym.FontStyle))
-        {
-            sb.Append($"font-style: {sym.FontStyle}; ");
-            sb.Append($"--widget-font-style: {sym.FontStyle}; ");
-        }
-        return sb.ToString();
+        bool hasFamily = !string.IsNullOrEmpty(sym.FontFamily);
+        bool hasSize = sym.FontSize > 0;
+        bool hasWeight = !string.IsNullOrEmpty(sym.FontWeight);
+        bool hasStyle = !string.IsNullOrEmpty(sym.FontStyle);
+
+        if (!hasFamily && !hasSize && !hasWeight && !hasStyle)
+            return string.Empty;
+
+        return string.Concat(
+            hasFamily ? $"font-family: {sym.FontFamily}; --widget-font-family: {sym.FontFamily}; " : "",
+            hasSize ? $"font-size: {sym.FontSize}px; --widget-font-size: {sym.FontSize}px; " : "",
+            hasWeight ? $"font-weight: {sym.FontWeight}; --widget-font-weight: {sym.FontWeight}; " : "",
+            hasStyle ? $"font-style: {sym.FontStyle}; --widget-font-style: {sym.FontStyle}; " : "");
     }
 
     protected override void OnInitialized()
@@ -1265,16 +1270,47 @@ else
         {
             if (sym.LabelBinding.Contains("value"))
             {
-                var result = sym.LabelBinding.Replace("value", liveValue);
-                result = result.Replace("+ '", "").Replace("' +", "").Replace("'", "")
-                    .Replace("+", "").Replace("  ", " ").Trim();
-                if (!string.IsNullOrEmpty(result))
-                    return $"{liveValue} {result.Replace(liveValue, "").Trim()}".Trim();
+                var binding = sym.LabelBinding.AsSpan();
+                var suffix = ExtractLabelSuffix(binding, liveValue);
+                if (suffix.Length > 0)
+                    return string.Concat(liveValue, " ", suffix);
                 return liveValue;
             }
         }
         catch { }
         return liveValue;
+    }
+
+    private static ReadOnlySpan<char> ExtractLabelSuffix(ReadOnlySpan<char> binding, string liveValue)
+    {
+        Span<char> buf = stackalloc char[binding.Length];
+        int pos = 0;
+        for (int i = 0; i < binding.Length; i++)
+        {
+            char c = binding[i];
+            if (c == '+' || c == '\'') continue;
+            buf[pos++] = c;
+        }
+        var cleaned = buf[..pos].Trim();
+        // Remove the "value" token itself
+        int idx = cleaned.IndexOf(liveValue.AsSpan());
+        if (idx >= 0)
+        {
+            Span<char> buf2 = stackalloc char[cleaned.Length - liveValue.Length];
+            cleaned[..idx].CopyTo(buf2);
+            cleaned[(idx + liveValue.Length)..].CopyTo(buf2[idx..]);
+            cleaned = buf2[..(cleaned.Length - liveValue.Length)];
+        }
+        // Collapse double spaces
+        Span<char> buf3 = stackalloc char[cleaned.Length];
+        int wp = 0;
+        bool lastSpace = false;
+        for (int i = 0; i < cleaned.Length; i++)
+        {
+            if (cleaned[i] == ' ') { if (!lastSpace) { buf3[wp++] = ' '; lastSpace = true; } }
+            else { buf3[wp++] = cleaned[i]; lastSpace = false; }
+        }
+        return new string(buf3[..wp].Trim());
     }
 
     private string? EvalSimpleCondition(string binding, string liveValue, double? numVal)

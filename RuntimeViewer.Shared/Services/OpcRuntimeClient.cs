@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Opc.Ua;
 using Opc.Ua.Client;
 using Opc.Ua.Configuration;
@@ -43,7 +44,7 @@ public class OpcRuntimeClient : IDisposable
     private Session? _session;
     private Subscription? _subscription;
     private ApplicationConfiguration? _appConfig;
-    private readonly Dictionary<string, string> _values = new();
+    private readonly ConcurrentDictionary<string, string> _values = new();
     private readonly object _lock = new();
 
     public bool IsConnected => _session?.Connected == true;
@@ -76,10 +77,7 @@ public class OpcRuntimeClient : IDisposable
 
     public string? GetValue(string variablePath)
     {
-        lock (_lock)
-        {
-            return _values.TryGetValue(variablePath, out var v) ? v : null;
-        }
+        return _values.TryGetValue(variablePath, out var v) ? v : null;
     }
 
     public async Task ConnectAsync(string endpointUrl, string? username = null, string? password = null)
@@ -290,11 +288,8 @@ public class OpcRuntimeClient : IDisposable
             _subscription.RemoveItems(itemsToRemove);
 
             // Clear stale cached values
-            lock (_lock)
-            {
-                foreach (var p in toRemove)
-                    _values.Remove(p);
-            }
+            foreach (var p in toRemove)
+                _values.TryRemove(p, out _);
         }
 
         // Add new items
@@ -375,10 +370,7 @@ public class OpcRuntimeClient : IDisposable
                 ? fmt.ToString(null, System.Globalization.CultureInfo.InvariantCulture)
                 : rawVal?.ToString() ?? "";
             var statusCode = notification.Value?.StatusCode ?? StatusCodes.Bad;
-            lock (_lock)
-            {
-                _values[item.DisplayName] = val;
-            }
+            _values[item.DisplayName] = val;
             _notificationCount++;
             // Log first 20 notifications, then every 50th to avoid flooding
             if (_notificationCount <= 20 || _notificationCount % 50 == 0)
@@ -393,7 +385,7 @@ public class OpcRuntimeClient : IDisposable
     /// <summary>Update the local value cache without writing to the server. Fires change events so the UI refreshes immediately.</summary>
     public void UpdateLocalValue(string variablePath, string value)
     {
-        lock (_lock) { _values[variablePath] = value; }
+        _values[variablePath] = value;
         ValuesChanged?.Invoke();
         ValueChanged?.Invoke(variablePath);
     }
@@ -433,7 +425,7 @@ public class OpcRuntimeClient : IDisposable
             {
                 // Immediately reflect the written value in the local cache
                 // so the UI updates without waiting for a subscription round-trip.
-                lock (_lock) { _values[variablePath] = value; }
+                _values[variablePath] = value;
                 ValuesChanged?.Invoke();
                 ValueChanged?.Invoke(variablePath);
             }
