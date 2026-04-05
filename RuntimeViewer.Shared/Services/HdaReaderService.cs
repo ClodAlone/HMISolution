@@ -49,7 +49,7 @@ public class HdaReaderService
         var endTime = DateTime.UtcNow;
         var startTime = timeRangeMinutes > 0 ? endTime.AddMinutes(-timeRangeMinutes) : DateTime.MinValue;
 
-        // Read all series concurrently sharing a single connection open
+        // Parallel reads — SQLite WAL mode allows concurrent readers
         var tasks = variablePaths.Select(path =>
             Task.Run(() => ReadSeries(connInfo, path, startTime, endTime, maxPoints))).ToList();
 
@@ -87,6 +87,7 @@ public class HdaReaderService
         DateTime startTime, DateTime endTime, int maxPoints)
     {
         var series = new HdaSeries { VariableName = variableName };
+        series.Points = new List<HdaDataPoint>(maxPoints);
 
         try
         {
@@ -100,13 +101,15 @@ public class HdaReaderService
                 cmd.CommandText = $@"
                     SELECT time, value, value_str
                     FROM {connInfo.TableName}
-                    WHERE variable_name = @n AND time >= @s AND time <= @e
+                    WHERE variable_name = $n AND time >= $s AND time <= $e
                     ORDER BY time ASC
-                    LIMIT @limit";
-                AddParam(cmd, "@n", variableName);
-                AddParam(cmd, "@s", startTime.ToString("o"));
-                AddParam(cmd, "@e", endTime.ToString("o"));
-                AddParam(cmd, "@limit", maxPoints);
+                    LIMIT $limit";
+                var sqliteCmd = (SqliteCommand)cmd;
+                sqliteCmd.Parameters.Add("$n", SqliteType.Text).Value = variableName;
+                sqliteCmd.Parameters.Add("$s", SqliteType.Text).Value = startTime.ToString("o");
+                sqliteCmd.Parameters.Add("$e", SqliteType.Text).Value = endTime.ToString("o");
+                sqliteCmd.Parameters.Add("$limit", SqliteType.Integer).Value = maxPoints;
+                cmd.Prepare();
             }
             else
             {
@@ -124,21 +127,25 @@ public class HdaReaderService
 
             using var reader = cmd.ExecuteReader();
             double min = double.MaxValue, max = double.MinValue;
+            var isSqlite = connInfo.Provider == "Sqlite";
 
             while (reader.Read())
             {
                 var point = new HdaDataPoint();
 
-                if (connInfo.Provider == "Sqlite")
-                    point.Time = DateTime.Parse(reader.GetString(0)).ToUniversalTime();
+                if (isSqlite)
+                    point.Time = DateTime.ParseExact(reader.GetString(0), "o",
+                        CultureInfo.InvariantCulture,
+                        DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal);
                 else
                     point.Time = reader.GetDateTime(0).ToUniversalTime();
 
                 if (!reader.IsDBNull(1))
                 {
-                    point.Value = reader.GetDouble(1);
-                    if (point.Value.Value < min) min = point.Value.Value;
-                    if (point.Value.Value > max) max = point.Value.Value;
+                    var d = reader.GetDouble(1);
+                    point.Value = d;
+                    if (d < min) min = d;
+                    if (d > max) max = d;
                 }
                 else if (!reader.IsDBNull(2))
                 {

@@ -329,6 +329,7 @@
     @if (_serverDiag != null && _serverDiag.Subsystems.Count > 0)
     {
         var diag = _serverDiag;
+        var subsystems = diag.Subsystems.ToList();
         var isLive = DiagClient.Latest != null;
         <h6 class="mt-2">⚡ Subsystem Performance
             <span class="text-muted" style="font-size: 9px;">
@@ -336,7 +337,7 @@
             </span>
         </h6>
 
-        @if (diag.Subsystems.Any(s => !string.IsNullOrEmpty(s.LastError)))
+        @if (subsystems.Any(s => !string.IsNullOrEmpty(s.LastError)))
         {
             <button class="btn btn-sm btn-outline-danger mb-1" style="font-size: 9px; padding: 1px 6px;" @onclick="CopyAllDiagErrors" title="Copy all error messages to clipboard">📋 Copy All Errors</button>
         }
@@ -348,7 +349,7 @@
             </div>
         }
 
-        @foreach (var category in diag.Subsystems.GroupBy(s => s.Category).OrderBy(g => g.Key))
+        @foreach (var category in subsystems.GroupBy(s => s.Category).OrderBy(g => g.Key))
         {
             <div class="perf-subsystem-group mb-2">
                 <div class="perf-subsystem-cat">@CategoryIcon(category.Key) @category.Key</div>
@@ -368,8 +369,8 @@
                     <tbody>
                         @foreach (var sub in category)
                         {
-                            var loadPct = diag.Subsystems.Sum(s => s.TotalCpuMs) > 0
-                                ? sub.TotalCpuMs / diag.Subsystems.Sum(s => s.TotalCpuMs) * 100
+                            var loadPct = subsystems.Sum(s => s.TotalCpuMs) > 0
+                                ? sub.TotalCpuMs / subsystems.Sum(s => s.TotalCpuMs) * 100
                                 : 0;
                             <tr class="@(sub.Status == "Error" ? "table-danger" : "")">
                                 <td class="text-truncate" style="max-width: 140px;" title="@sub.Name">@sub.Name</td>
@@ -576,7 +577,7 @@
         ViewerProcess.StateChanged += OnServerStateChanged;
         _statusTimer = new Timer(_ => InvokeAsync(async () => { await RefreshStatusAsync(); StateHasChanged(); }), null, TimeSpan.Zero, TimeSpan.FromSeconds(5));
         _perfTimer = new Timer(_ => InvokeAsync(() => { SamplePerformance(); BuildSubsystems(); StateHasChanged(); return Task.CompletedTask; }), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2));
-        _diagTimer2 = new Timer(_ => _ = PollDiagInBackground(), null, TimeSpan.FromSeconds(3), TimeSpan.FromSeconds(3));
+        _diagTimer2 = new Timer(_ => InvokeAsync(async () => { await PollDiagInBackground(); }), null, TimeSpan.FromSeconds(3), TimeSpan.FromSeconds(3));
     }
 
     private void OnServerStateChanged()
@@ -1192,7 +1193,7 @@
     private async Task CopyAllDiagErrors()
     {
         if (_serverDiag == null) return;
-        var errors = _serverDiag.Subsystems
+        var errors = _serverDiag.Subsystems.ToList()
             .Where(s => !string.IsNullOrEmpty(s.LastError))
             .Select(s => $"[{s.Category}/{s.Name}] {s.LastError}");
         var text = string.Join(Environment.NewLine, errors);

@@ -628,6 +628,19 @@ public class NodeEditorService
 
     public (bool success, string message) SaveAs(string path)
     {
+        var fullPath = Path.GetFullPath(path);
+        var dir = Path.GetDirectoryName(fullPath);
+
+        if (!string.IsNullOrEmpty(dir) && Directory.Exists(dir))
+        {
+            var existingJsonFiles = Directory.GetFiles(dir, "*.json", SearchOption.TopDirectoryOnly);
+            bool hasOtherProject = existingJsonFiles.Any(f =>
+                !string.Equals(Path.GetFullPath(f), fullPath, StringComparison.OrdinalIgnoreCase));
+
+            if (hasOtherProject)
+                return (false, $"The folder already contains a project. Choose a different folder.");
+        }
+
         _nodesPath = path;
         if (ActiveProject != null) ActiveProject.Name = System.IO.Path.GetFileNameWithoutExtension(path);
         return Save();

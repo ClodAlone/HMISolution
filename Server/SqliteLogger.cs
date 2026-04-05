@@ -188,6 +188,7 @@ namespace SimpleOpcFileServer
                     if (_connection == null || _insertCmd == null) return;
 
                     using var tx = _connection.BeginTransaction();
+                    _insertCmd.Transaction = tx;
 
                     foreach (var entry in batch)
                     {
@@ -198,6 +199,7 @@ namespace SimpleOpcFileServer
                             if (!_lastCleanupTimes.ContainsKey(entry.NodeIdId) || (entry.Timestamp - _lastCleanupTimes[entry.NodeIdId]) > interval)
                             {
                                 using var cleanCmd = _connection.CreateCommand();
+                                cleanCmd.Transaction = tx;
                                 cleanCmd.CommandText = $"DELETE FROM {_tableName} WHERE variable_name = @n AND time < @t_limit";
                                 cleanCmd.Parameters.AddWithValue("@n", entry.NodeIdId);
                                 cleanCmd.Parameters.AddWithValue("@t_limit", (entry.Timestamp - entry.MaxAge.Value).ToString("o"));
@@ -226,6 +228,7 @@ namespace SimpleOpcFileServer
                     }
 
                     tx.Commit();
+                    _insertCmd.Transaction = null;
                 }
             }
             catch (Exception ex)

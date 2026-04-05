@@ -526,10 +526,18 @@ public class RuntimeViewerProcessService : IDisposable
         {
             foreach (var proc in Process.GetProcessesByName(processName))
             {
-                if (proc.Id == myPid) continue;
+                if (proc.Id == myPid)
+                {
+                    proc.Dispose();
+                    continue;
+                }
                 try
                 {
-                    if (proc.HasExited) continue;
+                    if (proc.HasExited)
+                    {
+                        proc.Dispose();
+                        continue;
+                    }
 
                     var cmdLine = GetCommandLine(proc);
                     if (!string.IsNullOrEmpty(cmdLine) &&
@@ -537,15 +545,9 @@ public class RuntimeViewerProcessService : IDisposable
                     {
                         return proc;
                     }
-
-                    var configFileName = Path.GetFileName(configPath);
-                    if (!string.IsNullOrEmpty(cmdLine) &&
-                        cmdLine.Contains(configFileName, StringComparison.OrdinalIgnoreCase))
-                    {
-                        return proc;
-                    }
                 }
                 catch { }
+                proc.Dispose();
             }
         }
         catch { }

@@ -415,10 +415,18 @@ public class ServerProcessService : IDisposable
         {
             foreach (var proc in Process.GetProcessesByName(processName))
             {
-                if (proc.Id == myPid) continue;
+                if (proc.Id == myPid)
+                {
+                    proc.Dispose();
+                    continue;
+                }
                 try
                 {
-                    if (proc.HasExited) continue;
+                    if (proc.HasExited)
+                    {
+                        proc.Dispose();
+                        continue;
+                    }
 
                     var cmdLine = GetCommandLine(proc);
                     if (!string.IsNullOrEmpty(cmdLine) &&
@@ -426,19 +434,12 @@ public class ServerProcessService : IDisposable
                     {
                         return proc;
                     }
-
-                    // Also try matching just the config filename for processes started with relative paths
-                    var configFileName = Path.GetFileName(configPath);
-                    if (!string.IsNullOrEmpty(cmdLine) &&
-                        cmdLine.Contains(configFileName, StringComparison.OrdinalIgnoreCase))
-                    {
-                        return proc;
-                    }
                 }
                 catch
                 {
-                    // Access denied or process exited — skip
+                    // Access denied or process exited
                 }
+                proc.Dispose();
             }
         }
         catch

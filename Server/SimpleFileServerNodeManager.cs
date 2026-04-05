@@ -389,6 +389,10 @@ namespace SimpleOpcFileServer
             _drivers.Clear();
             InitializeDrivers();
 
+            // Cleanup previous data logger (new one created in LoadModel)
+            _logger?.Dispose();
+            _logger = null;
+
             // Cleanup previous event logger (new one created in LoadModel)
             _eventLogger?.Dispose();
             _eventLogger = null;
