@@ -482,6 +482,8 @@ namespace SimpleOpcFileServer
             if (oldFolder.Name != newFolder.Name) return false;
 
             string currentPath = string.IsNullOrEmpty(parentPath) ? oldFolder.Name : $"{parentPath}.{oldFolder.Name}";
+            bool isRoot = string.IsNullOrEmpty(parentPath);
+            string childPrefix = isRoot ? "" : currentPath;
 
             // Check Subfolders
             if (oldFolder.Folders.Count != newFolder.Folders.Count) return false; // No new/deleted folders allowed incrementally
@@ -491,7 +493,7 @@ namespace SimpleOpcFileServer
             foreach (var newSubFolder in newFolder.Folders)
             {
                 if (!oldFoldersMap.TryGetValue(newSubFolder.Name, out var oldSubFolder)) return false; // Name/Structure mismatch
-                if (!CheckFolderStructure(oldSubFolder, newSubFolder, currentPath, newVariables)) return false; 
+                if (!CheckFolderStructure(oldSubFolder, newSubFolder, childPrefix, newVariables)) return false; 
             }
 
             // Check Variables
@@ -509,7 +511,7 @@ namespace SimpleOpcFileServer
                 else
                 {
                     // New variable!
-                    newVariables.Add((newVar, currentPath));
+                    newVariables.Add((newVar, childPrefix));
                 }
             }
 
@@ -1253,11 +1255,15 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 }
             }
 
+            // Root folder (parent == null) is transparent: children use empty prefix
+            // so variable paths match user-facing convention (e.g. Process.Temperature)
+            var childPrefix = parent != null ? currentPath : "";
+
             foreach(var subFolder in folder.Folders)
             {
                 try
                 {
-                    CreateFolder(subFolder, folderState, references, currentPath);
+                    CreateFolder(subFolder, folderState, references, childPrefix);
                 }
                 catch (Exception ex)
                 {
@@ -1269,7 +1275,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             {
                 try
                 {
-                    CreateVariable(variable, folderState, currentPath);
+                    CreateVariable(variable, folderState, childPrefix);
                 }
                 catch (Exception ex)
                 {
@@ -1280,7 +1286,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
 
         private void CreateVariable(Variable variable, BaseObjectState parent, string pathPrefix)
         {
-            string currentPath = $"{pathPrefix}.{variable.Name}";
+            string currentPath = string.IsNullOrEmpty(pathPrefix) ? variable.Name : $"{pathPrefix}.{variable.Name}";
             
             // Use ServerVariableState which handles logging + security
             // Pass this NodeManager to handle user lookups
@@ -1501,7 +1507,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
 
         private void CreateEventVariable(Variable variable, BaseObjectState parent, string pathPrefix)
         {
-            string currentPath = $"{pathPrefix}.{variable.Name}";
+            string currentPath = string.IsNullOrEmpty(pathPrefix) ? variable.Name : $"{pathPrefix}.{variable.Name}";
             
             // Use ServerVariableState which handles logging + security
             // Pass this NodeManager to handle user lookups
@@ -1568,16 +1574,28 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
 
 
         // Script Accessors
+        /// <summary>
+        /// Resolves a variable by name, trying the exact key first then prepending the root folder name.
+        /// </summary>
+        private bool TryResolveVariable(string variableName, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out BaseDataVariableState? variable)
+        {
+            if (_variables.TryGetValue(variableName, out variable!))
+                return true;
+            // Fallback: user-facing paths omit the root folder name
+            var rootName = _lastModel?.Folder?.Name;
+            if (!string.IsNullOrEmpty(rootName) && _variables.TryGetValue(rootName + "." + variableName, out variable!))
+                return true;
+            variable = null;
+            return false;
+        }
+
         public object? ReadVariable(string variableName)
         {
-            if (_variables.TryGetValue(variableName, out var variable))
+            if (TryResolveVariable(variableName, out var variable))
             {
                 return variable.Value;
             }
-            // Try by full path/NodeId if needed? 
-            // variableName matches variable.Name property from json.
             throw new InvalidOperationException("Variable not found: " + variableName);
-            //return null;
         }
 
         public async Task<string?> GenerateReportAsync(string reportName)
@@ -1591,7 +1609,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             try
             {
                 var nodeId = variablePath;
-                if (_variables.TryGetValue(variablePath, out var vs))
+                if (TryResolveVariable(variablePath, out var vs))
                     nodeId = vs.NodeId?.ToString() ?? variablePath;
                 var dataValues = _logger.ReadHistory(nodeId, startTime, endTime);
                 var result = new List<(DateTime, double)>();
@@ -1608,7 +1626,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
 
         public void WriteVariable(string variableName, object value)
         {
-            if (_variables.TryGetValue(variableName, out var variable))
+            if (TryResolveVariable(variableName, out var variable))
             {
                 var oldValue = variable.Value;
                 variable.Value = value;
