@@ -68,7 +68,6 @@ try
     Log.Logger = new LoggerConfiguration()
         .ReadFrom.Configuration(builder.Configuration)
         .Enrich.FromLogContext()
-        .WriteTo.Console()
         .WriteTo.File(logPath, rollingInterval: RollingInterval.Day)
         .CreateLogger();
 
@@ -317,6 +316,7 @@ public class OpcUaServerApp
         }
         config.ServerConfiguration.UserTokenPolicies.Add(new UserTokenPolicy(UserTokenType.UserName));
         
+        Log.Information("Validating OPC UA configuration...");
         await config.Validate(ApplicationType.Server);
 
         config.CertificateValidator.CertificateValidation += (s, e) =>
@@ -327,6 +327,7 @@ public class OpcUaServerApp
             }
         };
 
+        Log.Information("Checking application certificates...");
         try
         {
             await application.CheckApplicationInstanceCertificates(false, 2048);
@@ -354,8 +355,15 @@ public class OpcUaServerApp
             await application.CheckApplicationInstanceCertificates(false, 2048);
         }
         
+        Log.Information("Starting OPC UA server...");
         _server = new OpcUaServer(configPath);
         await application.Start(_server);
+
+        // The TCP transport is now open — clients can connect.
+        // Complete the deferred node loading (JSON parse + address space population).
+        Log.Information("OPC UA transport listening on {Endpoint}. Loading address space...", endpointUrl);
+        _server.CompleteDeferredLoad();
+        Log.Information("Address space loaded successfully.");
     }
 }
 
@@ -365,6 +373,7 @@ public class OpcUaServerApp
 public class OpcUaServer : StandardServer
 {
     private readonly string _configPath;
+    private SimpleFileServerNodeManager? _nodeManager;
 
     public OpcUaServer(string configPath)
     {
@@ -376,10 +385,17 @@ public class OpcUaServer : StandardServer
     /// </summary>
     protected override MasterNodeManager CreateMasterNodeManager(IServerInternal server, ApplicationConfiguration configuration)
     {
-        var nodeManagers = new List<INodeManager>();
-        nodeManagers.Add(new SimpleFileServerNodeManager(server, configuration, _configPath));
-
+        _nodeManager = new SimpleFileServerNodeManager(server, configuration, _configPath);
+        var nodeManagers = new List<INodeManager> { _nodeManager };
         return new MasterNodeManager(server, configuration, null, nodeManagers.ToArray());
+    }
+
+    /// <summary>
+    /// Completes deferred node loading after the TCP transport is already listening.
+    /// </summary>
+    public void CompleteDeferredLoad()
+    {
+        _nodeManager?.CompleteDeferredLoad();
     }
 }
 

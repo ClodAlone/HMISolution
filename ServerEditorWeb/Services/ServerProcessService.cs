@@ -8,6 +8,7 @@ namespace ServerEditorWeb.Services;
 public class ServerProcessService : IDisposable
 {
     private Process? _serverProcess;
+    private readonly object _outputLock = new();
 
     public bool IsServerRunning { get; private set; }
     public Process? ServerProcess => _serverProcess;
@@ -15,6 +16,30 @@ public class ServerProcessService : IDisposable
 
     /// <summary>True when the tracked process was started externally (not by this editor).</summary>
     public bool IsExternalProcess { get; private set; }
+
+    /// <summary>Captured stdout/stderr lines from the server process.</summary>
+    public List<string> OutputLines { get; } = new();
+
+    /// <summary>Raised when a new output line is captured.</summary>
+    public event Action? OutputChanged;
+
+    /// <summary>Clears all captured output lines.</summary>
+    public void ClearOutput()
+    {
+        lock (_outputLock) { OutputLines.Clear(); }
+        OutputChanged?.Invoke();
+    }
+
+    private void AppendOutput(string line)
+    {
+        lock (_outputLock)
+        {
+            OutputLines.Add(line);
+            if (OutputLines.Count > 500)
+                OutputLines.RemoveAt(0);
+        }
+        OutputChanged?.Invoke();
+    }
 
     public static bool IsWindows => RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
     public static bool IsLinux => RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
@@ -74,13 +99,29 @@ public class ServerProcessService : IDisposable
             string fullNodesPath = Path.GetFullPath(nodesPath);
             string nodesDir = Path.GetDirectoryName(fullNodesPath) ?? ".";
 
+            ClearOutput();
+
             _serverProcess = new Process();
             _serverProcess.StartInfo.FileName = serverExe;
             _serverProcess.StartInfo.WorkingDirectory = nodesDir;
             _serverProcess.StartInfo.Arguments = $"\"{fullNodesPath}\"";
             _serverProcess.StartInfo.UseShellExecute = false;
             _serverProcess.StartInfo.CreateNoWindow = true;
+            _serverProcess.StartInfo.RedirectStandardOutput = true;
+            _serverProcess.StartInfo.RedirectStandardError = true;
             _serverProcess.EnableRaisingEvents = true;
+
+            _serverProcess.OutputDataReceived += (s, e) =>
+            {
+                if (e.Data != null)
+                    AppendOutput(e.Data);
+            };
+            _serverProcess.ErrorDataReceived += (s, e) =>
+            {
+                if (e.Data != null)
+                    AppendOutput($"[ERR] {e.Data}");
+            };
+
             _serverProcess.Exited += (s, e) =>
             {
                 IsServerRunning = false;
@@ -89,6 +130,8 @@ public class ServerProcessService : IDisposable
             };
 
             _serverProcess.Start();
+            _serverProcess.BeginOutputReadLine();
+            _serverProcess.BeginErrorReadLine();
             IsServerRunning = true;
             IsExternalProcess = false;
             StateChanged?.Invoke();

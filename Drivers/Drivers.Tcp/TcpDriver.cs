@@ -53,6 +53,11 @@ namespace SimpleOpcFileServer
             }
         }
 
+        public void Start()
+        {
+            lock (_lock) { foreach (var d in _devices.Values) d.Start(); }
+        }
+
         public void Dispose()
         {
             _disposed = true;
@@ -71,6 +76,7 @@ namespace SimpleOpcFileServer
             private readonly List<TcpItem> _items = new();
             private Timer? _timer;
             private int _pollInterval = 1000;
+            private int _minPollTime = int.MaxValue;
             private bool _disposed;
             private readonly object _deviceLock = new();
 
@@ -82,10 +88,18 @@ namespace SimpleOpcFileServer
                 lock (_deviceLock)
                 {
                     _items.Add(item);
-                    var configured = _items.Where(x => x.Config.PollTime > 0).ToList();
-                    _pollInterval = configured.Any() ? configured.Min(x => x.Config.PollTime) : 1000;
-                    if (_timer != null) _timer.Change(0, Timeout.Infinite);
-                    else _timer = new Timer(Poll, null, 0, Timeout.Infinite);
+                    if (item.Config.PollTime > 0 && item.Config.PollTime < _minPollTime)
+                        _minPollTime = item.Config.PollTime;
+                    _pollInterval = _minPollTime < int.MaxValue ? _minPollTime : 1000;
+                }
+            }
+
+            public void Start()
+            {
+                lock (_deviceLock)
+                {
+                    if (_timer == null && _items.Count > 0)
+                        _timer = new Timer(Poll, null, _pollInterval, Timeout.Infinite);
                 }
             }
 

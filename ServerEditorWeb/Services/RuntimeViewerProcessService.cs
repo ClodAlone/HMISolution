@@ -8,6 +8,7 @@ namespace ServerEditorWeb.Services;
 public class RuntimeViewerProcessService : IDisposable
 {
     private Process? _viewerProcess;
+    private readonly object _outputLock = new();
 
     public bool IsViewerRunning { get; private set; }
     public Process? ViewerProcess => _viewerProcess;
@@ -15,6 +16,30 @@ public class RuntimeViewerProcessService : IDisposable
 
     /// <summary>True when the tracked process was started externally (not by this editor).</summary>
     public bool IsExternalProcess { get; private set; }
+
+    /// <summary>Captured stdout/stderr lines from the viewer process.</summary>
+    public List<string> OutputLines { get; } = new();
+
+    /// <summary>Raised when a new output line is captured.</summary>
+    public event Action? OutputChanged;
+
+    /// <summary>Clears all captured output lines.</summary>
+    public void ClearOutput()
+    {
+        lock (_outputLock) { OutputLines.Clear(); }
+        OutputChanged?.Invoke();
+    }
+
+    private void AppendOutput(string line)
+    {
+        lock (_outputLock)
+        {
+            OutputLines.Add(line);
+            if (OutputLines.Count > 500)
+                OutputLines.RemoveAt(0);
+        }
+        OutputChanged?.Invoke();
+    }
 
     public static bool IsWindows => RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
     public static bool IsLinux => RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
@@ -55,6 +80,8 @@ public class RuntimeViewerProcessService : IDisposable
             if (kiosk)
                 args += " --kiosk";
 
+            ClearOutput();
+
             _viewerProcess = new Process();
             _viewerProcess.StartInfo.FileName = viewerExe;
             // Use the executable's own directory as working directory so native libraries
@@ -62,6 +89,7 @@ public class RuntimeViewerProcessService : IDisposable
             _viewerProcess.StartInfo.WorkingDirectory = exeDir;
             _viewerProcess.StartInfo.Arguments = args;
             _viewerProcess.StartInfo.UseShellExecute = false;
+            _viewerProcess.StartInfo.RedirectStandardOutput = true;
             _viewerProcess.StartInfo.RedirectStandardError = true;
             _viewerProcess.EnableRaisingEvents = true;
 
@@ -79,10 +107,18 @@ public class RuntimeViewerProcessService : IDisposable
 
             // Capture stderr asynchronously for diagnostics on early exit
             string? earlyStderr = null;
+            _viewerProcess.OutputDataReceived += (s, e) =>
+            {
+                if (e.Data != null)
+                    AppendOutput(e.Data);
+            };
             _viewerProcess.ErrorDataReceived += (s, e) =>
             {
                 if (e.Data != null)
+                {
                     earlyStderr = (earlyStderr == null ? "" : earlyStderr + "\n") + e.Data;
+                    AppendOutput($"[ERR] {e.Data}");
+                }
             };
 
             _viewerProcess.Exited += (s, e) =>
@@ -93,6 +129,7 @@ public class RuntimeViewerProcessService : IDisposable
             };
 
             _viewerProcess.Start();
+            _viewerProcess.BeginOutputReadLine();
             _viewerProcess.BeginErrorReadLine();
 
             // Give the process a brief moment to fail if there's a startup crash

@@ -8,6 +8,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace SimpleOpcFileServer
@@ -42,6 +43,20 @@ namespace SimpleOpcFileServer
         private BaseDataVariableState<bool>? _redundancyIsActiveVar;
 
         private readonly List<NodeId> _rootNodeIds = new();
+        private int _nodeCreationCount;
+        private int _nodeCreationTotal;
+
+        // Deferred loading support
+        private bool _deferLoading;
+
+        // Suppress alarm evaluation and data logging during bulk node creation
+        private volatile bool _loading;
+
+        // Pre-built alarm templates — created once, then cloned for each variable.
+        // Avoids 100K × base64-decode + binary-deserialize + 7 recursive walks per alarm.
+        [ThreadStatic] private static ExclusiveLimitAlarmState? t_limitAlarmTemplate;
+        [ThreadStatic] private static OffNormalAlarmState? t_conditionAlarmTemplate;
+        private IDictionary<NodeId, IList<IReference>>? _deferredExternalRefs;
         private FileSystemWatcher? _watcher;
         private System.Threading.Timer? _reloadTimer;
 
@@ -63,7 +78,7 @@ namespace SimpleOpcFileServer
         }
 
         // Alarm tracking
-        private readonly Dictionary<string, AlarmConditionInfo> _alarmConditions = new();
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<string, AlarmConditionInfo> _alarmConditions = new();
 
         // Alarm analytics — in-memory ring buffer for activation / acknowledgement events
         private readonly List<AlarmAnalyticsEvent> _alarmAnalyticsLog = new();
@@ -104,6 +119,7 @@ namespace SimpleOpcFileServer
         : base(server, configuration, NodeNamespaceUri)
         {
             _configPath = configPath;
+            _deferLoading = true;
             SystemContext.NodeIdFactory = this;
 
             // Hook up user validation
@@ -274,6 +290,13 @@ namespace SimpleOpcFileServer
                     _namespaceIndex = (ushort)SystemContext.NamespaceUris.GetIndexOrAppend(NodeNamespaceUri);
                 }
 
+                if (_deferLoading)
+                {
+                    _deferredExternalRefs = externalReferences;
+                    Log.Information("Address space creation deferred until server transport is ready.");
+                    return;
+                }
+
                 IList<IReference> references = null;
                 if (!externalReferences.TryGetValue(ObjectIds.ObjectsFolder, out references))
                 {
@@ -307,6 +330,97 @@ namespace SimpleOpcFileServer
                 }
             }
 
+        }
+
+        public void CompleteDeferredLoad()
+        {
+            var externalReferences = _deferredExternalRefs;
+            _deferredExternalRefs = null;
+            if (externalReferences == null) return;
+
+            // Phase 1: Parse and prepare (inside lock)
+            NodeModel? nodeModel = null;
+            IList<IReference>? references = null;
+
+            lock (Lock)
+            {
+                if (!externalReferences.TryGetValue(ObjectIds.ObjectsFolder, out references))
+                {
+                    externalReferences[ObjectIds.ObjectsFolder] = references = new List<IReference>();
+                }
+
+                try
+                {
+                    if (File.Exists(_configPath))
+                    {
+                        var fileInfo = new FileInfo(_configPath);
+                        Log.Information("Parsing configuration file ({SizeMB:F1} MB)...", fileInfo.Length / (1024.0 * 1024.0));
+                        var sw = System.Diagnostics.Stopwatch.StartNew();
+
+                        using (var fs = new FileStream(_configPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                        {
+                            nodeModel = JsonSerializer.Deserialize(fs, ServerJsonContext.Default.NodeModel);
+                        }
+
+                        Log.Information("Configuration parsed in {Elapsed:F1}s.", sw.Elapsed.TotalSeconds);
+
+                        if (nodeModel != null)
+                        {
+                            var varCount = CountVariablesInFolder(nodeModel.Folder);
+                            var alarmCount = nodeModel.Folder != null ? CountAlarmsInFolder(nodeModel.Folder) : 0;
+                            Log.Information("Project summary: {Variables} variables, {Alarms} alarms, {Scripts} scripts, {PlcPrograms} PLC programs.",
+                                varCount, alarmCount, nodeModel.Scripts?.Count ?? 0, nodeModel.PlcPrograms?.Count ?? 0);
+
+                            ResourceFileManager.LoadExternalResources(nodeModel, _configPath);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Utils.Trace(ex, "Error during deferred configuration parsing");
+                    Log.Error(ex, "Error during deferred configuration parsing.");
+                    return;
+                }
+            }
+
+            // Phase 2: LoadModel — runs mostly outside lock, acquires lock per-node via RegisterNode
+            if (nodeModel != null)
+            {
+                try
+                {
+                    Log.Information("Creating address space...");
+                    var swLoad = System.Diagnostics.Stopwatch.StartNew();
+                    LoadModel(nodeModel, externalReferences, holdingLock: false);
+                    Log.Information("Address space created in {Elapsed:F1}s.", swLoad.Elapsed.TotalSeconds);
+
+                    lock (Lock)
+                    {
+                        if (nodeModel != null) StripModelForCache(nodeModel);
+                        _lastModel = nodeModel;
+                        AddReverseReferences(externalReferences);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Utils.Trace(ex, "Error during deferred node loading");
+                    Log.Error(ex, "Error during deferred node loading.");
+                }
+            }
+            else
+            {
+                lock (Lock)
+                {
+                    AddReverseReferences(externalReferences);
+                }
+            }
+        }
+
+        private static int CountAlarmsInFolder(Folder folder)
+        {
+            int count = folder.Variables.Count(v => v.Alarm != null);
+            foreach (var sub in folder.Folders)
+                count += CountAlarmsInFolder(sub);
+            return count;
         }
 
         private void ReloadConfiguration()
@@ -560,9 +674,9 @@ namespace SimpleOpcFileServer
              return JsonSerializer.Serialize(d1, typeof(DatabaseConfig), ServerJsonContext.Default) == JsonSerializer.Serialize(d2, typeof(DatabaseConfig), ServerJsonContext.Default);
         }
 
-        private void LoadModel(NodeModel nodeModel, IDictionary<NodeId, IList<IReference>>? externalReferences)
+        private void LoadModel(NodeModel nodeModel, IDictionary<NodeId, IList<IReference>>? externalReferences, bool holdingLock = true)
         {
-             IList<IReference>? references = null;
+           IList<IReference>? references = null;
              if (externalReferences != null)
              {
                  externalReferences.TryGetValue(ObjectIds.ObjectsFolder, out references);
@@ -757,10 +871,34 @@ namespace SimpleOpcFileServer
                      _eventLogger?.LogSystem("Info", "Redundancy", $"Service initialized — role: {_redundancy.ActiveRole}");
                  }
 
+                 Log.Information("Initializing subsystems...");
+
+
                  if (nodeModel.Folder != null)
                  {
-                     CreateFolder(nodeModel.Folder, null, references, "");
+                     _loading = true;
+                     Log.Information("Creating OPC UA nodes...");
+                     CreateAddressSpaceParallel(nodeModel.Folder, references, holdingLock);
+                     _loading = false;
+                     Log.Information("OPC UA nodes created. Total tracked variables: {Count}.", _variables.Count);
+
+                     // Deferred alarm evaluation — now that all nodes are created,
+                     // evaluate initial alarm states in a single pass.
+                     if (_alarmConditions.Count > 0)
+                     {
+                         Log.Information("Evaluating initial alarm states for {Count} alarms...", _alarmConditions.Count);
+                         foreach (var info in _alarmConditions.Values)
+                             EvaluateAlarmCondition(info);
+                         Log.Information("Initial alarm evaluation complete.");
+                     }
                  }
+
+           lock (Lock)
+           { // re-acquire Lock for post-parallel setup
+
+                 // Start all drivers now that loading is complete — timers were deferred
+                 // to avoid driver polling competing with parallel node creation.
+                 foreach (var d in _drivers) d.Start();
 
                  // Start anomaly detection after variables are created
                  _anomalyDetectionService?.Start();
@@ -841,6 +979,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                           if (_redundancy != null)
                               CreateRedundancySystemVariable(references);
                       }
+           } // end re-acquired lock(Lock)
                  }
         
         private void CreateRecipeVariables(List<RecipeConfig> recipes, IList<IReference>? references)
@@ -1243,7 +1382,173 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             _variables["_System.Redundancy.ActiveRole"] = activeRole;
         }
 
-        private void CreateFolder(Folder folder, BaseObjectState? parent, IList<IReference>? references, string pathPrefix)
+        private void CreateAddressSpaceParallel(Folder rootFolder, IList<IReference> references, bool holdingLock = true)
+        {
+            // Create root folder node (serial, fast)
+            var rootFolderState = new FolderState(null);
+            string rootPath = rootFolder.Name;
+            rootFolderState.NodeId = new NodeId(rootPath, _namespaceIndex);
+            rootFolderState.BrowseName = new QualifiedName(rootFolder.Name, _namespaceIndex);
+            rootFolderState.DisplayName = new LocalizedText(rootFolder.Name);
+            rootFolderState.TypeDefinitionId = ObjectTypeIds.FolderType;
+            rootFolderState.ReferenceTypeId = ReferenceTypes.Organizes;
+            rootFolderState.EventNotifier = EventNotifiers.SubscribeToEvents;
+
+            lock (Lock)
+            {
+                _rootNodeIds.Add(rootFolderState.NodeId);
+                AddPredefinedNode(SystemContext, rootFolderState);
+                AddRootNotifier(rootFolderState);
+            }
+            rootFolderState.AddReference(ReferenceTypeIds.Organizes, true, ObjectIds.ObjectsFolder);
+            references.Add(new NodeStateReference(ReferenceTypeIds.Organizes, false, rootFolderState.NodeId));
+
+            // Root folder is transparent: children use empty prefix
+            var childPrefix = "";
+
+            // Count total variables for progress reporting
+            _nodeCreationTotal = CountVariablesInFolder(rootFolder);
+            _nodeCreationCount = 0;
+
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            long lastLogTime = 0;
+
+            if (!holdingLock && rootFolder.Folders.Count > 1)
+            {
+                Log.Information("Parallel node creation: {SubfolderCount} top-level groups, {TotalVars} variables. Using up to {Cores} cores.",
+                    rootFolder.Folders.Count, _nodeCreationTotal, Environment.ProcessorCount);
+
+                // Collect subtree roots during the fully lock-free parallel phase.
+                var subtreeRoots = new System.Collections.Concurrent.ConcurrentBag<FolderState>();
+
+                // Process subfolders in parallel -- no lock contention at all during this phase.
+                Parallel.ForEach(rootFolder.Folders, new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount }, subFolder =>
+                {
+                    // Pass a non-null batch sentinel to activate batch mode (children build the
+                    // tree via AddChild but aren't individually registered -- the bulk registration
+                    // pass after all parallel work completes handles dictionary insertion).
+                    var batchSentinel = new List<NodeState>(0);
+                    FolderState? subFolderState = null;
+                    try
+                    {
+                        subFolderState = CreateFolder(subFolder, rootFolderState, null, childPrefix, batchSentinel);
+                    }
+                    catch (Exception ex)
+                    {
+                        Utils.Trace(ex, $"Error creating subfolder '{subFolder.Name}' under root");
+                        Log.Error(ex, "Error creating subfolder '{SubFolder}' under root.", subFolder.Name);
+                    }
+                    if (subFolderState != null)
+                        subtreeRoots.Add(subFolderState);
+
+                    // Periodic progress reporting (every 10s)
+                    var current = Volatile.Read(ref _nodeCreationCount);
+                    var elapsed = sw.ElapsedMilliseconds;
+                    var lastLog = Interlocked.Read(ref lastLogTime);
+                    if (elapsed - lastLog >= 10_000)
+                    {
+                        if (Interlocked.CompareExchange(ref lastLogTime, elapsed, lastLog) == lastLog)
+                        {
+                            var pct = _nodeCreationTotal > 0 ? (int)(100.0 * current / _nodeCreationTotal) : 100;
+                            Log.Information("Creating nodes... {Current:N0}/{Total:N0} ({Pct}%) -- {Elapsed:F1}s elapsed.",
+                                current, _nodeCreationTotal, pct, sw.Elapsed.TotalSeconds);
+                        }
+                    }
+                });
+
+                // Bulk registration -- single-threaded, no lock needed.
+                // All node trees were built in parallel via AddChild; now register them
+                // into PredefinedNodes in one fast sequential pass.
+                Log.Information("Parallel creation done in {Elapsed:F1}s. Registering {Count} subtrees into address space...",
+                    sw.Elapsed.TotalSeconds, subtreeRoots.Count);
+
+                var dict = PredefinedNodes;
+                foreach (var root in subtreeRoots)
+                {
+                    var allNodes = new List<NodeState>(4096);
+                    CollectSubtreeNodes(SystemContext, root, allNodes);
+                    for (int i = 0; i < allNodes.Count; i++)
+                        dict[allNodes[i].NodeId] = allNodes[i];
+                }
+
+                Log.Information("Address space registration complete in {Elapsed:F1}s.", sw.Elapsed.TotalSeconds);
+            }
+            else
+            {
+                // Single or no subfolders — run sequentially
+                foreach (var subFolder in rootFolder.Folders)
+                    CreateFolder(subFolder, rootFolderState, null, childPrefix);
+            }
+
+            // Process root-level variables (usually few or none)
+            foreach (var variable in rootFolder.Variables)
+            {
+                try { CreateVariable(variable, rootFolderState, childPrefix); }
+                catch (Exception ex) { Utils.Trace(ex, $"Error creating root variable '{variable.Name}'"); }
+            }
+
+            var finalCount = Volatile.Read(ref _nodeCreationCount);
+            Log.Information("Node creation complete: {Count:N0} variables processed in {Elapsed:F1}s.", finalCount, sw.Elapsed.TotalSeconds);
+        }
+
+        /// <summary>Thread-safe wrapper for AddPredefinedNode. In batch mode the node is already
+        /// attached via AddChild; AddPredefinedNode on the subtree root discovers it recursively.</summary>
+        private void RegisterNode(ISystemContext context, NodeState node, List<NodeState>? batch = null)
+        {
+            if (batch == null) { lock (Lock) { AddPredefinedNode(context, node); } }
+            // batch != null: no-op - node is already a child; subtree root flush handles it.
+        }
+
+        /// <summary>Thread-safe wrapper for parent.AddChild + AddPredefinedNode. In batch mode
+        /// only AddChild is needed - AddPredefinedNode on the subtree root handles registration recursively.</summary>
+        private void RegisterChildNode(ISystemContext context, BaseInstanceState child, NodeState parent, List<NodeState>? batch = null)
+        {
+            if (batch != null)
+            {
+                // In parallel mode, synchronize AddChild on the parent in case multiple
+                // threads share the same parent node (e.g. rootFolderState).
+                lock (parent)
+                {
+                    parent.AddChild(child);
+                }
+                // Don't add to batch - AddPredefinedNode is recursive and will discover
+                // this child when the subtree root is flushed.
+            }
+            else
+            {
+                parent.AddChild(child);
+                lock (Lock) { AddPredefinedNode(context, child); }
+            }
+        }
+
+        /// <summary>Collects all nodes from a subtree into a flat list by walking children recursively.</summary>
+        private static void CollectSubtreeNodes(ISystemContext context, NodeState root, List<NodeState> result)
+        {
+            result.Add(root);
+            var children = new List<BaseInstanceState>();
+            root.GetChildren(context, children);
+            for (int i = 0; i < children.Count; i++)
+                CollectSubtreeNodes(context, children[i], result);
+        }
+
+        /// <summary>Registers a subtree into the address space. Collects all nodes outside the lock,
+        /// then does a fast flat dictionary insertion under the lock.</summary>
+        private void FlushNodeBatch(ISystemContext context, NodeState subtreeRoot)
+        {
+            // Phase 1: Collect all nodes from the subtree (outside the lock — fully parallel)
+            var allNodes = new List<NodeState>(4096);
+            CollectSubtreeNodes(context, subtreeRoot, allNodes);
+
+            // Phase 2: Register all nodes in the predefined dictionary (under lock — fast flat loop)
+            var dict = PredefinedNodes;
+            lock (Lock)
+            {
+                for (int i = 0; i < allNodes.Count; i++)
+                    dict[allNodes[i].NodeId] = allNodes[i];
+            }
+        }
+
+        private FolderState CreateFolder(Folder folder, BaseObjectState? parent, IList<IReference>? references, string pathPrefix, List<NodeState>? batch = null)
         {
             string currentPath = string.IsNullOrEmpty(pathPrefix) ? folder.Name : $"{pathPrefix}.{folder.Name}";
 
@@ -1257,13 +1562,12 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
 
             if (parent != null)
             {
-                parent.AddChild(folderState);
-                AddPredefinedNode(SystemContext, folderState);
+                RegisterChildNode(SystemContext, folderState, parent, batch);
             }
             else
             {
                 _rootNodeIds.Add(folderState.NodeId); // Track root
-                AddPredefinedNode(SystemContext, folderState);
+                RegisterNode(SystemContext, folderState, batch);
                 AddRootNotifier(folderState);
 
                 // Ensure inverse reference exists
@@ -1283,7 +1587,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             {
                 try
                 {
-                    CreateFolder(subFolder, folderState, references, childPrefix);
+                    CreateFolder(subFolder, folderState, references, childPrefix, batch);
                 }
                 catch (Exception ex)
                 {
@@ -1295,16 +1599,18 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             {
                 try
                 {
-                    CreateVariable(variable, folderState, childPrefix);
+                    CreateVariable(variable, folderState, childPrefix, batch);
                 }
                 catch (Exception ex)
                 {
                     Utils.Trace(ex, $"Error creating variable '{variable.Name}' under '{currentPath}'");
                 }
             }
+
+            return folderState;
         }
 
-        private void CreateVariable(Variable variable, BaseObjectState parent, string pathPrefix)
+        private void CreateVariable(Variable variable, BaseObjectState parent, string pathPrefix, List<NodeState>? batch = null)
         {
             string currentPath = string.IsNullOrEmpty(pathPrefix) ? variable.Name : $"{pathPrefix}.{variable.Name}";
             
@@ -1347,7 +1653,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 lastError.ReferenceTypeId = ReferenceTypeIds.HasProperty; // Ensure reference type is set
                 
                 variableState.AddChild(lastError);
-                AddPredefinedNode(SystemContext, lastError);
+                RegisterNode(SystemContext, lastError, batch);
             }
 
             byte accessLevel = AccessLevels.CurrentReadOrWrite;
@@ -1365,8 +1671,8 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 variableState.Historizing = true;
             }
 
-            parent.AddChild(variableState);
-            AddPredefinedNode(SystemContext, variableState);
+            RegisterChildNode(SystemContext, variableState, parent, batch);
+            Interlocked.Increment(ref _nodeCreationCount);
 
             // Add to dictionary for scripts
             // Use currentPath (NodeId identifier) as key
@@ -1401,7 +1707,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             // Create alarm condition if AlarmConfig is specified
             if (variable.Alarm != null)
             {
-                CreateAlarmCondition(variableState, variable.Alarm, currentPath, parent);
+                CreateAlarmCondition(variableState, variable.Alarm, currentPath, parent, batch);
             }
 
             // Register variable for anomaly detection
@@ -1476,12 +1782,12 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 statsFolder.AddChild(statsReset);
                 variableState.AddChild(statsFolder);
 
-                AddPredefinedNode(SystemContext, statsFolder);
-                AddPredefinedNode(SystemContext, statsMin);
-                AddPredefinedNode(SystemContext, statsMax);
-                AddPredefinedNode(SystemContext, statsAvg);
-                AddPredefinedNode(SystemContext, statsCount);
-                AddPredefinedNode(SystemContext, statsReset);
+                RegisterNode(SystemContext, statsFolder, batch);
+                RegisterNode(SystemContext, statsMin, batch);
+                RegisterNode(SystemContext, statsMax, batch);
+                RegisterNode(SystemContext, statsAvg, batch);
+                RegisterNode(SystemContext, statsCount, batch);
+                RegisterNode(SystemContext, statsReset, batch);
 
                 var tracker = new VariableStatisticsTracker(statsMin, statsMax, statsAvg, statsCount, statsReset, SystemContext);
                 _statsTrackers[currentPath] = tracker;
@@ -1525,7 +1831,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             }
         }
 
-        private void CreateEventVariable(Variable variable, BaseObjectState parent, string pathPrefix)
+        private void CreateEventVariable(Variable variable, BaseObjectState parent, string pathPrefix, List<NodeState>? batch = null)
         {
             string currentPath = string.IsNullOrEmpty(pathPrefix) ? variable.Name : $"{pathPrefix}.{variable.Name}";
             
@@ -1556,8 +1862,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 variableState.Historizing = true;
             }
 
-            parent.AddChild(variableState);
-            AddPredefinedNode(SystemContext, variableState);
+            RegisterChildNode(SystemContext, variableState, parent, batch);
 
             // Add to dictionary for scripts
             _variables[currentPath] = variableState;
@@ -1892,26 +2197,54 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             return stats;
         }
 
-        private void CreateAlarmCondition(BaseDataVariableState variableState, AlarmConfig alarmConfig, string variablePath, BaseObjectState parent)
+        /// <summary>Assigns unique NodeIds to all children of a cloned alarm template.
+        /// Children get NodeIds like "prefix.ChildBrowseName" in our namespace.</summary>
+        private void AssignAlarmChildNodeIds(NodeState alarm, string prefix)
         {
-            if (alarmConfig.TriggerType == AlarmTriggerType.Condition)
-                CreateConditionAlarm(variableState, alarmConfig, variablePath, parent);
-            else
-                CreateLimitAlarm(variableState, alarmConfig, variablePath, parent);
+            var children = new List<BaseInstanceState>();
+            alarm.GetChildren(SystemContext, children);
+            for (int i = 0; i < children.Count; i++)
+            {
+                var child = children[i];
+                child.NodeId = new NodeId(prefix + "." + child.SymbolicName, _namespaceIndex);
+                // Recurse into grandchildren (e.g. LimitState.CurrentState, EnabledState.Id, etc.)
+                AssignAlarmChildNodeIds(child, prefix + "." + child.SymbolicName);
+            }
         }
 
-        private void CreateLimitAlarm(BaseDataVariableState variableState, AlarmConfig alarmConfig, string variablePath, BaseObjectState parent)
+        private void CreateAlarmCondition(BaseDataVariableState variableState, AlarmConfig alarmConfig, string variablePath, BaseObjectState parent, List<NodeState>? batch = null)
+        {
+            if (alarmConfig.TriggerType == AlarmTriggerType.Condition)
+                CreateConditionAlarm(variableState, alarmConfig, variablePath, parent, batch);
+            else
+                CreateLimitAlarm(variableState, alarmConfig, variablePath, parent, batch);
+        }
+
+        private void CreateLimitAlarm(BaseDataVariableState variableState, AlarmConfig alarmConfig, string variablePath, BaseObjectState parent, List<NodeState>? batch = null)
         {
             var alarmNodeId = new NodeId(variablePath + ".Alarm", _namespaceIndex);
 
-            var alarm = new ExclusiveLimitAlarmState(parent);
+            // Clone from a pre-built template to avoid the very expensive
+            // base64-decode → binary-deserialize → 7-recursive-walk path in Create().
+            // The template is [ThreadStatic] so there is zero lock contention.
+            if (t_limitAlarmTemplate == null)
+            {
+                t_limitAlarmTemplate = new ExclusiveLimitAlarmState(null);
+                t_limitAlarmTemplate.Create(SystemContext, null, null, null, false);
+            }
 
-            alarm.Create(
-                SystemContext,
-                alarmNodeId,
-                new QualifiedName(variableState.BrowseName.Name + "Alarm", _namespaceIndex),
-                new LocalizedText(variableState.DisplayName.Text + " Alarm"),
-                true);
+            var alarm = (ExclusiveLimitAlarmState)t_limitAlarmTemplate.Clone();
+
+            // Assign unique NodeIds to the alarm and all its children.
+            alarm.NodeId = alarmNodeId;
+            var prefix = variablePath + ".Alarm";
+            AssignAlarmChildNodeIds(alarm, prefix);
+
+            // Set identity
+            alarm.BrowseName = new QualifiedName(variableState.BrowseName.Name + "Alarm", _namespaceIndex);
+            alarm.DisplayName = new LocalizedText(variableState.DisplayName.Text + " Alarm");
+            alarm.TypeDefinitionId = ObjectTypeIds.ExclusiveLimitAlarmType;
+            alarm.ReferenceTypeId = ReferenceTypeIds.HasComponent;
 
             // Ensure BranchId is initialized — required by ConditionState.IsBranch().
             // Some SDK versions do not auto-create this property in Create().
@@ -1995,8 +2328,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             alarm.OnConfirm = OnAlarmConfirm;
 
             // Add to parent and address space
-            parent.AddChild(alarm);
-            AddPredefinedNode(SystemContext, alarm);
+            RegisterChildNode(SystemContext, alarm, parent, batch);
 
             // Also add a HasCondition reference from the source variable to the alarm
             variableState.AddReference(ReferenceTypeIds.HasCondition, false, alarm.NodeId);
@@ -2011,46 +2343,38 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 IsActive = false
             };
             _alarmConditions[variablePath] = info;
-            Utils.Trace("ALARM-CREATE: {0} HighLimit={1} LowLimit={2} HH={3} LL={4} Hyst={5} InitialValue={6}",
-                variablePath, alarmConfig.HighLimit, alarmConfig.LowLimit,
-                alarmConfig.HighHighLimit, alarmConfig.LowLowLimit, alarmConfig.Hysteresis,
-                variableState.Value);
 
             // Monitor value changes to activate/deactivate the alarm
             variableState.OnStateChanged += (context, state, masks) =>
             {
-                if ((masks & NodeStateChangeMasks.Value) != 0)
-                {
-                    try
-                    {
-                        Utils.Trace("ALARM-STATECHANGED: {0} masks={1} value={2}",
-                            info.VariablePath, masks, info.SourceVariable.Value);
-                        EvaluateAlarmCondition(info);
-                    }
-                    catch (Exception ex)
-                    {
-                        Utils.Trace(ex, "ALARM-STATECHANGED-ERROR: {0}", info.VariablePath);
-                    }
-                }
+                if ((masks & NodeStateChangeMasks.Value) != 0 && !_loading)
+                    EvaluateAlarmCondition(info);
             };
 
-            // Evaluate once with the initial value
-            Utils.Trace("ALARM-INIT-EVAL: {0} value={1}", variablePath, variableState.Value);
-            EvaluateAlarmCondition(info);
+            // Initial evaluation is deferred — performed in bulk after all nodes are created.
         }
 
-        private void CreateConditionAlarm(BaseDataVariableState variableState, AlarmConfig alarmConfig, string variablePath, BaseObjectState parent)
+        private void CreateConditionAlarm(BaseDataVariableState variableState, AlarmConfig alarmConfig, string variablePath, BaseObjectState parent, List<NodeState>? batch = null)
         {
             var alarmNodeId = new NodeId(variablePath + ".Alarm", _namespaceIndex);
 
-            var alarm = new OffNormalAlarmState(parent);
+            // Clone from a pre-built template (same pattern as CreateLimitAlarm).
+            if (t_conditionAlarmTemplate == null)
+            {
+                t_conditionAlarmTemplate = new OffNormalAlarmState(null);
+                t_conditionAlarmTemplate.Create(SystemContext, null, null, null, false);
+            }
 
-            alarm.Create(
-                SystemContext,
-                alarmNodeId,
-                new QualifiedName(variableState.BrowseName.Name + "Alarm", _namespaceIndex),
-                new LocalizedText(variableState.DisplayName.Text + " Alarm"),
-                true);
+            var alarm = (OffNormalAlarmState)t_conditionAlarmTemplate.Clone();
+
+            alarm.NodeId = alarmNodeId;
+            var prefix = variablePath + ".Alarm";
+            AssignAlarmChildNodeIds(alarm, prefix);
+
+            alarm.BrowseName = new QualifiedName(variableState.BrowseName.Name + "Alarm", _namespaceIndex);
+            alarm.DisplayName = new LocalizedText(variableState.DisplayName.Text + " Alarm");
+            alarm.TypeDefinitionId = ObjectTypeIds.OffNormalAlarmType;
+            alarm.ReferenceTypeId = ReferenceTypeIds.HasComponent;
 
             // Ensure BranchId is initialized — required by ConditionState.IsBranch()
             if (alarm.BranchId == null)
@@ -2116,8 +2440,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             alarm.OnAcknowledge = OnAlarmAcknowledge;
             alarm.OnConfirm = OnAlarmConfirm;
 
-            parent.AddChild(alarm);
-            AddPredefinedNode(SystemContext, alarm);
+            RegisterChildNode(SystemContext, alarm, parent, batch);
 
             variableState.AddReference(ReferenceTypeIds.HasCondition, false, alarm.NodeId);
             alarm.AddReference(ReferenceTypeIds.HasCondition, true, variableState.NodeId);
@@ -2134,20 +2457,17 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
 
             variableState.OnStateChanged += (context, state, masks) =>
             {
-                if ((masks & NodeStateChangeMasks.Value) != 0)
+                if ((masks & NodeStateChangeMasks.Value) != 0 && !_loading)
                     EvaluateAlarmCondition(info);
             };
 
-            EvaluateAlarmCondition(info);
+            // Initial evaluation is deferred — performed in bulk after all nodes are created.
         }
 
         private void EvaluateAlarmCondition(AlarmConditionInfo info)
         {
             try
             {
-                Utils.Trace("ALARM-EVAL: {0} type={1} value={2} (type={3}) isActive={4}",
-                    info.VariablePath, info.Config.TriggerType,
-                    info.SourceVariable.Value, info.SourceVariable.Value?.GetType().Name ?? "null", info.IsActive);
                 if (info.Config.TriggerType == AlarmTriggerType.Condition)
                     EvaluateConditionAlarm(info);
                 else
@@ -2155,16 +2475,13 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             }
             catch (Exception ex)
             {
-                Utils.Trace(ex, "ALARM-EVAL-ERROR: {0}", info.VariablePath);
+                Log.Warning(ex, "Alarm evaluation error for {Path}", info.VariablePath);
             }
         }
 
         private void EvaluateLimitAlarm(AlarmConditionInfo info)
         {
             var result = AlarmEvaluator.EvaluateLimitAlarm(info.SourceVariable.Value, info.Config, info.IsActive);
-            Utils.Trace("ALARM-LIMIT: {0} result={1} activate={2} deactivate={3}",
-                info.VariablePath, result != null ? "ok" : "null",
-                result?.ShouldActivate, result?.ShouldDeactivate);
             if (result == null) return;
 
             double val = AlarmEvaluator.GetNumericValue(info.SourceVariable.Value)!.Value;
@@ -2180,7 +2497,6 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             {
                 info.IsActive = true;
                 var alarm = info.AlarmState;
-                Utils.Trace("ALARM-ACTIVATE: {0} severity={1} limitState={2}", info.VariablePath, result.Severity, result.LimitState);
 
                 ushort severity = result.Severity;
                 LimitAlarmStates limitState = result.LimitState switch
@@ -2214,7 +2530,6 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 alarm.EventType.Value = ObjectTypeIds.ExclusiveLimitAlarmType;
 
                 ReportAlarmEvent(alarm);
-                Utils.Trace("ALARM-REPORTED: {0} message={1}", info.VariablePath, message);
                 _eventLogger?.LogAlarm(severity >= 800 ? "Critical" : "Warning", info.VariablePath, message,
                     $"Value={val:G6} HH={highHigh} H={cfg.HighLimit} L={cfg.LowLimit} LL={lowLow} Hyst={hyst}");
                 RecordAlarmAnalyticsEvent(AlarmAnalyticsEventKind.Activated, info.VariablePath, message);
@@ -2659,7 +2974,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 {
                     this.OnStateChanged += (context, state, masks) =>
                     {
-                        if ((masks & NodeStateChangeMasks.Value) != 0)
+                        if ((masks & NodeStateChangeMasks.Value) != 0 && !_manager._loading)
                         {
                             try
                             {

@@ -56,6 +56,11 @@ namespace SimpleOpcFileServer
             }
         }
 
+        public void Start()
+        {
+            lock (_lock) { foreach (var d in _devices.Values) d.Start(); }
+        }
+
         public void Dispose()
         {
             _disposed = true;
@@ -74,6 +79,7 @@ namespace SimpleOpcFileServer
             private TcpClient? _client;
             private IModbusMaster? _master;
             private int _pollInterval = 1000;
+            private int _minPollTime = int.MaxValue;
             private bool _disposed;
             private readonly object _deviceLock = new();
 
@@ -90,24 +96,21 @@ namespace SimpleOpcFileServer
                 lock (_deviceLock)
                 {
                     _items.Add(item);
-                    if (_items.Count == 1)
-                        _pollInterval = item.Config.PollTime > 0 ? item.Config.PollTime : 1000;
-                    else
-                    {
-                        var configured = _items.Where(x => x.Config.PollTime > 0).ToList();
-                        if (configured.Any()) _pollInterval = configured.Min(x => x.Config.PollTime);
-                    }
-                    UpdateTimer();
+                    if (item.Config.PollTime > 0 && item.Config.PollTime < _minPollTime)
+                        _minPollTime = item.Config.PollTime;
+                    _pollInterval = _minPollTime < int.MaxValue ? _minPollTime : 1000;
                 }
             }
 
-            private void UpdateTimer()
+            public void Start()
             {
-                if (_timer != null)
-                    _timer.Change(0, Timeout.Infinite);
-                else
-                    _timer = new Timer(Poll, null, 0, Timeout.Infinite);
+                lock (_deviceLock)
+                {
+                    if (_timer == null && _items.Count > 0)
+                        _timer = new Timer(Poll, null, _pollInterval, Timeout.Infinite);
+                }
             }
+
 
             private void Poll(object? state)
             {

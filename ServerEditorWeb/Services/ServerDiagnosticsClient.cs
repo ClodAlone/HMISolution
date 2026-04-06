@@ -100,6 +100,11 @@ public class ServerDiagnosticsClient : IDisposable
             {
                 Latest = null;
                 Error = $"Read failed: {value.StatusCode}";
+                // Reset cached node ID so we re-resolve on the next poll.
+                // This handles the case where the server is still loading
+                // its address space (deferred loading) and the node doesn't
+                // exist yet.
+                _diagNodeId = null;
             }
         }
         catch (Exception ex)

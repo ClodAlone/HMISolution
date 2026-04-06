@@ -36,7 +36,8 @@ namespace SimpleOpcFileServer
         /// Registered monitored entries: variable path → (config, alarm config, variable logger).
         /// Populated during initialization by the node manager.
         /// </summary>
-        private readonly List<MonitoredVariable> _monitored = new();
+        private readonly ConcurrentQueue<MonitoredVariable> _pendingRegistrations = new();
+        private List<MonitoredVariable> _monitored = new();
 
         public AnomalyDetectionService(
             SimpleFileServerNodeManager nodeManager,
@@ -55,7 +56,7 @@ namespace SimpleOpcFileServer
         {
             if (!config.Enabled || logger == null) return;
 
-            _monitored.Add(new MonitoredVariable
+            _pendingRegistrations.Enqueue(new MonitoredVariable
             {
                 VariablePath = variablePath,
                 Config = config,
@@ -67,6 +68,8 @@ namespace SimpleOpcFileServer
         /// <summary>Start the background analysis loop.</summary>
         public void Start()
         {
+            // Materialize pending registrations into the indexed list
+            _monitored = new List<MonitoredVariable>(_pendingRegistrations);
             if (_monitored.Count == 0) return;
 
             DiagnosticsCollector.Instance.Register("AnomalyDetection", "Service");

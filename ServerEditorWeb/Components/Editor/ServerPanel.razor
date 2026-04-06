@@ -8,7 +8,7 @@
 <div class="server-panel">
     <h6>Server Process</h6>
     <div class="d-flex gap-2 mb-3">
-        <button class="btn btn-sm btn-success" @onclick="StartServer" disabled="@ServerProcess.IsServerRunning">▶ Start</button>
+        <button class="btn btn-sm btn-success" @onclick="StartServer" disabled="@(ServerProcess.IsServerRunning || string.IsNullOrEmpty(NodesPath))">▶ Start</button>
         <button class="btn btn-sm btn-danger" @onclick="StopServer" disabled="@(!ServerProcess.IsServerRunning)">⏹ Stop</button>
         <span class="badge @(ServerProcess.IsServerRunning ? "bg-success" : "bg-secondary") align-self-center">
             @(ServerProcess.IsServerRunning ? "Running" : "Stopped")
@@ -106,6 +106,33 @@
         </div>
     }
 
+    @* ─── Server Output Log ───────────────────────────────── *@
+    @if (ServerProcess.OutputLines.Count > 0 || ServerProcess.IsServerRunning)
+    {
+        <div class="mt-2">
+            <button class="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1" @onclick="() => _showServerOutput = !_showServerOutput">
+                @(_showServerOutput ? "▾" : "▸") 📋 Output
+                <span class="badge bg-secondary" style="font-size: 9px;">@ServerProcess.OutputLines.Count</span>
+                @if (ServerProcess.IsServerRunning && ServerProcess.OutputLines.Count > 0)
+                {
+                    <span class="badge bg-success" style="font-size: 8px;">live</span>
+                }
+            </button>
+            @if (_showServerOutput)
+            {
+                <div class="mt-1 position-relative">
+                    <div class="position-absolute d-flex gap-1" style="top: 4px; right: 4px; z-index: 1;">
+                        <button class="btn btn-sm btn-outline-secondary" style="font-size: 9px; padding: 1px 5px;"
+                                @onclick="() => CopyToClipboard(string.Join(Environment.NewLine, ServerProcess.OutputLines))" title="Copy output">📋</button>
+                        <button class="btn btn-sm btn-outline-secondary" style="font-size: 9px; padding: 1px 5px;"
+                                @onclick="() => ServerProcess.ClearOutput()" title="Clear output">🗑</button>
+                    </div>
+                    <pre data-server-output class="p-2 rounded mb-0" style="background: #0f172a; color: #e2e8f0; font-size: 10px; max-height: 250px; overflow-y: auto; white-space: pre-wrap; font-family: 'Cascadia Mono', 'Consolas', monospace;" @ref="_serverOutputEl">@string.Join("\n", ServerProcess.OutputLines)</pre>
+                </div>
+            }
+        </div>
+    }
+
     <hr class="my-3" />
 
     @* ─── RuntimeViewer Section ─────────────────────────────── *@
@@ -132,7 +159,7 @@
             <label class="form-check-label small" for="rvKiosk">Kiosk</label>
         </div>
         <div class="align-self-end">
-            <button class="btn btn-sm btn-success" @onclick="StartViewer" disabled="@ViewerProcess.IsViewerRunning">▶ Start</button>
+            <button class="btn btn-sm btn-success" @onclick="StartViewer" disabled="@(ViewerProcess.IsViewerRunning || string.IsNullOrEmpty(NodesPath))">▶ Start</button>
         </div>
         <div class="align-self-end">
             <button class="btn btn-sm btn-danger" @onclick="StopViewer" disabled="@(!ViewerProcess.IsViewerRunning)">⏹ Stop</button>
@@ -219,6 +246,33 @@
         <div class="mt-2 alert @(_rvMessageSuccess ? "alert-success" : "alert-danger") alert-dismissible">
             @_rvMessage
             <button type="button" class="btn-close" @onclick="() => _rvMessage = string.Empty"></button>
+        </div>
+    }
+
+    @* ─── RuntimeViewer Output Log ────────────────────────── *@
+    @if (ViewerProcess.OutputLines.Count > 0 || ViewerProcess.IsViewerRunning)
+    {
+        <div class="mt-2">
+            <button class="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1" @onclick="() => _showViewerOutput = !_showViewerOutput">
+                @(_showViewerOutput ? "▾" : "▸") 📋 Output
+                <span class="badge bg-secondary" style="font-size: 9px;">@ViewerProcess.OutputLines.Count</span>
+                @if (ViewerProcess.IsViewerRunning && ViewerProcess.OutputLines.Count > 0)
+                {
+                    <span class="badge bg-success" style="font-size: 8px;">live</span>
+                }
+            </button>
+            @if (_showViewerOutput)
+            {
+                <div class="mt-1 position-relative">
+                    <div class="position-absolute d-flex gap-1" style="top: 4px; right: 4px; z-index: 1;">
+                        <button class="btn btn-sm btn-outline-secondary" style="font-size: 9px; padding: 1px 5px;"
+                                @onclick="() => CopyToClipboard(string.Join(Environment.NewLine, ViewerProcess.OutputLines))" title="Copy output">📋</button>
+                        <button class="btn btn-sm btn-outline-secondary" style="font-size: 9px; padding: 1px 5px;"
+                                @onclick="() => ViewerProcess.ClearOutput()" title="Clear output">🗑</button>
+                    </div>
+                    <pre data-viewer-output class="p-2 rounded mb-0" style="background: #0f172a; color: #e2e8f0; font-size: 10px; max-height: 250px; overflow-y: auto; white-space: pre-wrap; font-family: 'Cascadia Mono', 'Consolas', monospace;" @ref="_viewerOutputEl">@string.Join("\n", ViewerProcess.OutputLines)</pre>
+                </div>
+            }
         </div>
     }
 
@@ -529,6 +583,12 @@
     private string _rvMessage = "";
     private bool _rvMessageSuccess;
 
+    // Output log panels
+    private bool _showServerOutput;
+    private bool _showViewerOutput;
+    private ElementReference _serverOutputEl;
+    private ElementReference _viewerOutputEl;
+
     // Performance tracking
     private readonly ProcessPerformanceTracker _serverPerfTracker = new();
     private readonly ProcessPerformanceTracker _viewerPerfTracker = new();
@@ -575,6 +635,8 @@
     {
         ServerProcess.StateChanged += OnServerStateChanged;
         ViewerProcess.StateChanged += OnServerStateChanged;
+        ServerProcess.OutputChanged += OnOutputChanged;
+        ViewerProcess.OutputChanged += OnOutputChanged;
         _statusTimer = new Timer(_ => InvokeAsync(async () => { await RefreshStatusAsync(); StateHasChanged(); }), null, TimeSpan.Zero, TimeSpan.FromSeconds(5));
         _perfTimer = new Timer(_ => InvokeAsync(() => { SamplePerformance(); BuildSubsystems(); StateHasChanged(); return Task.CompletedTask; }), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2));
         _diagTimer2 = new Timer(_ => InvokeAsync(async () => { await PollDiagInBackground(); }), null, TimeSpan.FromSeconds(3), TimeSpan.FromSeconds(3));
@@ -583,6 +645,24 @@
     private void OnServerStateChanged()
     {
         InvokeAsync(StateHasChanged);
+    }
+
+    private void OnOutputChanged()
+    {
+        InvokeAsync(async () =>
+        {
+            StateHasChanged();
+            await Task.Yield();
+            // Auto-scroll to bottom
+            try
+            {
+                if (_showServerOutput)
+                    await JS.InvokeVoidAsync("eval", "document.querySelector('[data-server-output]')?.scrollTo(0, 999999)");
+                if (_showViewerOutput)
+                    await JS.InvokeVoidAsync("eval", "document.querySelector('[data-viewer-output]')?.scrollTo(0, 999999)");
+            }
+            catch { /* element may not be rendered yet */ }
+        });
     }
 
     private void RefreshStatus()
@@ -633,6 +713,12 @@
 
     private void StartServer()
     {
+        if (string.IsNullOrEmpty(NodesPath))
+        {
+            _messageSuccess = false;
+            _message = "No project is open. Please open a project first.";
+            return;
+        }
         var (success, msg) = ServerProcess.StartServer(NodesPath);
         _messageSuccess = success;
         _message = msg;
@@ -735,6 +821,12 @@
 
     private void StartViewer()
     {
+        if (string.IsNullOrEmpty(NodesPath))
+        {
+            _rvMessageSuccess = false;
+            _rvMessage = "No project is open. Please open a project first.";
+            return;
+        }
         var (success, msg) = ViewerProcess.StartViewer(NodesPath, _rvPort, _rvKiosk, _rvMode);
         _rvMessageSuccess = success;
         _rvMessage = msg;
@@ -1177,6 +1269,8 @@
     {
         ServerProcess.StateChanged -= OnServerStateChanged;
         ViewerProcess.StateChanged -= OnServerStateChanged;
+        ServerProcess.OutputChanged -= OnOutputChanged;
+        ViewerProcess.OutputChanged -= OnOutputChanged;
         _statusTimer?.Dispose();
         _perfTimer?.Dispose();
         _diagTimer2?.Dispose();

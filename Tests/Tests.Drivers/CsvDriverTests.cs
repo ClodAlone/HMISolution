@@ -58,6 +58,7 @@ public class CsvDriverTests : IDisposable
 
         var config = new CsvConfig { FilePath = csvPath, RowIndex = 0, ColumnIndex = 1, PollTime = 100 };
         driver.AddItem(variable, JsonSerializer.Serialize(config));
+        driver.Start();
 
         Thread.Sleep(500);
         Assert.Equal(20.3, Convert.ToDouble(variable.Value));
@@ -73,6 +74,7 @@ public class CsvDriverTests : IDisposable
 
         var config = new CsvConfig { FilePath = csvPath, RowIndex = 2, ColumnIndex = 0, PollTime = 100 };
         driver.AddItem(variable, JsonSerializer.Serialize(config));
+        driver.Start();
 
         Thread.Sleep(500);
         Assert.Equal(5.0, Convert.ToDouble(variable.Value));
@@ -87,6 +89,7 @@ public class CsvDriverTests : IDisposable
 
         var config = new CsvConfig { FilePath = csvPath, Key = "sensor2", ColumnIndex = 1, PollTime = 100 };
         driver.AddItem(variable, JsonSerializer.Serialize(config));
+        driver.Start();
 
         Thread.Sleep(1000);
         Assert.Equal(200.0, Convert.ToDouble(variable.Value));
@@ -102,6 +105,7 @@ public class CsvDriverTests : IDisposable
 
         var config = new CsvConfig { FilePath = csvPath, RowIndex = 0, ColumnIndex = 0, PollTime = 100 };
         driver.AddItem(variable, JsonSerializer.Serialize(config));
+        driver.Start();
 
         Thread.Sleep(500);
         Assert.Equal(StatusCodes.Bad, variable.StatusCode.Code);
@@ -116,6 +120,7 @@ public class CsvDriverTests : IDisposable
 
         var config = new CsvConfig { FilePath = csvPath, RowIndex = 1, ColumnIndex = 0, PollTime = 100 };
         driver.AddItem(variable, JsonSerializer.Serialize(config));
+        driver.Start();
 
         Thread.Sleep(500);
         Assert.Equal(99, Convert.ToInt32(variable.Value));
@@ -130,6 +135,7 @@ public class CsvDriverTests : IDisposable
 
         var config = new CsvConfig { FilePath = csvPath, RowIndex = 0, ColumnIndex = 0, PollTime = 100 };
         driver.AddItem(variable, JsonSerializer.Serialize(config));
+        driver.Start();
 
         Thread.Sleep(500);
         Assert.Equal(true, variable.Value);
@@ -144,6 +150,7 @@ public class CsvDriverTests : IDisposable
 
         var config = new CsvConfig { FilePath = csvPath, RowIndex = 1, ColumnIndex = 1, PollTime = 100 };
         driver.AddItem(variable, JsonSerializer.Serialize(config));
+        driver.Start();
 
         Thread.Sleep(500);
         Assert.Equal("bar", variable.Value?.ToString());
@@ -158,6 +165,7 @@ public class CsvDriverTests : IDisposable
 
         var config = new CsvConfig { FilePath = csvPath, RowIndex = 0, ColumnIndex = 2, PollTime = 100 };
         driver.AddItem(variable, JsonSerializer.Serialize(config));
+        driver.Start();
 
         Thread.Sleep(500);
         Assert.Equal(30.0, Convert.ToDouble(variable.Value));
@@ -175,6 +183,7 @@ public class CsvDriverTests : IDisposable
 
         var config = new CsvConfig { FilePath = csvPath, RowIndex = 0, ColumnIndex = 0, PollTime = 100 };
         driver.AddItem(variable, JsonSerializer.Serialize(config));
+        driver.Start();
 
         Thread.Sleep(500);
         Assert.True(fired);
@@ -192,6 +201,7 @@ public class CsvDriverTests : IDisposable
         var config2 = new CsvConfig { FilePath = csvPath, RowIndex = 1, ColumnIndex = 2, PollTime = 100 };
         driver.AddItem(v1, JsonSerializer.Serialize(config1));
         driver.AddItem(v2, JsonSerializer.Serialize(config2));
+        driver.Start();
 
         Thread.Sleep(500);
         Assert.Equal(10.0, Convert.ToDouble(v1.Value));
@@ -208,6 +218,7 @@ public class CsvDriverTests : IDisposable
 
         var config = new CsvConfig { FilePath = csvPath, Key = "nonexistent", ColumnIndex = 1, PollTime = 100 };
         driver.AddItem(variable, JsonSerializer.Serialize(config));
+        driver.Start();
 
         Thread.Sleep(500);
         Assert.Equal(StatusCodes.Bad, variable.StatusCode.Code);
@@ -222,6 +233,7 @@ public class CsvDriverTests : IDisposable
 
         var config = new CsvConfig { FilePath = csvPath, RowIndex = 0, ColumnIndex = 0, PollTime = 50 };
         driver.AddItem(variable, JsonSerializer.Serialize(config));
+        driver.Start();
         Thread.Sleep(200);
 
         driver.Dispose();

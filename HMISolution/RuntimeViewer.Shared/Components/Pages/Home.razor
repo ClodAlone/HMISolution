@@ -566,6 +566,10 @@ else
     private bool _reconnecting;
     private static readonly TimeSpan ReconnectInterval = TimeSpan.FromSeconds(5);
 
+    // Retry timer for monitored items that failed because the server was
+    // still loading its address space (deferred loading).
+    private System.Threading.Timer? _itemRetryTimer;
+
     // Fit mode
     private bool _bestFit = true;
     private bool _showDiag;
@@ -720,6 +724,7 @@ else
         {
             StopReconnectTimer();
             ShowToast("success", "Connected", "OPC server connection established.");
+            StartItemRetryTimer();
         }
         else
         {
@@ -750,6 +755,32 @@ else
         {
             if (Opc.IsConnected || _connecting) return;
             await Connect();
+        });
+    }
+
+    private void StartItemRetryTimer()
+    {
+        _itemRetryTimer?.Dispose();
+        _itemRetryTimer = new System.Threading.Timer(OnItemRetryTick, null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
+    }
+
+    private void StopItemRetryTimer()
+    {
+        _itemRetryTimer?.Dispose();
+        _itemRetryTimer = null;
+    }
+
+    private void OnItemRetryTick(object? state)
+    {
+        _ = InvokeAsync(() =>
+        {
+            if (!Opc.IsConnected || !Opc.HasFailedMonitoredItems)
+            {
+                StopItemRetryTimer();
+                return;
+            }
+            Opc.RetryFailedMonitoredItems();
+            StateHasChanged();
         });
     }
 
@@ -1147,6 +1178,7 @@ else
         Opc.StateChanged -= OnDiagStateChanged;
         _idleTimer?.Dispose();
         _reconnectTimer?.Dispose();
+        _itemRetryTimer?.Dispose();
         _diagTimer?.Dispose();
         _idleRef?.Dispose();
         if (_kioskModule != null)

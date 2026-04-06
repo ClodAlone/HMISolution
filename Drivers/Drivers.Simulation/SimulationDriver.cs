@@ -64,13 +64,16 @@ namespace SimpleOpcFileServer
 
         private readonly List<SimulationItem> _items = new();
         private readonly object _lock = new();
-        private SimulationItem[] _snapshot = []; // cached; rebuilt only when items change
+        private volatile SimulationItem[] _snapshot = []; // cached; rebuilt lazily
+        private volatile bool _snapshotDirty;
         private Timer? _timer;
         private int _pollInterval = 100;
+        private int _minPollTime = int.MaxValue;
         private bool _disposed;
         private readonly ISystemContext _context;
         private readonly Random _random = new();
         private readonly DateTime _startTime = DateTime.UtcNow;
+        private static readonly JsonSerializerOptions s_jsonOptions = new() { PropertyNameCaseInsensitive = true };
 
         public SimulationDriver(ISystemContext context)
         {
@@ -79,23 +82,39 @@ namespace SimpleOpcFileServer
 
         public void AddItem(BaseDataVariableState variable, string configJson)
         {
-            var config = JsonSerializer.Deserialize<SimulationConfig>(configJson,
-                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            var config = JsonSerializer.Deserialize<SimulationConfig>(configJson, s_jsonOptions);
             if (config == null) return;
 
+            var item = new SimulationItem { Variable = variable, Config = config };
             lock (_lock)
             {
-                _items.Add(new SimulationItem { Variable = variable, Config = config });
-                _pollInterval = Math.Max(50, _items.Min(i => i.Config.PollTime));
-                _snapshot = [.. _items]; // rebuild cached snapshot
-                UpdateTimer();
+                _items.Add(item);
+                // Track min incrementally — O(1) instead of O(n) scan
+                if (config.PollTime < _minPollTime)
+                    _minPollTime = config.PollTime;
+                _pollInterval = Math.Max(50, _minPollTime);
+                _snapshotDirty = true;
             }
         }
 
-        private void UpdateTimer()
+        public void Start()
         {
-            if (_timer != null) _timer.Change(0, Timeout.Infinite);
-            else _timer = new Timer(Poll, null, 0, Timeout.Infinite);
+            lock (_lock)
+            {
+                if (_timer == null && _items.Count > 0)
+                    _timer = new Timer(Poll, null, _pollInterval, Timeout.Infinite);
+            }
+        }
+
+        private void RebuildSnapshotIfNeeded()
+        {
+            if (!_snapshotDirty) return;
+            lock (_lock)
+            {
+                if (!_snapshotDirty) return;
+                _snapshot = [.. _items];
+                _snapshotDirty = false;
+            }
         }
 
         private void Poll(object? state)
@@ -103,7 +122,8 @@ namespace SimpleOpcFileServer
             if (_disposed) return;
             var _sw = System.Diagnostics.Stopwatch.StartNew();
 
-            // Use the cached snapshot array — no allocation per tick
+            // Rebuild snapshot if items were added since last poll
+            RebuildSnapshotIfNeeded();
             var snapshot = _snapshot;
 
             var now = DateTime.UtcNow;

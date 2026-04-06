@@ -51,6 +51,7 @@ public class SimulationDriverTests
 
         var json = JsonSerializer.Serialize(config);
         driver.AddItem(variable, json);
+        driver.Start();
 
         // After a short delay, the variable should have been updated
         Thread.Sleep(600);
@@ -81,6 +82,7 @@ public class SimulationDriverTests
         });
 
         driver.AddItem(variable, config);
+        driver.Start();
         Thread.Sleep(350); // ~3 poll cycles
 
         // Counter should have been incremented
@@ -104,6 +106,7 @@ public class SimulationDriverTests
         });
 
         driver.AddItem(variable, config);
+        driver.Start();
         Thread.Sleep(200);
 
         var value = Convert.ToDouble(variable.Value);
@@ -126,6 +129,7 @@ public class SimulationDriverTests
         });
 
         driver.AddItem(variable, config);
+        driver.Start();
         Thread.Sleep(300);
 
         // RandomInt produces an int; convert carefully
@@ -148,6 +152,7 @@ public class SimulationDriverTests
         });
 
         driver.AddItem(variable, config);
+        driver.Start();
         Thread.Sleep(150);
 
         Assert.IsType<bool>(variable.Value);
@@ -169,6 +174,7 @@ public class SimulationDriverTests
         });
 
         driver.AddItem(variable, config);
+        driver.Start();
         Thread.Sleep(150);
 
         var value = Convert.ToDouble(variable.Value);
@@ -193,6 +199,7 @@ public class SimulationDriverTests
         });
 
         driver.AddItem(variable, config);
+        driver.Start();
         Thread.Sleep(200);
 
         Assert.True(fired);

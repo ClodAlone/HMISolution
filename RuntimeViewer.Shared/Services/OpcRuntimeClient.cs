@@ -359,7 +359,56 @@ public class OpcRuntimeClient : IDisposable
         Log($"PRECONNECT: Done. {_subscription.MonitoredItemCount} total item(s)");
     }
 
-    private int _notificationCount;
+    /// <summary>
+    /// Re-applies monitored items that failed (e.g. BadNodeIdUnknown) during
+    /// initial subscription — typically because the server was still loading
+    /// its address space via deferred loading.
+    /// </summary>
+    public void RetryFailedMonitoredItems()
+    {
+        if (_subscription == null || _session == null || !_session.Connected) return;
+
+        var failed = _subscription.MonitoredItems
+            .Where(m => m.Status?.Error != null && StatusCode.IsBad(m.Status.Error.StatusCode))
+            .ToList();
+
+        if (failed.Count == 0) return;
+
+        Log($"RETRY: Re-applying {failed.Count} failed monitored item(s)...");
+
+        _subscription.RemoveItems(failed);
+
+        foreach (var old in failed)
+        {
+            var item = new MonitoredItem(_subscription.DefaultItem)
+            {
+                DisplayName = old.DisplayName,
+                StartNodeId = old.StartNodeId,
+                SamplingInterval = old.SamplingInterval,
+                QueueSize = old.QueueSize,
+                DiscardOldest = old.DiscardOldest
+            };
+            item.Notification += OnMonitoredItemNotification;
+            _subscription.AddItem(item);
+        }
+
+        _subscription.ApplyChanges();
+
+        var stillFailed = _subscription.MonitoredItems.Count(m => m.Status?.Error != null && StatusCode.IsBad(m.Status.Error.StatusCode));
+        Log($"RETRY: Done. {failed.Count - stillFailed} recovered, {stillFailed} still failing.");
+    }
+
+    /// <summary>Returns true if any monitored items are in a failed state.</summary>
+    public bool HasFailedMonitoredItems
+    {
+        get
+        {
+            if (_subscription == null) return false;
+            return _subscription.MonitoredItems.Any(m => m.Status?.Error != null && StatusCode.IsBad(m.Status.Error.StatusCode));
+        }
+    }
+
+        private int _notificationCount;
 
     private void OnMonitoredItemNotification(MonitoredItem item, MonitoredItemNotificationEventArgs e)
     {
