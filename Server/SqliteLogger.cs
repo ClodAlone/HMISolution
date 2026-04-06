@@ -19,7 +19,7 @@ namespace SimpleOpcFileServer
         // Channel-based write queue replaces Task.Run + lock per variable.
         // A single consumer drains entries in batches within a transaction.
         private readonly Channel<WriteEntry> _writeChannel = Channel.CreateBounded<WriteEntry>(
-            new BoundedChannelOptions(10_000)
+            new BoundedChannelOptions(200_000)
             {
                 FullMode = BoundedChannelFullMode.DropOldest,
                 SingleReader = true,
@@ -27,8 +27,8 @@ namespace SimpleOpcFileServer
             });
         private Task? _writerTask;
         private readonly CancellationTokenSource _cts = new();
-        private const int BatchFlushIntervalMs = 100;
-        private const int MaxBatchSize = 500;
+        private const int BatchFlushIntervalMs = 200;
+        private const int MaxBatchSize = 5_000;
 
         private SqliteCommand? _insertCmd;
         private SqliteParameter? _pTime, _pName, _pVal, _pValStr, _pQuality;

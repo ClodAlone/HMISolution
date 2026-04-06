@@ -284,19 +284,18 @@ namespace SimpleOpcFileServer
                 {
                     if (File.Exists(_configPath))
                     {
-                        string json;
+                        NodeModel? nodeModel;
                         using (var fs = new FileStream(_configPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
-                        using (var sr = new StreamReader(fs))
                         {
-                            json = sr.ReadToEnd();
+                            nodeModel = JsonSerializer.Deserialize(fs, ServerJsonContext.Default.NodeModel);
                         }
-                        var nodeModel = JsonSerializer.Deserialize(json, ServerJsonContext.Default.NodeModel);
 
                         // Load external resource files (scripts/, screens/, plcprograms/)
                         if (nodeModel != null)
                             ResourceFileManager.LoadExternalResources(nodeModel, _configPath);
 
                         LoadModel(nodeModel, externalReferences);
+                        if (nodeModel != null) StripModelForCache(nodeModel);
                         _lastModel = nodeModel;
                     }
 
@@ -317,13 +316,11 @@ namespace SimpleOpcFileServer
                 Utils.Trace("Reloading configuration..."); 
                 try
                 {
-                    string json;
+                    NodeModel? newModel;
                     using (var fs = new FileStream(_configPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
-                    using (var sr = new StreamReader(fs))
                     {
-                        json = sr.ReadToEnd();
+                        newModel = JsonSerializer.Deserialize(fs, ServerJsonContext.Default.NodeModel);
                     }
-                    var newModel = JsonSerializer.Deserialize(json, ServerJsonContext.Default.NodeModel);
 
                     // Load external resource files (scripts/, screens/, plcprograms/)
                     if (newModel != null)
@@ -351,6 +348,7 @@ namespace SimpleOpcFileServer
                                     // Could fallback to full reload, but let's continue best effort or fail.
                                 }
                             }
+                            StripModelForCache(newModel);
                             _lastModel = newModel;
                             Utils.Trace("Configuration updated incrementally.");
                         }
@@ -410,6 +408,7 @@ namespace SimpleOpcFileServer
 
             // Re-create
             LoadModel(nodeModel, null);
+            StripModelForCache(nodeModel);
             _lastModel = nodeModel;
             Utils.Trace("Configuration reloaded fully.");
         }
@@ -459,6 +458,24 @@ namespace SimpleOpcFileServer
                 _eventLogger?.LogAuth("Info", "anonymous", "Anonymous session established");
                 return;
             }
+        }
+
+        /// <summary>
+        /// Strip heavyweight data (Screens, Images, etc.) from the model before caching
+        /// as _lastModel. Only Users, UserGroups, Database, Scripts, PlcPrograms, Recipes,
+        /// and Folder are needed for incremental change detection.
+        /// </summary>
+        private static void StripModelForCache(NodeModel model)
+        {
+            model.Screens = new();
+            model.Strings = new();
+            model.Images = new();
+            model.Cameras = new();
+            model.Schedulers = new();
+            model.Reports = new();
+            model.CalculatedVariables = new();
+            model.Assets = new();
+            model.BatchSequences = new();
         }
 
         private bool IsIncrementalChange(NodeModel oldModel, NodeModel newModel, out List<(Variable, string)> newVariables)
@@ -611,6 +628,9 @@ namespace SimpleOpcFileServer
 
                  // Register alarm analytics provider for diagnostics snapshots
                  DiagnosticsCollector.Instance.AlarmAnalyticsProvider = BuildAlarmAnalytics;
+
+                 // Register system stats provider for diagnostics snapshots
+                 DiagnosticsCollector.Instance.SystemStatsProvider = BuildSystemStats;
 
                  // Alarm notifications (Email, Telegram, WhatsApp, Web Push)
                  var notifCfg = nodeModel.Server?.AlarmNotification;
@@ -1849,6 +1869,29 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             }
         }
 
+        /// <summary>Build system-level statistics for the diagnostics snapshot.</summary>
+        private SystemStats BuildSystemStats()
+        {
+            var stats = new SystemStats
+            {
+                ActiveAlarmCount = _alarmConditions.Values.Count(a => a.IsActive),
+                TotalAlarmActivations = _alarmAnalyticsLog.Count(e => e.Kind == AlarmAnalyticsEventKind.Activated),
+                TotalAlarmAcknowledgements = _alarmAnalyticsLog.Count(e => e.Kind == AlarmAnalyticsEventKind.Acknowledged)
+            };
+
+            // Driver stats
+            foreach (var d in _drivers)
+            {
+                stats.Drivers.Add(new DriverSystemStats
+                {
+                    Name = d.Key,
+                    Status = "Running"
+                });
+            }
+
+            return stats;
+        }
+
         private void CreateAlarmCondition(BaseDataVariableState variableState, AlarmConfig alarmConfig, string variablePath, BaseObjectState parent)
         {
             if (alarmConfig.TriggerType == AlarmTriggerType.Condition)
@@ -2622,10 +2665,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                             {
                                 if (state is BaseDataVariableState varState)
                                 {
-                                    var sw = System.Diagnostics.Stopwatch.StartNew();
                                     _logger.Log(varState, _config);
-                                    sw.Stop();
-                                    DiagnosticsCollector.Instance.RecordCycle("DataLogger", _logger.GetType().Name, sw.Elapsed.TotalMilliseconds);
 
                                     // Redundancy: enqueue for replication to standby
                                     if (_manager._redundancy is { IsActive: true })

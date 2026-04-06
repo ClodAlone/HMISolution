@@ -89,22 +89,31 @@ try
 
     var host = builder.Build();
 
-    // Start diagnostics HTTP endpoint and configure crash email
+    // Start diagnostics HTTP endpoint and configure crash email.
+    // Use streaming JSON reader to extract only the "Server" property
+    // instead of deserializing the entire (potentially very large) config file.
     try
     {
         int diagPort = 14841;
+        SharedModels.ServerSettings? serverSection = null;
         if (File.Exists(configPath))
         {
-            var diagJson = File.ReadAllText(configPath);
-            var diagModel = JsonSerializer.Deserialize(diagJson, ServerJsonContext.Default.NodeModel);
-            if (diagModel?.Server?.DiagnosticsPort is > 0 and var port)
-                diagPort = port;
-            else if (diagModel?.Server?.DiagnosticsPort == 0)
-                diagPort = 0;
-
-            // Configure crash email notifications
-            SharedModels.CrashReporter.ConfigureEmail(diagModel?.Server?.CrashEmail);
+            using var fs = new FileStream(configPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            using var jsonDoc = JsonDocument.Parse(fs);
+            if (jsonDoc.RootElement.TryGetProperty("Server", out var serverEl))
+            {
+                serverSection = JsonSerializer.Deserialize<ServerSettings>(serverEl.GetRawText(),
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            }
         }
+        if (serverSection?.DiagnosticsPort is > 0 and var port)
+            diagPort = port;
+        else if (serverSection?.DiagnosticsPort == 0)
+            diagPort = 0;
+
+        // Configure crash email notifications
+        SharedModels.CrashReporter.ConfigureEmail(serverSection?.CrashEmail);
+
         SimpleOpcFileServer.DiagnosticsCollector.Instance.Start(diagPort);
     }
     catch (Exception ex)
@@ -203,16 +212,21 @@ public class OpcUaServerApp
         {
             if (File.Exists(configPath))
             {
-                var json = await File.ReadAllTextAsync(configPath);
-                var nodeModel = JsonSerializer.Deserialize(json, ServerJsonContext.Default.NodeModel);
-                if (nodeModel?.Server != null)
+                using var fs = new FileStream(configPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                using var jsonDoc = await JsonDocument.ParseAsync(fs);
+                if (jsonDoc.RootElement.TryGetProperty("Server", out var serverEl))
                 {
-                    if (!string.IsNullOrWhiteSpace(nodeModel.Server.EndpointUrl))
+                    var server = JsonSerializer.Deserialize<SharedModels.ServerSettings>(serverEl.GetRawText(),
+                        new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                    if (server != null)
                     {
-                        endpointUrl = nodeModel.Server.EndpointUrl;
-                    }
+                        if (!string.IsNullOrWhiteSpace(server.EndpointUrl))
+                        {
+                            endpointUrl = server.EndpointUrl;
+                        }
 
-                    enableAnonymous = nodeModel.Server.EnableAnonymous;
+                        enableAnonymous = server.EnableAnonymous;
+                    }
                 }
             }
         }

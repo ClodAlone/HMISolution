@@ -33,8 +33,8 @@ public class ProjectService
             if (!File.Exists(path))
                 return (false, $"File not found: {path}");
 
-            var json = File.ReadAllText(path);
-            _model = JsonSerializer.Deserialize<NodeModel>(json);
+            using var stream = File.OpenRead(path);
+            _model = JsonSerializer.Deserialize<NodeModel>(stream);
             _configPath = path;
 
             if (_model == null)

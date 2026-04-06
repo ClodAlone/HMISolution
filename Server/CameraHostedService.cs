@@ -184,8 +184,8 @@ public class CameraHostedService : BackgroundService
         {
             if (!File.Exists(_serverConfig.NodesConfigFile)) return [];
 
-            var json = File.ReadAllText(_serverConfig.NodesConfigFile);
-            var model = JsonSerializer.Deserialize(json, ServerJsonContext.Default.NodeModel);
+            using var stream = File.OpenRead(_serverConfig.NodesConfigFile);
+            var model = JsonSerializer.Deserialize(stream, ServerJsonContext.Default.NodeModel);
             if (model?.Cameras != null && model.Cameras.Count > 0)
                 return model.Cameras;
 

@@ -64,6 +64,7 @@ namespace SimpleOpcFileServer
 
         private readonly List<SimulationItem> _items = new();
         private readonly object _lock = new();
+        private SimulationItem[] _snapshot = []; // cached; rebuilt only when items change
         private Timer? _timer;
         private int _pollInterval = 100;
         private bool _disposed;
@@ -86,6 +87,7 @@ namespace SimpleOpcFileServer
             {
                 _items.Add(new SimulationItem { Variable = variable, Config = config });
                 _pollInterval = Math.Max(50, _items.Min(i => i.Config.PollTime));
+                _snapshot = [.. _items]; // rebuild cached snapshot
                 UpdateTimer();
             }
         }
@@ -101,12 +103,8 @@ namespace SimpleOpcFileServer
             if (_disposed) return;
             var _sw = System.Diagnostics.Stopwatch.StartNew();
 
-            List<SimulationItem> snapshot;
-            lock (_lock)
-            {
-                if (_disposed) return;
-                snapshot = new List<SimulationItem>(_items);
-            }
+            // Use the cached snapshot array — no allocation per tick
+            var snapshot = _snapshot;
 
             var now = DateTime.UtcNow;
             var elapsed = (now - _startTime).TotalMilliseconds;
@@ -115,6 +113,11 @@ namespace SimpleOpcFileServer
             {
                 try
                 {
+                    // Respect per-item PollTime: skip items whose interval hasn't elapsed
+                    if (now - item.LastPollTime < item.PollTimeSpan)
+                        continue;
+                    item.LastPollTime = now;
+
                     var value = Compute(item, elapsed);
                     item.Variable.Value = value;
                     item.Variable.StatusCode = StatusCodes.Good;
@@ -189,6 +192,8 @@ namespace SimpleOpcFileServer
             public BaseDataVariableState Variable { get; set; } = null!;
             public SimulationConfig Config { get; set; } = null!;
             public long TickCount { get; set; }
+            public DateTime LastPollTime { get; set; }
+            public TimeSpan PollTimeSpan => TimeSpan.FromMilliseconds(Config.PollTime);
         }
     }
 }

@@ -83,6 +83,11 @@ namespace SimpleOpcFileServer
         {
             var interval = TimeSpan.FromSeconds(Math.Max(_settings.IntervalSeconds, 5));
 
+            // For large variable counts, process in batches across multiple cycles
+            // to avoid overwhelming the SQLite logger with 100K+ ReadHistory queries.
+            const int MaxPerCycle = 1000;
+            int offset = 0;
+
             while (!_cts.Token.IsCancellationRequested)
             {
                 try
@@ -94,11 +99,18 @@ namespace SimpleOpcFileServer
                 var sw = System.Diagnostics.Stopwatch.StartNew();
                 try
                 {
-                    foreach (var entry in _monitored)
+                    int count = _monitored.Count;
+                    int batchSize = Math.Min(MaxPerCycle, count);
+                    if (offset >= count) offset = 0;
+                    int end = Math.Min(offset + batchSize, count);
+
+                    for (int i = offset; i < end; i++)
                     {
                         if (_cts.Token.IsCancellationRequested) break;
-                        AnalyzeVariable(entry);
+                        AnalyzeVariable(_monitored[i]);
                     }
+
+                    offset = end >= count ? 0 : end;
                 }
                 catch (Exception ex)
                 {
