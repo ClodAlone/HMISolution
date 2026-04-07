@@ -764,7 +764,159 @@ else if (Node is SchedulerGroupNode)
 }
 else if (Node is ReportNode reportNode)
 {
+    var _selectedSection = Editor.SelectedReportSection;
     <div class="properties-panel">
+    @if (_selectedSection != null && reportNode.Report.Sections.Contains(_selectedSection))
+    {
+        var sec = _selectedSection;
+        <h5>@GetReportSectionIcon(sec.Type) @sec.Type Section Properties</h5>
+        <div class="mb-2">
+            <button class="btn btn-sm btn-outline-secondary" @onclick="() => Editor.SetReportSectionSelection(null)">← Back to Report Properties</button>
+        </div>
+
+        @if (sec.Type == "Header")
+        {
+            <div class="mb-3">
+                <label class="form-label">Title</label>
+                <input type="text" class="form-control" @bind="sec.Title" @bind:after="OnChanged" placeholder="Section heading" />
+            </div>
+        }
+        else if (sec.Type == "Text")
+        {
+            <div class="mb-3">
+                <label class="form-label">Title (optional)</label>
+                <input type="text" class="form-control" @bind="sec.Title" @bind:after="OnChanged" />
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Content (HTML supported)</label>
+                <textarea class="form-control" rows="4" @bind="sec.Content" @bind:after="OnChanged"></textarea>
+            </div>
+        }
+        else if (sec.Type == "Chart")
+        {
+            <div class="mb-3">
+                <label class="form-label">Chart Title</label>
+                <input type="text" class="form-control" @bind="sec.Title" @bind:after="OnChanged" placeholder="e.g. Temperature History" />
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Chart Type</label>
+                <select class="form-select" @bind="sec.ChartType" @bind:after="OnChanged">
+                    <option value="Line">Line</option>
+                    <option value="Bar">Bar</option>
+                    <option value="Area">Area</option>
+                    <option value="Pie">Pie</option>
+                </select>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Time Range (minutes)</label>
+                <input type="number" class="form-control" @bind="sec.ChartTimeRangeMinutes" @bind:after="OnChanged" />
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Max Points</label>
+                <input type="number" class="form-control" @bind="sec.ChartMaxPoints" @bind:after="OnChanged" />
+            </div>
+            <div class="row g-2 mb-3">
+                <div class="col-6">
+                    <label class="form-label">Width</label>
+                    <input type="number" class="form-control" @bind="sec.ChartWidth" @bind:after="OnChanged" />
+                </div>
+                <div class="col-6">
+                    <label class="form-label">Height</label>
+                    <input type="number" class="form-control" @bind="sec.ChartHeight" @bind:after="OnChanged" />
+                </div>
+            </div>
+            <div class="mb-3 form-check">
+                <input class="form-check-input" type="checkbox" @bind="sec.ChartShowLegend" @bind:after="OnChanged" />
+                <label class="form-check-label">Show Legend</label>
+            </div>
+            <div class="mb-3 form-check">
+                <input class="form-check-input" type="checkbox" @bind="sec.ChartShowGrid" @bind:after="OnChanged" />
+                <label class="form-check-label">Show Grid</label>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Variable Paths</label>
+                @for (int vi = 0; vi < sec.ChartVariablePaths.Count; vi++)
+                {
+                    var vIdx = vi;
+                    <div class="d-flex gap-1 mb-1">
+                        <VariablePathPicker Value="@sec.ChartVariablePaths[vIdx]"
+                                            ValueChanged="v => { sec.ChartVariablePaths[vIdx] = v ?? string.Empty; }"
+                                            OnChanged="OnChanged"
+                                            Placeholder="e.g. Folder1.Temperature" />
+                        <button class="btn btn-sm btn-outline-danger py-0 px-1"
+                                @onclick="() => { sec.ChartVariablePaths.RemoveAt(vIdx); OnChanged(); }">✕</button>
+                    </div>
+                }
+                <button class="btn btn-sm btn-outline-primary"
+                        @onclick="() => { sec.ChartVariablePaths.Add(string.Empty); OnChanged(); }">➕ Add Variable</button>
+            </div>
+        }
+        else if (sec.Type == "Table")
+        {
+            <div class="mb-3">
+                <label class="form-label">Table Title</label>
+                <input type="text" class="form-control" @bind="sec.Title" @bind:after="OnChanged" placeholder="e.g. Current Values" />
+            </div>
+            <div class="mb-3 form-check">
+                <input class="form-check-input" type="checkbox" @bind="sec.TableShowStatistics" @bind:after="OnChanged" />
+                <label class="form-check-label">Show Statistics (Min/Max/Avg)</label>
+            </div>
+            @if (sec.TableShowStatistics)
+            {
+                <div class="mb-3">
+                    <label class="form-label">Statistics Time Range (minutes)</label>
+                    <input type="number" class="form-control" @bind="sec.TableTimeRangeMinutes" @bind:after="OnChanged" />
+                </div>
+            }
+            <div class="mb-3">
+                <label class="form-label">Variable Paths</label>
+                @for (int ti = 0; ti < sec.TableVariablePaths.Count; ti++)
+                {
+                    var tIdx = ti;
+                    <div class="d-flex gap-1 mb-1">
+                        <VariablePathPicker Value="@sec.TableVariablePaths[tIdx]"
+                                            ValueChanged="v => { sec.TableVariablePaths[tIdx] = v ?? string.Empty; }"
+                                            OnChanged="OnChanged"
+                                            Placeholder="e.g. Folder1.Pressure" />
+                        <button class="btn btn-sm btn-outline-danger py-0 px-1"
+                                @onclick="() => { sec.TableVariablePaths.RemoveAt(tIdx); OnChanged(); }">✕</button>
+                    </div>
+                }
+                <button class="btn btn-sm btn-outline-primary"
+                        @onclick="() => { sec.TableVariablePaths.Add(string.Empty); OnChanged(); }">➕ Add Variable</button>
+            </div>
+        }
+        else if (sec.Type == "Value")
+        {
+            <div class="mb-3">
+                <label class="form-label">Label</label>
+                <input type="text" class="form-control" @bind="sec.ValueLabel" @bind:after="OnChanged" placeholder="e.g. Current Temperature" />
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Variable Path</label>
+                <VariablePathPicker Value="@sec.ValueVariablePath"
+                                    ValueChanged="v => { sec.ValueVariablePath = v ?? string.Empty; }"
+                                    OnChanged="OnChanged"
+                                    Placeholder="e.g. Folder1.Temperature" />
+            </div>
+            <div class="row g-2 mb-3">
+                <div class="col-6">
+                    <label class="form-label">Format</label>
+                    <input type="text" class="form-control" @bind="sec.ValueFormat" @bind:after="OnChanged" placeholder="e.g. F2" />
+                </div>
+                <div class="col-6">
+                    <label class="form-label">Unit</label>
+                    <input type="text" class="form-control" @bind="sec.ValueUnit" @bind:after="OnChanged" placeholder="e.g. °C" />
+                </div>
+            </div>
+        }
+        else if (sec.Type == "PageBreak")
+        {
+            <div class="text-muted small">Page break (PDF only). No additional settings.</div>
+        }
+    }
+    else
+    {
         <h5>📄 @L["section.report"]</h5>
         <div class="mb-3">
             <label class="form-label">@L["prop.name"]</label>
@@ -868,6 +1020,7 @@ else if (Node is ReportNode reportNode)
             <strong>Sections:</strong> @reportNode.Report.Sections.Count section(s).<br/>
             Open the <strong>Report Designer</strong> panel (double-click) to add charts, tables, text and value sections.
         </div>
+    }
     </div>
 }
 else if (Node is ReportGroupNode)
@@ -2312,13 +2465,16 @@ else if (Node is UserNode uNode)
     protected override void OnInitialized()
     {
         L.LocaleChanged += OnLocaleChanged;
+        Editor.ReportSectionSelectionChanged += OnReportSectionChanged;
     }
 
     private void OnLocaleChanged() => InvokeAsync(StateHasChanged);
+    private void OnReportSectionChanged() => InvokeAsync(StateHasChanged);
 
     public void Dispose()
     {
         L.LocaleChanged -= OnLocaleChanged;
+        Editor.ReportSectionSelectionChanged -= OnReportSectionChanged;
     }
 
     // Snapshot for undo: captured before a @bind writes its new value
@@ -2339,6 +2495,17 @@ else if (Node is UserNode uNode)
         FlushUndo();
         await OnPropertyChanged.InvokeAsync();
     }
+
+    private static string GetReportSectionIcon(string type) => type switch
+    {
+        "Header" => "📝",
+        "Text" => "📃",
+        "Chart" => "📊",
+        "Table" => "📋",
+        "Value" => "🔢",
+        "PageBreak" => "📄",
+        _ => "❓"
+    };
 
     private async Task AddSchedulerCommand(SchedulerNode node, bool deactivate)
     {

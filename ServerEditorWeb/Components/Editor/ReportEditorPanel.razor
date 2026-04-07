@@ -1,6 +1,8 @@
 ﻿@using SharedModels
 @using ServerEditorWeb.Models
 @using ServerEditorWeb.Services
+@inject NodeEditorService Editor
+@implements IDisposable
 
 <div class="report-editor-panel" style="padding: 8px; overflow: auto; height: 100%;">
     @if (_report == null)
@@ -40,7 +42,9 @@
         {
             var idx = i;
             var sec = _report.Sections[idx];
-            <div class="card mb-2" style="background: #1e293b; border: 1px solid #334155;">
+            var isSelected = sec == Editor.SelectedReportSection;
+            <div class="card mb-2" style="background: #1e293b; border: 2px solid @(isSelected ? "#3b82f6" : "#334155"); cursor: pointer;"
+                 @onclick="() => SelectSection(sec)" @onclick:stopPropagation>
                 <div class="card-header py-1 px-2 d-flex align-items-center" style="background: #0f172a; font-size: 11px;">
                     <span class="fw-bold">
                         @GetSectionIcon(sec.Type) @sec.Type
@@ -238,7 +242,27 @@
 
     protected override void OnParametersSet()
     {
+        var prev = _report;
         _report = (Node is ReportNode rn) ? rn.Report : null;
+        if (_report != prev)
+            Editor.SetReportSectionSelection(null);
+    }
+
+    protected override void OnInitialized()
+    {
+        Editor.ReportSectionSelectionChanged += OnSectionSelectionChanged;
+    }
+
+    private void OnSectionSelectionChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        Editor.ReportSectionSelectionChanged -= OnSectionSelectionChanged;
+    }
+
+    private void SelectSection(ReportSection section)
+    {
+        Editor.SetReportSectionSelection(section);
     }
 
     private void OnChanged()
@@ -265,13 +289,17 @@
             section.TableVariablePaths.Add("");
         }
         _report.Sections.Add(section);
+        Editor.SetReportSectionSelection(section);
         OnChanged();
     }
 
     private void RemoveSection(int index)
     {
         if (_report == null || index < 0 || index >= _report.Sections.Count) return;
+        var removed = _report.Sections[index];
         _report.Sections.RemoveAt(index);
+        if (Editor.SelectedReportSection == removed)
+            Editor.SetReportSectionSelection(null);
         OnChanged();
     }
 

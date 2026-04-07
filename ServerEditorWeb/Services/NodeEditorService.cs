@@ -61,6 +61,16 @@ public class NodeEditorService
         ScreenSelectionChanged?.Invoke();
     }
 
+    // Report section selection (shared between ReportEditorPanel and NodeProperties)
+    public ReportSection? SelectedReportSection { get; private set; }
+    public event Action? ReportSectionSelectionChanged;
+
+    public void SetReportSectionSelection(ReportSection? section)
+    {
+        SelectedReportSection = section;
+        ReportSectionSelectionChanged?.Invoke();
+    }
+
     private void NotifyStateChanged() => StateChanged?.Invoke();
 
     public NodeEditorService()
@@ -1466,6 +1476,10 @@ public class NodeEditorService
         node.IsSelected = true;
         SelectedItems.Add(node);
         SelectedItem = node;
+
+        // Clear report section selection when switching nodes
+        if (SelectedReportSection != null && node is not ReportNode)
+            SetReportSectionSelection(null);
     }
 
     /// <summary>Returns the range of sibling nodes between a and b (inclusive), or null if not siblings.</summary>
