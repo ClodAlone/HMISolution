@@ -60,11 +60,11 @@ public class CrossReferenceServiceTests
 
         var paths = svc.GetAllVariablePaths(model);
 
-        Assert.Contains("Root.SystemReady", paths);
-        Assert.Contains("Root.Plant.Temperature", paths);
-        Assert.Contains("Root.Plant.Pressure", paths);
-        Assert.Contains("Root.Plant.Motor.Speed", paths);
-        Assert.Contains("Root.Plant.Motor.Running", paths);
+        Assert.Contains("SystemReady", paths);
+        Assert.Contains("Plant.Temperature", paths);
+        Assert.Contains("Plant.Pressure", paths);
+        Assert.Contains("Plant.Motor.Speed", paths);
+        Assert.Contains("Plant.Motor.Running", paths);
         Assert.Equal(5, paths.Count);
     }
 

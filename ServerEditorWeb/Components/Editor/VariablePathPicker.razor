@@ -103,7 +103,11 @@
         var root = Editor.RootModel?.Folder;
         if (root != null)
         {
-            CollectPaths(root, "");
+            // Skip root folder name — variable paths in the project never include it
+            foreach (var sub in root.Folders)
+                CollectPaths(sub, "");
+            foreach (var v in root.Variables)
+                _allPaths.Add(new VarPathEntry { Path = v.Name, Type = v.Type, IsFolder = false });
         }
 
         // Include calculated / virtual variables
@@ -320,9 +324,16 @@
         var root = Editor.RootModel?.Folder;
         if (root != null)
         {
-            var rootNode = BuildFolderNode(root, "");
-            if (rootNode != null)
-                _treeRoots.Add(rootNode);
+            // Skip root folder — show its children as top-level tree nodes
+            foreach (var sub in root.Folders)
+            {
+                var child = BuildFolderNode(sub, "");
+                if (child != null) _treeRoots.Add(child);
+            }
+            foreach (var v in root.Variables)
+            {
+                _treeRoots.Add(new TreeVarNode { Name = v.Name, FullPath = v.Name, Type = v.Type, IsFolder = false });
+            }
         }
 
         // Add calculated variables

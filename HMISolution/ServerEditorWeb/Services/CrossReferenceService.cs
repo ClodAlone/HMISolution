@@ -41,7 +41,13 @@ public class CrossReferenceService
     {
         var paths = new List<string>();
         if (model?.Folder != null)
-            CollectVariablePaths(model.Folder, "", paths);
+        {
+            // Skip root folder name — variable paths never include it
+            foreach (var v in model.Folder.Variables)
+                paths.Add(v.Name);
+            foreach (var sub in model.Folder.Folders)
+                CollectVariablePaths(sub, "", paths);
+        }
         return paths;
     }
 
