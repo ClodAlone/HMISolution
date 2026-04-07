@@ -3,6 +3,8 @@
 @using System.Text.Json
 @inject DriverTestService _driverTestSvc
 
+<OpcItemPickerPopup Visible="_showOpcPicker" OnItemSelected="OnOpcItemPicked" OnCancelled="() => _showOpcPicker = false" />
+
 @* ─── Driver Configurations ───────────────────────────── *@
 <div class="mb-2">
     <label class="form-label fw-bold small">🔌 Driver Bindings</label>
@@ -675,8 +677,12 @@
         <div class="row g-1 mb-1">
             <div class="col-8">
                 <label class="form-label mb-0 small" title="Node ID of the remote variable to read, e.g. ns=2;s=Tag1">Node ID <span class="vde-hint">ⓘ</span></label>
-                <input type="text" class="form-control form-control-sm" value="@c.NodeId"
-                       @onchange="(e) => SetString(key, c, (x,v) => x.NodeId = v, e)" placeholder="ns=2;s=Demo.Static.Scalar.Double" />
+                <div class="input-group input-group-sm">
+                    <input type="text" class="form-control form-control-sm" value="@c.NodeId"
+                           @onchange="(e) => SetString(key, c, (x,v) => x.NodeId = v, e)" placeholder="ns=2;s=Demo.Static.Scalar.Double" />
+                    <button class="btn btn-outline-info btn-sm" type="button" style="font-size:10px;" title="Browse OPC UA server to pick a node"
+                            @onclick="() => OpenOpcPicker(key)">📂 Browse…</button>
+                </div>
             </div>
             <div class="col-4">
                 <label class="form-label mb-0 small" title="Polling interval in milliseconds">Poll (ms) <span class="vde-hint">ⓘ</span></label>
@@ -1131,4 +1137,26 @@
         "Sql" => "SQL statement (UPDATE/INSERT)",
         _ => "Value"
     };
+
+    // ─── OPC Item Picker ─────────────────────────────────────
+    private bool _showOpcPicker;
+    private string? _opcPickerDriverKey;
+
+    private void OpenOpcPicker(string driverKey)
+    {
+        _opcPickerDriverKey = driverKey;
+        _showOpcPicker = true;
+    }
+
+    private void OnOpcItemPicked((string EndpointUrl, string NodeId) selection)
+    {
+        _showOpcPicker = false;
+        if (_opcPickerDriverKey == null) return;
+
+        var c = GetConfig<OpcUaClientFields>(_opcPickerDriverKey);
+        c.EndpointUrl = selection.EndpointUrl;
+        c.NodeId = selection.NodeId;
+        SetConfig(_opcPickerDriverKey, c);
+        _opcPickerDriverKey = null;
+    }
 }

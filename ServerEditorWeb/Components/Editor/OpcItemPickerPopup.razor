@@ -1,0 +1,247 @@
+@using ServerEditorWeb.Services
+@implements IDisposable
+
+@if (Visible)
+{
+    <div class="opc-picker-backdrop" @onclick="Cancel"></div>
+    <div class="opc-picker-modal">
+        <div class="opc-picker-content">
+            <div class="opc-picker-header">
+                <span class="fw-bold small">🔗 OPC UA Item Picker</span>
+                <button type="button" class="btn-close btn-close-sm" @onclick="Cancel"></button>
+            </div>
+            <div class="opc-picker-body">
+                @* Connection bar *@
+                <div class="d-flex gap-2 mb-2 align-items-center">
+                    <div class="position-relative" style="flex: 1; max-width: 360px;">
+                        <div class="input-group input-group-sm">
+                            <input type="text" class="form-control form-control-sm"
+                                   placeholder="opc.tcp://localhost:4840"
+                                   @bind="_endpointUrl" @bind:event="oninput"
+                                   @onfocus="() => _showDropdown = true"
+                                   @onkeydown="HandleKeyDown" />
+                            @if (Opc.RecentEndpoints.Count > 0)
+                            {
+                                <button class="btn btn-outline-secondary btn-sm" type="button"
+                                        @onclick="ToggleDropdown" @onclick:stopPropagation="true"
+                                        title="Recent endpoints">
+                                    <span style="font-size:.7rem;">▼</span>
+                                </button>
+                            }
+                        </div>
+                        @if (_showDropdown && Opc.RecentEndpoints.Count > 0)
+                        {
+                            <div class="dropdown-menu show w-100 shadow-sm" style="max-height:160px;overflow-y:auto;font-size:.82rem;z-index:1060;">
+                                @foreach (var ep in Opc.RecentEndpoints)
+                                {
+                                    <button class="dropdown-item text-truncate" type="button"
+                                            @onclick="() => SelectEndpoint(ep)" title="@ep">@ep</button>
+                                }
+                            </div>
+                        }
+                    </div>
+                    <button class="btn btn-sm btn-primary" @onclick="Connect" disabled="@_connecting">
+                        @if (_connecting)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        🔌 Connect
+                    </button>
+                    @if (Opc.IsConnected)
+                    {
+                        <span class="badge bg-success" style="font-size:.7rem;">Connected</span>
+                    }
+                    else
+                    {
+                        <span class="badge bg-secondary" style="font-size:.7rem;">Disconnected</span>
+                    }
+                </div>
+
+                @if (!string.IsNullOrEmpty(Opc.ErrorMessage))
+                {
+                    <div class="alert alert-danger py-1 px-2 small mb-2">@Opc.ErrorMessage</div>
+                }
+
+                @if (Opc.IsConnected)
+                {
+                    @* Browse tree *@
+                    <div class="opc-picker-tree">
+                        @foreach (var node in Opc.RootNodes)
+                        {
+                            <OpcTreeNode Node="node" OnSelect="OnNodeClicked" OnExpand="OnNodeExpand" SelectedNodeId="@_selectedNodeId" />
+                        }
+                    </div>
+
+                    @* Selected item summary *@
+                    @if (_selectedNode != null)
+                    {
+                        <div class="opc-picker-selection mt-2">
+                            <span class="small text-muted me-1">Selected:</span>
+                            <span class="small fw-bold" style="color:var(--accent-color);">@_selectedNode.DisplayName</span>
+                            <code class="ms-2 small">@_selectedNode.NodeIdString</code>
+                        </div>
+                    }
+                }
+                else
+                {
+                    <div class="text-muted small mt-3 text-center">Connect to an OPC UA server to browse items.</div>
+                }
+            </div>
+            <div class="opc-picker-footer">
+                <button class="btn btn-sm btn-outline-secondary" @onclick="Cancel">Cancel</button>
+                <button class="btn btn-sm btn-primary" disabled="@(_selectedNode == null || !_selectedNode.IsVariable)" @onclick="ConfirmSelection">
+                    ✔ Select
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .opc-picker-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,.45);
+        z-index: 1050;
+    }
+    .opc-picker-modal {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1055;
+        pointer-events: none;
+    }
+    .opc-picker-content {
+        pointer-events: auto;
+        background: var(--bg-primary, #fff);
+        color: var(--text-primary, #212529);
+        border: 1px solid var(--border-color, #dee2e6);
+        border-radius: 8px;
+        box-shadow: 0 8px 32px rgba(0,0,0,.25);
+        width: 600px;
+        max-width: 90vw;
+        max-height: 80vh;
+        display: flex;
+        flex-direction: column;
+    }
+    .opc-picker-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 12px;
+        border-bottom: 1px solid var(--border-color, #dee2e6);
+    }
+    .opc-picker-body {
+        flex: 1;
+        overflow: auto;
+        padding: 10px 12px;
+        min-height: 300px;
+    }
+    .opc-picker-tree {
+        max-height: 320px;
+        overflow: auto;
+        border: 1px solid var(--border-color, #dee2e6);
+        border-radius: 4px;
+        padding: 4px;
+    }
+    .opc-picker-selection {
+        background: color-mix(in srgb, var(--accent-color, #0d6efd) 8%, transparent);
+        border: 1px solid color-mix(in srgb, var(--accent-color, #0d6efd) 25%, transparent);
+        border-radius: 4px;
+        padding: 6px 10px;
+    }
+    .opc-picker-footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        padding: 8px 12px;
+        border-top: 1px solid var(--border-color, #dee2e6);
+    }
+</style>
+
+@code {
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public EventCallback<(string EndpointUrl, string NodeId)> OnItemSelected { get; set; }
+    [Parameter] public EventCallback OnCancelled { get; set; }
+
+    [Inject] private OpcClientService Opc { get; set; } = default!;
+
+    private string _endpointUrl = "";
+    private bool _connecting;
+    private bool _showDropdown;
+    private string _selectedNodeId = "";
+    private OpcBrowseNode? _selectedNode;
+
+    protected override void OnInitialized()
+    {
+        if (Opc.RecentEndpoints.Count > 0)
+            _endpointUrl = Opc.RecentEndpoints[0];
+        Opc.StateChanged += OnOpcStateChanged;
+    }
+
+    private void OnOpcStateChanged() => InvokeAsync(StateHasChanged);
+
+    private void ToggleDropdown() => _showDropdown = !_showDropdown;
+
+    private void SelectEndpoint(string ep)
+    {
+        _endpointUrl = ep;
+        _showDropdown = false;
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape") _showDropdown = false;
+        else if (e.Key == "Enter") await Connect();
+    }
+
+    private async Task Connect()
+    {
+        if (string.IsNullOrWhiteSpace(_endpointUrl)) return;
+        _showDropdown = false;
+        _connecting = true;
+        StateHasChanged();
+        try { await Opc.ConnectAsync(_endpointUrl); }
+        finally { _connecting = false; StateHasChanged(); }
+    }
+
+    private async Task OnNodeExpand(OpcBrowseNode node)
+    {
+        if (!node.ChildrenLoaded)
+        {
+            await Opc.LoadChildrenAsync(node);
+            StateHasChanged();
+        }
+    }
+
+    private async Task OnNodeClicked(OpcBrowseNode node)
+    {
+        _selectedNodeId = node.NodeIdString;
+        _selectedNode = node;
+
+        // Auto-expand if it has children and hasn't been loaded
+        if (node.HasChildren && !node.ChildrenLoaded)
+        {
+            await Opc.LoadChildrenAsync(node);
+            node.IsExpanded = true;
+        }
+    }
+
+    private async Task ConfirmSelection()
+    {
+        if (_selectedNode == null || !_selectedNode.IsVariable) return;
+        await OnItemSelected.InvokeAsync((_endpointUrl, _selectedNode.NodeIdString));
+    }
+
+    private async Task Cancel()
+    {
+        await OnCancelled.InvokeAsync();
+    }
+
+    public void Dispose()
+    {
+        Opc.StateChanged -= OnOpcStateChanged;
+    }
+}
