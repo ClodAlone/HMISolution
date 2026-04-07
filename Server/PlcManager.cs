@@ -101,9 +101,9 @@ namespace SimpleOpcFileServer
                     try
                     {
                         if (IsIl)
-                            IlInterpreter.Execute(_compiledIl!, _nodeManager);
+                            IlInterpreter.Execute(_compiledIl!, _nodeManager, debug);
                         else if (IsLd)
-                            LdInterpreter.Execute(_compiledLd!, _nodeManager);
+                            LdInterpreter.Execute(_compiledLd!, _nodeManager, debug);
                         else
                             StInterpreter.Execute(_compiledSt!, _nodeManager, debug);
 
@@ -588,27 +588,29 @@ namespace SimpleOpcFileServer
         private static StStatement? ParseStatement(List<Token> tokens, ref int pos)
         {
             var current = Peek(tokens, pos);
+            var sourceLine = current.Line;
 
+            StStatement? result;
             switch (current.Type)
             {
                 case TokenType.If:
-                    return ParseIf(tokens, ref pos);
+                    result = ParseIf(tokens, ref pos); break;
                 case TokenType.For:
-                    return ParseFor(tokens, ref pos);
+                    result = ParseFor(tokens, ref pos); break;
                 case TokenType.While:
-                    return ParseWhile(tokens, ref pos);
+                    result = ParseWhile(tokens, ref pos); break;
                 case TokenType.Repeat:
-                    return ParseRepeat(tokens, ref pos);
+                    result = ParseRepeat(tokens, ref pos); break;
                 case TokenType.Case:
-                    return ParseCase(tokens, ref pos);
+                    result = ParseCase(tokens, ref pos); break;
                 case TokenType.Exit:
                     pos++;
                     Expect(tokens, ref pos, TokenType.Semicolon);
-                    return new StExit();
+                    result = new StExit(); break;
                 case TokenType.Return:
                     pos++;
                     Expect(tokens, ref pos, TokenType.Semicolon);
-                    return new StReturn();
+                    result = new StReturn(); break;
                 case TokenType.Var:
                     // Inline VAR block (e.g. mid-code local declarations)
                     pos++; // skip VAR
@@ -623,10 +625,13 @@ namespace SimpleOpcFileServer
                     pos++; // empty statement
                     return null;
                 case TokenType.Identifier:
-                    return ParseAssignmentOrCall(tokens, ref pos);
+                    result = ParseAssignmentOrCall(tokens, ref pos); break;
                 default:
                     throw new InvalidOperationException($"Unexpected token '{current.Text}' ({current.Type}) at line {current.Line}");
             }
+
+            result.SourceLine = sourceLine - 1; // Convert 1-based token line to 0-based
+            return result;
         }
 
         private static StStatement ParseAssignmentOrCall(List<Token> tokens, ref int pos)
@@ -1284,21 +1289,46 @@ namespace SimpleOpcFileServer
                 "BOOL_TO_INT" or "BOOL_TO_REAL" => IsTrue(evaluated.FirstOrDefault()) ? 1.0 : 0.0,
                 "INT_TO_REAL" or "DINT_TO_REAL" => ToDouble(evaluated.FirstOrDefault()),
                 "REAL_TO_INT" or "REAL_TO_DINT" => (double)(long)ToDouble(evaluated.FirstOrDefault()),
-                "READ" or "READDOUBLE" => ToDouble(nodeManager.ReadVariable(evaluated.FirstOrDefault()?.ToString() ?? "")),
-                "READBOOL" => IsTrue(nodeManager.ReadVariable(evaluated.FirstOrDefault()?.ToString() ?? "")),
-                "READINT" => (double)(long)ToDouble(nodeManager.ReadVariable(evaluated.FirstOrDefault()?.ToString() ?? "")),
-                "WRITE" => EvalWrite(evaluated, nodeManager),
+                "READ" or "READDOUBLE" => EvalRead(evaluated, nodeManager, debug),
+                "READBOOL" => EvalReadBool(evaluated, nodeManager, debug),
+                "READINT" => EvalReadInt(evaluated, nodeManager, debug),
+                "WRITE" => EvalWrite(evaluated, nodeManager, debug),
                 "RANDOM" => Random.Shared.NextDouble(),
                 "PID" => EvalPid(evaluated),
                 _ => throw new InvalidOperationException($"Unknown function: {name}")
             };
         }
 
-        private static object? EvalWrite(List<object?> evaluated, SimpleFileServerNodeManager nodeManager)
+        private static object? EvalRead(List<object?> evaluated, SimpleFileServerNodeManager nodeManager, PlcDebugContext? debug)
+        {
+            var path = evaluated.FirstOrDefault()?.ToString() ?? "";
+            var val = nodeManager.ReadVariable(path);
+            debug?.RecordRead(path, val);
+            return ToDouble(val);
+        }
+
+        private static object? EvalReadBool(List<object?> evaluated, SimpleFileServerNodeManager nodeManager, PlcDebugContext? debug)
+        {
+            var path = evaluated.FirstOrDefault()?.ToString() ?? "";
+            var val = nodeManager.ReadVariable(path);
+            debug?.RecordRead(path, val);
+            return IsTrue(val);
+        }
+
+        private static object? EvalReadInt(List<object?> evaluated, SimpleFileServerNodeManager nodeManager, PlcDebugContext? debug)
+        {
+            var path = evaluated.FirstOrDefault()?.ToString() ?? "";
+            var val = nodeManager.ReadVariable(path);
+            debug?.RecordRead(path, val);
+            return (double)(long)ToDouble(val);
+        }
+
+        private static object? EvalWrite(List<object?> evaluated, SimpleFileServerNodeManager nodeManager, PlcDebugContext? debug)
         {
             var path = evaluated.ElementAtOrDefault(0)?.ToString() ?? "";
             var value = evaluated.ElementAtOrDefault(1);
             nodeManager.WriteVariable(path, value ?? 0.0);
+            debug?.RecordWrite(path, value);
             return null;
         }
 
@@ -1407,6 +1437,8 @@ namespace SimpleOpcFileServer
         public string? Label { get; set; }
         public string Operator { get; set; } = "";
         public string? Operand { get; set; }
+        /// <summary>0-based source line number for debug annotations.</summary>
+        public int SourceLine { get; set; } = -1;
     }
 
     internal static class IlParser
@@ -1439,7 +1471,7 @@ namespace SimpleOpcFileServer
                 if (commentIdx >= 0) line = line[..commentIdx].Trim();
                 if (string.IsNullOrEmpty(line)) continue;
 
-                var instr = new IlInstruction();
+                var instr = new IlInstruction { SourceLine = lineNum - 1 };
 
                 // Check for label (ends with ':')
                 var colonIdx = line.IndexOf(':');
@@ -1471,7 +1503,7 @@ namespace SimpleOpcFileServer
 
     internal static class IlInterpreter
     {
-        public static void Execute(List<IlInstruction> instructions, SimpleFileServerNodeManager nodeManager)
+        public static void Execute(List<IlInstruction> instructions, SimpleFileServerNodeManager nodeManager, PlcDebugContext? debug = null)
         {
             double accumulator = 0.0;
             var locals = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
@@ -1496,82 +1528,112 @@ namespace SimpleOpcFileServer
 
                 if (string.IsNullOrEmpty(op)) continue;
 
+                debug?.RecordExecutedLine(instr.SourceLine);
+
                 switch (op)
                 {
                     case "LD":
                         accumulator = ResolveValue(operand, locals, nodeManager);
+                        debug?.Annotate(instr.SourceLine, operand ?? "acc", accumulator);
                         break;
                     case "LDN":
                         accumulator = ResolveValue(operand, locals, nodeManager) != 0.0 ? 0.0 : 1.0;
+                        debug?.Annotate(instr.SourceLine, operand ?? "acc", accumulator);
                         break;
                     case "ST":
                         StoreValue(operand, accumulator, locals, nodeManager);
+                        debug?.Annotate(instr.SourceLine, operand ?? "acc", accumulator);
+                        debug?.RecordWrite(operand ?? "", accumulator);
+                        debug?.RecordWriteLine(instr.SourceLine);
                         break;
                     case "STN":
-                        StoreValue(operand, accumulator != 0.0 ? 0.0 : 1.0, locals, nodeManager);
+                    {
+                        var stVal = accumulator != 0.0 ? 0.0 : 1.0;
+                        StoreValue(operand, stVal, locals, nodeManager);
+                        debug?.Annotate(instr.SourceLine, operand ?? "acc", stVal);
+                        debug?.RecordWrite(operand ?? "", stVal);
+                        debug?.RecordWriteLine(instr.SourceLine);
                         break;
+                    }
                     case "S": // Set (to TRUE/1 if accumulator is true)
-                        if (accumulator != 0.0) StoreValue(operand, 1.0, locals, nodeManager);
+                        if (accumulator != 0.0) { StoreValue(operand, 1.0, locals, nodeManager); debug?.Annotate(instr.SourceLine, operand ?? "acc", 1.0); debug?.RecordWrite(operand ?? "", 1.0); debug?.RecordWriteLine(instr.SourceLine); }
                         break;
                     case "R": // Reset (to FALSE/0 if accumulator is true)
-                        if (accumulator != 0.0) StoreValue(operand, 0.0, locals, nodeManager);
+                        if (accumulator != 0.0) { StoreValue(operand, 0.0, locals, nodeManager); debug?.Annotate(instr.SourceLine, operand ?? "acc", 0.0); debug?.RecordWrite(operand ?? "", 0.0); debug?.RecordWriteLine(instr.SourceLine); }
                         break;
                     case "AND":
                         accumulator = (accumulator != 0.0 && ResolveValue(operand, locals, nodeManager) != 0.0) ? 1.0 : 0.0;
+                        debug?.Annotate(instr.SourceLine, "acc", accumulator);
                         break;
                     case "ANDN":
                         accumulator = (accumulator != 0.0 && ResolveValue(operand, locals, nodeManager) == 0.0) ? 1.0 : 0.0;
+                        debug?.Annotate(instr.SourceLine, "acc", accumulator);
                         break;
                     case "OR":
                         accumulator = (accumulator != 0.0 || ResolveValue(operand, locals, nodeManager) != 0.0) ? 1.0 : 0.0;
+                        debug?.Annotate(instr.SourceLine, "acc", accumulator);
                         break;
                     case "ORN":
                         accumulator = (accumulator != 0.0 || ResolveValue(operand, locals, nodeManager) == 0.0) ? 1.0 : 0.0;
+                        debug?.Annotate(instr.SourceLine, "acc", accumulator);
                         break;
                     case "XOR":
                         accumulator = ((accumulator != 0.0) ^ (ResolveValue(operand, locals, nodeManager) != 0.0)) ? 1.0 : 0.0;
+                        debug?.Annotate(instr.SourceLine, "acc", accumulator);
                         break;
                     case "NOT":
                         accumulator = accumulator != 0.0 ? 0.0 : 1.0;
+                        debug?.Annotate(instr.SourceLine, "acc", accumulator);
                         break;
                     case "ADD":
                         accumulator += ResolveValue(operand, locals, nodeManager);
+                        debug?.Annotate(instr.SourceLine, "acc", accumulator);
                         break;
                     case "SUB":
                         accumulator -= ResolveValue(operand, locals, nodeManager);
+                        debug?.Annotate(instr.SourceLine, "acc", accumulator);
                         break;
                     case "MUL":
                         accumulator *= ResolveValue(operand, locals, nodeManager);
+                        debug?.Annotate(instr.SourceLine, "acc", accumulator);
                         break;
                     case "DIV":
                     {
                         var d = ResolveValue(operand, locals, nodeManager);
                         accumulator = d != 0.0 ? accumulator / d : 0.0;
+                        debug?.Annotate(instr.SourceLine, "acc", accumulator);
                         break;
                     }
                     case "MOD":
                     {
                         var d = ResolveValue(operand, locals, nodeManager);
                         accumulator = d != 0.0 ? accumulator % d : 0.0;
+                        debug?.Annotate(instr.SourceLine, "acc", accumulator);
                         break;
                     }
                     case "GT":
                         accumulator = accumulator > ResolveValue(operand, locals, nodeManager) ? 1.0 : 0.0;
+                        debug?.Annotate(instr.SourceLine, "acc", accumulator);
                         break;
                     case "GE":
                         accumulator = accumulator >= ResolveValue(operand, locals, nodeManager) ? 1.0 : 0.0;
+                        debug?.Annotate(instr.SourceLine, "acc", accumulator);
                         break;
                     case "EQ":
                         accumulator = accumulator == ResolveValue(operand, locals, nodeManager) ? 1.0 : 0.0;
+                        debug?.Annotate(instr.SourceLine, "acc", accumulator);
                         break;
                     case "NE":
                         accumulator = accumulator != ResolveValue(operand, locals, nodeManager) ? 1.0 : 0.0;
+                        debug?.Annotate(instr.SourceLine, "acc", accumulator);
                         break;
                     case "LE":
                         accumulator = accumulator <= ResolveValue(operand, locals, nodeManager) ? 1.0 : 0.0;
+                        debug?.Annotate(instr.SourceLine, "acc", accumulator);
                         break;
                     case "LT":
                         accumulator = accumulator < ResolveValue(operand, locals, nodeManager) ? 1.0 : 0.0;
+                        debug?.Annotate(instr.SourceLine, "acc", accumulator);
                         break;
                     case "JMP":
                         if (operand != null && labelIndex.TryGetValue(operand, out var jmpTarget))
@@ -1597,9 +1659,11 @@ namespace SimpleOpcFileServer
                         break;
                     case "ABS":
                         accumulator = Math.Abs(accumulator);
+                        debug?.Annotate(instr.SourceLine, "acc", accumulator);
                         break;
                     case "SQRT":
                         accumulator = Math.Sqrt(accumulator);
+                        debug?.Annotate(instr.SourceLine, "acc", accumulator);
                         break;
                     case "CAL":
                     case "CALC":
@@ -1609,6 +1673,7 @@ namespace SimpleOpcFileServer
                         if (op == "CALC" && accumulator == 0.0) break;
                         if (op == "CALCN" && accumulator != 0.0) break;
                         accumulator = ExecuteCall(operand, accumulator, locals, nodeManager);
+                        debug?.Annotate(instr.SourceLine, "acc", accumulator);
                         break;
                     }
                     // Ignore unknown operators silently
@@ -1735,6 +1800,8 @@ namespace SimpleOpcFileServer
     {
         public string? Label { get; set; }
         public List<LdElement> Elements { get; set; } = new();
+        /// <summary>0-based source line number for debug annotations.</summary>
+        public int SourceLine { get; set; } = -1;
     }
 
     internal class LdElement
@@ -1743,6 +1810,8 @@ namespace SimpleOpcFileServer
         public string Modifier { get; set; } = ""; // NO, NC for contacts; GT, LT, GE, LE, EQ, NE for compare
         public string Operand1 { get; set; } = "";
         public string Operand2 { get; set; } = "";
+        /// <summary>0-based source line number for debug annotations.</summary>
+        public int SourceLine { get; set; } = -1;
     }
 
     internal class LdProgram
@@ -1786,7 +1855,7 @@ namespace SimpleOpcFileServer
                 switch (keyword)
                 {
                     case "RUNG":
-                        currentRung = new LdRung();
+                        currentRung = new LdRung { SourceLine = lineNum - 1 };
                         if (parts.Length > 1)
                             currentRung.Label = string.Join(' ', parts.Skip(1)).Trim('"', '\'');
                         break;
@@ -1804,26 +1873,27 @@ namespace SimpleOpcFileServer
                         {
                             Type = "CONTACT",
                             Modifier = parts[1].ToUpperInvariant(), // NO or NC
-                            Operand1 = parts[2]
+                            Operand1 = parts[2],
+                            SourceLine = lineNum - 1
                         });
                         break;
 
                     case "COIL":
                         if (currentRung == null) throw new InvalidOperationException($"COIL outside RUNG at line {lineNum}");
                         if (parts.Length < 2) throw new InvalidOperationException($"COIL requires variable at line {lineNum}");
-                        currentRung.Elements.Add(new LdElement { Type = "COIL", Operand1 = parts[1] });
+                        currentRung.Elements.Add(new LdElement { Type = "COIL", Operand1 = parts[1], SourceLine = lineNum - 1 });
                         break;
 
                     case "COIL_S":
                         if (currentRung == null) throw new InvalidOperationException($"COIL_S outside RUNG at line {lineNum}");
                         if (parts.Length < 2) throw new InvalidOperationException($"COIL_S requires variable at line {lineNum}");
-                        currentRung.Elements.Add(new LdElement { Type = "COIL_S", Operand1 = parts[1] });
+                        currentRung.Elements.Add(new LdElement { Type = "COIL_S", Operand1 = parts[1], SourceLine = lineNum - 1 });
                         break;
 
                     case "COIL_R":
                         if (currentRung == null) throw new InvalidOperationException($"COIL_R outside RUNG at line {lineNum}");
                         if (parts.Length < 2) throw new InvalidOperationException($"COIL_R requires variable at line {lineNum}");
-                        currentRung.Elements.Add(new LdElement { Type = "COIL_R", Operand1 = parts[1] });
+                        currentRung.Elements.Add(new LdElement { Type = "COIL_R", Operand1 = parts[1], SourceLine = lineNum - 1 });
                         break;
 
                     case "COMPARE":
@@ -1834,7 +1904,8 @@ namespace SimpleOpcFileServer
                             Type = "COMPARE",
                             Modifier = parts[1].ToUpperInvariant(),
                             Operand1 = parts[2],
-                            Operand2 = parts[3]
+                            Operand2 = parts[3],
+                            SourceLine = lineNum - 1
                         });
                         break;
 
@@ -1845,7 +1916,8 @@ namespace SimpleOpcFileServer
                         {
                             Type = keyword,
                             Operand1 = parts[1],
-                            Operand2 = parts[2]
+                            Operand2 = parts[2],
+                            SourceLine = lineNum - 1
                         });
                         break;
 
@@ -1856,7 +1928,8 @@ namespace SimpleOpcFileServer
                         {
                             Type = keyword,
                             Operand1 = parts[1],
-                            Operand2 = parts[2]
+                            Operand2 = parts[2],
+                            SourceLine = lineNum - 1
                         });
                         break;
 
@@ -1872,7 +1945,8 @@ namespace SimpleOpcFileServer
                         {
                             Type = "PID",
                             Operand1 = $"{parts[1]};{parts[2]};{parts[4]};{parts[5]};{parts[6]};{pidOutMin};{pidOutMax}",
-                            Operand2 = parts[3]
+                            Operand2 = parts[3],
+                            SourceLine = lineNum - 1
                         });
                         break;
 
@@ -1895,7 +1969,7 @@ namespace SimpleOpcFileServer
         private static readonly ConcurrentDictionary<string, (int count, bool prevRung)> _counters = new();
         private static readonly ConcurrentDictionary<string, (double integral, double prevError)> _pidStates = new();
 
-        public static void Execute(LdProgram program, SimpleFileServerNodeManager nodeManager)
+        public static void Execute(LdProgram program, SimpleFileServerNodeManager nodeManager, PlcDebugContext? debug = null)
         {
             foreach (var rung in program.Rungs)
             {
@@ -1904,14 +1978,18 @@ namespace SimpleOpcFileServer
 
                 foreach (var elem in rung.Elements)
                 {
+                    debug?.RecordExecutedLine(elem.SourceLine);
+
                     switch (elem.Type)
                     {
                         case "CONTACT":
                         {
                             double val = ReadValue(elem.Operand1, nodeManager);
+                            debug?.RecordRead(elem.Operand1, val);
                             bool contact = val != 0.0;
                             if (elem.Modifier == "NC") contact = !contact;
                             rungState = rungState && contact;
+                            debug?.Annotate(elem.SourceLine, elem.Operand1, contact);
                             break;
                         }
 
@@ -1919,6 +1997,7 @@ namespace SimpleOpcFileServer
                         {
                             double left = ReadValue(elem.Operand1, nodeManager);
                             double right = ParseNumericOrRead(elem.Operand2, nodeManager);
+                            debug?.RecordRead(elem.Operand1, left);
                             bool result = elem.Modifier switch
                             {
                                 "GT" => left > right,
@@ -1930,19 +2009,28 @@ namespace SimpleOpcFileServer
                                 _ => false
                             };
                             rungState = rungState && result;
+                            debug?.Annotate(elem.SourceLine, elem.Operand1 + " " + elem.Modifier + " " + elem.Operand2, result);
                             break;
                         }
 
                         case "COIL":
-                            WriteValue(elem.Operand1, rungState ? 1.0 : 0.0, nodeManager);
+                        {
+                            var coilVal = rungState ? 1.0 : 0.0;
+                            WriteValue(elem.Operand1, coilVal, nodeManager);
+                            debug?.Annotate(elem.SourceLine, elem.Operand1, coilVal);
+                            debug?.RecordWrite(elem.Operand1, coilVal);
+                            debug?.RecordWriteLine(elem.SourceLine);
                             break;
+                        }
 
                         case "COIL_S":
-                            if (rungState) WriteValue(elem.Operand1, 1.0, nodeManager);
+                            if (rungState) { WriteValue(elem.Operand1, 1.0, nodeManager); debug?.RecordWrite(elem.Operand1, 1.0); debug?.RecordWriteLine(elem.SourceLine); }
+                            debug?.Annotate(elem.SourceLine, elem.Operand1, rungState ? 1.0 : ReadValue(elem.Operand1, nodeManager));
                             break;
 
                         case "COIL_R":
-                            if (rungState) WriteValue(elem.Operand1, 0.0, nodeManager);
+                            if (rungState) { WriteValue(elem.Operand1, 0.0, nodeManager); debug?.RecordWrite(elem.Operand1, 0.0); debug?.RecordWriteLine(elem.SourceLine); }
+                            debug?.Annotate(elem.SourceLine, elem.Operand1, rungState ? 0.0 : ReadValue(elem.Operand1, nodeManager));
                             break;
 
                         case "MOVE":
@@ -1950,6 +2038,9 @@ namespace SimpleOpcFileServer
                             {
                                 double src = ParseNumericOrRead(elem.Operand1, nodeManager);
                                 WriteValue(elem.Operand2, src, nodeManager);
+                                debug?.Annotate(elem.SourceLine, elem.Operand2, src);
+                                debug?.RecordWrite(elem.Operand2, src);
+                                debug?.RecordWriteLine(elem.SourceLine);
                             }
                             break;
 
@@ -1958,7 +2049,11 @@ namespace SimpleOpcFileServer
                             {
                                 double src = ParseNumericOrRead(elem.Operand1, nodeManager);
                                 double dst = ReadValue(elem.Operand2, nodeManager);
-                                WriteValue(elem.Operand2, dst + src, nodeManager);
+                                var result = dst + src;
+                                WriteValue(elem.Operand2, result, nodeManager);
+                                debug?.Annotate(elem.SourceLine, elem.Operand2, result);
+                                debug?.RecordWrite(elem.Operand2, result);
+                                debug?.RecordWriteLine(elem.SourceLine);
                             }
                             break;
 
@@ -1967,7 +2062,11 @@ namespace SimpleOpcFileServer
                             {
                                 double src = ParseNumericOrRead(elem.Operand1, nodeManager);
                                 double dst = ReadValue(elem.Operand2, nodeManager);
-                                WriteValue(elem.Operand2, dst - src, nodeManager);
+                                var result = dst - src;
+                                WriteValue(elem.Operand2, result, nodeManager);
+                                debug?.Annotate(elem.SourceLine, elem.Operand2, result);
+                                debug?.RecordWrite(elem.Operand2, result);
+                                debug?.RecordWriteLine(elem.SourceLine);
                             }
                             break;
 
@@ -1976,7 +2075,11 @@ namespace SimpleOpcFileServer
                             {
                                 double src = ParseNumericOrRead(elem.Operand1, nodeManager);
                                 double dst = ReadValue(elem.Operand2, nodeManager);
-                                WriteValue(elem.Operand2, dst * src, nodeManager);
+                                var result = dst * src;
+                                WriteValue(elem.Operand2, result, nodeManager);
+                                debug?.Annotate(elem.SourceLine, elem.Operand2, result);
+                                debug?.RecordWrite(elem.Operand2, result);
+                                debug?.RecordWriteLine(elem.SourceLine);
                             }
                             break;
 
@@ -1985,7 +2088,11 @@ namespace SimpleOpcFileServer
                             {
                                 double src = ParseNumericOrRead(elem.Operand1, nodeManager);
                                 double dst = ReadValue(elem.Operand2, nodeManager);
-                                WriteValue(elem.Operand2, src != 0 ? dst / src : 0.0, nodeManager);
+                                var divResult = src != 0 ? dst / src : 0.0;
+                                WriteValue(elem.Operand2, divResult, nodeManager);
+                                debug?.Annotate(elem.SourceLine, elem.Operand2, divResult);
+                                debug?.RecordWrite(elem.Operand2, divResult);
+                                debug?.RecordWriteLine(elem.SourceLine);
                             }
                             break;
 
@@ -2010,6 +2117,8 @@ namespace SimpleOpcFileServer
 
                             _timers[key] = state;
                             WriteValue(key, state.done ? 1.0 : 0.0, nodeManager);
+                            debug?.Annotate(elem.SourceLine, key, state.done);
+                            debug?.RecordWrite(key, state.done ? 1.0 : 0.0);
                             rungState = state.done;
                             break;
                         }
@@ -2028,6 +2137,8 @@ namespace SimpleOpcFileServer
                             _counters[key] = (count, rungState);
                             bool done = count >= preset;
                             WriteValue(key, done ? 1.0 : 0.0, nodeManager);
+                            debug?.Annotate(elem.SourceLine, key, count);
+                            debug?.RecordWrite(key, done ? 1.0 : 0.0);
                             rungState = done;
                             break;
                         }
@@ -2063,6 +2174,9 @@ namespace SimpleOpcFileServer
 
                                 _pidStates[pidKey] = (integral, error);
                                 WriteValue(pidKey, output, nodeManager);
+                                debug?.Annotate(elem.SourceLine, pidKey, output);
+                                debug?.RecordWrite(pidKey, output);
+                                debug?.RecordWriteLine(elem.SourceLine);
                             }
                             break;
                         }
