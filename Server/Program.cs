@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
@@ -13,9 +13,21 @@ using Serilog;
 using SimpleOpcFileServer;
 using SharedModels;
 using System.Text.Json;
+using System.Reflection;
 
 try
 {
+    // Display version banner
+    var entryAsm = Assembly.GetEntryAssembly();
+    var infoVer = entryAsm?.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+    var version = infoVer?.Split('+')[0] ?? entryAsm?.GetName().Version?.ToString(3) ?? "1.0.0";
+    var product = entryAsm?.GetCustomAttribute<AssemblyProductAttribute>()?.Product ?? "Server";
+    var copyright = entryAsm?.GetCustomAttribute<AssemblyCopyrightAttribute>()?.Copyright ?? "";
+    Console.WriteLine($"{product} - Server v{version}");
+    if (!string.IsNullOrEmpty(copyright))
+        Console.WriteLine(copyright);
+    Console.WriteLine();
+
     // Set current directory to AppContext.BaseDirectory to ensure relative paths work correctly when running as a Windows Service
     Directory.SetCurrentDirectory(AppContext.BaseDirectory);
 

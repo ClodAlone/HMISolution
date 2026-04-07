@@ -1,0 +1,123 @@
+﻿@using System.Reflection
+
+<div class="rv-splash-overlay" @onclick="Close">
+    <div class="rv-splash-card" @onclick:stopPropagation>
+        <div class="rv-splash-logo">&#x1F4FA;</div>
+        <h4 class="rv-splash-title">Simple OPC File Server</h4>
+        <div class="rv-splash-subtitle">Runtime Viewer</div>
+        <div class="rv-splash-version">v@_version</div>
+        <div class="rv-splash-meta">
+            <span>@_product</span>
+            <span>@_copyright</span>
+        </div>
+        <div class="rv-splash-dismiss">Click anywhere to dismiss</div>
+    </div>
+</div>
+
+<style>
+    .rv-splash-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 99999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(0, 0, 0, 0.7);
+        backdrop-filter: blur(4px);
+        animation: rvSplashFadeIn 0.3s ease-out;
+        cursor: pointer;
+    }
+
+    .rv-splash-card {
+        background: linear-gradient(145deg, #1a1a2e, #16213e);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 16px;
+        padding: 48px 56px;
+        text-align: center;
+        color: #e2e8f0;
+        box-shadow: 0 25px 60px rgba(0, 0, 0, 0.5);
+        animation: rvSplashSlideUp 0.4s ease-out;
+        cursor: default;
+        min-width: 320px;
+    }
+
+    .rv-splash-logo {
+        font-size: 64px;
+        margin-bottom: 12px;
+        line-height: 1;
+    }
+
+    .rv-splash-title {
+        font-size: 22px;
+        font-weight: 700;
+        margin: 0 0 4px 0;
+        color: #f8fafc;
+    }
+
+    .rv-splash-subtitle {
+        font-size: 14px;
+        color: #94a3b8;
+        margin-bottom: 16px;
+    }
+
+    .rv-splash-version {
+        display: inline-block;
+        background: #0ea5e9;
+        color: white;
+        font-size: 13px;
+        font-weight: 600;
+        padding: 4px 16px;
+        border-radius: 20px;
+        margin-bottom: 20px;
+        letter-spacing: 0.5px;
+    }
+
+    .rv-splash-meta {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        font-size: 11px;
+        color: #64748b;
+    }
+
+    .rv-splash-dismiss {
+        margin-top: 20px;
+        font-size: 11px;
+        color: #475569;
+        animation: rvSplashPulse 2s ease-in-out infinite;
+    }
+
+    @@keyframes rvSplashFadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+
+    @@keyframes rvSplashSlideUp {
+        from { opacity: 0; transform: translateY(20px) scale(0.96); }
+        to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    @@keyframes rvSplashPulse {
+        0%, 100% { opacity: 0.5; }
+        50% { opacity: 1; }
+    }
+</style>
+
+@code {
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private string _version = "";
+    private string _product = "";
+    private string _copyright = "";
+
+    protected override void OnInitialized()
+    {
+        var asm = System.Reflection.Assembly.GetEntryAssembly();
+        var infoVersion = asm?.GetCustomAttribute<System.Reflection.AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+        _version = infoVersion?.Split('+')[0] ?? asm?.GetName().Version?.ToString(3) ?? "1.0.0";
+        _product = asm?.GetCustomAttribute<System.Reflection.AssemblyProductAttribute>()?.Product ?? "";
+        _copyright = asm?.GetCustomAttribute<System.Reflection.AssemblyCopyrightAttribute>()?.Copyright ?? "";
+    }
+
+    private void Close() => OnClose.InvokeAsync();
+}

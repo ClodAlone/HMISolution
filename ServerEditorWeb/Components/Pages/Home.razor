@@ -1,4 +1,4 @@
-@page "/"
+﻿@page "/"
 @rendermode InteractiveServer
 @using Microsoft.JSInterop
 @using ServerEditorWeb.Models
@@ -649,6 +649,10 @@ else
     <AboutDialog OnClose="() => _showAboutDialog = false" />
 }
 
+@if (_showSplash)
+{
+    <SplashPopup OnClose="() => { _showSplash = false; }" />
+}
 
 @if (_showUnlockDialog)
 {
@@ -778,6 +782,7 @@ else
     private ProblemsPanel? _problemsPanel;
     private HelpPanel? _helpPanel;
     private bool _showAboutDialog;
+    private bool _showSplash;
     private bool _showNewProjectWizard;
 
     private string _selectedFile = "";
@@ -1088,6 +1093,10 @@ private void UnsavedDialogCancel()
     {
         if (firstRender)
         {
+            // Show splash only once the interactive circuit is live
+            _showSplash = true;
+            StateHasChanged();
+
             await JS.InvokeVoidAsync("themeManager.setTheme", Theme.Theme);
             _shortcutRef = DotNetObjectReference.Create(this);
             await JS.InvokeVoidAsync("editorShortcuts.init", _shortcutRef);
@@ -1097,7 +1106,9 @@ private void UnsavedDialogCancel()
             {
                 _isLoadingProject = true;
                 _loadingStatus = "Restoring session\u2026";
-                StateHasChanged();
+
+                // Keep splash visible during restore; guarantee minimum 2s display
+                var splashMin = Task.Delay(2000);
 
                 await Editor.RestorePreviousSessionAsync(status =>
                 {
@@ -1105,11 +1116,20 @@ private void UnsavedDialogCancel()
                     InvokeAsync(StateHasChanged);
                 });
 
+                await splashMin;
+                _showSplash = false;
                 _isLoadingProject = false;
                 _loadingStatus = "";
                 _loadingFileName = "";
                 _requiresLogin = AuthService.IsLoginRequired(Editor.RootModel);
                 SetupLogDirectory();
+                StateHasChanged();
+            }
+            else
+            {
+                // No session to restore — dismiss splash after brief display
+                await Task.Delay(2000);
+                _showSplash = false;
                 StateHasChanged();
             }
 

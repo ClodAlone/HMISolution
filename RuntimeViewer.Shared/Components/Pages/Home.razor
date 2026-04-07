@@ -1,4 +1,4 @@
-@page "/"
+﻿@page "/"
 @page "/screen/{ScreenName}"
 @using SharedModels
 @using System.Net.Http.Json
@@ -479,6 +479,11 @@ else
 
 } @* end else (authenticated) *@
 
+@if (_showSplash)
+{
+    <SplashPopup OnClose="() => { _showSplash = false; }" />
+}
+
 @code {
     [Parameter] public string? ScreenName { get; set; }
 
@@ -530,6 +535,9 @@ else
     private int _toastId;
     private bool _hamburgerOpen;
 
+    // Splash
+    private bool _showSplash;
+
     // Tag Browser
     private bool _showTagBrowser;
     private bool _showMultiSite;
@@ -571,6 +579,13 @@ else
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (firstRender)
+        {
+            // Show splash only once the interactive circuit is live
+            _showSplash = true;
+            StateHasChanged();
+        }
+
         if (firstRender && Project.IsKiosk)
 
         if (firstRender && _multiSiteEnabled)
@@ -612,6 +627,11 @@ else
         if (firstRender)
         {
             await InitPushNotificationsAsync();
+
+            // Auto-dismiss splash after 2 seconds
+            await Task.Delay(2000);
+            _showSplash = false;
+            StateHasChanged();
         }
     }
 
