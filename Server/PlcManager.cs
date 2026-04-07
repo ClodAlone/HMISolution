@@ -1443,7 +1443,7 @@ namespace SimpleOpcFileServer
 
                 // Check for label (ends with ':')
                 var colonIdx = line.IndexOf(':');
-                if (colonIdx > 0 && colonIdx < line.Length - 1 && !line[..colonIdx].Contains(' '))
+                if (colonIdx > 0 && !line[..colonIdx].Contains(' '))
                 {
                     instr.Label = line[..colonIdx].Trim();
                     line = line[(colonIdx + 1)..].Trim();
@@ -1601,8 +1601,63 @@ namespace SimpleOpcFileServer
                     case "SQRT":
                         accumulator = Math.Sqrt(accumulator);
                         break;
+                    case "CAL":
+                    case "CALC":
+                    case "CALCN":
+                    {
+                        // CALC = call if accumulator true, CALCN = call if accumulator false
+                        if (op == "CALC" && accumulator == 0.0) break;
+                        if (op == "CALCN" && accumulator != 0.0) break;
+                        accumulator = ExecuteCall(operand, accumulator, locals, nodeManager);
+                        break;
+                    }
                     // Ignore unknown operators silently
                 }
+            }
+        }
+
+        private static double ExecuteCall(string? operand, double accumulator, Dictionary<string, double> locals, SimpleFileServerNodeManager nodeManager)
+        {
+            if (string.IsNullOrEmpty(operand)) return accumulator;
+
+            // Parse function call: FuncName(arg1, arg2, ...)
+            var parenOpen = operand.IndexOf('(');
+            if (parenOpen < 0) return accumulator;
+
+            var funcName = operand[..parenOpen].Trim().ToUpperInvariant();
+            var argsStr = operand[(parenOpen + 1)..].TrimEnd().TrimEnd(')');
+            var args = argsStr.Split(',', StringSplitOptions.TrimEntries);
+
+            switch (funcName)
+            {
+                case "READ":
+                {
+                    var path = args.ElementAtOrDefault(0)?.Trim('\'', '"') ?? "";
+                    if (!string.IsNullOrEmpty(path))
+                    {
+                        try
+                        {
+                            var val = nodeManager.ReadVariable(path);
+                            return StInterpreter.ToDouble(val);
+                        }
+                        catch { return 0.0; }
+                    }
+                    return 0.0;
+                }
+                case "WRITE":
+                {
+                    var path = args.ElementAtOrDefault(0)?.Trim('\'', '"') ?? "";
+                    var valueArg = args.ElementAtOrDefault(1)?.Trim() ?? "";
+                    double value = ResolveValue(valueArg, locals, nodeManager);
+                    if (!string.IsNullOrEmpty(path))
+                    {
+                        try { nodeManager.WriteVariable(path, value); }
+                        catch { /* ignore */ }
+                    }
+                    return accumulator;
+                }
+                default:
+                    return accumulator;
             }
         }
 

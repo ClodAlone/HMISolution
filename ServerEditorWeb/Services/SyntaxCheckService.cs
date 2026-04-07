@@ -1,4 +1,4 @@
-﻿using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Scripting;
 using Microsoft.CodeAnalysis.Scripting;
 using Microsoft.CodeAnalysis.VisualBasic;
@@ -484,6 +484,7 @@ internal static class IlSyntaxChecker
         "ADD", "SUB", "MUL", "DIV", "MOD",
         "GT", "GE", "EQ", "NE", "LE", "LT",
         "JMP", "JMPC", "JMPCN",
+        "CAL", "CALC", "CALCN",
         "RET", "RETC", "RETCN",
         "NOP", "ABS", "SQRT"
     };
@@ -523,7 +524,7 @@ internal static class IlSyntaxChecker
 
             // Check for label
             var colonIdx = line.IndexOf(':');
-            if (colonIdx > 0 && colonIdx < line.Length - 1 && !line[..colonIdx].Contains(' '))
+            if (colonIdx > 0 && !line[..colonIdx].Contains(' '))
             {
                 line = line[(colonIdx + 1)..].Trim();
                 if (string.IsNullOrEmpty(line)) continue; // Label-only line
@@ -541,7 +542,8 @@ internal static class IlSyntaxChecker
                 or "AND" or "ANDN" or "OR" or "ORN" or "XOR"
                 or "ADD" or "SUB" or "MUL" or "DIV" or "MOD"
                 or "GT" or "GE" or "EQ" or "NE" or "LE" or "LT"
-                or "JMP" or "JMPC" or "JMPCN")
+                or "JMP" or "JMPC" or "JMPCN"
+                or "CAL" or "CALC" or "CALCN")
             {
                 if (parts.Length < 2 || string.IsNullOrWhiteSpace(parts[1]))
                     throw new InvalidOperationException($"IL operator '{op}' requires an operand at line {lineNum}");

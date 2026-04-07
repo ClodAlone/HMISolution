@@ -484,6 +484,7 @@ internal static class IlSyntaxChecker
         "ADD", "SUB", "MUL", "DIV", "MOD",
         "GT", "GE", "EQ", "NE", "LE", "LT",
         "JMP", "JMPC", "JMPCN",
+        "CAL", "CALC", "CALCN",
         "RET", "RETC", "RETCN",
         "NOP", "ABS", "SQRT"
     };
@@ -541,7 +542,8 @@ internal static class IlSyntaxChecker
                 or "AND" or "ANDN" or "OR" or "ORN" or "XOR"
                 or "ADD" or "SUB" or "MUL" or "DIV" or "MOD"
                 or "GT" or "GE" or "EQ" or "NE" or "LE" or "LT"
-                or "JMP" or "JMPC" or "JMPCN")
+                or "JMP" or "JMPC" or "JMPCN"
+                or "CAL" or "CALC" or "CALCN")
             {
                 if (parts.Length < 2 || string.IsNullOrWhiteSpace(parts[1]))
                     throw new InvalidOperationException($"IL operator '{op}' requires an operand at line {lineNum}");
