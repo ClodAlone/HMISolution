@@ -413,6 +413,15 @@ namespace SimpleOpcFileServer
                     AddReverseReferences(externalReferences);
                 }
             }
+
+            // Push external references to other node managers (e.g. ObjectsFolder).
+            // During normal (non-deferred) startup MasterNodeManager calls
+            // AddReferences on every node manager after CreateAddressSpace completes.
+            // Because we deferred, the dict was empty at that point — replay it now.
+            foreach (var kvp in externalReferences)
+            {
+                Server.NodeManager.AddReferences(kvp.Key, kvp.Value);
+            }
         }
 
         private static int CountAlarmsInFolder(Folder folder)
@@ -520,8 +529,21 @@ namespace SimpleOpcFileServer
             }
             _rootNodeIds.Clear();
 
-            // Re-create
-            LoadModel(nodeModel, null);
+            // Re-create — build an externalReferences dictionary so that
+            // AddReverseReferences can wire up ObjectsFolder → root folder references
+            // making the address space browseable after reload.
+            var externalReferences = new Dictionary<NodeId, IList<IReference>>();
+            externalReferences[ObjectIds.ObjectsFolder] = new List<IReference>();
+            LoadModel(nodeModel, externalReferences);
+            AddReverseReferences(externalReferences);
+
+            // Push external references to other node managers (e.g. ObjectsFolder)
+            // so that browsing ObjectsFolder shows the new root folder.
+            foreach (var kvp in externalReferences)
+            {
+                Server.NodeManager.AddReferences(kvp.Key, kvp.Value);
+            }
+
             StripModelForCache(nodeModel);
             _lastModel = nodeModel;
             Utils.Trace("Configuration reloaded fully.");
@@ -1401,7 +1423,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 AddRootNotifier(rootFolderState);
             }
             rootFolderState.AddReference(ReferenceTypeIds.Organizes, true, ObjectIds.ObjectsFolder);
-            references.Add(new NodeStateReference(ReferenceTypeIds.Organizes, false, rootFolderState.NodeId));
+            references?.Add(new NodeStateReference(ReferenceTypeIds.Organizes, false, rootFolderState.NodeId));
 
             // Root folder is transparent: children use empty prefix
             var childPrefix = "";
