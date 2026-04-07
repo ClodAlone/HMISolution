@@ -463,14 +463,14 @@ else if (Node is RecipeNode recipeNode)
                                    @onchange="e => { rv.DisplayName = e.Value?.ToString() ?? string.Empty; OnChanged(); }" />
                         </td>
                         <td>
-                            <button class="btn btn-sm btn-outline-danger" @onclick="() => RemoveRecipeVariable(recipeNode, idx)" title="Remove">Ô£ò</button>
+                            <button class="btn btn-sm btn-outline-danger" @onclick="() => RemoveRecipeVariable(recipeNode, idx)" title="Remove">🗑</button>
                         </td>
                     </tr>
                 }
             </tbody>
         </table>
 
-        <button class="btn btn-sm btn-outline-primary" @onclick="() => AddRecipeVariable(recipeNode)">Ô×ò Add Variable</button>
+        <button class="btn btn-sm btn-outline-primary" @onclick="() => AddRecipeVariable(recipeNode)">➕ Add Variable</button>
 
         <div class="alert alert-info small mt-3">
             <strong>OPC Variables at Runtime:</strong><br/>
@@ -586,12 +586,12 @@ else if (Node is SchedulerNode schedulerNode)
                         <td><input type="number" class="form-control form-control-sm" @bind="holiday.Month" @bind:after="OnChanged" /></td>
                         <td><input type="number" class="form-control form-control-sm" @bind="holiday.Day" @bind:after="OnChanged" /></td>
                         <td><input type="number" class="form-control form-control-sm" @bind="holiday.Year" @bind:after="OnChanged" placeholder="0=all" /></td>
-                        <td><button class="btn btn-sm btn-outline-danger" @onclick="() => { schedulerNode.Scheduler.CustomHolidays.Remove(holiday); OnChanged(); }">Ô£ò</button></td>
+                        <td><button class="btn btn-sm btn-outline-danger" @onclick="() => { schedulerNode.Scheduler.CustomHolidays.Remove(holiday); OnChanged(); }">🗑</button></td>
                     </tr>
                 }
             </tbody>
         </table>
-        <button class="btn btn-sm btn-outline-primary" @onclick="() => { schedulerNode.Scheduler.CustomHolidays.Add(new SharedModels.HolidayEntry()); OnChanged(); }">Ô×ò Add Holiday</button>
+        <button class="btn btn-sm btn-outline-primary" @onclick="() => { schedulerNode.Scheduler.CustomHolidays.Add(new SharedModels.HolidayEntry()); OnChanged(); }">➕ Add Holiday</button>
 
         <h6 class="mt-3">Activate Commands</h6>
         <p class="text-muted small">Commands executed when a time slot becomes active.</p>
@@ -631,7 +631,7 @@ else if (Node is SchedulerNode schedulerNode)
                             <option value="ChangeLanguage">Change Language</option>
                         </optgroup>
                     </select>
-                    <button class="btn btn-sm btn-outline-danger py-0 px-1" style="font-size: 9px;" @onclick="() => { schedulerNode.Scheduler.Commands.RemoveAt(idx); OnChanged(); }">Ô£ò</button>
+                    <button class="btn btn-sm btn-outline-danger py-0 px-1" style="font-size: 9px;" @onclick="() => { schedulerNode.Scheduler.Commands.RemoveAt(idx); OnChanged(); }">🗑</button>
                 </div>
                 @if (cmd.Action is "SetVariable" or "WriteVariable" or "ToggleVariable" or "IncrementVariable" or "DecrementVariable")
                 {
@@ -667,7 +667,7 @@ else if (Node is SchedulerNode schedulerNode)
                 }
             </div>
         }
-        <button class="btn btn-sm btn-outline-primary" @onclick="() => AddSchedulerCommand(schedulerNode, false)">Ô×ò Add Command</button>
+        <button class="btn btn-sm btn-outline-primary" @onclick="() => AddSchedulerCommand(schedulerNode, false)">➕ Add Command</button>
 
         <h6 class="mt-3">Deactivate Commands</h6>
         <p class="text-muted small">Commands executed when leaving a time slot (becomes inactive).</p>
@@ -707,7 +707,7 @@ else if (Node is SchedulerNode schedulerNode)
                             <option value="ChangeLanguage">Change Language</option>
                         </optgroup>
                     </select>
-                    <button class="btn btn-sm btn-outline-danger py-0 px-1" style="font-size: 9px;" @onclick="() => { schedulerNode.Scheduler.DeactivateCommands.RemoveAt(idx); OnChanged(); }">Ô£ò</button>
+                    <button class="btn btn-sm btn-outline-danger py-0 px-1" style="font-size: 9px;" @onclick="() => { schedulerNode.Scheduler.DeactivateCommands.RemoveAt(idx); OnChanged(); }">🗑</button>
                 </div>
                 @if (cmd.Action is "SetVariable" or "WriteVariable" or "ToggleVariable" or "IncrementVariable" or "DecrementVariable")
                 {
@@ -743,7 +743,7 @@ else if (Node is SchedulerNode schedulerNode)
                 }
             </div>
         }
-        <button class="btn btn-sm btn-outline-primary" @onclick="() => AddSchedulerCommand(schedulerNode, true)">Ô×ò Add Deactivate Command</button>
+        <button class="btn btn-sm btn-outline-primary" @onclick="() => AddSchedulerCommand(schedulerNode, true)">➕ Add Deactivate Command</button>
 
         <div class="alert alert-info small mt-3">
             <strong>Usage:</strong> Use the <strong>Scheduler Editor</strong> panel to visually edit the weekly schedule.
@@ -1991,14 +1991,18 @@ else if (Node is AssetNode assetNode)
     </div>
     <div class="mb-3">
         <label class="form-label">Running Variable Path</label>
-        <input type="text" class="form-control" @bind="assetNode.Asset.RunningVariablePath" @bind:after="OnChanged"
-               placeholder="e.g. Pumps.Pump01.Running" />
+        <VariablePathPicker Value="@assetNode.Asset.RunningVariablePath"
+                            ValueChanged="v => { assetNode.Asset.RunningVariablePath = v; }"
+                            OnChanged="OnChanged"
+                            Placeholder="e.g. Pumps.Pump01.Running" />
         <div class="form-text">OPC variable that indicates the equipment is running (truthy = running).</div>
     </div>
     <div class="mb-3">
         <label class="form-label">Fault Variable Path</label>
-        <input type="text" class="form-control" @bind="assetNode.Asset.FaultVariablePath" @bind:after="OnChanged"
-               placeholder="e.g. Pumps.Pump01.Fault" />
+        <VariablePathPicker Value="@assetNode.Asset.FaultVariablePath"
+                            ValueChanged="v => { assetNode.Asset.FaultVariablePath = v; }"
+                            OnChanged="OnChanged"
+                            Placeholder="e.g. Pumps.Pump01.Fault" />
         <div class="form-text">Optional — truthy value indicates the equipment has faulted.</div>
     </div>
     <div class="mb-3">
