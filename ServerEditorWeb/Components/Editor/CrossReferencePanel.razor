@@ -13,6 +13,9 @@
                            @bind="_searchText" @bind:event="oninput" @bind:after="OnSearchChanged"
                            @onkeydown="OnSearchKeyDown" @onfocus="OnComboInputFocus" autocomplete="off" />
                     <button class="xref-combo-toggle" @onclick="ToggleDropdown" tabindex="-1" title="Show variable list">▾</button>
+                    <button class="xref-combo-clear" tabindex="-1" title="Clear"
+                            style="@(string.IsNullOrEmpty(_searchText) ? "display:none" : "")"
+                            @onclick="ClearSearch">&#x2715;</button>
                 </div>
                 @if (_dropdownOpen && _filteredPaths.Count > 0)
                 {
@@ -166,6 +169,22 @@
     }
     .xref-combo-toggle:hover {
         background: #e9ecef;
+    }
+    .xref-combo-clear {
+        border: none;
+        background: transparent;
+        padding: 0 8px;
+        cursor: pointer;
+        font-size: 14px;
+        color: #888;
+        border-left: 1px solid #ced4da;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .xref-combo-clear:hover {
+        background: #f8d7da;
+        color: #dc3545;
     }
     .xref-combo-dropdown {
         position: absolute;
@@ -367,6 +386,14 @@
         {
             _dropdownOpen = false;
         }
+    }
+
+    private void ClearSearch()
+    {
+        _searchText = "";
+        _dropdownOpen = false;
+        _lastSearchPath = null;
+        _results.Clear();
     }
 
     private void RunSearch()

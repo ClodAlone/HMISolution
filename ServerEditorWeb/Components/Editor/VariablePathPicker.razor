@@ -12,8 +12,12 @@
         <button type="button" class="var-picker-toggle" tabindex="-1"
                 @onmousedown="() => _preventClose = true" @onmousedown:preventDefault
                 @onclick="ToggleDropdown" title="Browse variables">&#x25BE;</button>
-        <button type="button" class="var-picker-browse" tabindex="-1"
+        <button type="button" class="var-picker-browse @(string.IsNullOrEmpty(Value) ? "var-picker-browse-last" : "")" tabindex="-1"
                 @onclick="OpenTreePicker" title="Pick variable from tree">&#x1F4C2;</button>
+        <button type="button" class="var-picker-clear" tabindex="-1"
+                style="@(string.IsNullOrEmpty(Value) ? "display:none" : "")"
+                @onmousedown="() => _preventClose = true" @onmousedown:preventDefault
+                @onclick="ClearValue" title="Clear">&#x2715;</button>
     </div>
 
     @if (_showDropdown && _filteredPaths.Count > 0)
@@ -25,7 +29,7 @@
                 var idx = i;
                 <div class="var-picker-item @(idx == _highlightIndex ? "var-picker-item-hl" : "")"
                      @onmousedown="() => SelectItem(item)" @onmousedown:preventDefault>
-                    <span class="var-picker-item-icon">@(item.IsFolder ? "&#x1F4C1;" : "&#x1F4CA;")</span>
+                    <span class="var-picker-item-icon">@(new MarkupString(item.IsFolder ? "&#x1F4C1;" : "&#x1F4CA;"))</span>
                     <span class="var-picker-item-path">@item.Path</span>
                     @if (!item.IsFolder)
                     {
@@ -187,6 +191,15 @@
         await OnChanged.InvokeAsync();
         RebuildPaths();
         _showDropdown = true;
+    }
+
+    private async Task ClearValue()
+    {
+        Value = "";
+        _filter = "";
+        _showDropdown = false;
+        await ValueChanged.InvokeAsync(string.Empty);
+        await OnChanged.InvokeAsync();
     }
 
     private void OnFocusIn()
