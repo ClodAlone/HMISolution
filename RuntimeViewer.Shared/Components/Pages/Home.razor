@@ -484,6 +484,41 @@ else
     <SplashPopup OnClose="() => { _showSplash = false; }" />
 }
 
+@if (_showClosePrompt)
+{
+    <div class="rv-login-overlay">
+        <div class="rv-login-card">
+            <div class="rv-login-header">
+                <span>🔒</span>
+                <span>Close Application</span>
+            </div>
+            <div class="rv-login-body">
+                <div style="font-size: 12px; color: #aaa; margin-bottom: 12px;">
+                    Enter admin credentials to close the application.
+                </div>
+                @if (!string.IsNullOrEmpty(_closeError))
+                {
+                    <div class="rv-login-error">@_closeError</div>
+                }
+                <div class="rv-login-field">
+                    <label>Username</label>
+                    <input type="text" @bind="_closeUsername" @onkeydown="OnCloseKeyDown"
+                           placeholder="Enter username" autofocus />
+                </div>
+                <div class="rv-login-field">
+                    <label>Password</label>
+                    <input type="password" @bind="_closePassword" @onkeydown="OnCloseKeyDown"
+                           placeholder="Enter password" />
+                </div>
+                <div style="display: flex; gap: 8px; margin-top: 8px;">
+                    <button class="rv-login-btn" style="flex: 1;" @onclick="DoCloseConfirm">Confirm Close</button>
+                    <button class="rv-login-btn" style="flex: 1; background: #555;" @onclick="CancelClose">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     [Parameter] public string? ScreenName { get; set; }
 
@@ -555,6 +590,13 @@ else
     private bool _pushSubscribed;
     private bool _pushBusy;
     private string? _vapidPublicKey;
+
+    // Close confirmation (desktop password prompt)
+    private bool _showClosePrompt;
+    private string _closeUsername = "";
+    private string _closePassword = "";
+    private string _closeError = "";
+    private DotNetObjectReference<Home>? _closeRef;
 
     protected override void OnInitialized()
     {
@@ -628,6 +670,24 @@ else
         {
             await InitPushNotificationsAsync();
 
+            // Register listener for native close-request from Photino desktop shell
+            if (_loginRequired)
+            {
+                _closeRef = DotNetObjectReference.Create(this);
+                await JS.InvokeVoidAsync("eval", """
+                    window.__rvSetupCloseHandler = function(dotNetRef) {
+                        if (window.external && window.external.receiveMessage) {
+                            window.external.receiveMessage = function(msg) {
+                                if (msg === 'close-requested') {
+                                    dotNetRef.invokeMethodAsync('OnDesktopCloseRequested');
+                                }
+                            };
+                        }
+                    };
+                """);
+                await JS.InvokeVoidAsync("__rvSetupCloseHandler", _closeRef);
+            }
+
             // Auto-dismiss splash after 2 seconds
             await Task.Delay(2000);
             _showSplash = false;
@@ -639,6 +699,58 @@ else
     public void OnUserActivity()
     {
         _lastActivity = DateTime.UtcNow;
+    }
+
+    [JSInvokable]
+    public void OnDesktopCloseRequested()
+    {
+        InvokeAsync(() =>
+        {
+            _closeUsername = "";
+            _closePassword = "";
+            _closeError = "";
+            _showClosePrompt = true;
+            StateHasChanged();
+        });
+    }
+
+    private async Task DoCloseConfirm()
+    {
+        _closeError = "";
+        var model = Project.Model;
+        if (model == null)
+        {
+            _closeError = "No project loaded.";
+            return;
+        }
+
+        var (success, message) = Auth.Login(_closeUsername, _closePassword, model.Users, model.UserGroups);
+        if (!success)
+        {
+            _closeError = message;
+            return;
+        }
+
+        // Valid credentials — send approval to the native shell
+        _showClosePrompt = false;
+        StateHasChanged();
+        await JS.InvokeVoidAsync("eval", "if (window.external && window.external.sendMessage) window.external.sendMessage('close-approved');");
+    }
+
+    private void CancelClose()
+    {
+        _showClosePrompt = false;
+        _closeUsername = "";
+        _closePassword = "";
+        _closeError = "";
+    }
+
+    private async Task OnCloseKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            await DoCloseConfirm();
+        else if (e.Key == "Escape")
+            CancelClose();
     }
 
     private void CheckIdleTimeout(object? state)
@@ -1183,6 +1295,7 @@ else
         MultiSite?.Dispose();
         _diagTimer?.Dispose();
         _idleRef?.Dispose();
+        _closeRef?.Dispose();
         if (_kioskModule != null)
         {
             try { await _kioskModule.DisposeAsync(); } catch { }

@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
+using System.Text.Json;
 using Photino.NET;
 using SharedModels;
 
@@ -8,6 +9,10 @@ namespace RuntimeViewer.Desktop;
 
 static class Program
 {
+    private static bool _closeApproved;
+    private static PhotinoWindow? _window;
+    private static bool _requirePasswordToClose;
+
     [STAThread]
     static void Main(string[] args)
     {
@@ -20,6 +25,9 @@ static class Program
         var configPath = args.FirstOrDefault(a => !a.StartsWith("-")) ?? "nodes.json";
         if (!Path.IsPathRooted(configPath))
             configPath = Path.GetFullPath(configPath);
+
+        // Check if the project requires password-protected close
+        _requirePasswordToClose = IsPasswordProtectedClose(configPath);
 
         // Find the RuntimeViewer web executable
         var viewerExe = FindViewerExe();
@@ -52,7 +60,7 @@ static class Program
 
             // Open a Photino window pointing to the local web server
             var title = $"Runtime Viewer — {Path.GetFileNameWithoutExtension(configPath)}";
-            var window = new PhotinoWindow()
+            _window = new PhotinoWindow()
                 .SetTitle(title)
                 .SetUseOsDefaultSize(false)
                 .SetSize(1280, 800)
@@ -62,9 +70,15 @@ static class Program
 #endif
                 .Load(new Uri(url));
 
+            if (_requirePasswordToClose)
+            {
+                _window.RegisterWebMessageReceivedHandler(OnWebMessageReceived);
+                _window.WindowClosingHandler = OnWindowClosing;
+            }
+
             if (isKiosk)
             {
-                window
+                _window
                     .SetFullScreen(true)
                     .SetChromeless(true);
             }
@@ -78,12 +92,50 @@ static class Program
                 }
             };
 
-            window.WaitForClose();
+            _window.WaitForClose();
         }
         finally
         {
             try { webProcess.Kill(entireProcessTree: true); } catch { }
             webProcess.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Checks if the project config has EnableRuntimeLogin with at least one user,
+    /// meaning the desktop window close should require admin password.
+    /// </summary>
+    private static bool IsPasswordProtectedClose(string configPath)
+    {
+        try
+        {
+            if (!File.Exists(configPath)) return false;
+            using var fs = new FileStream(configPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            var model = JsonSerializer.Deserialize<NodeModel>(fs);
+            return model?.Server?.EnableRuntimeLogin == true && model.Users.Count > 0;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool OnWindowClosing(object sender, EventArgs e)
+    {
+        if (_closeApproved)
+            return false; // Allow close
+
+        // Cancel close and ask the web UI for admin password
+        try { _window?.SendWebMessage("close-requested"); } catch { }
+        return true; // Cancel close
+    }
+
+    private static void OnWebMessageReceived(object? sender, string message)
+    {
+        if (message == "close-approved")
+        {
+            _closeApproved = true;
+            try { _window?.Close(); } catch { }
         }
     }
 
