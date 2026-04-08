@@ -1661,6 +1661,13 @@ namespace SharedModels
         /// <summary>Enable YOLO object detection on frames.</summary>
         public bool EnableYolo { get; set; }
 
+        /// <summary>
+        /// OPC variable path (Boolean) that dynamically enables/disables YOLO detection at runtime.
+        /// When set, the server reads this variable each frame; true = run detection, false = skip.
+        /// When empty, detection follows the static <see cref="EnableYolo"/> flag.
+        /// </summary>
+        public string YoloEnableVariable { get; set; } = "";
+
         /// <summary>Path to the YOLO ONNX model file. Empty = use default bundled model.</summary>
         public string YoloModelPath { get; set; } = "";
 

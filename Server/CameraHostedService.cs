@@ -71,7 +71,8 @@ public class CameraHostedService : BackgroundService
             _cameraService.StartCamera(cam, (prefix, label, confidence, count) =>
             {
                 WriteDetectionVariables(prefix, label, confidence, count);
-            });
+            },
+            varPath => ReadBoolVariable(varPath));
             _logger.LogInformation("Camera started: {Id} ({Protocol}) -> {Url}", cam.CameraId, cam.Protocol, cam.Url);
         }
 
@@ -212,6 +213,23 @@ public class CameraHostedService : BackgroundService
         {
             _logger.LogWarning(ex, "Failed to load camera configs");
             return [];
+        }
+    }
+
+    /// <summary>
+    /// Reads a Boolean OPC variable by path. Used by CameraInstance to check YoloEnableVariable.
+    /// </summary>
+    private bool ReadBoolVariable(string variablePath)
+    {
+        if (_nodeManager == null) return true;
+        try
+        {
+            var value = _nodeManager.ReadVariable(variablePath);
+            return Convert.ToBoolean(value);
+        }
+        catch
+        {
+            return true; // variable not found — default to enabled
         }
     }
 

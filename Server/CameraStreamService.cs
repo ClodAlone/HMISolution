@@ -36,10 +36,10 @@ public class CameraStreamService : IDisposable
         _logger = logger;
     }
 
-    public void StartCamera(CameraConfig config, Action<string, string, double, int>? onDetection = null)
+    public void StartCamera(CameraConfig config, Action<string, string, double, int>? onDetection = null, Func<string, bool>? readBoolVariable = null)
     {
         if (_cameras.ContainsKey(config.CameraId)) return;
-        var instance = new CameraInstance(config, _logger, onDetection);
+        var instance = new CameraInstance(config, _logger, onDetection, readBoolVariable);
         _cameras[config.CameraId] = instance;
         instance.Start();
     }
@@ -108,6 +108,7 @@ public class CameraStreamService : IDisposable
         private readonly CameraConfig _config;
         private readonly ILogger _logger;
         private readonly Action<string, string, double, int>? _onDetection;
+        private readonly Func<string, bool>? _readBoolVariable;
         private CancellationTokenSource? _cts;
         private Task? _captureTask;
         private InferenceSession? _yoloSession;
@@ -131,11 +132,12 @@ public class CameraStreamService : IDisposable
             "refrigerator", "book", "clock", "vase", "scissors", "teddy bear", "hair drier", "toothbrush"
         ];
 
-        public CameraInstance(CameraConfig config, ILogger logger, Action<string, string, double, int>? onDetection)
+        public CameraInstance(CameraConfig config, ILogger logger, Action<string, string, double, int>? onDetection, Func<string, bool>? readBoolVariable)
         {
             _config = config;
             _logger = logger;
             _onDetection = onDetection;
+            _readBoolVariable = readBoolVariable;
 
             var handler = new HttpClientHandler();
             if (!string.IsNullOrEmpty(config.Username))
@@ -144,7 +146,8 @@ public class CameraStreamService : IDisposable
             }
             _httpClient = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(30) };
 
-            if (config.EnableYolo)
+            // Load YOLO model if detection is enabled statically OR a dynamic variable is configured
+            if (config.EnableYolo || !string.IsNullOrEmpty(config.YoloEnableVariable))
             {
                 try
                 {
@@ -316,9 +319,23 @@ public class CameraStreamService : IDisposable
 
         // ─── Frame processing + YOLO ─────────────────────────
 
+        /// <summary>
+        /// Checks the YoloEnableVariable (if configured) to dynamically enable/disable detection.
+        /// Returns true if detection should run.
+        /// </summary>
+        private bool IsYoloEnabledAtRuntime()
+        {
+            if (!string.IsNullOrEmpty(_config.YoloEnableVariable) && _readBoolVariable != null)
+            {
+                try { return _readBoolVariable(_config.YoloEnableVariable); }
+                catch { return true; } // variable not found — default to enabled
+            }
+            return true; // no variable configured — always enabled
+        }
+
         private async Task ProcessFrameAsync(byte[] jpegBytes)
         {
-            if (_yoloSession != null)
+            if (_yoloSession != null && IsYoloEnabledAtRuntime())
             {
                 try
                 {
