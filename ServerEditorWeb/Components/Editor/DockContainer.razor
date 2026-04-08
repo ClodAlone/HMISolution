@@ -3,7 +3,7 @@
 @using ServerEditorWeb.Services
 @implements IAsyncDisposable
 
-<div class="dock-container @(_isMaximized ? "dock-maximized" : "")" @oncontextmenu="OnContainerContextMenu" @oncontextmenu:preventDefault @onkeydown="OnKeyDown" tabindex="0">
+<div class="dock-container @(_isMaximized ? "dock-maximized" : "") @(_isFocusMode ? "dock-focus" : "")" @oncontextmenu="OnContainerContextMenu" @oncontextmenu:preventDefault @onkeydown="OnKeyDown" tabindex="0">
     @if (_isMaximized)
     {
         @* Maximized mode — only show the maximized panel *@
@@ -25,6 +25,66 @@
                 </div>
             </div>
         }
+    }
+    else if (_isFocusMode)
+    {
+        @* Focus mode — center + right panels only (no bottom, no tree) *@
+        var centerPanels = Panels.Where(p => p.Zone == "center").ToList();
+        var rightPanels = Panels.Where(p => p.Zone == "right").ToList();
+
+        <div class="dock-row-top">
+            @* Center zone *@
+            <div class="dock-zone dock-zone-center">
+                @if (centerPanels.Count > 0)
+                {
+                    <ul class="dock-tabs">
+                        @foreach (var p in centerPanels)
+                        {
+                            var panelId = p.Id;
+                            var zone = "center";
+                            <li class="dock-tab @(panelId == _activeCenterTab ? "active" : "")"
+                                @onclick="() => ActivateTab(panelId, zone)">
+                                <span>@p.Icon @p.Title</span>
+                                <button class="dock-tab-close" @onclick="() => HidePanel(panelId)" @onclick:stopPropagation>✕</button>
+                            </li>
+                        }
+                        <li class="dock-tab-spacer"></li>
+                        <li class="dock-tab-action" @onclick="RestoreFocusMode" title="Exit Focus Mode (Esc)">
+                            <span>🗗</span>
+                        </li>
+                    </ul>
+                    var activeCenter = centerPanels.FirstOrDefault(p => p.Id == _activeCenterTab) ?? centerPanels.First();
+                    <div class="dock-tab-content">
+                        @RenderPanel(activeCenter)
+                    </div>
+                }
+            </div>
+
+            @* Right zone (properties) *@
+            @if (rightPanels.Count > 0)
+            {
+                var activeRight = rightPanels.FirstOrDefault(p => p.Id == _activeRightTab) ?? rightPanels.First();
+                <div class="dock-splitter dock-splitter-v" @onmousedown="OnRightSplitterDown" @onmousedown:preventDefault></div>
+                <div class="dock-zone dock-zone-right" style="width: @(_rightWidth)px;">
+                    <ul class="dock-tabs">
+                        @foreach (var p in rightPanels)
+                        {
+                            var panelId = p.Id;
+                            var zone = "right";
+                            <li class="dock-tab @(panelId == _activeRightTab ? "active" : "")"
+                                @onclick="() => ActivateTab(panelId, zone)">
+                                <span>@p.Icon @p.Title</span>
+                                <button class="dock-tab-close" @onclick="() => HidePanel(panelId)" @onclick:stopPropagation>✕</button>
+                            </li>
+                        }
+                        <li class="dock-tab-spacer"></li>
+                    </ul>
+                    <div class="dock-tab-content">
+                        @RenderPanel(activeRight)
+                    </div>
+                </div>
+            }
+        </div>
     }
     else
     {
@@ -306,6 +366,10 @@
     private string _maximizedPanelId = "";
     public bool IsMaximized => _isMaximized;
 
+    // Focus mode state
+    private bool _isFocusMode;
+    public bool IsFocusMode => _isFocusMode;
+
     // Auto-hide state
     private string _autoHideRevealedId = "";
 
@@ -583,6 +647,30 @@
         StateHasChanged();
     }
 
+    // ─── Focus mode (center + right, no tree/bottom) ─────
+
+    public void ToggleFocusMode()
+    {
+        if (_isFocusMode)
+        {
+            RestoreFocusMode();
+        }
+        else
+        {
+            _isMaximized = false;
+            _maximizedPanelId = "";
+            _isFocusMode = true;
+            _autoHideRevealedId = "";
+            StateHasChanged();
+        }
+    }
+
+    private void RestoreFocusMode()
+    {
+        _isFocusMode = false;
+        StateHasChanged();
+    }
+
     private void OnKeyDown(KeyboardEventArgs e)
     {
         if (e.Key == "Escape")
@@ -590,6 +678,10 @@
             if (_isMaximized)
             {
                 RestoreMaximized();
+            }
+            else if (_isFocusMode)
+            {
+                RestoreFocusMode();
             }
             else if (!string.IsNullOrEmpty(_autoHideRevealedId))
             {

@@ -19,7 +19,7 @@
             <div class="d-flex gap-1 align-items-center flex-wrap">
                 <span class="small fw-bold me-2">@screen.Name</span>
 
-                
+
 
                 @if (_selectedSymbols.Count > 1)
                 {
@@ -1037,11 +1037,29 @@
                                 @RenderSvgText(sym.Width / 2, sym.Height + 14, "middle", null, "#333", 11, labelText ?? sym.Label, sym)
                             }
 
+                            @{
+                                var badgeX = sym.Width - 2.0;
+                            }
                             @if (sym.Animations.Count > 0)
                             {
                                 @* Animation indicator badge *@
-                                <circle cx="@(sym.Width - 2)" cy="4" r="5" fill="#17a2b8" stroke="white" stroke-width="1"/>
-                                @RenderSvgText(sym.Width - 2, ScaledFontSize(7, sym), "middle", "middle", "white", ScaledFontSize(7, sym), "▶")
+                                <circle cx="@badgeX" cy="4" r="5" fill="#17a2b8" stroke="white" stroke-width="1"/>
+                                @RenderSvgText(badgeX, ScaledFontSize(7, sym), "middle", "middle", "white", ScaledFontSize(7, sym), "▶")
+                                badgeX -= 12;
+                            }
+                            @if (SymbolHasVariables(sym))
+                            {
+                                @* Variable binding indicator badge *@
+                                <circle cx="@badgeX" cy="4" r="5" fill="#28a745" stroke="white" stroke-width="1"/>
+                                @RenderSvgText(badgeX, ScaledFontSize(7, sym), "middle", "middle", "white", ScaledFontSize(7, sym), "V")
+                                badgeX -= 12;
+                            }
+                            @if (sym.Commands.Count > 0)
+                            {
+                                @* Command indicator badge *@
+                                <circle cx="@badgeX" cy="4" r="5" fill="#fd7e14" stroke="white" stroke-width="1"/>
+                                @RenderSvgText(badgeX, ScaledFontSize(7, sym), "middle", "middle", "white", ScaledFontSize(7, sym), "C")
+                                badgeX -= 12;
                             }
 
                             @if (isSelected)
@@ -1169,7 +1187,7 @@
     private int _distributeGapX = 10;
     private int _distributeGapY = 10;
 
-    // ─── Undo snapshots ──────────────────────────────────────
+    // ─── Undo snapshots
     private Dictionary<ScreenSymbol, string> _operationSnapshots = new();
 
     private void CaptureSnapshots(IEnumerable<ScreenSymbol> symbols)
@@ -2553,7 +2571,22 @@
                 _selectedSymbols.Add(sym);
         }
     }
-    // ─── OPC live values ────────────────────────────────────
+    // ─── Symbol badge helpers ────────────────────────────────
+    private bool SymbolHasVariables(ScreenSymbol sym)
+    {
+        if (!string.IsNullOrEmpty(sym.VariablePath)) return true;
+        if (!string.IsNullOrEmpty(sym.FillBinding)) return true;
+        if (!string.IsNullOrEmpty(sym.VisibilityBinding)) return true;
+        if (!string.IsNullOrEmpty(sym.RotationBinding)) return true;
+        if (!string.IsNullOrEmpty(sym.LabelBinding)) return true;
+        if (sym.HdaVariablePaths.Count > 0) return true;
+        if (sym.TrendPens.Any(p => !string.IsNullOrEmpty(p.VariablePath))) return true;
+        if (sym.Animations.Any(a => !string.IsNullOrEmpty(a.TriggerVariable))) return true;
+        if (sym.Commands.Any(c => !string.IsNullOrEmpty(c.VariablePath))) return true;
+        return false;
+    }
+
+    // ─── OPC live values
 
     private string? GetLiveValue(ScreenSymbol sym)
     {

@@ -341,12 +341,17 @@ else
                 @onclick="ToggleMaximize">
             @(_dockContainer?.IsMaximized == true ? "🗗" : "⬜")
         </button>
+        <button class="iconbar-btn @(_dockContainer?.IsFocusMode == true ? "iconbar-btn-active" : "")"
+                title="@(_dockContainer?.IsFocusMode == true ? "Exit Focus Mode (Esc)" : "Focus Mode (maximize with properties)")"
+                @onclick="ToggleFocusMode">
+            @(_dockContainer?.IsFocusMode == true ? "🗗" : "🔲")
+        </button>
     </div>
 
     @* Main Content *@
     <div class="editor-main">
-        @* Left Panel: Tree (hidden when maximized) *@
-        @if (_dockContainer?.IsMaximized != true)
+        @* Left Panel: Tree (hidden when maximized or in focus mode) *@
+        @if (_dockContainer?.IsMaximized != true && _dockContainer?.IsFocusMode != true)
         {
         <div class="editor-tree">
             <TreeView Nodes="Editor.RootItems" SelectedNode="Editor.SelectedItem" OnSelect="SelectNode"
@@ -1501,6 +1506,12 @@ private void UnsavedDialogCancel()
         _dockContainer?.ToggleMaximize();
     }
 
+    private void ToggleFocusMode()
+    {
+        CloseMenus();
+        _dockContainer?.ToggleFocusMode();
+    }
+
     private async void SetTheme(string theme)
     {
         CloseMenus();
@@ -1903,6 +1914,8 @@ private void UnsavedDialogCancel()
         {
             if (_dockContainer.IsMaximized)
                 _dockContainer.ToggleMaximize();
+            else if (_dockContainer.IsFocusMode)
+                _dockContainer.ToggleFocusMode();
         }
         InvokeAsync(StateHasChanged);
     }
