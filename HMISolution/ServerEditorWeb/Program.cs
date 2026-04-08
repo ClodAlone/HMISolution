@@ -8,6 +8,11 @@ SharedModels.CrashReporter.Install(crashDir, "Editor");
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Enable static web assets in all environments (not just Development).
+// Without this, CSS/JS from Razor Class Libraries return empty content
+// when running the built exe directly (Production mode).
+builder.WebHost.UseStaticWebAssets();
+
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();

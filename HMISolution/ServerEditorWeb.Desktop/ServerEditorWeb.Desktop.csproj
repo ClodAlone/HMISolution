@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SharedModels\SharedModels.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Photino.NET" Version="4.0.16" />
+  </ItemGroup>
+
+  <!-- When building one configuration, also build the other so both Debug and Release binaries are always available -->
+  <Target Name="BuildOtherConfiguration" AfterTargets="Build" Condition="'$(BuildingOtherConfiguration)' != 'true'">
+    <Message Importance="high" Text="Building ServerEditorWeb.Desktop — $(OtherConfiguration) ..." />
+    <MSBuild Projects="$(MSBuildProjectFullPath)"
+             Targets="Build"
+             Properties="Configuration=$(OtherConfiguration);BuildingOtherConfiguration=true" />
+  </Target>
+
+  <PropertyGroup>
+    <OtherConfiguration Condition="'$(Configuration)' == 'Debug'">Release</OtherConfiguration>
+    <OtherConfiguration Condition="'$(Configuration)' == 'Release'">Debug</OtherConfiguration>
+  </PropertyGroup>
+
+</Project>
