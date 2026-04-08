@@ -147,11 +147,12 @@ namespace SimpleOpcFileServer
                 while (!_token.IsCancellationRequested)
                 {
                     cycleCount++;
+                    var editorConnected = DiagnosticsCollector.Instance.IsEditorConnected;
                     var sw = System.Diagnostics.Stopwatch.StartNew();
                     ScriptGlobals? globals = null;
                     try
                     {
-                        globals = new ScriptGlobals(_nodeManager, _scriptManager, _config.Name, _token);
+                        globals = new ScriptGlobals(_nodeManager, _scriptManager, _config.Name, _token, editorConnected);
 
                         if (IsVb)
                             await RunVbAsync(globals);
@@ -160,7 +161,7 @@ namespace SimpleOpcFileServer
 
                         sw.Stop();
                         DiagnosticsCollector.Instance.RecordCycle("Script", _config.Name, sw.Elapsed.TotalMilliseconds);
-                        RecordDebugSnapshot(globals, cycleCount, "Running", null);
+                        if (editorConnected) RecordDebugSnapshot(globals, cycleCount, "Running", null);
                         _consecutiveErrors = 0;
                     }
                     catch (Exception ex)
@@ -168,7 +169,7 @@ namespace SimpleOpcFileServer
                         sw.Stop();
                         _consecutiveErrors++;
                         DiagnosticsCollector.Instance.RecordCycle("Script", _config.Name, sw.Elapsed.TotalMilliseconds, error: ex.Message);
-                        RecordDebugSnapshot(globals, cycleCount, "Error", ex.Message);
+                        if (editorConnected) RecordDebugSnapshot(globals, cycleCount, "Error", ex.Message);
 
                         // Only log the first occurrence and every 10th repeat to avoid Serilog flooding
                         if (_consecutiveErrors == 1 || _consecutiveErrors % 10 == 0)
@@ -377,18 +378,20 @@ End Module";
         private readonly ScriptManager _scriptManager;
         private readonly string _scriptName;
         private readonly CancellationToken _ct;
+        private readonly bool _debugEnabled;
 
         /// <summary>Tracks variable reads/writes for debug visualization.</summary>
         internal Dictionary<string, string> DebugReads { get; } = new(StringComparer.OrdinalIgnoreCase);
         internal Dictionary<string, string> DebugWrites { get; } = new(StringComparer.OrdinalIgnoreCase);
 
         public ScriptGlobals(SimpleFileServerNodeManager manager, ScriptManager scriptManager,
-            string scriptName = "", CancellationToken ct = default)
+            string scriptName = "", CancellationToken ct = default, bool debugEnabled = true)
         {
             _manager = manager;
             _scriptManager = scriptManager;
             _scriptName = scriptName;
             _ct = ct;
+            _debugEnabled = debugEnabled;
         }
 
         /// <summary>
@@ -397,6 +400,7 @@ End Module";
         /// </summary>
         public void __DebugCheckpoint(int line)
         {
+            if (!_debugEnabled && !ScriptDebugger.Instance.HasActiveSession(_scriptName)) return;
             var allVars = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             foreach (var kvp in DebugReads) allVars["[read] " + kvp.Key] = kvp.Value;
             foreach (var kvp in DebugWrites) allVars["[write] " + kvp.Key] = kvp.Value;
@@ -406,7 +410,7 @@ End Module";
         public object? Read(string variableName)
         {
             var val = _manager.ReadVariable(variableName);
-            DebugReads[variableName] = val?.ToString() ?? "null";
+            if (_debugEnabled) DebugReads[variableName] = val?.ToString() ?? "null";
             return val;
         }
 
@@ -433,7 +437,7 @@ End Module";
         public void Write(string variableName, object value)
         {
             _manager.WriteVariable(variableName, value);
-            DebugWrites[variableName] = value?.ToString() ?? "null";
+            if (_debugEnabled) DebugWrites[variableName] = value?.ToString() ?? "null";
         }
 
         /// <summary>

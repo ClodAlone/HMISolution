@@ -101,7 +101,8 @@ namespace SimpleOpcFileServer
                 while (!_token.IsCancellationRequested)
                 {
                     cycleCount++;
-                    var debug = new PlcDebugContext();
+                    var editorConnected = DiagnosticsCollector.Instance.IsEditorConnected;
+                    var debug = editorConnected ? new PlcDebugContext() : null;
                     var sw = System.Diagnostics.Stopwatch.StartNew();
                     try
                     {
@@ -114,7 +115,7 @@ namespace SimpleOpcFileServer
 
                         sw.Stop();
                         DiagnosticsCollector.Instance.RecordCycle("PlcProgram", _config.Name, sw.Elapsed.TotalMilliseconds);
-                        RecordDebugSnapshot(debug, cycleCount, "Running", null);
+                        if (editorConnected) RecordDebugSnapshot(debug!, cycleCount, "Running", null);
                         _consecutiveErrors = 0;
                     }
                     catch (Exception ex)
@@ -122,7 +123,7 @@ namespace SimpleOpcFileServer
                         sw.Stop();
                         _consecutiveErrors++;
                         DiagnosticsCollector.Instance.RecordCycle("PlcProgram", _config.Name, sw.Elapsed.TotalMilliseconds, error: ex.Message);
-                        RecordDebugSnapshot(debug, cycleCount, "Error", ex.Message);
+                        if (editorConnected) RecordDebugSnapshot(debug!, cycleCount, "Error", ex.Message);
                         if (_consecutiveErrors == 1 || _consecutiveErrors % 10 == 0)
                             Log.Error(ex, "PLC '{Name}': execution error: {Message}", _config.Name, ex.Message);
                     }

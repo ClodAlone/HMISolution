@@ -29,6 +29,16 @@ namespace SimpleOpcFileServer
         /// <summary>Set the redundancy service for routing /redundancy/* requests.</summary>
         public void SetRedundancyService(RedundancyService service) => _redundancyService = service;
 
+        // Editor connectivity tracking
+        private long _lastEditorPollTicks;
+        private static readonly long EditorTimeoutTicks = TimeSpan.FromSeconds(10).Ticks;
+
+        /// <summary>
+        /// Returns true when an editor has polled the diagnostics endpoint recently.
+        /// Programs use this to skip expensive debug tracking when nobody is watching.
+        /// </summary>
+        public bool IsEditorConnected => (DateTime.UtcNow.Ticks - Interlocked.Read(ref _lastEditorPollTicks)) < EditorTimeoutTicks;
+
         // Process-level CPU tracking
         private TimeSpan _lastCpuTime;
         private DateTime _lastCpuSample;
@@ -390,6 +400,7 @@ namespace SimpleOpcFileServer
                     }
 
                     // Default: GET - return diagnostics snapshot
+                    Interlocked.Exchange(ref _lastEditorPollTicks, DateTime.UtcNow.Ticks);
                     var snapshot = BuildSnapshot();
                     var jsonBytes = JsonSerializer.SerializeToUtf8Bytes(snapshot, DiagnosticsJsonContext.Default.ServerDiagnostics);
 
