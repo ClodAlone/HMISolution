@@ -142,6 +142,16 @@ else
                         <div class="menu-item danger @(Editor.SelectedItem?.Parent == null ? "disabled" : "")" @onclick="DeleteMenu" @onclick:stopPropagation>
                             <span class="menu-icon">🗑</span><span class="menu-label">@L["menu.edit.delete"]</span><span class="menu-shortcut">Del</span>
                         </div>
+                        <div class="menu-separator"></div>
+                        <div class="menu-item" @onclick="FindInEditorMenu" @onclick:stopPropagation>
+                            <span class="menu-icon">🔍</span><span class="menu-label">Find in Editor</span><span class="menu-shortcut">Ctrl+F</span>
+                        </div>
+                        <div class="menu-item" @onclick="FindReplaceMenu" @onclick:stopPropagation>
+                            <span class="menu-icon">🔍</span><span class="menu-label">Find &amp; Replace</span><span class="menu-shortcut">Ctrl+H</span>
+                        </div>
+                        <div class="menu-item" @onclick="FindInProjectMenu" @onclick:stopPropagation>
+                            <span class="menu-icon">🌐</span><span class="menu-label">Find in Project</span><span class="menu-shortcut">Ctrl+Shift+F</span>
+                        </div>
                     </div>
                 }
             </div>
@@ -475,6 +485,10 @@ else
                 {
                     <HelpPanel @ref="_helpPanel" />
                 }
+                else if (context.Id == "findreplace")
+                {
+                    <FindReplacePanel @ref="_findReplacePanel" OnNavigateToItem="OnFindReplaceNavigate" />
+                }
             </PanelContent>
         </DockContainer>
     </div>
@@ -757,6 +771,7 @@ else
     private WatchTablePanel? _watchTablePanel;
     private ProblemsPanel? _problemsPanel;
     private HelpPanel? _helpPanel;
+    private FindReplacePanel? _findReplacePanel;
     private bool _showAboutDialog;
     private bool _showNewProjectWizard;
 
@@ -843,6 +858,7 @@ else
         new() { Id = "problems", Title = "Problems", Icon = "⚠️", Zone = "bottom" },
         new() { Id = "scriptdebugwatch", Title = "Debug Watch", Icon = "🔍", Zone = "bottom" },
         new() { Id = "help", Title = "Help", Icon = "❓", Zone = "right" },
+        new() { Id = "findreplace", Title = "Find & Replace", Icon = "🔍", Zone = "bottom" },
     ];
 
 private void OnAddFolder(TreeNode node)
@@ -1287,6 +1303,10 @@ private void UnsavedDialogCancel()
     private void DeleteMenu() { CloseMenus(); Delete(); }
     private void CopyMenu() { CloseMenus(); Editor.CopySelected(Clipboard); }
     private void PasteMenu() { CloseMenus(); Editor.PasteFromClipboard(Clipboard); }
+
+    private async void FindInEditorMenu() { CloseMenus(); await OnKeyboardFind(); }
+    private async void FindReplaceMenu() { CloseMenus(); await OnKeyboardFindReplace(); }
+    private async void FindInProjectMenu() { CloseMenus(); await OnKeyboardGlobalFind(); }
 
     private void ShowHelpPanel() { CloseMenus(); _dockContainer?.ShowPanel("help", "right"); _dockContainer?.ActivatePanel("help"); }
     private async void ShowProblemsPanel() { CloseMenus(); _dockContainer?.ShowPanel("problems", "bottom"); _dockContainer?.ActivatePanel("problems"); if (_problemsPanel != null) await _problemsPanel.RunValidation(); }
@@ -1775,6 +1795,102 @@ private void UnsavedDialogCancel()
             Delete();
         }
         InvokeAsync(StateHasChanged);
+    }
+
+    // ─── Find & Replace ─────────────────────────────────────
+
+    [JSInvokable]
+    public async Task OnKeyboardFind()
+    {
+        _dockContainer?.ShowPanel("findreplace", "bottom");
+        _dockContainer?.ActivatePanel("findreplace");
+        _findReplacePanel?.SetEditorMode();
+        await InvokeAsync(StateHasChanged);
+        if (_findReplacePanel != null)
+            await _findReplacePanel.FocusSearchAsync();
+    }
+
+    [JSInvokable]
+    public async Task OnKeyboardFindReplace()
+    {
+        _dockContainer?.ShowPanel("findreplace", "bottom");
+        _dockContainer?.ActivatePanel("findreplace");
+        _findReplacePanel?.SetEditorMode();
+        await InvokeAsync(StateHasChanged);
+        if (_findReplacePanel != null)
+            await _findReplacePanel.FocusSearchAsync();
+    }
+
+    [JSInvokable]
+    public async Task OnKeyboardGlobalFind()
+    {
+        _dockContainer?.ShowPanel("findreplace", "bottom");
+        _dockContainer?.ActivatePanel("findreplace");
+        _findReplacePanel?.SetGlobalMode();
+        await InvokeAsync(StateHasChanged);
+        if (_findReplacePanel != null)
+            await _findReplacePanel.FocusSearchAsync();
+    }
+
+    private void OnFindReplaceNavigate(string target)
+    {
+        if (string.IsNullOrEmpty(target)) return;
+
+        if (target.StartsWith("script:"))
+        {
+            var name = target[7..];
+            var node = FindNodeByNameAndType<ScriptNode>(name);
+            if (node != null) { Editor.SelectNode(node); _dockContainer?.ActivatePanel("scripteditor"); }
+        }
+        else if (target.StartsWith("plc:"))
+        {
+            var name = target[4..];
+            var node = FindNodeByNameAndType<PlcProgramNode>(name);
+            if (node != null) { Editor.SelectNode(node); _dockContainer?.ActivatePanel("plceditor"); }
+        }
+        else if (target.StartsWith("screen:"))
+        {
+            var screenName = target[7..];
+            foreach (var root in Editor.RootItems)
+            {
+                var found = FindScreenNode(root, screenName);
+                if (found != null) { Editor.SelectNode(found); _dockContainer?.ActivatePanel("screen"); break; }
+            }
+        }
+        else if (target.StartsWith("variable:"))
+        {
+            _dockContainer?.ActivatePanel("properties");
+        }
+        else if (target.StartsWith("json:"))
+        {
+            _dockContainer?.ActivatePanel("json");
+        }
+        else if (target.StartsWith("strings:"))
+        {
+            _dockContainer?.ActivatePanel("strings");
+        }
+    }
+
+    private T? FindNodeByNameAndType<T>(string name) where T : TreeNode
+    {
+        foreach (var root in Editor.RootItems)
+        {
+            var found = FindNodeByNameAndType<T>(root, name);
+            if (found != null) return found;
+        }
+        return null;
+    }
+
+    private static T? FindNodeByNameAndType<T>(TreeNode node, string name) where T : TreeNode
+    {
+        if (node is T typed && typed.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
+            return typed;
+        foreach (var child in node.Children)
+        {
+            var found = FindNodeByNameAndType<T>(child, name);
+            if (found != null) return found;
+        }
+        return null;
     }
 
     public void Dispose()

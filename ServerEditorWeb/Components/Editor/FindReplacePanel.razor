@@ -1,0 +1,616 @@
+@using ServerEditorWeb.Services
+@using ServerEditorWeb.Models
+@using Microsoft.JSInterop
+@implements IDisposable
+
+<div class="find-replace-panel">
+    @* ── Mode Tabs ── *@
+    <div class="fr-mode-tabs">
+        <button class="fr-mode-tab @(_mode == Mode.CurrentEditor ? "active" : "")"
+                @onclick="() => SetMode(Mode.CurrentEditor)" title="Find in active code editor (Ctrl+F)">
+            📝 Editor
+        </button>
+        <button class="fr-mode-tab @(_mode == Mode.GlobalProject ? "active" : "")"
+                @onclick="() => SetMode(Mode.GlobalProject)" title="Find across the entire project (Ctrl+Shift+F)">
+            🌐 Project
+        </button>
+    </div>
+
+    @* ── Search Inputs ── *@
+    <div class="fr-inputs">
+        <div class="fr-row">
+            <span class="fr-label">Find:</span>
+            <input type="text" class="fr-input" @bind="FindReplace.SearchText" @bind:event="oninput"
+                   @bind:after="OnSearchTextChanged" @onkeydown="OnSearchKeyDown"
+                   placeholder="Search text…" @ref="_searchInput" />
+        </div>
+        <div class="fr-row">
+            <span class="fr-label">Replace:</span>
+            <input type="text" class="fr-input" @bind="FindReplace.ReplaceText" @bind:event="oninput"
+                   placeholder="Replace with…" @onkeydown="OnReplaceKeyDown" />
+        </div>
+        <div class="fr-options">
+            <label class="fr-option" title="Match Case (Alt+C)">
+                <input type="checkbox" @bind="FindReplace.CaseSensitive" @bind:after="OnOptionsChanged" />
+                <span>Aa</span>
+            </label>
+            <label class="fr-option" title="Whole Word (Alt+W)">
+                <input type="checkbox" @bind="FindReplace.WholeWord" @bind:after="OnOptionsChanged" />
+                <span>W</span>
+            </label>
+            <label class="fr-option" title="Use Regular Expression (Alt+R)">
+                <input type="checkbox" @bind="FindReplace.UseRegex" @bind:after="OnOptionsChanged" />
+                <span>.*</span>
+            </label>
+            @if (_mode == Mode.CurrentEditor && _editorMatchCount >= 0)
+            {
+                <span class="fr-match-count">@_editorMatchCount match(es)</span>
+            }
+        </div>
+    </div>
+
+    @* ── Action Buttons ── *@
+    <div class="fr-actions">
+        @if (_mode == Mode.CurrentEditor)
+        {
+            <button class="btn btn-sm btn-outline-primary" @onclick="FindPrevious" title="Find Previous (Shift+Enter)"
+                    disabled="@string.IsNullOrEmpty(FindReplace.SearchText)">◀ Prev</button>
+            <button class="btn btn-sm btn-outline-primary" @onclick="FindNext" title="Find Next (Enter / F3)"
+                    disabled="@string.IsNullOrEmpty(FindReplace.SearchText)">Next ▶</button>
+            <button class="btn btn-sm btn-outline-warning" @onclick="ReplaceCurrent" title="Replace current match"
+                    disabled="@string.IsNullOrEmpty(FindReplace.SearchText)">Replace</button>
+            <button class="btn btn-sm btn-outline-danger" @onclick="ReplaceAllInEditor" title="Replace all in active editor"
+                    disabled="@string.IsNullOrEmpty(FindReplace.SearchText)">Replace All</button>
+        }
+        else
+        {
+            <button class="btn btn-sm btn-outline-primary" @onclick="SearchGlobal" title="Search entire project"
+                    disabled="@string.IsNullOrEmpty(FindReplace.SearchText)">🔍 Search Project</button>
+            <button class="btn btn-sm btn-outline-danger" @onclick="ReplaceAllGlobal" title="Replace all in entire project"
+                    disabled="@string.IsNullOrEmpty(FindReplace.SearchText)">Replace All in Project</button>
+        }
+    </div>
+
+    @* ── Status ── *@
+    @if (!string.IsNullOrEmpty(_statusMessage))
+    {
+        <div class="fr-status @(_statusIsError ? "fr-status-error" : "fr-status-success")">
+            @_statusMessage
+        </div>
+    }
+
+    @* ── Global Results ── *@
+    @if (_mode == Mode.GlobalProject && _globalResults != null)
+    {
+        <div class="fr-results-header">
+            <span>@_globalResults.Count result(s) found</span>
+        </div>
+        <div class="fr-results">
+            @if (_globalResults.Count == 0 && !string.IsNullOrEmpty(FindReplace.SearchText))
+            {
+                <div class="fr-no-results">No matches found.</div>
+            }
+            else
+            {
+                @foreach (var group in _globalResults.GroupBy(r => r.Category))
+                {
+                    <div class="fr-result-group">
+                        <div class="fr-result-group-header" @onclick="() => ToggleGroup(group.Key)">
+                            <span>@(_collapsedGroups.Contains(group.Key) ? "▶" : "▼")</span>
+                            <strong>@group.Key</strong>
+                            <span class="fr-result-count">(@group.Count())</span>
+                        </div>
+                        @if (!_collapsedGroups.Contains(group.Key))
+                        {
+                            @foreach (var result in group.Take(200))
+                            {
+                                <div class="fr-result-item" @onclick="() => NavigateToResult(result)" title="@result.ItemName — @result.FieldName">
+                                    <span class="fr-result-name">@result.ItemName</span>
+                                    <span class="fr-result-field">@result.FieldName</span>
+                                    @if (result.Line >= 0)
+                                    {
+                                        <span class="fr-result-line">Ln @(result.Line + 1)</span>
+                                    }
+                                    <div class="fr-result-context">@HighlightContext(result.Context)</div>
+                                </div>
+                            }
+                            @if (group.Count() > 200)
+                            {
+                                <div class="fr-result-overflow">… and @(group.Count() - 200) more</div>
+                            }
+                        }
+                    </div>
+                }
+            }
+        </div>
+    }
+</div>
+
+<style>
+    .find-replace-panel {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        overflow: hidden;
+        font-size: 12px;
+    }
+    .fr-mode-tabs {
+        display: flex;
+        gap: 0;
+        border-bottom: 1px solid var(--border-color, #dee2e6);
+        background: var(--bg-secondary, #f8f9fa);
+        flex-shrink: 0;
+    }
+    .fr-mode-tab {
+        flex: 1;
+        padding: 4px 8px;
+        border: none;
+        background: transparent;
+        cursor: pointer;
+        font-size: 11px;
+        color: var(--text-secondary, #555);
+        border-bottom: 2px solid transparent;
+    }
+    .fr-mode-tab.active {
+        color: var(--accent-color, #0d6efd);
+        border-bottom-color: var(--accent-color, #0d6efd);
+        font-weight: 600;
+    }
+    .fr-mode-tab:hover {
+        background: var(--bg-hover, #e9ecef);
+    }
+    .fr-inputs {
+        padding: 6px 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        flex-shrink: 0;
+    }
+    .fr-row {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+    .fr-label {
+        width: 52px;
+        font-weight: 600;
+        color: var(--text-secondary, #555);
+        flex-shrink: 0;
+        font-size: 11px;
+    }
+    .fr-input {
+        flex: 1;
+        padding: 3px 6px;
+        border: 1px solid var(--border-color, #dee2e6);
+        border-radius: 3px;
+        font-size: 12px;
+        background: var(--bg-input, #fff);
+        color: var(--text-primary, #212529);
+        outline: none;
+    }
+    .fr-input:focus {
+        border-color: var(--accent-color, #0d6efd);
+        box-shadow: 0 0 0 1px var(--accent-color, #0d6efd);
+    }
+    .fr-options {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        padding: 2px 0;
+    }
+    .fr-option {
+        display: flex;
+        align-items: center;
+        gap: 2px;
+        cursor: pointer;
+        font-size: 11px;
+        color: var(--text-secondary, #555);
+    }
+    .fr-option input { width: 13px; height: 13px; }
+    .fr-option span {
+        font-family: monospace;
+        font-weight: 600;
+        font-size: 11px;
+    }
+    .fr-match-count {
+        margin-left: auto;
+        font-size: 10px;
+        color: var(--text-muted, #999);
+    }
+    .fr-actions {
+        padding: 4px 8px;
+        display: flex;
+        gap: 4px;
+        flex-wrap: wrap;
+        flex-shrink: 0;
+        border-bottom: 1px solid var(--border-color, #dee2e6);
+    }
+    .fr-actions .btn { font-size: 11px; padding: 2px 8px; }
+    .fr-status {
+        padding: 3px 8px;
+        font-size: 11px;
+        flex-shrink: 0;
+    }
+    .fr-status-success { color: var(--success-color, #198754); }
+    .fr-status-error { color: var(--danger-color, #dc3545); }
+    .fr-results-header {
+        padding: 3px 8px;
+        background: var(--bg-secondary, #f8f9fa);
+        border-bottom: 1px solid var(--border-color, #dee2e6);
+        font-size: 11px;
+        font-weight: 600;
+        flex-shrink: 0;
+    }
+    .fr-results {
+        flex: 1;
+        overflow-y: auto;
+        min-height: 0;
+    }
+    .fr-no-results {
+        padding: 12px;
+        text-align: center;
+        color: var(--text-muted, #999);
+    }
+    .fr-result-group-header {
+        padding: 3px 8px;
+        background: var(--bg-tertiary, #f0f0f0);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 11px;
+    }
+    .fr-result-group-header:hover { background: var(--bg-hover, #e9ecef); }
+    .fr-result-count {
+        color: var(--text-muted, #999);
+        font-weight: normal;
+        font-size: 10px;
+    }
+    .fr-result-item {
+        padding: 3px 8px 3px 20px;
+        cursor: pointer;
+        border-bottom: 1px solid var(--border-light, #f0f0f0);
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        align-items: baseline;
+    }
+    .fr-result-item:hover { background: var(--bg-hover, #e9ecef); }
+    .fr-result-name {
+        font-weight: 600;
+        color: var(--accent-color, #0d6efd);
+        font-size: 11px;
+        max-width: 200px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .fr-result-field {
+        color: var(--text-muted, #999);
+        font-size: 10px;
+    }
+    .fr-result-line {
+        color: var(--text-muted, #999);
+        font-size: 10px;
+        font-family: monospace;
+    }
+    .fr-result-context {
+        width: 100%;
+        font-family: monospace;
+        font-size: 11px;
+        color: var(--text-primary, #212529);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .fr-result-overflow {
+        padding: 3px 20px;
+        color: var(--text-muted, #999);
+        font-size: 10px;
+        font-style: italic;
+    }
+    .fr-highlight {
+        background: #fff3cd;
+        font-weight: 700;
+        border-radius: 2px;
+        padding: 0 1px;
+    }
+    [data-theme="dark"] .fr-highlight {
+        background: #665d1e;
+        color: #ffc107;
+    }
+</style>
+
+@code {
+    [Parameter] public EventCallback OnNavigateToScript { get; set; }
+    [Parameter] public EventCallback OnNavigateToPlc { get; set; }
+    [Parameter] public EventCallback<string> OnNavigateToItem { get; set; }
+
+    [Inject] private FindReplaceService FindReplace { get; set; } = default!;
+    [Inject] private NodeEditorService Editor { get; set; } = default!;
+    [Inject] private IJSRuntime JS { get; set; } = default!;
+
+    private enum Mode { CurrentEditor, GlobalProject }
+    private Mode _mode = Mode.CurrentEditor;
+    private ElementReference _searchInput;
+
+    private string _statusMessage = "";
+    private bool _statusIsError;
+    private int _editorMatchCount = -1;
+    private List<FindReplaceService.FindResult>? _globalResults;
+    private HashSet<string> _collapsedGroups = new();
+
+    protected override void OnInitialized()
+    {
+        FindReplace.StateChanged += OnServiceStateChanged;
+    }
+
+    private void OnServiceStateChanged() => InvokeAsync(StateHasChanged);
+
+    public async Task FocusSearchAsync()
+    {
+        try
+        {
+            // Small delay to ensure the panel is rendered and visible
+            await Task.Yield();
+            await JS.InvokeVoidAsync("focusElement", _searchInput);
+        }
+        catch { }
+    }
+
+    public void SetEditorMode()
+    {
+        _mode = Mode.CurrentEditor;
+        StateHasChanged();
+    }
+
+    public void SetGlobalMode()
+    {
+        _mode = Mode.GlobalProject;
+        StateHasChanged();
+    }
+
+    private void SetMode(Mode mode)
+    {
+        _mode = mode;
+        _statusMessage = "";
+        if (mode == Mode.CurrentEditor)
+            _globalResults = null;
+    }
+
+    private async Task OnSearchTextChanged()
+    {
+        if (_mode == Mode.CurrentEditor)
+        {
+            await UpdateEditorSearch();
+        }
+    }
+
+    private async Task OnOptionsChanged()
+    {
+        if (_mode == Mode.CurrentEditor)
+        {
+            await UpdateEditorSearch();
+        }
+    }
+
+    private async Task UpdateEditorSearch()
+    {
+        _statusMessage = "";
+        if (string.IsNullOrEmpty(FindReplace.SearchText))
+        {
+            _editorMatchCount = -1;
+            await JS.InvokeVoidAsync("codeEditor.clearSearch");
+            return;
+        }
+
+        try
+        {
+            _editorMatchCount = await JS.InvokeAsync<int>("codeEditor.startSearch",
+                FindReplace.SearchText, FindReplace.CaseSensitive, FindReplace.UseRegex, FindReplace.WholeWord);
+        }
+        catch
+        {
+            _editorMatchCount = -1;
+        }
+    }
+
+    private async Task FindNext()
+    {
+        if (string.IsNullOrEmpty(FindReplace.SearchText)) return;
+        var found = await JS.InvokeAsync<bool>("codeEditor.findNext",
+            FindReplace.SearchText, FindReplace.CaseSensitive, FindReplace.UseRegex, FindReplace.WholeWord);
+        _statusMessage = found ? "" : "No more matches.";
+        _statusIsError = !found;
+    }
+
+    private async Task FindPrevious()
+    {
+        if (string.IsNullOrEmpty(FindReplace.SearchText)) return;
+        var found = await JS.InvokeAsync<bool>("codeEditor.findPrev",
+            FindReplace.SearchText, FindReplace.CaseSensitive, FindReplace.UseRegex, FindReplace.WholeWord);
+        _statusMessage = found ? "" : "No more matches.";
+        _statusIsError = !found;
+    }
+
+    private async Task ReplaceCurrent()
+    {
+        if (string.IsNullOrEmpty(FindReplace.SearchText)) return;
+        var replaced = await JS.InvokeAsync<bool>("codeEditor.replaceCurrent",
+            FindReplace.SearchText, FindReplace.ReplaceText ?? "", FindReplace.CaseSensitive, FindReplace.UseRegex, FindReplace.WholeWord);
+        if (replaced)
+        {
+            _editorMatchCount = Math.Max(0, _editorMatchCount - 1);
+            _statusMessage = "Replaced.";
+            _statusIsError = false;
+        }
+        else
+        {
+            _statusMessage = "No match at cursor.";
+            _statusIsError = true;
+        }
+    }
+
+    private async Task ReplaceAllInEditor()
+    {
+        if (string.IsNullOrEmpty(FindReplace.SearchText)) return;
+        var count = await JS.InvokeAsync<int>("codeEditor.replaceAll",
+            FindReplace.SearchText, FindReplace.ReplaceText ?? "", FindReplace.CaseSensitive, FindReplace.UseRegex, FindReplace.WholeWord);
+        _editorMatchCount = 0;
+        _statusMessage = $"Replaced {count} occurrence(s).";
+        _statusIsError = count == 0;
+    }
+
+    private void SearchGlobal()
+    {
+        _statusMessage = "";
+        _globalResults = FindReplace.SearchProject();
+        _collapsedGroups.Clear();
+        if (_globalResults.Count == 0)
+        {
+            _statusMessage = "No matches found in the project.";
+            _statusIsError = true;
+        }
+    }
+
+    private void ReplaceAllGlobal()
+    {
+        var count = FindReplace.ReplaceAllInProject();
+        _statusMessage = count > 0
+            ? $"Replaced {count} occurrence(s) across the project."
+            : "No matches to replace.";
+        _statusIsError = count == 0;
+
+        if (count > 0)
+        {
+            Editor.MarkChanged();
+            // Refresh results
+            _globalResults = FindReplace.SearchProject();
+        }
+    }
+
+    private void ToggleGroup(string key)
+    {
+        if (!_collapsedGroups.Remove(key))
+            _collapsedGroups.Add(key);
+    }
+
+    private async Task NavigateToResult(FindReplaceService.FindResult result)
+    {
+        // Navigate to the appropriate editor/panel based on the result category
+        var category = result.Category.TrimStart('[').Split(']').Last().Trim();
+
+        if (category is "Script")
+        {
+            // Find the script node and navigate
+            await OnNavigateToItem.InvokeAsync($"script:{result.ItemName}");
+        }
+        else if (category is "PLC Program")
+        {
+            await OnNavigateToItem.InvokeAsync($"plc:{result.ItemName}");
+        }
+        else if (category is "Variable" or "Folder")
+        {
+            await OnNavigateToItem.InvokeAsync($"variable:{result.ItemName}");
+        }
+        else if (category is "Screen" or "Screen Symbol")
+        {
+            var screenName = result.ItemName.Contains('/') ? result.ItemName.Split('/')[0] : result.ItemName;
+            await OnNavigateToItem.InvokeAsync($"screen:{screenName}");
+        }
+        else if (category is "JSON Editor")
+        {
+            await OnNavigateToItem.InvokeAsync("json:");
+        }
+        else if (category is "String")
+        {
+            await OnNavigateToItem.InvokeAsync("strings:");
+        }
+    }
+
+    private MarkupString HighlightContext(string context)
+    {
+        if (string.IsNullOrEmpty(context) || string.IsNullOrEmpty(FindReplace.SearchText))
+            return new MarkupString(System.Net.WebUtility.HtmlEncode(context));
+
+        // Truncate long context
+        var text = context.Length > 200 ? context[..200] + "…" : context;
+
+        try
+        {
+            if (FindReplace.UseRegex)
+            {
+                var options = FindReplace.CaseSensitive ? System.Text.RegularExpressions.RegexOptions.None : System.Text.RegularExpressions.RegexOptions.IgnoreCase;
+                var escaped = System.Text.RegularExpressions.Regex.Replace(
+                    System.Net.WebUtility.HtmlEncode(text),
+                    FindReplace.SearchText,
+                    m => $"<span class=\"fr-highlight\">{m.Value}</span>",
+                    options);
+                return new MarkupString(escaped);
+            }
+
+            var comparison = FindReplace.CaseSensitive ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
+            var html = "";
+            int idx = 0;
+            while (idx < text.Length)
+            {
+                var pos = text.IndexOf(FindReplace.SearchText, idx, comparison);
+                if (pos < 0)
+                {
+                    html += System.Net.WebUtility.HtmlEncode(text[idx..]);
+                    break;
+                }
+                html += System.Net.WebUtility.HtmlEncode(text[idx..pos]);
+                html += $"<span class=\"fr-highlight\">{System.Net.WebUtility.HtmlEncode(text[pos..(pos + FindReplace.SearchText.Length)])}</span>";
+                idx = pos + FindReplace.SearchText.Length;
+            }
+            return new MarkupString(html);
+        }
+        catch
+        {
+            return new MarkupString(System.Net.WebUtility.HtmlEncode(text));
+        }
+    }
+
+    private async Task OnSearchKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            if (_mode == Mode.CurrentEditor)
+            {
+                if (e.ShiftKey)
+                    await FindPrevious();
+                else
+                    await FindNext();
+            }
+            else
+            {
+                SearchGlobal();
+            }
+        }
+        else if (e.Key == "Escape")
+        {
+            if (_mode == Mode.CurrentEditor)
+            {
+                await JS.InvokeVoidAsync("codeEditor.clearSearch");
+                _editorMatchCount = -1;
+            }
+        }
+    }
+
+    private async Task OnReplaceKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            if (_mode == Mode.CurrentEditor)
+                await ReplaceCurrent();
+            else
+                ReplaceAllGlobal();
+        }
+    }
+
+    public void Dispose()
+    {
+        FindReplace.StateChanged -= OnServiceStateChanged;
+    }
+}

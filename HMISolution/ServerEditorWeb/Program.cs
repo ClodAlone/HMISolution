@@ -38,6 +38,7 @@ builder.Services.AddSingleton<DriverTestService>();
 builder.Services.AddSingleton<CertificateService>();
 builder.Services.AddSingleton<BackupService>();
 builder.Services.AddSingleton<ScriptDebugService>();
+builder.Services.AddSingleton<FindReplaceService>();
 
 builder.Services.AddRateLimiter(options =>
 {

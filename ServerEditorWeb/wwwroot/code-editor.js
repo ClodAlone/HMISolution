@@ -337,5 +337,204 @@ window.codeEditor = {
         element._hintFn = null;
         element._breakpoints = null;
         element._enableBreakpoints = false;
+    },
+
+    // ─── Find & Replace helpers ─────────────────────────────
+    // These operate on the first visible CodeMirror instance on the page.
+
+    _getActiveEditor: function () {
+        var cms = document.querySelectorAll('.CodeMirror');
+        for (var i = 0; i < cms.length; i++) {
+            if (cms[i].offsetParent !== null && cms[i].CodeMirror)
+                return cms[i].CodeMirror;
+        }
+        return null;
+    },
+
+    _buildSearchQuery: function (text, caseSensitive, useRegex, wholeWord) {
+        if (useRegex) {
+            try {
+                return new RegExp(text, caseSensitive ? 'g' : 'gi');
+            } catch (e) {
+                return null;
+            }
+        }
+        if (wholeWord) {
+            var escaped = text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            return new RegExp('\\b' + escaped + '\\b', caseSensitive ? 'g' : 'gi');
+        }
+        return null; // plain string search
+    },
+
+    _findMatches: function (editor, text, caseSensitive, useRegex, wholeWord) {
+        var matches = [];
+        if (!text) return matches;
+        var doc = editor.getValue();
+        var query = codeEditor._buildSearchQuery(text, caseSensitive, useRegex, wholeWord);
+        if (query) {
+            var m;
+            while ((m = query.exec(doc)) !== null) {
+                var from = editor.posFromIndex(m.index);
+                var to = editor.posFromIndex(m.index + m[0].length);
+                matches.push({ from: from, to: to });
+                if (m[0].length === 0) break; // prevent infinite loop on zero-length match
+            }
+        } else {
+            // Plain text search
+            var searchStr = caseSensitive ? text : text.toLowerCase();
+            var content = caseSensitive ? doc : doc.toLowerCase();
+            var idx = 0;
+            while (true) {
+                var pos = content.indexOf(searchStr, idx);
+                if (pos < 0) break;
+                var from = editor.posFromIndex(pos);
+                var to = editor.posFromIndex(pos + text.length);
+                matches.push({ from: from, to: to });
+                idx = pos + text.length;
+            }
+        }
+        return matches;
+    },
+
+    _clearSearchOverlay: function (editor) {
+        if (editor._frMarks) {
+            for (var i = 0; i < editor._frMarks.length; i++) {
+                editor._frMarks[i].clear();
+            }
+            editor._frMarks = [];
+        }
+        editor._frMatches = null;
+        editor._frIndex = -1;
+    },
+
+    _highlightMatches: function (editor, matches) {
+        codeEditor._clearSearchOverlay(editor);
+        editor._frMarks = [];
+        editor._frMatches = matches;
+        editor._frIndex = -1;
+        for (var i = 0; i < matches.length; i++) {
+            var mark = editor.markText(matches[i].from, matches[i].to, {
+                className: 'cm-fr-match'
+            });
+            editor._frMarks.push(mark);
+        }
+    },
+
+    /// Start a search: highlight all matches and return count.
+    startSearch: function (text, caseSensitive, useRegex, wholeWord) {
+        var editor = codeEditor._getActiveEditor();
+        if (!editor) return 0;
+        var matches = codeEditor._findMatches(editor, text, caseSensitive, useRegex, wholeWord);
+        codeEditor._highlightMatches(editor, matches);
+        return matches.length;
+    },
+
+    /// Clear all search highlights from the active editor.
+    clearSearch: function () {
+        var editor = codeEditor._getActiveEditor();
+        if (editor) codeEditor._clearSearchOverlay(editor);
+    },
+
+    /// Find the next match, select it, and scroll into view. Returns true if found.
+    findNext: function (text, caseSensitive, useRegex, wholeWord) {
+        var editor = codeEditor._getActiveEditor();
+        if (!editor) return false;
+        var matches = codeEditor._findMatches(editor, text, caseSensitive, useRegex, wholeWord);
+        if (matches.length === 0) return false;
+
+        codeEditor._highlightMatches(editor, matches);
+        var cursor = editor.getCursor();
+        var idx = 0;
+        // Find next match after cursor
+        for (var i = 0; i < matches.length; i++) {
+            if (CodeMirror.cmpPos(matches[i].from, cursor) > 0 ||
+                (CodeMirror.cmpPos(matches[i].from, cursor) === 0 && CodeMirror.cmpPos(matches[i].to, cursor) > 0)) {
+                idx = i;
+                break;
+            }
+            if (i === matches.length - 1) idx = 0; // wrap around
+        }
+        editor._frIndex = idx;
+        editor.setSelection(matches[idx].from, matches[idx].to);
+        editor.scrollIntoView({ from: matches[idx].from, to: matches[idx].to }, 60);
+        return true;
+    },
+
+    /// Find the previous match, select it, and scroll into view. Returns true if found.
+    findPrev: function (text, caseSensitive, useRegex, wholeWord) {
+        var editor = codeEditor._getActiveEditor();
+        if (!editor) return false;
+        var matches = codeEditor._findMatches(editor, text, caseSensitive, useRegex, wholeWord);
+        if (matches.length === 0) return false;
+
+        codeEditor._highlightMatches(editor, matches);
+        var cursor = editor.getCursor('from');
+        var idx = matches.length - 1;
+        for (var i = matches.length - 1; i >= 0; i--) {
+            if (CodeMirror.cmpPos(matches[i].from, cursor) < 0) {
+                idx = i;
+                break;
+            }
+            if (i === 0) idx = matches.length - 1; // wrap around
+        }
+        editor._frIndex = idx;
+        editor.setSelection(matches[idx].from, matches[idx].to);
+        editor.scrollIntoView({ from: matches[idx].from, to: matches[idx].to }, 60);
+        return true;
+    },
+
+    /// Replace the current selection if it matches, then move to next. Returns true if replaced.
+    replaceCurrent: function (text, replacement, caseSensitive, useRegex, wholeWord) {
+        var editor = codeEditor._getActiveEditor();
+        if (!editor) return false;
+        var sel = editor.getSelection();
+        if (!sel) return false;
+
+        // Check if current selection matches the search
+        var isMatch = false;
+        if (useRegex) {
+            try {
+                var flags = caseSensitive ? '' : 'i';
+                isMatch = new RegExp('^(?:' + text + ')$', flags).test(sel);
+            } catch (e) { return false; }
+        } else if (wholeWord) {
+            isMatch = caseSensitive ? sel === text : sel.toLowerCase() === text.toLowerCase();
+        } else {
+            isMatch = caseSensitive ? sel === text : sel.toLowerCase() === text.toLowerCase();
+        }
+
+        if (!isMatch) {
+            // Try to find next match first
+            return codeEditor.findNext(text, caseSensitive, useRegex, wholeWord);
+        }
+
+        editor.replaceSelection(replacement);
+        // Find next match
+        codeEditor.findNext(text, caseSensitive, useRegex, wholeWord);
+        return true;
+    },
+
+    /// Replace all matches in the active editor. Returns the count of replacements.
+    replaceAll: function (text, replacement, caseSensitive, useRegex, wholeWord) {
+        var editor = codeEditor._getActiveEditor();
+        if (!editor) return 0;
+        var matches = codeEditor._findMatches(editor, text, caseSensitive, useRegex, wholeWord);
+        if (matches.length === 0) return 0;
+
+        // Replace from end to start to preserve positions
+        editor.operation(function () {
+            for (var i = matches.length - 1; i >= 0; i--) {
+                editor.replaceRange(replacement, matches[i].from, matches[i].to);
+            }
+        });
+
+        codeEditor._clearSearchOverlay(editor);
+        return matches.length;
     }
 };
+
+// Helper to focus an element from Blazor
+window.focusElement = function (element) {
+    if (element && element.focus) element.focus();
+};
+

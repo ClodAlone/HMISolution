@@ -4,12 +4,13 @@ window.editorShortcuts = {
 
     init: function (dotNetRef) {
         this._dotNetRef = dotNetRef;
-        document.addEventListener('keydown', this._onKeyDown);
+        // Use capture phase so we can preventDefault before the browser opens its own Find dialog
+        document.addEventListener('keydown', this._onKeyDown, { capture: true });
         window.addEventListener('beforeunload', this._onBeforeUnload);
     },
 
     dispose: function () {
-        document.removeEventListener('keydown', this._onKeyDown);
+        document.removeEventListener('keydown', this._onKeyDown, { capture: true });
         window.removeEventListener('beforeunload', this._onBeforeUnload);
         this._dotNetRef = null;
     },
@@ -70,6 +71,18 @@ window.editorShortcuts = {
                 case 'o':
                     e.preventDefault();
                     ref.invokeMethodAsync('OnKeyboardOpen');
+                    break;
+                case 'f':
+                    e.preventDefault();
+                    if (e.shiftKey) {
+                        ref.invokeMethodAsync('OnKeyboardGlobalFind');
+                    } else {
+                        ref.invokeMethodAsync('OnKeyboardFind');
+                    }
+                    break;
+                case 'h':
+                    e.preventDefault();
+                    ref.invokeMethodAsync('OnKeyboardFindReplace');
                     break;
             }
         }
