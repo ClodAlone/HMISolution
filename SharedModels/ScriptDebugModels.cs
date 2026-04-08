@@ -55,6 +55,9 @@ public class ScriptDebugSession
     /// <summary>0-based line number where execution is currently paused. -1 if not paused.</summary>
     public int PausedAtLine { get; set; } = -1;
 
+    /// <summary>0-based line number of the most recently visited checkpoint. -1 if unknown.</summary>
+    public int LastCheckpointLine { get; set; } = -1;
+
     /// <summary>Active breakpoints for this script.</summary>
     public List<ScriptBreakpoint> Breakpoints { get; set; } = new();
 

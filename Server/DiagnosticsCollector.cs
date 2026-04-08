@@ -186,9 +186,13 @@ namespace SimpleOpcFileServer
             {
                 var info = kvp2.Value;
                 // Always refresh debug session from ScriptDebugger so paused state is visible
-                // even when the script execution cycle is blocked at a breakpoint.
-                if (info.Category == "Script")
+                // even when the execution cycle is blocked at a breakpoint.
+                if (info.Category == "Script" || info.Category == "PlcProgram")
+                {
                     info.DebugSession = ScriptDebugger.Instance.GetSessionInfo(info.Name);
+                    if (info.DebugSession != null && info.DebugSession.LastCheckpointLine >= 0)
+                        info.LastExecutedLine = info.DebugSession.LastCheckpointLine;
+                }
                 diag.ProgramDebug.Add(info);
             }
 

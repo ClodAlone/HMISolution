@@ -89,6 +89,9 @@ public sealed class ScriptDebugger
         bool shouldPause;
         lock (session.Lock)
         {
+            // Always track the current execution line for live visualization
+            session.LastCheckpointLine = line;
+
             if (session.State == ScriptDebugState.Detached) return;
 
             shouldPause = session.State == ScriptDebugState.Paused
@@ -142,6 +145,7 @@ public sealed class ScriptDebugger
             {
                 State = session.State,
                 PausedAtLine = session.PausedAtLine,
+                LastCheckpointLine = session.LastCheckpointLine,
                 Breakpoints = session.Breakpoints.Select(bp => new ScriptBreakpoint
                 {
                     ScriptName = bp.ScriptName,
@@ -234,6 +238,7 @@ public sealed class ScriptDebugger
         public readonly object Lock = new();
         public ScriptDebugState State = ScriptDebugState.Detached;
         public int PausedAtLine = -1;
+        public int LastCheckpointLine = -1;
         public List<ScriptBreakpoint> Breakpoints = new();
         public Dictionary<string, string> WatchVariables = new();
         public SemaphoreSlim Signal = new(0, 1);

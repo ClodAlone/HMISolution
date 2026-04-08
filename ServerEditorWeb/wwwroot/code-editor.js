@@ -317,6 +317,25 @@ window.codeEditor = {
         }
     },
 
+    setExecutionLine: function (element, line) {
+        var editor = element._cm;
+        if (!editor) return;
+        codeEditor.clearExecutionLine(element);
+        if (line >= 0 && line < editor.lineCount()) {
+            editor.addLineClass(line, 'wrap', 'debug-execution-line');
+            element._executionLine = line;
+        }
+    },
+
+    clearExecutionLine: function (element) {
+        var editor = element._cm;
+        if (!editor) return;
+        if (element._executionLine != null) {
+            editor.removeLineClass(element._executionLine, 'wrap', 'debug-execution-line');
+            element._executionLine = null;
+        }
+    },
+
     _makeBreakpointMarker: function () {
         var marker = document.createElement('div');
         marker.className = 'breakpoint-marker';
@@ -329,6 +348,7 @@ window.codeEditor = {
         if (!editor) return;
         codeEditor.clearDebugAnnotations(element);
         codeEditor.clearCurrentDebugLine(element);
+        codeEditor.clearExecutionLine(element);
         var wrapper = editor.getWrapperElement();
         if (wrapper && wrapper.parentNode) wrapper.parentNode.removeChild(wrapper);
         element._cm = null;

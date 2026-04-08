@@ -237,6 +237,62 @@ else
                 }
             </div>
 
+            @* Run menu *@
+            <div class="menubar-item @(_openMenu == "run" ? "open" : "")" @onclick='() => ToggleMenu("run")' @onmouseenter='() => HoverMenu("run")'>
+                Run
+                @if (_openMenu == "run")
+                {
+                    <div class="menubar-dropdown">
+                        <div class="menu-section-label">Server</div>
+                        <div class="menu-item @(ServerProcess.IsServerRunning || string.IsNullOrEmpty(Editor.CurrentFilePath) ? "disabled" : "")" @onclick="StartServerCmd" @onclick:stopPropagation>
+                            <span class="menu-icon">▶️</span><span class="menu-label">Start Server</span>
+                        </div>
+                        <div class="menu-item @(!ServerProcess.IsServerRunning ? "disabled" : "")" @onclick="StopServerCmd" @onclick:stopPropagation>
+                            <span class="menu-icon">⏹️</span><span class="menu-label">Stop Server</span>
+                        </div>
+                        <div class="menu-separator"></div>
+                        <div class="menu-section-label">Runtime Viewer</div>
+                        <div class="menu-item @(ViewerProcess.IsViewerRunning || string.IsNullOrEmpty(Editor.CurrentFilePath) ? "disabled" : "")" @onclick="StartRuntimeCmd" @onclick:stopPropagation>
+                            <span class="menu-icon">▶️</span><span class="menu-label">Start Runtime</span>
+                        </div>
+                        <div class="menu-item @(!ViewerProcess.IsViewerRunning ? "disabled" : "")" @onclick="StopRuntimeCmd" @onclick:stopPropagation>
+                            <span class="menu-icon">⏹️</span><span class="menu-label">Stop Runtime</span>
+                        </div>
+                        <div class="menu-separator"></div>
+                        <div class="menu-item" @onclick="ShowServerPanel" @onclick:stopPropagation>
+                            <span class="menu-icon">🖥️</span><span class="menu-label">Server Panel</span>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            @* Run menu *@
+            <div class="menubar-item @(_openMenu == "runmenu" ? "open" : "")" @onclick='() => ToggleMenu("runmenu")' @onmouseenter='() => HoverMenu("runmenu")'>
+                Run
+                @if (_openMenu == "runmenu")
+                {
+                    <div class="menubar-dropdown">
+                        <div class="menu-item @(ServerProcess.IsServerRunning || string.IsNullOrEmpty(Editor.CurrentFilePath) ? "disabled" : "")" @onclick="StartServerCmd" @onclick:stopPropagation>
+                            <span class="menu-icon">&#x25B6;&#xFE0F;</span><span class="menu-label">Start Server</span>
+                        </div>
+                        <div class="menu-item @(!ServerProcess.IsServerRunning ? "disabled" : "")" @onclick="StopServerCmd" @onclick:stopPropagation>
+                            <span class="menu-icon">&#x23F9;&#xFE0F;</span><span class="menu-label">Stop Server</span>
+                        </div>
+                        <div class="menu-separator"></div>
+                        <div class="menu-item @(ViewerProcess.IsViewerRunning || string.IsNullOrEmpty(Editor.CurrentFilePath) ? "disabled" : "")" @onclick="StartRuntimeCmd" @onclick:stopPropagation>
+                            <span class="menu-icon">&#x25B6;&#xFE0F;</span><span class="menu-label">Start Runtime</span>
+                        </div>
+                        <div class="menu-item @(!ViewerProcess.IsViewerRunning ? "disabled" : "")" @onclick="StopRuntimeCmd" @onclick:stopPropagation>
+                            <span class="menu-icon">&#x23F9;&#xFE0F;</span><span class="menu-label">Stop Runtime</span>
+                        </div>
+                        <div class="menu-separator"></div>
+                        <div class="menu-item" @onclick="ShowServerPanel" @onclick:stopPropagation>
+                            <span class="menu-icon">&#x1F5A5;&#xFE0F;</span><span class="menu-label">Server Panel</span>
+                        </div>
+                    </div>
+                }
+            </div>
+
             @* Help menu *@
             <div class="menubar-item @(_openMenu == "helpmenu" ? "open" : "")" @onclick='() => ToggleMenu("helpmenu")' @onmouseenter='() => HoverMenu("helpmenu")'>
                 @L["menu.help"]
@@ -277,6 +333,22 @@ else
                 @if (Editor.HasUnsavedChanges)
                 {
                     <span class="badge bg-warning text-dark" style="font-size: 10px;">@L["status.unsaved"]</span>
+                }
+                @if (ServerProcess.IsServerRunning)
+                {
+                    <span class="badge bg-success" style="font-size: 10px;">▶ Server</span>
+                }
+                @if (ViewerProcess.IsViewerRunning)
+                {
+                    <span class="badge bg-success" style="font-size: 10px;">▶ Runtime</span>
+                }
+                @if (ServerProcess.IsServerRunning)
+                {
+                    <span class="badge bg-success" style="font-size: 10px;">▶ Server</span>
+                }
+                @if (ViewerProcess.IsViewerRunning)
+                {
+                    <span class="badge bg-success" style="font-size: 10px;">▶ Runtime</span>
                 }
                 @if (!string.IsNullOrEmpty(Editor.CurrentFilePath))
                 {
@@ -332,6 +404,38 @@ else
                 disabled="@(Editor.SelectedItem is not CalculatedGroupNode)">📐</button>
         <button class="iconbar-btn" title="@L["toolbar.addScreen"]" @onclick="AddScreen"
                 disabled="@(Editor.SelectedItem is not (ScreenGroupNode or ResourceFolderNode { ResourceKind: "Screen" }))">🖼️</button>
+
+        <span class="iconbar-sep"></span>
+
+        @* Server / Runtime *@
+        <button class="iconbar-btn @(ServerProcess.IsServerRunning ? "iconbar-btn-active" : "")"
+                title="@(ServerProcess.IsServerRunning ? "Stop Server" : "Start Server")"
+                @onclick="ToggleServerCmd"
+                disabled="@(!ServerProcess.IsServerRunning && string.IsNullOrEmpty(Editor.CurrentFilePath))">
+            @(ServerProcess.IsServerRunning ? "⏹️" : "▶️")
+        </button>
+        <button class="iconbar-btn @(ViewerProcess.IsViewerRunning ? "iconbar-btn-active" : "")"
+                title="@(ViewerProcess.IsViewerRunning ? "Stop Runtime" : "Start Runtime")"
+                @onclick="ToggleRuntimeCmd"
+                disabled="@(!ViewerProcess.IsViewerRunning && string.IsNullOrEmpty(Editor.CurrentFilePath))">
+            @(ViewerProcess.IsViewerRunning ? "⏹" : "🖥️")
+        </button>
+
+        <span class="iconbar-sep"></span>
+
+        @* Server / Runtime *@
+        <button class="iconbar-btn @(ServerProcess.IsServerRunning ? "iconbar-btn-active" : "")"
+                title="@(ServerProcess.IsServerRunning ? "Stop Server" : "Start Server")"
+                @onclick="ToggleServerCmd"
+                disabled="@(!ServerProcess.IsServerRunning && string.IsNullOrEmpty(Editor.CurrentFilePath))">
+            @(ServerProcess.IsServerRunning ? "⏹️" : "▶️")
+        </button>
+        <button class="iconbar-btn @(ViewerProcess.IsViewerRunning ? "iconbar-btn-active" : "")"
+                title="@(ViewerProcess.IsViewerRunning ? "Stop Runtime" : "Start Runtime")"
+                @onclick="ToggleRuntimeCmd"
+                disabled="@(!ViewerProcess.IsViewerRunning && string.IsNullOrEmpty(Editor.CurrentFilePath))">
+            @(ViewerProcess.IsViewerRunning ? "⏹" : "🖥️")
+        </button>
 
         <span class="iconbar-sep"></span>
 
@@ -761,6 +865,8 @@ else
     [Inject] private UndoRedoService UndoRedo { get; set; } = default!;
     [Inject] private PropertyGridService PropertyGrid { get; set; } = default!;
     [Inject] private EditorLocalizationService L { get; set; } = default!;
+    [Inject] private ServerProcessService ServerProcess { get; set; } = default!;
+    [Inject] private RuntimeViewerProcessService ViewerProcess { get; set; } = default!;
 
     private LogViewerService _serverLogService = new();
     private LogViewerService _appLogService = new();
@@ -1311,6 +1417,58 @@ private void UnsavedDialogCancel()
     private void ShowHelpPanel() { CloseMenus(); _dockContainer?.ShowPanel("help", "right"); _dockContainer?.ActivatePanel("help"); }
     private async void ShowProblemsPanel() { CloseMenus(); _dockContainer?.ShowPanel("problems", "bottom"); _dockContainer?.ActivatePanel("problems"); if (_problemsPanel != null) await _problemsPanel.RunValidation(); }
     private void ShowAboutDialog() { CloseMenus(); _showAboutDialog = true; }
+
+    // ─── Server / Runtime commands ──────────────────────────
+    private void OnProcessStateChanged() => InvokeAsync(StateHasChanged);
+
+    private void StartServerCmd()
+    {
+        CloseMenus();
+        if (string.IsNullOrEmpty(Editor.CurrentFilePath)) { ShowToast(false, "No project is open."); return; }
+        var (success, msg) = ServerProcess.StartServer(Editor.CurrentFilePath);
+        ShowToast(success, msg);
+    }
+
+    private void StopServerCmd()
+    {
+        CloseMenus();
+        var (success, msg) = ServerProcess.StopServer();
+        ShowToast(success, msg);
+    }
+
+    private void StartRuntimeCmd()
+    {
+        CloseMenus();
+        if (string.IsNullOrEmpty(Editor.CurrentFilePath)) { ShowToast(false, "No project is open."); return; }
+        var (success, msg) = ViewerProcess.StartViewer(Editor.CurrentFilePath, 5100, false, "web");
+        ShowToast(success, msg);
+    }
+
+    private void StopRuntimeCmd()
+    {
+        CloseMenus();
+        var (success, msg) = ViewerProcess.StopViewer();
+        ShowToast(success, msg);
+    }
+
+    private void ToggleServerCmd()
+    {
+        if (ServerProcess.IsServerRunning) StopServerCmd();
+        else StartServerCmd();
+    }
+
+    private void ToggleRuntimeCmd()
+    {
+        if (ViewerProcess.IsViewerRunning) StopRuntimeCmd();
+        else StartRuntimeCmd();
+    }
+
+    private void ShowServerPanel()
+    {
+        CloseMenus();
+        _dockContainer?.ShowPanel("server", "center");
+        _dockContainer?.ActivatePanel("server");
+    }
 
     private async Task QuickLoadFile(string path)
     {
@@ -1901,6 +2059,8 @@ private void UnsavedDialogCancel()
         UndoRedo.StateChanged -= OnUndoRedoStateChanged;
         PropertyGrid.OnPropertySet -= OnPropertyGridValueSet;
         L.LocaleChanged -= OnLocaleChanged;
+        ServerProcess.StateChanged -= OnProcessStateChanged;
+        ViewerProcess.StateChanged -= OnProcessStateChanged;
         _serverLogService.Dispose();
         _appLogService.Dispose();
         _shortcutRef?.Dispose();

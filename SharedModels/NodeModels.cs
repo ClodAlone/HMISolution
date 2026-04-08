@@ -277,6 +277,9 @@ namespace SharedModels
 
         /// <summary>PID auto-tune wizard configuration and last results. Null if not used.</summary>
         public PidAutoTuneConfig? PidAutoTune { get; set; }
+
+        /// <summary>0-based line numbers where breakpoints are set. Persisted with the project.</summary>
+        public List<int> Breakpoints { get; set; } = new();
     }
 
     /// <summary>
@@ -2065,6 +2068,9 @@ namespace SharedModels
 
         /// <summary>Per-line debug annotations: 0-based line number -> display text (variable values at that line).</summary>
         public Dictionary<int, string> LineAnnotations { get; set; } = new();
+
+        /// <summary>0-based line number of the most recently executed statement. -1 if unknown.</summary>
+        public int LastExecutedLine { get; set; } = -1;
 
         /// <summary>Active debug session state (breakpoints, pause state, watch variables). Null when not debugging.</summary>
         public ScriptDebugSession? DebugSession { get; set; }

@@ -71,6 +71,7 @@ else if (IsServerRunning && !string.IsNullOrEmpty(ProgramName))
     [Parameter] public string Height { get; set; } = "300px";
     [Parameter] public ElementReference EditorElement { get; set; }
     [Parameter] public EventCallback<ScriptDebugSession?> OnDebugSessionChanged { get; set; }
+    [Parameter] public EventCallback<int> OnExecutionLineChanged { get; set; }
 
     [Inject] private IJSRuntime JS { get; set; } = default!;
     [Inject] private ServerDiagnosticsClient DiagClient { get; set; } = default!;
@@ -84,6 +85,7 @@ else if (IsServerRunning && !string.IsNullOrEmpty(ProgramName))
     private int _lineCount;
     private Dictionary<int, List<string>>? _scriptLineMap;
     private ScriptDebugState _lastDebugState = ScriptDebugState.Detached;
+    private int _lastExecLine = -1;
 
     private bool IsServerRunning => ServerRunning || ServerProcess.IsServerRunning;
     private bool HasEditorElement => !EditorElement.Equals(default(ElementReference));
@@ -188,6 +190,14 @@ else if (IsServerRunning && !string.IsNullOrEmpty(ProgramName))
 
         var session = _debugInfo?.DebugSession;
         NotifyDebugSessionChanged(session);
+
+        // Notify current execution line
+        var execLine = _debugInfo?.LastExecutedLine ?? -1;
+        if (execLine != _lastExecLine)
+        {
+            _lastExecLine = execLine;
+            _ = InvokeAsync(() => OnExecutionLineChanged.InvokeAsync(execLine));
+        }
 
         var isDebugging = session != null && session.State != ScriptDebugState.Detached;
         var interval = isDebugging ? 500 : 2000;

@@ -64,7 +64,8 @@
                               ServerRunning="ServerProcess.IsServerRunning"
                               SourceCode="@script.Code" Height="100%"
                               EditorElement="@(_editor?.EditorElement ?? default)"
-                              OnDebugSessionChanged="OnDebugSessionUpdated" />
+                              OnDebugSessionChanged="OnDebugSessionUpdated"
+                              OnExecutionLineChanged="OnExecutionLineChanged" />
         </div>
     }
 </div>
@@ -273,11 +274,28 @@
         if (_editor != null)
         {
             if (_debugState == ScriptDebugState.Paused && _pausedLine >= 0)
+            {
+                await _editor.ClearExecutionLineAsync();
                 await _editor.SetCurrentDebugLineAsync(_pausedLine);
+            }
             else if (prevState == ScriptDebugState.Paused)
+            {
                 await _editor.ClearCurrentDebugLineAsync();
+            }
         }
         StateHasChanged();
+    }
+
+    private int _execLine = -1;
+
+    private async Task OnExecutionLineChanged(int line)
+    {
+        _execLine = line;
+        if (_editor == null || _debugState == ScriptDebugState.Paused) return;
+        if (line >= 0)
+            await _editor.SetExecutionLineAsync(line);
+        else
+            await _editor.ClearExecutionLineAsync();
     }
 
     protected override void OnInitialized()

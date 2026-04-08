@@ -141,6 +141,9 @@ namespace SimpleOpcFileServer
             _task = Task.Run(async () =>
             {
                 long cycleCount = 0;
+                // Seed diagnostics so the program appears immediately
+                RecordDebugSnapshot(null, 0, "Running", null);
+
                 while (!_token.IsCancellationRequested)
                 {
                     cycleCount++;
@@ -360,6 +363,8 @@ End Module";
                     info.Variables["[write] " + kvp.Key] = kvp.Value;
             }
             info.DebugSession = ScriptDebugger.Instance.GetSessionInfo(_config.Name);
+            if (info.DebugSession != null)
+                info.LastExecutedLine = info.DebugSession.LastCheckpointLine;
             DiagnosticsCollector.Instance.RecordDebug(info);
         }
 
