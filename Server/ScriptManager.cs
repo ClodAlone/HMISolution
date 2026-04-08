@@ -233,8 +233,8 @@ namespace SimpleOpcFileServer
                 if (_compiledDebugScript == null)
                 {
                     var instrumentedCode = ScriptDebugger.InstrumentSource(_config.Code);
-                    // Debug scripts use a separate cache key prefix to avoid collisions
-                    _compiledDebugScript = GetOrCompileCSharp(instrumentedCode, "dbg:" + _config.Code);
+                    // Cache key uses the instrumented code so changes to InstrumentSource logic invalidate stale compilations
+                    _compiledDebugScript = GetOrCompileCSharp(instrumentedCode, "dbg:" + instrumentedCode);
                 }
 
                 await _compiledDebugScript.RunAsync(globals, cancellationToken: _token);

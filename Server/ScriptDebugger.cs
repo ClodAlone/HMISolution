@@ -174,10 +174,11 @@ public sealed class ScriptDebugger
         var lines = code.Split('\n');
         var sb = new StringBuilder();
         bool inBlockComment = false;
+        string prevTrimmed = "";
 
         for (int i = 0; i < lines.Length; i++)
         {
-            var trimmed = lines[i].TrimStart();
+            var trimmed = lines[i].TrimStart().TrimEnd('\r', '\n');
 
             // Track block comments
             if (inBlockComment)
@@ -198,15 +199,23 @@ public sealed class ScriptDebugger
             bool isCodeLine = !string.IsNullOrWhiteSpace(trimmed)
                 && !trimmed.StartsWith("//")
                 && trimmed != "{"
-                && trimmed != "}"
+                && !trimmed.StartsWith("}")
                 && trimmed != "{}"
                 && !trimmed.StartsWith("using ")
-                && !trimmed.StartsWith("#");
+                && !trimmed.StartsWith("#")
+                && !trimmed.StartsWith("else")
+                && !trimmed.StartsWith("catch")
+                && !trimmed.StartsWith("finally");
+
+            // Skip instrumenting single-statement bodies of braceless control flow.
+            // If the previous code line was a control-flow head without opening a brace,
+            // the current line is its body and adding a checkpoint would break syntax.
+            if (isCodeLine && IsBracelessControlFlowHead(prevTrimmed))
+                isCodeLine = false;
 
             if (isCodeLine)
             {
-                // Preserve original indentation, prepend checkpoint on the same line
-                var indent = lines[i][..^trimmed.Length];
+                var indent = lines[i][..^lines[i].TrimStart().Length];
                 sb.Append(indent);
                 sb.Append($"__DebugCheckpoint({i}); ");
                 sb.AppendLine(trimmed);
@@ -215,9 +224,28 @@ public sealed class ScriptDebugger
             {
                 sb.AppendLine(lines[i]);
             }
+
+            if (!string.IsNullOrWhiteSpace(trimmed) && !trimmed.StartsWith("//"))
+                prevTrimmed = trimmed;
         }
 
         return sb.ToString();
+    }
+
+    private static bool IsBracelessControlFlowHead(string trimmed)
+    {
+        if (string.IsNullOrEmpty(trimmed))
+            return false;
+        if (trimmed == "else")
+            return true;
+        if (trimmed.EndsWith(')') &&
+            (trimmed.StartsWith("if ") || trimmed.StartsWith("if(") ||
+             trimmed.StartsWith("else ") ||
+             trimmed.StartsWith("for ") || trimmed.StartsWith("for(") ||
+             trimmed.StartsWith("foreach ") || trimmed.StartsWith("foreach(") ||
+             trimmed.StartsWith("while ") || trimmed.StartsWith("while(")))
+            return true;
+        return false;
     }
 
     private DebugSession GetOrCreateSession(string scriptName)
