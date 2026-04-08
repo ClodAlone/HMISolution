@@ -1,18 +1,25 @@
 window.codeEditor = {
-    create: function (element, dotNetRef, value, language, height, enableBreakpoints) {
+    create: function (element, dotNetRef, value, language, height, enableBreakpoints, enableServerCompletions) {
         if (element._cm) return;
 
         var mode = language === 'csharp' ? 'text/x-csharp'
                  : language === 'vb' ? 'text/x-vb'
                  : { name: 'javascript', json: true };
 
-        // Custom hint function that uses stored completions
-        var hintFn = function (cm) {
+        // Kind-to-CSS-class mapping for IntelliSense icons
+        var kindClassMap = {
+            method: 'cm-hint-function', property: 'cm-hint-property', field: 'cm-hint-field',
+            event: 'cm-hint-event', 'class': 'cm-hint-class', 'interface': 'cm-hint-interface',
+            namespace: 'cm-hint-namespace', keyword: 'cm-hint-keyword', variable: 'cm-hint-variable',
+            constant: 'cm-hint-constant', text: ''
+        };
+
+        // Local completions hint (API functions + variable paths)
+        var localHintFn = function (cm) {
             var cur = cm.getCursor();
             var line = cm.getLine(cur.line);
             var end = cur.ch;
             var start = end;
-            // Walk back to find the start of the current token (allows dots in identifiers)
             while (start > 0 && /[\w.]/.test(line.charAt(start - 1))) start--;
             var token = line.substring(start, end).toLowerCase();
 
@@ -21,7 +28,6 @@ window.codeEditor = {
             if (token.length === 0) {
                 filtered = completions.slice(0, 50);
             } else {
-                // Score completions: starts-with first, then contains
                 var starts = [];
                 var contains = [];
                 for (var i = 0; i < completions.length; i++) {
@@ -45,6 +51,55 @@ window.codeEditor = {
                 to: CodeMirror.Pos(cur.line, end)
             };
         };
+
+        // Server-side (Roslyn) async hint function
+        var serverHintFn = function (cm, callback) {
+            var cur = cm.getCursor();
+            var line = cm.getLine(cur.line);
+            var end = cur.ch;
+            var start = end;
+
+            // Calculate cursor position in the full document
+            var cursorPos = 0;
+            for (var i = 0; i < cur.line; i++) {
+                cursorPos += cm.getLine(i).length + 1; // +1 for newline
+            }
+            cursorPos += cur.ch;
+
+            // Walk back for the token start (only word chars for Roslyn, stop at dot)
+            var tokenStart = end;
+            while (tokenStart > 0 && /[\w]/.test(line.charAt(tokenStart - 1))) tokenStart--;
+
+            var code = cm.getValue();
+
+            dotNetRef.invokeMethodAsync('OnRequestCompletions', code, cursorPos).then(function (items) {
+                if (!items || items.length === 0) {
+                    // Fall back to local completions
+                    callback(localHintFn(cm));
+                    return;
+                }
+
+                var list = items.map(function (item) {
+                    return {
+                        text: item.text,
+                        displayText: item.displayText || item.text,
+                        className: kindClassMap[item.kind] || ''
+                    };
+                });
+
+                callback({
+                    list: list,
+                    from: CodeMirror.Pos(cur.line, tokenStart),
+                    to: CodeMirror.Pos(cur.line, end)
+                });
+            }).catch(function () {
+                callback(localHintFn(cm));
+            });
+        };
+        serverHintFn.async = true;
+
+        // Choose the appropriate hint function
+        var hintFn = enableServerCompletions ? serverHintFn : localHintFn;
 
         var extraKeys = {
             'Ctrl-Space': function (cm) {
@@ -83,22 +138,41 @@ window.codeEditor = {
             dotNetRef.invokeMethodAsync('OnEditorChanged', editor.getValue());
         });
 
-        // Auto-show completions when typing identifier characters (if completions are available)
+        // Auto-show completions when typing
         editor.on('inputRead', function (cm, change) {
             if (suppressed) return;
-            if (!element._completions || element._completions.length === 0) return;
             if (cm.state.completionActive) return;
             var ch = change.text[change.text.length - 1];
-            if (ch && /[\w.]/.test(ch)) {
-                // Get current token length
+            if (!ch) return;
+
+            // If server completions are enabled, trigger on dot immediately
+            if (enableServerCompletions && ch === '.') {
+                cm.showHint({ hint: hintFn, completeSingle: false });
+                return;
+            }
+
+            // If server completions are enabled, trigger on 'using' context
+            if (enableServerCompletions && /[\w]/.test(ch)) {
+                var cur = cm.getCursor();
+                var line = cm.getLine(cur.line);
+                var trimmed = line.substring(0, cur.ch).trimStart();
+                if (/^using\s+\w/.test(trimmed)) {
+                    cm.showHint({ hint: hintFn, completeSingle: false });
+                    return;
+                }
+            }
+
+            // Standard completions: trigger after 2+ chars typed
+            var hasCompletions = enableServerCompletions || (element._completions && element._completions.length > 0);
+            if (!hasCompletions) return;
+            if (/[\w]/.test(ch)) {
                 var cur = cm.getCursor();
                 var line = cm.getLine(cur.line);
                 var s = cur.ch;
-                while (s > 0 && /[\w.]/.test(line.charAt(s - 1))) s--;
+                while (s > 0 && /[\w]/.test(line.charAt(s - 1))) s--;
                 var tok = line.substring(s, cur.ch);
-                // Only auto-show after at least 2 chars typed
                 if (tok.length >= 2) {
-                    cm.showHint({ hint: element._hintFn, completeSingle: false });
+                    cm.showHint({ hint: hintFn, completeSingle: false });
                 }
             }
         });

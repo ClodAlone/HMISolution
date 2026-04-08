@@ -30,7 +30,7 @@ public class SyntaxCheckService
 {
     private static readonly Lazy<List<MetadataReference>> _csharpReferences = new(BuildCSharpReferences);
 
-    public (bool success, string message) CheckSyntax(string code, string language = "CSharp")
+    public (bool success, string message) CheckSyntax(string code, string language = "CSharp", IReadOnlyList<string>? extraReferences = null)
     {
         try
         {
@@ -41,7 +41,7 @@ public class SyntaxCheckService
                 return CheckVbSyntax(code);
             }
 
-            return CheckCSharpSyntax(code);
+            return CheckCSharpSyntax(code, extraReferences);
         }
         catch (Exception ex)
         {
@@ -74,10 +74,25 @@ public class SyntaxCheckService
         }
     }
 
-    private (bool success, string message) CheckCSharpSyntax(string code)
+    private (bool success, string message) CheckCSharpSyntax(string code, IReadOnlyList<string>? extraReferences = null)
     {
+        var refPaths = _csharpReferences.Value
+            .Select(r => ((PortableExecutableReference)r).FilePath!)
+            .Distinct()
+            .ToList();
+
+        // Add external assembly references
+        if (extraReferences != null)
+        {
+            foreach (var path in extraReferences)
+            {
+                if (File.Exists(path) && !refPaths.Contains(path, StringComparer.OrdinalIgnoreCase))
+                    refPaths.Add(path);
+            }
+        }
+
         var options = ScriptOptions.Default
-            .AddReferences(_csharpReferences.Value.Select(r => ((PortableExecutableReference)r).FilePath!).Distinct().ToArray())
+            .AddReferences(refPaths.ToArray())
             .AddReferences(typeof(ScriptGlobals).Assembly)
             .AddImports("System", "System.Collections.Generic", "System.Linq",
                          "ServerEditorWeb.Services");

@@ -255,6 +255,9 @@ namespace SharedModels
 
         /// <summary>0-based line numbers where breakpoints are set. Persisted with the project.</summary>
         public List<int> Breakpoints { get; set; } = new();
+
+        /// <summary>External assembly file paths referenced by this script (for compilation and IntelliSense).</summary>
+        public List<string> References { get; set; } = new();
     }
 
     /// <summary>

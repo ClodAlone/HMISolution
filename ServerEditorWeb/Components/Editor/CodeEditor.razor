@@ -13,6 +13,9 @@
     [Parameter] public bool EnableBreakpoints { get; set; }
     [Parameter] public EventCallback<int[]> BreakpointsChanged { get; set; }
 
+    /// <summary>Optional callback for server-side (Roslyn) IntelliSense. Receives (code, cursorPosition) and returns completion items.</summary>
+    [Parameter] public Func<string, int, Task<List<CompletionItem>>>? RequestCompletions { get; set; }
+
     [Inject] private IJSRuntime JS { get; set; } = default!;
 
     private ElementReference _element;
@@ -56,7 +59,7 @@
         {
             _dotNetRef = DotNetObjectReference.Create(this);
             _lastValue = Value ?? "";
-            await JS.InvokeVoidAsync("codeEditor.create", _element, _dotNetRef, _lastValue, Language, Height, EnableBreakpoints);
+            await JS.InvokeVoidAsync("codeEditor.create", _element, _dotNetRef, _lastValue, Language, Height, EnableBreakpoints, RequestCompletions != null);
             _initialized = true;
             if (Completions is { Count: > 0 })
             {
@@ -92,6 +95,14 @@
     public async Task OnBreakpointsChanged(int[] lines)
     {
         await BreakpointsChanged.InvokeAsync(lines);
+    }
+
+    [JSInvokable]
+    public async Task<List<CompletionItem>> OnRequestCompletions(string code, int cursorPosition)
+    {
+        if (RequestCompletions != null)
+            return await RequestCompletions(code, cursorPosition);
+        return new();
     }
 
     /// <summary>Programmatically sets breakpoint markers.</summary>

@@ -22,6 +22,9 @@
                     }
                     Check Syntax
                 </button>
+                <button class="btn btn-sm btn-outline-secondary" @onclick="ToggleReferences" title="Manage external assembly references">
+                    📦 References (@(script.References.Count))
+                </button>
                 @if (!string.IsNullOrEmpty(_syntaxResult))
                 {
                     <span class="small @(_syntaxSuccess ? "text-success" : "text-danger")">@_syntaxResult</span>
@@ -52,6 +55,42 @@
             </div>
         </div>
 
+        @* References Panel *@
+        @if (_showReferences)
+        {
+            <div class="script-references-panel">
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <strong class="small">Assembly References</strong>
+                    <button class="btn btn-sm btn-outline-success" @onclick="AddReference" title="Add assembly reference">+ Add</button>
+                </div>
+                @if (script.References.Count == 0)
+                {
+                    <p class="text-muted small mb-1">No external references. Click <strong>+ Add</strong> to browse for a .dll assembly.</p>
+                }
+                else
+                {
+                    <div class="script-references-list">
+                        @for (int i = 0; i < script.References.Count; i++)
+                        {
+                            var idx = i;
+                            <div class="d-flex align-items-center gap-1 mb-1">
+                                <span class="small text-truncate flex-grow-1" title="@script.References[idx]">🔎 @System.IO.Path.GetFileName(script.References[idx])</span>
+                                <button class="btn btn-sm btn-outline-danger py-0 px-1" @onclick="() => RemoveReference(idx)" title="Remove">✕</button>
+                            </div>
+                        }
+                    </div>
+                }
+                @if (_showAddReference)
+                {
+                    <div class="input-group input-group-sm mt-1">
+                        <input type="text" class="form-control form-control-sm" @bind="_newReferencePath" placeholder="Full path to .dll assembly" />
+                        <button class="btn btn-sm btn-success" @onclick="ConfirmAddReference">Add</button>
+                        <button class="btn btn-sm btn-outline-secondary" @onclick="CancelAddReference">Cancel</button>
+                    </div>
+                }
+            </div>
+        }
+
         @* Code Editor + Debug *@
         <div class="script-editor-body">
             <CodeEditor @ref="_editor" @bind-Value="script.Code" @bind-Value:after="OnCodeChanged"
@@ -59,7 +98,8 @@
                         Completions="_completions"
                         EnableBreakpoints="true"
                         BreakpointsChanged="OnBreakpointsChanged"
-                        Initialized="OnEditorInitialized" />
+                        Initialized="OnEditorInitialized"
+                        RequestCompletions="HandleCompletionRequest" />
             <ProgramDebugPanel Category="Script" ProgramName="@script.Name"
                               ServerRunning="ServerProcess.IsServerRunning"
                               SourceCode="@script.Code" Height="100%"
@@ -103,6 +143,18 @@
         bottom: 0;
         height: auto !important;
     }
+    .script-references-panel {
+        padding: 6px 10px;
+        border-bottom: 1px solid var(--bs-border-color);
+        background: #f0f4f8;
+        max-height: 180px;
+        overflow-y: auto;
+        flex-shrink: 0;
+    }
+    .script-references-list {
+        max-height: 100px;
+        overflow-y: auto;
+    }
 </style>
 
 @code {
@@ -113,6 +165,7 @@
     [Inject] private ServerProcessService ServerProcess { get; set; } = default!;
     [Inject] private NodeEditorService Editor { get; set; } = default!;
     [Inject] private ScriptDebugService DebugService { get; set; } = default!;
+    [Inject] private ScriptCompletionService CompletionService { get; set; } = default!;
 
     private CodeEditor? _editor;
     private ScriptNode? _scriptNode;
@@ -126,6 +179,9 @@
     private int _pausedLine = -1;
     private bool _needsBreakpointRestore;
     private string? _debugError;
+    private bool _showReferences;
+    private bool _showAddReference;
+    private string _newReferencePath = "";
 
     private ScriptConfig? GetScript()
     {
@@ -200,7 +256,8 @@
         {
             var code = script.Code;
             var language = script.Language;
-            var (success, message) = await Task.Run(() => SyntaxChecker.CheckSyntax(code, language));
+            var refs = script.References;
+            var (success, message) = await Task.Run(() => SyntaxChecker.CheckSyntax(code, language, refs));
             _syntaxSuccess = success;
             _syntaxResult = message;
         }
@@ -337,6 +394,71 @@
         catch (Exception ex)
         {
             _debugError = $"Set breakpoints failed: {ex.Message}";
+        }
+    }
+
+    // --- References management ----------------------------------
+
+    private void ToggleReferences() => _showReferences = !_showReferences;
+
+    private void AddReference() { _showAddReference = true; _newReferencePath = ""; }
+
+    private async Task ConfirmAddReference()
+    {
+        var script = GetScript();
+        if (script == null || string.IsNullOrWhiteSpace(_newReferencePath)) return;
+        var path = _newReferencePath.Trim();
+        if (!script.References.Contains(path, StringComparer.OrdinalIgnoreCase))
+        {
+            script.References.Add(path);
+            _newReferencePath = "";
+            _showAddReference = false;
+            await OnPropertyChanged.InvokeAsync();
+        }
+    }
+
+    private async Task RemoveReference(int index)
+    {
+        var script = GetScript();
+        if (script == null || index < 0 || index >= script.References.Count) return;
+        script.References.RemoveAt(index);
+        await OnPropertyChanged.InvokeAsync();
+    }
+
+    private void CancelAddReference() { _showAddReference = false; _newReferencePath = ""; }
+
+    // --- Roslyn IntelliSense ------------------------------------
+
+    private async Task<List<CodeEditor.CompletionItem>> HandleCompletionRequest(string code, int cursorPosition)
+    {
+        var script = GetScript();
+        var refs = script?.References;
+        try
+        {
+            var items = await Task.Run(() => CompletionService.GetCompletionsAsync(code, cursorPosition, refs));
+            return items.Select(i => new CodeEditor.CompletionItem
+            {
+                Text = i.Text,
+                DisplayText = i.DisplayText,
+                ClassName = i.Kind switch
+                {
+                    "Method" => "cm-hint-function",
+                    "Property" => "cm-hint-property",
+                    "Field" => "cm-hint-field",
+                    "Class" or "Struct" or "Enum" or "Delegate" => "cm-hint-class",
+                    "Interface" => "cm-hint-interface",
+                    "Namespace" => "cm-hint-namespace",
+                    "Keyword" => "cm-hint-keyword",
+                    "Constant" or "EnumMember" => "cm-hint-constant",
+                    "Event" => "cm-hint-event",
+                    "Variable" or "Local" or "Parameter" => "cm-hint-variable",
+                    _ => ""
+                }
+            }).ToList();
+        }
+        catch
+        {
+            return new();
         }
     }
 

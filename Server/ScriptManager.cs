@@ -203,13 +203,25 @@ namespace SimpleOpcFileServer
             }, _token);
         }
 
-        private static Script<object> GetOrCompileCSharp(string code, string cacheKey)
+        private static Script<object> GetOrCompileCSharp(string code, string cacheKey, IReadOnlyList<string>? extraReferences = null)
         {
             return s_compilationCache.GetOrAdd(cacheKey, _ =>
             {
                 var options = ScriptOptions.Default
                     .AddReferences(typeof(SimpleFileServerNodeManager).Assembly)
                     .AddImports("System", "System.Collections.Generic", "System.Linq");
+
+                if (extraReferences != null)
+                {
+                    foreach (var path in extraReferences)
+                    {
+                        if (File.Exists(path))
+                        {
+                            try { options = options.AddReferences(path); }
+                            catch { /* skip invalid assemblies */ }
+                        }
+                    }
+                }
 
                 var script = CSharpScript.Create(code, options, typeof(ScriptGlobals));
                 script.Compile();
@@ -234,7 +246,7 @@ namespace SimpleOpcFileServer
                 {
                     var instrumentedCode = ScriptDebugger.InstrumentSource(_config.Code);
                     // Cache key uses the instrumented code so changes to InstrumentSource logic invalidate stale compilations
-                    _compiledDebugScript = GetOrCompileCSharp(instrumentedCode, "dbg:" + instrumentedCode);
+                    _compiledDebugScript = GetOrCompileCSharp(instrumentedCode, "dbg:" + instrumentedCode, _config.References);
                 }
 
                 await _compiledDebugScript.RunAsync(globals, cancellationToken: _token);
@@ -243,7 +255,7 @@ namespace SimpleOpcFileServer
             {
                 if (_compiledCSharpScript == null)
                 {
-                    _compiledCSharpScript = GetOrCompileCSharp(_config.Code, _config.Code);
+                    _compiledCSharpScript = GetOrCompileCSharp(_config.Code, _config.Code, _config.References);
                 }
 
                 await _compiledCSharpScript.RunAsync(globals, cancellationToken: _token);

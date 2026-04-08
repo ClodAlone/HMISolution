@@ -39,6 +39,7 @@ builder.Services.AddScoped<GitService>();
 builder.Services.AddSingleton<ProjectDiffService>();
 builder.Services.AddSingleton<AiService>();
 builder.Services.AddSingleton<SyntaxCheckService>();
+builder.Services.AddSingleton<ScriptCompletionService>();
 builder.Services.AddSingleton<PropertyGridService>();
 builder.Services.AddSingleton<DockLayoutService>();
 builder.Services.AddSingleton<ThemeService>();
