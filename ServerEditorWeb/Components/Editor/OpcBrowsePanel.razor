@@ -62,9 +62,15 @@
             @* Browse tree *@
             <div class="opc-tree-panel" style="width: 320px; min-width: 200px; overflow: auto; border-right: 1px solid var(--bs-border-color); padding-right: 8px;">
                 <h6 class="text-muted mb-2">Browse</h6>
+                <TreeFilterBar FilterText="@_opcFilterText" FilterTextChanged="OnOpcFilterChanged"
+                               RecentFilters="_recentOpcFilters" RecentFiltersChanged="v => _recentOpcFilters = v"
+                               Placeholder="Filter nodes..." />
                 @foreach (var node in Opc.RootNodes)
                 {
-                    <OpcTreeNode Node="node" OnSelect="OnNodeSelected" OnExpand="OnNodeExpand" SelectedNodeId="@_selectedNodeId" />
+                    @if (string.IsNullOrEmpty(_opcFilterText) || OpcNodeMatchesFilter(node, _opcFilterText))
+                    {
+                        <OpcTreeNode Node="node" FilterText="@_opcFilterText" OnSelect="OnNodeSelected" OnExpand="OnNodeExpand" SelectedNodeId="@_selectedNodeId" />
+                    }
                 }
             </div>
 
@@ -115,8 +121,8 @@
                                                 <input type="text" class="form-control form-control-sm" style="max-width: 160px;"
                                                        @bind="_editValue" @bind:event="oninput"
                                                        @onkeydown="e => HandleEditKeyDown(e, item)" />
-                                                <button class="btn btn-sm btn-success" @onclick="() => CommitWrite(item)">✓</button>
-                                                <button class="btn btn-sm btn-outline-secondary" @onclick="CancelEdit">✕</button>
+                                                <button class="btn btn-sm btn-success" @onclick="() => CommitWrite(item)">✔</button>
+                                                <button class="btn btn-sm btn-outline-secondary" @onclick="CancelEdit">✖</button>
                                             </div>
                                         }
                                         else
@@ -161,6 +167,11 @@
     private int[] _colWidths = [180, 0, 100, 130, 80];
     private int _resizingCol = -1;
     private double _resizeStartX;
+
+    private string _opcFilterText = "";
+    private static List<string> _recentOpcFilters = new();
+
+    private void OnOpcFilterChanged(string text) { _opcFilterText = text; }
 
     protected override void OnInitialized()
     {
@@ -290,6 +301,21 @@
     private void OnMouseUp(MouseEventArgs e)
     {
         _resizingCol = -1;
+    }
+
+    private static bool OpcNodeMatchesFilter(OpcBrowseNode node, string filter)
+    {
+        if (node.DisplayName.Contains(filter, StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (node.ChildrenLoaded)
+        {
+            foreach (var child in node.Children)
+            {
+                if (OpcNodeMatchesFilter(child, filter))
+                    return true;
+            }
+        }
+        return false;
     }
 
     public void Dispose()

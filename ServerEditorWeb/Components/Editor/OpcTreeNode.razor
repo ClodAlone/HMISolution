@@ -7,7 +7,7 @@
         @if (Node.HasChildren)
         {
             <span class="me-1" style="font-size: 0.7em; width: 14px; text-align: center; cursor: pointer;" @onclick="Toggle" @onclick:stopPropagation="true">
-                @(Node.IsExpanded ? "▼" : "▶")
+                @(IsEffectivelyExpanded ? "▼" : "▶")
             </span>
         }
         else
@@ -18,12 +18,15 @@
         <span class="text-truncate small">@Node.DisplayName</span>
     </div>
 
-    @if (Node.IsExpanded && Node.ChildrenLoaded)
+    @if (IsEffectivelyExpanded && Node.ChildrenLoaded)
     {
         <div style="padding-left: 16px;">
             @foreach (var child in Node.Children)
             {
-                <OpcTreeNode Node="child" OnSelect="OnSelect" OnExpand="OnExpand" SelectedNodeId="@SelectedNodeId" />
+                @if (string.IsNullOrEmpty(FilterText) || OpcNodeMatchesFilter(child, FilterText))
+                {
+                    <OpcTreeNode Node="child" FilterText="@FilterText" OnSelect="OnSelect" OnExpand="OnExpand" SelectedNodeId="@SelectedNodeId" />
+                }
             }
         </div>
     }
@@ -34,8 +37,12 @@
     [Parameter] public EventCallback<OpcBrowseNode> OnSelect { get; set; }
     [Parameter] public EventCallback<OpcBrowseNode> OnExpand { get; set; }
     [Parameter] public string SelectedNodeId { get; set; } = "";
+    [Parameter] public string FilterText { get; set; } = "";
 
     private bool _isSelected => Node.NodeIdString == SelectedNodeId;
+
+    private bool IsEffectivelyExpanded =>
+        !string.IsNullOrEmpty(FilterText) ? Node.ChildrenLoaded && Node.Children.Count > 0 : Node.IsExpanded;
 
     private async Task Toggle()
     {
@@ -58,4 +65,19 @@
         "Object" => "📁",
         _ => "📄"
     };
+
+    private static bool OpcNodeMatchesFilter(OpcBrowseNode node, string filter)
+    {
+        if (node.DisplayName.Contains(filter, StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (node.ChildrenLoaded)
+        {
+            foreach (var child in node.Children)
+            {
+                if (OpcNodeMatchesFilter(child, filter))
+                    return true;
+            }
+        }
+        return false;
+    }
 }

@@ -1,0 +1,90 @@
+<div class="tree-filter-bar">
+    <div class="tree-filter-input-wrapper">
+        <span class="tree-filter-icon">🔍</span>
+        <input type="text" class="tree-filter-input" placeholder="@Placeholder"
+               value="@FilterText" @oninput="OnInput"
+               @onfocus="() => _dropdownOpen = RecentFilters.Count > 0"
+               @onkeydown="OnKeyDown" />
+        @if (!string.IsNullOrEmpty(FilterText))
+        {
+            <button class="tree-filter-clear" @onclick="Clear" title="Clear filter">✕</button>
+        }
+    </div>
+    @if (_dropdownOpen && RecentFilters.Count > 0)
+    {
+        <div class="tree-filter-backdrop" @onclick="() => _dropdownOpen = false"></div>
+        <div class="tree-filter-dropdown">
+            @foreach (var recent in RecentFilters)
+            {
+                <div class="tree-filter-dropdown-item" @onclick="() => SelectRecent(recent)">@recent</div>
+            }
+            <div class="tree-filter-dropdown-item tree-filter-clear-history" @onclick="ClearHistory">🗑 Clear history</div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string FilterText { get; set; } = "";
+    [Parameter] public EventCallback<string> FilterTextChanged { get; set; }
+    [Parameter] public string Placeholder { get; set; } = "Filter…";
+    [Parameter] public List<string> RecentFilters { get; set; } = new();
+    [Parameter] public EventCallback<List<string>> RecentFiltersChanged { get; set; }
+
+    private bool _dropdownOpen;
+    private const int MaxRecent = 10;
+
+    private async Task OnInput(ChangeEventArgs e)
+    {
+        var text = e.Value?.ToString() ?? "";
+        FilterText = text;
+        await FilterTextChanged.InvokeAsync(text);
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+        {
+            _dropdownOpen = false;
+            if (!string.IsNullOrEmpty(FilterText))
+                await Clear();
+        }
+        else if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(FilterText))
+        {
+            await CommitRecent(FilterText);
+            _dropdownOpen = false;
+        }
+    }
+
+    private async Task SelectRecent(string text)
+    {
+        _dropdownOpen = false;
+        FilterText = text;
+        await FilterTextChanged.InvokeAsync(text);
+    }
+
+    private async Task Clear()
+    {
+        if (!string.IsNullOrWhiteSpace(FilterText))
+            await CommitRecent(FilterText);
+        FilterText = "";
+        await FilterTextChanged.InvokeAsync("");
+    }
+
+    private async Task CommitRecent(string text)
+    {
+        var trimmed = text.Trim();
+        if (string.IsNullOrEmpty(trimmed)) return;
+        RecentFilters.Remove(trimmed);
+        RecentFilters.Insert(0, trimmed);
+        if (RecentFilters.Count > MaxRecent)
+            RecentFilters.RemoveAt(RecentFilters.Count - 1);
+        await RecentFiltersChanged.InvokeAsync(RecentFilters);
+    }
+
+    private async Task ClearHistory()
+    {
+        _dropdownOpen = false;
+        RecentFilters.Clear();
+        await RecentFiltersChanged.InvokeAsync(RecentFilters);
+    }
+}

@@ -2,19 +2,25 @@
 @using ServerEditorWeb.Services
 
 <div class="tree-view">
+    <TreeFilterBar FilterText="@_filterText" FilterTextChanged="OnFilterChanged"
+                   RecentFilters="_recentTreeFilters" RecentFiltersChanged="v => _recentTreeFilters = v"
+                   Placeholder="Filter tree..." />
     @foreach (var node in Nodes)
     {
-        <TreeViewItem Node="node" OnSelect="OnSelect" OnDoubleClick="OnDoubleClick" SelectedNode="SelectedNode"
-            OnAddFolder="OnAddFolder" OnAddVariable="OnAddVariable" OnAddScript="OnAddScript"
-            OnAddPlcProgram="OnAddPlcProgram" OnAddRecipe="OnAddRecipe" OnAddScheduler="OnAddScheduler" OnAddReport="OnAddReport"
-            OnAddCalculated="OnAddCalculated" OnAddAsset="OnAddAsset" OnAddBatch="OnAddBatch" OnAddScreen="OnAddScreen" OnAddUserGroup="OnAddUserGroup" OnAddUser="OnAddUser"
-            OnRename="OnRename" OnDelete="OnDelete"
-            OnCopy="OnCopy" OnPaste="OnPaste"
-            OnSetActiveProject="OnSetActiveProject" OnCloseProject="OnCloseProject"
-            OnFindReferences="OnFindReferences"
-            OnAddToWatch="OnAddToWatch"
-            OnFindInEditor="OnFindInEditor"
-            OnFindInProject="OnFindInProject" />
+        @if (string.IsNullOrEmpty(_filterText) || NodeMatchesFilter(node, _filterText))
+        {
+            <TreeViewItem Node="node" FilterText="@_filterText" OnSelect="OnSelect" OnDoubleClick="OnDoubleClick" SelectedNode="SelectedNode"
+                OnAddFolder="OnAddFolder" OnAddVariable="OnAddVariable" OnAddScript="OnAddScript"
+                OnAddPlcProgram="OnAddPlcProgram" OnAddRecipe="OnAddRecipe" OnAddScheduler="OnAddScheduler" OnAddReport="OnAddReport"
+                OnAddCalculated="OnAddCalculated" OnAddAsset="OnAddAsset" OnAddBatch="OnAddBatch" OnAddScreen="OnAddScreen" OnAddUserGroup="OnAddUserGroup" OnAddUser="OnAddUser"
+                OnRename="OnRename" OnDelete="OnDelete"
+                OnCopy="OnCopy" OnPaste="OnPaste"
+                OnSetActiveProject="OnSetActiveProject" OnCloseProject="OnCloseProject"
+                OnFindReferences="OnFindReferences"
+                OnAddToWatch="OnAddToWatch"
+                OnFindInEditor="OnFindInEditor"
+                OnFindInProject="OnFindInProject" />
+        }
     }
 </div>
 
@@ -47,4 +53,21 @@
     [Parameter] public EventCallback<TreeNode> OnAddToWatch { get; set; }
     [Parameter] public EventCallback OnFindInEditor { get; set; }
     [Parameter] public EventCallback OnFindInProject { get; set; }
+
+    private string _filterText = "";
+    private static List<string> _recentTreeFilters = new();
+
+    private void OnFilterChanged(string text) { _filterText = text; }
+
+    private static bool NodeMatchesFilter(TreeNode node, string filter)
+    {
+        if (node.Name.Contains(filter, StringComparison.OrdinalIgnoreCase))
+            return true;
+        foreach (var child in node.Children)
+        {
+            if (NodeMatchesFilter(child, filter))
+                return true;
+        }
+        return false;
+    }
 }

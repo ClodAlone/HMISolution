@@ -12,7 +12,7 @@
         @if (Node.Children.Count > 0)
         {
             <span class="tree-toggle" @onclick="ToggleExpand" @onclick:stopPropagation="true">
-                @(Node.IsExpanded ? "▼" : "▶")
+                @(IsEffectivelyExpanded ? "▼" : "▶")
             </span>
         }
         else
@@ -62,21 +62,24 @@
             OnFindInProject="OnFindInProject" />
     }
 
-    @if (Node.IsExpanded && Node.Children.Count > 0)
+    @if (IsEffectivelyExpanded && Node.Children.Count > 0)
     {
         <div class="tree-children">
             @foreach (var child in Node.Children)
             {
-                <TreeViewItem Node="child" OnSelect="OnSelect" OnDoubleClick="OnDoubleClick" SelectedNode="SelectedNode"
-                    OnAddFolder="OnAddFolder" OnAddVariable="OnAddVariable" OnAddScript="OnAddScript"
-                    OnAddPlcProgram="OnAddPlcProgram" OnAddRecipe="OnAddRecipe" OnAddScheduler="OnAddScheduler" OnAddReport="OnAddReport"
-                    OnAddCalculated="OnAddCalculated" OnAddAsset="OnAddAsset" OnAddBatch="OnAddBatch" OnAddScreen="OnAddScreen" OnAddUserGroup="OnAddUserGroup" OnAddUser="OnAddUser"
-                    OnCopy="OnCopy" OnPaste="OnPaste"
-                    OnSetActiveProject="OnSetActiveProject" OnCloseProject="OnCloseProject"
-                    OnFindReferences="OnFindReferences"
-            OnAddToWatch="OnAddToWatch"
-            OnFindInEditor="OnFindInEditor"
-            OnFindInProject="OnFindInProject" />
+                @if (string.IsNullOrEmpty(FilterText) || NodeMatchesFilter(child, FilterText))
+                {
+                    <TreeViewItem Node="child" FilterText="@FilterText" OnSelect="OnSelect" OnDoubleClick="OnDoubleClick" SelectedNode="SelectedNode"
+                        OnAddFolder="OnAddFolder" OnAddVariable="OnAddVariable" OnAddScript="OnAddScript"
+                        OnAddPlcProgram="OnAddPlcProgram" OnAddRecipe="OnAddRecipe" OnAddScheduler="OnAddScheduler" OnAddReport="OnAddReport"
+                        OnAddCalculated="OnAddCalculated" OnAddAsset="OnAddAsset" OnAddBatch="OnAddBatch" OnAddScreen="OnAddScreen" OnAddUserGroup="OnAddUserGroup" OnAddUser="OnAddUser"
+                        OnCopy="OnCopy" OnPaste="OnPaste"
+                        OnSetActiveProject="OnSetActiveProject" OnCloseProject="OnCloseProject"
+                        OnFindReferences="OnFindReferences"
+                        OnAddToWatch="OnAddToWatch"
+                        OnFindInEditor="OnFindInEditor"
+                        OnFindInProject="OnFindInProject" />
+                }
             }
         </div>
     }
@@ -85,6 +88,7 @@
 @code {
     [Parameter] public TreeNode Node { get; set; } = default!;
     [Parameter] public TreeNode? SelectedNode { get; set; }
+    [Parameter] public string FilterText { get; set; } = "";
     [Parameter] public EventCallback<TreeNodeClickArgs> OnSelect { get; set; }
     [Parameter] public EventCallback<TreeNode> OnDoubleClick { get; set; }
     [Parameter] public EventCallback<TreeNode> OnAddFolder { get; set; }
@@ -116,6 +120,9 @@
     private bool _contextMenuVisible;
     private double _contextMenuX, _contextMenuY;
 
+    private bool IsEffectivelyExpanded =>
+        !string.IsNullOrEmpty(FilterText) ? Node.Children.Count > 0 : Node.IsExpanded;
+
     private void OnClick(MouseEventArgs e)
     {
         OnSelect.InvokeAsync(new TreeNodeClickArgs(Node, e.CtrlKey, e.ShiftKey));
@@ -146,5 +153,17 @@
             try { await JS.InvokeVoidAsync("editorShortcuts.scrollIntoView", _headerRef); } catch { }
         }
         _wasSelected = Node.IsSelected;
+    }
+
+    private static bool NodeMatchesFilter(TreeNode node, string filter)
+    {
+        if (node.Name.Contains(filter, StringComparison.OrdinalIgnoreCase))
+            return true;
+        foreach (var child in node.Children)
+        {
+            if (NodeMatchesFilter(child, filter))
+                return true;
+        }
+        return false;
     }
 }
