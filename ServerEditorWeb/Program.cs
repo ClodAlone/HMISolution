@@ -10,7 +10,26 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
-    .AddInteractiveServerComponents();
+    .AddInteractiveServerComponents(options =>
+    {
+        if (builder.Environment.IsDevelopment())
+        {
+            // Keep circuits alive longer while paused at breakpoints
+            options.DisconnectedCircuitRetentionPeriod = TimeSpan.FromMinutes(30);
+            options.JSInteropDefaultCallTimeout = TimeSpan.FromMinutes(10);
+        }
+    });
+
+if (builder.Environment.IsDevelopment())
+{
+    // Increase SignalR timeouts so the connection survives breakpoint pauses
+    builder.Services.AddSignalR(hubOptions =>
+    {
+        hubOptions.ClientTimeoutInterval = TimeSpan.FromMinutes(10);
+        hubOptions.KeepAliveInterval = TimeSpan.FromSeconds(5);
+        hubOptions.HandshakeTimeout = TimeSpan.FromMinutes(2);
+    });
+}
 
 builder.Services.AddSingleton<NodeEditorService>();
 builder.Services.AddSingleton<ServerProcessService>();

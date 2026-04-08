@@ -15,7 +15,15 @@ builder.WebHost.UseStaticWebAssets();
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
-    .AddInteractiveServerComponents();
+    .AddInteractiveServerComponents(options =>
+    {
+        if (builder.Environment.IsDevelopment())
+        {
+            // Keep circuits alive longer while paused at breakpoints
+            options.DisconnectedCircuitRetentionPeriod = TimeSpan.FromMinutes(30);
+            options.JSInteropDefaultCallTimeout = TimeSpan.FromMinutes(10);
+        }
+    });
 
 builder.Services.AddSingleton<NodeEditorService>();
 builder.Services.AddSingleton<ServerProcessService>();
