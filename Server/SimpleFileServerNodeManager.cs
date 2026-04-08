@@ -34,6 +34,7 @@ namespace SimpleOpcFileServer
         private ReportManager? _reportManager;
         private AssetManager? _assetManager;
         private BatchSequenceManager? _batchManager;
+        private EventManager? _eventManager;
 
         // Cached configs for deferred start on redundancy failover
         private List<ScriptConfig>? _cachedScripts;
@@ -994,6 +995,14 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                       _batchManager = new BatchSequenceManager(this);
                       _batchManager.Initialize(nodeModel.BatchSequences);
                   }
+
+                  // ─── Events (condition → command) ───
+                  if (nodeModel.Events != null && nodeModel.Events.Count > 0)
+                  {
+                      CreateEventVariables(nodeModel.Events, references);
+                      _eventManager = new EventManager(this);
+                      _eventManager.Initialize(nodeModel.Events);
+                  }
                               // ─── Diagnostics OPC UA node (always created, license-exempt) ───
                           CreateDiagnosticsNode(references);
 
@@ -1177,6 +1186,58 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
         }
 
         private void CreateAssetVar<T>(FolderState parent, string prefix, string name, T defaultValue)
+        {
+            var path = $"{prefix}.{name}";
+            var variable = new BaseDataVariableState<T>(parent)
+            {
+                NodeId = new NodeId(path, _namespaceIndex),
+                BrowseName = new QualifiedName(name, _namespaceIndex),
+                DisplayName = new LocalizedText(name),
+                DataType = Opc.Ua.TypeInfo.GetDataTypeId(typeof(T)),
+                ValueRank = ValueRanks.Scalar, Value = defaultValue,
+                AccessLevel = AccessLevels.CurrentRead,
+                UserAccessLevel = AccessLevels.CurrentRead,
+                Timestamp = DateTime.UtcNow, StatusCode = StatusCodes.Good
+            };
+            parent.AddChild(variable);
+            AddPredefinedNode(SystemContext, variable);
+            _variables[path] = variable;
+        }
+
+        private void CreateEventVariables(List<SharedModels.EventConfig> events, IList<IReference>? references)
+        {
+            var rootFolder = new FolderState(null)
+            {
+                NodeId = new NodeId("_Events", _namespaceIndex),
+                BrowseName = new QualifiedName("_Events", _namespaceIndex),
+                DisplayName = new LocalizedText("Events"),
+                TypeDefinitionId = ObjectTypeIds.FolderType
+            };
+            if (references != null)
+                rootFolder.AddReference(ReferenceTypeIds.Organizes, true, ObjectIds.ObjectsFolder);
+            AddPredefinedNode(SystemContext, rootFolder);
+
+            foreach (var evt in events)
+            {
+                if (!evt.Enabled) continue;
+
+                var folder = new FolderState(rootFolder)
+                {
+                    NodeId = new NodeId($"_Events.{evt.Name}", _namespaceIndex),
+                    BrowseName = new QualifiedName(evt.Name, _namespaceIndex),
+                    DisplayName = new LocalizedText(evt.Name),
+                    TypeDefinitionId = ObjectTypeIds.FolderType
+                };
+                rootFolder.AddChild(folder);
+                AddPredefinedNode(SystemContext, folder);
+
+                var prefix = $"_Events.{evt.Name}";
+                CreateEventVar<bool>(folder, prefix, "Active", false);
+                CreateEventVar<DateTime>(folder, prefix, "LastFired", DateTime.MinValue);
+            }
+        }
+
+        private void CreateEventVar<T>(FolderState parent, string prefix, string name, T defaultValue)
         {
             var path = $"{prefix}.{name}";
             var variable = new BaseDataVariableState<T>(parent)
@@ -2785,6 +2846,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 _assetManager?.Dispose();
                 _notificationService?.Dispose();
                 _batchManager?.Dispose();
+                _eventManager?.Dispose();
                 _anomalyDetectionService?.Dispose();
                 _sparkplugPublisher?.Dispose();
                 _redundancy?.Dispose();

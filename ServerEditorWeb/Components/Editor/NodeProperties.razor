@@ -657,7 +657,10 @@ else if (Node is SchedulerNode schedulerNode)
                 }
                 else if (cmd.Action is "NavigateScreen" or "OpenScreenPopup" or "OpenScreenModal")
                 {
-                    <input type="text" class="form-control form-control-sm" style="font-size: 10px;" placeholder="Screen name" @bind="cmd.TargetScreen" @bind:after="OnChanged" />
+                    <ScreenPicker Value="@cmd.TargetScreen"
+                                  ValueChanged='v => { cmd.TargetScreen = v ?? string.Empty; }'
+                                  OnChanged="OnChanged"
+                                  Placeholder="(select screen)" />
                 }
                 else if (cmd.Action is "ExecuteScript" or "ExecuteJavaScript")
                 {
@@ -669,11 +672,17 @@ else if (Node is SchedulerNode schedulerNode)
                 }
                 else if (cmd.Action == "ChangeLanguage")
                 {
-                    <input type="text" class="form-control form-control-sm" style="font-size: 10px;" placeholder="Language code (e.g. en, de, it)" @bind="cmd.Value" @bind:after="OnChanged" />
+                    <LocalePicker Value="@cmd.TargetLocale"
+                                  ValueChanged='v => { cmd.TargetLocale = v ?? string.Empty; }'
+                                  OnChanged="OnChanged"
+                                  Placeholder="(select language)" />
                 }
                 else if (cmd.Action == "GenerateReport")
                 {
-                    <input type="text" class="form-control form-control-sm" style="font-size: 10px;" placeholder="Report name" @bind="cmd.TargetReport" @bind:after="OnChanged" />
+                    <ReportPicker Value="@cmd.TargetReport"
+                                  ValueChanged='v => { cmd.TargetReport = v ?? string.Empty; }'
+                                  OnChanged="OnChanged"
+                                  Placeholder="(select report)" />
                 }
             </div>
         }
@@ -739,7 +748,10 @@ else if (Node is SchedulerNode schedulerNode)
                 }
                 else if (cmd.Action is "NavigateScreen" or "OpenScreenPopup" or "OpenScreenModal")
                 {
-                    <input type="text" class="form-control form-control-sm" style="font-size: 10px;" placeholder="Screen name" @bind="cmd.TargetScreen" @bind:after="OnChanged" />
+                    <ScreenPicker Value="@cmd.TargetScreen"
+                                  ValueChanged='v => { cmd.TargetScreen = v ?? string.Empty; }'
+                                  OnChanged="OnChanged"
+                                  Placeholder="(select screen)" />
                 }
                 else if (cmd.Action is "ExecuteScript" or "ExecuteJavaScript")
                 {
@@ -751,11 +763,17 @@ else if (Node is SchedulerNode schedulerNode)
                 }
                 else if (cmd.Action == "ChangeLanguage")
                 {
-                    <input type="text" class="form-control form-control-sm" style="font-size: 10px;" placeholder="Language code (e.g. en, de, it)" @bind="cmd.Value" @bind:after="OnChanged" />
+                    <LocalePicker Value="@cmd.TargetLocale"
+                                  ValueChanged='v => { cmd.TargetLocale = v ?? string.Empty; }'
+                                  OnChanged="OnChanged"
+                                  Placeholder="(select language)" />
                 }
                 else if (cmd.Action == "GenerateReport")
                 {
-                    <input type="text" class="form-control form-control-sm" style="font-size: 10px;" placeholder="Report name" @bind="cmd.TargetReport" @bind:after="OnChanged" />
+                    <ReportPicker Value="@cmd.TargetReport"
+                                  ValueChanged='v => { cmd.TargetReport = v ?? string.Empty; }'
+                                  OnChanged="OnChanged"
+                                  Placeholder="(select report)" />
                 }
             </div>
         }
@@ -2150,6 +2168,266 @@ else if (Node is BatchNode batchNode)
     <p class="text-muted small mt-3">At runtime: <code>_Batch.@(batchNode.Batch.Name).State</code>, <code>.CurrentStep</code>, <code>.StepElapsed</code> etc.</p>
  </div>
 }
+else if (Node is EventNode eventNode)
+{
+ <div class="properties-panel">
+    <h5>🔔 Event</h5>
+    <div class="mb-3">
+        <label class="form-label">Name</label>
+        <input type="text" class="form-control" @bind="eventNode.Name" @bind:after="OnChanged"
+               @onfocus="() => CaptureForUndo(eventNode, nameof(eventNode.Name))" />
+    </div>
+    <div class="mb-2 form-check">
+        <input class="form-check-input" type="checkbox" @bind="eventNode.Event.Enabled" @bind:after="OnChanged" />
+        <label class="form-check-label">Enabled</label>
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Description</label>
+        <input type="text" class="form-control" @bind="eventNode.Event.Description" @bind:after="OnChanged" placeholder="Optional notes..." />
+    </div>
+
+    <hr />
+    <h6>🔍 Condition</h6>
+    <div class="mb-3">
+        <label class="form-label">Variable Path</label>
+        <VariablePathPicker Value="@eventNode.Event.ConditionVariablePath"
+                            ValueChanged='v => { eventNode.Event.ConditionVariablePath = v ?? string.Empty; }'
+                            OnChanged="OnChanged"
+                            Placeholder="e.g. Sensors.Temperature.Value" />
+        <div class="form-text">OPC variable whose value is evaluated as the trigger condition.</div>
+    </div>
+    <div class="row g-2 mb-3">
+        <div class="col-6">
+            <label class="form-label">Operator</label>
+            <select class="form-select" @bind="eventNode.Event.ConditionOperator" @bind:after="OnChanged">
+                <option value="True">True (truthy / non-zero)</option>
+                <option value="False">False (falsy / zero)</option>
+                <option value="==">== (equals)</option>
+                <option value="!=">!= (not equal)</option>
+                <option value=">">&gt; (greater than)</option>
+                <option value="<">&lt; (less than)</option>
+                <option value=">=">&gt;= (greater or equal)</option>
+                <option value="<=">&lt;= (less or equal)</option>
+            </select>
+        </div>
+        <div class="col-6">
+            <label class="form-label">Value</label>
+            <input type="text" class="form-control" @bind="eventNode.Event.ConditionValue" @bind:after="OnChanged"
+                   placeholder="Comparison value"
+                   disabled="@(eventNode.Event.ConditionOperator is "True" or "False")" />
+        </div>
+    </div>
+
+    <hr />
+    <h6>⚙️ Trigger</h6>
+    <div class="row g-2 mb-3">
+        <div class="col-6">
+            <label class="form-label">Trigger Mode</label>
+            <select class="form-select" @bind="eventNode.Event.TriggerMode" @bind:after="OnChanged">
+                <option value="RisingEdge">Rising Edge (false → true)</option>
+                <option value="FallingEdge">Falling Edge (true → false)</option>
+                <option value="Continuous">Continuous (while true)</option>
+            </select>
+        </div>
+        <div class="col-6">
+            <label class="form-label">Hold Time (seconds)</label>
+            <input type="number" class="form-control" min="0" @bind="eventNode.Event.HoldTimeSeconds" @bind:after="OnChanged" />
+            <div class="form-text">Condition must stay true for this duration before firing. 0 = immediate.</div>
+        </div>
+    </div>
+
+    <hr />
+    <h6>▶ Commands (@eventNode.Event.Commands.Count)</h6>
+    <p class="text-muted small">Executed when the event fires.</p>
+    @for (int i = 0; i < eventNode.Event.Commands.Count; i++)
+    {
+        var idx = i;
+        var cmd = eventNode.Event.Commands[idx];
+        <div class="border rounded p-2 mb-2" style="font-size: 11px;">
+            <div class="d-flex gap-1 mb-1">
+                <select class="form-select form-select-sm" style="font-size: 10px;" @bind="cmd.Action" @bind:after="OnChanged">
+                    <optgroup label="Navigation">
+                        <option value="NavigateScreen">Navigate Screen</option>
+                        <option value="OpenScreenPopup">Open Screen Popup</option>
+                        <option value="OpenScreenModal">Open Screen Modal</option>
+                    </optgroup>
+                    <optgroup label="Variables">
+                        <option value="SetVariable">Set Variable</option>
+                        <option value="WriteVariable">Write Variable</option>
+                        <option value="ResetVariable">Reset Variable</option>
+                        <option value="ToggleVariable">Toggle Variable</option>
+                        <option value="IncrementVariable">Increment Variable</option>
+                        <option value="DecrementVariable">Decrement Variable</option>
+                    </optgroup>
+                    <optgroup label="Scripting">
+                        <option value="ExecuteScript">Execute Script</option>
+                        <option value="ExecuteJavaScript">Execute JavaScript</option>
+                    </optgroup>
+                    <optgroup label="Authentication">
+                        <option value="Login">Login</option>
+                        <option value="Logout">Logout</option>
+                    </optgroup>
+                    <optgroup label="Alarms">
+                        <option value="AcknowledgeAllAlarms">Acknowledge All Alarms</option>
+                        <option value="ResetAllAlarms">Reset All Alarms</option>
+                    </optgroup>
+                    <optgroup label="Other">
+                        <option value="ChangeLanguage">Change Language</option>
+                        <option value="GenerateReport">Generate Report</option>
+                    </optgroup>
+                </select>
+                <button class="btn btn-sm btn-outline-danger py-0 px-1" style="font-size: 9px;" @onclick="() => { eventNode.Event.Commands.RemoveAt(idx); OnChanged(); }">🗑</button>
+            </div>
+            @if (cmd.Action is "SetVariable" or "WriteVariable" or "ToggleVariable" or "IncrementVariable" or "DecrementVariable")
+            {
+                <VariablePathPicker Value="@cmd.VariablePath"
+                                    ValueChanged="v => { cmd.VariablePath = v ?? string.Empty; }"
+                                    OnChanged="OnChanged"
+                                    Placeholder="Variable path" />
+                @if (cmd.Action is not "ToggleVariable")
+                {
+                    <input type="text" class="form-control form-control-sm" style="font-size: 10px;" placeholder="@(cmd.Action is "IncrementVariable" or "DecrementVariable" ? "Step (default 1)" : "Value")" @bind="cmd.Value" @bind:after="OnChanged" />
+                }
+            }
+            else if (cmd.Action == "ResetVariable")
+            {
+                <VariablePathPicker Value="@cmd.VariablePath"
+                                    ValueChanged="v => { cmd.VariablePath = v ?? string.Empty; }"
+                                    OnChanged="OnChanged"
+                                    Placeholder="Variable path" />
+            }
+            else if (cmd.Action is "NavigateScreen" or "OpenScreenPopup" or "OpenScreenModal")
+            {
+                <ScreenPicker Value="@cmd.TargetScreen"
+                              ValueChanged='v => { cmd.TargetScreen = v ?? string.Empty; }'
+                              OnChanged="OnChanged"
+                              Placeholder="(select screen)" />
+            }
+            else if (cmd.Action is "ExecuteScript" or "ExecuteJavaScript")
+            {
+                <textarea class="form-control form-control-sm" style="font-size: 10px;" rows="3" placeholder="@(cmd.Action == "ExecuteJavaScript" ? "JavaScript code" : "C# script")" @bind="cmd.Script" @bind:after="OnChanged"></textarea>
+            }
+            else if (cmd.Action is "AcknowledgeAllAlarms" or "ResetAllAlarms")
+            {
+                <input type="text" class="form-control form-control-sm" style="font-size: 10px;" placeholder="Comment (optional)" @bind="cmd.Value" @bind:after="OnChanged" />
+            }
+            else if (cmd.Action == "ChangeLanguage")
+            {
+                <LocalePicker Value="@cmd.TargetLocale"
+                              ValueChanged='v => { cmd.TargetLocale = v ?? string.Empty; }'
+                              OnChanged="OnChanged"
+                              Placeholder="(select language)" />
+            }
+            else if (cmd.Action == "GenerateReport")
+            {
+                <ReportPicker Value="@cmd.TargetReport"
+                              ValueChanged='v => { cmd.TargetReport = v ?? string.Empty; }'
+                              OnChanged="OnChanged"
+                              Placeholder="(select report)" />
+            }
+        </div>
+    }
+    <button class="btn btn-sm btn-outline-primary" @onclick="() => AddEventCommand(eventNode, false)">➕ Add Command</button>
+
+    <hr />
+    <h6>⏹ Clear Commands (@eventNode.Event.ClearCommands.Count)</h6>
+    <p class="text-muted small">Optional commands executed when the condition clears (edge resets).</p>
+    @for (int i = 0; i < eventNode.Event.ClearCommands.Count; i++)
+    {
+        var idx = i;
+        var cmd = eventNode.Event.ClearCommands[idx];
+        <div class="border rounded p-2 mb-2" style="font-size: 11px;">
+            <div class="d-flex gap-1 mb-1">
+                <select class="form-select form-select-sm" style="font-size: 10px;" @bind="cmd.Action" @bind:after="OnChanged">
+                    <optgroup label="Navigation">
+                        <option value="NavigateScreen">Navigate Screen</option>
+                        <option value="OpenScreenPopup">Open Screen Popup</option>
+                        <option value="OpenScreenModal">Open Screen Modal</option>
+                    </optgroup>
+                    <optgroup label="Variables">
+                        <option value="SetVariable">Set Variable</option>
+                        <option value="WriteVariable">Write Variable</option>
+                        <option value="ResetVariable">Reset Variable</option>
+                        <option value="ToggleVariable">Toggle Variable</option>
+                        <option value="IncrementVariable">Increment Variable</option>
+                        <option value="DecrementVariable">Decrement Variable</option>
+                    </optgroup>
+                    <optgroup label="Scripting">
+                        <option value="ExecuteScript">Execute Script</option>
+                        <option value="ExecuteJavaScript">Execute JavaScript</option>
+                    </optgroup>
+                    <optgroup label="Authentication">
+                        <option value="Login">Login</option>
+                        <option value="Logout">Logout</option>
+                    </optgroup>
+                    <optgroup label="Alarms">
+                        <option value="AcknowledgeAllAlarms">Acknowledge All Alarms</option>
+                        <option value="ResetAllAlarms">Reset All Alarms</option>
+                    </optgroup>
+                    <optgroup label="Other">
+                        <option value="ChangeLanguage">Change Language</option>
+                        <option value="GenerateReport">Generate Report</option>
+                    </optgroup>
+                </select>
+                <button class="btn btn-sm btn-outline-danger py-0 px-1" style="font-size: 9px;" @onclick="() => { eventNode.Event.ClearCommands.RemoveAt(idx); OnChanged(); }">🗑</button>
+            </div>
+            @if (cmd.Action is "SetVariable" or "WriteVariable" or "ToggleVariable" or "IncrementVariable" or "DecrementVariable")
+            {
+                <VariablePathPicker Value="@cmd.VariablePath"
+                                    ValueChanged="v => { cmd.VariablePath = v ?? string.Empty; }"
+                                    OnChanged="OnChanged"
+                                    Placeholder="Variable path" />
+                @if (cmd.Action is not "ToggleVariable")
+                {
+                    <input type="text" class="form-control form-control-sm" style="font-size: 10px;" placeholder="Value" @bind="cmd.Value" @bind:after="OnChanged" />
+                }
+            }
+            else if (cmd.Action == "ResetVariable")
+            {
+                <VariablePathPicker Value="@cmd.VariablePath"
+                                    ValueChanged="v => { cmd.VariablePath = v ?? string.Empty; }"
+                                    OnChanged="OnChanged"
+                                    Placeholder="Variable path" />
+            }
+            else if (cmd.Action is "NavigateScreen" or "OpenScreenPopup" or "OpenScreenModal")
+            {
+                <ScreenPicker Value="@cmd.TargetScreen"
+                              ValueChanged='v => { cmd.TargetScreen = v ?? string.Empty; }'
+                              OnChanged="OnChanged"
+                              Placeholder="(select screen)" />
+            }
+            else if (cmd.Action is "ExecuteScript" or "ExecuteJavaScript")
+            {
+                <textarea class="form-control form-control-sm" style="font-size: 10px;" rows="3" placeholder="@(cmd.Action == "ExecuteJavaScript" ? "JavaScript code" : "C# script")" @bind="cmd.Script" @bind:after="OnChanged"></textarea>
+            }
+            else if (cmd.Action is "AcknowledgeAllAlarms" or "ResetAllAlarms")
+            {
+                <input type="text" class="form-control form-control-sm" style="font-size: 10px;" placeholder="Comment (optional)" @bind="cmd.Value" @bind:after="OnChanged" />
+            }
+            else if (cmd.Action == "ChangeLanguage")
+            {
+                <LocalePicker Value="@cmd.TargetLocale"
+                              ValueChanged='v => { cmd.TargetLocale = v ?? string.Empty; }'
+                              OnChanged="OnChanged"
+                              Placeholder="(select language)" />
+            }
+            else if (cmd.Action == "GenerateReport")
+            {
+                <ReportPicker Value="@cmd.TargetReport"
+                              ValueChanged='v => { cmd.TargetReport = v ?? string.Empty; }'
+                              OnChanged="OnChanged"
+                              Placeholder="(select report)" />
+            }
+        </div>
+    }
+    <button class="btn btn-sm btn-outline-primary" @onclick="() => AddEventCommand(eventNode, true)">➕ Add Clear Command</button>
+
+    <p class="text-muted small mt-3">
+        At runtime the server publishes <code>_Events.@(eventNode.Event.Name).Active</code> (Boolean) and
+        <code>.LastFired</code> (DateTime) as OPC variables.
+    </p>
+ </div>
+}
 else if (Node is AssetNode assetNode)
 {
  <div class="properties-panel">
@@ -2543,6 +2821,19 @@ else if (Node is UserNode uNode)
             node.Scheduler.DeactivateCommands.Add(cmd);
         else
             node.Scheduler.Commands.Add(cmd);
+        await OnChanged();
+    }
+    private async Task AddEventCommand(EventNode node, bool clear)
+    {
+        var cmd = new SharedModels.SymbolCommand
+        {
+            Id = Guid.NewGuid().ToString("N")[..8],
+            Action = "SetVariable"
+        };
+        if (clear)
+            node.Event.ClearCommands.Add(cmd);
+        else
+            node.Event.Commands.Add(cmd);
         await OnChanged();
     }
     private void FlushUndo()

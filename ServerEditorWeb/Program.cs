@@ -90,4 +90,8 @@ app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
+// Lightweight API for Desktop shell to query unsaved state
+app.MapGet("/api/has-unsaved-changes", (ServerEditorWeb.Services.NodeEditorService editor) =>
+    Results.Json(new { hasUnsavedChanges = editor.AnyUnsavedChanges }));
+
 app.Run();

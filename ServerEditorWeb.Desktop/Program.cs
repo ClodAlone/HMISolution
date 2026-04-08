@@ -8,6 +8,7 @@ namespace ServerEditorWeb.Desktop;
 static class Program
 {
     private static PhotinoWindow? _window;
+    private static string? _serverUrl;
 
     [STAThread]
     static void Main(string[] args)
@@ -55,7 +56,10 @@ static class Program
 #if DEBUG
                 .SetDevToolsEnabled(true)
 #endif
+                .RegisterWindowClosingHandler(OnWindowClosing)
                 .Load(new Uri(url));
+
+            _serverUrl = url;
 
             AppDomain.CurrentDomain.UnhandledException += (_, e) =>
             {
@@ -73,6 +77,56 @@ static class Program
             try { webProcess.Kill(entireProcessTree: true); } catch { }
             webProcess.Dispose();
         }
+    }
+
+    /// <summary>
+    /// Called by Photino before closing the window.
+    /// Returns true to cancel the close, false to allow it.
+    /// </summary>
+    private static bool OnWindowClosing(object sender, EventArgs e)
+    {
+        if (_serverUrl == null) return false;
+
+        try
+        {
+            if (HasUnsavedChanges())
+            {
+                // Show native Yes/No dialog asking the user
+                if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(
+                    System.Runtime.InteropServices.OSPlatform.Windows))
+                {
+                    var result = NativeMessageBox("HMI Editor",
+                        "You have unsaved changes. Are you sure you want to close without saving?",
+                        0x04 | 0x30); // MB_YESNO | MB_ICONWARNING
+                    return result != 6; // 6 = IDYES = allow close
+                }
+                // Non-Windows: allow close (no native dialog available)
+            }
+        }
+        catch
+        {
+            // If we cannot determine state, allow close
+        }
+        return false;
+    }
+
+    private static bool HasUnsavedChanges()
+    {
+        try
+        {
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(2) };
+            var response = http.GetStringAsync($"{_serverUrl}/api/has-unsaved-changes").Result;
+            return response.Contains("true", StringComparison.OrdinalIgnoreCase);
+        }
+        catch { return false; }
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    private static extern int MessageBox(IntPtr hWnd, string text, string caption, uint type);
+
+    private static int NativeMessageBox(string title, string message, uint flags)
+    {
+        return MessageBox(IntPtr.Zero, message, title, flags);
     }
 
     private static string? FindEditorExe()

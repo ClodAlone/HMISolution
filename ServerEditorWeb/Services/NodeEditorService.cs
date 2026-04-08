@@ -540,6 +540,17 @@ public class NodeEditorService
         }
         proj.Children.Add(batchGroup);
 
+        var eventGroup = new EventGroupNode() { Parent = proj };
+        if (proj.Model.Events != null)
+        {
+            foreach (var evt in proj.Model.Events)
+            {
+                var eNode = new EventNode(evt) { Parent = eventGroup };
+                eventGroup.Children.Add(eNode);
+            }
+        }
+        proj.Children.Add(eventGroup);
+
         var screenGroup = new ScreenGroupNode() { Parent = proj };
         if (proj.Model.Screens != null)
         {
@@ -948,6 +959,25 @@ public class NodeEditorService
                 Enabled = true
             };
             var newNode = new BatchNode(newBatch) { Parent = parent };
+            parent.Children.Add(newNode);
+            parent.IsExpanded = true;
+            SetSingleSelection(newNode);
+            HasUnsavedChanges = true;
+            NotifyStateChanged();
+        }
+    }
+
+
+    public void AddEvent()
+    {
+        if (SelectedItem is EventGroupNode parent)
+        {
+            var newEvent = new EventConfig
+            {
+                Name = "New Event",
+                Enabled = true
+            };
+            var newNode = new EventNode(newEvent) { Parent = parent };
             parent.Children.Add(newNode);
             parent.IsExpanded = true;
             SetSingleSelection(newNode);
@@ -1841,6 +1871,18 @@ public class NodeEditorService
                     {
                         bNode.SyncName();
                         _rootModel.BatchSequences.Add(bNode.Batch);
+                    }
+                }
+            }
+            else if (root is EventGroupNode eventGrpNode && _rootModel != null)
+            {
+                _rootModel.Events.Clear();
+                foreach (var child in eventGrpNode.Children)
+                {
+                    if (child is EventNode eNode)
+                    {
+                        eNode.SyncName();
+                        _rootModel.Events.Add(eNode.Event);
                     }
                 }
             }

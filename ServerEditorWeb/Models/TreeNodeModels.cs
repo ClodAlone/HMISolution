@@ -450,3 +450,19 @@ public class BatchNode : TreeNode
     public BatchNode(BatchSequenceConfig batch) { Batch = batch; Name = batch.Name; }
     public void SyncName() => Batch.Name = Name;
 }
+
+public class EventGroupNode : TreeNode
+{
+    public override string TypeName => "EventGroup";
+    public override string Icon => "⚡";
+    public EventGroupNode() { Name = "Events"; }
+}
+
+public class EventNode : TreeNode
+{
+    public override string TypeName => "Event";
+    public override string Icon => "🔔";
+    public EventConfig Event { get; }
+    public EventNode(EventConfig evt) { Event = evt; Name = evt.Name; }
+    public void SyncName() => Event.Name = Name;
+}

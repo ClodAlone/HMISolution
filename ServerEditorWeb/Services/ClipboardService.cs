@@ -284,6 +284,7 @@ public class ClipboardService
         "Recipe" or "Recipes" => target is RecipeGroupNode,
         "Scheduler" => target is SchedulerGroupNode,
         "Report" => target is ReportGroupNode,
+        "Event" => target is EventGroupNode,
         "Screen" or "Screens" => target is ScreenGroupNode or ResourceFolderNode { ResourceKind: "Screen" },
         _ => false
     };

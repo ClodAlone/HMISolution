@@ -1,0 +1,483 @@
+@using SharedModels
+@using ServerEditorWeb.Services
+@using ServerEditorWeb.Models
+
+<div class="var-picker" @onfocusin="OnFocusIn" @onfocusout="OnFocusOutDelayed">
+    <div class="var-picker-input-wrap">
+        <input type="text" class="form-control form-control-sm var-picker-input"
+               style="font-size: 10px;"
+               value="@Value"
+               @oninput="OnInput"
+               @onkeydown="OnKeyDown"
+               placeholder="@Placeholder" />
+        <button type="button" class="var-picker-toggle" tabindex="-1"
+                @onmousedown="() => _preventClose = true" @onmousedown:preventDefault
+                @onclick="ToggleDropdown" title="Browse screens">&#x25BE;</button>
+        <button type="button" class="var-picker-browse @(string.IsNullOrEmpty(Value) ? "var-picker-browse-last" : "")" tabindex="-1"
+                @onclick="OpenTreePicker" title="Pick screen from tree">&#x1F4C2;</button>
+        <button type="button" class="var-picker-clear" tabindex="-1"
+                style="@(string.IsNullOrEmpty(Value) ? "display:none" : "")"
+                @onmousedown="() => _preventClose = true" @onmousedown:preventDefault
+                @onclick="ClearValue" title="Clear">&#x2715;</button>
+    </div>
+
+    @if (_showDropdown && _filteredItems.Count > 0)
+    {
+        <div class="var-picker-dropdown" @onmousedown:preventDefault>
+            @for (var i = 0; i < _filteredItems.Count; i++)
+            {
+                var item = _filteredItems[i];
+                var idx = i;
+                <div class="var-picker-item @(idx == _highlightIndex ? "var-picker-item-hl" : "")"
+                     @onmousedown="() => SelectItem(item)" @onmousedown:preventDefault>
+                    <span class="var-picker-item-icon">@(new MarkupString(item.IsFolder ? "&#x1F4C1;" : "&#x1F5BC;"))</span>
+                    <span class="var-picker-item-path">@item.Path</span>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@if (_showTreePicker)
+{
+    <div class="var-tree-overlay" @onclick="CloseTreePicker" @onclick:stopPropagation>
+        <div class="var-tree-dialog" @onclick:stopPropagation>
+            <div class="var-tree-header">
+                <span class="var-tree-title">Select Screen</span>
+                <button type="button" class="var-tree-close" @onclick="CloseTreePicker">&times;</button>
+            </div>
+            <div class="var-tree-filter">
+                <input type="text" class="form-control form-control-sm"
+                       placeholder="Filter screens..."
+                       @oninput="OnTreeFilterInput" />
+            </div>
+            <div class="var-tree-body">
+                @RenderTreeLevel(_treeRoots, 0)
+            </div>
+            <div class="var-tree-footer">
+                @if (!string.IsNullOrEmpty(_treeSelectedName))
+                {
+                    <span class="var-tree-selected-label">@_treeSelectedName</span>
+                }
+                <button type="button" class="btn btn-sm btn-primary"
+                        disabled="@(string.IsNullOrEmpty(_treeSelectedName))"
+                        @onclick="ConfirmTreeSelection">OK</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary"
+                        @onclick="CloseTreePicker">Cancel</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public EventCallback<string?> ValueChanged { get; set; }
+    [Parameter] public EventCallback OnChanged { get; set; }
+    [Parameter] public string Placeholder { get; set; } = "(select screen)";
+
+    [Inject] private NodeEditorService Editor { get; set; } = default!;
+
+    private bool _showDropdown;
+    private int _highlightIndex = -1;
+    private string _filter = "";
+    private List<ScreenEntry> _allItems = new();
+    private List<ScreenEntry> _filteredItems = new();
+    private bool _preventClose;
+    private CancellationTokenSource? _closeCts;
+
+    // Tree picker state
+    private bool _showTreePicker;
+    private string? _treeSelectedName;
+    private string _treeFilter = "";
+    private List<ScreenTreeNode> _treeRoots = new();
+    private HashSet<string> _expandedTreeNodes = new();
+
+    protected override void OnParametersSet()
+    {
+        RebuildItems();
+    }
+
+    private void RebuildItems()
+    {
+        _allItems.Clear();
+        var screens = Editor.RootModel?.Screens;
+        if (screens == null) { ApplyFilter(); return; }
+
+        // Collect group folders
+        var folders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var s in screens)
+        {
+            if (!string.IsNullOrWhiteSpace(s.Group))
+            {
+                var parts = s.Group.Split('/');
+                var path = "";
+                foreach (var p in parts)
+                {
+                    path = string.IsNullOrEmpty(path) ? p : $"{path}/{p}";
+                    folders.Add(path);
+                }
+            }
+        }
+
+        foreach (var f in folders.OrderBy(f => f, StringComparer.OrdinalIgnoreCase))
+            _allItems.Add(new ScreenEntry { Path = f, IsFolder = true });
+
+        foreach (var s in screens.Where(s => !string.IsNullOrWhiteSpace(s.Name)).OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase))
+        {
+            var display = string.IsNullOrEmpty(s.Group) ? s.Name : $"{s.Group}/{s.Name}";
+            _allItems.Add(new ScreenEntry { Path = display, ScreenName = s.Name, IsFolder = false });
+        }
+
+        ApplyFilter();
+    }
+
+    private void ApplyFilter()
+    {
+        if (string.IsNullOrWhiteSpace(_filter))
+            _filteredItems = _allItems.Where(p => !p.IsFolder).ToList();
+        else
+            _filteredItems = _allItems
+                .Where(p => p.Path.Contains(_filter, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+        _highlightIndex = -1;
+    }
+
+    private async Task OnInput(ChangeEventArgs e)
+    {
+        var val = e.Value?.ToString() ?? "";
+        _filter = val;
+        Value = val;
+        await ValueChanged.InvokeAsync(val);
+        await OnChanged.InvokeAsync();
+        RebuildItems();
+        _showDropdown = true;
+    }
+
+    private async Task ClearValue()
+    {
+        Value = "";
+        _filter = "";
+        _showDropdown = false;
+        await ValueChanged.InvokeAsync(string.Empty);
+        await OnChanged.InvokeAsync();
+    }
+
+    private void OnFocusIn()
+    {
+        _closeCts?.Cancel();
+        _closeCts = null;
+        RebuildItems();
+        _filter = Value ?? "";
+        _showDropdown = true;
+    }
+
+    private async Task OnFocusOutDelayed()
+    {
+        if (_preventClose) { _preventClose = false; return; }
+        _closeCts?.Cancel();
+        _closeCts = new CancellationTokenSource();
+        var token = _closeCts.Token;
+        try
+        {
+            await Task.Delay(250, token);
+            if (!token.IsCancellationRequested) { _showDropdown = false; StateHasChanged(); }
+        }
+        catch (TaskCanceledException) { }
+    }
+
+    private void ToggleDropdown()
+    {
+        _preventClose = false;
+        if (_showDropdown) { _showDropdown = false; }
+        else { _filter = ""; RebuildItems(); _showDropdown = true; }
+    }
+
+    private async Task SelectItem(ScreenEntry item)
+    {
+        if (item.IsFolder)
+        {
+            _filter = item.Path + "/";
+            Value = _filter;
+            await ValueChanged.InvokeAsync(Value);
+            ApplyFilter();
+        }
+        else
+        {
+            Value = item.ScreenName;
+            _showDropdown = false;
+            await ValueChanged.InvokeAsync(Value);
+            await OnChanged.InvokeAsync();
+        }
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (!_showDropdown || _filteredItems.Count == 0)
+        {
+            if (e.Key == "ArrowDown") { _filter = Value ?? ""; RebuildItems(); _showDropdown = true; }
+            return;
+        }
+        switch (e.Key)
+        {
+            case "ArrowDown": _highlightIndex = Math.Min(_highlightIndex + 1, _filteredItems.Count - 1); break;
+            case "ArrowUp": _highlightIndex = Math.Max(_highlightIndex - 1, 0); break;
+            case "Enter":
+                if (_highlightIndex >= 0 && _highlightIndex < _filteredItems.Count)
+                    await SelectItem(_filteredItems[_highlightIndex]);
+                break;
+            case "Escape": _showDropdown = false; break;
+        }
+    }
+
+    // ─── Tree picker ─────────────────────────────────────────
+
+    private void OpenTreePicker()
+    {
+        _showDropdown = false;
+        _treeSelectedName = Value;
+        _treeFilter = "";
+        BuildTree();
+        _showTreePicker = true;
+    }
+
+    private void CloseTreePicker() => _showTreePicker = false;
+
+    private async Task ConfirmTreeSelection()
+    {
+        if (!string.IsNullOrEmpty(_treeSelectedName))
+        {
+            Value = _treeSelectedName;
+            await ValueChanged.InvokeAsync(Value);
+            await OnChanged.InvokeAsync();
+        }
+        _showTreePicker = false;
+    }
+
+    private void BuildTree()
+    {
+        _treeRoots = new List<ScreenTreeNode>();
+        _expandedTreeNodes.Clear();
+
+        var screens = Editor.RootModel?.Screens;
+        if (screens == null) return;
+
+        // Build folder structure
+        var folderMap = new Dictionary<string, ScreenTreeNode>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var s in screens)
+        {
+            if (string.IsNullOrWhiteSpace(s.Name)) continue;
+
+            var group = s.Group?.Trim() ?? "";
+            ScreenTreeNode parentNode;
+
+            if (string.IsNullOrEmpty(group))
+            {
+                // Root level screen
+                _treeRoots.Add(new ScreenTreeNode { Name = s.Name, ScreenName = s.Name, IsFolder = false });
+                continue;
+            }
+
+            // Ensure folder hierarchy
+            parentNode = EnsureFolder(group, folderMap);
+            parentNode.Children.Add(new ScreenTreeNode { Name = s.Name, ScreenName = s.Name, IsFolder = false });
+        }
+
+        // Sort root items: folders first, then screens alphabetically
+        _treeRoots.Sort((a, b) =>
+        {
+            if (a.IsFolder != b.IsFolder) return a.IsFolder ? -1 : 1;
+            return string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase);
+        });
+        foreach (var folder in _treeRoots.Where(n => n.IsFolder))
+            SortChildren(folder);
+
+        // Auto-expand to the currently selected value
+        if (!string.IsNullOrEmpty(Value))
+        {
+            var screen = screens.FirstOrDefault(s => s.Name.Equals(Value, StringComparison.OrdinalIgnoreCase));
+            if (screen != null && !string.IsNullOrEmpty(screen.Group))
+            {
+                var parts = screen.Group.Split('/');
+                var path = "";
+                foreach (var p in parts)
+                {
+                    path = string.IsNullOrEmpty(path) ? p : $"{path}/{p}";
+                    _expandedTreeNodes.Add(path);
+                }
+            }
+        }
+    }
+
+    private ScreenTreeNode EnsureFolder(string groupPath, Dictionary<string, ScreenTreeNode> cache)
+    {
+        if (cache.TryGetValue(groupPath, out var existing)) return existing;
+
+        var parts = groupPath.Split('/');
+        var pathSoFar = "";
+        List<ScreenTreeNode> currentList = _treeRoots;
+        ScreenTreeNode? current = null;
+
+        foreach (var part in parts)
+        {
+            pathSoFar = string.IsNullOrEmpty(pathSoFar) ? part : $"{pathSoFar}/{part}";
+
+            if (!cache.TryGetValue(pathSoFar, out var folder))
+            {
+                folder = currentList.FirstOrDefault(n => n.IsFolder && n.Name.Equals(part, StringComparison.OrdinalIgnoreCase));
+                if (folder == null)
+                {
+                    folder = new ScreenTreeNode { Name = part, GroupPath = pathSoFar, IsFolder = true };
+                    currentList.Add(folder);
+                }
+                cache[pathSoFar] = folder;
+            }
+            currentList = folder.Children;
+            current = folder;
+        }
+
+        return current!;
+    }
+
+    private void SortChildren(ScreenTreeNode node)
+    {
+        node.Children.Sort((a, b) =>
+        {
+            if (a.IsFolder != b.IsFolder) return a.IsFolder ? -1 : 1;
+            return string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase);
+        });
+        foreach (var child in node.Children.Where(c => c.IsFolder))
+            SortChildren(child);
+    }
+
+    private void ToggleTreeNode(string path)
+    {
+        if (!_expandedTreeNodes.Add(path))
+            _expandedTreeNodes.Remove(path);
+    }
+
+    private void SelectTreeScreen(string name) => _treeSelectedName = name;
+
+    private void OnTreeFilterInput(ChangeEventArgs e)
+    {
+        _treeFilter = e.Value?.ToString() ?? "";
+        if (!string.IsNullOrWhiteSpace(_treeFilter))
+            ExpandAllNodes(_treeRoots);
+    }
+
+    private void ExpandAllNodes(List<ScreenTreeNode> nodes)
+    {
+        foreach (var n in nodes)
+        {
+            if (n.IsFolder)
+            {
+                _expandedTreeNodes.Add(n.GroupPath);
+                ExpandAllNodes(n.Children);
+            }
+        }
+    }
+
+    private bool NodeMatchesFilter(ScreenTreeNode node)
+    {
+        if (string.IsNullOrWhiteSpace(_treeFilter)) return true;
+        if (node.Name.Contains(_treeFilter, StringComparison.OrdinalIgnoreCase)) return true;
+        if (node.IsFolder)
+            return node.Children.Any(NodeMatchesFilter);
+        return false;
+    }
+
+    private RenderFragment RenderTreeLevel(List<ScreenTreeNode> nodes, int depth) => builder =>
+    {
+        int seq = 0;
+        foreach (var node in nodes)
+        {
+            if (!NodeMatchesFilter(node)) continue;
+
+            if (node.IsFolder)
+            {
+                var expanded = _expandedTreeNodes.Contains(node.GroupPath);
+                var capturedNode = node;
+
+                builder.OpenElement(seq++, "div");
+                builder.AddAttribute(seq++, "class", "var-tree-node var-tree-folder");
+                builder.AddAttribute(seq++, "style", $"padding-left: {depth * 16 + 4}px;");
+                builder.AddAttribute(seq++, "onclick",
+                    Microsoft.AspNetCore.Components.EventCallback.Factory.Create(this,
+                        () => ToggleTreeNode(capturedNode.GroupPath)));
+
+                builder.OpenElement(seq++, "span");
+                builder.AddAttribute(seq++, "class", "var-tree-chevron");
+                builder.AddContent(seq++, expanded ? "\u25BE" : "\u25B8");
+                builder.CloseElement();
+
+                builder.OpenElement(seq++, "span");
+                builder.AddAttribute(seq++, "class", "var-tree-icon");
+                builder.AddContent(seq++, "\U0001F4C1");
+                builder.CloseElement();
+
+                builder.OpenElement(seq++, "span");
+                builder.AddAttribute(seq++, "class", "var-tree-name");
+                builder.AddContent(seq++, capturedNode.Name);
+                builder.CloseElement();
+
+                builder.CloseElement();
+
+                if (expanded)
+                {
+                    builder.AddContent(seq++, RenderTreeLevel(capturedNode.Children, depth + 1));
+                }
+            }
+            else
+            {
+                var isSelected = string.Equals(node.ScreenName, _treeSelectedName, StringComparison.OrdinalIgnoreCase);
+                var capturedNode = node;
+
+                builder.OpenElement(seq++, "div");
+                builder.AddAttribute(seq++, "class",
+                    $"var-tree-node var-tree-var{(isSelected ? " var-tree-var-selected" : "")}");
+                builder.AddAttribute(seq++, "style", $"padding-left: {depth * 16 + 4}px;");
+                builder.AddAttribute(seq++, "onclick",
+                    Microsoft.AspNetCore.Components.EventCallback.Factory.Create(this,
+                        () => SelectTreeScreen(capturedNode.ScreenName)));
+                builder.AddAttribute(seq++, "ondblclick",
+                    Microsoft.AspNetCore.Components.EventCallback.Factory.Create(this,
+                        async () => { _treeSelectedName = capturedNode.ScreenName; await ConfirmTreeSelection(); }));
+
+                builder.OpenElement(seq++, "span");
+                builder.AddAttribute(seq++, "class", "var-tree-chevron");
+                builder.AddMarkupContent(seq++, "&nbsp;");
+                builder.CloseElement();
+
+                builder.OpenElement(seq++, "span");
+                builder.AddAttribute(seq++, "class", "var-tree-icon");
+                builder.AddContent(seq++, "\U0001F5BC\uFE0F");
+                builder.CloseElement();
+
+                builder.OpenElement(seq++, "span");
+                builder.AddAttribute(seq++, "class", "var-tree-name");
+                builder.AddContent(seq++, capturedNode.Name);
+                builder.CloseElement();
+
+                builder.CloseElement();
+            }
+        }
+    };
+
+    // ─── Models ─────────────────────────────────────────────
+
+    private class ScreenEntry
+    {
+        public string Path { get; set; } = "";
+        public string ScreenName { get; set; } = "";
+        public bool IsFolder { get; set; }
+    }
+
+    private class ScreenTreeNode
+    {
+        public string Name { get; set; } = "";
+        public string ScreenName { get; set; } = "";
+        public string GroupPath { get; set; } = "";
+        public bool IsFolder { get; set; }
+        public List<ScreenTreeNode> Children { get; set; } = new();
+    }
+}
