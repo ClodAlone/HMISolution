@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Buffers;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -114,6 +114,7 @@ public class CameraStreamService : IDisposable
         private InferenceSession? _yoloSession;
         private volatile byte[]? _latestFrame;
         private readonly HttpClient _httpClient;
+        private readonly string _cleanUrl;
 
         public byte[]? LatestJpegFrame => _latestFrame;
         public int FrameDelay => Math.Max(33, 1000 / Math.Max(1, _config.Fps));
@@ -140,11 +141,57 @@ public class CameraStreamService : IDisposable
             _readBoolVariable = readBoolVariable;
 
             var handler = new HttpClientHandler();
-            if (!string.IsNullOrEmpty(config.Username))
+            string? authUser = config.Username;
+            string? authPass = config.Password;
+
+            // Extract embedded credentials from URL (e.g. http://user:pass@host/path)
+            if (string.IsNullOrEmpty(authUser) && !string.IsNullOrEmpty(config.Url))
             {
-                handler.Credentials = new System.Net.NetworkCredential(config.Username, config.Password);
+                try
+                {
+                    var uri = new Uri(config.Url);
+                    if (!string.IsNullOrEmpty(uri.UserInfo))
+                    {
+                        var parts = uri.UserInfo.Split(':', 2);
+                        authUser = Uri.UnescapeDataString(parts[0]);
+                        authPass = parts.Length > 1 ? Uri.UnescapeDataString(parts[1]) : "";
+                    }
+                }
+                catch { }
+            }
+
+            if (!string.IsNullOrEmpty(authUser))
+            {
+                // Use CredentialCache to support both Digest and Basic auth (Hikvision uses Digest)
+                try
+                {
+                    var credUri = new Uri(config.Url);
+                    var baseUri = new Uri($"{credUri.Scheme}://{credUri.Host}{(credUri.IsDefaultPort ? "" : $":{credUri.Port}")}");
+                    var credCache = new System.Net.CredentialCache();
+                    var cred = new System.Net.NetworkCredential(authUser, authPass);
+                    credCache.Add(baseUri, "Digest", cred);
+                    credCache.Add(baseUri, "Basic", cred);
+                    handler.Credentials = credCache;
+                }
+                catch
+                {
+                    handler.Credentials = new System.Net.NetworkCredential(authUser, authPass);
+                }
+                handler.PreAuthenticate = false;
             }
             _httpClient = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(30) };
+
+            // Build a clean URL without embedded credentials (HttpClient uses NetworkCredential instead)
+            _cleanUrl = config.Url;
+            try
+            {
+                var parsed = new Uri(config.Url);
+                if (!string.IsNullOrEmpty(parsed.UserInfo))
+                {
+                    _cleanUrl = $"{parsed.Scheme}://{parsed.Host}{(parsed.IsDefaultPort ? "" : $":{parsed.Port}")}{parsed.PathAndQuery}";
+                }
+            }
+            catch { }
 
             // Load YOLO model if detection is enabled statically OR a dynamic variable is configured
             if (config.EnableYolo || !string.IsNullOrEmpty(config.YoloEnableVariable))
@@ -242,7 +289,7 @@ public class CameraStreamService : IDisposable
             {
                 try
                 {
-                    using var response = await _httpClient.GetAsync(_config.Url, HttpCompletionOption.ResponseHeadersRead, ct);
+                    using var response = await _httpClient.GetAsync(_cleanUrl, HttpCompletionOption.ResponseHeadersRead, ct);
                     response.EnsureSuccessStatusCode();
                     var stream = await response.Content.ReadAsStreamAsync(ct);
                     await ReadMjpegFramesAsync(stream, ct);
@@ -267,7 +314,7 @@ public class CameraStreamService : IDisposable
             {
                 try
                 {
-                    var bytes = await _httpClient.GetByteArrayAsync(_config.Url, ct);
+                    var bytes = await _httpClient.GetByteArrayAsync(_cleanUrl, ct);
                     await ProcessFrameAsync(bytes);
                 }
                 catch (Exception ex) when (!ct.IsCancellationRequested)

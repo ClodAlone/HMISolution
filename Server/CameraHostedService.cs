@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
@@ -83,8 +83,21 @@ public class CameraHostedService : BackgroundService
         try
         {
             _httpListener = new HttpListener();
-            _httpListener.Prefixes.Add($"http://+:{StreamPort}/");
-            _httpListener.Start();
+            try
+            {
+                // Try wildcard binding first (allows remote access, requires admin or URL ACL)
+                _httpListener.Prefixes.Add($"http://+:{StreamPort}/");
+                _httpListener.Start();
+            }
+            catch (HttpListenerException)
+            {
+                // Fall back to localhost binding (no admin required)
+                _httpListener.Close();
+                _httpListener = new HttpListener();
+                _httpListener.Prefixes.Add($"http://localhost:{StreamPort}/");
+                _httpListener.Start();
+                _logger.LogInformation("Camera stream bound to localhost only (run as admin or register URL ACL for remote access)");
+            }
             _logger.LogInformation("Camera MJPEG stream server listening on port {Port}", StreamPort);
 
             while (!stoppingToken.IsCancellationRequested)
@@ -187,22 +200,52 @@ public class CameraHostedService : BackgroundService
 
             using var stream = File.OpenRead(_serverConfig.NodesConfigFile);
             var model = JsonSerializer.Deserialize(stream, ServerJsonContext.Default.NodeModel);
-            if (model?.Cameras != null && model.Cameras.Count > 0)
-                return model.Cameras;
 
-            // Also scan screens for ipcamera symbols with inline camera configs
-            var cameras = new List<CameraConfig>();
-            if (model?.Screens != null)
+            List<CameraConfig> cameras;
+            if (model?.Cameras != null && model.Cameras.Count > 0)
             {
-                foreach (var screen in model.Screens)
+                cameras = model.Cameras;
+            }
+            else
+            {
+                // Also scan screens for ipcamera symbols with inline camera configs
+                cameras = new List<CameraConfig>();
+                if (model?.Screens != null)
                 {
-                    foreach (var sym in screen.Symbols)
+                    foreach (var screen in model.Screens)
                     {
-                        if (sym.Type == "ipcamera" && sym.Camera != null && !string.IsNullOrEmpty(sym.Camera.CameraId))
+                        foreach (var sym in screen.Symbols)
                         {
-                            if (!cameras.Any(c => c.CameraId == sym.Camera.CameraId))
-                                cameras.Add(sym.Camera);
+                            if (sym.Type == "ipcamera" && sym.Camera != null && !string.IsNullOrEmpty(sym.Camera.CameraId))
+                            {
+                                if (!cameras.Any(c => c.CameraId == sym.Camera.CameraId))
+                                    cameras.Add(sym.Camera);
+                            }
                         }
+                    }
+                }
+            }
+
+            // Resolve YOLO model paths relative to the project directory
+            var projectDir = Path.GetDirectoryName(Path.GetFullPath(_serverConfig.NodesConfigFile));
+            if (projectDir != null)
+            {
+                foreach (var cam in cameras)
+                {
+                    var modelFile = string.IsNullOrEmpty(cam.YoloModelPath) ? "yolov8n.onnx" : cam.YoloModelPath;
+                    if (!Path.IsPathRooted(modelFile))
+                    {
+                        // Check project directory first, then fall back to working directory
+                        var projectRelative = Path.Combine(projectDir, modelFile);
+                        if (File.Exists(projectRelative))
+                        {
+                            cam.YoloModelPath = Path.GetFullPath(projectRelative);
+                        }
+                        else if (File.Exists(modelFile))
+                        {
+                            cam.YoloModelPath = Path.GetFullPath(modelFile);
+                        }
+                        // else leave as-is; CameraStreamService will log "not found"
                     }
                 }
             }
