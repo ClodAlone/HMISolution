@@ -34,6 +34,7 @@ namespace SharedModels
         public List<AssetConfig> Assets { get; set; } = new();
         public List<BatchSequenceConfig> BatchSequences { get; set; } = new();
         public List<EventConfig> Events { get; set; } = new();
+        public List<VariableAliasMap> AliasMaps { get; set; } = new();
 
         /// <summary>
         /// PBKDF2-SHA256 hash of the project protection password.
@@ -1147,6 +1148,12 @@ namespace SharedModels
         /// </summary>
         public List<string> EmbeddedScreens { get; set; } = new();
 
+        /// <summary>
+        /// Alias map names corresponding to each embedded screen (same index as EmbeddedScreens).
+        /// Empty string means no alias map for that screen.
+        /// </summary>
+        public List<string> EmbeddedScreenAliasMaps { get; set; } = new();
+
         // â”€â”€â”€ Responsive layout properties â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         /// <summary>Column span in the responsive grid (1-12).</summary>
         public int ColSpan { get; set; } = 4;
@@ -1765,6 +1772,30 @@ namespace SharedModels
 
         /// <summary>Target locale/language code (for ChangeLanguage). E.g. "en", "de", "it".</summary>
         public string TargetLocale { get; set; } = "";
+
+        /// <summary>
+        /// Name of a VariableAliasMap to apply when opening a screen (NavigateScreen/OpenScreenPopup/OpenScreenModal).
+        /// The alias map replaces placeholder tokens in variable paths with real OPC paths at runtime.
+        /// </summary>
+        public string AliasMapName { get; set; } = "";
+    }
+
+    /// <summary>
+    /// Maps alias placeholder names to real OPC variable paths.
+    /// Used to create reusable screen templates: a screen uses alias placeholders (e.g. {Motor})
+    /// in its variable bindings, and a VariableAliasMap provides the concrete paths at runtime
+    /// (e.g. Motor -> Plant.Line1.Motor1).
+    /// </summary>
+    public class VariableAliasMap
+    {
+        public string Name { get; set; } = "";
+
+        /// <summary>
+        /// Alias-to-real-path mappings. Key = alias placeholder name (e.g. "Motor"),
+        /// Value = real OPC variable path (e.g. "Plant.Line1.Motor1").
+        /// In screen variable bindings, use {AliasName} syntax which gets replaced at runtime.
+        /// </summary>
+        public Dictionary<string, string> Mappings { get; set; } = new();
     }
 
     /// <summary>

@@ -91,7 +91,14 @@ public class CsvDriverTests : IDisposable
         driver.AddItem(variable, JsonSerializer.Serialize(config));
         driver.Start();
 
-        Thread.Sleep(1000);
+        // Spin-wait until the timer fires at least once (value changes from initial 0.0)
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (DateTime.UtcNow < deadline)
+        {
+            if (Convert.ToDouble(variable.Value) != 0.0) break;
+            Thread.Sleep(50);
+        }
+
         Assert.Equal(200.0, Convert.ToDouble(variable.Value));
     }
 

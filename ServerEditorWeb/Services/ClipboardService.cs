@@ -94,7 +94,47 @@ public class ClipboardService
         Changed?.Invoke();
     }
 
-    public void CopySymbols(List<ScreenSymbol> symbols)
+    public void CopyEvent(EventConfig evt)
+    {
+        ContentType = "Event";
+        ContentJson = JsonSerializer.Serialize(evt, _jsonOpts);
+        Label = evt.Name;
+        Changed?.Invoke();
+    }
+
+    public void CopyAliasMap(VariableAliasMap map)
+    {
+        ContentType = "AliasMap";
+        ContentJson = JsonSerializer.Serialize(map, _jsonOpts);
+        Label = map.Name;
+        Changed?.Invoke();
+    }
+
+    public void CopyCalculated(CalculatedVariableConfig calc)
+    {
+        ContentType = "Calculated";
+        ContentJson = JsonSerializer.Serialize(calc, _jsonOpts);
+        Label = calc.Name;
+        Changed?.Invoke();
+    }
+
+    public void CopyAsset(AssetConfig asset)
+    {
+        ContentType = "Asset";
+        ContentJson = JsonSerializer.Serialize(asset, _jsonOpts);
+        Label = asset.Name;
+        Changed?.Invoke();
+    }
+
+    public void CopyBatch(BatchSequenceConfig batch)
+    {
+        ContentType = "Batch";
+        ContentJson = JsonSerializer.Serialize(batch, _jsonOpts);
+        Label = batch.Name;
+        Changed?.Invoke();
+    }
+
+        public void CopySymbols(List<ScreenSymbol> symbols)
     {
         ContentType = "Symbols";
         ContentJson = JsonSerializer.Serialize(symbols, _jsonOpts);
@@ -218,7 +258,47 @@ public class ClipboardService
         return r;
     }
 
-    public List<ScreenSymbol>? PasteSymbols()
+    public EventConfig? PasteEvent()
+    {
+        if (ContentType != "Event" || ContentJson == null) return null;
+        var e = JsonSerializer.Deserialize<EventConfig>(ContentJson, _jsonOpts);
+        if (e != null) e.Name += " (Copy)";
+        return e;
+    }
+
+    public VariableAliasMap? PasteAliasMap()
+    {
+        if (ContentType != "AliasMap" || ContentJson == null) return null;
+        var m = JsonSerializer.Deserialize<VariableAliasMap>(ContentJson, _jsonOpts);
+        if (m != null) m.Name += " (Copy)";
+        return m;
+    }
+
+    public CalculatedVariableConfig? PasteCalculated()
+    {
+        if (ContentType != "Calculated" || ContentJson == null) return null;
+        var c = JsonSerializer.Deserialize<CalculatedVariableConfig>(ContentJson, _jsonOpts);
+        if (c != null) c.Name += " (Copy)";
+        return c;
+    }
+
+    public AssetConfig? PasteAsset()
+    {
+        if (ContentType != "Asset" || ContentJson == null) return null;
+        var a = JsonSerializer.Deserialize<AssetConfig>(ContentJson, _jsonOpts);
+        if (a != null) a.Name += " (Copy)";
+        return a;
+    }
+
+    public BatchSequenceConfig? PasteBatch()
+    {
+        if (ContentType != "Batch" || ContentJson == null) return null;
+        var b = JsonSerializer.Deserialize<BatchSequenceConfig>(ContentJson, _jsonOpts);
+        if (b != null) b.Name += " (Copy)";
+        return b;
+    }
+
+        public List<ScreenSymbol>? PasteSymbols()
     {
         if (ContentType != "Symbols" || ContentJson == null) return null;
         return JsonSerializer.Deserialize<List<ScreenSymbol>>(ContentJson, _jsonOpts);
@@ -285,6 +365,10 @@ public class ClipboardService
         "Scheduler" => target is SchedulerGroupNode,
         "Report" => target is ReportGroupNode,
         "Event" => target is EventGroupNode,
+        "AliasMap" => target is AliasMapGroupNode,
+        "Calculated" => target is CalculatedGroupNode,
+        "Asset" => target is AssetGroupNode,
+        "Batch" => target is BatchGroupNode,
         "Screen" or "Screens" => target is ScreenGroupNode or ResourceFolderNode { ResourceKind: "Screen" },
         _ => false
     };

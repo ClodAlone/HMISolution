@@ -466,3 +466,19 @@ public class EventNode : TreeNode
     public EventNode(EventConfig evt) { Event = evt; Name = evt.Name; }
     public void SyncName() => Event.Name = Name;
 }
+
+public class AliasMapGroupNode : TreeNode
+{
+    public override string TypeName => "AliasMapGroup";
+    public override string Icon => "🔗";
+    public AliasMapGroupNode() { Name = "Alias Maps"; }
+}
+
+public class AliasMapNode : TreeNode
+{
+    public override string TypeName => "AliasMap";
+    public override string Icon => "🔀";
+    public VariableAliasMap AliasMap { get; }
+    public AliasMapNode(VariableAliasMap map) { AliasMap = map; Name = map.Name; }
+    public void SyncName() => AliasMap.Name = Name;
+}

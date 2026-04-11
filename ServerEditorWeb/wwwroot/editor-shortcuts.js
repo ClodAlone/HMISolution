@@ -97,5 +97,15 @@ window.editorShortcuts = {
             e.preventDefault();
             ref.invokeMethodAsync('OnKeyboardDelete');
         }
+
+        // Tab \u2013 cycle selection through screen objects by z-order
+        if (e.key === 'Tab' && !isEditable) {
+            e.preventDefault();
+            if (e.shiftKey) {
+                ref.invokeMethodAsync('OnKeyboardShiftTab');
+            } else {
+                ref.invokeMethodAsync('OnKeyboardTab');
+            }
+        }
     }
 };

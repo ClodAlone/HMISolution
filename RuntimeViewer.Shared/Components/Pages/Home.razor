@@ -1,4 +1,4 @@
-﻿@page "/"
+@page "/"
 @page "/screen/{ScreenName}"
 @using SharedModels
 @using System.Net.Http.Json
@@ -124,7 +124,7 @@ else
                     {
                         var s = scr;
                         <button class="rv-tab @(s == _currentScreen ? "active" : "")"
-                                @onclick="() => DoNavigateScreen(s.Name)">
+                                @onclick="() => DoNavigateScreen(s.Name, string.Empty)">
                             @s.Name
                         </button>
                     }
@@ -202,7 +202,7 @@ else
                     {
                         var s = scr;
                         <button class="rv-tab @(s == _currentScreen ? "active" : "")"
-                                @onclick="() => DoNavigateScreen(s.Name)">
+                                @onclick="() => DoNavigateScreen(s.Name, string.Empty)">
                             @s.Name
                         </button>
                     }
@@ -318,7 +318,7 @@ else
         }
         else if (_currentScreen != null)
         {
-            <ScreenRenderer Screen="_currentScreen" IsKiosk="Project.IsKiosk" BestFit="_bestFit" OnRequestLogin="ShowAccessLoginPrompt" />
+            <ScreenRenderer Screen="_currentScreen" IsKiosk="Project.IsKiosk" BestFit="_bestFit" OnRequestLogin="ShowAccessLoginPrompt" VariableAliases="_currentAliasMap" />
         }
         else if (Project.Screens.Count == 0)
         {
@@ -342,7 +342,7 @@ else
             {
                 var s = scr;
                 <button class="rv-bottom-tab @(s == _currentScreen ? "active" : "")"
-                        @onclick="() => DoNavigateScreen(s.Name)">
+                        @onclick="() => DoNavigateScreen(s.Name, string.Empty)">
                     <span class="rv-bottom-tab-icon">&#x1F5BC;</span>
                     <span class="rv-bottom-tab-label">@s.Name</span>
                 </button>
@@ -364,7 +364,7 @@ else
         {
             var s = scr;
             <div class="rv-hamburger-item @(s == _currentScreen ? "active" : "")"
-                 @onclick="() => { DoNavigateScreen(s.Name); _hamburgerOpen = false; }">
+                 @onclick="() => { DoNavigateScreen(s.Name, string.Empty); _hamburgerOpen = false; }">
                 <span>&#x1F5BC;</span>
                 <span>@s.Name</span>
             </div>
@@ -394,7 +394,7 @@ else
             <button class="rv-popup-close" @onclick="ClosePopup">✕</button>
         </div>
         <div class="rv-popup-body">
-            <ScreenRenderer Screen="_popupScreen" OnRequestLogin="ShowAccessLoginPrompt" />
+            <ScreenRenderer Screen="_popupScreen" OnRequestLogin="ShowAccessLoginPrompt" VariableAliases="_popupAliasMap" />
         </div>
     </div>
 }
@@ -409,7 +409,7 @@ else
             <button class="rv-popup-close" @onclick="CloseModal">✕</button>
         </div>
         <div class="rv-modal-body">
-            <ScreenRenderer Screen="_modalScreen" OnRequestLogin="ShowAccessLoginPrompt" />
+            <ScreenRenderer Screen="_modalScreen" OnRequestLogin="ShowAccessLoginPrompt" VariableAliases="_modalAliasMap" />
         </div>
     </div>
 }
@@ -537,6 +537,9 @@ else
     private ScreenConfig? _currentScreen;
     private ScreenConfig? _popupScreen;
     private ScreenConfig? _modalScreen;
+    private Dictionary<string, string>? _currentAliasMap;
+    private Dictionary<string, string>? _popupAliasMap;
+    private Dictionary<string, string>? _modalAliasMap;
     private bool _connecting;
     private bool _isFullscreen;
     private IJSObjectReference? _kioskModule;
@@ -839,7 +842,7 @@ else
         StateHasChanged();
     }
 
-    private void DoNavigateScreen(string name)
+    private void DoNavigateScreen(string name, string aliasMapName)
     {
         InvokeAsync(() =>
         {
@@ -852,13 +855,14 @@ else
                     Opc.PreconnectVariables(predicted);
             }
 
+            _currentAliasMap = ResolveAliasMap(aliasMapName);
             ShowToast("info", "Navigate", $"Switching to {name}");
             Nav.NavigateTo($"/screen/{Uri.EscapeDataString(name)}");
             StateHasChanged();
         });
     }
 
-    private void DoOpenPopup(string name)
+    private void DoOpenPopup(string name, string aliasMapName)
     {
         InvokeAsync(() =>
         {
@@ -866,11 +870,20 @@ else
                 s.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
             if (screen != null && !Auth.IsGroupAllowed(screen.AllowedGroups)) return;
             _popupScreen = screen;
+            _popupAliasMap = ResolveAliasMap(aliasMapName);
             StateHasChanged();
         });
     }
 
-    private void DoOpenModal(string name)
+    private Dictionary<string, string>? ResolveAliasMap(string aliasMapName)
+    {
+        if (string.IsNullOrEmpty(aliasMapName)) return null;
+        var map = Project.Model?.AliasMaps?.FirstOrDefault(m =>
+            m.Name.Equals(aliasMapName, StringComparison.OrdinalIgnoreCase));
+        return map?.Mappings is { Count: > 0 } ? map.Mappings : null;
+    }
+
+    private void DoOpenModal(string name, string aliasMapName)
     {
         InvokeAsync(() =>
         {
@@ -878,6 +891,7 @@ else
                 s.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
             if (screen != null && !Auth.IsGroupAllowed(screen.AllowedGroups)) return;
             _modalScreen = screen;
+            _modalAliasMap = ResolveAliasMap(aliasMapName);
             StateHasChanged();
         });
     }

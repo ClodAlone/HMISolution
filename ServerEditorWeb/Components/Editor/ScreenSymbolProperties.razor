@@ -1237,6 +1237,15 @@
                                    @onchange="(e) => UpdateEmbeddedScreen(index, e)"
                                    placeholder="Screen name" />
                         }
+                        <select class="form-select form-select-sm" style="font-size: 10px; max-width: 120px;"
+                                value="@GetEmbeddedScreenAliasMap(_selectedSymbol, index)"
+                                @onchange="(e) => UpdateEmbeddedScreenAliasMap(index, e)">
+                            <option value="">(no alias)</option>
+                            @foreach (var am in Editor?.RootModel?.AliasMaps ?? new())
+                            {
+                                <option value="@am.Name">@am.Name</option>
+                            }
+                        </select>
                         <button class="btn btn-sm btn-outline-danger" style="font-size: 9px; padding: 1px 4px;"
                                 @onclick="() => RemoveEmbeddedScreen(index)"
                                 title="Remove">✕</button>
@@ -2804,6 +2813,18 @@
                                       OnChanged="OnChanged"
                                       Placeholder="(select screen)" />
                     </div>
+                    <div class="mb-1">
+                        <label class="form-label mb-0" style="font-size: 10px;">Alias Map (optional)</label>
+                        <select class="form-select form-select-sm" style="font-size: 10px;"
+                                value="@c.AliasMapName"
+                                @onchange="e => { c.AliasMapName = e.Value?.ToString() ?? string.Empty; OnChanged(); }">
+                            <option value="">(none)</option>
+                            @foreach (var map in Editor.RootModel?.AliasMaps ?? new())
+                            {
+                                <option value="@map.Name">@map.Name</option>
+                            }
+                        </select>
+                    </div>
                 }
 
                 @if (c.Action is "SetVariable" or "ResetVariable" or "ToggleVariable"
@@ -3210,7 +3231,9 @@ else
 
     private void AddEmbeddedScreen()
     {
-        _selectedSymbol?.EmbeddedScreens.Add("");
+        if (_selectedSymbol == null) return;
+        _selectedSymbol.EmbeddedScreens.Add("");
+        _selectedSymbol.EmbeddedScreenAliasMaps.Add("");
         OnChanged();
     }
 
@@ -3235,6 +3258,8 @@ else
         if (_selectedSymbol != null && index >= 0 && index < _selectedSymbol.EmbeddedScreens.Count)
         {
             _selectedSymbol.EmbeddedScreens.RemoveAt(index);
+            if (index < _selectedSymbol.EmbeddedScreenAliasMaps.Count)
+                _selectedSymbol.EmbeddedScreenAliasMaps.RemoveAt(index);
             OnChanged();
         }
     }
@@ -3246,6 +3271,20 @@ else
             _selectedSymbol.EmbeddedScreens[index] = e.Value?.ToString() ?? "";
             OnChanged();
         }
+    }
+
+    private string GetEmbeddedScreenAliasMap(ScreenSymbol sym, int index)
+    {
+        return index < sym.EmbeddedScreenAliasMaps.Count ? sym.EmbeddedScreenAliasMaps[index] : "";
+    }
+
+    private void UpdateEmbeddedScreenAliasMap(int index, ChangeEventArgs e)
+    {
+        if (_selectedSymbol == null) return;
+        while (_selectedSymbol.EmbeddedScreenAliasMaps.Count <= index)
+            _selectedSymbol.EmbeddedScreenAliasMaps.Add("");
+        _selectedSymbol.EmbeddedScreenAliasMaps[index] = e.Value?.ToString() ?? "";
+        OnChanged();
     }
 
 

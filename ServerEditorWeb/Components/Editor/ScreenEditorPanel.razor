@@ -108,6 +108,15 @@
                     </button>
                 }
 
+                @if (_selectedSymbols.Count > 0)
+                {
+                    <span class="mx-1">|</span>
+                    <button class="btn btn-sm btn-outline-secondary py-0 px-1" @onclick="BringToFront" title="Bring to Front">&#x23EB;</button>
+                    <button class="btn btn-sm btn-outline-secondary py-0 px-1" @onclick="MoveForward" title="Move Forward">&#x25B2;</button>
+                    <button class="btn btn-sm btn-outline-secondary py-0 px-1" @onclick="MoveBackward" title="Move Backward">&#x25BC;</button>
+                    <button class="btn btn-sm btn-outline-secondary py-0 px-1" @onclick="SendToBack" title="Send to Back">&#x23EC;</button>
+                }
+
                 <span class="ms-auto small text-muted">Symbols: @screen.Symbols.Count</span>
 
                 <span class="mx-1">|</span>
@@ -1992,6 +2001,144 @@
     {
         DeleteSelected();
         StateHasChanged();
+    }
+
+    // --- Tab cycling (z-order) ---
+
+    /// <summary>Select the next symbol in z-order (Tab key). Wraps around.</summary>
+    public void SelectNextByZOrder()
+    {
+        var screen = GetScreen();
+        if (screen == null || screen.Symbols.Count == 0) return;
+
+        if (_selectedSymbol == null)
+        {
+            var first = screen.Symbols[0];
+            _selectedSymbols.Clear();
+            _selectedSymbol = first;
+            _selectedSymbols.Add(first);
+        }
+        else
+        {
+            var idx = screen.Symbols.IndexOf(_selectedSymbol);
+            var next = (idx + 1) % screen.Symbols.Count;
+            var sym = screen.Symbols[next];
+            _selectedSymbols.Clear();
+            _selectedSymbol = sym;
+            _selectedSymbols.Add(sym);
+        }
+        NotifySelectionChanged();
+        _ = ScrollToSymbolAsync(_selectedSymbol);
+        StateHasChanged();
+    }
+
+    /// <summary>Select the previous symbol in z-order (Shift+Tab key). Wraps around.</summary>
+    public void SelectPreviousByZOrder()
+    {
+        var screen = GetScreen();
+        if (screen == null || screen.Symbols.Count == 0) return;
+
+        if (_selectedSymbol == null)
+        {
+            var last = screen.Symbols[^1];
+            _selectedSymbols.Clear();
+            _selectedSymbol = last;
+            _selectedSymbols.Add(last);
+        }
+        else
+        {
+            var idx = screen.Symbols.IndexOf(_selectedSymbol);
+            var prev = (idx - 1 + screen.Symbols.Count) % screen.Symbols.Count;
+            var sym = screen.Symbols[prev];
+            _selectedSymbols.Clear();
+            _selectedSymbol = sym;
+            _selectedSymbols.Add(sym);
+        }
+        NotifySelectionChanged();
+        _ = ScrollToSymbolAsync(_selectedSymbol);
+        StateHasChanged();
+    }
+
+    // --- Z-order commands ---
+
+    private void BringToFront()
+    {
+        var screen = GetScreen();
+        if (screen == null || _selectedSymbol == null) return;
+        var sym = _selectedSymbol;
+        var oldIdx = screen.Symbols.IndexOf(sym);
+        if (oldIdx < 0 || oldIdx == screen.Symbols.Count - 1) return;
+
+        screen.Symbols.RemoveAt(oldIdx);
+        screen.Symbols.Add(sym);
+
+        UndoRedo.RecordAction(new CollectionAction
+        {
+            Description = "Bring to front",
+            UndoCallback = () => { screen.Symbols.Remove(sym); screen.Symbols.Insert(oldIdx, sym); },
+            RedoCallback = () => { screen.Symbols.Remove(sym); screen.Symbols.Add(sym); }
+        });
+        OnChanged();
+    }
+
+    private void SendToBack()
+    {
+        var screen = GetScreen();
+        if (screen == null || _selectedSymbol == null) return;
+        var sym = _selectedSymbol;
+        var oldIdx = screen.Symbols.IndexOf(sym);
+        if (oldIdx <= 0) return;
+
+        screen.Symbols.RemoveAt(oldIdx);
+        screen.Symbols.Insert(0, sym);
+
+        UndoRedo.RecordAction(new CollectionAction
+        {
+            Description = "Send to back",
+            UndoCallback = () => { screen.Symbols.Remove(sym); screen.Symbols.Insert(oldIdx, sym); },
+            RedoCallback = () => { screen.Symbols.Remove(sym); screen.Symbols.Insert(0, sym); }
+        });
+        OnChanged();
+    }
+
+    private void MoveForward()
+    {
+        var screen = GetScreen();
+        if (screen == null || _selectedSymbol == null) return;
+        var sym = _selectedSymbol;
+        var idx = screen.Symbols.IndexOf(sym);
+        if (idx < 0 || idx == screen.Symbols.Count - 1) return;
+
+        screen.Symbols.RemoveAt(idx);
+        screen.Symbols.Insert(idx + 1, sym);
+
+        UndoRedo.RecordAction(new CollectionAction
+        {
+            Description = "Move forward",
+            UndoCallback = () => { screen.Symbols.RemoveAt(idx + 1); screen.Symbols.Insert(idx, sym); },
+            RedoCallback = () => { screen.Symbols.RemoveAt(idx); screen.Symbols.Insert(idx + 1, sym); }
+        });
+        OnChanged();
+    }
+
+    private void MoveBackward()
+    {
+        var screen = GetScreen();
+        if (screen == null || _selectedSymbol == null) return;
+        var sym = _selectedSymbol;
+        var idx = screen.Symbols.IndexOf(sym);
+        if (idx <= 0) return;
+
+        screen.Symbols.RemoveAt(idx);
+        screen.Symbols.Insert(idx - 1, sym);
+
+        UndoRedo.RecordAction(new CollectionAction
+        {
+            Description = "Move backward",
+            UndoCallback = () => { screen.Symbols.RemoveAt(idx - 1); screen.Symbols.Insert(idx, sym); },
+            RedoCallback = () => { screen.Symbols.RemoveAt(idx); screen.Symbols.Insert(idx - 1, sym); }
+        });
+        OnChanged();
     }
 
     private void CopySelectedSymbols()

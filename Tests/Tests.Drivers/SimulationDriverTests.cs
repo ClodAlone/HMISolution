@@ -130,7 +130,14 @@ public class SimulationDriverTests
 
         driver.AddItem(variable, config);
         driver.Start();
-        Thread.Sleep(300);
+
+        // Spin-wait until the timer fires at least once (value changes from initial 0.0)
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (DateTime.UtcNow < deadline)
+        {
+            if (variable.Value is int) break;
+            Thread.Sleep(50);
+        }
 
         // RandomInt produces an int; convert carefully
         var value = Convert.ToInt32(variable.Value);

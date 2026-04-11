@@ -551,6 +551,17 @@ public class NodeEditorService
         }
         proj.Children.Add(eventGroup);
 
+        var aliasMapGroup = new AliasMapGroupNode() { Parent = proj };
+        if (proj.Model.AliasMaps != null)
+        {
+            foreach (var map in proj.Model.AliasMaps)
+            {
+                var mNode = new AliasMapNode(map) { Parent = aliasMapGroup };
+                aliasMapGroup.Children.Add(mNode);
+            }
+        }
+        proj.Children.Add(aliasMapGroup);
+
         var screenGroup = new ScreenGroupNode() { Parent = proj };
         if (proj.Model.Screens != null)
         {
@@ -986,6 +997,24 @@ public class NodeEditorService
         }
     }
 
+    public void AddAliasMap()
+    {
+        if (SelectedItem is AliasMapGroupNode parent)
+        {
+            var newMap = new VariableAliasMap
+            {
+                Name = "New Alias Map"
+            };
+            var newNode = new AliasMapNode(newMap) { Parent = parent };
+            parent.Children.Add(newNode);
+            parent.IsExpanded = true;
+            _rootModel?.AliasMaps.Add(newMap);
+            SetSingleSelection(newNode);
+            HasUnsavedChanges = true;
+            NotifyStateChanged();
+        }
+    }
+
     /// <summary>
     /// Adds a resource folder
     /// </summary>
@@ -1094,6 +1123,10 @@ public class NodeEditorService
                 foreach (var child in ugn.Children.OfType<UserNode>())
                     _rootModel?.Users.Remove(child.User);
             }
+            else if (item is AliasMapNode amn)
+            {
+                _rootModel?.AliasMaps.Remove(amn.AliasMap);
+            }
 
             deletedInfo.Add((item, parent, index, user, group, groupUsers));
             parent.Children.Remove(item);
@@ -1128,6 +1161,8 @@ public class NodeEditorService
                     {
                         _rootModel?.Users.Add(user);
                     }
+                    if (item is AliasMapNode amnUndo)
+                        _rootModel?.AliasMaps.Add(amnUndo.AliasMap);
                 }
                 NotifyStateChanged();
             },
@@ -1144,6 +1179,8 @@ public class NodeEditorService
                             foreach (var u in groupUsers)
                                 _rootModel?.Users.Remove(u);
                     }
+                    if (item is AliasMapNode amnRedo)
+                        _rootModel?.AliasMaps.Remove(amnRedo.AliasMap);
                     parent.Children.Remove(item);
                     item.IsSelected = false;
                 }
@@ -1350,7 +1387,93 @@ public class NodeEditorService
                 break;
             }
 
-            // ÔöÇÔöÇÔöÇ Multi-paste cases ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+            case "Scheduler" when SelectedItem is SchedulerGroupNode schedulerGroup:
+            {
+                var newSch = clipboard.PasteScheduler();
+                if (newSch == null) return;
+                var newSchNode = new SchedulerNode(newSch) { Parent = schedulerGroup };
+                schedulerGroup.Children.Add(newSchNode);
+                schedulerGroup.IsExpanded = true;
+                SelectedItem = newSchNode;
+                HasUnsavedChanges = true;
+                NotifyStateChanged();
+                break;
+            }
+            case "Report" when SelectedItem is ReportGroupNode reportGroup:
+            {
+                var newRpt = clipboard.PasteReport();
+                if (newRpt == null) return;
+                var newRptNode = new ReportNode(newRpt) { Parent = reportGroup };
+                reportGroup.Children.Add(newRptNode);
+                reportGroup.IsExpanded = true;
+                SelectedItem = newRptNode;
+                HasUnsavedChanges = true;
+                NotifyStateChanged();
+                break;
+            }
+            case "Event" when SelectedItem is EventGroupNode eventGroup:
+            {
+                var newEvt = clipboard.PasteEvent();
+                if (newEvt == null) return;
+                var newEvtNode = new EventNode(newEvt) { Parent = eventGroup };
+                eventGroup.Children.Add(newEvtNode);
+                eventGroup.IsExpanded = true;
+                SelectedItem = newEvtNode;
+                HasUnsavedChanges = true;
+                NotifyStateChanged();
+                break;
+            }
+            case "AliasMap" when SelectedItem is AliasMapGroupNode aliasGroup:
+            {
+                var newMap = clipboard.PasteAliasMap();
+                if (newMap == null) return;
+                var newMapNode = new AliasMapNode(newMap) { Parent = aliasGroup };
+                aliasGroup.Children.Add(newMapNode);
+                aliasGroup.IsExpanded = true;
+                _rootModel?.AliasMaps.Add(newMap);
+                SelectedItem = newMapNode;
+                HasUnsavedChanges = true;
+                NotifyStateChanged();
+                break;
+            }
+            case "Calculated" when SelectedItem is CalculatedGroupNode calcGroup:
+            {
+                var newCalc = clipboard.PasteCalculated();
+                if (newCalc == null) return;
+                var newCalcNode = new CalculatedNode(newCalc) { Parent = calcGroup };
+                calcGroup.Children.Add(newCalcNode);
+                calcGroup.IsExpanded = true;
+                SelectedItem = newCalcNode;
+                HasUnsavedChanges = true;
+                NotifyStateChanged();
+                break;
+            }
+            case "Asset" when SelectedItem is AssetGroupNode assetGroup:
+            {
+                var newAsset = clipboard.PasteAsset();
+                if (newAsset == null) return;
+                var newAssetNode = new AssetNode(newAsset) { Parent = assetGroup };
+                assetGroup.Children.Add(newAssetNode);
+                assetGroup.IsExpanded = true;
+                SelectedItem = newAssetNode;
+                HasUnsavedChanges = true;
+                NotifyStateChanged();
+                break;
+            }
+            case "Batch" when SelectedItem is BatchGroupNode batchGroup:
+            {
+                var newBatch = clipboard.PasteBatch();
+                if (newBatch == null) return;
+                var newBatchNode = new BatchNode(newBatch) { Parent = batchGroup };
+                batchGroup.Children.Add(newBatchNode);
+                batchGroup.IsExpanded = true;
+                SelectedItem = newBatchNode;
+                HasUnsavedChanges = true;
+                NotifyStateChanged();
+                break;
+            }
+
+            // Ã”Ã¶Ã‡Ã”Ã¶Ã‡Ã”Ã¶Ã‡ Multi-paste cases Ã”Ã¶Ã‡Ã”Ã¶Ã‡Ã”Ã¶Ã‡Ã”Ã¶Ã‡Ã”Ã¶Ã‡Ã”Ã¶Ã‡Ã”Ã¶Ã‡Ã”Ã¶Ã‡Ã”Ã¶Ã‡Ã”Ã¶Ã‡Ã”Ã¶Ã‡Ã”Ã¶Ã‡Ã”Ã¶Ã‡Ã”Ã¶Ã‡Ã”Ã¶Ã‡Ã”Ã¶Ã‡Ã”Ã¶Ã‡Ã”Ã¶Ã‡Ã”Ã¶Ã‡Ã”Ã¶Ã‡Ã”Ã¶Ã‡Ã”Ã¶Ã‡Ã”Ã¶Ã‡Ã”Ã¶Ã‡Ã”Ã¶Ã‡Ã”Ã¶Ã‡Ã”Ã¶Ã‡Ã”Ã¶Ã‡Ã”Ã¶Ã‡Ã”Ã¶Ã‡
             case "Variables" when target is FolderNode pf:
             {
                 var items = clipboard.PasteVariables();
@@ -1474,7 +1597,7 @@ public class NodeEditorService
             }
             else
             {
-                // Not siblings — just select the new node
+                // Not siblings â€” just select the new node
                 SetSingleSelection(node);
             }
         }
@@ -1699,7 +1822,7 @@ public class NodeEditorService
     private static void BuildResourceTree<T>(TreeNode parent, List<T> items, string resourceKind,
         Func<T, string> getGroup, Func<T, TreeNode> createNode)
     {
-        // Cache of group-path → folder node
+        // Cache of group-path â†’ folder node
         var folderCache = new Dictionary<string, ResourceFolderNode>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var item in items)
@@ -1883,6 +2006,18 @@ public class NodeEditorService
                     {
                         eNode.SyncName();
                         _rootModel.Events.Add(eNode.Event);
+                    }
+                }
+            }
+            else if (root is AliasMapGroupNode aliasGrpNode && _rootModel != null)
+            {
+                _rootModel.AliasMaps.Clear();
+                foreach (var child in aliasGrpNode.Children)
+                {
+                    if (child is AliasMapNode mNode)
+                    {
+                        mNode.SyncName();
+                        _rootModel.AliasMaps.Add(mNode.AliasMap);
                     }
                 }
             }

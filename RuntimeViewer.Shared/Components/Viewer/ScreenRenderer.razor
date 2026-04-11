@@ -16,7 +16,7 @@ else if (Screen.LayoutMode == "responsive")
          style="background: @Screen.Background;@(string.IsNullOrEmpty(bgDataResp) ? "" : $" background-image: url('{bgDataResp}'); background-size: cover; background-position: center;") gap: @(Screen.GridGap)px; grid-template-columns: repeat(@Screen.GridColumns, 1fr);">
         @foreach (var sym in GetSortedSymbols())
         {
-            var liveValue = Opc.GetValue(sym.VariablePath ?? "");
+            var liveValue = OpcGet(sym.VariablePath);
             var fillColor = EvalFillBinding(sym, liveValue);
             var visible = EvalVisibilityBinding(sym, liveValue);
             var labelText = EvalLabelBinding(sym, liveValue);
@@ -399,7 +399,7 @@ else
 
         @foreach (var sym in Screen.Symbols)
         {
-            var liveValue = Opc.GetValue(sym.VariablePath ?? "");
+            var liveValue = OpcGet(sym.VariablePath);
             var fillColor = EvalFillBinding(sym, liveValue);
             var visible = EvalVisibilityBinding(sym, liveValue);
             var rotation = EvalRotationBinding(sym, liveValue);
@@ -734,6 +734,13 @@ else
     [Parameter] public EventCallback OnRequestLogin { get; set; }
 
     /// <summary>
+    /// Optional alias map for parameterized (template) screens.
+    /// Keys are alias placeholder names, values are real OPC variable paths.
+    /// Variable paths containing {AliasName} tokens are resolved at runtime.
+    /// </summary>
+    [Parameter] public Dictionary<string, string>? VariableAliases { get; set; }
+
+    /// <summary>
     /// Effective fit mode: per-screen FitMode wins if set; BestFit parameter acts as legacy override.
     /// </summary>
     private string EffectiveFitMode
@@ -860,7 +867,7 @@ else
         {
             var paths = Screen.Symbols
                 .Where(s => !string.IsNullOrEmpty(s.VariablePath))
-                .Select(s => s.VariablePath!)
+                .Select(s => ResolveAlias(s.VariablePath))
                 .Distinct()
                 .ToList();
 
@@ -870,7 +877,7 @@ else
                 foreach (var cmd in sym.Commands)
                 {
                     if (!string.IsNullOrEmpty(cmd.VariablePath))
-                        paths.Add(cmd.VariablePath);
+                        paths.Add(ResolveAlias(cmd.VariablePath));
                 }
 
                 // Monitor recipe OPC command/status variables and recipe variable paths
@@ -912,7 +919,7 @@ else
                 foreach (var anim in sym.Animations)
                 {
                     if (!string.IsNullOrEmpty(anim.TriggerVariable))
-                        paths.Add(anim.TriggerVariable);
+                        paths.Add(ResolveAlias(anim.TriggerVariable));
                 }
             }
 
@@ -926,6 +933,28 @@ else
                 Opc.MonitorVariables(distinctPaths);
             }
         }
+    }
+
+    /// &lt;summary&gt;
+    /// Resolves alias placeholders in a variable path.
+    /// Replaces {AliasName} tokens using the VariableAliases dictionary.
+    /// Returns the original path if no aliases apply.
+    /// &lt;/summary&gt;
+    private string ResolveAlias(string? path)
+    {
+        if (string.IsNullOrEmpty(path) || VariableAliases is not { Count: > 0 })
+            return path ?? "";
+        if (!path.Contains('{'))
+            return path;
+        foreach (var kv in VariableAliases)
+            path = path.Replace($"{{{kv.Key}}}", kv.Value);
+        return path;
+    }
+
+    /// &lt;summary&gt;Read an OPC value, resolving aliases first.&lt;/summary&gt;
+    private string? OpcGet(string? path)
+    {
+        return Opc.GetValue(ResolveAlias(path));
     }
 
     private void OnValuesChanged()
@@ -967,7 +996,7 @@ else
                     var cy = sym.Y + sym.Height / 2.0;
                     _knobDragStartAngle = Math.Atan2(svgPt.X - cx, -(svgPt.Y - cy)) * 180.0 / Math.PI;
                     _knobPrevAngle = _knobDragStartAngle;
-                    _knobDragStartValue = ParseDouble(Opc.GetValue(sym.VariablePath) ?? "0");
+                    _knobDragStartValue = ParseDouble(OpcGet(sym.VariablePath) ?? "0");
                     _knobCurrentValue = _knobDragStartValue;
                     _dragKnobSymbol = sym;
                     _isDraggingKnob = true;
@@ -995,10 +1024,11 @@ else
 
     private async Task OnRadioGroupSelect(string variablePath, string value)
     {
-        if (string.IsNullOrEmpty(variablePath)) return;
-        Opc.UpdateLocalValue(variablePath, value);
+        var resolved = ResolveAlias(variablePath);
+        if (string.IsNullOrEmpty(resolved)) return;
+        Opc.UpdateLocalValue(resolved, value);
         StateHasChanged();
-        await Opc.WriteValueAsync(variablePath, value);
+        await Opc.WriteValueAsync(resolved, value);
     }
 
     private async Task OnSymbolMouseUp(MouseEventArgs e, ScreenSymbol sym)
@@ -1047,12 +1077,13 @@ else
                 return;
             }
             var n = Math.Max(2, Math.Min(12, sym.SwitchPositions));
-            var pos = (int)ParseDouble(Opc.GetValue(sym.VariablePath) ?? "0");
+            var pos = (int)ParseDouble(OpcGet(sym.VariablePath) ?? "0");
             pos = (pos + 1) % n;
             var posStr = pos.ToString();
-            Opc.UpdateLocalValue(sym.VariablePath, posStr);
+            var resolvedRotary = ResolveAlias(sym.VariablePath);
+            Opc.UpdateLocalValue(resolvedRotary, posStr);
             StateHasChanged();
-            await Opc.WriteValueAsync(sym.VariablePath, posStr);
+            await Opc.WriteValueAsync(resolvedRotary, posStr);
             return;
         }
 
@@ -1064,12 +1095,13 @@ else
                 await OnRequestLogin.InvokeAsync();
                 return;
             }
-            var current = Opc.GetValue(sym.VariablePath) ?? "0";
+            var current = OpcGet(sym.VariablePath) ?? "0";
             var isOn = current is "True" or "true" or "1";
             var newVal = isOn ? "0" : "1";
-            Opc.UpdateLocalValue(sym.VariablePath, newVal);
+            var resolvedSwitch = ResolveAlias(sym.VariablePath);
+            Opc.UpdateLocalValue(resolvedSwitch, newVal);
             StateHasChanged();
-            await Opc.WriteValueAsync(sym.VariablePath, newVal);
+            await Opc.WriteValueAsync(resolvedSwitch, newVal);
             return;
         }
 
@@ -1085,7 +1117,7 @@ else
             var vals = (sym.DropdownValues ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
             if (opts.Length > 0)
             {
-                var current = Opc.GetValue(sym.VariablePath) ?? "";
+                var current = OpcGet(sym.VariablePath) ?? "";
                 var curIdx = -1;
                 for (var k = 0; k < opts.Length; k++)
                 {
@@ -1094,9 +1126,10 @@ else
                 }
                 var nextIdx = (curIdx + 1) % opts.Length;
                 var nextVal = nextIdx < vals.Length ? vals[nextIdx] : opts[nextIdx];
-                Opc.UpdateLocalValue(sym.VariablePath, nextVal);
+                var resolvedRadio = ResolveAlias(sym.VariablePath);
+                Opc.UpdateLocalValue(resolvedRadio, nextVal);
                 StateHasChanged();
-                await Opc.WriteValueAsync(sym.VariablePath, nextVal);
+                await Opc.WriteValueAsync(resolvedRadio, nextVal);
             }
             return;
         }

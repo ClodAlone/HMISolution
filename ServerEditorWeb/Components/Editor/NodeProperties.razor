@@ -669,6 +669,16 @@ else if (Node is SchedulerNode schedulerNode)
                                   ValueChanged='v => { cmd.TargetScreen = v ?? string.Empty; }'
                                   OnChanged="OnChanged"
                                   Placeholder="(select screen)" />
+                    <select class="form-select form-select-sm mt-1" style="font-size: 10px;" @bind="cmd.AliasMapName" @bind:after="OnChanged">
+                        <option value="">(no alias map)</option>
+                        @if (Editor.RootModel?.AliasMaps != null)
+                        {
+                            @foreach (var am in Editor.RootModel.AliasMaps)
+                            {
+                                <option value="@am.Name">@am.Name</option>
+                            }
+                        }
+                    </select>
                 }
                 else if (cmd.Action is "ExecuteScript" or "ExecuteJavaScript")
                 {
@@ -760,6 +770,16 @@ else if (Node is SchedulerNode schedulerNode)
                                   ValueChanged='v => { cmd.TargetScreen = v ?? string.Empty; }'
                                   OnChanged="OnChanged"
                                   Placeholder="(select screen)" />
+                    <select class="form-select form-select-sm mt-1" style="font-size: 10px;" @bind="cmd.AliasMapName" @bind:after="OnChanged">
+                        <option value="">(no alias map)</option>
+                        @if (Editor.RootModel?.AliasMaps != null)
+                        {
+                            @foreach (var am in Editor.RootModel.AliasMaps)
+                            {
+                                <option value="@am.Name">@am.Name</option>
+                            }
+                        }
+                    </select>
                 }
                 else if (cmd.Action is "ExecuteScript" or "ExecuteJavaScript")
                 {
@@ -2176,6 +2196,58 @@ else if (Node is BatchNode batchNode)
     <p class="text-muted small mt-3">At runtime: <code>_Batch.@(batchNode.Batch.Name).State</code>, <code>.CurrentStep</code>, <code>.StepElapsed</code> etc.</p>
  </div>
 }
+else if (Node is AliasMapNode aliasMapNode)
+{
+ <div class="properties-panel">
+    <h5>🔀 Alias Map</h5>
+    <div class="mb-3">
+        <label class="form-label">Name</label>
+        <input type="text" class="form-control" @bind="aliasMapNode.Name" @bind:after="OnChanged" />
+    </div>
+
+    <h6>Mappings</h6>
+    <p class="text-muted small">
+        Define alias-to-variable-path mappings. In screen variable bindings, use <code>{AliasName}</code>
+        syntax. At runtime, <code>{AliasName}</code> is replaced with the real OPC path defined here.
+    </p>
+
+    @{ var mappings = aliasMapNode.AliasMap.Mappings; }
+
+    @if (mappings.Count > 0)
+    {
+        <table class="table table-sm table-bordered">
+            <thead><tr><th>Alias</th><th>Real Path</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var key in mappings.Keys.ToList())
+                {
+                    var k = key;
+                    <tr>
+                        <td>
+                            <input type="text" class="form-control form-control-sm" value="@k"
+                                   @onchange="e => { var nk = e.Value?.ToString() ?? k; if (nk != k && !string.IsNullOrWhiteSpace(nk)) { var v = mappings[k]; mappings.Remove(k); mappings[nk] = v; OnChanged(); } }" />
+                        </td>
+                        <td>
+                            <VariablePathPicker Value="@mappings[k]"
+                                                ValueChanged='v => { mappings[k] = v ?? ""; OnChanged(); }' />
+                        </td>
+                        <td style="width:32px;text-align:center;">
+                            <button class="btn btn-sm btn-outline-danger py-0 px-1" @onclick="() => { mappings.Remove(k); OnChanged(); }">âœ•</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+    else
+    {
+        <div class="text-muted small mb-2">No mappings defined yet.</div>
+    }
+
+    <button class="btn btn-sm btn-outline-primary" @onclick="() => AddAliasMapping(aliasMapNode)">
+        + Add Mapping
+    </button>
+ </div>
+}
 else if (Node is EventNode eventNode)
 {
  <div class="properties-panel">
@@ -2310,6 +2382,16 @@ else if (Node is EventNode eventNode)
                               ValueChanged='v => { cmd.TargetScreen = v ?? string.Empty; }'
                               OnChanged="OnChanged"
                               Placeholder="(select screen)" />
+                <select class="form-select form-select-sm mt-1" style="font-size: 10px;" @bind="cmd.AliasMapName" @bind:after="OnChanged">
+                    <option value="">(no alias map)</option>
+                    @if (Editor.RootModel?.AliasMaps != null)
+                    {
+                        @foreach (var am in Editor.RootModel.AliasMaps)
+                        {
+                            <option value="@am.Name">@am.Name</option>
+                        }
+                    }
+                </select>
             }
             else if (cmd.Action is "ExecuteScript" or "ExecuteJavaScript")
             {
@@ -2403,6 +2485,16 @@ else if (Node is EventNode eventNode)
                               ValueChanged='v => { cmd.TargetScreen = v ?? string.Empty; }'
                               OnChanged="OnChanged"
                               Placeholder="(select screen)" />
+                <select class="form-select form-select-sm mt-1" style="font-size: 10px;" @bind="cmd.AliasMapName" @bind:after="OnChanged">
+                    <option value="">(no alias map)</option>
+                    @if (Editor.RootModel?.AliasMaps != null)
+                    {
+                        @foreach (var am in Editor.RootModel.AliasMaps)
+                        {
+                            <option value="@am.Name">@am.Name</option>
+                        }
+                    }
+                </select>
             }
             else if (cmd.Action is "ExecuteScript" or "ExecuteJavaScript")
             {
@@ -3168,6 +3260,17 @@ else if (Node is UserNode uNode)
     {
         node.Batch.Transitions.Add(new BatchTransition());
         OnChanged();
+    }
+
+    private void AddAliasMapping(AliasMapNode node)
+    {
+        var mappings = node.AliasMap.Mappings;
+        var name = "Alias" + (mappings.Count + 1);
+        if (!mappings.ContainsKey(name))
+        {
+            mappings[name] = "";
+            OnChanged();
+        }
     }
 
     private void MoveStepUp(BatchNode node, int idx)

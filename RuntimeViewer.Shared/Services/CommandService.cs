@@ -11,14 +11,14 @@ public class CommandService
     private readonly OpcRuntimeClient _opc;
     private readonly IJSRuntime _js;
 
-    /// <summary>Raised when a NavigateScreen command fires.</summary>
-    public event Action<string>? NavigateScreen;
+    /// <summary>Raised when a NavigateScreen command fires. Args: screenName, aliasMapName.</summary>
+    public event Action<string, string>? NavigateScreen;
 
-    /// <summary>Raised when an OpenScreenPopup command fires.</summary>
-    public event Action<string>? OpenScreenPopup;
+    /// <summary>Raised when an OpenScreenPopup command fires. Args: screenName, aliasMapName.</summary>
+    public event Action<string, string>? OpenScreenPopup;
 
-    /// <summary>Raised when an OpenScreenModal command fires.</summary>
-    public event Action<string>? OpenScreenModal;
+    /// <summary>Raised when an OpenScreenModal command fires. Args: screenName, aliasMapName.</summary>
+    public event Action<string, string>? OpenScreenModal;
 
     /// <summary>Raised when a Login command fires to show the login prompt.</summary>
     public event Action? RequestLogin;
@@ -45,17 +45,17 @@ public class CommandService
         {
             case "NavigateScreen":
                 if (!string.IsNullOrEmpty(cmd.TargetScreen))
-                    NavigateScreen?.Invoke(cmd.TargetScreen);
+                    NavigateScreen?.Invoke(cmd.TargetScreen, cmd.AliasMapName ?? "");
                 break;
 
             case "OpenScreenPopup":
                 if (!string.IsNullOrEmpty(cmd.TargetScreen))
-                    OpenScreenPopup?.Invoke(cmd.TargetScreen);
+                    OpenScreenPopup?.Invoke(cmd.TargetScreen, cmd.AliasMapName ?? "");
                 break;
 
             case "OpenScreenModal":
                 if (!string.IsNullOrEmpty(cmd.TargetScreen))
-                    OpenScreenModal?.Invoke(cmd.TargetScreen);
+                    OpenScreenModal?.Invoke(cmd.TargetScreen, cmd.AliasMapName ?? "");
                 break;
 
             case "SetVariable":
