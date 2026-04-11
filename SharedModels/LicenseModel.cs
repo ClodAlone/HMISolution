@@ -82,6 +82,21 @@ public class LicenseStatus
     public int DaysRemaining { get; set; }
     public License? License { get; set; }
 
+    /// <summary>UTC timestamp when the demo grace period started. <c>null</c> if not in demo mode.</summary>
+    public DateTime? DemoStartedUtc { get; set; }
+
+    /// <summary>Duration of the demo grace period in minutes. Default 10.</summary>
+    public int DemoGraceMinutes { get; set; } = 10;
+
+    /// <summary>Whether the demo grace period has expired and the license should degrade to Trial limits.</summary>
+    public bool IsDemoExpired => DemoStartedUtc.HasValue &&
+                                 DateTime.UtcNow >= DemoStartedUtc.Value.AddMinutes(DemoGraceMinutes);
+
+    /// <summary>Time remaining in the demo grace period. <see cref="TimeSpan.Zero"/> if expired or not in demo mode.</summary>
+    public TimeSpan DemoTimeRemaining => DemoStartedUtc.HasValue
+        ? TimeSpan.FromTicks(Math.Max(0, (DemoStartedUtc.Value.AddMinutes(DemoGraceMinutes) - DateTime.UtcNow).Ticks))
+        : TimeSpan.Zero;
+
     /// <summary>Check whether a feature count is within the license limit. 0 = unlimited.</summary>
     public bool IsWithinLimit(int current, int max) => max == 0 || current <= max;
 }
@@ -148,6 +163,27 @@ public static class LicenseTiers
         Tier = "Enterprise",
         LicensedTo = licensedTo,
         MachineId = machineId,
+        ExpiresUtc = DateTime.MaxValue,
+        MaxVariables = 0,
+        MaxDrivers = 0,
+        MaxScripts = 0,
+        MaxPlcPrograms = 0,
+        MaxScreens = 0,
+        MaxRecipes = 0,
+        AllowDataLogging = true,
+        AllowAi = true
+    };
+
+    /// <summary>
+    /// Creates a Demo license with full (Enterprise-level) features.
+    /// Used during the demo grace period before degrading to Trial limits.
+    /// </summary>
+    public static License CreateDemo() => new()
+    {
+        Id = Guid.NewGuid().ToString("N")[..12],
+        Tier = "Demo",
+        LicensedTo = "Demo User",
+        MachineId = "",
         ExpiresUtc = DateTime.MaxValue,
         MaxVariables = 0,
         MaxDrivers = 0,

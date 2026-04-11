@@ -2,6 +2,12 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
+# Copy Version.props and Directory.Build.props (imported by all projects)
+COPY HMISolution/Version.props                                HMISolution/Version.props
+COPY Drivers/Directory.Build.props                            Drivers/Directory.Build.props
+COPY Server/Directory.Build.props                             Server/Directory.Build.props
+COPY SharedModels/Directory.Build.props                       SharedModels/Directory.Build.props
+
 # Copy all project files first for layer caching
 COPY SharedModels/SharedModels.csproj                         SharedModels/
 COPY Drivers/Drivers.Abstractions/Drivers.Abstractions.csproj Drivers/Drivers.Abstractions/
@@ -38,8 +44,8 @@ COPY --from=build /app/publish .
 # Default config / data volume mount point
 VOLUME /data
 
-# OPC UA default port (4840) + diagnostics port (14841)
-EXPOSE 4840
+# OPC UA default port (14840) + diagnostics port (14841)
+EXPOSE 14840
 EXPOSE 14841
 
 # Pass nodes.json path as argument; mount your config at /data/nodes.json

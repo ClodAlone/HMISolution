@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
@@ -22,8 +22,10 @@ public class CameraHostedService : BackgroundService
     private readonly ServerConfig _serverConfig;
     private readonly ILogger<CameraHostedService> _logger;
     private readonly CameraStreamService _cameraService;
+    private readonly CameraRecordingService _recordingService;
     private HttpListener? _httpListener;
     private SimpleFileServerNodeManager? _nodeManager;
+    private string _projectDir = "";
 
     // Tracks last detection timestamp per prefix for Alive timeout
     private readonly ConcurrentDictionary<string, DateTime> _lastDetectionTime = new();
@@ -36,11 +38,13 @@ public class CameraHostedService : BackgroundService
     public CameraHostedService(
         ServerConfig serverConfig,
         ILogger<CameraHostedService> logger,
-        CameraStreamService cameraService)
+        CameraStreamService cameraService,
+        CameraRecordingService recordingService)
     {
         _serverConfig = serverConfig;
         _logger = logger;
         _cameraService = cameraService;
+        _recordingService = recordingService;
     }
 
     /// <summary>Set the node manager reference for writing detection variables.</summary>
@@ -62,6 +66,9 @@ public class CameraHostedService : BackgroundService
             return;
         }
 
+        // Resolve project directory for recordings
+        _projectDir = Path.GetDirectoryName(Path.GetFullPath(_serverConfig.NodesConfigFile)) ?? ".";
+
         // Start cameras
         foreach (var cam in cameras)
         {
@@ -74,6 +81,17 @@ public class CameraHostedService : BackgroundService
             },
             varPath => ReadBoolVariable(varPath));
             _logger.LogInformation("Camera started: {Id} ({Protocol}) -> {Url}", cam.CameraId, cam.Protocol, cam.Url);
+
+            // Start video recorder if recording is enabled
+            if (cam.RecordingEnabled)
+            {
+                _recordingService.StartRecorder(cam,
+                    () => _cameraService.GetLatestFrame(cam.CameraId),
+                    _projectDir,
+                    varPath => ReadBoolVariable(varPath),
+                    varPath => ReadDoubleVariable(varPath));
+                _logger.LogInformation("Recording started for camera {Id} (trigger={Trigger})", cam.CameraId, cam.RecordingTrigger);
+            }
         }
 
         // Start periodic timer to reset Alive when detections stop
@@ -186,6 +204,57 @@ public class CameraHostedService : BackgroundService
                 context.Response.Close();
                 return;
             }
+
+            // /camera/{cameraId}/recordings -> list recordings
+            if (action == "recordings" && segments.Length == 3)
+            {
+                var list = _recordingService.ListRecordings(cameraId, _projectDir);
+                var json = JsonSerializer.Serialize(list);
+                var bytes = System.Text.Encoding.UTF8.GetBytes(json);
+                context.Response.ContentType = "application/json";
+                context.Response.Headers.Add("Access-Control-Allow-Origin", "*");
+                context.Response.ContentLength64 = bytes.Length;
+                await context.Response.OutputStream.WriteAsync(bytes, ct);
+                context.Response.Close();
+                return;
+            }
+
+            // /camera/{cameraId}/recordings/{fileName} -> serve recording file
+            if (action == "recordings" && segments.Length >= 4)
+            {
+                var fileName = Uri.UnescapeDataString(segments[3]);
+                var filePath = _recordingService.GetRecordingFilePath(cameraId, fileName, _projectDir);
+                if (filePath != null)
+                {
+                    var fi = new FileInfo(filePath);
+                    context.Response.ContentType = "video/avi";
+                    context.Response.Headers.Add("Access-Control-Allow-Origin", "*");
+                    context.Response.Headers.Add("Content-Disposition", $"inline; filename=\"{fi.Name}\"");
+                    context.Response.ContentLength64 = fi.Length;
+                    using var fs = File.OpenRead(filePath);
+                    await fs.CopyToAsync(context.Response.OutputStream, ct);
+                }
+                else
+                {
+                    context.Response.StatusCode = 404;
+                }
+                context.Response.Close();
+                return;
+            }
+
+            // /camera/{cameraId}/recording-status -> is currently recording?
+            if (action == "recording-status")
+            {
+                var status = new { isRecording = _recordingService.IsRecording(cameraId) };
+                var json = JsonSerializer.Serialize(status);
+                var bytes = System.Text.Encoding.UTF8.GetBytes(json);
+                context.Response.ContentType = "application/json";
+                context.Response.Headers.Add("Access-Control-Allow-Origin", "*");
+                context.Response.ContentLength64 = bytes.Length;
+                await context.Response.OutputStream.WriteAsync(bytes, ct);
+                context.Response.Close();
+                return;
+            }
         }
 
         context.Response.StatusCode = 404;
@@ -276,7 +345,41 @@ public class CameraHostedService : BackgroundService
         }
     }
 
-    private void WriteDetectionVariables(string prefix, string label, double confidence, int count)
+    /// <summary>
+    /// Reads a Double OPC variable by path. Used by CameraRecordingService to read detection confidence.
+    /// </summary>
+    private double ReadDoubleVariable(string variablePath)
+    {
+        if (_nodeManager == null) return 0;
+        try
+        {
+            var value = _nodeManager.ReadVariable(variablePath);
+            return Convert.ToDouble(value, System.Globalization.CultureInfo.InvariantCulture);
+        }
+        catch
+        {
+            return 0;
+        }
+    }
+
+    /// <summary>
+    /// Reads a String OPC variable by path. Used by CameraRecordingService to read detection label.
+    /// </summary>
+    private string? ReadStringVariable(string variablePath)
+    {
+        if (_nodeManager == null) return null;
+        try
+        {
+            var value = _nodeManager.ReadVariable(variablePath);
+            return value?.ToString();
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+        private void WriteDetectionVariables(string prefix, string label, double confidence, int count)
     {
         if (_nodeManager == null) return;
 
@@ -335,6 +438,7 @@ public class CameraHostedService : BackgroundService
     {
         _aliveTimer?.Dispose();
         _httpListener?.Stop();
+        _recordingService.Dispose();
         _cameraService.Dispose();
         return base.StopAsync(cancellationToken);
     }

@@ -1,0 +1,43 @@
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     HMI Solution — Docker All-in-One Image Build Targets
+
+     Import this in any .csproj to auto-build the Docker image after a
+     Release publish, or invoke it manually:
+
+       dotnet msbuild docker/DockerAllInOne.targets /t:BuildDockerAllInOne
+     ═══════════════════════════════════════════════════════════════════════════ -->
+<Project>
+
+  <PropertyGroup>
+    <DockerAllInOneTag Condition="'$(DockerAllInOneTag)' == ''">latest</DockerAllInOneTag>
+    <DockerAllInOneImage>hmi-allinone</DockerAllInOneImage>
+    <!-- Resolve the repo root (one level up from this file's directory) -->
+    <RepoRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..'))</RepoRoot>
+  </PropertyGroup>
+
+  <Target Name="BuildDockerAllInOne"
+          AfterTargets="Build"
+          Condition="'$(Configuration)' == 'Release' AND '$(BuildDockerImage)' == 'true'">
+
+    <Message Importance="high"
+             Text="══ Building Docker All-in-One image: $(DockerAllInOneImage):$(DockerAllInOneTag) ══" />
+
+    <Exec Command="docker build -f &quot;$(RepoRoot)/Dockerfile.allinone&quot; -t $(DockerAllInOneImage):$(DockerAllInOneTag) &quot;$(RepoRoot)&quot;"
+          WorkingDirectory="$(RepoRoot)"
+          ConsoleToMSBuild="true" />
+
+    <Message Importance="high"
+             Text="══ Docker image built: $(DockerAllInOneImage):$(DockerAllInOneTag) ══" />
+  </Target>
+
+  <Target Name="ExportDockerAllInOne"
+          DependsOnTargets="BuildDockerAllInOne">
+    <Message Importance="high"
+             Text="══ Exporting Docker image to $(RepoRoot)/hmi-allinone.tar ══" />
+    <Exec Command="docker save -o &quot;$(RepoRoot)/hmi-allinone.tar&quot; $(DockerAllInOneImage):$(DockerAllInOneTag)"
+          WorkingDirectory="$(RepoRoot)" />
+    <Message Importance="high"
+             Text="══ Export complete: hmi-allinone.tar ══" />
+  </Target>
+
+</Project>

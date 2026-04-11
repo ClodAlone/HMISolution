@@ -30,7 +30,153 @@
         </div>
     </div>
 
-    @if (ServerProcessService.IsWindows)
+    @if (ServerProcessService.IsDocker)
+    {
+        <h6>🐳 Docker Service Instances</h6>
+        <div class="mb-2 small text-muted" style="font-size: 10px;">
+            Manage HMI Server and RuntimeViewer instances. Configuration is saved to
+            <code>/data/.hmi-services.json</code> and persists across container restarts.
+        </div>
+
+        @* Quick Start for current project *@
+        @if (!string.IsNullOrEmpty(NodesPath))
+        {
+            <div class="d-flex gap-2 mb-2 align-items-center flex-wrap">
+                <button class="btn btn-sm btn-success" style="font-size: 10px;"
+                        @onclick="DockerQuickStartServer"
+                        disabled="@DockerIsServerRunningForCurrent">
+                    ▶ Start Server
+                </button>
+                <button class="btn btn-sm btn-primary" style="font-size: 10px;"
+                        @onclick="DockerQuickStartViewer"
+                        disabled="@DockerIsViewerRunningForCurrent">
+                    ▶ Start Viewer (port @_dockerNewPort)
+                </button>
+                @if (DockerIsServerRunningForCurrent || DockerIsViewerRunningForCurrent)
+                {
+                    <button class="btn btn-sm btn-danger" style="font-size: 10px;"
+                            @onclick="DockerStopCurrentProject">
+                        ⏹ Stop All
+                    </button>
+                }
+                <span class="text-muted small" style="font-size: 10px;">
+                    Project: <strong>@(Path.GetFileName(Path.GetDirectoryName(NodesPath)) ?? "current")</strong>
+                </span>
+            </div>
+        }
+        else
+        {
+            <div class="text-warning small mb-2" style="font-size: 10px;">
+                ⚠ Open a project first to use quick-start buttons.
+            </div>
+        }
+
+        @* Add New Instance (advanced) *@
+        <details class="mb-2">
+            <summary class="small text-muted" style="font-size: 10px; cursor: pointer;">➕ Add instance for a different project…</summary>
+        <div class="mt-1 p-2 rounded" style="background: #1e293b; border: 1px solid #334155;">
+            <div class="d-flex gap-2 align-items-end flex-wrap">
+                <div>
+                    <label class="form-label mb-0 small text-muted" style="font-size: 9px;">Project</label>
+                    <select class="form-select form-select-sm" style="width: 220px; font-size: 10px;" @bind="_dockerNewProject">
+                        <option value="">— select project —</option>
+                        @foreach (var p in _dockerAvailableProjects)
+                        {
+                            var displayName = Path.GetFileName(Path.GetDirectoryName(p)) ?? p;
+                            <option value="@p">@displayName</option>
+                        }
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label mb-0 small text-muted" style="font-size: 9px;">Type</label>
+                    <select class="form-select form-select-sm" style="width: 100px; font-size: 10px;" @bind="_dockerNewKind">
+                        <option value="Server">Server</option>
+                        <option value="Viewer">Viewer</option>
+                    </select>
+                </div>
+                @if (_dockerNewKind == "Viewer")
+                {
+                    <div>
+                        <label class="form-label mb-0 small text-muted" style="font-size: 9px;">Port</label>
+                        <input type="number" class="form-control form-control-sm" style="width: 70px; font-size: 10px;"
+                               @bind="_dockerNewPort" min="1" max="65535" />
+                    </div>
+                }
+                <button class="btn btn-sm btn-success" style="font-size: 10px;"
+                        @onclick="DockerAddInstance" disabled="@string.IsNullOrEmpty(_dockerNewProject)">
+                    ➕ Start
+                </button>
+            </div>
+        </div>
+        </details>
+
+        @* Instance List *@
+        @if (DockerServices.Instances.Count > 0)
+        {
+            <table class="table table-sm table-borderless mb-1" style="font-size: 10px;">
+                <thead>
+                    <tr>
+                        <th style="width: 55px;">Type</th>
+                        <th>Project</th>
+                        <th style="width: 50px;">Port</th>
+                        <th style="width: 50px;">PID</th>
+                        <th style="width: 55px;">Status</th>
+                        <th style="width: 45px;">Auto</th>
+                        <th style="width: 95px;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var inst in DockerServices.Instances)
+                    {
+                        <tr>
+                            <td>@(inst.Kind == DockerServiceManager.InstanceKind.Server ? "🖥️ Srv" : "🖼️ Vwr")</td>
+                            <td class="text-truncate" style="max-width: 150px;" title="@inst.ProjectPath">@inst.DisplayName</td>
+                            <td>@(inst.Port > 0 ? inst.Port.ToString() : "—")</td>
+                            <td class="font-monospace">@(inst.IsRunning ? inst.Pid.ToString() : "—")</td>
+                            <td>
+                                <span class="badge @(inst.IsRunning ? "bg-success" : "bg-secondary")" style="font-size: 8px;">
+                                    @(inst.IsRunning ? "Running" : "Stopped")
+                                </span>
+                            </td>
+                            <td>
+                                <input type="checkbox" class="form-check-input" style="width: 14px; height: 14px;"
+                                       checked="@inst.AutoStart"
+                                       @onchange="e => DockerToggleAutoStart(inst.Id, (bool)(e.Value ?? false))"
+                                       title="Auto-start on container boot" />
+                            </td>
+                            <td>
+                                @if (inst.IsRunning)
+                                {
+                                    <button class="btn btn-sm btn-outline-danger" style="font-size: 9px; padding: 1px 5px;"
+                                            @onclick="() => DockerStopInstance(inst.Id)">⏹ Stop</button>
+                                }
+                                else
+                                {
+                                    <button class="btn btn-sm btn-outline-success" style="font-size: 9px; padding: 1px 5px;"
+                                            @onclick="() => DockerRestartInstance(inst)">▶ Start</button>
+                                }
+                                <button class="btn btn-sm btn-outline-secondary" style="font-size: 9px; padding: 1px 5px;"
+                                        @onclick="() => DockerRemoveInstance(inst.Id)" title="Remove instance">🗑</button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+        else
+        {
+            <div class="text-muted small" style="font-size: 10px;">No instances configured. Use the controls above to start a server or viewer.</div>
+        }
+
+        @if (!string.IsNullOrEmpty(_dockerMessage))
+        {
+            <div class="mt-1 alert @(_dockerMessageSuccess ? "alert-success" : "alert-danger") alert-dismissible py-1 px-2" style="font-size: 10px;">
+                @_dockerMessage
+                <button type="button" class="btn-close" style="font-size: 8px;" @onclick="() => _dockerMessage = string.Empty"></button>
+            </div>
+        }
+    }
+    else if (ServerProcessService.IsWindows)
     {
         <h6>🪟 Windows Service</h6>
         <div class="mb-2">
@@ -177,7 +323,11 @@
         }
     </div>
 
-    @if (ServerProcessService.IsWindows)
+    @if (ServerProcessService.IsDocker)
+    {
+        @* Docker viewer instances are managed in the combined Docker Service Instances section above *@
+    }
+    else if (ServerProcessService.IsWindows)
     {
         <h6>🪟 RuntimeViewer Windows Service</h6>
         <div class="mb-2">
@@ -546,6 +696,7 @@
     [Inject] private NodeEditorService Editor { get; set; } = default!;
     [Inject] private ServerDiagnosticsClient DiagClient { get; set; } = default!;
     [Inject] private AuthService Auth { get; set; } = default!;
+    [Inject] private DockerServiceManager DockerServices { get; set; } = default!;
 
     // Windows service state
     private bool _isWinServiceInstalled;
@@ -564,7 +715,7 @@
     private Timer? _statusTimer;
 
     // RuntimeViewer settings
-    private int _rvPort = 5100;
+    private int _rvPort = 8081;
     private bool _rvKiosk;
     private string _rvMode = "web"; // "web" or "desktop"
 
@@ -588,6 +739,109 @@
     private bool _showViewerOutput;
     private ElementReference _serverOutputEl;
     private ElementReference _viewerOutputEl;
+
+
+    // --- Docker Service Management ---
+    private string _dockerNewProject = "";
+    private string _dockerNewKind = "Server";
+    private int _dockerNewPort = 8081;
+    private string _dockerMessage = "";
+    private bool _dockerMessageSuccess;
+    private List<string> _dockerAvailableProjects = new();
+
+    private bool DockerIsServerRunningForCurrent =>
+        !string.IsNullOrEmpty(NodesPath) &&
+        DockerServices.Instances.Any(i =>
+            i.Kind == DockerServiceManager.InstanceKind.Server &&
+            i.IsRunning &&
+            string.Equals(i.ProjectPath, Path.GetFullPath(NodesPath), StringComparison.OrdinalIgnoreCase));
+
+    private bool DockerIsViewerRunningForCurrent =>
+        !string.IsNullOrEmpty(NodesPath) &&
+        DockerServices.Instances.Any(i =>
+            i.Kind == DockerServiceManager.InstanceKind.Viewer &&
+            i.IsRunning &&
+            string.Equals(i.ProjectPath, Path.GetFullPath(NodesPath), StringComparison.OrdinalIgnoreCase));
+
+    private void DockerQuickStartServer()
+    {
+        if (string.IsNullOrEmpty(NodesPath)) return;
+        var result = DockerServices.StartServer(NodesPath);
+        _dockerMessageSuccess = result.success;
+        _dockerMessage = result.message;
+    }
+
+    private void DockerQuickStartViewer()
+    {
+        if (string.IsNullOrEmpty(NodesPath)) return;
+        var result = DockerServices.StartViewer(NodesPath, _dockerNewPort);
+        _dockerMessageSuccess = result.success;
+        _dockerMessage = result.message;
+    }
+
+    private void DockerStopCurrentProject()
+    {
+        if (string.IsNullOrEmpty(NodesPath)) return;
+        var fullPath = Path.GetFullPath(NodesPath);
+        foreach (var inst in DockerServices.Instances.Where(i =>
+            i.IsRunning &&
+            string.Equals(i.ProjectPath, fullPath, StringComparison.OrdinalIgnoreCase)).ToList())
+        {
+            DockerServices.StopInstance(inst.Id);
+        }
+        _dockerMessageSuccess = true;
+        _dockerMessage = "Stopped all instances for current project.";
+    }
+
+    private void DockerAddInstance()
+    {
+        if (string.IsNullOrEmpty(_dockerNewProject)) return;
+        (bool success, string message) result;
+        if (_dockerNewKind == "Viewer")
+            result = DockerServices.StartViewer(_dockerNewProject, _dockerNewPort);
+        else
+            result = DockerServices.StartServer(_dockerNewProject);
+        _dockerMessageSuccess = result.success;
+        _dockerMessage = result.message;
+        if (result.success)
+            _dockerNewProject = "";
+    }
+
+    private void DockerStopInstance(string instanceId)
+    {
+        var (success, message) = DockerServices.StopInstance(instanceId);
+        _dockerMessageSuccess = success;
+        _dockerMessage = message;
+    }
+
+    private void DockerRemoveInstance(string instanceId)
+    {
+        var (success, message) = DockerServices.RemoveInstance(instanceId);
+        _dockerMessageSuccess = success;
+        _dockerMessage = message;
+    }
+
+    private void DockerRestartInstance(DockerServiceManager.ManagedInstance inst)
+    {
+        (bool success, string message) result;
+        if (inst.Kind == DockerServiceManager.InstanceKind.Viewer)
+            result = DockerServices.StartViewer(inst.ProjectPath, inst.Port);
+        else
+            result = DockerServices.StartServer(inst.ProjectPath);
+        _dockerMessageSuccess = result.success;
+        _dockerMessage = result.message;
+    }
+
+    private void DockerToggleAutoStart(string instanceId, bool autoStart)
+    {
+        DockerServices.SetAutoStart(instanceId, autoStart);
+    }
+
+    private void RefreshDockerProjects()
+    {
+        if (ServerProcessService.IsDocker)
+            _dockerAvailableProjects = DockerServices.GetAvailableProjects();
+    }
 
     // Performance tracking
     private readonly ProcessPerformanceTracker _serverPerfTracker = new();
@@ -637,6 +891,8 @@
         ViewerProcess.StateChanged += OnServerStateChanged;
         ServerProcess.OutputChanged += OnOutputChanged;
         ViewerProcess.OutputChanged += OnOutputChanged;
+        DockerServices.StateChanged += OnDockerStateChanged;
+        RefreshDockerProjects();
         _statusTimer = new Timer(_ => InvokeAsync(async () => { await RefreshStatusAsync(); StateHasChanged(); }), null, TimeSpan.Zero, TimeSpan.FromSeconds(5));
         _perfTimer = new Timer(_ => InvokeAsync(() => { SamplePerformance(); BuildSubsystems(); StateHasChanged(); return Task.CompletedTask; }), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2));
         _diagTimer2 = new Timer(_ => InvokeAsync(async () => { await PollDiagInBackground(); }), null, TimeSpan.FromSeconds(3), TimeSpan.FromSeconds(3));
@@ -645,6 +901,11 @@
     private void OnServerStateChanged()
     {
         InvokeAsync(StateHasChanged);
+    }
+
+    private void OnDockerStateChanged()
+    {
+        InvokeAsync(() => { RefreshDockerProjects(); StateHasChanged(); });
     }
 
     private void OnOutputChanged()
@@ -678,6 +939,11 @@
             ServerProcess.DetectExternalProcess(NodesPath);
             ViewerProcess.DetectExternalProcess(NodesPath);
         }
+
+        // Docker containers don't have systemd or Windows services --
+        // process detection above is sufficient.
+        if (ServerProcessService.IsDocker)
+            return;
 
         if (ServerProcessService.IsWindows)
         {
@@ -1271,6 +1537,7 @@
         ViewerProcess.StateChanged -= OnServerStateChanged;
         ServerProcess.OutputChanged -= OnOutputChanged;
         ViewerProcess.OutputChanged -= OnOutputChanged;
+        DockerServices.StateChanged -= OnDockerStateChanged;
         _statusTimer?.Dispose();
         _perfTimer?.Dispose();
         _diagTimer2?.Dispose();

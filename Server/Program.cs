@@ -55,6 +55,8 @@ try
     Console.WriteLine($"License: {licenseStatus.Tier} — {licenseStatus.Message}");
     if (!string.IsNullOrEmpty(licenseStatus.LicensedTo))
         Console.WriteLine($"Licensed to: {licenseStatus.LicensedTo}");
+    if (licenseStatus.DemoStartedUtc.HasValue)
+        Console.WriteLine($"Demo mode: full features for {licenseStatus.DemoGraceMinutes} minutes (started {licenseStatus.DemoStartedUtc.Value:HH:mm:ss} UTC)");
 
     if (!File.Exists(configPath))
     {
@@ -96,6 +98,7 @@ try
     builder.Services.AddHostedService<OpcUaWorker>();
     builder.Services.AddSingleton<OpcUaServerApp>();
     builder.Services.AddSingleton<CameraStreamService>();
+    builder.Services.AddSingleton<CameraRecordingService>();
     builder.Services.AddHostedService<CameraHostedService>();
 
     var host = builder.Build();

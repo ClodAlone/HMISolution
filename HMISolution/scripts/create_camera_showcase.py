@@ -6,6 +6,7 @@ os.makedirs(os.path.join(BASE, "screens"), exist_ok=True)
 os.makedirs(os.path.join(BASE, "scripts"), exist_ok=True)
 os.makedirs(os.path.join(BASE, "Logs"), exist_ok=True)
 os.makedirs(os.path.join(BASE, "crash_reports"), exist_ok=True)
+os.makedirs(os.path.join(BASE, "Recordings"), exist_ok=True)
 
 # ════════════════════════════════════════════════════════════
 # 1. nodes.json — project definition
@@ -279,7 +280,77 @@ nodes = {
         {"Key": "yolo_settings", "Translations": {"en": "YOLO Settings", "de": "YOLO-Einstellungen", "it": "Impostazioni YOLO"}}
     ],
     "Images": [],
-    "Cameras": [],
+    "Cameras": [
+      {
+        "CameraId": "entrance",
+        "Url": "http://192.168.1.100/mjpeg",
+        "Protocol": "mjpeg",
+        "Fps": 10,
+        "EnableYolo": true,
+        "YoloEnableVariable": "CameraDemo.Cameras.Entrance.YoloEnabled",
+        "YoloModelPath": "",
+        "YoloConfidence": 0.5,
+        "DetectionVariablePrefix": "CameraDemo.Detection.Entrance",
+        "DrawDetections": true,
+        "UseCuda": false,
+        "CudaDeviceId": 0,
+        "DetectionTimeoutSeconds": 10,
+        "Username": "",
+        "Password": "",
+        "RecordingEnabled": true,
+        "RecordingMode": "on_detection",
+        "RecordingMinConfidence": 0.5,
+        "RecordingMaxDurationSeconds": 60,
+        "RecordingFolder": "Recordings/entrance",
+        "RecordingMaxAgeDays": 7
+      },
+      {
+        "CameraId": "warehouse",
+        "Url": "rtsp://192.168.1.101:554/stream1",
+        "Protocol": "rtsp",
+        "Fps": 15,
+        "EnableYolo": true,
+        "YoloEnableVariable": "CameraDemo.Cameras.Warehouse.YoloEnabled",
+        "YoloModelPath": "",
+        "YoloConfidence": 0.4,
+        "DetectionVariablePrefix": "CameraDemo.Detection.Warehouse",
+        "DrawDetections": true,
+        "UseCuda": false,
+        "CudaDeviceId": 0,
+        "DetectionTimeoutSeconds": 10,
+        "Username": "admin",
+        "Password": "camera123",
+        "RecordingEnabled": true,
+        "RecordingMode": "always",
+        "RecordingMinConfidence": 0.4,
+        "RecordingMaxDurationSeconds": 300,
+        "RecordingFolder": "Recordings/warehouse",
+        "RecordingMaxAgeDays": 14
+      },
+      {
+        "CameraId": "parking",
+        "Url": "http://192.168.1.102/snapshot.jpg",
+        "Protocol": "http",
+        "Fps": 2,
+        "EnableYolo": false,
+        "YoloEnableVariable": "CameraDemo.Cameras.ParkingLot.YoloEnabled",
+        "YoloModelPath": "",
+        "YoloConfidence": 0.6,
+        "DetectionVariablePrefix": "CameraDemo.Detection.ParkingLot",
+        "DrawDetections": true,
+        "UseCuda": false,
+        "CudaDeviceId": 0,
+        "DetectionTimeoutSeconds": 10,
+        "Username": "",
+        "Password": "",
+        "RecordingEnabled": true,
+        "RecordingMode": "on_detection",
+        "RecordingMinConfidence": 0.6,
+        "RecordingMaxDurationSeconds": 60,
+        "RecordingFolder": "Recordings/parking",
+        "RecordingMaxAgeDays": 7
+      }
+    ],
     "Schedulers": [],
     "Reports": [],
     "CalculatedVariables": [],
@@ -368,23 +439,8 @@ def cam_config(cam_id, url, protocol="mjpeg", fps=5, enable_yolo=True,
                yolo_enable_var="", det_prefix="", confidence=0.5,
                draw=True, timeout=10, username="", password=""):
     """Create a CameraConfig dict."""
-    return {
-        "CameraId": cam_id,
-        "Url": url,
-        "Protocol": protocol,
-        "Fps": fps,
-        "EnableYolo": enable_yolo,
-        "YoloEnableVariable": yolo_enable_var,
-        "YoloModelPath": "",
-        "YoloConfidence": confidence,
-        "DetectionVariablePrefix": det_prefix,
-        "DrawDetections": draw,
-        "UseCuda": False,
-        "CudaDeviceId": 0,
-        "DetectionTimeoutSeconds": timeout,
-        "Username": username,
-        "Password": password
-    }
+    # For UI widgets we only include the CameraId so camera definitions are managed in nodes.json (server-side).
+    return { "CameraId": cam_id }
 
 
 # ════════════════════════════════════════════════════════════
@@ -1030,6 +1086,111 @@ script = {
 with open(os.path.join(BASE, "scripts", "SimulateDetections.json"), "w", encoding="utf-8") as f:
     json.dump(script, f, indent=2, ensure_ascii=False)
 print("5. Created scripts/SimulateDetections.json")
+
+# --- Script: VideoRecorder — create placeholder recording files when detection triggers ---
+# Build recordings config from nodes['Cameras'] so recording properties are server-managed
+recordings_cfg = []
+for cam in nodes.get("Cameras", []):
+    cam_id = cam.get("CameraId")
+    prefix = cam.get("DetectionVariablePrefix", f"CameraDemo.Detection.{cam_id}")
+    rec_folder = cam.get("RecordingFolder", f"Recordings/{cam_id}")
+    # make absolute path for the demo scripts that will create files locally
+    abs_folder = os.path.join(BASE, rec_folder) if not os.path.isabs(rec_folder) else rec_folder
+    recordings_cfg.append({
+        "id": cam_id,
+        "prefix": prefix,
+        "min_conf": cam.get("RecordingMinConfidence", cam.get("YoloConfidence", 0.5)),
+        "folder": abs_folder,
+        "max_age": cam.get("RecordingMaxAgeDays", 7),
+        "max_duration": cam.get("RecordingMaxDurationSeconds", 60),
+        "mode": cam.get("RecordingMode", "on_detection")
+    })
+
+camera_block_template = r"""// --- CAMERA_BLOCK {ID} ---
+var label_{ID} = ReadString("{PREFIX}.Label");
+var conf_{ID} = ReadDouble("{PREFIX}.Confidence");
+// When mode is 'always' we create a rolling file if none created recently; when 'on_detection' we require a label + min confidence
+if ({MODE_CHECK})
+{{
+    var folder = @"{FOLDER}";
+    if (!System.IO.Directory.Exists(folder)) System.IO.Directory.CreateDirectory(folder);
+    var files = System.IO.Directory.GetFiles(folder, "{ID}_*.mp4");
+    var latest = System.DateTime.MinValue;
+    if (files.Length > 0) latest = System.IO.File.GetLastWriteTimeUtc(files.OrderByDescending(f => f).First());
+    // avoid creating a new file too often — wait at least 5 seconds since the last one
+    if ((System.DateTime.UtcNow - latest).TotalSeconds > 5)
+    {{
+        var fname = System.IO.Path.Combine(folder, "{ID}_" + (string.IsNullOrEmpty(label_{ID}) ? "record" : label_{ID}) + "_" + System.DateTime.UtcNow.ToString("yyyyMMddHHmmss") + ".mp4");
+        // create a placeholder file to represent a recording (the real system would stream/encode video here)
+        System.IO.File.WriteAllText(fname, "");
+    }}
+}}
+"""
+
+parts = []
+for cam in recordings_cfg:
+    mode_check = "true" if cam["mode"] == "always" else f"!string.IsNullOrEmpty(label_{cam['id']}) && conf_{cam['id']} >= {cam['min_conf']}"
+    block = camera_block_template.replace("{ID}", cam['id']).replace("{PREFIX}", cam['prefix']).replace("{FOLDER}", cam['folder']).replace("{MODE_CHECK}", mode_check)
+    parts.append(block)
+
+video_code = """// VideoRecorder — simulated recording creation
+// This script creates placeholder .mp4 files in per-camera folders when a recording should be started.
+// It is intended for demo/sample projects only.
+using System.Linq;
+
+""" + "\n".join(parts)
+
+video_script = {
+    "Name": "VideoRecorder",
+    "Code": video_code.strip(),
+    "Enabled": True,
+    "IntervalMs": 2000,
+    "Language": "CSharp",
+    "Group": "Recording",
+    "Breakpoints": []
+}
+
+with open(os.path.join(BASE, "scripts", "VideoRecorder.json"), "w", encoding="utf-8") as f:
+    json.dump(video_script, f, indent=2, ensure_ascii=False)
+print("5b. Created scripts/VideoRecorder.json")
+
+# --- Script: CleanupRecordings — deletes old recording files based on max age ---
+cleanup_template = r"""// CleanupRecordings — delete files older than specified days for each camera
+var rootFolders = new[] {{ {FOLDERS_ARRAY} }};
+foreach (var entry in rootFolders)
+{{
+    var folder = entry.Folder;
+    var maxAgeDays = entry.MaxAgeDays;
+    if (!System.IO.Directory.Exists(folder)) continue;
+    var files = System.IO.Directory.GetFiles(folder, "*.mp4");
+    foreach (var f in files)
+    {{
+        var age = (System.DateTime.UtcNow - System.IO.File.GetLastWriteTimeUtc(f)).TotalDays;
+        if (age > maxAgeDays) System.IO.File.Delete(f);
+    }}
+}}
+"""
+
+folders_array_items = []
+for cam in recordings_cfg:
+    # create a small JSON-like literal for the C# anonymous type
+    folders_array_items.append("new { Folder = @\"%s\", MaxAgeDays = %s }" % (cam['folder'], cam['max_age']))
+
+cleanup_code = cleanup_template.replace("{FOLDERS_ARRAY}", ", ".join(folders_array_items))
+
+cleanup_script = {
+    "Name": "CleanupRecordings",
+    "Code": cleanup_code.strip(),
+    "Enabled": True,
+    "IntervalMs": 3600000,  # run hourly
+    "Language": "CSharp",
+    "Group": "Recording",
+    "Breakpoints": []
+}
+
+with open(os.path.join(BASE, "scripts", "CleanupRecordings.json"), "w", encoding="utf-8") as f:
+    json.dump(cleanup_script, f, indent=2, ensure_ascii=False)
+print("5c. Created scripts/CleanupRecordings.json")
 
 
 # ════════════════════════════════════════════════════════════

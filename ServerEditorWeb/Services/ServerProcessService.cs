@@ -43,6 +43,9 @@ public class ServerProcessService : IDisposable
 
     public static bool IsWindows => RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
     public static bool IsLinux => RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
+    /// <summary>True when running inside a Docker container (entrypoint manages processes).</summary>
+    public static bool IsDocker { get; } = Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER") == "true"
+                                          || File.Exists("/.dockerenv");
 
     // Windows Service management
     public string ServiceName { get; set; } = "SimpleOpcFileServer";
@@ -104,7 +107,11 @@ public class ServerProcessService : IDisposable
             _serverProcess = new Process();
             _serverProcess.StartInfo.FileName = serverExe;
             _serverProcess.StartInfo.WorkingDirectory = nodesDir;
-            _serverProcess.StartInfo.Arguments = $"\"{fullNodesPath}\"";
+            // When the executable is "dotnet" (Docker), we must pass Server.dll as first arg
+            if (serverExe == "dotnet")
+                _serverProcess.StartInfo.Arguments = $"/opt/hmi/server/Server.dll \"{fullNodesPath}\"";
+            else
+                _serverProcess.StartInfo.Arguments = $"\"{fullNodesPath}\"";
             _serverProcess.StartInfo.UseShellExecute = false;
             _serverProcess.StartInfo.CreateNoWindow = true;
             _serverProcess.StartInfo.RedirectStandardOutput = true;
@@ -182,7 +189,8 @@ public class ServerProcessService : IDisposable
             return;
 
         var fullConfigPath = Path.GetFullPath(nodesPath);
-        var proc = FindRunningProcess("Server", fullConfigPath);
+        var proc = FindRunningProcess("Server", fullConfigPath)
+                ?? (IsDocker ? FindDotnetProcess("Server.dll") : null);
         if (proc != null)
         {
             _serverProcess = proc;
@@ -398,11 +406,15 @@ public class ServerProcessService : IDisposable
         // 4. Linux: check common install paths
         if (IsLinux)
         {
-            string[] linuxPaths = ["/usr/local/bin/Server", "/opt/simpleopcfileserver/Server"];
+            string[] linuxPaths = ["/usr/local/bin/Server", "/opt/simpleopcfileserver/Server", "/opt/hmi/server/Server"];
             foreach (var p in linuxPaths)
             {
                 if (File.Exists(p)) return p;
             }
+
+            // Docker: framework-dependent (no native exe), use "dotnet Server.dll"
+            if (IsDocker && File.Exists("/opt/hmi/server/Server.dll"))
+                return "dotnet";
         }
 
         return null;
@@ -532,6 +544,36 @@ public class ServerProcessService : IDisposable
             var raw = File.ReadAllText(cmdLinePath);
             return raw.Replace('\0', ' ').Trim();
         }
+        return null;
+    }
+
+    /// <summary>
+    /// Find a running 'dotnet' process whose command line contains the given DLL name.
+    /// Used inside Docker where processes are launched via 'dotnet Xxx.dll'.
+    /// </summary>
+    private static Process? FindDotnetProcess(string dllName)
+    {
+        var myPid = Environment.ProcessId;
+        try
+        {
+            foreach (var proc in Process.GetProcessesByName("dotnet"))
+            {
+                if (proc.Id == myPid) { proc.Dispose(); continue; }
+                try
+                {
+                    if (proc.HasExited) { proc.Dispose(); continue; }
+                    var cmdLine = GetCommandLine(proc);
+                    if (!string.IsNullOrEmpty(cmdLine) &&
+                        cmdLine.Contains(dllName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return proc;
+                    }
+                }
+                catch { }
+                proc.Dispose();
+            }
+        }
+        catch { }
         return null;
     }
 

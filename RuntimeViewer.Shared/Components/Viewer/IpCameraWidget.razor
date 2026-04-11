@@ -1,37 +1,111 @@
 @using RuntimeViewer.Shared.Services
+@using System.Net.Http
+@using System.Text.Json
 @implements IDisposable
 
 <div class="ipcamera-widget" @onclick:stopPropagation @onmousedown:stopPropagation @onmouseup:stopPropagation>
-    @if (!string.IsNullOrEmpty(_streamUrl))
+    @if (!_showHistory)
     {
-        <img src="@_streamUrl" alt="Camera: @CameraId"
-             class="ipcamera-img"
-             @onerror="OnImageError" />
-        @if (_hasError)
+        @* ---- Live View ---- *@
+        @if (!string.IsNullOrEmpty(_streamUrl))
         {
-            <div class="ipcamera-overlay">
-                <span>⚠️ Stream unavailable</span>
-                <button class="ipcamera-retry" @onclick="Retry">Retry</button>
+            <img src="@_streamUrl" alt="Camera: @CameraId"
+                 class="ipcamera-img"
+                 @onerror="OnImageError" />
+            @if (_hasError)
+            {
+                <div class="ipcamera-overlay">
+                    <span>Stream unavailable</span>
+                    <button class="ipcamera-retry" @onclick="Retry">Retry</button>
+                </div>
+            }
+        }
+        else
+        {
+            <div class="ipcamera-placeholder">
+                <span>No Camera</span>
+                <span class="small">@(string.IsNullOrEmpty(CameraId) ? "No camera configured" : $"Camera: {CameraId}")</span>
+            </div>
+        }
+
+        @* ---- Detection Overlay ---- *@
+        @if (ShowOverlay)
+        {
+            <div class="ipcamera-info">
+                @if (!string.IsNullOrEmpty(_detectionLabel))
+                {
+                    <span class="ipcamera-det">@_detectionLabel (@(_detectionConfidence.ToString("P0"))) - @_detectionCount obj</span>
+                }
+                else
+                {
+                    <span class="ipcamera-det-none">No detections</span>
+                }
+            </div>
+        }
+
+        @* ---- Recording indicator + History button ---- *@
+        @if (RecordingEnabled)
+        {
+            <div class="ipcamera-rec-bar">
+                @if (_isRecording)
+                {
+                    <span class="ipcamera-rec-dot"></span>
+                    <span class="ipcamera-rec-text">REC</span>
+                }
+                <button class="ipcamera-hist-btn" @onclick="ToggleHistory" title="Video History">History</button>
             </div>
         }
     }
     else
     {
-        <div class="ipcamera-placeholder">
-            <span>📷</span>
-            <span class="small">@(string.IsNullOrEmpty(CameraId) ? "No camera configured" : $"Camera: {CameraId}")</span>
-        </div>
-    }
-    @if (ShowOverlay)
-    {
-        <div class="ipcamera-info">
-            @if (!string.IsNullOrEmpty(_detectionLabel))
+        @* ---- Video History Panel ---- *@
+        <div class="ipcamera-history">
+            <div class="ipcamera-hist-header">
+                <span>Recordings - @CameraId</span>
+                <button class="ipcamera-hist-close" @onclick="ToggleHistory" title="Back to live">X</button>
+            </div>
+
+            @if (_selectedRecording != null)
             {
-                <span class="ipcamera-det">🎯 @_detectionLabel (@(_detectionConfidence.ToString("P0"))) — @_detectionCount obj</span>
+                @* ---- Video Player ---- *@
+                <div class="ipcamera-player">
+                    <video src="@_selectedRecording.Url" controls autoplay
+                           class="ipcamera-video">
+                        Your browser does not support the video tag.
+                    </video>
+                    <div class="ipcamera-player-info">
+                        <span>@_selectedRecording.FileName</span>
+                        <span>@FormatDuration(_selectedRecording.DurationSeconds) - @FormatSize(_selectedRecording.SizeBytes)</span>
+                        <button class="ipcamera-back-list" @onclick="BackToList">Back to list</button>
+                    </div>
+                </div>
             }
             else
             {
-                <span class="ipcamera-det-none">No detections</span>
+                @* ---- Recordings List ---- *@
+                @if (_loadingRecordings)
+                {
+                    <div class="ipcamera-hist-loading">Loading recordings...</div>
+                }
+                else if (_recordings.Count == 0)
+                {
+                    <div class="ipcamera-hist-empty">No recordings found.</div>
+                }
+                else
+                {
+                    <div class="ipcamera-hist-list">
+                        @foreach (var rec in _recordings)
+                        {
+                            <div class="ipcamera-hist-item" @onclick="() => PlayRecording(rec)">
+                                <div class="ipcamera-hist-item-icon">&#x1F3AC;</div>
+                                <div class="ipcamera-hist-item-info">
+                                    <span class="ipcamera-hist-item-date">@rec.StartTimeUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</span>
+                                    <span class="ipcamera-hist-item-meta">@FormatDuration(rec.DurationSeconds) - @FormatSize(rec.SizeBytes)</span>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
             }
         </div>
     }
@@ -43,9 +117,7 @@
         background: #0a0a0a; border-radius: 4px; display: flex;
         align-items: center; justify-content: center;
     }
-    .ipcamera-img {
-        width: 100%; height: 100%; object-fit: contain;
-    }
+    .ipcamera-img { width: 100%; height: 100%; object-fit: contain; }
     .ipcamera-placeholder {
         display: flex; flex-direction: column; align-items: center; gap: 4px;
         color: #6b7280; font-size: 12px;
@@ -68,6 +140,66 @@
     }
     .ipcamera-det { color: #86efac; }
     .ipcamera-det-none { color: #6b7280; }
+    .ipcamera-rec-bar {
+        position: absolute; top: 6px; right: 6px;
+        display: flex; align-items: center; gap: 4px;
+        background: rgba(0,0,0,0.55); border-radius: 4px; padding: 2px 6px;
+    }
+    .ipcamera-rec-dot {
+        width: 8px; height: 8px; border-radius: 50%;
+        background: #ef4444; animation: ipcam-blink 1s infinite;
+    }
+    .ipcamera-rec-text { color: #ef4444; font-size: 10px; font-weight: 700; letter-spacing: 1px; }
+    .ipcamera-hist-btn {
+        background: transparent; border: none; color: #e2e8f0;
+        cursor: pointer; font-size: 11px; padding: 0 4px; line-height: 1;
+    }
+    .ipcamera-hist-btn:hover { color: #60a5fa; }
+    @@keyframes ipcam-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+    .ipcamera-history {
+        width: 100%; height: 100%; display: flex; flex-direction: column;
+        background: #111827; color: #e2e8f0; overflow: hidden;
+    }
+    .ipcamera-hist-header {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 6px 10px; background: #1e293b; font-size: 12px; font-weight: 600;
+        border-bottom: 1px solid #334155; flex-shrink: 0;
+    }
+    .ipcamera-hist-close {
+        background: transparent; border: none; color: #94a3b8;
+        cursor: pointer; font-size: 14px; line-height: 1; padding: 0 4px;
+    }
+    .ipcamera-hist-close:hover { color: #f87171; }
+    .ipcamera-hist-loading, .ipcamera-hist-empty {
+        display: flex; align-items: center; justify-content: center;
+        flex: 1; color: #6b7280; font-size: 12px;
+    }
+    .ipcamera-hist-list { flex: 1; overflow-y: auto; padding: 4px; }
+    .ipcamera-hist-item {
+        display: flex; align-items: center; gap: 8px;
+        padding: 6px 8px; border-radius: 4px; cursor: pointer; transition: background 0.15s;
+    }
+    .ipcamera-hist-item:hover { background: #1e293b; }
+    .ipcamera-hist-item-icon { font-size: 18px; flex-shrink: 0; }
+    .ipcamera-hist-item-info { display: flex; flex-direction: column; min-width: 0; }
+    .ipcamera-hist-item-date {
+        font-size: 11px; font-weight: 600; color: #e2e8f0;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .ipcamera-hist-item-meta { font-size: 10px; color: #6b7280; }
+    .ipcamera-player { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    .ipcamera-video { flex: 1; width: 100%; background: #000; object-fit: contain; }
+    .ipcamera-player-info {
+        display: flex; align-items: center; gap: 8px;
+        padding: 4px 8px; background: #1e293b; font-size: 10px;
+        border-top: 1px solid #334155; flex-shrink: 0; flex-wrap: wrap;
+    }
+    .ipcamera-player-info span { color: #94a3b8; }
+    .ipcamera-back-list {
+        background: #334155; color: #e2e8f0; border: 1px solid #475569;
+        border-radius: 3px; padding: 2px 8px; cursor: pointer; font-size: 10px; margin-left: auto;
+    }
+    .ipcamera-back-list:hover { background: #475569; }
 </style>
 
 @code {
@@ -75,16 +207,28 @@
     [Parameter] public string ServerBaseUrl { get; set; } = "";
     [Parameter] public bool ShowOverlay { get; set; }
     [Parameter] public string? DetectionVariablePrefix { get; set; }
+    [Parameter] public bool RecordingEnabled { get; set; }
 
     [Inject] private OpcRuntimeClient Opc { get; set; } = default!;
     [Inject] private ProjectService Project { get; set; } = default!;
 
     private string _streamUrl = "";
+    private string _cameraBaseUrl = "";
     private bool _hasError;
+    private readonly string _clientToken = Guid.NewGuid().ToString("N")[..8];
     private string _detectionLabel = "";
     private double _detectionConfidence;
     private int _detectionCount;
     private System.Threading.Timer? _detectionTimer;
+    private System.Threading.Timer? _recordingStatusTimer;
+
+    // Recording state
+    private bool _isRecording;
+    private bool _showHistory;
+    private bool _loadingRecordings;
+    private List<RecordingInfo> _recordings = new();
+    private RecordingInfo? _selectedRecording;
+    private HttpClient? _httpClient;
 
     protected override void OnParametersSet()
     {
@@ -97,6 +241,15 @@
                 InvokeAsync(StateHasChanged);
             }, null, 0, 1000);
         }
+
+        if (RecordingEnabled && !string.IsNullOrEmpty(CameraId))
+        {
+            _recordingStatusTimer ??= new System.Threading.Timer(async _ =>
+            {
+                await PollRecordingStatus();
+                await InvokeAsync(StateHasChanged);
+            }, null, 0, 3000);
+        }
     }
 
     private void BuildStreamUrl()
@@ -104,14 +257,13 @@
         if (string.IsNullOrEmpty(CameraId))
         {
             _streamUrl = "";
+            _cameraBaseUrl = "";
             return;
         }
 
-        // Determine the server's stream base URL
         var baseUrl = ServerBaseUrl;
         if (string.IsNullOrEmpty(baseUrl))
         {
-            // Derive from the OPC endpoint — assume camera HTTP is on port 8088 of same host
             var endpoint = Project.Settings?.EndpointUrl ?? "";
             if (!string.IsNullOrEmpty(endpoint))
             {
@@ -126,7 +278,8 @@
                 baseUrl = "http://localhost:8088";
         }
 
-        _streamUrl = $"{baseUrl.TrimEnd('/')}/camera/{Uri.EscapeDataString(CameraId)}/stream";
+        _cameraBaseUrl = $"{baseUrl.TrimEnd('/')}/camera/{Uri.EscapeDataString(CameraId)}";
+        _streamUrl = $"{_cameraBaseUrl}/stream?client={_clientToken}";
         _hasError = false;
     }
 
@@ -143,6 +296,73 @@
             _detectionCount = cnt;
     }
 
+    private async Task PollRecordingStatus()
+    {
+        if (string.IsNullOrEmpty(_cameraBaseUrl)) return;
+        try
+        {
+            var http = GetHttpClient();
+            var json = await http.GetStringAsync($"{_cameraBaseUrl}/recording-status");
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.TryGetProperty("isRecording", out var val))
+                _isRecording = val.GetBoolean();
+        }
+        catch { }
+    }
+
+    private async Task ToggleHistory()
+    {
+        _showHistory = !_showHistory;
+        _selectedRecording = null;
+        if (_showHistory)
+            await LoadRecordings();
+    }
+
+    private async Task LoadRecordings()
+    {
+        if (string.IsNullOrEmpty(_cameraBaseUrl)) return;
+        _loadingRecordings = true;
+        _recordings.Clear();
+        StateHasChanged();
+
+        try
+        {
+            var http = GetHttpClient();
+            var json = await http.GetStringAsync($"{_cameraBaseUrl}/recordings");
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            var list = JsonSerializer.Deserialize<List<RecordingInfo>>(json, options);
+            if (list != null)
+            {
+                _recordings = list.OrderByDescending(r => r.StartTimeUtc).ToList();
+            }
+        }
+        catch { }
+        finally
+        {
+            _loadingRecordings = false;
+        }
+    }
+
+    private void PlayRecording(RecordingInfo rec)
+    {
+        _selectedRecording = rec;
+    }
+
+    private void BackToList()
+    {
+        _selectedRecording = null;
+    }
+
+    private HttpClient GetHttpClient()
+    {
+        if (_httpClient == null)
+        {
+            var handler = new HttpClientHandler();
+            _httpClient = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(15) };
+        }
+        return _httpClient;
+    }
+
     private void OnImageError()
     {
         _hasError = true;
@@ -151,15 +371,39 @@
     private void Retry()
     {
         _hasError = false;
-        // Force re-render by appending a cache buster
         BuildStreamUrl();
-        if (!_streamUrl.Contains('?'))
-            _streamUrl += $"?t={DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}";
+        _streamUrl += $"&t={DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}";
+    }
+
+    private static string FormatDuration(double seconds)
+    {
+        var ts = TimeSpan.FromSeconds(seconds);
+        return ts.TotalHours >= 1
+            ? ts.ToString(@"h\:mm\:ss")
+            : ts.ToString(@"m\:ss");
+    }
+
+    private static string FormatSize(long bytes)
+    {
+        if (bytes < 1024) return $"{bytes} B";
+        if (bytes < 1024 * 1024) return $"{bytes / 1024.0:F1} KB";
+        return $"{bytes / (1024.0 * 1024.0):F1} MB";
     }
 
     public void Dispose()
     {
         _detectionTimer?.Dispose();
+        _recordingStatusTimer?.Dispose();
+        _httpClient?.Dispose();
+    }
+
+    private class RecordingInfo
+    {
+        public string FileName { get; set; } = "";
+        public string CameraId { get; set; } = "";
+        public DateTime StartTimeUtc { get; set; }
+        public double DurationSeconds { get; set; }
+        public long SizeBytes { get; set; }
+        public string Url { get; set; } = "";
     }
 }
-

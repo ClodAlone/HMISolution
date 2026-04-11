@@ -74,6 +74,9 @@ namespace SimpleOpcFileServer
             private bool _disposed;
             private readonly object _deviceLock = new();
             private readonly HttpClient _client = new();
+            private string? _lastLoggedError;
+            private int _consecutiveErrors;
+            private const int MaxBackoffMs = 30_000;
 
             public RestDevice(string url, ISystemContext context, Action<string, string>? onError = null, Action<double>? onCycle = null) { _url = url; _context = context; _onError = onError; _onCycle = onCycle; }
 
@@ -101,6 +104,7 @@ namespace SimpleOpcFileServer
             {
                 if (_disposed) return;
                 var _sw = System.Diagnostics.Stopwatch.StartNew();
+                bool anyError = false;
                 List<RestItem> snapshot;
                 lock (_deviceLock) { if (_disposed) return; snapshot = new List<RestItem>(_items); }
 
@@ -121,11 +125,23 @@ namespace SimpleOpcFileServer
                 }
                 catch (Exception ex)
                 {
-                    Log.Error(ex, "REST fetch error for {Url}: {Message}", _url, ex.Message);
+                    if (ex.Message != _lastLoggedError)
+                    {
+                        Log.Error(ex, "REST fetch error for {Url}: {Message}", _url, ex.Message);
+                        _lastLoggedError = ex.Message;
+                    }
+                    else Log.Debug("REST fetch error (repeated) for {Url}: {Message}", _url, ex.Message);
                     _onError?.Invoke(_url, $"Fetch error: {ex.Message}");
                     foreach (var item in snapshot) UpdateError(item.Variable, ex.Message);
+                    anyError = true;
                 }
-                finally { _onCycle?.Invoke(_sw.Elapsed.TotalMilliseconds); if (!_disposed) _timer?.Change(_pollInterval, Timeout.Infinite); }
+                finally
+                {
+                    if (anyError) _consecutiveErrors++; else { _consecutiveErrors = 0; _lastLoggedError = null; }
+                    var delay = _consecutiveErrors > 0 ? Math.Min(_pollInterval * (1 << Math.Min(_consecutiveErrors, 10)), MaxBackoffMs) : _pollInterval;
+                    _onCycle?.Invoke(_sw.Elapsed.TotalMilliseconds);
+                    if (!_disposed) _timer?.Change(delay, Timeout.Infinite);
+                }
             }
 
             private void UpdateItem(RestItem item, JsonElement root)

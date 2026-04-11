@@ -43,6 +43,9 @@ public class RuntimeViewerProcessService : IDisposable
 
     public static bool IsWindows => RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
     public static bool IsLinux => RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
+    /// <summary>True when running inside a Docker container (entrypoint manages processes).</summary>
+    public static bool IsDocker { get; } = Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER") == "true"
+                                          || File.Exists("/.dockerenv");
 
     public string ServiceName { get; set; } = "SimpleOpcRuntimeViewer";
     public string SystemdServiceName { get; set; } = "simpleopcruntimeviewer";
@@ -76,7 +79,10 @@ public class RuntimeViewerProcessService : IDisposable
             string nodesDir = Path.GetDirectoryName(fullNodesPath) ?? ".";
             string exeDir = Path.GetDirectoryName(viewerExe) ?? ".";
 
-            var args = $"\"{fullNodesPath}\"";
+            // When the executable is "dotnet" (Docker), we must pass RuntimeViewer.dll as first arg
+            var args = viewerExe == "dotnet"
+                ? $"/opt/hmi/viewer/RuntimeViewer.dll \"{fullNodesPath}\""
+                : $"\"{fullNodesPath}\"";
             if (kiosk)
                 args += " --kiosk";
 
@@ -86,7 +92,7 @@ public class RuntimeViewerProcessService : IDisposable
             _viewerProcess.StartInfo.FileName = viewerExe;
             // Use the executable's own directory as working directory so native libraries
             // (Photino.Native, WebView2Loader, etc.) can be found via runtimes/ subfolder.
-            _viewerProcess.StartInfo.WorkingDirectory = exeDir;
+            _viewerProcess.StartInfo.WorkingDirectory = viewerExe == "dotnet" ? "/opt/hmi/viewer" : exeDir;
             _viewerProcess.StartInfo.Arguments = args;
             _viewerProcess.StartInfo.UseShellExecute = false;
             _viewerProcess.StartInfo.RedirectStandardOutput = true;
@@ -200,7 +206,8 @@ public class RuntimeViewerProcessService : IDisposable
         var fullConfigPath = Path.GetFullPath(nodesPath);
         // Check both RuntimeViewer (web) and RuntimeViewer.Desktop process names
         var proc = FindRunningProcess("RuntimeViewer", fullConfigPath)
-                ?? FindRunningProcess("RuntimeViewer.Desktop", fullConfigPath);
+                ?? FindRunningProcess("RuntimeViewer.Desktop", fullConfigPath)
+                ?? (IsDocker ? FindDotnetProcess("RuntimeViewer.dll") : null);
         if (proc != null)
         {
             _viewerProcess = proc;
@@ -448,11 +455,15 @@ public class RuntimeViewerProcessService : IDisposable
         // 4. Linux: check common install paths
         if (IsLinux)
         {
-            string[] linuxPaths = ["/usr/local/bin/RuntimeViewer", "/opt/simpleopcruntimeviewer/RuntimeViewer"];
+            string[] linuxPaths = ["/usr/local/bin/RuntimeViewer", "/opt/simpleopcruntimeviewer/RuntimeViewer", "/opt/hmi/viewer/RuntimeViewer"];
             foreach (var p in linuxPaths)
             {
                 if (File.Exists(p)) return p;
             }
+
+            // Docker: framework-dependent (no native exe), use "dotnet RuntimeViewer.dll"
+            if (IsDocker && File.Exists("/opt/hmi/viewer/RuntimeViewer.dll"))
+                return "dotnet";
         }
 
         return null;
@@ -622,6 +633,36 @@ public class RuntimeViewerProcessService : IDisposable
         var path = $"/proc/{pid}/cmdline";
         if (File.Exists(path))
             return File.ReadAllText(path).Replace('\0', ' ').Trim();
+        return null;
+    }
+
+    /// <summary>
+    /// Find a running 'dotnet' process whose command line contains the given DLL name.
+    /// Used inside Docker where processes are launched via 'dotnet Xxx.dll'.
+    /// </summary>
+    private static Process? FindDotnetProcess(string dllName)
+    {
+        var myPid = Environment.ProcessId;
+        try
+        {
+            foreach (var proc in Process.GetProcessesByName("dotnet"))
+            {
+                if (proc.Id == myPid) { proc.Dispose(); continue; }
+                try
+                {
+                    if (proc.HasExited) { proc.Dispose(); continue; }
+                    var cmdLine = GetCommandLine(proc);
+                    if (!string.IsNullOrEmpty(cmdLine) &&
+                        cmdLine.Contains(dllName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return proc;
+                    }
+                }
+                catch { /* access denied or exited */ }
+                proc.Dispose();
+            }
+        }
+        catch { }
         return null;
     }
 

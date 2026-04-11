@@ -82,6 +82,9 @@ namespace SimpleOpcFileServer
             private int _minPollTime = int.MaxValue;
             private bool _disposed;
             private readonly object _deviceLock = new();
+            private string? _lastLoggedError;
+            private int _consecutiveErrors;
+            private const int MaxBackoffMs = 30_000;
 
             public ModbusDevice(string key, ISystemContext context, Action<string, string>? onError = null, Action<double>? onCycle = null)
             {
@@ -116,6 +119,7 @@ namespace SimpleOpcFileServer
             {
                 if (_disposed) return;
                 var _sw = System.Diagnostics.Stopwatch.StartNew();
+                bool anyError = false;
 
                 List<ModbusItem> itemsToPoll;
                 TcpClient? client;
@@ -153,9 +157,15 @@ namespace SimpleOpcFileServer
                         catch (Exception ex)
                         {
                             newClient.Close();
-                            Log.Error(ex, "Modbus connection error for {Key}: {Message}", _key, ex.Message);
+                            if (ex.Message != _lastLoggedError)
+                            {
+                                Log.Error(ex, "Modbus connection error for {Key}: {Message}", _key, ex.Message);
+                                _lastLoggedError = ex.Message;
+                            }
+                            else Log.Debug("Modbus connection error (repeated) for {Key}: {Message}", _key, ex.Message);
                             _onError?.Invoke(_key, $"Connection error: {ex.Message}");
                             foreach (var item in itemsToPoll) UpdateError(item.Variable, ex.Message);
+                            anyError = true;
                             return;
                         }
                     }
@@ -168,10 +178,16 @@ namespace SimpleOpcFileServer
                             try { ReadItem(master, item); }
                             catch (Exception ex)
                             {
-                                Log.Error(ex, "Modbus read error for {Name}: {Message}", item.Variable.DisplayName, ex.Message);
+                                if (ex.Message != _lastLoggedError)
+                                {
+                                    Log.Error(ex, "Modbus read error for {Name}: {Message}", item.Variable.DisplayName, ex.Message);
+                                    _lastLoggedError = ex.Message;
+                                }
+                                else Log.Debug("Modbus read error (repeated) for {Name}: {Message}", item.Variable.DisplayName, ex.Message);
                                 _onError?.Invoke(_key, $"Read error ({item.Variable.DisplayName}): {ex.Message}");
                                 UpdateError(item.Variable, ex.Message);
                                 connectionFailed = true;
+                                anyError = true;
                             }
                         }
                         if (connectionFailed)
@@ -186,14 +202,22 @@ namespace SimpleOpcFileServer
                 }
                 catch (Exception ex)
                 {
-                    Log.Error(ex, "Modbus poll error for {Key}: {Message}", _key, ex.Message);
+                    if (ex.Message != _lastLoggedError)
+                    {
+                        Log.Error(ex, "Modbus poll error for {Key}: {Message}", _key, ex.Message);
+                        _lastLoggedError = ex.Message;
+                    }
+                    else Log.Debug("Modbus poll error (repeated) for {Key}: {Message}", _key, ex.Message);
                     _onError?.Invoke(_key, $"Poll error: {ex.Message}");
                     foreach (var item in itemsToPoll) UpdateError(item.Variable, ex.Message);
+                    anyError = true;
                 }
                 finally
                 {
+                    if (anyError) _consecutiveErrors++; else { _consecutiveErrors = 0; _lastLoggedError = null; }
+                    var delay = _consecutiveErrors > 0 ? Math.Min(_pollInterval * (1 << Math.Min(_consecutiveErrors, 10)), MaxBackoffMs) : _pollInterval;
                     _onCycle?.Invoke(_sw.Elapsed.TotalMilliseconds);
-                    if (!_disposed) _timer?.Change(_pollInterval, Timeout.Infinite);
+                    if (!_disposed) _timer?.Change(delay, Timeout.Infinite);
                 }
             }
 

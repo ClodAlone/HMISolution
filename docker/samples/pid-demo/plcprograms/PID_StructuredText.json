@@ -1,0 +1,28 @@
+{
+  "Name": "PID_StructuredText",
+  "Code": "(* ==============================================\n   PID Controller \u002B Process Simulation\n   Language: Structured Text (ST)\n   \n   This program demonstrates:\n   1. A first-order process simulation (thermal model)\n   2. A PID controller using the built-in PID() function\n   3. Adjustable gains via OPC variables\n   ============================================== *)\n\nVAR\n  (* Process simulation *)\n  pv : REAL;\n  sp : REAL;\n  output : REAL;\n  disturbance : REAL;\n  gain : REAL;\n  tau : REAL;\n  noise : REAL;\n  dt : REAL;\n  dpv : REAL;\n  (* PID parameters *)\n  kp : REAL;\n  ki : REAL;\n  kd : REAL;\n  outMin : REAL;\n  outMax : REAL;\n  enabled : REAL;\nEND_VAR\n\n(* Read simulation parameters *)\ngain := Read(\u0027Simulation.ProcessGain\u0027);\ntau := Read(\u0027Simulation.TimeConstant\u0027);\nnoise := Read(\u0027Simulation.NoiseAmplitude\u0027);\ndisturbance := Read(\u0027Process.CoolingDisturbance\u0027);\n\n(* Read current process state *)\npv := Read(\u0027Process.Temperature\u0027);\nsp := Read(\u0027Process.Setpoint\u0027);\n\n(* Read PID gains from operator-adjustable variables *)\nkp := Read(\u0027PID.Kp\u0027);\nki := Read(\u0027PID.Ki\u0027);\nkd := Read(\u0027PID.Kd\u0027);\noutMin := Read(\u0027PID.OutMin\u0027);\noutMax := Read(\u0027PID.OutMax\u0027);\nenabled := Read(\u0027PID.Enabled\u0027);\n\n(* --- PID Controller --- *)\nIF enabled \u003E 0.5 THEN\n  output := PID(\u0027main_loop\u0027, pv, sp, kp, ki, kd, outMin, outMax);\nELSE\n  output := 0.0;\nEND_IF;\n\nWrite(\u0027Process.HeaterOutput\u0027, output);\n\n(* --- Process Simulation (first-order \u002B disturbance \u002B noise) --- *)\n(* dPV/dt = (-PV \u002B K * output - disturbance * tau) / tau *)\ndt := 0.1;\ndpv := (-pv \u002B gain * output - disturbance * tau) / tau;\npv := pv \u002B dpv * dt;\n\n(* Add measurement noise *)\npv := pv \u002B (Random() - 0.5) * 2.0 * noise;\n\n(* Clamp to physical range *)\nIF pv \u003C 0.0 THEN pv := 0.0; END_IF;\nIF pv \u003E 200.0 THEN pv := 200.0; END_IF;\n\nWrite(\u0027Process.Temperature\u0027, pv);\n",
+  "Enabled": true,
+  "IntervalMs": 100,
+  "Language": "ST",
+  "Group": "",
+  "PidAutoTune": {
+    "ProcessVariablePath": "Process.Temperature",
+    "OutputPath": "Process.HeaterOutput",
+    "SetpointPath": "Process.Setpoint",
+    "Setpoint": 50,
+    "RelayAmplitude": 15,
+    "OutputBias": 50,
+    "Hysteresis": 0.5,
+    "PidType": "PID",
+    "OutputMin": 0,
+    "OutputMax": 100,
+    "LastKp": 2,
+    "LastKi": 0.5,
+    "LastKd": 0.1
+  },
+  "Breakpoints": [
+    49,
+    50,
+    52
+  ]
+}

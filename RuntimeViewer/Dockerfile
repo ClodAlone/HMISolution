@@ -2,6 +2,12 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
+# Copy Version.props and Directory.Build.props (imported by all projects)
+COPY HMISolution/Version.props                              HMISolution/Version.props
+COPY SharedModels/Directory.Build.props                      SharedModels/Directory.Build.props
+COPY RuntimeViewer.Shared/Directory.Build.props              RuntimeViewer.Shared/Directory.Build.props
+COPY RuntimeViewer/Directory.Build.props                     RuntimeViewer/Directory.Build.props
+
 # Copy project files
 COPY SharedModels/SharedModels.csproj                         SharedModels/
 COPY RuntimeViewer.Shared/RuntimeViewer.Shared.csproj         RuntimeViewer.Shared/

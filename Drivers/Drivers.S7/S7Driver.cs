@@ -78,6 +78,9 @@ namespace SimpleOpcFileServer
             private int _minPollTime = int.MaxValue;
             private bool _disposed;
             private readonly object _deviceLock = new();
+            private string? _lastLoggedError;
+            private int _consecutiveErrors;
+            private const int MaxBackoffMs = 30_000;
 
             public S7Device(string key, string ip, short rack, short slot, ISystemContext context, Action<string, string>? onError = null, Action<double>? onCycle = null)
             { _key = key; _ip = ip; _rack = rack; _slot = slot; _context = context; _onError = onError; _onCycle = onCycle; }
@@ -107,6 +110,7 @@ namespace SimpleOpcFileServer
             {
                 if (_disposed) return;
                 var _sw = System.Diagnostics.Stopwatch.StartNew();
+                bool anyError = false;
                 List<S7Item> itemsToPoll;
                 Plc? plc;
                 lock (_deviceLock)
@@ -125,9 +129,15 @@ namespace SimpleOpcFileServer
                         try { plc.Open(); }
                         catch (Exception ex)
                         {
-                            Log.Error(ex, "S7 connection error for {Key}: {Message}", _key, ex.Message);
+                            if (ex.Message != _lastLoggedError)
+                            {
+                                Log.Error(ex, "S7 connection error for {Key}: {Message}", _key, ex.Message);
+                                _lastLoggedError = ex.Message;
+                            }
+                            else Log.Debug("S7 connection error (repeated) for {Key}: {Message}", _key, ex.Message);
                             _onError?.Invoke(_key, $"Connection error: {ex.Message}");
                             foreach (var item in itemsToPoll) UpdateError(item.Variable, ex.Message);
+                            anyError = true;
                             return;
                         }
                     }
@@ -142,9 +152,15 @@ namespace SimpleOpcFileServer
                             }
                             catch (Exception ex)
                             {
-                                Log.Error(ex, "S7 read error for {Name}: {Message}", item.Variable.DisplayName, ex.Message);
+                                if (ex.Message != _lastLoggedError)
+                                {
+                                    Log.Error(ex, "S7 read error for {Name}: {Message}", item.Variable.DisplayName, ex.Message);
+                                    _lastLoggedError = ex.Message;
+                                }
+                                else Log.Debug("S7 read error (repeated) for {Name}: {Message}", item.Variable.DisplayName, ex.Message);
                                 _onError?.Invoke(_key, $"Read error ({item.Variable.DisplayName}): {ex.Message}");
                                 UpdateError(item.Variable, ex.Message);
+                                anyError = true;
                             }
                         }
                     }
@@ -152,12 +168,24 @@ namespace SimpleOpcFileServer
                 }
                 catch (Exception ex)
                 {
-                    Log.Error(ex, "S7 PLC error for {Key}: {Message}", _key, ex.Message);
+                    if (ex.Message != _lastLoggedError)
+                    {
+                        Log.Error(ex, "S7 PLC error for {Key}: {Message}", _key, ex.Message);
+                        _lastLoggedError = ex.Message;
+                    }
+                    else Log.Debug("S7 PLC error (repeated) for {Key}: {Message}", _key, ex.Message);
                     _onError?.Invoke(_key, $"PLC error: {ex.Message}");
                     foreach (var item in itemsToPoll) UpdateError(item.Variable, ex.Message);
                     lock (_deviceLock) { if (_plc == plc) DisposePlc(); }
+                    anyError = true;
                 }
-                finally { _onCycle?.Invoke(_sw.Elapsed.TotalMilliseconds); if (!_disposed) _timer?.Change(_pollInterval, Timeout.Infinite); }
+                finally
+                {
+                    if (anyError) _consecutiveErrors++; else { _consecutiveErrors = 0; _lastLoggedError = null; }
+                    var delay = _consecutiveErrors > 0 ? Math.Min(_pollInterval * (1 << Math.Min(_consecutiveErrors, 10)), MaxBackoffMs) : _pollInterval;
+                    _onCycle?.Invoke(_sw.Elapsed.TotalMilliseconds);
+                    if (!_disposed) _timer?.Change(delay, Timeout.Infinite);
+                }
             }
 
             private void Update(BaseDataVariableState variable, object value)

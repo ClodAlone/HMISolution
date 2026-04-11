@@ -2,6 +2,11 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
+# Copy Version.props and Directory.Build.props (imported by all projects)
+COPY HMISolution/Version.props                              HMISolution/Version.props
+COPY SharedModels/Directory.Build.props                      SharedModels/Directory.Build.props
+COPY ServerEditorWeb/Directory.Build.props                   ServerEditorWeb/Directory.Build.props
+
 # Copy project files
 COPY SharedModels/SharedModels.csproj         SharedModels/
 COPY ServerEditorWeb/ServerEditorWeb.csproj   ServerEditorWeb/

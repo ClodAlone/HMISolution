@@ -1,4 +1,4 @@
-﻿@using RuntimeViewer.Shared.Services
+@using RuntimeViewer.Shared.Services
 @implements IDisposable
 
 <div class="editbox-widget" @onclick:stopPropagation @onmousedown:stopPropagation @onmouseup:stopPropagation>
@@ -136,13 +136,10 @@
         // Only re-render when our specific variable changes
         if (!string.Equals(path, VariablePath, StringComparison.Ordinal)) return;
 
-        // Re-check numeric status when OPC values arrive (initial value may not have been available)
+        // Re-evaluate numeric status on every change so string variables display correctly
         var val = Opc.GetValue(VariablePath ?? "");
-        if (!_isNumeric && val != null && double.TryParse(val, System.Globalization.NumberStyles.Any,
-                System.Globalization.CultureInfo.InvariantCulture, out _))
-        {
-            _isNumeric = true;
-        }
+        _isNumeric = val != null && double.TryParse(val, System.Globalization.NumberStyles.Any,
+                System.Globalization.CultureInfo.InvariantCulture, out _);
         InvokeAsync(StateHasChanged);
     }
 

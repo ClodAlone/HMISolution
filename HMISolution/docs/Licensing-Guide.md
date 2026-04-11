@@ -199,18 +199,23 @@ The application window is organized into five sections:
 
 ## 4. License Tiers & Feature Limits
 
-| Feature | Trial | Starter | Professional | Enterprise |
-|---|:---:|:---:|:---:|:---:|
-| Max Variables | 20 | 100 | 1,000 | Unlimited |
-| Max Drivers | 1 | 2 | Unlimited | Unlimited |
-| Max Scripts | 2 | 5 | Unlimited | Unlimited |
-| Max PLC Programs | 1 | 2 | Unlimited | Unlimited |
-| Max Screens | 1 | 3 | Unlimited | Unlimited |
-| Max Recipes | 0 | 3 | Unlimited | Unlimited |
-| Data Logging | No | No | Yes | Yes |
-| AI Assistant | No | No | Yes | Yes |
-| Duration | 30 days | Custom | Custom | Perpetual |
-| Machine Lock | No | Optional | Optional | Optional |
+| Feature | Demo | Trial | Starter | Professional | Enterprise |
+|---|:---:|:---:|:---:|:---:|:---:|
+| Max Variables | Unlimited | 20 | 100 | 1,000 | Unlimited |
+| Max Drivers | Unlimited | 1 | 2 | Unlimited | Unlimited |
+| Max Scripts | Unlimited | 2 | 5 | Unlimited | Unlimited |
+| Max PLC Programs | Unlimited | 1 | 2 | Unlimited | Unlimited |
+| Max Screens | Unlimited | 1 | 3 | Unlimited | Unlimited |
+| Max Recipes | Unlimited | 0 | 3 | Unlimited | Unlimited |
+| Data Logging | Yes | No | No | Yes | Yes |
+| AI Assistant | Yes | No | No | Yes | Yes |
+| Duration | **10 minutes** | 30 days | Custom | Custom | Perpetual |
+| Machine Lock | No | No | Optional | Optional | Optional |
+
+> **Demo mode**: When no `license.json` file is found, the application starts in Demo mode
+> with full (Enterprise-level) features for **10 minutes**. After the grace period expires,
+> it automatically degrades to Trial limits. Restart the application to get another 10-minute
+> demo window, or add a license file for permanent access.
 
 > `Unlimited` means `0` in the JSON. All integer limits follow the rule: `0 = unlimited`.
 
@@ -556,15 +561,22 @@ Validation runs at startup in **all three processes**:
 
 2. Validate(licensePath)
    a. Read and parse the JSON file
-   b. Verify RSA-SHA256 signature:
+   b. If no file found -> Demo mode (full features for 10 minutes, then degrades to Trial)
+   c. Verify RSA-SHA256 signature:
       - Build canonical payload (sorted keys, no Signature field)
       - RSA.VerifyData(payload, signature, SHA256, PKCS1)
       - If public key is still placeholder -> skip (dev mode)
-   c. Check ExpiresUtc < DateTime.UtcNow -> expired
-   d. Check MachineId matches GetMachineId() -> wrong machine
-   e. All passed -> LicenseStatus.IsValid = true
+   d. Check ExpiresUtc < DateTime.UtcNow -> expired
+   e. Check MachineId matches GetMachineId() -> wrong machine
+   f. All passed -> LicenseStatus.IsValid = true
 
 3. Result cached in LicenseManager.Current (static)
+
+4. Demo expiry check (Server only):
+   - A background timer fires every 30 seconds
+   - LicenseManager.CheckDemoExpiry() checks if 10 minutes have elapsed
+   - When expired: degrades to Trial limits, re-enforces license limits on the loaded model
+   - Timer stops after degradation (permanent until restart with a license file)
 ```
 
 ### Canonical Payload (Signed Data)
@@ -667,9 +679,24 @@ The fingerprint **will change** if:
 
 ---
 
-## 12. Trial / Unlicensed Mode
+## 12. Demo & Trial Mode
 
-When no valid license is found (missing, expired, tampered, wrong machine), the system falls back to **Trial mode**:
+When no valid license is found (missing file), the system starts in **Demo mode** with full features for **10 minutes**, then degrades to **Trial mode**:
+
+### Demo Mode (first 10 minutes)
+
+All features are unlocked (Enterprise-level). The server console shows:
+```
+License: Demo — No license file found. Running in Demo mode (full features for 10 minutes).
+Demo mode: full features for 10 minutes (started 14:30:00 UTC)
+```
+
+The editor shows a countdown timer:
+```
+⏱️ Demo: 8:42 remaining — full features active
+```
+
+### Trial Mode (after demo expires, or expired/tampered license)
 
 | Limit | Trial Value |
 |---|---|
@@ -681,18 +708,18 @@ When no valid license is found (missing, expired, tampered, wrong machine), the 
 | Max Recipes | 0 |
 | Data Logging | Disabled |
 | AI Assistant | Disabled |
-| Duration | 30 days (from first run) |
 
-The server console will show:
+When the demo expires, the server logs:
 ```
-License: Unlicensed -- No license file found. Running in Trial mode.
+Demo period expired — degrading to Trial mode with limited features.
 ```
-or
+
+When a license file is expired or invalid:
 ```
 License: Trial -- License expired on 2025-06-01.
 ```
 
-> **Note**: In trial mode, the application is fully functional within the trial limits. It never crashes or locks out the user -- it simply restricts feature counts.
+> **Note**: Restarting the application grants another 10-minute demo window. Add a `license.json` file to the project folder for permanent access.
 
 ---
 

@@ -547,6 +547,103 @@
                     </div>
                 }
             }
+
+            <hr class="my-2" />
+            <h6 class="mb-2 small" style="color: #22c55e;">Video Recording</h6>
+
+            <div class="form-check mb-2">
+                <input type="checkbox" class="form-check-input" id="@($"rec_{_selectedSymbol.Id}")"
+                       checked="@_selectedSymbol.Camera.RecordingEnabled"
+                       @onchange="(e) => { _selectedSymbol.Camera!.RecordingEnabled = (bool)(e.Value ?? false); OnChanged(); }" />
+                <label class="form-check-label small" for="@($"rec_{_selectedSymbol.Id}")">
+                    Enable video recording
+                </label>
+                <div class="form-text" style="font-size: 9px;">Records camera frames into video segments on the server. Requires FFmpeg.</div>
+            </div>
+
+            @if (_selectedSymbol.Camera.RecordingEnabled)
+            {
+                <div class="mb-2">
+                    <label class="form-label mb-0 small">Recording Trigger</label>
+                    <select class="form-select form-select-sm" style="font-size: 10px;"
+                            @bind="_selectedSymbol.Camera.RecordingTrigger" @bind:after="OnChanged">
+                        <option value="always">Always (record continuously)</option>
+                        <option value="detection">On Detection (YOLO object detected)</option>
+                        <option value="variable">Variable (OPC Boolean trigger)</option>
+                    </select>
+                </div>
+
+                @if (_selectedSymbol.Camera.RecordingTrigger == "variable")
+                {
+                    <div class="mb-2">
+                        <label class="form-label mb-0 small">Trigger Variable</label>
+                        <VariablePathPicker Value="@_selectedSymbol.Camera.RecordingTriggerVariable"
+                                            ValueChanged='v => { _selectedSymbol.Camera!.RecordingTriggerVariable = v ?? string.Empty; }'
+                                            OnChanged="OnChanged"
+                                            Placeholder="(Boolean variable to start/stop recording)" />
+                    </div>
+                }
+
+                @if (_selectedSymbol.Camera.RecordingTrigger == "detection")
+                {
+                    <div class="mb-2">
+                        <label class="form-label mb-0 small">Min Confidence Threshold</label>
+                        <input type="number" class="form-control form-control-sm" style="font-size: 10px; width: 100px;"
+                               min="0" max="1" step="0.05"
+                               @bind="_selectedSymbol.Camera.RecordingDetectionConfidenceThreshold" @bind:after="OnChanged" />
+                        <div class="form-text" style="font-size: 9px;">0.0-1.0 — Minimum YOLO confidence to trigger recording. 0 = any detection.</div>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label mb-0 small">Detection Labels Filter</label>
+                        <input type="text" class="form-control form-control-sm" style="font-size: 10px;"
+                               @bind="_selectedSymbol.Camera.RecordingDetectionLabels" @bind:after="OnChanged"
+                               placeholder="e.g. person, car, dog" />
+                        <div class="form-text" style="font-size: 9px;">Comma-separated YOLO labels to trigger recording. Empty = any object.</div>
+                    </div>
+                }
+
+                <div class="d-flex gap-1 mb-2">
+                    <div>
+                        <label class="form-label mb-0 small">Max Segment (sec)</label>
+                        <input type="number" class="form-control form-control-sm" style="font-size: 10px; width: 80px;"
+                               min="0" @bind="_selectedSymbol.Camera.RecordingMaxDurationSeconds" @bind:after="OnChanged" />
+                        <div class="form-text" style="font-size: 9px;">0 = unlimited</div>
+                    </div>
+                    <div>
+                        <label class="form-label mb-0 small">Pre-roll (sec)</label>
+                        <input type="number" class="form-control form-control-sm" style="font-size: 10px; width: 60px;"
+                               min="0" max="30" @bind="_selectedSymbol.Camera.RecordingPreRollSeconds" @bind:after="OnChanged" />
+                    </div>
+                    <div>
+                        <label class="form-label mb-0 small">Post-roll (sec)</label>
+                        <input type="number" class="form-control form-control-sm" style="font-size: 10px; width: 60px;"
+                               min="0" max="60" @bind="_selectedSymbol.Camera.RecordingPostRollSeconds" @bind:after="OnChanged" />
+                    </div>
+                </div>
+
+                <div class="d-flex gap-1 mb-2">
+                    <div>
+                        <label class="form-label mb-0 small">Max Age (hours)</label>
+                        <input type="number" class="form-control form-control-sm" style="font-size: 10px; width: 80px;"
+                               min="0" @bind="_selectedSymbol.Camera.RecordingMaxAgeHours" @bind:after="OnChanged" />
+                        <div class="form-text" style="font-size: 9px;">0 = no cleanup</div>
+                    </div>
+                    <div>
+                        <label class="form-label mb-0 small">Max Size (MB)</label>
+                        <input type="number" class="form-control form-control-sm" style="font-size: 10px; width: 80px;"
+                               min="0" @bind="_selectedSymbol.Camera.RecordingMaxSizeMB" @bind:after="OnChanged" />
+                        <div class="form-text" style="font-size: 9px;">0 = no limit</div>
+                    </div>
+                </div>
+
+                <div class="mb-2">
+                    <label class="form-label mb-0 small">Recording Path</label>
+                    <input type="text" class="form-control form-control-sm" style="font-size: 10px;"
+                           @bind="_selectedSymbol.Camera.RecordingPath" @bind:after="OnChanged"
+                           placeholder="(defaults to Camera ID)" />
+                    <div class="form-text" style="font-size: 9px;">Subfolder under project/recordings/. Leave empty to use Camera ID.</div>
+                </div>
+            }
         }
 
         @if (_selectedSymbol.Type is "recipe")

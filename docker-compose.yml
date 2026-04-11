@@ -1,7 +1,8 @@
 # docker-compose.yml  –  Build & run HMI release images locally
 # Usage:
-#   docker compose build                     # build both images
-#   docker compose up -d                     # run both containers
+#   docker compose build                     # build individual images
+#   docker compose up -d                     # run individual containers
+#   docker compose --profile allinone up -d  # run the all-in-one container
 #   docker compose push                      # push to registry (after docker login)
 
 services:
@@ -12,7 +13,7 @@ services:
       context: .
       dockerfile: Server/Dockerfile
     ports:
-      - "4840:4840"
+      - "14840:14840"
       - "14841:14841"
     volumes:
       - server-data:/data
@@ -31,6 +32,32 @@ services:
       - ASPNETCORE_ENVIRONMENT=Production
     restart: unless-stopped
 
+  # All-in-One image (includes TimescaleDB, Ollama, ffmpeg, ONNX models)
+  # Activate with:  docker compose --profile allinone up -d
+  allinone:
+    image: ghcr.io/clodalone/hmi-allinone:${TAG:-latest}
+    profiles: ["allinone"]
+    build:
+      context: .
+      dockerfile: Dockerfile.allinone
+    ports:
+      - "14840:14840"
+      - "14841:14841"
+      - "8080:8080"
+      - "8081:8081"
+      - "8088:8088"
+      - "5432:5432"
+      - "11434:11434"
+    volumes:
+      - allinone-data:/data
+      - allinone-pgdata:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_PASSWORD=hmipass
+      - OLLAMA_MODEL=mistral
+    restart: unless-stopped
+
 volumes:
   server-data:
   editor-data:
+  allinone-data:
+  allinone-pgdata:

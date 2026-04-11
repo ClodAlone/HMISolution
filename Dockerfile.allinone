@@ -1,0 +1,223 @@
+# =============================================================================
+#  HMI Solution — All-in-One Docker Image
+#
+#  Includes:
+#    • .NET 10 runtime with all HMI binaries (Server, ServerEditorWeb, RuntimeViewer)
+#    • TimescaleDB (PostgreSQL 16 + TimescaleDB extension)
+#    • Ollama (local LLM inference)
+#    • ffmpeg (RTSP camera capture & video recording)
+#    • YOLOv8n ONNX model (object detection)
+#    • All driver DLLs
+#
+#  Build:  docker build -f Dockerfile.allinone -t hmi-allinone .
+#  Run:    docker run -d -p 14840:14840 -p 8080:8080 -p 8081:8081 \
+#              -p 8088:8088 -p 14841:14841 -p 5432:5432 -p 11434:11434 \
+#              -v hmi-data:/data --name hmi hmi-allinone
+# =============================================================================
+
+# ─── Stage 1: Build all .NET projects ───────────────────────────────────────
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+WORKDIR /src
+
+# -- Copy Version.props (imported by every Directory.Build.props) --
+COPY HMISolution/Version.props HMISolution/Version.props
+
+# -- Copy Directory.Build.props for each project group --
+COPY Drivers/Directory.Build.props                            Drivers/Directory.Build.props
+COPY Server/Directory.Build.props                             Server/Directory.Build.props
+COPY SharedModels/Directory.Build.props                       SharedModels/Directory.Build.props
+COPY ServerEditorWeb/Directory.Build.props                    ServerEditorWeb/Directory.Build.props
+COPY RuntimeViewer/Directory.Build.props                      RuntimeViewer/Directory.Build.props
+COPY RuntimeViewer.Shared/Directory.Build.props               RuntimeViewer.Shared/Directory.Build.props
+
+# -- Copy project files for restore layer caching --
+COPY SharedModels/SharedModels.csproj                         SharedModels/
+COPY Drivers/Drivers.Abstractions/Drivers.Abstractions.csproj Drivers/Drivers.Abstractions/
+COPY Drivers/Drivers.Csv/Drivers.Csv.csproj                   Drivers/Drivers.Csv/
+COPY Drivers/Drivers.EtherNetIP/Drivers.EtherNetIP.csproj     Drivers/Drivers.EtherNetIP/
+COPY Drivers/Drivers.Knx/Drivers.Knx.csproj                   Drivers/Drivers.Knx/
+COPY Drivers/Drivers.Modbus/Drivers.Modbus.csproj             Drivers/Drivers.Modbus/
+COPY Drivers/Drivers.Mqtt/Drivers.Mqtt.csproj                 Drivers/Drivers.Mqtt/
+COPY Drivers/Drivers.OpcUaClient/Drivers.OpcUaClient.csproj   Drivers/Drivers.OpcUaClient/
+COPY Drivers/Drivers.Rest/Drivers.Rest.csproj                 Drivers/Drivers.Rest/
+COPY Drivers/Drivers.S7/Drivers.S7.csproj                     Drivers/Drivers.S7/
+COPY Drivers/Drivers.Simulation/Drivers.Simulation.csproj     Drivers/Drivers.Simulation/
+COPY Drivers/Drivers.SparkplugB/Drivers.SparkplugB.csproj     Drivers/Drivers.SparkplugB/
+COPY Drivers/Drivers.Sql/Drivers.Sql.csproj                   Drivers/Drivers.Sql/
+COPY Drivers/Drivers.Tcp/Drivers.Tcp.csproj                   Drivers/Drivers.Tcp/
+COPY Server/Server.csproj                                     Server/
+COPY ServerEditorWeb/ServerEditorWeb.csproj                   ServerEditorWeb/
+COPY RuntimeViewer.Shared/RuntimeViewer.Shared.csproj         RuntimeViewer.Shared/
+COPY RuntimeViewer/RuntimeViewer.csproj                       RuntimeViewer/
+
+# Restore all driver projects (loaded dynamically at runtime, not via ProjectReference)
+RUN dotnet restore Drivers/Drivers.Csv/Drivers.Csv.csproj && \
+    dotnet restore Drivers/Drivers.Modbus/Drivers.Modbus.csproj && \
+    dotnet restore Drivers/Drivers.S7/Drivers.S7.csproj && \
+    dotnet restore Drivers/Drivers.Mqtt/Drivers.Mqtt.csproj && \
+    dotnet restore Drivers/Drivers.EtherNetIP/Drivers.EtherNetIP.csproj && \
+    dotnet restore Drivers/Drivers.OpcUaClient/Drivers.OpcUaClient.csproj && \
+    dotnet restore Drivers/Drivers.Rest/Drivers.Rest.csproj && \
+    dotnet restore Drivers/Drivers.Tcp/Drivers.Tcp.csproj && \
+    dotnet restore Drivers/Drivers.Knx/Drivers.Knx.csproj && \
+    dotnet restore Drivers/Drivers.Simulation/Drivers.Simulation.csproj && \
+    dotnet restore Drivers/Drivers.SparkplugB/Drivers.SparkplugB.csproj && \
+    dotnet restore Drivers/Drivers.Sql/Drivers.Sql.csproj
+
+# Restore main application projects
+RUN dotnet restore Server/Server.csproj && \
+    dotnet restore ServerEditorWeb/ServerEditorWeb.csproj && \
+    dotnet restore RuntimeViewer/RuntimeViewer.csproj
+
+# -- Copy all source --
+COPY SharedModels/          SharedModels/
+COPY Drivers/               Drivers/
+COPY Server/                Server/
+COPY ServerEditorWeb/       ServerEditorWeb/
+COPY RuntimeViewer.Shared/  RuntimeViewer.Shared/
+COPY RuntimeViewer/         RuntimeViewer/
+
+# -- Build all driver projects (dynamically loaded, not referenced via ProjectReference) --
+RUN dotnet build Drivers/Drivers.Csv/Drivers.Csv.csproj -c Release --no-restore && \
+    dotnet build Drivers/Drivers.Modbus/Drivers.Modbus.csproj -c Release --no-restore && \
+    dotnet build Drivers/Drivers.S7/Drivers.S7.csproj -c Release --no-restore && \
+    dotnet build Drivers/Drivers.Mqtt/Drivers.Mqtt.csproj -c Release --no-restore && \
+    dotnet build Drivers/Drivers.EtherNetIP/Drivers.EtherNetIP.csproj -c Release --no-restore && \
+    dotnet build Drivers/Drivers.OpcUaClient/Drivers.OpcUaClient.csproj -c Release --no-restore && \
+    dotnet build Drivers/Drivers.Rest/Drivers.Rest.csproj -c Release --no-restore && \
+    dotnet build Drivers/Drivers.Tcp/Drivers.Tcp.csproj -c Release --no-restore && \
+    dotnet build Drivers/Drivers.Knx/Drivers.Knx.csproj -c Release --no-restore && \
+    dotnet build Drivers/Drivers.Simulation/Drivers.Simulation.csproj -c Release --no-restore && \
+    dotnet build Drivers/Drivers.SparkplugB/Drivers.SparkplugB.csproj -c Release --no-restore && \
+    dotnet build Drivers/Drivers.Sql/Drivers.Sql.csproj -c Release --no-restore
+
+# -- Publish each app --
+# Server: publish first, then copy driver DLLs into the publish output
+RUN dotnet publish Server/Server.csproj -c Release -o /app/server --no-restore
+# CopyDrivers target puts DLLs in bin/Release/net10.0/drivers/ — copy to publish output
+RUN mkdir -p /app/server/drivers && \
+    cp Server/bin/Release/net10.0/drivers/*.dll /app/server/drivers/ 2>/dev/null || true
+# Editor & Viewer: do NOT use --no-restore here — Blazor framework assets
+# (_framework/blazor.web.js) are only emitted when restore runs with publish.
+RUN dotnet publish ServerEditorWeb/ServerEditorWeb.csproj -c Release -o /app/editor
+RUN dotnet publish RuntimeViewer/RuntimeViewer.csproj -c Release -o /app/viewer \
+    -p:BuildingOtherConfiguration=true
+
+# ─── Stage 2: Export YOLOv8n ONNX model from the official .pt weights ──────
+# This stage is isolated — if it fails the final image still works (YOLO just
+# won't be available until the user places a model file manually).
+FROM python:3.12-slim AS model-exporter
+RUN pip install --no-cache-dir ultralytics onnx onnxruntime 2>/dev/null
+RUN python -c "from ultralytics import YOLO; m = YOLO('yolov8n.pt'); m.export(format='onnx', imgsz=640)" \
+    && mv yolov8n.onnx /yolov8n.onnx \
+    || touch /yolov8n.onnx
+
+# ─── Stage 3: Final all-in-one runtime image ──────────────────────────────
+FROM ubuntu:24.04 AS runtime
+
+LABEL org.opencontainers.image.source="https://github.com/ClodAlone/HMISolution"
+LABEL org.opencontainers.image.description="HMI Solution — All-in-One (Server + Editor + Viewer + TimescaleDB + Ollama + ffmpeg)"
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=false
+
+# -- Install system dependencies --
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        # .NET runtime dependencies
+        ca-certificates libicu74 libssl3t64 zlib1g \
+        # TimescaleDB (PostgreSQL 16)
+        gnupg lsb-release curl \
+        # ffmpeg for camera capture / recording
+        ffmpeg \
+        # Ollama requires zstd for extraction
+        zstd \
+        # Utilities
+        procps less python3 && \
+    # Add PostgreSQL 16 repo
+    echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+        > /etc/apt/sources.list.d/pgdg.list && \
+    curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+        | gpg --dearmor -o /etc/apt/trusted.gpg.d/pgdg.gpg && \
+    # Add TimescaleDB repo
+    echo "deb https://packagecloud.io/timescale/timescaledb/ubuntu/ $(lsb_release -cs) main" \
+        > /etc/apt/sources.list.d/timescaledb.list && \
+    curl -fsSL https://packagecloud.io/timescale/timescaledb/gpgkey \
+        | gpg --dearmor -o /etc/apt/trusted.gpg.d/timescaledb.gpg && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+        postgresql-16 \
+        timescaledb-2-postgresql-16 && \
+    # Cleanup
+    apt-get purge -y gnupg lsb-release && \
+    apt-get autoremove -y && \
+    rm -rf /var/lib/apt/lists/* /tmp/*
+
+# -- Install .NET 10 ASP.NET Core runtime --
+# (Using the Microsoft package feed for Ubuntu 24.04)
+RUN curl -fsSL https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh && \
+    chmod +x /tmp/dotnet-install.sh && \
+    /tmp/dotnet-install.sh --channel 10.0 --runtime aspnetcore --install-dir /usr/share/dotnet && \
+    ln -sf /usr/share/dotnet/dotnet /usr/bin/dotnet && \
+    rm /tmp/dotnet-install.sh
+
+# -- Install Ollama --
+RUN curl -fsSL https://ollama.com/install.sh | sh
+
+# -- Copy published .NET applications --
+COPY --from=build /app/server /opt/hmi/server
+COPY --from=build /app/editor /opt/hmi/editor
+COPY --from=build /app/viewer /opt/hmi/viewer
+
+# -- Ensure SymbolLibrary SVGs are included (dotnet publish may not always copy them) --
+COPY ServerEditorWeb/SymbolLibrary/ /opt/hmi/editor/SymbolLibrary/
+
+# -- Copy YOLOv8n ONNX model into Server directory (zero-byte if export failed) --
+COPY --from=model-exporter /yolov8n.onnx /opt/hmi/server/yolov8n.onnx
+# Remove placeholder if export failed (File.Exists check in CameraStreamService handles absence)
+RUN [ -s /opt/hmi/server/yolov8n.onnx ] || rm -f /opt/hmi/server/yolov8n.onnx
+
+# -- Copy entrypoint script --
+COPY docker/entrypoint.sh /opt/hmi/entrypoint.sh
+# Strip Windows CRLF line endings AND UTF-8 BOM (0xEF 0xBB 0xBF) that
+# Visual Studio / Windows editors may silently add.  Without this the
+# Linux kernel cannot find the shebang and fails with "exec format error".
+RUN sed -i 's/\r$//' /opt/hmi/entrypoint.sh && \
+    sed -i '1s/^\xEF\xBB\xBF//' /opt/hmi/entrypoint.sh && \
+    chmod +x /opt/hmi/entrypoint.sh
+
+# -- Copy sample projects (seeded into /data on first run) --
+COPY docker/samples/ /opt/hmi/samples/
+
+# -- Prepare PostgreSQL data directory --
+RUN mkdir -p /var/lib/postgresql/data /var/log/postgresql /var/log/hmi /var/log && \
+    chown -R postgres:postgres /var/lib/postgresql /var/log/postgresql
+
+# -- Prepare data volume --
+RUN mkdir -p /data
+VOLUME /data
+
+# ── Port mapping ──────────────────────────────────────────────────────────
+# 14840   OPC UA Server
+# 14841   Server diagnostics / REST API
+#  8080   ServerEditorWeb (Blazor)
+#  8081   RuntimeViewer (Blazor)
+#  8088   Camera MJPEG streaming (HttpListener)
+#  5432   TimescaleDB (PostgreSQL)
+# 11434   Ollama API
+EXPOSE 14840 14841 8080 8081 8088 5432 11434
+
+# ── Environment defaults ─────────────────────────────────────────────────
+ENV POSTGRES_USER=postgres
+ENV POSTGRES_PASSWORD=hmipass
+ENV POSTGRES_DB=hmi
+ENV PGDATA=/var/lib/postgresql/data
+ENV OLLAMA_MODEL=mistral
+ENV OLLAMA_HOST=127.0.0.1:11434
+ENV OLLAMA_MODELS=/data/ollama-models
+ENV HMI_DATA=/data
+ENV ENABLE_SERVER=false
+ENV ENABLE_VIEWER=false
+ENV ASPNETCORE_ENVIRONMENT=Production
+ENV PATH="/usr/lib/postgresql/16/bin:/usr/share/dotnet:${PATH}"
+
+ENTRYPOINT ["/opt/hmi/entrypoint.sh"]

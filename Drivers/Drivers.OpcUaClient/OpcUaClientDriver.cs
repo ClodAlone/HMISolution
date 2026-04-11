@@ -71,6 +71,9 @@ namespace SimpleOpcFileServer
             private Session? _session;
             private ApplicationConfiguration? _config;
             private bool _disposed;
+            private string? _lastLoggedError;
+            private int _consecutiveErrors;
+            private const int MaxBackoffMs = 30_000;
 
             public OpcUaDevice(string endpointUrl, ISystemContext context, Action<string, string>? onError = null, Action<double>? onCycle = null) { _endpointUrl = endpointUrl; _context = context; _onError = onError; _onCycle = onCycle; }
 
@@ -98,6 +101,7 @@ namespace SimpleOpcFileServer
             {
                 if (_disposed) return;
                 var _sw = System.Diagnostics.Stopwatch.StartNew();
+                bool anyError = false;
                 List<OpcUaItem> itemsToPoll;
                 lock (_deviceLock) { if (_disposed) return; itemsToPoll = new List<OpcUaItem>(_items); }
 
@@ -119,20 +123,38 @@ namespace SimpleOpcFileServer
                         }
                         catch (Exception ex)
                         {
-                            Log.Error(ex, "OPC UA client read error for {NodeId}: {Message}", item.Config.NodeId, ex.Message);
+                            if (ex.Message != _lastLoggedError)
+                            {
+                                Log.Error(ex, "OPC UA client read error for {NodeId}: {Message}", item.Config.NodeId, ex.Message);
+                                _lastLoggedError = ex.Message;
+                            }
+                            else Log.Debug("OPC UA client read error (repeated) for {NodeId}: {Message}", item.Config.NodeId, ex.Message);
                             _onError?.Invoke(_endpointUrl, $"Read error ({item.Config.NodeId}): {ex.Message}");
                             UpdateError(item.Variable, ex.Message);
+                            anyError = true;
                         }
                     }
                 }
                 catch (Exception ex)
                 {
-                    Log.Error(ex, "OPC UA client poll error for {Endpoint}: {Message}", _endpointUrl, ex.Message);
+                    if (ex.Message != _lastLoggedError)
+                    {
+                        Log.Error(ex, "OPC UA client poll error for {Endpoint}: {Message}", _endpointUrl, ex.Message);
+                        _lastLoggedError = ex.Message;
+                    }
+                    else Log.Debug("OPC UA client poll error (repeated) for {Endpoint}: {Message}", _endpointUrl, ex.Message);
                     _onError?.Invoke(_endpointUrl, $"Poll error: {ex.Message}");
                     foreach (var item in itemsToPoll) UpdateError(item.Variable, ex.Message);
                     Disconnect();
+                    anyError = true;
                 }
-                finally { _onCycle?.Invoke(_sw.Elapsed.TotalMilliseconds); if (!_disposed) _timer?.Change(_pollInterval, Timeout.Infinite); }
+                finally
+                {
+                    if (anyError) _consecutiveErrors++; else { _consecutiveErrors = 0; _lastLoggedError = null; }
+                    var delay = _consecutiveErrors > 0 ? Math.Min(_pollInterval * (1 << Math.Min(_consecutiveErrors, 10)), MaxBackoffMs) : _pollInterval;
+                    _onCycle?.Invoke(_sw.Elapsed.TotalMilliseconds);
+                    if (!_disposed) _timer?.Change(delay, Timeout.Infinite);
+                }
             }
 
             private void EnsureConnected()

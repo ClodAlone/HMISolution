@@ -115,6 +115,7 @@ namespace SimpleOpcFileServer
         // Diagnostics OPC UA node
         private BaseDataVariableState<string>? _diagVariable;
         private System.Threading.Timer? _diagTimer;
+        private System.Threading.Timer? _demoCheckTimer;
 
         public SimpleFileServerNodeManager(IServerInternal server, ApplicationConfiguration configuration, string configPath)
         : base(server, configuration, NodeNamespaceUri)
@@ -422,6 +423,14 @@ namespace SimpleOpcFileServer
             foreach (var kvp in externalReferences)
             {
                 Server.NodeManager.AddReferences(kvp.Key, kvp.Value);
+            }
+
+            // Start demo license expiry check timer (fires every 30s)
+            if (SharedModels.LicenseManager.DemoStartedUtc.HasValue)
+            {
+                _demoCheckTimer = new System.Threading.Timer(OnDemoCheckTimer, null, 30_000, 30_000);
+                Log.Information("Demo mode active — full features for {Minutes} minutes.",
+                    SharedModels.LicenseManager.Current.DemoGraceMinutes);
             }
         }
 
@@ -2831,6 +2840,30 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             return ServiceResult.Good;
         }
 
+        private void OnDemoCheckTimer(object? state)
+        {
+            if (SharedModels.LicenseManager.CheckDemoExpiry())
+            {
+                Log.Warning("Demo period expired — degrading to Trial mode with limited features.");
+                _eventLogger?.LogSystem("Warning", "License",
+                    "Demo period expired. Running in Trial mode. Add a license file to restore full functionality.");
+
+                // Re-enforce limits on the loaded model
+                var lic = SharedModels.LicenseManager.Current.License;
+                if (lic != null && _lastModel != null)
+                {
+                    lock (Lock)
+                    {
+                        EnforceLicenseLimits(_lastModel, lic);
+                    }
+                }
+
+                // Stop checking — degradation is permanent until restart with a license file
+                _demoCheckTimer?.Dispose();
+                _demoCheckTimer = null;
+            }
+        }
+
         protected override void Dispose(bool disposing)
         {
             if (disposing)
@@ -2853,6 +2886,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 _eventLogger?.Dispose();
                 foreach (var rw in _resourceWatchers) rw.Dispose();
                 _resourceWatchers.Clear();
+                _demoCheckTimer?.Dispose();
             }
             base.Dispose(disposing);
         }

@@ -48,7 +48,7 @@ namespace SharedModels
     public class DatabaseConfig
     {
         public string Provider { get; set; } = "TimescaleDb";
-        public string ConnectionString { get; set; } = "";
+        public string ConnectionString { get; set; } = "Host=localhost;Port=5432;Database=hmi;Username=postgres;Password=hmipass";
         public string TableName { get; set; } = "variable_data";
     }
 
@@ -1895,6 +1895,63 @@ namespace SharedModels
 
         /// <summary>Optional password for camera authentication.</summary>
         public string Password { get; set; } = "";
+
+        // --- Video Recording ---
+
+        /// <summary>Enable server-side video recording for this camera.</summary>
+        public bool RecordingEnabled { get; set; }
+
+        /// <summary>Recording trigger mode: "always", "detection", or "variable". Default "always".</summary>
+        public string RecordingTrigger { get; set; } = "always";
+
+        /// <summary>OPC variable path (Boolean) that starts/stops recording when RecordingTrigger == "variable".</summary>
+        public string RecordingTriggerVariable { get; set; } = "";
+
+        /// <summary>Minimum YOLO confidence (0.0-1.0) required to trigger recording when RecordingTrigger == "detection". Default 0 (any detection).</summary>
+        public double RecordingDetectionConfidenceThreshold { get; set; }
+
+        /// <summary>Comma-separated list of YOLO labels that trigger recording when RecordingTrigger == "detection". Empty = any label.</summary>
+        public string RecordingDetectionLabels { get; set; } = "";
+
+        /// <summary>Maximum duration of a single recording segment in seconds. Default 300 (5 min). 0 = unlimited.</summary>
+        public int RecordingMaxDurationSeconds { get; set; } = 300;
+
+        /// <summary>Maximum age of recordings in hours before automatic cleanup. Default 24. 0 = no cleanup.</summary>
+        public int RecordingMaxAgeHours { get; set; } = 24;
+
+        /// <summary>Maximum total disk usage for this camera's recordings in MB. Default 500. 0 = no limit.</summary>
+        public int RecordingMaxSizeMB { get; set; } = 500;
+
+        /// <summary>Subdirectory name under the project's "recordings" folder. Defaults to CameraId if empty.</summary>
+        public string RecordingPath { get; set; } = "";
+
+        /// <summary>Seconds to keep recording after the trigger goes inactive (post-roll). Default 5.</summary>
+        public int RecordingPostRollSeconds { get; set; } = 5;
+
+        /// <summary>Seconds to buffer before the trigger fires (pre-roll). Default 3.</summary>
+        public int RecordingPreRollSeconds { get; set; } = 3;
+    }
+
+    /// <summary>Metadata for a camera recording file returned by the recordings API.</summary>
+    public class CameraRecordingInfo
+    {
+        /// <summary>Recording file name (without path).</summary>
+        public string FileName { get; set; } = "";
+
+        /// <summary>Camera ID that produced this recording.</summary>
+        public string CameraId { get; set; } = "";
+
+        /// <summary>UTC timestamp when recording started.</summary>
+        public DateTime StartTimeUtc { get; set; }
+
+        /// <summary>Duration in seconds.</summary>
+        public double DurationSeconds { get; set; }
+
+        /// <summary>File size in bytes.</summary>
+        public long SizeBytes { get; set; }
+
+        /// <summary>Relative URL to download/stream the recording.</summary>
+        public string Url { get; set; } = "";
     }
 
     // â”€â”€â”€ Diagnostics â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€

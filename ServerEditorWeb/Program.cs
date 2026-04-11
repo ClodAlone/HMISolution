@@ -34,6 +34,7 @@ if (builder.Environment.IsDevelopment())
 builder.Services.AddSingleton<NodeEditorService>();
 builder.Services.AddSingleton<ServerProcessService>();
 builder.Services.AddSingleton<RuntimeViewerProcessService>();
+builder.Services.AddSingleton<DockerServiceManager>();
 builder.Services.AddSingleton<ServerDiagnosticsClient>();
 builder.Services.AddScoped<GitService>();
 builder.Services.AddSingleton<ProjectDiffService>();

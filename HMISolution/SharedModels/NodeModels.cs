@@ -1703,6 +1703,29 @@ namespace SharedModels
 
         /// <summary>Optional password for camera authentication.</summary>
         public string Password { get; set; } = "";
+
+        // --- Recording configuration (server-managed) ---
+        /// <summary>
+        /// When true, server-side recording for this camera is enabled. Default false.
+        /// </summary>
+        public bool RecordingEnabled { get; set; }
+
+        /// <summary>
+        /// Recording mode: "always" = continuous rolling recordings, "on_detection" = start when an object is detected.
+        /// </summary>
+        public string RecordingMode { get; set; } = "on_detection";
+
+        /// <summary>Minimum confidence (0.0-1.0) required to trigger a recording when RecordingMode == "on_detection".</summary>
+        public double RecordingMinConfidence { get; set; } = 0.5;
+
+        /// <summary>Maximum duration in seconds for a single recording file. Server should enforce rotation by this duration.</summary>
+        public int RecordingMaxDurationSeconds { get; set; } = 60;
+
+        /// <summary>Relative or absolute folder path where recordings for this camera are stored. Relative paths resolved against project directory.</summary>
+        public string RecordingFolder { get; set; } = "Recordings";
+
+        /// <summary>Maximum age in days for recordings; server cleanup jobs may remove older files.</summary>
+        public int RecordingMaxAgeDays { get; set; } = 7;
     }
 
     // ─── Diagnostics ─────────────────────────────────────────

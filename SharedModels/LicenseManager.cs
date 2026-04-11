@@ -28,6 +28,7 @@ public static class LicenseManager
         "REPLACE_WITH_YOUR_PUBLIC_KEY";
 
     private static LicenseStatus? _cached;
+    private static DateTime? _demoStartedUtc;
 
     // ─── Hardware Fingerprint ───────────────────────────────────────
 
@@ -76,15 +77,17 @@ public static class LicenseManager
     {
         if (string.IsNullOrEmpty(licenseFilePath) || !File.Exists(licenseFilePath))
         {
+            // No license file — start Demo mode (full features for 10 minutes)
+            _demoStartedUtc ??= DateTime.UtcNow;
             _cached = new LicenseStatus
             {
-                IsValid = false,
-                Tier = "Unlicensed",
-                Message = "No license file found. Running in Trial mode.",
-                License = LicenseTiers.CreateTrial("Trial User", "")
+                IsValid = true,
+                Tier = "Demo",
+                Message = "No license file found. Running in Demo mode (full features for 10 minutes).",
+                License = LicenseTiers.CreateDemo(),
+                DemoStartedUtc = _demoStartedUtc,
+                DemoGraceMinutes = 10
             };
-            _cached.License.Signature = "(trial)";
-            ApplyTrialLimits(_cached);
             return _cached;
         }
 
@@ -185,6 +188,35 @@ public static class LicenseManager
 
         return null;
     }
+
+    /// <summary>
+    /// Check whether the demo grace period has expired. If it has, degrade to Trial limits.
+    /// Call this periodically (e.g. every 60 seconds) from a background timer.
+    /// Returns <c>true</c> if the demo just expired on this call.
+    /// </summary>
+    public static bool CheckDemoExpiry()
+    {
+        if (_cached == null || !_cached.DemoStartedUtc.HasValue)
+            return false; // Not in demo mode
+
+        if (!_cached.IsDemoExpired)
+            return false; // Still within the grace period
+
+        if (_cached.Tier == "Trial")
+            return false; // Already degraded
+
+        // Degrade to Trial limits
+        _cached.IsValid = false;
+        _cached.Tier = "Trial";
+        _cached.Message = "Demo period expired. Running in Trial mode (limited features). Please add a license file to unlock full functionality.";
+        _cached.License = LicenseTiers.CreateTrial("Trial User", "");
+        _cached.License.Signature = "(demo-expired)";
+        ApplyTrialLimits(_cached);
+        return true;
+    }
+
+    /// <summary>UTC timestamp when the demo grace period started. <c>null</c> if a license file was found.</summary>
+    public static DateTime? DemoStartedUtc => _demoStartedUtc;
 
     // ─── Key Generation & Signing (developer tools) ─────────────────
 

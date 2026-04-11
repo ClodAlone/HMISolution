@@ -75,6 +75,9 @@ namespace SimpleOpcFileServer
             private int _minPollTime = int.MaxValue;
             private bool _disposed;
             private readonly object _deviceLock = new();
+            private string? _lastLoggedError;
+            private int _consecutiveErrors;
+            private const int MaxBackoffMs = 30_000;
 
             public EtherNetIPDevice(string ip, ISystemContext context, Action<string, string>? onError = null, Action<double>? onCycle = null) { _ip = ip; _context = context; _onError = onError; _onCycle = onCycle; }
 
@@ -102,6 +105,7 @@ namespace SimpleOpcFileServer
             {
                 if (_disposed) return;
                 var _sw = System.Diagnostics.Stopwatch.StartNew();
+                bool anyError = false;
                 lock (_deviceLock)
                 {
                     if (_disposed) return;
@@ -138,16 +142,24 @@ namespace SimpleOpcFileServer
                         }
                         catch (Exception ex)
                         {
-                            Log.Error(ex, "EtherNetIP Error: {Message}", ex.Message);
+                            if (ex.Message != _lastLoggedError)
+                            {
+                                Log.Error(ex, "EtherNetIP Error: {Message}", ex.Message);
+                                _lastLoggedError = ex.Message;
+                            }
+                            else Log.Debug("EtherNetIP Error (repeated): {Message}", ex.Message);
                             _onError?.Invoke(_ip, $"Error: {ex.Message}");
                             UpdateError(item.Variable, ex.Message);
                             try { item.LibTag?.Dispose(); } catch { }
                             item.LibTag = null;
+                            anyError = true;
                         }
                     }
                 }
+                if (anyError) _consecutiveErrors++; else { _consecutiveErrors = 0; _lastLoggedError = null; }
+                var delay = _consecutiveErrors > 0 ? Math.Min(_pollInterval * (1 << Math.Min(_consecutiveErrors, 10)), MaxBackoffMs) : _pollInterval;
                 _onCycle?.Invoke(_sw.Elapsed.TotalMilliseconds);
-                if (!_disposed) _timer?.Change(_pollInterval, Timeout.Infinite);
+                if (!_disposed) _timer?.Change(delay, Timeout.Infinite);
             }
 
             private void Update(BaseDataVariableState variable, object value)
