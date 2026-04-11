@@ -1021,6 +1021,29 @@
                                             <line x1="4" y1="26" x2="@(sym.Width - 4)" y2="26" stroke="#334155" stroke-width="1" />
                                             @RenderSvgText(sym.Width / 2, 40, "middle", "middle", "#64748b", ScaledFontSize(9, sym), "(top-10, MTTA, flood detection at runtime)")
                                             break;
+                                        case "radiogroup":
+                                            var rgBg = sym.DropdownBackground ?? "#1e293b";
+                                            var rgOpts = (sym.DropdownOptions ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                                            var rgVert = sym.RadioGroupLayout == "vertical";
+                                            var rgCount = Math.Max(1, rgOpts.Length);
+                                            <rect width="@sym.Width" height="@sym.Height" rx="4" fill="@rgBg" stroke="#475569" stroke-width="1" />
+                                            @if (rgOpts.Length == 0)
+                                            {
+                                                @RenderSvgText(sym.Width / 2, sym.Height / 2, "middle", "middle", "#64748b", ScaledFontSize(10, sym), "Radio Group (no options)")
+                                            }
+                                            else
+                                            {
+                                                @for (int ri = 0; ri < rgOpts.Length; ri++)
+                                                {
+                                                    double rcx, rcy;
+                                                    if (rgVert) { rcx = 14; rcy = (sym.Height / rgCount) * ri + (sym.Height / rgCount) / 2; }
+                                                    else { rcx = (sym.Width / rgCount) * ri + 14; rcy = sym.Height / 2.0; }
+                                                    <circle cx="@F(rcx)" cy="@F(rcy)" r="5" fill="none" stroke="#64748b" stroke-width="1.5" />
+                                                    @if (ri == 0) { <circle cx="@F(rcx)" cy="@F(rcy)" r="2.5" fill="#3b82f6" /> }
+                                                    @RenderSvgText(rcx + 10, rcy, "start", "middle", ri == 0 ? "#e2e8f0" : "#94a3b8", ScaledFontSize(11, sym), rgOpts[ri])
+                                                }
+                                            }
+                                            break;
                                         case "kpiwidget":
                                             @RenderKpiEditorPreview(sym)
                                             break;
@@ -1032,7 +1055,7 @@
                                             @RenderSvgText(sym.Width / 2, 40, "middle", "middle", "#64748b", ScaledFontSize(9, sym), "(AI-powered chat at runtime)")
                                             break;
                             }
-                            @if (!string.IsNullOrEmpty(labelText ?? sym.Label) && sym.Type is not "text" and not "button" and not "animtext" and not "numericdisplay" and not "progressbar" and not "dropdown" and not "sparkline" and not "colorzone" and not "alarmbanner" and not "conveyor" and not "piechart" and not "barchart" and not "navbutton" and not "heatexchanger" and not "popup" and not "setpointramp" and not "flowmeter" and not "xyplot" and not "pdfviewer" and not "alarmanalytics" and not "kpiwidget" and not "nlquery")
+                            @if (!string.IsNullOrEmpty(labelText ?? sym.Label) && sym.Type is not "text" and not "button" and not "animtext" and not "numericdisplay" and not "progressbar" and not "dropdown" and not "radiogroup" and not "sparkline" and not "colorzone" and not "alarmbanner" and not "conveyor" and not "piechart" and not "barchart" and not "navbutton" and not "heatexchanger" and not "popup" and not "setpointramp" and not "flowmeter" and not "xyplot" and not "pdfviewer" and not "alarmanalytics" and not "kpiwidget" and not "nlquery")
                             {
                                 @RenderSvgText(sym.Width / 2, sym.Height + 14, "middle", null, "#333", 11, labelText ?? sym.Label, sym)
                             }

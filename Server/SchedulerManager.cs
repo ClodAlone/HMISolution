@@ -29,7 +29,7 @@ namespace SimpleOpcFileServer
             foreach (var config in schedulers)
             {
                 DiagnosticsCollector.Instance.Register("Scheduler", config.Name, config.Enabled);
-                if (config.Enabled)
+                if (config.Enabled || !string.IsNullOrEmpty(config.EnableVariablePath))
                 {
                     _schedulers.Add(new SchedulerState(config));
                 }
@@ -53,6 +53,14 @@ namespace SimpleOpcFileServer
                 try
                 {
                     var shouldBeActive = IsTimeSlotActive(sched.Config, now);
+
+                    // Runtime enable variable: if set, check the variable value
+                    if (!string.IsNullOrEmpty(sched.Config.EnableVariablePath))
+                    {
+                        var enableVal = _nodeManager.ReadVariable(sched.Config.EnableVariablePath);
+                        if (enableVal is not ("1" or "true" or "True"))
+                            shouldBeActive = false;
+                    }
 
                     if (shouldBeActive && !sched.IsActive)
                     {

@@ -304,6 +304,9 @@ else if (Screen.LayoutMode == "responsive")
                     case "dropdown":
                         @RenderResponsiveDropdown(sym, liveValue)
                         break;
+                    case "radiogroup":
+                        @RenderResponsiveRadioGroup(sym, liveValue)
+                        break;
                     case "datatable":
                         @RenderResponsiveDataTable(sym, liveValue)
                         break;
@@ -649,6 +652,9 @@ else
                     case "dropdown":
                         @RenderDropdown(sym, liveValue)
                         break;
+                    case "radiogroup":
+                        @RenderRadioGroup(sym, liveValue)
+                        break;
                     case "datatable":
                         @RenderDataTable(sym, liveValue)
                         break;
@@ -697,7 +703,7 @@ else
                         break;
                 }
 
-                @if (!string.IsNullOrEmpty(resolvedLabel) && sym.Type is not "text" and not "button" and not "animtext" and not "numericdisplay" and not "progressbar" and not "dropdown" and not "sparkline" and not "colorzone" and not "alarmbanner" and not "conveyor" and not "piechart" and not "barchart" and not "navbutton" and not "heatexchanger" and not "popup" and not "setpointramp" and not "flowmeter" and not "xyplot" and not "pdfviewer" and not "alarmanalytics" and not "kpiwidget")
+                @if (!string.IsNullOrEmpty(resolvedLabel) && sym.Type is not "text" and not "button" and not "animtext" and not "numericdisplay" and not "progressbar" and not "dropdown" and not "radiogroup" and not "sparkline" and not "colorzone" and not "alarmbanner" and not "conveyor" and not "piechart" and not "barchart" and not "navbutton" and not "heatexchanger" and not "popup" and not "setpointramp" and not "flowmeter" and not "xyplot" and not "pdfviewer" and not "alarmanalytics" and not "kpiwidget")
                 {
                     @RenderSvgText(sym.Width / 2, sym.Height + 14, "middle", null, "#333", 11, resolvedLabel, sym)
                 }
@@ -987,6 +993,14 @@ else
         }
     }
 
+    private async Task OnRadioGroupSelect(string variablePath, string value)
+    {
+        if (string.IsNullOrEmpty(variablePath)) return;
+        Opc.UpdateLocalValue(variablePath, value);
+        StateHasChanged();
+        await Opc.WriteValueAsync(variablePath, value);
+    }
+
     private async Task OnSymbolMouseUp(MouseEventArgs e, ScreenSymbol sym)
     {
         // Drag end is handled by JS pointer-capture (JsDragEnd)
@@ -1056,6 +1070,34 @@ else
             Opc.UpdateLocalValue(sym.VariablePath, newVal);
             StateHasChanged();
             await Opc.WriteValueAsync(sym.VariablePath, newVal);
+            return;
+        }
+
+        // Radio group: cycle through options on click (SVG mode)
+        if (sym.Type == "radiogroup" && !string.IsNullOrEmpty(sym.VariablePath))
+        {
+            if (!Auth.HasWriteAccess(sym.RequiredAccess))
+            {
+                await OnRequestLogin.InvokeAsync();
+                return;
+            }
+            var opts = (sym.DropdownOptions ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var vals = (sym.DropdownValues ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (opts.Length > 0)
+            {
+                var current = Opc.GetValue(sym.VariablePath) ?? "";
+                var curIdx = -1;
+                for (var k = 0; k < opts.Length; k++)
+                {
+                    var v = k < vals.Length ? vals[k] : opts[k];
+                    if (v == current) { curIdx = k; break; }
+                }
+                var nextIdx = (curIdx + 1) % opts.Length;
+                var nextVal = nextIdx < vals.Length ? vals[nextIdx] : opts[nextIdx];
+                Opc.UpdateLocalValue(sym.VariablePath, nextVal);
+                StateHasChanged();
+                await Opc.WriteValueAsync(sym.VariablePath, nextVal);
+            }
             return;
         }
 
@@ -4213,6 +4255,86 @@ else
         builder.CloseElement();
     };
 
+    // â€”â€”â€” Radio Group rendering (SVG) â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”
+    private RenderFragment RenderRadioGroup(ScreenSymbol sym, string? liveValue) => builder =>
+    {
+        int seq = 0;
+        var w = sym.Width;
+        var h = sym.Height;
+        var bg = sym.DropdownBackground ?? "#1e293b";
+        var options = (sym.DropdownOptions ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var values = (sym.DropdownValues ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var isVertical = sym.RadioGroupLayout == "vertical";
+        var count = Math.Max(1, options.Length);
+
+        if (options.Length == 0)
+        {
+            builder.OpenElement(seq++, "text");
+            builder.AddAttribute(seq++, "x", F(w / 2));
+            builder.AddAttribute(seq++, "y", F(h / 2));
+            builder.AddAttribute(seq++, "text-anchor", "middle"); builder.AddAttribute(seq++, "dominant-baseline", "middle");
+            builder.AddAttribute(seq++, "fill", "#64748b"); builder.AddAttribute(seq++, "font-size", 10);
+            builder.AddContent(seq++, "Radio Group (no options)");
+            builder.CloseElement();
+            return;
+        }
+
+        // Background
+        builder.OpenElement(seq++, "rect");
+        builder.AddAttribute(seq++, "width", w); builder.AddAttribute(seq++, "height", h);
+        builder.AddAttribute(seq++, "rx", 4); builder.AddAttribute(seq++, "fill", bg);
+        builder.AddAttribute(seq++, "stroke", "#475569"); builder.AddAttribute(seq++, "stroke-width", 1);
+        builder.CloseElement();
+
+        for (var idx = 0; idx < options.Length; idx++)
+        {
+            var label = options[idx];
+            var val = idx < values.Length ? values[idx] : label;
+            var isSelected = val == (liveValue ?? "");
+
+            double cx, cy, tw, th;
+            if (isVertical)
+            {
+                th = h / count;
+                cx = 14; cy = th * idx + th / 2;
+                tw = w;
+            }
+            else
+            {
+                tw = w / count;
+                cx = tw * idx + 14; cy = h / 2.0;
+            }
+
+            // Radio circle (outer)
+            builder.OpenElement(seq++, "circle");
+            builder.AddAttribute(seq++, "cx", F(cx)); builder.AddAttribute(seq++, "cy", F(cy));
+            builder.AddAttribute(seq++, "r", 5);
+            builder.AddAttribute(seq++, "fill", "none");
+            builder.AddAttribute(seq++, "stroke", isSelected ? "#3b82f6" : "#64748b");
+            builder.AddAttribute(seq++, "stroke-width", 1.5);
+            builder.CloseElement();
+
+            // Radio dot (inner, if selected)
+            if (isSelected)
+            {
+                builder.OpenElement(seq++, "circle");
+                builder.AddAttribute(seq++, "cx", F(cx)); builder.AddAttribute(seq++, "cy", F(cy));
+                builder.AddAttribute(seq++, "r", 2.5);
+                builder.AddAttribute(seq++, "fill", "#3b82f6");
+                builder.CloseElement();
+            }
+
+            // Label text
+            builder.OpenElement(seq++, "text");
+            builder.AddAttribute(seq++, "x", F(cx + 10));
+            builder.AddAttribute(seq++, "y", F(cy));
+            builder.AddAttribute(seq++, "text-anchor", "start"); builder.AddAttribute(seq++, "dominant-baseline", "middle");
+            builder.AddAttribute(seq++, "fill", isSelected ? "#e2e8f0" : "#94a3b8"); builder.AddAttribute(seq++, "font-size", 11);
+            builder.AddContent(seq++, label);
+            builder.CloseElement();
+        }
+    };
+
     // â”€â”€â”€ Data Table rendering (SVG via foreignObject) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     private RenderFragment RenderDataTable(ScreenSymbol sym, string? liveValue) => builder =>
     {
@@ -4428,6 +4550,53 @@ else
         builder.AddAttribute(seq++, "style", "color:#94a3b8;font-size:10px;");
         builder.AddContent(seq++, "\u25BC");
         builder.CloseElement();
+        builder.CloseElement();
+    };
+
+    private RenderFragment RenderResponsiveRadioGroup(ScreenSymbol sym, string? liveValue) => builder =>
+    {
+        int seq = 0;
+        var bg = sym.DropdownBackground ?? "#1e293b";
+        var options = (sym.DropdownOptions ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var values = (sym.DropdownValues ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var isVertical = sym.RadioGroupLayout == "vertical";
+
+        if (options.Length == 0)
+        {
+            builder.OpenElement(seq++, "div");
+            builder.AddAttribute(seq++, "style", $"width:100%;height:100%;background:{bg};border:1px solid #475569;border-radius:4px;display:flex;align-items:center;justify-content:center;color:#64748b;font-size:11px;");
+            builder.AddContent(seq++, "Radio Group (no options)");
+            builder.CloseElement();
+            return;
+        }
+
+        builder.OpenElement(seq++, "div");
+        builder.AddAttribute(seq++, "style", $"width:100%;height:100%;background:{bg};border:1px solid #475569;border-radius:4px;display:flex;{(isVertical ? "flex-direction:column;" : "")}align-items:{(isVertical ? "flex-start" : "center")};gap:8px;padding:4px 10px;overflow:hidden;");
+
+        for (var idx = 0; idx < options.Length; idx++)
+        {
+            var label = options[idx];
+            var val = idx < values.Length ? values[idx] : label;
+            var isSelected = val == (liveValue ?? "");
+            var capturedVal = val;
+            var capturedPath = sym.VariablePath ?? "";
+
+            builder.OpenElement(seq++, "label");
+            builder.AddAttribute(seq++, "style", "display:flex;align-items:center;gap:4px;cursor:pointer;color:" + (isSelected ? "#e2e8f0" : "#94a3b8") + ";font-size:12px;white-space:nowrap;");
+            builder.AddAttribute(seq++, "onclick", EventCallback.Factory.Create<MouseEventArgs>(this, async () => await OnRadioGroupSelect(capturedPath, capturedVal)));
+
+            // Radio circle via styled span
+            builder.OpenElement(seq++, "span");
+            builder.AddAttribute(seq++, "style", "display:inline-block;width:14px;height:14px;border-radius:50%;border:1.5px solid " + (isSelected ? "#3b82f6" : "#64748b") + ";background:" + (isSelected ? "#3b82f6" : "transparent") + ";box-shadow:" + (isSelected ? "inset 0 0 0 3px " + bg : "none") + ";flex-shrink:0;");
+            builder.CloseElement();
+
+            builder.OpenElement(seq++, "span");
+            builder.AddContent(seq++, label);
+            builder.CloseElement();
+
+            builder.CloseElement(); // label
+        }
+
         builder.CloseElement();
     };
 

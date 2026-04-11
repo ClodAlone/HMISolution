@@ -1890,6 +1890,11 @@ namespace SharedModels
         public string Name { get; set; } = "";
         public bool Enabled { get; set; } = true;
 
+        /// <summary>OPC variable path that controls whether this scheduler is active at runtime.
+        /// When set, the scheduler only ticks when the variable value is truthy ("1", "true", "True").
+        /// When empty, the scheduler is always active (if Enabled is true).</summary>
+        public string EnableVariablePath { get; set; } = "";
+
         /// <summary>When true, runtime users can edit the schedule from the Weekly Planner widget.</summary>
         public bool AllowRuntimeEdit { get; set; }
 
