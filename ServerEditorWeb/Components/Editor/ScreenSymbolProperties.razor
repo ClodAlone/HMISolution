@@ -1,4 +1,4 @@
-﻿@using ServerEditorWeb.Models
+@using ServerEditorWeb.Models
 @using ServerEditorWeb.Services
 @using SharedModels
 @implements IDisposable
@@ -2755,6 +2755,63 @@
         }
 
 
+
+        @* ── Connection Ports (mimic / schematic symbols) ── *@
+        @if (_selectedSymbol.ConnectionPorts.Count > 0 || _selectedSymbol.Type.StartsWith("mimic"))
+        {
+            <hr class="my-2" />
+            <h6 class="mb-2 small" style="color: #06b6d4;">🔌 Connection Ports (@_selectedSymbol.ConnectionPorts.Count)</h6>
+
+            @foreach (var port in _selectedSymbol.ConnectionPorts)
+            {
+                var p = port;
+                var portColor = p.PortType == "input" ? "#3b82f6" : p.PortType == "output" ? "#22c55e" : "#f59e0b";
+                <div class="border rounded p-1 mb-2" style="font-size: 11px; background: var(--surface-alt, #f8f8f8);">
+                    <div class="d-flex gap-1 mb-1 align-items-center">
+                        <span style="width:8px;height:8px;border-radius:50%;background:@portColor;flex-shrink:0;" title="@p.PortType"></span>
+                        <input type="text" class="form-control form-control-sm" style="font-size: 10px; width: 60px; flex-shrink: 0;"
+                               placeholder="id" title="Port ID"
+                               @bind="p.Id" @bind:after="OnChanged" />
+                        <select class="form-select form-select-sm" style="font-size: 10px;"
+                                @bind="p.PortType" @bind:after="OnChanged">
+                            <option value="input">Input</option>
+                            <option value="output">Output</option>
+                            <option value="bidirectional">Bidirectional</option>
+                        </select>
+                        <button class="btn btn-sm btn-outline-danger py-0 px-1" style="font-size: 9px;"
+                                title="Remove port (and its connections)"
+                                @onclick="() => RemoveConnectionPort(p)">✕</button>
+                    </div>
+                    <div class="d-flex gap-1 mb-1 align-items-center">
+                        <label class="mb-0" style="font-size: 9px; width: 20px; flex-shrink: 0;">X</label>
+                        <input type="number" class="form-control form-control-sm" style="font-size: 10px; width: 65px;"
+                               step="0.05" min="0" max="1" title="Relative X (0=left, 1=right)"
+                               @bind="p.RelativeX" @bind:after="OnChanged" />
+                        <label class="mb-0" style="font-size: 9px; width: 20px; flex-shrink: 0;">Y</label>
+                        <input type="number" class="form-control form-control-sm" style="font-size: 10px; width: 65px;"
+                               step="0.05" min="0" max="1" title="Relative Y (0=top, 1=bottom)"
+                               @bind="p.RelativeY" @bind:after="OnChanged" />
+                        <select class="form-select form-select-sm" style="font-size: 10px; width: 70px; flex-shrink: 0;"
+                                title="Exit direction for route"
+                                @bind="p.Direction" @bind:after="OnChanged">
+                            <option value="left">← Left</option>
+                            <option value="right">→ Right</option>
+                            <option value="up">↑ Up</option>
+                            <option value="down">↓ Down</option>
+                        </select>
+                    </div>
+                    <div class="d-flex gap-1 align-items-center">
+                        <label class="mb-0" style="font-size: 9px; flex-shrink: 0;">Label</label>
+                        <input type="text" class="form-control form-control-sm" style="font-size: 10px;"
+                               placeholder="(optional)" @bind="p.Label" @bind:after="OnChanged" />
+                    </div>
+                </div>
+            }
+
+            <button class="btn btn-sm btn-outline-info w-100 py-0" style="font-size: 11px;"
+                    @onclick="AddConnectionPort">＋ Add Port</button>
+        }
+
         <hr class="my-2" />
         <h6 class="mb-2 small text-warning">🔒 Access Control</h6>
         <div class="mb-2">
@@ -3251,6 +3308,39 @@ else
             Action = "NavigateScreen",
             Trigger = "Click"
         });
+        OnChanged();
+    }
+
+    private static int _nextPortId = 1;
+
+    private void AddConnectionPort()
+    {
+        if (_selectedSymbol == null) return;
+        _selectedSymbol.ConnectionPorts.Add(new ConnectionPort
+        {
+            Id = $"port_{_nextPortId++}",
+            PortType = "bidirectional",
+            RelativeX = 0.5,
+            RelativeY = 0.5,
+            Direction = "right",
+            Label = ""
+        });
+        OnChanged();
+    }
+
+    private void RemoveConnectionPort(ConnectionPort port)
+    {
+        if (_selectedSymbol == null) return;
+        // Remove any connections referencing this port
+        var screen = (Editor.SelectedItem as ScreenNode)?.Screen;
+        if (screen != null)
+        {
+            var symId = _selectedSymbol.Id;
+            screen.Connections.RemoveAll(c =>
+                (c.SourceSymbolId == symId && c.SourcePortId == port.Id) ||
+                (c.TargetSymbolId == symId && c.TargetPortId == port.Id));
+        }
+        _selectedSymbol.ConnectionPorts.Remove(port);
         OnChanged();
     }
 

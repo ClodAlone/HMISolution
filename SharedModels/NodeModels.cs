@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -980,12 +980,15 @@ namespace SharedModels
         public string FitMode { get; set; } = "contain";
 
         public List<ScreenSymbol> Symbols { get; set; } = new();
+
+        /// <summary>Screen-level connections between symbol ports (auto-routed pipes/wires).</summary>
+        public List<SymbolConnection> Connections { get; set; } = new();
     }
 
     public class ScreenSymbol
     {
         public string Id { get; set; } = "";
-        public string Type { get; set; } = "rect"; // rect, circle, ellipse, text, line, gauge, indicator, svg, alarmlist, hdachart, hdagrid, eventlog, editbox, ipcamera, recipe, weeklyplanner, screenembed, reportviewer, imagemap, trend, progressbar, numericdisplay, ledarray, pipe, tank, dropdown, datatable, sparkline, motorcontrol, valve, alarmbanner, colorzone, conveyor, piechart, barchart, navbutton, heatexchanger, popup, setpointramp, flowmeter, xyplot, pdfviewer, switch, rotaryswitch, knob, hslider, vslider, button, animtext
+        public string Type { get; set; } = "rect"; // rect, circle, ellipse, text, line, gauge, indicator, svg, alarmlist, hdachart, hdagrid, eventlog, editbox, ipcamera, recipe, weeklyplanner, screenembed, reportviewer, imagemap, trend, progressbar, numericdisplay, ledarray, pipe, tank, dropdown, datatable, sparkline, motorcontrol, valve, alarmbanner, colorzone, conveyor, piechart, barchart, navbutton, heatexchanger, popup, setpointramp, flowmeter, xyplot, pdfviewer, switch, rotaryswitch, knob, hslider, vslider, button, animtext, mimicpump, mimicvalve, mimictank, mimicsensor, mimiccontroller, mimicmixer, mimicheater, mimicfilter, mimiccompressor, mimicreactor
         public double X { get; set; }
         public double Y { get; set; }
         public double Width { get; set; } = 80;
@@ -1691,6 +1694,56 @@ namespace SharedModels
         // ——— Radio Group properties (Type == "radiogroup") ———————
         /// <summary>Layout direction: "horizontal" or "vertical". Default horizontal.</summary>
         public string RadioGroupLayout { get; set; } = "horizontal";
+
+        /// <summary>Connection ports defined on this symbol for auto-routed connections.</summary>
+        public List<ConnectionPort> ConnectionPorts { get; set; } = new();
+    }
+
+    /// <summary>
+    /// A routed connection between two symbol ports on the same screen.
+    /// The connection path is auto-calculated using orthogonal routing.
+    /// </summary>
+    public class SymbolConnection
+    {
+        public string Id { get; set; } = "";
+        public string SourceSymbolId { get; set; } = "";
+        public string SourcePortId { get; set; } = "";
+        public string TargetSymbolId { get; set; } = "";
+        public string TargetPortId { get; set; } = "";
+        public string Color { get; set; } = "#64748b";
+        public double StrokeWidth { get; set; } = 2;
+        public string LineStyle { get; set; } = "solid";
+        public bool ShowFlow { get; set; }
+        public string FlowDirection { get; set; } = "forward";
+        public string FlowColor { get; set; } = "#3b82f6";
+        public string Label { get; set; } = "";
+        public string FlowVariablePath { get; set; } = "";
+        public string PathData { get; set; } = "";
+        public List<double> Waypoints { get; set; } = new();
+    }
+
+    /// <summary>
+    /// A connection port on a mimic symbol.
+    /// Ports define where connections can attach (edges of the symbol).
+    /// </summary>
+    public class ConnectionPort
+    {
+        public string Id { get; set; } = "";
+
+        /// <summary>Port type: "input", "output", or "bidirectional".</summary>
+        public string PortType { get; set; } = "bidirectional";
+
+        /// <summary>Relative X position (0.0 = left edge, 1.0 = right edge).</summary>
+        public double RelativeX { get; set; }
+
+        /// <summary>Relative Y position (0.0 = top edge, 1.0 = bottom edge).</summary>
+        public double RelativeY { get; set; }
+
+        /// <summary>Preferred routing direction: "left", "right", "up", "down".</summary>
+        public string Direction { get; set; } = "right";
+
+        /// <summary>Optional display label for the port (shown on hover).</summary>
+        public string Label { get; set; } = "";
     }
 
     /// <summary>

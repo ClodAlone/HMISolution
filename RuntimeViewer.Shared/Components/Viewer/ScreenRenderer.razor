@@ -379,6 +379,7 @@ else
          height="@(useFixedSize ? Screen.Height : null)"
          preserveAspectRatio="@par"
          class="rv-canvas @fitCss"
+         overflow="hidden"
          style="background: @Screen.Background;@(_isDraggingKnob || _isDraggingSlider ? " cursor: grabbing; user-select: none;" : "")"
          @ref="_svgRef">
 
@@ -701,9 +702,63 @@ else
                     case "kpiwidget":
                         @RenderKpiWidget(sym, liveValue)
                         break;
+                    case "mimicpump":
+                        <circle cx="@F(sym.Width/2)" cy="@F(sym.Height/2)" r="@F(Math.Min(sym.Width,sym.Height)/2-2)" fill="@fillColor" stroke="@sym.Stroke" stroke-width="@sym.StrokeWidth"/>
+                        <polygon points="@($"{F(sym.Width*0.3)},{F(sym.Height*0.3)} {F(sym.Width*0.7)},{F(sym.Height*0.5)} {F(sym.Width*0.3)},{F(sym.Height*0.7)}")" fill="@sym.Stroke" opacity="0.8"/>
+                        break;
+                    case "mimicvalve":
+                        <polygon points="@($"{F(sym.Width*0.15)},{F(sym.Height*0.2)} {F(sym.Width*0.85)},{F(sym.Height*0.5)} {F(sym.Width*0.15)},{F(sym.Height*0.8)}")" fill="@fillColor" stroke="@sym.Stroke" stroke-width="@sym.StrokeWidth"/>
+                        <polygon points="@($"{F(sym.Width*0.85)},{F(sym.Height*0.2)} {F(sym.Width*0.15)},{F(sym.Height*0.5)} {F(sym.Width*0.85)},{F(sym.Height*0.8)}")" fill="@fillColor" stroke="@sym.Stroke" stroke-width="@sym.StrokeWidth"/>
+                        <line x1="@F(sym.Width*0.5)" y1="@F(sym.Height*0.2)" x2="@F(sym.Width*0.5)" y2="0" stroke="@sym.Stroke" stroke-width="@sym.StrokeWidth"/>
+                        break;
+                    case "mimictank":
+                        <rect width="@sym.Width" height="@sym.Height" rx="4" fill="@fillColor" stroke="@sym.Stroke" stroke-width="@sym.StrokeWidth"/>
+                        <rect x="2" y="@F(sym.Height*0.5)" width="@F(sym.Width-4)" height="@F(sym.Height*0.48)" rx="2" fill="@sym.Stroke" opacity="0.25"/>
+                        break;
+                    case "mimicsensor":
+                        <rect width="@sym.Width" height="@F(sym.Height*0.7)" rx="4" fill="@fillColor" stroke="@sym.Stroke" stroke-width="@sym.StrokeWidth"/>
+                        @RenderSvgText(sym.Width/2, sym.Height*0.4, "middle", "middle", sym.Stroke, 12, "PT")
+                        <line x1="@F(sym.Width/2)" y1="@F(sym.Height*0.7)" x2="@F(sym.Width/2)" y2="@F(sym.Height)" stroke="@sym.Stroke" stroke-width="@sym.StrokeWidth"/>
+                        break;
+                    case "mimiccontroller":
+                        <rect width="@sym.Width" height="@sym.Height" rx="4" fill="@fillColor" stroke="@sym.Stroke" stroke-width="@sym.StrokeWidth"/>
+                        @RenderSvgText(sym.Width/2, sym.Height*0.35, "middle", "middle", sym.Stroke, 10, "PLC")
+                        <rect x="@F(sym.Width*0.1)" y="@F(sym.Height*0.55)" width="@F(sym.Width*0.8)" height="@F(sym.Height*0.2)" rx="2" fill="#1e293b"/>
+                        <circle cx="@F(sym.Width*0.25)" cy="@F(sym.Height*0.65)" r="3" fill="#22c55e"/>
+                        <circle cx="@F(sym.Width*0.42)" cy="@F(sym.Height*0.65)" r="3" fill="#22c55e"/>
+                        <circle cx="@F(sym.Width*0.59)" cy="@F(sym.Height*0.65)" r="3" fill="#f59e0b"/>
+                        break;
+                    case "mimicmixer":
+                        <rect width="@sym.Width" height="@sym.Height" rx="6" fill="@fillColor" stroke="@sym.Stroke" stroke-width="@sym.StrokeWidth"/>
+                        <line x1="@F(sym.Width/2)" y1="0" x2="@F(sym.Width/2)" y2="@F(sym.Height*0.35)" stroke="#94a3b8" stroke-width="2"/>
+                        <line x1="@F(sym.Width*0.3)" y1="@F(sym.Height*0.45)" x2="@F(sym.Width*0.7)" y2="@F(sym.Height*0.65)" stroke="#94a3b8" stroke-width="2"/>
+                        <line x1="@F(sym.Width*0.7)" y1="@F(sym.Height*0.45)" x2="@F(sym.Width*0.3)" y2="@F(sym.Height*0.65)" stroke="#94a3b8" stroke-width="2"/>
+                        break;
+                    case "mimicheater":
+                        <rect width="@sym.Width" height="@sym.Height" rx="4" fill="@fillColor" stroke="@sym.Stroke" stroke-width="@sym.StrokeWidth"/>
+                        <path d="M @F(sym.Width*0.2),@F(sym.Height*0.5) C @F(sym.Width*0.2),@F(sym.Height*0.35) @F(sym.Width*0.3),@F(sym.Height*0.25) @F(sym.Width*0.35),@F(sym.Height*0.35)" fill="none" stroke="#ef4444" stroke-width="1.5"/>
+                        <path d="M @F(sym.Width*0.55),@F(sym.Height*0.5) C @F(sym.Width*0.55),@F(sym.Height*0.35) @F(sym.Width*0.65),@F(sym.Height*0.25) @F(sym.Width*0.7),@F(sym.Height*0.35)" fill="none" stroke="#f59e0b" stroke-width="1.5"/>
+                        break;
+                    case "mimicfilter":
+                        <polygon points="@($"{F(sym.Width*0.15)},0 {F(sym.Width*0.85)},0 {F(sym.Width*0.78)},{F(sym.Height)} {F(sym.Width*0.22)},{F(sym.Height)}")" fill="@fillColor" stroke="@sym.Stroke" stroke-width="@sym.StrokeWidth"/>
+                        <line x1="@F(sym.Width*0.22)" y1="@F(sym.Height*0.35)" x2="@F(sym.Width*0.78)" y2="@F(sym.Height*0.35)" stroke="#475569" stroke-width="1" stroke-dasharray="3,2"/>
+                        <line x1="@F(sym.Width*0.2)" y1="@F(sym.Height*0.55)" x2="@F(sym.Width*0.8)" y2="@F(sym.Height*0.55)" stroke="#475569" stroke-width="1" stroke-dasharray="3,2"/>
+                        break;
+                    case "mimiccompressor":
+                        <circle cx="@F(sym.Width/2)" cy="@F(sym.Height/2)" r="@F(Math.Min(sym.Width,sym.Height)/2-2)" fill="@fillColor" stroke="@sym.Stroke" stroke-width="@sym.StrokeWidth"/>
+                        <path d="M @F(sym.Width*0.3),@F(sym.Height*0.35) L @F(sym.Width*0.5),@F(sym.Height*0.5) L @F(sym.Width*0.3),@F(sym.Height*0.65)" fill="none" stroke="#06b6d4" stroke-width="2"/>
+                        <path d="M @F(sym.Width*0.5),@F(sym.Height*0.5) L @F(sym.Width*0.7),@F(sym.Height*0.35) M @F(sym.Width*0.5),@F(sym.Height*0.5) L @F(sym.Width*0.7),@F(sym.Height*0.65)" fill="none" stroke="#06b6d4" stroke-width="2"/>
+                        break;
+                    case "mimicreactor":
+                        <rect width="@sym.Width" height="@sym.Height" rx="8" fill="@fillColor" stroke="@sym.Stroke" stroke-width="@sym.StrokeWidth"/>
+                        <circle cx="@F(sym.Width*0.35)" cy="@F(sym.Height*0.4)" r="4" fill="@sym.Stroke" opacity="0.5"/>
+                        <circle cx="@F(sym.Width*0.6)" cy="@F(sym.Height*0.55)" r="5" fill="@sym.Stroke" opacity="0.4"/>
+                        <circle cx="@F(sym.Width*0.45)" cy="@F(sym.Height*0.65)" r="3.5" fill="@sym.Stroke" opacity="0.6"/>
+                        break;
+                        break;
                 }
 
-                @if (!string.IsNullOrEmpty(resolvedLabel) && sym.Type is not "text" and not "button" and not "animtext" and not "numericdisplay" and not "progressbar" and not "dropdown" and not "radiogroup" and not "sparkline" and not "colorzone" and not "alarmbanner" and not "conveyor" and not "piechart" and not "barchart" and not "navbutton" and not "heatexchanger" and not "popup" and not "setpointramp" and not "flowmeter" and not "xyplot" and not "pdfviewer" and not "alarmanalytics" and not "kpiwidget")
+                @if (!string.IsNullOrEmpty(resolvedLabel) && sym.Type is not "text" and not "button" and not "animtext" and not "numericdisplay" and not "progressbar" and not "dropdown" and not "radiogroup" and not "sparkline" and not "colorzone" and not "alarmbanner" and not "conveyor" and not "piechart" and not "barchart" and not "navbutton" and not "heatexchanger" and not "popup" and not "setpointramp" and not "flowmeter" and not "xyplot" and not "pdfviewer" and not "alarmanalytics" and not "kpiwidget" and not "mimicpump" and not "mimicvalve" and not "mimictank" and not "mimicsensor" and not "mimiccontroller" and not "mimicmixer" and not "mimicheater" and not "mimicfilter" and not "mimiccompressor" and not "mimicreactor")
                 {
                     @RenderSvgText(sym.Width / 2, sym.Height + 14, "middle", null, "#333", 11, resolvedLabel, sym)
                 }
@@ -724,6 +779,57 @@ else
                 </g>
             </g></LiveSymbol>
         }
+
+        @* ── Auto-routed connections ── *@
+        @foreach (var conn in Screen.Connections)
+        {
+            var srcSym = Screen.Symbols.FirstOrDefault(s => s.Id == conn.SourceSymbolId);
+            var tgtSym = Screen.Symbols.FirstOrDefault(s => s.Id == conn.TargetSymbolId);
+            if (srcSym == null || tgtSym == null) continue;
+            var srcPort = srcSym.ConnectionPorts.FirstOrDefault(p => p.Id == conn.SourcePortId);
+            var tgtPort = tgtSym.ConnectionPorts.FirstOrDefault(p => p.Id == conn.TargetPortId);
+            if (srcPort == null || tgtPort == null) continue;
+
+            var sx = srcSym.X + srcPort.RelativeX * srcSym.Width;
+            var sy = srcSym.Y + srcPort.RelativeY * srcSym.Height;
+            var tx = tgtSym.X + tgtPort.RelativeX * tgtSym.Width;
+            var ty = tgtSym.Y + tgtPort.RelativeY * tgtSym.Height;
+            var pathD = ComputeOrthogonalRoute(sx, sy, srcPort.Direction, tx, ty, tgtPort.Direction, Screen, srcSym, tgtSym);
+            var dashArray = conn.LineStyle == "dashed" ? "8,4" : conn.LineStyle == "dotted" ? "2,4" : "none";
+            var showFlow = conn.ShowFlow;
+            if (showFlow && !string.IsNullOrEmpty(conn.FlowVariablePath))
+            {
+                var flowVal = OpcGet(conn.FlowVariablePath, null);
+                showFlow = flowVal is "1" or "true" or "True";
+            }
+            <g>
+                <path d="@pathD" fill="none" stroke="@conn.Color" stroke-width="@conn.StrokeWidth"
+                      stroke-dasharray="@dashArray" stroke-linecap="round" stroke-linejoin="round"/>
+                @if (showFlow)
+                {
+                    <circle r="3" fill="@conn.FlowColor">
+                        <animateMotion dur="2s" repeatCount="indefinite" path="@pathD"
+                                       keyPoints="@(conn.FlowDirection == "reverse" ? "1;0" : "0;1")" keyTimes="0;1" calcMode="linear"/>
+                    </circle>
+                    <circle r="3" fill="@conn.FlowColor" opacity="0.5">
+                        <animateMotion dur="2s" repeatCount="indefinite" path="@pathD" begin="0.66s"
+                                       keyPoints="@(conn.FlowDirection == "reverse" ? "1;0" : "0;1")" keyTimes="0;1" calcMode="linear"/>
+                    </circle>
+                    <circle r="3" fill="@conn.FlowColor" opacity="0.3">
+                        <animateMotion dur="2s" repeatCount="indefinite" path="@pathD" begin="1.33s"
+                                       keyPoints="@(conn.FlowDirection == "reverse" ? "1;0" : "0;1")" keyTimes="0;1" calcMode="linear"/>
+                    </circle>
+                }
+                @if (!string.IsNullOrEmpty(conn.Label))
+                {
+                    var mx = (sx + tx) / 2;
+                    var my = (sy + ty) / 2;
+                    <rect x="@F(mx - conn.Label.Length * 3.5 - 4)" y="@F(my - 8)" width="@F(conn.Label.Length * 7 + 8)" height="16" rx="3" fill="rgba(0,0,0,0.7)"/>
+                    @RenderSvgText(mx, my + 4, "middle", "middle", "#e2e8f0", 10, conn.Label)
+                }
+            </g>
+        }
+
     </svg>
 }
 
@@ -1338,6 +1444,207 @@ else
 
 
     // â”€â”€â”€ Formatting â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+
+    private string ComputeOrthogonalRoute(double sx, double sy, string srcDir, double tx, double ty, string tgtDir, ScreenConfig screen, ScreenSymbol srcSym, ScreenSymbol tgtSym)
+    {
+        const double margin = 30.0;
+        const double pad = 16.0;
+        string F(double v) => v.ToString("F1", System.Globalization.CultureInfo.InvariantCulture);
+
+        // 1. Exit points (stub endpoints outside symbol boundary)
+        double ex = sx, ey = sy, etx = tx, ety = ty;
+        switch (srcDir) { case "left": ex = sx - margin; break; case "right": ex = sx + margin; break; case "up": ey = sy - margin; break; case "down": ey = sy + margin; break; }
+        switch (tgtDir) { case "left": etx = tx - margin; break; case "right": etx = tx + margin; break; case "up": ety = ty - margin; break; case "down": ety = ty + margin; break; }
+
+        // 2. Obstacles: inflated bounding boxes of ALL non-text symbols (including src and tgt)
+        //    Routes must go AROUND source and target symbols; only the stub segments
+        //    (port-point to exit-point) are allowed to cross the src/tgt boundary.
+        var obstacles = new List<(double L, double T, double R, double B)>();
+        foreach (var sym in screen.Symbols)
+        {
+            if (sym.Type == "text") continue;
+            obstacles.Add((sym.X - pad, sym.Y - pad, sym.X + sym.Width + pad, sym.Y + sym.Height + pad));
+        }
+
+        // Hit-test helpers
+        bool HitsH(double y, double x1, double x2)
+        {
+            double lo = Math.Min(x1, x2), hi = Math.Max(x1, x2);
+            foreach (var o in obstacles)
+                if (y > o.T && y < o.B && hi > o.L && lo < o.R) return true;
+            return false;
+        }
+        bool HitsV(double x, double y1, double y2)
+        {
+            double lo = Math.Min(y1, y2), hi = Math.Max(y1, y2);
+            foreach (var o in obstacles)
+                if (x > o.L && x < o.R && hi > o.T && lo < o.B) return true;
+            return false;
+        }
+
+        // Collect obstacle edges for scanning clear channels
+        var edgesX = new SortedSet<double>();
+        var edgesY = new SortedSet<double>();
+        foreach (var o in obstacles)
+        {
+            edgesX.Add(o.L - 2); edgesX.Add(o.R + 2);
+            edgesY.Add(o.T - 2); edgesY.Add(o.B + 2);
+        }
+
+        // Find a clear vertical channel (x-coord) between two y-values, preferring near mid
+        double FindClearV(double fromX, double toX, double y1, double y2)
+        {
+            double mid = (fromX + toX) / 2;
+            if (!HitsV(mid, y1, y2)) return mid;
+            double best = mid; double bestDist = double.MaxValue;
+            foreach (var cx in edgesX)
+            {
+                if (!HitsV(cx, y1, y2))
+                {
+                    double d = Math.Abs(cx - mid);
+                    if (d < bestDist) { best = cx; bestDist = d; }
+                }
+            }
+            if (bestDist < double.MaxValue) return best;
+            for (double off = pad; off < 800; off += pad)
+            {
+                if (!HitsV(mid + off, y1, y2)) return mid + off;
+                if (!HitsV(mid - off, y1, y2)) return mid - off;
+            }
+            return mid;
+        }
+
+        // Find a clear horizontal channel (y-coord) between two x-values, preferring near mid
+        double FindClearH(double fromY, double toY, double x1, double x2)
+        {
+            double mid = (fromY + toY) / 2;
+            if (!HitsH(mid, x1, x2)) return mid;
+            double best = mid; double bestDist = double.MaxValue;
+            foreach (var cy in edgesY)
+            {
+                if (!HitsH(cy, x1, x2))
+                {
+                    double d = Math.Abs(cy - mid);
+                    if (d < bestDist) { best = cy; bestDist = d; }
+                }
+            }
+            if (bestDist < double.MaxValue) return best;
+            for (double off = pad; off < 800; off += pad)
+            {
+                if (!HitsH(mid + off, x1, x2)) return mid + off;
+                if (!HitsH(mid - off, x1, x2)) return mid - off;
+            }
+            return mid;
+        }
+
+        bool srcH = srcDir is "left" or "right";
+        bool tgtH = tgtDir is "left" or "right";
+        var pts = new List<(double x, double y)> { (ex, ey) };
+
+        if (srcH && tgtH)
+        {
+            double mx = FindClearV(ex, etx, Math.Min(ey, ety), Math.Max(ey, ety));
+            if (!HitsH(ey, ex, mx) && !HitsH(ety, mx, etx))
+            {
+                pts.Add((mx, ey)); pts.Add((mx, ety));
+            }
+            else
+            {
+                // U-route: try both above and below, pick closest to exit points
+                double screenH = screen.Height > 0 ? screen.Height : 800;
+                double screenW = screen.Width > 0 ? screen.Width : 1400;
+                double loX = Math.Min(ex, etx), hiX = Math.Max(ex, etx);
+                double loY = Math.Min(ey, ety);
+                double localTop = double.MaxValue, localBot = double.MinValue;
+                foreach (var o in obstacles) { if (o.R > loX && o.L < hiX) { if (o.T < localTop) localTop = o.T; if (o.B > localBot) localBot = o.B; } }
+                double candAbove = localTop - pad;
+                double candBelow = localBot + pad;
+                double distAbove = Math.Abs(candAbove - loY);
+                double distBelow = Math.Abs(candBelow - loY);
+                double cy1;
+                if (candAbove >= 0 && candBelow <= screenH)
+                    cy1 = distAbove <= distBelow ? candAbove : candBelow;
+                else if (candAbove >= 0)
+                    cy1 = candAbove;
+                else if (candBelow <= screenH)
+                    cy1 = candBelow;
+                else
+                    cy1 = candAbove;
+                double clearY = FindClearH(cy1, cy1, loX, hiX);
+                pts.Add((ex, clearY)); pts.Add((etx, clearY));
+            }
+        }
+        else if (!srcH && !tgtH)
+        {
+            double my = FindClearH(Math.Min(ey, ety), Math.Max(ey, ety), Math.Min(ex, etx), Math.Max(ex, etx));
+            if (!HitsV(ex, ey, my) && !HitsV(etx, my, ety))
+            {
+                pts.Add((ex, my)); pts.Add((etx, my));
+            }
+            else
+            {
+                double loY2 = Math.Min(ey, ety), hiY2 = Math.Max(ey, ety);
+                double loX2 = Math.Min(ex, etx);
+                double localLeft = double.MaxValue, localRight = double.MinValue;
+                foreach (var o in obstacles) { if (o.B > loY2 && o.T < hiY2) { if (o.L < localLeft) localLeft = o.L; if (o.R > localRight) localRight = o.R; } }
+                double candLeft = localLeft - pad;
+                double candRight = localRight + pad;
+                double sW = screen.Width > 0 ? screen.Width : 1400;
+                double dL = Math.Abs(candLeft - loX2);
+                double dR = Math.Abs(candRight - loX2);
+                double cx1;
+                if (candLeft >= 0 && candRight <= sW)
+                    cx1 = dL <= dR ? candLeft : candRight;
+                else if (candLeft >= 0)
+                    cx1 = candLeft;
+                else if (candRight <= sW)
+                    cx1 = candRight;
+                else
+                    cx1 = candLeft;
+                double clearX = FindClearV(cx1, cx1, loY2, hiY2);
+                pts.Add((clearX, ey)); pts.Add((clearX, ety));
+            }
+        }
+        else
+        {
+            if (srcH)
+            {
+                if (!HitsH(ey, ex, etx) && !HitsV(etx, ey, ety))
+                    pts.Add((etx, ey));
+                else if (!HitsV(ex, ey, ety) && !HitsH(ety, ex, etx))
+                    pts.Add((ex, ety));
+                else
+                {
+                    double mx = FindClearV(ex, etx, Math.Min(ey, ety), Math.Max(ey, ety));
+                    pts.Add((mx, ey)); pts.Add((mx, ety));
+                }
+            }
+            else
+            {
+                if (!HitsV(ex, ey, ety) && !HitsH(ety, ex, etx))
+                    pts.Add((ex, ety));
+                else if (!HitsH(ey, ex, etx) && !HitsV(etx, ey, ety))
+                    pts.Add((etx, ey));
+                else
+                {
+                    double my = FindClearH(ey, ety, Math.Min(ex, etx), Math.Max(ex, etx));
+                    pts.Add((ex, my)); pts.Add((etx, my));
+                }
+            }
+        }
+
+        pts.Add((etx, ety));
+
+        // Build SVG path
+        var sb = new System.Text.StringBuilder();
+        sb.Append($"M {F(sx)} {F(sy)}");
+        foreach (var (px, py) in pts)
+            sb.Append($" L {F(px)} {F(py)}");
+        sb.Append($" L {F(tx)} {F(ty)}");
+        return sb.ToString();
+    }
+
 
     private static string F(double v) => v.ToString("F1", System.Globalization.CultureInfo.InvariantCulture);
 
