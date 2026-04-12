@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using SharedModels;
 using ServerEditorWeb.Models;
 
@@ -46,6 +46,8 @@ public class NodeEditorService
     public void SetUndoService(UndoRedoService undoRedo) => _undoRedo = undoRedo;
 
     public event Action? StateChanged;
+    public event Action? UserSymbolGroupsChanged;
+    public void NotifyUserSymbolGroupsChanged() => UserSymbolGroupsChanged?.Invoke();
 
     // Screen symbol selection (shared between ScreenEditorPanel and ScreenSymbolProperties)
     public ScreenSymbol? SelectedScreenSymbol { get; private set; }

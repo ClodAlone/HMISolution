@@ -1,4 +1,7 @@
+﻿@implements IDisposable
 @using SharedModels
+@using ServerEditorWeb.Services
+@inject NodeEditorService Editor
 
 <div class="toolbox-panel">
     <div class="toolbox-search">
@@ -10,6 +13,43 @@
             <button class="toolbox-search-clear" @onclick="ClearSearch" title="Clear">✕</button>
         }
     </div>
+
+    @{ var userGroups = GetUserSymbolGroups(); }
+    @if (userGroups.Count > 0)
+    {
+        <div class="toolbox-category">
+            <button class="toolbox-category-header" @onclick='() => ToggleCategory("__user_groups__")'>
+                <span class="toolbox-chevron @(IsCategoryExpanded("__user_groups__") ? "expanded" : "")">&#9654;</span>
+                <span class="fw-semibold small">&#128230; User Symbol Groups</span>
+                <span class="badge bg-info ms-auto" style="font-size: 9px;">@userGroups.Count</span>
+            </button>
+            @if (IsCategoryExpanded("__user_groups__"))
+            {
+                <div class="toolbox-items">
+                    @foreach (var grp in userGroups)
+                    {
+                        var captured = grp;
+                        <div class="toolbox-item-wrap">
+                            <button class="toolbox-item item-data"
+                                    draggable="true"
+                                    @ondragstart="() => OnUserGroupDragStart(captured)"
+                                    @ondragend="OnUserGroupDragEnd"
+                                    title="@captured.Name (@captured.TemplateSymbols.Count symbols, @captured.AliasDefinitions.Count aliases)">
+                                <span class="toolbox-item-icon">&#128230;</span>
+                                <span class="toolbox-item-label">@captured.Name</span>
+                                @if (captured.AliasDefinitions.Count > 0)
+                                {
+                                    <span class="toolbox-anim-badge" title="@captured.AliasDefinitions.Count alias(es)">A</span>
+                                }
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger p-0 ms-1" style="font-size: 8px; line-height: 1; width: 16px; height: 16px;"
+                                    @onclick="() => DeleteUserGroup(captured)" title="Delete group">&#10005;</button>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    }
 
     @if (_filteredCategories.Count == 0)
     {
@@ -80,7 +120,7 @@
     private List<ToolboxCategory> _filteredCategories = new();
     private ToolboxItem? _previewItem;
 
-    protected override void OnInitialized() { _filteredCategories = _categories; }
+    protected override void OnInitialized() { _filteredCategories = _categories; Editor.UserSymbolGroupsChanged += OnEditorStateChanged; }
 
     private bool IsCategoryExpanded(string name) => !_collapsedCategories.Contains(name);
 
@@ -94,10 +134,26 @@
 
     /// <summary>Currently dragged toolbox widget type, readable by drop targets.</summary>
     public static string? DraggedToolboxType { get; set; }
+    public static UserSymbolGroup? DraggedUserGroup { get; set; }
 
     private void OnDragStart(string type) { DraggedToolboxType = type; }
     private void OnDragEnd() { DraggedToolboxType = null; }
 
+    private void OnUserGroupDragStart(UserSymbolGroup grp) { DraggedUserGroup = grp; }
+    private void OnUserGroupDragEnd() { DraggedUserGroup = null; }
+
+    private List<UserSymbolGroup> GetUserSymbolGroups()
+    {
+        return Editor.RootModel?.UserSymbolGroups ?? new();
+    }
+
+    private void DeleteUserGroup(UserSymbolGroup grp)
+    {
+        Editor.RootModel?.UserSymbolGroups.Remove(grp);
+        Editor.NotifyUserSymbolGroupsChanged();
+        StateHasChanged();
+
+    }
     private void OnSearchChanged()
     {
         if (string.IsNullOrWhiteSpace(_searchText)) { _filteredCategories = _categories; return; }
@@ -126,7 +182,7 @@
         builder.AddAttribute(2, "height", h);
         builder.AddAttribute(3, "viewBox", $"0 0 {w} {h}");
         builder.AddAttribute(4, "xmlns", "http://www.w3.org/2000/svg");
-        builder.AddAttribute(5, "style", "background: #0f172a; border-radius: 4px;");
+        builder.AddAttribute(5, "style", "background: var(--toolbox-preview-bg); border-radius: 4px;");
         switch (item.Type)
         {
             case "rect":
@@ -327,4 +383,6 @@
             new("pdfviewer",   "D", "PDF Viewer",    "Embedded PDF document viewer",                          "item-media"),
         ]),
     ];
+    private async void OnEditorStateChanged() { await InvokeAsync(StateHasChanged); }
+    public void Dispose() { Editor.UserSymbolGroupsChanged -= OnEditorStateChanged; }
 }

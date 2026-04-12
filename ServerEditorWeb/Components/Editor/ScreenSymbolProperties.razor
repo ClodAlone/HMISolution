@@ -1,4 +1,4 @@
-@using ServerEditorWeb.Models
+﻿@using ServerEditorWeb.Models
 @using ServerEditorWeb.Services
 @using SharedModels
 @implements IDisposable
@@ -19,6 +19,38 @@
             <div class="small mb-2">
                 <span class="text-muted">Group:</span>
                 <span class="badge bg-secondary ms-1" style="font-size: 9px;">@_selectedSymbol.GroupId</span>
+            </div>
+        }
+
+        @if (!string.IsNullOrEmpty(_selectedSymbol.UserSymbolGroupName))
+        {
+            <div class="mb-2 p-2" style="background: #1a2233; border-radius: 6px; border: 1px solid #334155;">
+                <label class="form-label mb-1 small fw-bold">&#128230; User Symbol Group: @_selectedSymbol.UserSymbolGroupName</label>
+                @if (_selectedSymbol.InstanceAliases.Count > 0)
+                {
+                    <table class="table table-sm table-dark mb-0" style="font-size: 11px;">
+                        <thead><tr><th style="width:40%">Alias</th><th>Variable Path</th></tr></thead>
+                        <tbody>
+                            @foreach (var alias in _selectedSymbol.InstanceAliases.Keys.ToList())
+                            {
+                                var key = alias;
+                                <tr>
+                                    <td><code>{@key}</code></td>
+                                    <td>
+                                        <VariablePathPicker
+                                            Value="@_selectedSymbol.InstanceAliases[key]"
+                                            ValueChanged="(v) => { _selectedSymbol.InstanceAliases[key] = v; PropagateGroupAliases(_selectedSymbol); OnChanged(); }"
+                                            Placeholder="Select variable path..." />
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+                else
+                {
+                    <div class="text-muted small">No alias definitions in this group.</div>
+                }
             </div>
         }
 
@@ -3589,6 +3621,21 @@ else
                 Convert.ToInt32(hex[2..4], 16),
                 Convert.ToInt32(hex[4..6], 16));
     }
+    /// <summary>When the user edits an alias on one symbol, propagate to all group siblings.</summary>
+    private void PropagateGroupAliases(ScreenSymbol source)
+    {
+        if (string.IsNullOrEmpty(source.GroupId)) return;
+        var screen = (Editor.SelectedItem as ScreenNode)?.Screen;
+        if (screen == null) return;
+        foreach (var sym in screen.Symbols)
+        {
+            if (sym == source) continue;
+            if (sym.GroupId != source.GroupId) continue;
+            foreach (var kv in source.InstanceAliases)
+                sym.InstanceAliases[kv.Key] = kv.Value;
+        }
+    }
+
     public void Dispose()
     {
         Editor.ScreenSelectionChanged -= OnSelectionChanged;

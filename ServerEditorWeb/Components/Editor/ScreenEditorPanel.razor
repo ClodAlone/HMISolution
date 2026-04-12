@@ -1,4 +1,4 @@
-@using ServerEditorWeb.Models
+﻿@using ServerEditorWeb.Models
 @using ServerEditorWeb.Services
 @using SharedModels
 @implements IAsyncDisposable
@@ -36,6 +36,8 @@
                     {
                         <button class="btn btn-sm btn-outline-warning" @onclick="UngroupSelected" title="Ungroup selected symbols">✂ Ungroup</button>
                     }
+                    <span class="mx-1">|</span>
+                    <button class="btn btn-sm btn-outline-info" @onclick="ShowSaveToUserLibraryDialog" title="Save selected symbols as a reusable user symbol group">&#128190; Save to Library</button>
                 }
                 else if (_selectedSymbol != null)
                 {
@@ -135,8 +137,8 @@
                      style="background: @screen.Background; font-family: sans-serif;"
                      @onmousedown="OnCanvasMouseDown"
                      @onmousemove="OnCanvasMouseMove"
-                     @onmouseup="OnCanvasMouseUp">
-
+                     @onmouseup="OnCanvasMouseUp"
+                     @oncontextmenu="OnCanvasContextMenu" @oncontextmenu:preventDefault>
                     @{ var bgData = ResolveImageData(screen.BackgroundImageId); }
                     @if (!string.IsNullOrEmpty(bgData))
                     {
@@ -1093,6 +1095,13 @@
                                 @RenderSvgText(badgeX, ScaledFontSize(7, sym), "middle", "middle", "white", ScaledFontSize(7, sym), "C")
                                 badgeX -= 12;
                             }
+                            @if (!string.IsNullOrEmpty(sym.UserSymbolGroupName))
+                            {
+                                @* User Symbol Group indicator badge *@
+                                <circle cx="@badgeX" cy="4" r="5" fill="#8b5cf6" stroke="white" stroke-width="1"/>
+                                @RenderSvgText(badgeX, ScaledFontSize(7, sym), "middle", "middle", "white", ScaledFontSize(7, sym), "G")
+                                badgeX -= 12;
+                            }
 
                             @if (isSelected)
                             {
@@ -1135,6 +1144,32 @@
                         </g>
                     }
 
+
+                    @* User Symbol Group bounding box + label when selected *@
+                    @{
+                        var selectedGroupIds = _selectedSymbols
+                            .Where(s => !string.IsNullOrEmpty(s.GroupId) && !string.IsNullOrEmpty(s.UserSymbolGroupName))
+                            .Select(s => s.GroupId!)
+                            .Distinct()
+                            .ToList();
+                    }
+                    @foreach (var gid in selectedGroupIds)
+                    {
+                        var grpSyms = screen.Symbols.Where(s => s.GroupId == gid).ToList();
+                        var gMinX = grpSyms.Min(s => s.X) - 4;
+                        var gMinY = grpSyms.Min(s => s.Y) - 16;
+                        var gMaxX = grpSyms.Max(s => s.X + s.Width) + 4;
+                        var gMaxY = grpSyms.Max(s => s.Y + s.Height) + 4;
+                        var grpName = grpSyms.FirstOrDefault()?.UserSymbolGroupName ?? "";
+                        <rect x="@gMinX" y="@gMinY" width="@(gMaxX - gMinX)" height="@(gMaxY - gMinY)"
+                              fill="none" stroke="#8b5cf6" stroke-width="1" stroke-dasharray="6,3" rx="4" opacity="0.7" />
+                        @if (!string.IsNullOrEmpty(grpName))
+                        {
+                            <rect x="@gMinX" y="@(gMinY - 1)" width="@(grpName.Length * 6 + 12)" height="13" rx="3" fill="#8b5cf6" opacity="0.85" />
+                            @RenderSvgGroupLabel(gMinX + 6, gMinY + 9, grpName)
+                        }
+                    }
+
                     @* Marquee selection rectangle *@
                     @if (_isMarqueeSelecting)
                     {
@@ -1150,14 +1185,101 @@
         </div>
     }
 
+
+
+    @if (_showContextMenu)
+    {
+        <div style="position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:9998;" @onclick="CloseContextMenu" @oncontextmenu="CloseContextMenu" @oncontextmenu:preventDefault></div>
+        <div class="ctx-menu" style="position:fixed;left:@(_ctxMenuX)px;top:@(_ctxMenuY)px;z-index:9999;min-width:200px;background:var(--ctx-menu-bg);border:1px solid var(--ctx-menu-border);border-radius:6px;padding:4px 0;box-shadow:0 4px 16px var(--ctx-menu-shadow);font-size:12px;color:var(--ctx-menu-text);">
+            @if (_selectedSymbols.Count > 0)
+            {
+                <div class="ctx-menu-header" style="padding:4px 12px;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">
+                    @(_selectedSymbols.Count > 1 ? $"{_selectedSymbols.Count} symbols selected" : (_selectedSymbol?.Type ?? "Symbol"))
+                </div>
+                <button class="ctx-item" @onclick="() => { CloseContextMenu(); CopySelectedSymbols(); }">&#128203; Copy</button>
+                <button class="ctx-item" @onclick="() => { CloseContextMenu(); DuplicateSelected(); }">&#10697; Duplicate</button>
+                <button class="ctx-item ctx-danger" @onclick="() => { CloseContextMenu(); DeleteSelected(); }">&#128465; Delete</button>
+                <div class="ctx-sep"></div>
+                <button class="ctx-item" @onclick="() => { CloseContextMenu(); BringToFront(); }">&#9195; Bring to Front</button>
+                <button class="ctx-item" @onclick="() => { CloseContextMenu(); MoveForward(); }">&#9650; Move Forward</button>
+                <button class="ctx-item" @onclick="() => { CloseContextMenu(); MoveBackward(); }">&#9660; Move Backward</button>
+                <button class="ctx-item" @onclick="() => { CloseContextMenu(); SendToBack(); }">&#9196; Send to Back</button>
+                <div class="ctx-sep"></div>
+                <button class="ctx-item" @onclick="() => { CloseContextMenu(); RotateSelected(-90); }">&#8634; Rotate Left 90&#176;</button>
+                <button class="ctx-item" @onclick="() => { CloseContextMenu(); RotateSelected(90); }">&#8635; Rotate Right 90&#176;</button>
+                @if (_selectedSymbol != null && !string.IsNullOrEmpty(_selectedSymbol.UserSymbolGroupName))
+                {
+                    <div class="ctx-sep"></div>
+                    <div class="ctx-menu-header" style="padding:4px 12px;color:var(--code-accent);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">
+                        &#128230; @_selectedSymbol.UserSymbolGroupName
+                    </div>
+                    <button class="ctx-item" @onclick="() => { CloseContextMenu(); SelectEntireGroup(_selectedSymbol); }">&#128279; Select Entire Group</button>
+                    <button class="ctx-item" @onclick="() => { CloseContextMenu(); _editAliasGroupId = _selectedSymbol.GroupId; _showEditAliasDialog = true; }">&#9999; Edit Aliases...</button>
+                }
+            }
+            @if (_selectedSymbols.Count > 1)
+            {
+                <div class="ctx-sep"></div>
+                <button class="ctx-item" @onclick="() => { CloseContextMenu(); GroupSelected(); }">&#128279; Group</button>
+                @if (_selectedSymbols.Any(s => !string.IsNullOrEmpty(s.GroupId)))
+                {
+                    <button class="ctx-item" @onclick="() => { CloseContextMenu(); UngroupSelected(); }">&#9986; Ungroup</button>
+                }
+                <button class="ctx-item" @onclick="() => { CloseContextMenu(); _showDistributeDialog = true; }">&#9638; Distribute...</button>
+                <div class="ctx-sep"></div>
+                <button class="ctx-item" @onclick="() => { CloseContextMenu(); ShowSaveToUserLibraryDialog(); }">&#128190; Save to User Library...</button>
+            }
+            else if (_selectedSymbol != null && !string.IsNullOrEmpty(_selectedSymbol.GroupId))
+            {
+                <div class="ctx-sep"></div>
+                <button class="ctx-item" @onclick="() => { CloseContextMenu(); UngroupSelected(); }">&#9986; Ungroup</button>
+            }
+            @if (Clipboard.CanPasteSymbols)
+            {
+                <div class="ctx-sep"></div>
+                <button class="ctx-item" @onclick="() => { CloseContextMenu(); PasteSymbols(); }">&#128204; Paste</button>
+            }
+            @if (_selectedSymbols.Count == 0 && !Clipboard.CanPasteSymbols)
+            {
+                <div class="ctx-menu-header" style="padding:6px 12px;font-size:11px;">Right-click a symbol for actions</div>
+            }
+        </div>
+    }
+
+    @if (_showSaveToLibraryDialog)
+    {
+        <div class="modal show d-block" style="background: rgba(0,0,0,0.5);">
+            <div class="modal-dialog modal-sm">
+                <div class="modal-content">
+                    <div class="modal-header py-2">
+                        <h6 class="modal-title">Save to User Symbol Library</h6>
+                        <button class="btn-close" @onclick="() => _showSaveToLibraryDialog = false"></button>
+                    </div>
+                    <div class="modal-body">
+                        <label class="form-label small">Group Name:</label>
+                        <input type="text" class="form-control form-control-sm" @bind="_userGroupName" placeholder="e.g. Motor Control" />
+                        <label class="form-label small mt-2">Category:</label>
+                        <input type="text" class="form-control form-control-sm" @bind="_userGroupCategory" placeholder="e.g. Motors" />
+                        <label class="form-label small mt-2">Alias Definitions (one per line):</label>
+                        <textarea class="form-control form-control-sm" rows="4" @bind="_userGroupAliasText" placeholder="Motor&#10;Speed&#10;Status"></textarea>
+                        <div class="text-muted small mt-1">Each alias becomes a {AliasName} placeholder in variable paths.</div>
+                    </div>
+                    <div class="modal-footer py-1">
+                        <button class="btn btn-sm btn-primary" @onclick="SaveSelectedAsUserGroup" disabled="@(string.IsNullOrWhiteSpace(_userGroupName))">Save</button>
+                        <button class="btn btn-sm btn-secondary" @onclick="() => _showSaveToLibraryDialog = false">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
     @if (_showDistributeDialog)
     {
         <div class="modal show d-block" style="background: rgba(0,0,0,0.5);">
             <div class="modal-dialog modal-sm">
-                <div class="modal-content bg-dark text-light">
+                <div class="modal-content">
                     <div class="modal-header py-2">
                         <h6 class="modal-title">Distribute to Columns</h6>
-                        <button class="btn-close btn-close-white" @onclick="() => _showDistributeDialog = false"></button>
+                        <button class="btn-close" @onclick="() => _showDistributeDialog = false"></button>
                     </div>
                     <div class="modal-body">
                         <label>Columns:</label>
@@ -1171,6 +1293,48 @@
                         <button class="btn btn-sm btn-primary" @onclick="ApplyDistributeToColumns">Apply</button>
                         <button class="btn btn-sm btn-secondary" @onclick="() => _showDistributeDialog = false">Cancel</button>
                     </div>
+                </div>
+            </div>
+        </div>
+    }
+    @if (_showEditAliasDialog && !string.IsNullOrEmpty(_editAliasGroupId))
+    {
+        var aliasScreen = (Editor.SelectedItem as ScreenNode)?.Screen;
+        var aliasGroupSyms = aliasScreen?.Symbols.Where(s => s.GroupId == _editAliasGroupId).ToList() ?? new();
+        var aliasSource = aliasGroupSyms.FirstOrDefault();
+        <div style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;" @onclick="() => _showEditAliasDialog = false">
+            <div style="background:var(--dialog-bg);border:1px solid var(--dialog-border);border-radius:8px;padding:16px;min-width:420px;max-width:600px;max-height:80vh;overflow-y:auto;color:var(--dialog-text);" @onclick:stopPropagation>
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="mb-0" style="color:var(--dialog-text);">&#9999; Edit Aliases &#8212; @(aliasSource?.UserSymbolGroupName ?? "Group")</h6>
+                    <button class="btn-close" @onclick="() => _showEditAliasDialog = false"></button>
+                </div>
+                @if (aliasSource != null && aliasSource.InstanceAliases.Count > 0)
+                {
+                    <table class="table table-sm mb-0" style="font-size:12px;">
+                        <thead><tr><th style="width:35%">Alias</th><th>Variable Path</th></tr></thead>
+                        <tbody>
+                            @foreach (var alias in aliasSource.InstanceAliases.Keys.ToList())
+                            {
+                                var key = alias;
+                                <tr>
+                                    <td><code style="color:var(--code-accent);">{@key}</code></td>
+                                    <td>
+                                        <VariablePathPicker
+                                            Value="@aliasSource.InstanceAliases[key]"
+                                            ValueChanged="(v) => { aliasSource.InstanceAliases[key] = v; PropagateEditAliases(aliasSource); OnChanged(); }"
+                                            Placeholder="Select variable path..." />
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+                else
+                {
+                    <div class="text-muted small">No alias definitions in this group.</div>
+                }
+                <div class="text-end mt-3">
+                    <button class="btn btn-sm btn-secondary" @onclick="() => _showEditAliasDialog = false">Close</button>
                 </div>
             </div>
         </div>
@@ -1218,6 +1382,21 @@
     private int _distributeColumns = 3;
     private int _distributeGapX = 10;
     private int _distributeGapY = 10;
+
+
+    // --- User Symbol Library dialog state ---
+    private bool _showSaveToLibraryDialog;
+    private string _userGroupName = "";
+    private string _userGroupCategory = "";
+    private string _userGroupAliasText = "";
+    // --- Context menu state ---
+    private bool _showContextMenu;
+    private double _ctxMenuX;
+    private double _ctxMenuY;
+    private ScreenSymbol? _ctxSymbol;
+    // --- Edit Aliases dialog state ---
+    private bool _showEditAliasDialog;
+    private string? _editAliasGroupId;
 
     // ─── Undo snapshots
     private Dictionary<ScreenSymbol, string> _operationSnapshots = new();
@@ -1377,6 +1556,15 @@
         {
             AddLibrarySymbol(screen, libItem, dropX, dropY);
             SymbolLibraryPanel.DraggedLibraryItem = null;
+            StateHasChanged();
+            return;
+        }
+
+        // Handle user symbol group drag
+        if (ScreenToolboxPanel.DraggedUserGroup is { } userGroup)
+        {
+            DropUserSymbolGroup(screen, userGroup, dropX, dropY);
+            ScreenToolboxPanel.DraggedUserGroup = null;
             StateHasChanged();
         }
     }
@@ -2326,6 +2514,7 @@
     private void OnSymbolMouseDown(MouseEventArgs e, ScreenSymbol sym)
     {
         var isCtrl = e.CtrlKey;
+        _showContextMenu = false;
 
         if (isCtrl)
         {
@@ -2395,9 +2584,51 @@
         }
     }
 
+    private void SelectEntireGroup(ScreenSymbol source)
+    {
+        if (string.IsNullOrEmpty(source.GroupId)) return;
+        var screen = GetScreen();
+        if (screen == null) return;
+        _selectedSymbols.Clear();
+        foreach (var sym in screen.Symbols)
+        {
+            if (sym.GroupId == source.GroupId)
+                _selectedSymbols.Add(sym);
+        }
+        _selectedSymbol = _selectedSymbols.FirstOrDefault();
+        NotifySelectionChanged();
+    }
+
+    private void PropagateEditAliases(ScreenSymbol source)
+    {
+        if (string.IsNullOrEmpty(source.GroupId)) return;
+        var screen = GetScreen();
+        if (screen == null) return;
+        foreach (var sym in screen.Symbols)
+        {
+            if (sym == source) continue;
+            if (sym.GroupId != source.GroupId) continue;
+            foreach (var kv in source.InstanceAliases)
+                sym.InstanceAliases[kv.Key] = kv.Value;
+        }
+    }
+
+    private void OnCanvasContextMenu(MouseEventArgs e)
+    {
+        _ctxMenuX = e.ClientX;
+        _ctxMenuY = e.ClientY;
+        _showContextMenu = true;
+    }
+
+    private void CloseContextMenu()
+    {
+        _showContextMenu = false;
+    }
+
     private void OnCanvasMouseDown(MouseEventArgs e)
     {
         if (_isDragging || _isRotating || _isResizing) return;
+        _showContextMenu = false;
 
         // Click on empty area — start marquee or clear selection
         if (!e.CtrlKey)
@@ -2740,6 +2971,98 @@
             if (sym.GroupId == groupId)
                 _selectedSymbols.Add(sym);
         }
+    }
+
+    // --- User Symbol Library ---
+    private void ShowSaveToUserLibraryDialog()
+    {
+        _userGroupName = "";
+        _userGroupCategory = "";
+        _userGroupAliasText = "";
+        _showSaveToLibraryDialog = true;
+    }
+
+    private void SaveSelectedAsUserGroup()
+    {
+        if (_selectedSymbols.Count == 0 || string.IsNullOrWhiteSpace(_userGroupName)) return;
+        var model = Editor.RootModel;
+        if (model == null) return;
+
+        // Compute bounding box origin
+        var minX = _selectedSymbols.Min(s => s.X);
+        var minY = _selectedSymbols.Min(s => s.Y);
+
+        // Parse alias definitions
+        var aliases = _userGroupAliasText
+            .Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(a => a.Trim())
+            .Where(a => a.Length > 0)
+            .Distinct()
+            .ToList();
+
+        // Build template symbols with relative positions
+        var templates = new List<ScreenSymbol>();
+        foreach (var src in _selectedSymbols.OrderBy(s => s.Y).ThenBy(s => s.X))
+        {
+            var json = System.Text.Json.JsonSerializer.Serialize(src);
+            var clone = System.Text.Json.JsonSerializer.Deserialize<ScreenSymbol>(json)!;
+            clone.Id = "";  // will be assigned on drop
+            clone.GroupId = null;
+            clone.X = (int)(src.X - minX);
+            clone.Y = (int)(src.Y - minY);
+            clone.UserSymbolGroupName = "";
+            clone.InstanceAliases = new();
+            templates.Add(clone);
+        }
+
+        var group = new UserSymbolGroup
+        {
+            Name = _userGroupName.Trim(),
+            Category = _userGroupCategory.Trim(),
+            AliasDefinitions = aliases,
+            TemplateSymbols = templates
+        };
+
+        // Remove existing group with same name, then add
+        model.UserSymbolGroups.RemoveAll(g => g.Name == group.Name);
+        model.UserSymbolGroups.Add(group);
+
+        _showSaveToLibraryDialog = false;
+        Editor.NotifyUserSymbolGroupsChanged();
+        OnChanged();
+    }
+
+    private void DropUserSymbolGroup(ScreenConfig screen, UserSymbolGroup group, double dropX, double dropY)
+    {
+        var groupId = $"grp_{_nextGroupId++}";
+        var newSymbols = new List<ScreenSymbol>();
+
+        foreach (var tmpl in group.TemplateSymbols)
+        {
+            var json = System.Text.Json.JsonSerializer.Serialize(tmpl);
+            var sym = System.Text.Json.JsonSerializer.Deserialize<ScreenSymbol>(json)!;
+            sym.Id = $"sym_{_nextId++}";
+            sym.GroupId = groupId;
+            sym.X = (int)(dropX + tmpl.X);
+            sym.Y = (int)(dropY + tmpl.Y);
+            sym.UserSymbolGroupName = group.Name;
+            // Initialize instance aliases with empty values
+            sym.InstanceAliases = group.AliasDefinitions.ToDictionary(a => a, _ => "");
+            screen.Symbols.Add(sym);
+            newSymbols.Add(sym);
+        }
+
+        UndoRedo.RecordAction(new CollectionAction
+        {
+            Description = $"Drop user group '{group.Name}'",
+            UndoCallback = () => { foreach (var s in newSymbols) screen.Symbols.Remove(s); },
+            RedoCallback = () => { foreach (var s in newSymbols) screen.Symbols.Add(s); }
+        });
+
+        _selectedSymbols = new HashSet<ScreenSymbol>(newSymbols);
+        _selectedSymbol = newSymbols.FirstOrDefault();
+        NotifySelectionChanged();
+        OnChanged();
     }
     // ─── Symbol badge helpers ────────────────────────────────
     private bool SymbolHasVariables(ScreenSymbol sym)
@@ -3141,6 +3464,19 @@
         builder.AddAttribute(seq++, "font-family", !string.IsNullOrEmpty(sym?.FontFamily) ? sym.FontFamily : "sans-serif");
         if (!string.IsNullOrEmpty(sym?.FontWeight)) builder.AddAttribute(seq++, "font-weight", sym.FontWeight);
         if (!string.IsNullOrEmpty(sym?.FontStyle)) builder.AddAttribute(seq++, "font-style", sym.FontStyle);
+        builder.AddContent(seq++, content);
+        builder.CloseElement();
+    };
+
+    private RenderFragment RenderSvgGroupLabel(double x, double y, string content) => builder =>
+    {
+        int seq = 0;
+        builder.OpenElement(seq++, "text");
+        builder.AddAttribute(seq++, "x", x);
+        builder.AddAttribute(seq++, "y", y);
+        builder.AddAttribute(seq++, "fill", "white");
+        builder.AddAttribute(seq++, "font-size", 9);
+        builder.AddAttribute(seq++, "font-weight", "bold");
         builder.AddContent(seq++, content);
         builder.CloseElement();
     };

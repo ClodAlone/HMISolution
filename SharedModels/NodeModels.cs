@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -35,6 +35,7 @@ namespace SharedModels
         public List<BatchSequenceConfig> BatchSequences { get; set; } = new();
         public List<EventConfig> Events { get; set; } = new();
         public List<VariableAliasMap> AliasMaps { get; set; } = new();
+        public List<UserSymbolGroup> UserSymbolGroups { get; set; } = new();
 
         /// <summary>
         /// PBKDF2-SHA256 hash of the project protection password.
@@ -1154,6 +1155,20 @@ namespace SharedModels
         /// </summary>
         public List<string> EmbeddedScreenAliasMaps { get; set; } = new();
 
+        // ─── User Symbol Group instance properties ────────────
+        /// <summary>
+        /// Name of the UserSymbolGroup this instance was created from. Empty = not from a user group.
+        /// All symbols in the same dropped instance share the same GroupId.
+        /// </summary>
+        public string UserSymbolGroupName { get; set; } = "";
+
+        /// <summary>
+        /// Per-instance alias mappings. Key = alias placeholder name (from UserSymbolGroup.AliasDefinitions),
+        /// Value = real variable path. At runtime, {AliasName} tokens in VariablePath and command paths
+        /// are replaced with these values.
+        /// </summary>
+        public Dictionary<string, string> InstanceAliases { get; set; } = new();
+
         // â”€â”€â”€ Responsive layout properties â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         /// <summary>Column span in the responsive grid (1-12).</summary>
         public int ColSpan { get; set; } = 4;
@@ -1796,6 +1811,37 @@ namespace SharedModels
         /// In screen variable bindings, use {AliasName} syntax which gets replaced at runtime.
         /// </summary>
         public Dictionary<string, string> Mappings { get; set; } = new();
+    }
+
+    /// <summary>
+    /// A reusable group of symbols saved to the user symbol library.
+    /// Contains template symbol snapshots with relative positions and alias placeholder definitions.
+    /// When dropped on a screen, all template symbols are instantiated with a shared GroupId
+    /// and each instance gets its own InstanceAliases dictionary for variable substitution.
+    /// </summary>
+    public class UserSymbolGroup
+    {
+        /// <summary>Unique identifier for this symbol group.</summary>
+        public string Id { get; set; } = Guid.NewGuid().ToString("N")[..8];
+
+        /// <summary>Display name of this symbol group.</summary>
+        public string Name { get; set; } = "";
+
+        /// <summary>Category for organizing groups in the toolbox (e.g. "Motors", "Valves").</summary>
+        public string Category { get; set; } = "";
+
+        /// <summary>
+        /// Alias placeholder names defined for this group (e.g. "Motor", "Pump").
+        /// Each instance dropped on a screen provides concrete variable paths for these aliases
+        /// via ScreenSymbol.InstanceAliases.
+        /// </summary>
+        public List<string> AliasDefinitions { get; set; } = new();
+
+        /// <summary>
+        /// Template symbol snapshots with relative positions (origin = top-left of bounding box).
+        /// These are deep-copied when dropping a new instance onto a screen.
+        /// </summary>
+        public List<ScreenSymbol> TemplateSymbols { get; set; } = new();
     }
 
     /// <summary>
