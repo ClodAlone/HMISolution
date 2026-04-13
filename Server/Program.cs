@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
@@ -240,6 +240,11 @@ public class OpcUaServerApp
                         }
 
                         enableAnonymous = server.EnableAnonymous;
+
+                        // When runtime login is disabled, anonymous OPC access must be
+                        // allowed so the viewer can connect without user credentials.
+                        if (!server.EnableRuntimeLogin)
+                            enableAnonymous = true;
                     }
                 }
             }

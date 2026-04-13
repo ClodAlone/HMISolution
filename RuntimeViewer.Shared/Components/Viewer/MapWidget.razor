@@ -1,0 +1,194 @@
+@using RuntimeViewer.Shared.Services
+@using SharedModels
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+@inject OpcRuntimeClient Opc
+@inject CommandService Commands
+
+<div class="map-widget" @ref="_mapContainer" id="@_mapId"
+     style="width: 100%; height: 100%; position: relative; background: #0f172a; border-radius: 4px; overflow: hidden;">
+    @if (!_leafletReady)
+    {
+        <div style="display:flex; align-items:center; justify-content:center; width:100%; height:100%; color:#64748b; font-size:13px;">
+            Loading mapâ€¦
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string MapMode { get; set; } = "geo";
+    [Parameter] public double CenterLat { get; set; } = 45.4642;
+    [Parameter] public double CenterLng { get; set; } = 9.19;
+    [Parameter] public int Zoom { get; set; } = 13;
+    [Parameter] public string TileUrl { get; set; } = "";
+    [Parameter] public string FloorPlanImage { get; set; } = "";
+    [Parameter] public double FloorPlanWidth { get; set; } = 1000;
+    [Parameter] public double FloorPlanHeight { get; set; } = 600;
+    [Parameter] public bool ShowZoomControl { get; set; } = true;
+    [Parameter] public bool Interactive { get; set; } = true;
+    [Parameter] public List<MapMarker> Markers { get; set; } = new();
+
+    private ElementReference _mapContainer;
+    private string _mapId = $"map_{Guid.NewGuid():N}";
+    private IJSObjectReference? _module;
+    private bool _leafletReady;
+    private System.Threading.Timer? _updateTimer;
+    private DotNetObjectReference<MapWidget>? _selfRef;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _selfRef = DotNetObjectReference.Create(this);
+            _module = await JS.InvokeAsync<IJSObjectReference>("import",
+                "./_content/RuntimeViewer.Shared/js/mapWidget.js");
+            await _module.InvokeVoidAsync("initMap", _mapId, new
+            {
+                mode = MapMode,
+                centerLat = CenterLat,
+                centerLng = CenterLng,
+                zoom = Zoom,
+                tileUrl = string.IsNullOrEmpty(TileUrl) ? "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" : TileUrl,
+                floorPlanImage = FloorPlanImage,
+                floorPlanWidth = FloorPlanWidth,
+                floorPlanHeight = FloorPlanHeight,
+                showZoomControl = ShowZoomControl,
+                interactive = Interactive,
+                markers = Markers.Select(m => new
+                {
+                    id = m.Id,
+                    label = m.Label,
+                    lat = m.Lat,
+                    lng = m.Lng,
+                    posX = m.PosX,
+                    posY = m.PosY,
+                    shape = m.Shape,
+                    color = m.Color,
+                    size = m.Size,
+                    icon = m.Icon,
+                    showPopup = m.ShowPopup,
+                    hasPopupScreen = !string.IsNullOrEmpty(m.PopupScreen)
+                }).ToArray()
+            }, _selfRef);
+            _leafletReady = true;
+            StateHasChanged();
+
+            // Start periodic marker update timer (every 2 seconds)
+            _updateTimer = new System.Threading.Timer(async _ => await UpdateMarkers(), null, 2000, 2000);
+        }
+    }
+
+    private async Task UpdateMarkers()
+    {
+        if (_module == null) return;
+        try
+        {
+            var updates = Markers.Select(m =>
+            {
+                string? rawValue = !string.IsNullOrEmpty(m.VariablePath) ? Opc.GetValue(m.VariablePath) : null;
+                var color = ResolveColor(m, rawValue);
+                var label = m.Label;
+                if (rawValue != null)
+                    label = $"{m.Label}: {rawValue}";
+
+                // Dynamic position from variables
+                double? lat = TryReadDouble(m.LatVariablePath);
+                double? lng = TryReadDouble(m.LngVariablePath);
+                double? posX = TryReadDouble(m.PosXVariablePath);
+                double? posY = TryReadDouble(m.PosYVariablePath);
+
+                return new
+                {
+                    id = m.Id,
+                    color,
+                    label,
+                    value = rawValue ?? "",
+                    lat = lat,
+                    lng = lng,
+                    posX = posX,
+                    posY = posY
+                };
+            }).ToArray();
+
+            if (updates.Length > 0)
+                await _module.InvokeVoidAsync("updateMarkers", _mapId, updates);
+        }
+        catch { /* ignore during disposal */ }
+    }
+
+    private double? TryReadDouble(string? variablePath)
+    {
+        if (string.IsNullOrEmpty(variablePath)) return null;
+        var raw = Opc.GetValue(variablePath);
+        if (raw != null && double.TryParse(raw, System.Globalization.NumberStyles.Any,
+            System.Globalization.CultureInfo.InvariantCulture, out var val))
+            return val;
+        return null;
+    }
+
+    /// <summary>Called from JS when a marker with a popup screen is clicked.</summary>
+    [JSInvokable]
+    public void OnMarkerClicked(string markerId)
+    {
+        var marker = Markers.FirstOrDefault(m => m.Id == markerId);
+        if (marker == null || string.IsNullOrEmpty(marker.PopupScreen)) return;
+        Commands.RaiseOpenScreenPopup(marker.PopupScreen, marker.PopupAliasMapName ?? "");
+    }
+
+    private string ResolveColor(MapMarker marker, string? value)
+    {
+        if (string.IsNullOrEmpty(marker.ColorRules) || value == null)
+            return marker.Color;
+
+        if (!double.TryParse(value, System.Globalization.NumberStyles.Any,
+            System.Globalization.CultureInfo.InvariantCulture, out var numVal))
+            return marker.Color;
+
+        foreach (var rule in marker.ColorRules.Split(';', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var trimmed = rule.Trim();
+            if (trimmed.StartsWith("*"))
+            {
+                var parts = trimmed.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length >= 2) return parts[1];
+                continue;
+            }
+
+            // Parse rules like ">80 #ef4444", ">=20 #22c55e"
+            var match = System.Text.RegularExpressions.Regex.Match(trimmed, @"^([><=!]+)\s*([\d.]+)\s+(#[0-9a-fA-F]{3,8})$");
+            if (!match.Success) continue;
+
+            var op = match.Groups[1].Value;
+            if (!double.TryParse(match.Groups[2].Value, System.Globalization.NumberStyles.Any,
+                System.Globalization.CultureInfo.InvariantCulture, out var threshold)) continue;
+            var ruleColor = match.Groups[3].Value;
+
+            var passes = op switch
+            {
+                ">" => numVal > threshold,
+                ">=" => numVal >= threshold,
+                "<" => numVal < threshold,
+                "<=" => numVal <= threshold,
+                "==" => Math.Abs(numVal - threshold) < 0.001,
+                "!=" => Math.Abs(numVal - threshold) >= 0.001,
+                _ => false
+            };
+
+            if (passes) return ruleColor;
+        }
+
+        return marker.Color;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_updateTimer != null)
+            await _updateTimer.DisposeAsync();
+        if (_module != null)
+        {
+            try { await _module.InvokeVoidAsync("destroyMap", _mapId); } catch { }
+            try { await _module.DisposeAsync(); } catch { }
+        }
+        _selfRef?.Dispose();
+    }
+}

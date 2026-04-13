@@ -99,7 +99,7 @@ else if (Screen.LayoutMode == "responsive")
                                         Categories="@sym.EventLogCategories" />
                         break;
                     case "editbox":
-                        <EditBoxWidget VariablePath="@sym.VariablePath"
+                        <EditBoxWidget VariablePath="@ResolveAlias(sym.VariablePath, sym.InstanceAliases is { Count: > 0 } ? sym.InstanceAliases : null)"
                                        Step="@sym.EditBoxStep"
                                        Format="@sym.EditBoxFormat"
                                        Min="@sym.MinValue"
@@ -107,7 +107,7 @@ else if (Screen.LayoutMode == "responsive")
                                        ShowStatistics="@sym.EditBoxShowStatistics" />
                         break;
                     case "ipcamera":
-                        <IpCameraWidget CameraId="@(sym.Camera?.CameraId ?? "")"
+                        <IpCameraWidget CameraId
                                         ServerBaseUrl=""
                                         ShowOverlay="@(sym.Camera?.EnableYolo == true)"
                                         DetectionVariablePrefix="@(sym.Camera?.DetectionVariablePrefix ?? "")" />
@@ -496,7 +496,7 @@ else
                     case "editbox":
                         <foreignObject width="@sym.Width" height="@sym.Height">
                             <div xmlns="http://www.w3.org/1999/xhtml" style="width: @(sym.Width)px; height: @(sym.Height)px; @WidgetFontStyle(sym)">
-                                <EditBoxWidget VariablePath="@sym.VariablePath"
+                                <EditBoxWidget VariablePath="@ResolveAlias(sym.VariablePath, sym.InstanceAliases is { Count: > 0 } ? sym.InstanceAliases : null)"
                                                Step="@sym.EditBoxStep"
                                                Format="@sym.EditBoxFormat"
                                                Min="@sym.MinValue"
@@ -834,10 +834,11 @@ else
                 // Monitor statistics sub-variables for editboxes with ShowStatistics
                 if (sym.Type == "editbox" && sym.EditBoxShowStatistics && !string.IsNullOrEmpty(sym.VariablePath))
                 {
-                    paths.Add(sym.VariablePath + ".Statistics.Min");
-                    paths.Add(sym.VariablePath + ".Statistics.Max");
-                    paths.Add(sym.VariablePath + ".Statistics.Average");
-                    paths.Add(sym.VariablePath + ".Statistics.Count");
+                    var resolvedEditPath = ResolveAlias(sym.VariablePath, sym.InstanceAliases is { Count: > 0 } ? sym.InstanceAliases : null);
+                    paths.Add(resolvedEditPath + ".Statistics.Min");
+                    paths.Add(resolvedEditPath + ".Statistics.Max");
+                    paths.Add(resolvedEditPath + ".Statistics.Average");
+                    paths.Add(resolvedEditPath + ".Statistics.Count");
                 }
 
                 // Monitor realtime trend pen variables

@@ -110,6 +110,7 @@
     private System.Threading.Timer? _statusTimer;
     private bool _spinBusy;
     private bool _isWriting;
+    private string? _lastRenderedValue;
 
     private string DisplayValue
     {
@@ -129,6 +130,7 @@
     protected override void OnInitialized()
     {
         Opc.ValueChanged += OnValueChanged;
+        Opc.ValuesChanged += OnValuesChanged;
     }
 
     private void OnValueChanged(string path)
@@ -143,12 +145,27 @@
         InvokeAsync(StateHasChanged);
     }
 
+    private void OnValuesChanged()
+    {
+        // Fallback: if the per-path ValueChanged event was missed (e.g. due to
+        // subscription churn), re-render when ANY value changes and ours differs.
+        var current = Opc.GetValue(VariablePath ?? "");
+        if (current != _lastRenderedValue)
+        {
+            _lastRenderedValue = current;
+            _isNumeric = current != null && double.TryParse(current, System.Globalization.NumberStyles.Any,
+                    System.Globalization.CultureInfo.InvariantCulture, out _);
+            InvokeAsync(StateHasChanged);
+        }
+    }
+
     protected override void OnParametersSet()
     {
         // Determine if the live value looks numeric to show spin buttons
         var val = Opc.GetValue(VariablePath ?? "");
         _isNumeric = val != null && double.TryParse(val, System.Globalization.NumberStyles.Any,
             System.Globalization.CultureInfo.InvariantCulture, out _);
+        _lastRenderedValue = val;
     }
 
     private void StartEdit()
@@ -279,6 +296,7 @@
     public void Dispose()
     {
         Opc.ValueChanged -= OnValueChanged;
+        Opc.ValuesChanged -= OnValuesChanged;
         _statusTimer?.Dispose();
     }
 }

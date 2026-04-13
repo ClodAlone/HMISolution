@@ -1,4 +1,4 @@
-﻿@using SharedModels
+@using SharedModels
 @using RuntimeViewer.Shared.Services
 @using Microsoft.JSInterop
 @using System.Globalization
@@ -30,7 +30,8 @@ else if (Screen.LayoutMode == "responsive")
 
             var hasCmd = sym.Commands.Count > 0;
             var isInputWidget = sym.Type is "knob" or "rotaryswitch" or "switch" or "hslider" or "vslider";
-            var isInteractive = hasCmd || isInputWidget;
+            var isNavButton = sym.Type == "navbutton" && !string.IsNullOrEmpty(sym.NavButtonTarget);
+            var isInteractive = hasCmd || isInputWidget || isNavButton;
             var canExecute = hasCmd && Auth.HasWriteAccess(sym.RequiredAccess);
             var isLocked = hasCmd && !canExecute && !string.IsNullOrEmpty(sym.RequiredAccess);
 
@@ -104,7 +105,7 @@ else if (Screen.LayoutMode == "responsive")
                                         Categories="@sym.EventLogCategories" />
                         break;
                     case "editbox":
-                        <EditBoxWidget VariablePath="@sym.VariablePath"
+                        <EditBoxWidget VariablePath="@ResolveAlias(sym.VariablePath, sym.InstanceAliases is { Count: > 0 } ? sym.InstanceAliases : null)"
                                        Step="@sym.EditBoxStep"
                                        Format="@sym.EditBoxFormat"
                                        Min="@sym.MinValue"
@@ -349,6 +350,19 @@ else if (Screen.LayoutMode == "responsive")
                     case "kpiwidget":
                         @RenderResponsiveKpiWidget(sym, liveValue)
                         break;
+                    case "geomap":
+                        <MapWidget MapMode="@sym.MapMode"
+                                   CenterLat="@sym.MapCenterLat"
+                                   CenterLng="@sym.MapCenterLng"
+                                   Zoom="@sym.MapZoom"
+                                   TileUrl="@sym.MapTileUrl"
+                                   FloorPlanImage="@sym.MapFloorPlanImage"
+                                   FloorPlanWidth="@sym.MapFloorPlanWidth"
+                                   FloorPlanHeight="@sym.MapFloorPlanHeight"
+                                   ShowZoomControl="@sym.MapShowZoomControl"
+                                   Interactive="@sym.MapInteractive"
+                                   Markers="@sym.MapMarkers" />
+                        break;
                 }
 
                 @if (isLocked)
@@ -421,9 +435,10 @@ else
 
             var hasCmd = sym.Commands.Count > 0;
             var isInputWidget = sym.Type is "knob" or "rotaryswitch" or "switch" or "hslider" or "vslider";
-            var isInteractive = hasCmd || isInputWidget;
+            var isNavButton = sym.Type == "navbutton" && !string.IsNullOrEmpty(sym.NavButtonTarget);
+            var isInteractive = hasCmd || isInputWidget || isNavButton;
             var canExecute = hasCmd && Auth.HasWriteAccess(sym.RequiredAccess);
-            
+
             var isPressed = _pressedSymbolId == sym.Id;
             var isLocked = hasCmd && !canExecute && !string.IsNullOrEmpty(sym.RequiredAccess);
 
@@ -518,7 +533,7 @@ else
                     case "editbox":
                         <foreignObject width="@sym.Width" height="@sym.Height">
                             <div xmlns="http://www.w3.org/1999/xhtml" style="width: @(sym.Width)px; height: @(sym.Height)px; @WidgetFontStyle(sym)">
-                                <EditBoxWidget VariablePath="@sym.VariablePath"
+                                <EditBoxWidget VariablePath="@ResolveAlias(sym.VariablePath, sym.InstanceAliases is { Count: > 0 } ? sym.InstanceAliases : null)"
                                                Step="@sym.EditBoxStep"
                                                Format="@sym.EditBoxFormat"
                                                Min="@sym.MinValue"
@@ -702,6 +717,23 @@ else
                     case "kpiwidget":
                         @RenderKpiWidget(sym, liveValue)
                         break;
+                    case "geomap":
+                        <foreignObject width="@sym.Width" height="@sym.Height">
+                            <div xmlns="http://www.w3.org/1999/xhtml" style="width: @(sym.Width)px; height: @(sym.Height)px; @WidgetFontStyle(sym)">
+                                <MapWidget MapMode="@sym.MapMode"
+                                           CenterLat="@sym.MapCenterLat"
+                                           CenterLng="@sym.MapCenterLng"
+                                           Zoom="@sym.MapZoom"
+                                           TileUrl="@sym.MapTileUrl"
+                                           FloorPlanImage="@sym.MapFloorPlanImage"
+                                           FloorPlanWidth="@sym.MapFloorPlanWidth"
+                                           FloorPlanHeight="@sym.MapFloorPlanHeight"
+                                           ShowZoomControl="@sym.MapShowZoomControl"
+                                           Interactive="@sym.MapInteractive"
+                                           Markers="@sym.MapMarkers" />
+                            </div>
+                        </foreignObject>
+                        break;
                     case "mimicpump":
                         <circle cx="@F(sym.Width/2)" cy="@F(sym.Height/2)" r="@F(Math.Min(sym.Width,sym.Height)/2-2)" fill="@fillColor" stroke="@sym.Stroke" stroke-width="@sym.StrokeWidth"/>
                         <polygon points="@($"{F(sym.Width*0.3)},{F(sym.Height*0.3)} {F(sym.Width*0.7)},{F(sym.Height*0.5)} {F(sym.Width*0.3)},{F(sym.Height*0.7)}")" fill="@sym.Stroke" opacity="0.8"/>
@@ -871,6 +903,7 @@ else
     private IJSObjectReference? _jsModule;
     private System.Threading.Timer? _refreshTimer;
     private string? _pressedSymbolId;
+    private readonly string _callerId = Guid.NewGuid().ToString("N");
 
     private string? ResolveImageData(string? imageId)
     {
@@ -1005,10 +1038,11 @@ else
                 // Monitor statistics sub-variables for editboxes with ShowStatistics
                 if (sym.Type == "editbox" && sym.EditBoxShowStatistics && !string.IsNullOrEmpty(sym.VariablePath))
                 {
-                    paths.Add(sym.VariablePath + ".Statistics.Min");
-                    paths.Add(sym.VariablePath + ".Statistics.Max");
-                    paths.Add(sym.VariablePath + ".Statistics.Average");
-                    paths.Add(sym.VariablePath + ".Statistics.Count");
+                    var resolvedEditPath = ResolveAlias(sym.VariablePath, sym.InstanceAliases is { Count: > 0 } ? sym.InstanceAliases : null);
+                    paths.Add(resolvedEditPath + ".Statistics.Min");
+                    paths.Add(resolvedEditPath + ".Statistics.Max");
+                    paths.Add(resolvedEditPath + ".Statistics.Average");
+                    paths.Add(resolvedEditPath + ".Statistics.Count");
                 }
 
                 // Monitor realtime trend pen variables
@@ -1036,7 +1070,7 @@ else
             {
                 _lastMonitoredScreenName = Screen.Name;
                 _lastMonitoredPaths = distinctPaths;
-                Opc.MonitorVariables(distinctPaths);
+                Opc.MonitorVariables(distinctPaths, _callerId);
             }
         }
     }
@@ -1148,7 +1182,7 @@ else
         foreach (var cmd in sym.Commands)
         {
             if (cmd.Trigger is "MouseDown" or "WhilePressed")
-                await Commands.ExecuteAsync(cmd);
+                await Commands.ExecuteAsync(cmd, VariableAliases);
         }
     }
 
@@ -1173,7 +1207,7 @@ else
         foreach (var cmd in sym.Commands)
         {
             if (cmd.Trigger == "MouseUp")
-                await Commands.ExecuteAsync(cmd);
+                await Commands.ExecuteAsync(cmd, VariableAliases);
         }
 
         // WhilePressed release
@@ -1264,6 +1298,13 @@ else
             return;
         }
 
+        // NavButton: trigger NavigateScreen from NavButtonTarget property
+        if (sym.Type == "navbutton" && !string.IsNullOrEmpty(sym.NavButtonTarget))
+        {
+            Commands.RaiseNavigateScreen(sym.NavButtonTarget, "");
+            return;
+        }
+
         if (sym.Commands.Count > 0 && !Auth.HasWriteAccess(sym.RequiredAccess))
         {
             await OnRequestLogin.InvokeAsync();
@@ -1273,7 +1314,7 @@ else
         foreach (var cmd in sym.Commands)
         {
             if (cmd.Trigger == "Click")
-                await Commands.ExecuteAsync(cmd);
+                await Commands.ExecuteAsync(cmd, VariableAliases);
         }
     }
 
@@ -6288,10 +6329,10 @@ else
 
     public async ValueTask DisposeAsync()
     {
-        // Unsubscribe monitored items for this screen
+        // Unregister this renderer's paths from the shared subscription
         _lastMonitoredScreenName = null;
         _lastMonitoredPaths.Clear();
-        Opc.MonitorVariables(Enumerable.Empty<string>());
+        Opc.UnregisterCaller(_callerId);
 
         Opc.ValuesChanged -= OnValuesChanged;
         Localization.LanguageChanged -= OnLanguageChanged;

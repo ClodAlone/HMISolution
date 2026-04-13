@@ -1,5 +1,7 @@
 using System.Diagnostics;
 using System.Management;
+using System.Net;
+using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.ServiceProcess;
 
@@ -63,6 +65,11 @@ public class RuntimeViewerProcessService : IDisposable
             return (false, "RuntimeViewer is already running externally. Use Stop to terminate it first.");
 
         bool isDesktop = mode == "desktop";
+
+        // For web mode, check that the HTTP port is available before starting
+        if (!isDesktop && ServerProcessService.IsPortInUse(port))
+            return (false, $"Cannot start RuntimeViewer: HTTP port {port} is already in use.");
+
         string? viewerExe = isDesktop
             ? FindDesktopExecutable(nodesPath)
             : FindViewerExecutable(nodesPath);

@@ -1072,6 +1072,9 @@
                                             <line x1="4" y1="26" x2="@(sym.Width - 4)" y2="26" stroke="#334155" stroke-width="1" />
                                             @RenderSvgText(sym.Width / 2, 40, "middle", "middle", "#64748b", ScaledFontSize(9, sym), "(AI-powered chat at runtime)")
                                             break;
+                                        case "geomap":
+                                            @RenderGeoMapEditorPreview(sym)
+                                            break;
                                         case "mimicpump":
                                             <circle cx="@(sym.Width/2)" cy="@(sym.Height/2)" r="@(Math.Min(sym.Width,sym.Height)/2-2)" fill="@fillColor" stroke="@sym.Stroke" stroke-width="@sym.StrokeWidth"/>
                                             <polygon points="@($"{sym.Width*0.3},{sym.Height*0.3} {sym.Width*0.7},{sym.Height*0.5} {sym.Width*0.3},{sym.Height*0.7}")" fill="@sym.Stroke" opacity="0.8"/>
@@ -3446,6 +3449,110 @@ Right-click a symbol for actions</div>
         }
         return sb.ToString();
     }
+
+    // --- GeoMap editor preview --
+
+    private RenderFragment RenderGeoMapEditorPreview(ScreenSymbol sym) => builder =>
+    {
+        int seq = 0;
+        var w = sym.Width; var h = sym.Height;
+        var mapLabel = sym.MapMode == "floorplan" ? "\U0001F3E2 Floor Plan" : "\U0001F5FA\uFE0F Map";
+
+        // background
+        builder.OpenElement(seq++, "rect");
+        builder.AddAttribute(seq++, "width", w); builder.AddAttribute(seq++, "height", h);
+        builder.AddAttribute(seq++, "fill", "#0f172a"); builder.AddAttribute(seq++, "stroke", sym.Stroke ?? "#334155");
+        builder.AddAttribute(seq++, "stroke-width", sym.StrokeWidth); builder.AddAttribute(seq++, "rx", 4);
+        builder.CloseElement();
+
+        // inner rect
+        builder.OpenElement(seq++, "rect");
+        builder.AddAttribute(seq++, "x", 4); builder.AddAttribute(seq++, "y", 4);
+        builder.AddAttribute(seq++, "width", w - 8); builder.AddAttribute(seq++, "height", h - 8);
+        builder.AddAttribute(seq++, "rx", 2); builder.AddAttribute(seq++, "fill", "#1e3a5f");
+        builder.AddAttribute(seq++, "opacity", 0.4);
+        builder.CloseElement();
+
+        // grid lines
+        var gsx = w / 6.0; var gsy = h / 5.0;
+        for (int gi = 1; gi < 6; gi++)
+        {
+            builder.OpenElement(seq++, "line");
+            builder.AddAttribute(seq++, "x1", F(gi * gsx)); builder.AddAttribute(seq++, "y1", 4);
+            builder.AddAttribute(seq++, "x2", F(gi * gsx)); builder.AddAttribute(seq++, "y2", F(h - 4));
+            builder.AddAttribute(seq++, "stroke", "#475569"); builder.AddAttribute(seq++, "stroke-width", 0.5);
+            builder.AddAttribute(seq++, "opacity", 0.3);
+            builder.CloseElement();
+        }
+        for (int gi = 1; gi < 5; gi++)
+        {
+            builder.OpenElement(seq++, "line");
+            builder.AddAttribute(seq++, "x1", 4); builder.AddAttribute(seq++, "y1", F(gi * gsy));
+            builder.AddAttribute(seq++, "x2", F(w - 4)); builder.AddAttribute(seq++, "y2", F(gi * gsy));
+            builder.AddAttribute(seq++, "stroke", "#475569"); builder.AddAttribute(seq++, "stroke-width", 0.5);
+            builder.AddAttribute(seq++, "opacity", 0.3);
+            builder.CloseElement();
+        }
+
+        // title
+        builder.OpenElement(seq++, "text");
+        builder.AddAttribute(seq++, "x", F(w / 2.0)); builder.AddAttribute(seq++, "y", 18);
+        builder.AddAttribute(seq++, "text-anchor", "middle"); builder.AddAttribute(seq++, "dominant-baseline", "middle");
+        builder.AddAttribute(seq++, "fill", "#e2e8f0"); builder.AddAttribute(seq++, "font-size", ScaledFontSize(11, sym));
+        builder.AddContent(seq++, mapLabel);
+        builder.CloseElement();
+
+        var mColors = new[] { "#ef4444", "#22c55e", "#f59e0b", "#3b82f6", "#a855f7", "#06b6d4" };
+        if (sym.MapMarkers.Count == 0)
+        {
+            builder.OpenElement(seq++, "text");
+            builder.AddAttribute(seq++, "x", F(w / 2.0)); builder.AddAttribute(seq++, "y", F(h / 2.0 + 4));
+            builder.AddAttribute(seq++, "text-anchor", "middle"); builder.AddAttribute(seq++, "dominant-baseline", "middle");
+            builder.AddAttribute(seq++, "fill", "#64748b"); builder.AddAttribute(seq++, "font-size", ScaledFontSize(9, sym));
+            builder.AddContent(seq++, "(add markers in properties)");
+            builder.CloseElement();
+        }
+        else
+        {
+            var rng = new Random(42);
+            for (int mi = 0; mi < Math.Min(sym.MapMarkers.Count, 8); mi++)
+            {
+                var mk = sym.MapMarkers[mi];
+                var mcx = 20 + rng.NextDouble() * (w - 40);
+                var mcy = 30 + rng.NextDouble() * (h - 50);
+                var mclr = !string.IsNullOrEmpty(mk.Color) ? mk.Color : mColors[mi % mColors.Length];
+
+                builder.OpenElement(seq++, "circle");
+                builder.AddAttribute(seq++, "cx", F(mcx)); builder.AddAttribute(seq++, "cy", F(mcy));
+                builder.AddAttribute(seq++, "r", 6); builder.AddAttribute(seq++, "fill", mclr);
+                builder.AddAttribute(seq++, "stroke", "#0f172a"); builder.AddAttribute(seq++, "stroke-width", 1.5);
+                builder.AddAttribute(seq++, "opacity", 0.9);
+                builder.CloseElement();
+
+                if (!string.IsNullOrEmpty(mk.Label))
+                {
+                    builder.OpenElement(seq++, "text");
+                    builder.AddAttribute(seq++, "x", F(mcx)); builder.AddAttribute(seq++, "y", F(mcy + 14));
+                    builder.AddAttribute(seq++, "text-anchor", "middle"); builder.AddAttribute(seq++, "fill", "#94a3b8");
+                    builder.AddAttribute(seq++, "font-size", 8);
+                    builder.AddContent(seq++, mk.Label);
+                    builder.CloseElement();
+                }
+            }
+        }
+
+        if (sym.MapMarkers.Count > 0)
+        {
+            var info = sym.MapMode == "floorplan" ? "Floor Plan"
+                : $"Lat {sym.MapCenterLat:F2}, Lng {sym.MapCenterLng:F2}";
+            builder.OpenElement(seq++, "text");
+            builder.AddAttribute(seq++, "x", F(w / 2.0)); builder.AddAttribute(seq++, "y", F(h - 8));
+            builder.AddAttribute(seq++, "text-anchor", "middle"); builder.AddAttribute(seq++, "fill", "#64748b");
+            builder.AddAttribute(seq++, "font-size", ScaledFontSize(8, sym));
+            builder.AddContent(seq++, $"{sym.MapMarkers.Count} marker(s) \u2014 {info}");
+            builder.CloseElement();
+        }
+    };
 
     // ─── KPI Widget editor preview ──
 

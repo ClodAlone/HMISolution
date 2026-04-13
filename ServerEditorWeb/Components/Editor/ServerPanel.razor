@@ -319,7 +319,7 @@
         }
         @if (ViewerProcess.IsViewerRunning && _rvMode == "web")
         {
-            <button class="btn btn-sm btn-outline-primary align-self-end" @onclick="OpenViewer">🌐 Open</button>
+            <button class="btn btn-sm btn-outline-primary align-self-end" @onclick="OpenViewer" disabled="@_openingViewer">@(_openingViewer ? "⏳ Opening…" : "🌐 Open")</button>
         }
     </div>
 
@@ -686,6 +686,9 @@
             Machine ID: @LicenseManager.GetMachineId()
         </div>
     }
+    <button class="btn btn-sm btn-outline-primary mt-2" style="font-size: 10px;" @onclick="GenerateLicenseRequest" title="Generate a license request file to send to the developer">
+        &#128196; Generate License Request
+    </button>
 </div>
 
 @code {
@@ -717,6 +720,7 @@
     // RuntimeViewer settings
     private int _rvPort = 8081;
     private bool _rvKiosk;
+    private bool _openingViewer;
     private string _rvMode = "web"; // "web" or "desktop"
 
     // RuntimeViewer Windows service state
@@ -1100,7 +1104,16 @@
 
     private async Task OpenViewer()
     {
-        await JS.InvokeVoidAsync("open", $"http://localhost:{_rvPort}", "_blank");
+        _openingViewer = true;
+        StateHasChanged();
+        try
+        {
+            await JS.InvokeVoidAsync("open", $"http://localhost:{_rvPort}", "_blank");
+        }
+        finally
+        {
+            _openingViewer = false;
+        }
     }
 
     private void StopViewer()
@@ -1541,6 +1554,42 @@
         _statusTimer?.Dispose();
         _perfTimer?.Dispose();
         _diagTimer2?.Dispose();
+    }
+
+    private async Task GenerateLicenseRequest()
+    {
+        var machineId = LicenseManager.GetMachineId();
+        var machineName = Environment.MachineName;
+        var os = System.Runtime.InteropServices.RuntimeInformation.OSDescription;
+        var projectName = !string.IsNullOrEmpty(NodesPath)
+            ? System.IO.Path.GetFileNameWithoutExtension(NodesPath)
+            : "";
+        var lic = LicenseManager.Current;
+
+        var request = new
+        {
+            MachineId = machineId,
+            MachineName = machineName,
+            OperatingSystem = os,
+            ProjectName = projectName,
+            CurrentTier = lic.Tier,
+            RequestedUtc = DateTime.UtcNow.ToString("o"),
+            Note = "Please send this file to the developer to receive a license file."
+        };
+
+        var json = System.Text.Json.JsonSerializer.Serialize(request,
+            new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+        var base64 = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(json));
+        var fileName = $"license-request-{machineName}.json";
+
+        await JS.InvokeVoidAsync("eval", $@"
+            var a = document.createElement('a');
+            a.href = 'data:application/json;base64,{base64}';
+            a.download = '{fileName}';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        ");
     }
 
     private static string FormatLimit(int max) => max == 0 ? "Unlimited" : max.ToString();

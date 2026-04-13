@@ -11,14 +11,14 @@ public class CommandService
     private readonly OpcRuntimeClient _opc;
     private readonly IJSRuntime _js;
 
-    /// <summary>Raised when a NavigateScreen command fires. Args: screenName, aliasMapName.</summary>
-    public event Action<string, string>? NavigateScreen;
+    /// <summary>Raised when a NavigateScreen command fires. Args: screenName, aliasMapName, fallbackAliases.</summary>
+    public event Action<string, string, Dictionary<string, string>?>? NavigateScreen;
 
-    /// <summary>Raised when an OpenScreenPopup command fires. Args: screenName, aliasMapName.</summary>
-    public event Action<string, string>? OpenScreenPopup;
+    /// <summary>Raised when an OpenScreenPopup command fires. Args: screenName, aliasMapName, fallbackAliases.</summary>
+    public event Action<string, string, Dictionary<string, string>?>? OpenScreenPopup;
 
-    /// <summary>Raised when an OpenScreenModal command fires. Args: screenName, aliasMapName.</summary>
-    public event Action<string, string>? OpenScreenModal;
+    /// <summary>Raised when an OpenScreenModal command fires. Args: screenName, aliasMapName, fallbackAliases.</summary>
+    public event Action<string, string, Dictionary<string, string>?>? OpenScreenModal;
 
     /// <summary>Raised when a Login command fires to show the login prompt.</summary>
     public event Action? RequestLogin;
@@ -38,24 +38,32 @@ public class CommandService
         _js = js;
     }
 
+    /// <summary>Raises the OpenScreenPopup event programmatically (e.g. from map marker click).</summary>
+    public void RaiseOpenScreenPopup(string screenName, string aliasMapName)
+        => OpenScreenPopup?.Invoke(screenName, aliasMapName, null);
+
+    /// <summary>Raises the NavigateScreen event programmatically (e.g. from navbutton click).</summary>
+    public void RaiseNavigateScreen(string screenName, string aliasMapName)
+        => NavigateScreen?.Invoke(screenName, aliasMapName, null);
+
     /// <summary>Execute a command. Returns immediately for fire-and-forget actions.</summary>
-    public async Task ExecuteAsync(SymbolCommand cmd)
+    public async Task ExecuteAsync(SymbolCommand cmd, Dictionary<string, string>? currentAliases = null)
     {
         switch (cmd.Action)
         {
             case "NavigateScreen":
                 if (!string.IsNullOrEmpty(cmd.TargetScreen))
-                    NavigateScreen?.Invoke(cmd.TargetScreen, cmd.AliasMapName ?? "");
+                    NavigateScreen?.Invoke(cmd.TargetScreen, cmd.AliasMapName ?? "", string.IsNullOrEmpty(cmd.AliasMapName) ? currentAliases : null);
                 break;
 
             case "OpenScreenPopup":
                 if (!string.IsNullOrEmpty(cmd.TargetScreen))
-                    OpenScreenPopup?.Invoke(cmd.TargetScreen, cmd.AliasMapName ?? "");
+                    OpenScreenPopup?.Invoke(cmd.TargetScreen, cmd.AliasMapName ?? "", string.IsNullOrEmpty(cmd.AliasMapName) ? currentAliases : null);
                 break;
 
             case "OpenScreenModal":
                 if (!string.IsNullOrEmpty(cmd.TargetScreen))
-                    OpenScreenModal?.Invoke(cmd.TargetScreen, cmd.AliasMapName ?? "");
+                    OpenScreenModal?.Invoke(cmd.TargetScreen, cmd.AliasMapName ?? "", string.IsNullOrEmpty(cmd.AliasMapName) ? currentAliases : null);
                 break;
 
             case "SetVariable":

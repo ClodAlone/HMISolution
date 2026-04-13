@@ -1,7 +1,10 @@
 using System.Diagnostics;
 using System.Management;
+using System.Net;
+using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.ServiceProcess;
+using System.Text.Json;
 
 namespace ServerEditorWeb.Services;
 
@@ -92,6 +95,11 @@ public class ServerProcessService : IDisposable
         DetectExternalProcess(nodesPath);
         if (IsServerRunning)
             return (false, "Server is already running externally. Use Stop to terminate it first.");
+
+        // Check that the ports the server will use are available
+        var portsResult = CheckServerPorts(nodesPath);
+        if (!portsResult.success)
+            return portsResult;
 
         string? serverExe = FindServerExecutable(nodesPath);
         if (serverExe == null)
@@ -360,6 +368,71 @@ public class ServerProcessService : IDisposable
     {
         if (!IsLinux) return "";
         return await RunCommandAsync("journalctl", $"-u {SystemdServiceName}.service --no-pager -n {lines}");
+    }
+
+    // ─── Port Checking ────────────────────────────────────────
+
+    /// <summary>
+    /// Check whether a TCP port is already in use by attempting to bind to it.
+    /// </summary>
+    internal static bool IsPortInUse(int port)
+    {
+        try
+        {
+            using var listener = new TcpListener(IPAddress.Loopback, port);
+            listener.Start();
+            listener.Stop();
+            return false;
+        }
+        catch (SocketException)
+        {
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Read the project config file and check that OPC UA and diagnostics ports are available.
+    /// </summary>
+    private static (bool success, string message) CheckServerPorts(string nodesPath)
+    {
+        int opcPort = 14840;
+        int diagPort = 14841;
+
+        try
+        {
+            var fullPath = Path.GetFullPath(nodesPath);
+            if (File.Exists(fullPath))
+            {
+                var json = File.ReadAllText(fullPath);
+                using var doc = JsonDocument.Parse(json);
+
+                if (doc.RootElement.TryGetProperty("ServerSettings", out var ss))
+                {
+                    if (ss.TryGetProperty("EndpointUrl", out var epProp))
+                    {
+                        var epUrl = epProp.GetString();
+                        if (!string.IsNullOrEmpty(epUrl) && Uri.TryCreate(epUrl, UriKind.Absolute, out var uri) && uri.Port > 0)
+                            opcPort = uri.Port;
+                    }
+                    if (ss.TryGetProperty("DiagnosticsPort", out var diagProp) && diagProp.TryGetInt32(out var dp))
+                        diagPort = dp;
+                }
+            }
+        }
+        catch
+        {
+        }
+
+        var busy = new List<string>();
+        if (IsPortInUse(opcPort))
+            busy.Add("OPC UA port " + opcPort);
+        if (diagPort > 0 && IsPortInUse(diagPort))
+            busy.Add("Diagnostics port " + diagPort);
+
+        if (busy.Count > 0)
+            return (false, "Cannot start server: " + string.Join(" and ", busy) + " already in use.");
+
+        return (true, "");
     }
 
     // ─── Helpers ─────────────────────────────────────────────

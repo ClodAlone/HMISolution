@@ -108,6 +108,7 @@
                 <option value="pdfviewer">PDF Viewer</option>
                 <option value="kpiwidget">KPI Widget</option>
                 <option value="reportviewer">Report Viewer</option>
+                <option value="geomap">Map / Floor Plan</option>
             </select>
         </div>
 
@@ -2756,6 +2757,221 @@
 
 
 
+        @if (_selectedSymbol.Type is "geomap")
+        {
+            <hr class="my-2" />
+            <h6 class="mb-2 small" style="color: #22c55e;">🗺️ Map / Floor Plan Settings</h6>
+            <div class="mb-2">
+                <label class="form-label mb-0 small">Map Mode</label>
+                <select class="form-select form-select-sm" style="font-size: 11px;"
+                        @bind="_selectedSymbol.MapMode" @bind:after="OnChanged">
+                    <option value="geo">Geographic (OpenStreetMap)</option>
+                    <option value="floorplan">Floor Plan (Custom Image)</option>
+                </select>
+            </div>
+
+            @if (_selectedSymbol.MapMode is "geo" or "")
+            {
+                <div class="d-flex gap-1 mb-2">
+                    <div>
+                        <label class="form-label mb-0 small">Center Lat</label>
+                        <input type="number" step="0.0001" class="form-control form-control-sm" style="font-size: 10px;"
+                               @bind="_selectedSymbol.MapCenterLat" @bind:after="OnChanged" />
+                    </div>
+                    <div>
+                        <label class="form-label mb-0 small">Center Lng</label>
+                        <input type="number" step="0.0001" class="form-control form-control-sm" style="font-size: 10px;"
+                               @bind="_selectedSymbol.MapCenterLng" @bind:after="OnChanged" />
+                    </div>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label mb-0 small">Zoom (1-20)</label>
+                    <input type="number" min="1" max="20" class="form-control form-control-sm" style="width: 70px; font-size: 10px;"
+                           @bind="_selectedSymbol.MapZoom" @bind:after="OnChanged" />
+                </div>
+                <div class="mb-2">
+                    <label class="form-label mb-0 small">Tile URL (empty = OSM default)</label>
+                    <input type="text" class="form-control form-control-sm" style="font-size: 10px;"
+                           placeholder="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                           @bind="_selectedSymbol.MapTileUrl" @bind:after="OnChanged" />
+                </div>
+            }
+
+            @if (_selectedSymbol.MapMode is "floorplan")
+            {
+                <div class="mb-2">
+                    <label class="form-label mb-0 small">Floor Plan Image URL / Data URI</label>
+                    <input type="text" class="form-control form-control-sm" style="font-size: 10px;"
+                           placeholder="data:image/png;base64,... or /images/floor1.png"
+                           @bind="_selectedSymbol.MapFloorPlanImage" @bind:after="OnChanged" />
+                </div>
+                <div class="d-flex gap-1 mb-2">
+                    <div>
+                        <label class="form-label mb-0 small">Plan Width</label>
+                        <input type="number" class="form-control form-control-sm" style="font-size: 10px;"
+                               @bind="_selectedSymbol.MapFloorPlanWidth" @bind:after="OnChanged" />
+                    </div>
+                    <div>
+                        <label class="form-label mb-0 small">Plan Height</label>
+                        <input type="number" class="form-control form-control-sm" style="font-size: 10px;"
+                               @bind="_selectedSymbol.MapFloorPlanHeight" @bind:after="OnChanged" />
+                    </div>
+                </div>
+            }
+
+            <div class="form-check form-switch mb-1">
+                <input class="form-check-input" type="checkbox"
+                       @bind="_selectedSymbol.MapShowZoomControl" @bind:after="OnChanged" />
+                <label class="form-check-label small">Show zoom controls</label>
+            </div>
+            <div class="form-check form-switch mb-1">
+                <input class="form-check-input" type="checkbox"
+                       @bind="_selectedSymbol.MapInteractive" @bind:after="OnChanged" />
+                <label class="form-check-label small">Interactive (pan/zoom)</label>
+            </div>
+
+            <hr class="my-1" />
+            <h6 class="mb-2 small" style="color: #06b6d4;">📍 Markers (@_selectedSymbol.MapMarkers.Count)</h6>
+            @foreach (var marker in _selectedSymbol.MapMarkers)
+            {
+                var m = marker;
+                <div class="border rounded p-1 mb-2" style="font-size: 11px; background: var(--surface-alt, #f8f8f8);">
+                    <div class="d-flex gap-1 mb-1 align-items-center">
+                        <input type="text" class="form-control form-control-sm" style="font-size: 10px; flex: 1;"
+                               placeholder="Label" @bind="m.Label" @bind:after="OnChanged" />
+                        <button class="btn btn-sm btn-outline-danger py-0 px-1" style="font-size: 10px;"
+                                @onclick="() => { _selectedSymbol.MapMarkers.Remove(m); OnChanged(); }">✕</button>
+                    </div>
+
+                    @if (_selectedSymbol.MapMode is "geo" or "")
+                    {
+                        <div class="d-flex gap-1 mb-1">
+                            <div>
+                                <label class="form-label mb-0" style="font-size: 9px;">Lat</label>
+                                <input type="number" step="0.0001" class="form-control form-control-sm" style="font-size: 10px;"
+                                       @bind="m.Lat" @bind:after="OnChanged" />
+                            </div>
+                            <div>
+                                <label class="form-label mb-0" style="font-size: 9px;">Lng</label>
+                                <input type="number" step="0.0001" class="form-control form-control-sm" style="font-size: 10px;"
+                                       @bind="m.Lng" @bind:after="OnChanged" />
+                            </div>
+                        </div>
+                        <div class="mb-1">
+                            <label class="form-label mb-0" style="font-size: 9px;">Lat Variable (dynamic)</label>
+                            <VariablePathPicker Value="@m.LatVariablePath"
+                                                ValueChanged="(v) => { m.LatVariablePath = v; OnChanged(); }"
+                                                Placeholder="Optional â€” overrides Lat" />
+                        </div>
+                        <div class="mb-1">
+                            <label class="form-label mb-0" style="font-size: 9px;">Lng Variable (dynamic)</label>
+                            <VariablePathPicker Value="@m.LngVariablePath"
+                                                ValueChanged="(v) => { m.LngVariablePath = v; OnChanged(); }"
+                                                Placeholder="Optional â€” overrides Lng" />
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="d-flex gap-1 mb-1">
+                            <div>
+                                <label class="form-label mb-0" style="font-size: 9px;">X</label>
+                                <input type="number" class="form-control form-control-sm" style="font-size: 10px;"
+                                       @bind="m.PosX" @bind:after="OnChanged" />
+                            </div>
+                            <div>
+                                <label class="form-label mb-0" style="font-size: 9px;">Y</label>
+                                <input type="number" class="form-control form-control-sm" style="font-size: 10px;"
+                                       @bind="m.PosY" @bind:after="OnChanged" />
+                            </div>
+                        </div>
+                        <div class="mb-1">
+                            <label class="form-label mb-0" style="font-size: 9px;">X Variable (dynamic)</label>
+                            <VariablePathPicker Value="@m.PosXVariablePath"
+                                                ValueChanged="(v) => { m.PosXVariablePath = v; OnChanged(); }"
+                                                Placeholder="Optional â€” overrides X" />
+                        </div>
+                        <div class="mb-1">
+                            <label class="form-label mb-0" style="font-size: 9px;">Y Variable (dynamic)</label>
+                            <VariablePathPicker Value="@m.PosYVariablePath"
+                                                ValueChanged="(v) => { m.PosYVariablePath = v; OnChanged(); }"
+                                                Placeholder="Optional â€” overrides Y" />
+                        </div>
+                    }
+
+                    <div class="d-flex gap-1 mb-1">
+                        <div>
+                            <label class="form-label mb-0" style="font-size: 9px;">Shape</label>
+                            <select class="form-select form-select-sm" style="font-size: 10px;"
+                                    @bind="m.Shape" @bind:after="OnChanged">
+                                <option value="pin">📍 Pin</option>
+                                <option value="circle">⚫ Circle</option>
+                                <option value="square">⬛ Square</option>
+                                <option value="diamond">◆ Diamond</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="form-label mb-0" style="font-size: 9px;">Size</label>
+                            <input type="number" min="8" max="64" class="form-control form-control-sm" style="font-size: 10px; width: 55px;"
+                                   @bind="m.Size" @bind:after="OnChanged" />
+                        </div>
+                    </div>
+                    <div class="mb-1">
+                        <label class="form-label mb-0" style="font-size: 9px;">Color</label>
+                        <ColorPicker Value="@m.Color" ValueChanged="(v) => { m.Color = v; }" OnAfterChange="OnChanged" />
+                    </div>
+                    <div class="mb-1">
+                        <label class="form-label mb-0" style="font-size: 9px;">Variable Path</label>
+                        <VariablePathPicker Value="@m.VariablePath"
+                                            ValueChanged="(v) => { m.VariablePath = v; OnChanged(); }"
+                                            Placeholder="Select variable..." />
+                    </div>
+                    <div class="mb-1">
+                        <label class="form-label mb-0" style="font-size: 9px;">Color Rules (e.g. "&gt;80 #ef4444;&gt;=20 #22c55e;* #3b82f6")</label>
+                        <input type="text" class="form-control form-control-sm" style="font-size: 10px;"
+                               placeholder="Empty = use base color"
+                               @bind="m.ColorRules" @bind:after="OnChanged" />
+                    </div>
+                    <div class="d-flex gap-1 mb-1">
+                        <div>
+                            <label class="form-label mb-0" style="font-size: 9px;">Icon</label>
+                            <input type="text" class="form-control form-control-sm" style="font-size: 10px; width: 50px;"
+                                   @bind="m.Icon" @bind:after="OnChanged" />
+                        </div>
+                        <div class="form-check form-switch ms-2 mt-3">
+                            <input class="form-check-input" type="checkbox"
+                                   @bind="m.ShowPopup" @bind:after="OnChanged" />
+                            <label class="form-check-label" style="font-size: 9px;">Popup</label>
+                        </div>
+                    </div>
+                    <div class="mb-1">
+                        <label class="form-label mb-0" style="font-size: 9px;">Popup Screen (on click)</label>
+                        <ScreenPicker Value="@m.PopupScreen"
+                                      ValueChanged='v => { m.PopupScreen = v ?? string.Empty; }'
+                                      OnChanged="OnChanged"
+                                      Placeholder="(none â€” no screen popup)" />
+                    </div>
+                    @if (!string.IsNullOrEmpty(m.PopupScreen))
+                    {
+                        <div class="mb-1">
+                            <label class="form-label mb-0" style="font-size: 9px;">Popup Alias Map</label>
+                            <select class="form-select form-select-sm" style="font-size: 10px;"
+                                    value="@m.PopupAliasMapName"
+                                    @onchange="e => { m.PopupAliasMapName = e.Value?.ToString() ?? string.Empty; OnChanged(); }">
+                                <option value="">(none)</option>
+                                @foreach (var map in Editor.RootModel?.AliasMaps ?? new())
+                                {
+                                    <option value="@map.Name">@map.Name</option>
+                                }
+                            </select>
+                        </div>
+                    }
+                </div>
+            }
+            <button class="btn btn-sm btn-outline-info w-100 py-0" style="font-size: 11px;"
+                    @onclick="AddMapMarker">＋ Add Marker</button>
+        }
+
+
         @* ── Connection Ports (mimic / schematic symbols) ── *@
         @if (_selectedSymbol.ConnectionPorts.Count > 0 || _selectedSymbol.Type.StartsWith("mimic"))
         {
@@ -3312,6 +3528,23 @@ else
     }
 
     private static int _nextPortId = 1;
+
+    private void AddMapMarker()
+    {
+        if (_selectedSymbol == null) return;
+        _selectedSymbol.MapMarkers.Add(new SharedModels.MapMarker
+        {
+            Id = Guid.NewGuid().ToString("N")[..8],
+            Label = $"Marker {(_selectedSymbol.MapMarkers.Count + 1)}",
+            Lat = _selectedSymbol.MapCenterLat,
+            Lng = _selectedSymbol.MapCenterLng,
+            Shape = "pin",
+            Color = "#3b82f6",
+            Size = 24,
+            ShowPopup = true
+        });
+        OnChanged();
+    }
 
     private void AddConnectionPort()
     {

@@ -124,7 +124,7 @@ else
                     {
                         var s = scr;
                         <button class="rv-tab @(s == _currentScreen ? "active" : "")"
-                                @onclick="() => DoNavigateScreen(s.Name, string.Empty)">
+                                @onclick="() => DoNavigateScreen(s.Name, string.Empty, null)">
                             @s.Name
                         </button>
                     }
@@ -202,7 +202,7 @@ else
                     {
                         var s = scr;
                         <button class="rv-tab @(s == _currentScreen ? "active" : "")"
-                                @onclick="() => DoNavigateScreen(s.Name, string.Empty)">
+                                @onclick="() => DoNavigateScreen(s.Name, string.Empty, null)">
                             @s.Name
                         </button>
                     }
@@ -342,7 +342,7 @@ else
             {
                 var s = scr;
                 <button class="rv-bottom-tab @(s == _currentScreen ? "active" : "")"
-                        @onclick="() => DoNavigateScreen(s.Name, string.Empty)">
+                        @onclick="() => DoNavigateScreen(s.Name, string.Empty, null)">
                     <span class="rv-bottom-tab-icon">&#x1F5BC;</span>
                     <span class="rv-bottom-tab-label">@s.Name</span>
                 </button>
@@ -364,7 +364,7 @@ else
         {
             var s = scr;
             <div class="rv-hamburger-item @(s == _currentScreen ? "active" : "")"
-                 @onclick="() => { DoNavigateScreen(s.Name, string.Empty); _hamburgerOpen = false; }">
+                 @onclick="() => { DoNavigateScreen(s.Name, string.Empty, null); _hamburgerOpen = false; }">
                 <span>&#x1F5BC;</span>
                 <span>@s.Name</span>
             </div>
@@ -384,10 +384,10 @@ else
     </div>
 }
 
-@* -- Popup overlay -- *@
+@* -- Popup overlay (modal -- only closable via X button) -- *@
 @if (_popupScreen != null)
 {
-    <div class="rv-popup-backdrop" @onclick="ClosePopup"></div>
+    <div class="rv-popup-backdrop"></div>
     <div class="rv-popup">
         <div class="rv-popup-header">
             <span>@_popupScreen.Name</span>
@@ -842,7 +842,7 @@ else
         StateHasChanged();
     }
 
-    private void DoNavigateScreen(string name, string aliasMapName)
+    private void DoNavigateScreen(string name, string aliasMapName, Dictionary<string, string>? fallbackAliases)
     {
         InvokeAsync(() =>
         {
@@ -855,14 +855,14 @@ else
                     Opc.PreconnectVariables(predicted);
             }
 
-            _currentAliasMap = ResolveAliasMap(aliasMapName);
+            _currentAliasMap = ResolveAliasMap(aliasMapName) ?? fallbackAliases;
             ShowToast("info", "Navigate", $"Switching to {name}");
             Nav.NavigateTo($"/screen/{Uri.EscapeDataString(name)}");
             StateHasChanged();
         });
     }
 
-    private void DoOpenPopup(string name, string aliasMapName)
+    private void DoOpenPopup(string name, string aliasMapName, Dictionary<string, string>? fallbackAliases)
     {
         InvokeAsync(() =>
         {
@@ -870,7 +870,7 @@ else
                 s.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
             if (screen != null && !Auth.IsGroupAllowed(screen.AllowedGroups)) return;
             _popupScreen = screen;
-            _popupAliasMap = ResolveAliasMap(aliasMapName);
+            _popupAliasMap = ResolveAliasMap(aliasMapName) ?? fallbackAliases;
             StateHasChanged();
         });
     }
@@ -883,7 +883,7 @@ else
         return map?.Mappings is { Count: > 0 } ? map.Mappings : null;
     }
 
-    private void DoOpenModal(string name, string aliasMapName)
+    private void DoOpenModal(string name, string aliasMapName, Dictionary<string, string>? fallbackAliases)
     {
         InvokeAsync(() =>
         {
@@ -891,7 +891,7 @@ else
                 s.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
             if (screen != null && !Auth.IsGroupAllowed(screen.AllowedGroups)) return;
             _modalScreen = screen;
-            _modalAliasMap = ResolveAliasMap(aliasMapName);
+            _modalAliasMap = ResolveAliasMap(aliasMapName) ?? fallbackAliases;
             StateHasChanged();
         });
     }

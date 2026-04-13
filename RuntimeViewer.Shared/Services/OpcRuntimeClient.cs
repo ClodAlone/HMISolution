@@ -47,6 +47,10 @@ public class OpcRuntimeClient : IDisposable
     private readonly ConcurrentDictionary<string, string> _values = new();
     private readonly object _lock = new();
 
+    // Multi-caller subscription tracking: each ScreenRenderer registers its paths
+    // under a unique caller ID so popup/modal paths merge with the main screen paths.
+    private readonly ConcurrentDictionary<string, HashSet<string>> _callerPaths = new();
+
     public bool IsConnected => _session?.Connected == true;
     public string? ErrorMessage { get; private set; }
 
@@ -192,6 +196,11 @@ public class OpcRuntimeClient : IDisposable
             var endpointConfiguration = EndpointConfiguration.Create(_appConfig);
             var endpoint = new ConfiguredEndpoint(null, endpointDescription, endpointConfiguration);
 
+            // Log supported token types for diagnostics
+            var tokenTypes = endpointDescription.UserIdentityTokens?
+                .Select(t => t.TokenType.ToString()) ?? [];
+            Log($"CONNECT: Endpoint supports token types: [{string.Join(", ", tokenTypes)}]");
+
             UserIdentity identity;
             if (!string.IsNullOrEmpty(username))
             {
@@ -205,8 +214,14 @@ public class OpcRuntimeClient : IDisposable
             }
             else
             {
+                // Prefer anonymous; log a warning if the endpoint does not advertise it
+                var supportsAnonymous = endpointDescription.UserIdentityTokens?
+                    .Any(t => t.TokenType == UserTokenType.Anonymous) ?? false;
+
                 identity = new UserIdentity(new AnonymousIdentityToken());
-                Log("CONNECT: Creating session (anonymous)...");
+                Log(supportsAnonymous
+                    ? "CONNECT: Creating session (anonymous)..."
+                    : "CONNECT: WARNING — endpoint does not advertise Anonymous; attempting anyway...");
             }
 
             _session = await Session.Create(
@@ -244,7 +259,37 @@ public class OpcRuntimeClient : IDisposable
 
     private const string ServerNamespaceUri = "http://simpleopcfileserver.org/UA";
 
+    /// <summary>Unregisters a caller's paths (e.g. when a popup/modal closes) and updates the subscription.</summary>
+    public void UnregisterCaller(string callerId)
+    {
+        if (_callerPaths.TryRemove(callerId, out _))
+        {
+            Log($"MONITOR: Unregistered caller '{callerId}'");
+            // Recompute the union of all remaining callers
+            var union = new HashSet<string>();
+            foreach (var kv in _callerPaths)
+                union.UnionWith(kv.Value);
+            MonitorVariablesCore(union);
+        }
+    }
+
     public void MonitorVariables(IEnumerable<string> variablePaths, ushort namespaceIndex = 0)
+        => MonitorVariables(variablePaths, "default", namespaceIndex);
+
+    public void MonitorVariables(IEnumerable<string> variablePaths, string callerId, ushort namespaceIndex = 0)
+    {
+        var pathSet = new HashSet<string>(variablePaths.Where(p => !string.IsNullOrEmpty(p)));
+        _callerPaths[callerId] = pathSet;
+
+        // Compute the union of all callers' paths
+        var union = new HashSet<string>();
+        foreach (var kv in _callerPaths)
+            union.UnionWith(kv.Value);
+
+        MonitorVariablesCore(union, namespaceIndex);
+    }
+
+    private void MonitorVariablesCore(IEnumerable<string> variablePaths, ushort namespaceIndex = 0)
     {
         if (_subscription == null || _session == null)
         {
@@ -287,9 +332,11 @@ public class OpcRuntimeClient : IDisposable
                 .Where(m => toRemove.Contains(m.DisplayName)).ToList();
             _subscription.RemoveItems(itemsToRemove);
 
-            // Clear stale cached values
-            foreach (var p in toRemove)
-                _values.TryRemove(p, out _);
+            // NOTE: We intentionally do NOT clear _values for removed paths here.
+            // Clearing cached values immediately causes a visible UI blink ("—")
+            // between the remove and when new OPC notifications arrive.
+            // Stale cached values are harmless and will be overwritten when
+            // the same path is re-subscribed later.
         }
 
         // Add new items
@@ -311,11 +358,73 @@ public class OpcRuntimeClient : IDisposable
 
         _subscription.ApplyChanges();
 
+        // Fallback: for items that failed, try dropping the first path segment.
+        // This handles cases like "Building.HVAC.AHU1.Temp" where the server uses
+        // root-transparent paths ("HVAC.AHU1.Temp") but the alias map or screen
+        // references include the project/root folder name as a prefix.
+        var failedItems = _subscription.MonitoredItems
+            .Where(mi => mi.Status?.Created != true && mi.StartNodeId.IdType == IdType.String)
+            .ToList();
+
+        if (failedItems.Count > 0)
+        {
+            var retryCount = 0;
+            foreach (var failed in failedItems)
+            {
+                var original = (string)failed.StartNodeId.Identifier;
+                var dot = original.IndexOf('.');
+                if (dot < 0 || dot >= original.Length - 1) continue;
+
+                var shortened = original[(dot + 1)..];
+                failed.StartNodeId = new NodeId(shortened, namespaceIndex);
+                retryCount++;
+            }
+
+            if (retryCount > 0)
+            {
+                Log($"MONITOR: Retrying {retryCount} failed item(s) with first path segment stripped.");
+                _subscription.ApplyChanges();
+            }
+        }
+
         // Log the status of each monitored item after ApplyChanges
         foreach (var mi in _subscription.MonitoredItems)
         {
             var statusName = mi.Status?.Error?.StatusCode.ToString() ?? "Good";
             Log($"  ITEM: \"{mi.DisplayName}\" -> NodeId={mi.StartNodeId} | Created={mi.Status?.Created} | Status={statusName}");
+        }
+
+        var itemsToRead = _subscription.MonitoredItems
+            .Where(mi => mi.Status?.Created == true && !_values.ContainsKey(mi.DisplayName))
+            .ToList();
+        if (itemsToRead.Count > 0)
+        {
+            try
+            {
+                var nodesToRead = new ReadValueIdCollection();
+                foreach (var mi in itemsToRead)
+                    nodesToRead.Add(new ReadValueId { NodeId = mi.StartNodeId, AttributeId = Attributes.Value });
+
+                _session.Read(null, 0, TimestampsToReturn.Neither, nodesToRead,
+                    out DataValueCollection results, out _);
+
+                for (var i = 0; i < results.Count; i++)
+                {
+                    if (StatusCode.IsGood(results[i].StatusCode))
+                    {
+                        var rawVal = results[i].WrappedValue.Value;
+                        var val = rawVal is IFormattable fmt
+                            ? fmt.ToString(null, System.Globalization.CultureInfo.InvariantCulture)
+                            : rawVal?.ToString() ?? "";
+                        _values[itemsToRead[i].DisplayName] = val;
+                    }
+                }
+                Log($"MONITOR: Pre-read {itemsToRead.Count} initial values.");
+            }
+            catch (Exception ex)
+            {
+                Log($"MONITOR: Pre-read failed (non-fatal): {ex.Message}");
+            }
         }
 
         Log($"MONITOR: Done. {_subscription.MonitoredItemCount} active monitored item(s)");
@@ -394,6 +503,28 @@ public class OpcRuntimeClient : IDisposable
 
         _subscription.ApplyChanges();
 
+        // Fallback: try stripping first path segment for items still failing
+        var stillBad = _subscription.MonitoredItems
+            .Where(m => m.Status?.Created != true && m.StartNodeId.IdType == IdType.String)
+            .ToList();
+        if (stillBad.Count > 0)
+        {
+            var retryCount = 0;
+            foreach (var mi in stillBad)
+            {
+                var id = (string)mi.StartNodeId.Identifier;
+                var dot = id.IndexOf('.');
+                if (dot < 0 || dot >= id.Length - 1) continue;
+                mi.StartNodeId = new NodeId(id[(dot + 1)..], mi.StartNodeId.NamespaceIndex);
+                retryCount++;
+            }
+            if (retryCount > 0)
+            {
+                Log($"RETRY: Retrying {retryCount} item(s) with first path segment stripped.");
+                _subscription.ApplyChanges();
+            }
+        }
+
         var stillFailed = _subscription.MonitoredItems.Count(m => m.Status?.Error != null && StatusCode.IsBad(m.Status.Error.StatusCode));
         Log($"RETRY: Done. {failed.Count - stillFailed} recovered, {stillFailed} still failing.");
     }
@@ -450,7 +581,9 @@ public class OpcRuntimeClient : IDisposable
 
         try
         {
-            var nodeId = new NodeId(variablePath, namespaceIndex);
+            // If we have a monitored item for this path, use its (possibly corrected) NodeId
+            var monitoredItem = _subscription?.MonitoredItems.FirstOrDefault(m => m.DisplayName == variablePath);
+            var nodeId = monitoredItem?.StartNodeId ?? new NodeId(variablePath, namespaceIndex);
 
             // Send the value as a string â€” the server's HandleWriteValue
             // converts strings to the correct DataType (Double, Int32, etc.).

@@ -988,7 +988,7 @@ namespace SharedModels
     public class ScreenSymbol
     {
         public string Id { get; set; } = "";
-        public string Type { get; set; } = "rect"; // rect, circle, ellipse, text, line, gauge, indicator, svg, alarmlist, hdachart, hdagrid, eventlog, editbox, ipcamera, recipe, weeklyplanner, screenembed, reportviewer, imagemap, trend, progressbar, numericdisplay, ledarray, pipe, tank, dropdown, datatable, sparkline, motorcontrol, valve, alarmbanner, colorzone, conveyor, piechart, barchart, navbutton, heatexchanger, popup, setpointramp, flowmeter, xyplot, pdfviewer, switch, rotaryswitch, knob, hslider, vslider, button, animtext, mimicpump, mimicvalve, mimictank, mimicsensor, mimiccontroller, mimicmixer, mimicheater, mimicfilter, mimiccompressor, mimicreactor
+        public string Type { get; set; } = "rect"; // rect, circle, ellipse, text, line, gauge, indicator, svg, alarmlist, hdachart, hdagrid, eventlog, editbox, ipcamera, recipe, weeklyplanner, screenembed, reportviewer, imagemap, trend, progressbar, numericdisplay, ledarray, pipe, tank, dropdown, datatable, sparkline, motorcontrol, valve, alarmbanner, colorzone, conveyor, piechart, barchart, navbutton, heatexchanger, popup, setpointramp, flowmeter, xyplot, pdfviewer, switch, rotaryswitch, knob, hslider, vslider, button, animtext, mimicpump, mimicvalve, mimictank, mimicsensor, mimiccontroller, mimicmixer, mimicheater, mimicfilter, mimiccompressor, mimicreactor, geomap
         public double X { get; set; }
         public double Y { get; set; }
         public double Width { get; set; } = 80;
@@ -1695,6 +1695,48 @@ namespace SharedModels
         /// <summary>Layout direction: "horizontal" or "vertical". Default horizontal.</summary>
         public string RadioGroupLayout { get; set; } = "horizontal";
 
+        // ——— Geographic Map / Floor Plan properties (Type == "geomap") ———————
+        /// <summary>
+        /// Map mode: "geo" for geographic tile map (OpenStreetMap), "floorplan" for custom image overlay.
+        /// Default "geo".
+        /// </summary>
+        public string MapMode { get; set; } = "geo";
+
+        /// <summary>Map center latitude (WGS-84). Default 45.4642 (Milan).</summary>
+        public double MapCenterLat { get; set; } = 45.4642;
+
+        /// <summary>Map center longitude (WGS-84). Default 9.1900 (Milan).</summary>
+        public double MapCenterLng { get; set; } = 9.19;
+
+        /// <summary>Initial zoom level (1-20 for geo; 0-5 for floor plan). Default 13.</summary>
+        public int MapZoom { get; set; } = 13;
+
+        /// <summary>
+        /// Tile URL template for geographic mode (e.g. "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").
+        /// Empty = OpenStreetMap default.
+        /// </summary>
+        public string MapTileUrl { get; set; } = "";
+
+        /// <summary>
+        /// Floor plan image as a base64 data URI or resource URL (used when MapMode == "floorplan").
+        /// </summary>
+        public string MapFloorPlanImage { get; set; } = "";
+
+        /// <summary>Floor plan image width in logical units (for coordinate mapping). Default 1000.</summary>
+        public double MapFloorPlanWidth { get; set; } = 1000;
+
+        /// <summary>Floor plan image height in logical units (for coordinate mapping). Default 600.</summary>
+        public double MapFloorPlanHeight { get; set; } = 600;
+
+        /// <summary>Show zoom controls on the map. Default true.</summary>
+        public bool MapShowZoomControl { get; set; } = true;
+
+        /// <summary>Allow panning and zooming. Default true.</summary>
+        public bool MapInteractive { get; set; } = true;
+
+        /// <summary>Markers placed on the map, each bound to a variable.</summary>
+        public List<MapMarker> MapMarkers { get; set; } = new();
+
         /// <summary>Connection ports defined on this symbol for auto-routed connections.</summary>
         public List<ConnectionPort> ConnectionPorts { get; set; } = new();
     }
@@ -1744,6 +1786,74 @@ namespace SharedModels
 
         /// <summary>Optional display label for the port (shown on hover).</summary>
         public string Label { get; set; } = "";
+    }
+
+    /// <summary>
+    /// A marker placed on a geographic map or floor plan (Type == "geomap").
+    /// Each marker is positioned by lat/lng (geo mode) or x/y (floor plan mode)
+    /// and can be bound to a variable for color/label/size animation.
+    /// </summary>
+    public class MapMarker
+    {
+        public string Id { get; set; } = "";
+
+        /// <summary>Display label shown on the marker tooltip/popup.</summary>
+        public string Label { get; set; } = "";
+
+        /// <summary>Latitude (geo mode). Ignored in floor plan mode.</summary>
+        public double Lat { get; set; }
+
+        /// <summary>Longitude (geo mode). Ignored in floor plan mode.</summary>
+        public double Lng { get; set; }
+
+        /// <summary>X coordinate in logical units (floor plan mode). Ignored in geo mode.</summary>
+        public double PosX { get; set; }
+
+        /// <summary>Y coordinate in logical units (floor plan mode). Ignored in geo mode.</summary>
+        public double PosY { get; set; }
+
+        /// <summary>Marker icon/shape: "pin" (default), "circle", "square", "diamond".</summary>
+        public string Shape { get; set; } = "pin";
+
+        /// <summary>Marker base color. Default "#3b82f6".</summary>
+        public string Color { get; set; } = "#3b82f6";
+
+        /// <summary>Marker size in pixels. Default 24.</summary>
+        public int Size { get; set; } = 24;
+
+        /// <summary>Variable path bound to this marker. Used for color/label animation.</summary>
+        public string VariablePath { get; set; } = "";
+
+        /// <summary>
+        /// Color rule expression evaluated against the variable value.
+        /// Semicolon-separated: ">80 #ef4444;>=20 #22c55e;* #3b82f6".
+        /// Empty = use base Color always.
+        /// </summary>
+        public string ColorRules { get; set; } = "";
+
+        /// <summary>Show a popup with the variable value when marker is clicked. Default true.</summary>
+        public bool ShowPopup { get; set; } = true;
+
+        /// <summary>Optional icon emoji/character displayed on the marker. Default "".</summary>
+        public string Icon { get; set; } = "";
+
+        /// <summary>Variable path for dynamic latitude (geo mode). If set, Lat is initial/fallback.</summary>
+        public string LatVariablePath { get; set; } = "";
+
+        /// <summary>Variable path for dynamic longitude (geo mode). If set, Lng is initial/fallback.</summary>
+        public string LngVariablePath { get; set; } = "";
+
+        /// <summary>Variable path for dynamic X position (floor plan mode). If set, PosX is initial/fallback.</summary>
+        public string PosXVariablePath { get; set; } = "";
+
+        /// <summary>Variable path for dynamic Y position (floor plan mode). If set, PosY is initial/fallback.</summary>
+        public string PosYVariablePath { get; set; } = "";
+
+        /// <summary>Screen name to open as popup when marker is clicked. Empty = no popup screen.</summary>
+        public string PopupScreen { get; set; } = "";
+
+        /// <summary>Alias map name to apply when opening the popup screen.</summary>
+        public string PopupAliasMapName { get; set; } = "";
     }
 
     /// <summary>
