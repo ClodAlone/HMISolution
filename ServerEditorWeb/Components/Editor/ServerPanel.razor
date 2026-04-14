@@ -689,6 +689,14 @@
     <button class="btn btn-sm btn-outline-primary mt-2" style="font-size: 10px;" @onclick="GenerateLicenseRequest" title="Generate a license request file to send to the developer">
         &#128196; Generate License Request
     </button>
+    <button class="btn btn-sm btn-outline-success mt-2 ms-1" style="font-size: 10px;" @onclick="TriggerLicenseFilePicker" title="Import a license.json file into the current project">
+        📥 Import License
+    </button>
+    <InputFile id="licenseFileInput" OnChange="OnLicenseFileSelected" accept=".json" style="display: none;" />
+    @if (!string.IsNullOrEmpty(_licenseImportMessage))
+    {
+        <div class="small mt-1 @(_licenseImportSuccess ? "text-success" : "text-danger")" style="font-size: 10px;">@_licenseImportMessage</div>
+    }
 </div>
 
 @code {
@@ -1598,6 +1606,85 @@
     {
         try { await JS.InvokeVoidAsync("navigator.clipboard.writeText", text); }
         catch { /* clipboard may not be available */ }
+    }
+
+    // ─── License Import ─────────────────────────────────────────
+    private string? _licenseImportMessage;
+    private bool _licenseImportSuccess;
+
+    private async Task TriggerLicenseFilePicker()
+    {
+        _licenseImportMessage = null;
+        await JS.InvokeVoidAsync("eval", "document.getElementById('licenseFileInput').click()");
+    }
+
+    private async Task OnLicenseFileSelected(InputFileChangeEventArgs e)
+    {
+        _licenseImportMessage = null;
+        _licenseImportSuccess = false;
+
+        try
+        {
+            var file = e.File;
+            if (file == null)
+                return;
+
+            if (!file.Name.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+            {
+                _licenseImportMessage = "❌ Please select a .json license file.";
+                return;
+            }
+
+            // Determine project directory
+            var projectPath = Editor.ActiveProject?.FilePath ?? NodesPath;
+            if (string.IsNullOrEmpty(projectPath))
+            {
+                _licenseImportMessage = "❌ No project is currently open.";
+                return;
+            }
+
+            var projectDir = Path.GetDirectoryName(Path.GetFullPath(projectPath));
+            if (string.IsNullOrEmpty(projectDir) || !Directory.Exists(projectDir))
+            {
+                _licenseImportMessage = "❌ Project directory not found.";
+                return;
+            }
+
+            var destPath = Path.Combine(projectDir, "license.json");
+
+            // Read the uploaded file (limit to 1 MB for safety)
+            using var stream = file.OpenReadStream(maxAllowedSize: 1 * 1024 * 1024);
+            using var ms = new MemoryStream();
+            await stream.CopyToAsync(ms);
+            var content = ms.ToArray();
+
+            // Basic JSON validation
+            try
+            {
+                System.Text.Json.JsonDocument.Parse(content);
+            }
+            catch
+            {
+                _licenseImportMessage = "❌ The selected file is not valid JSON.";
+                return;
+            }
+
+            // Write the license file beside the project
+            await File.WriteAllBytesAsync(destPath, content);
+
+            // Clear the cached license and re-validate so the UI updates immediately
+            LicenseManager.ClearCache();
+            LicenseManager.Validate(destPath);
+
+            _licenseImportSuccess = true;
+            _licenseImportMessage = $"✅ License imported to {destPath}";
+        }
+        catch (Exception ex)
+        {
+            _licenseImportMessage = $"❌ Import failed: {ex.Message}";
+        }
+
+        StateHasChanged();
     }
 
     private async Task CopyAllDiagErrors()

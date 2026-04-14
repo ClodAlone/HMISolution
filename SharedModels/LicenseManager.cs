@@ -189,6 +189,11 @@ public static class LicenseManager
     };
 
     /// <summary>
+    /// Clear the cached license status so the next <see cref="Validate"/> call re-reads from disk.
+    /// </summary>
+    public static void ClearCache() => _cached = null;
+
+    /// <summary>
     /// Find a license.json file next to the given config file path.
     /// Searches for: license.json, License.json, *.license.json
     /// </summary>
