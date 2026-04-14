@@ -45,7 +45,10 @@ su postgres -c "$PGBIN/pg_ctl -D '$PGDATA' -l /var/log/postgresql/postgresql.log
 
 # Create user / database if first run
 su postgres -c "$PGBIN/psql -tc \"SELECT 1 FROM pg_roles WHERE rolname='$POSTGRES_USER'\"" \
-    | grep -q 1 || su postgres -c "$PGBIN/psql -c \"CREATE ROLE $POSTGRES_USER WITH LOGIN PASSWORD '$POSTGRES_PASSWORD' SUPERUSER;\""
+    | grep -q 1 || su postgres -c "$PGBIN/psql -c \"CREATE ROLE $POSTGRES_USER WITH LOGIN SUPERUSER;\""
+# Always set the password — initdb creates 'postgres' with no password,
+# but pg_hba.conf requires scram-sha-256 for TCP connections.
+su postgres -c "$PGBIN/psql -c \"ALTER ROLE $POSTGRES_USER WITH PASSWORD '$POSTGRES_PASSWORD';\""
 su postgres -c "$PGBIN/psql -tc \"SELECT 1 FROM pg_database WHERE datname='$POSTGRES_DB'\"" \
     | grep -q 1 || su postgres -c "$PGBIN/createdb -O '$POSTGRES_USER' '$POSTGRES_DB'"
 su postgres -c "$PGBIN/psql -d '$POSTGRES_DB' -c 'CREATE EXTENSION IF NOT EXISTS timescaledb;'" 2>/dev/null || true

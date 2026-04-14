@@ -10,8 +10,27 @@ public class AiService
     private bool _isTraining;
     private string _trainingStatus = "";
     private string _ollamaModel = "mistral";
-    private string _ollamaBaseUrl = "http://localhost:11434";
+    private string _ollamaBaseUrl = ResolveOllamaUrl();
     private string _trainingContext = "";
+
+    /// <summary>
+    /// Resolves the Ollama base URL from the OLLAMA_HOST environment variable
+    /// (set by Docker entrypoint), falling back to http://127.0.0.1:11434.
+    /// Uses 127.0.0.1 instead of localhost to avoid IPv6 loopback mismatch in containers.
+    /// </summary>
+    private static string ResolveOllamaUrl()
+    {
+        var host = Environment.GetEnvironmentVariable("OLLAMA_HOST");
+        if (!string.IsNullOrEmpty(host))
+        {
+            // OLLAMA_HOST is typically "127.0.0.1:11434" (no scheme)
+            if (!host.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
+                !host.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                host = "http://" + host;
+            return host;
+        }
+        return "http://127.0.0.1:11434";
+    }
 
     public bool IsTraining => _isTraining;
     public string TrainingStatus => _trainingStatus;
@@ -332,11 +351,13 @@ Lines starting with # or ## are comments — read them for IP/port info. Parse d
 
             _trainingContext = sb.ToString();
 
-            // Verify Ollama is reachable by making a small test call
-            _trainingStatus = "Verifying Ollama connection...";
+            // Verify Ollama is reachable by making a small test call.
+            // The first request after container start requires Ollama to load the full model
+            // into memory (30-90s for ~4 GB models), so use a generous timeout.
+            _trainingStatus = "Verifying Ollama connection (first call may take a minute while the model loads)...";
             onProgress?.Invoke(_trainingStatus);
 
-            using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+            using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(120) };
             try
             {
                 var testBody = new

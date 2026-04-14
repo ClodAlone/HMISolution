@@ -1402,6 +1402,22 @@ else if (Node is ServerSettingsNode ssNode)
                        placeholder="variable_data" />
                 <div class="form-text">Database table where logged values are stored. Default: <code>variable_data</code>.</div>
             </div>
+            <div class="mb-2">
+                <button class="btn btn-sm btn-outline-info" disabled="@_dbTesting"
+                        @onclick="() => TestDatabaseConnection(dbCfg)">
+                    @if (_dbTesting)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1"></span>
+                    }
+                    🔌 Test Connection
+                </button>
+                @if (!string.IsNullOrEmpty(_dbTestMessage))
+                {
+                    <div class="alert @(_dbTestSuccess ? "alert-success" : "alert-danger") small py-1 px-2 mt-1 mb-0">
+                        @_dbTestMessage
+                    </div>
+                }
+            </div>
         }
 
         @* ─── Event Log ──────────────────────────────────────── *@
@@ -2865,6 +2881,11 @@ else if (Node is UserNode uNode)
     private string _pidResultMessage = "";
     private bool _pidResultSuccess;
 
+    // Database connection test
+    private bool _dbTesting;
+    private string _dbTestMessage = "";
+    private bool _dbTestSuccess;
+
     protected override void OnInitialized()
     {
         L.LocaleChanged += OnLocaleChanged;
@@ -3074,6 +3095,59 @@ else if (Node is UserNode uNode)
     {
         Editor.RootModel!.Database ??= new DatabaseConfig();
         return Editor.RootModel.Database;
+    }
+
+    private async Task TestDatabaseConnection(DatabaseConfig cfg)
+    {
+        _dbTesting = true;
+        _dbTestMessage = "";
+        _dbTestSuccess = false;
+        StateHasChanged();
+
+        try
+        {
+            if (string.IsNullOrWhiteSpace(cfg.ConnectionString))
+            {
+                _dbTestMessage = "Connection string is empty.";
+                return;
+            }
+
+            if (cfg.Provider == "Sqlite")
+            {
+                await using var conn = new Microsoft.Data.Sqlite.SqliteConnection(cfg.ConnectionString);
+                await conn.OpenAsync();
+                await using var cmd = conn.CreateCommand();
+                cmd.CommandText = "SELECT sqlite_version();";
+                var version = await cmd.ExecuteScalarAsync();
+                _dbTestSuccess = true;
+                _dbTestMessage = $"✅ SQLite connection successful (v{version}).";
+            }
+            else
+            {
+                await using var conn = new Npgsql.NpgsqlConnection(cfg.ConnectionString);
+                await conn.OpenAsync();
+                // Check TimescaleDB extension
+                await using var cmd = conn.CreateCommand();
+                cmd.CommandText = "SELECT default_version FROM pg_available_extensions WHERE name = 'timescaledb';";
+                var tsVersion = await cmd.ExecuteScalarAsync();
+                await using var verCmd = conn.CreateCommand();
+                verCmd.CommandText = "SELECT version();";
+                var pgVersion = await verCmd.ExecuteScalarAsync();
+                _dbTestSuccess = true;
+                _dbTestMessage = tsVersion != null
+                    ? $"✅ Connection successful — PostgreSQL ({pgVersion}), TimescaleDB v{tsVersion} available."
+                    : $"✅ Connection successful — PostgreSQL ({pgVersion}). ⚠ TimescaleDB extension not found.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _dbTestMessage = $"❌ Connection failed: {ex.Message}";
+        }
+        finally
+        {
+            _dbTesting = false;
+            StateHasChanged();
+        }
     }
 
     // ── Event Log helper ──

@@ -1,11 +1,19 @@
 @using SharedModels
 @using ServerEditorWeb.Services
+@using Microsoft.Data.Sqlite
+@implements IDisposable
 @inject NodeEditorService Editor
 @inject IJSRuntime JS
 
 <div class="events-datalogging-panel">
     <div class="d-flex justify-content-between align-items-center mb-2">
-        <h6 class="mb-0">📊 Events & Data Logging</h6>
+        <h6 class="mb-0">
+            📊 Events & Data Logging
+            @if (!string.IsNullOrEmpty(_activeProjectName))
+            {
+                <span class="text-muted" style="font-size: 10px; font-weight: normal;"> — @_activeProjectName</span>
+            }
+        </h6>
         <div class="d-flex gap-1">
             <button class="btn btn-sm btn-outline-secondary" @onclick="RefreshData" disabled="@_loading">
                 @if (_loading) { <span class="spinner-border spinner-border-sm me-1"></span> }
@@ -42,6 +50,7 @@
                 <select class="form-control form-control-sm" @bind="_severityFilter">
                     <option value="">All Severities</option>
                     <option value="Critical">Critical</option>
+                    <option value="Warning">Warning</option>
                     <option value="High">High</option>
                     <option value="Medium">Medium</option>
                     <option value="Low">Low</option>
@@ -80,6 +89,11 @@
             </a>
         </li>
         <li class="nav-item">
+            <a class="nav-link @(_activeTab == "datalogging" ? "active" : "")" href="#" @onclick:preventDefault @onclick="@((MouseEventArgs e) => SetTab("datalogging"))">
+                💾 Data Logging
+            </a>
+        </li>
+        <li class="nav-item">
             <a class="nav-link @(_activeTab == "summary" ? "active" : "")" href="#" @onclick:preventDefault @onclick="@((MouseEventArgs e) => SetTab("summary"))">
                 📊 Summary
             </a>
@@ -89,11 +103,18 @@
     @* Events Table *@
     @if (_activeTab == "events")
     {
-        @if (_events.Count == 0)
+        @if (!string.IsNullOrEmpty(_statusMessage))
+        {
+            <div class="text-muted small text-center py-4">
+                <div style="font-size: 32px;">@(_dbFound ? "📭" : "📂")</div>
+                <div class="mt-1">@_statusMessage</div>
+            </div>
+        }
+        else if (_events.Count == 0)
         {
             <div class="text-muted small text-center py-4">
                 <div style="font-size: 32px;">📭</div>
-                <div class="mt-1">No events found. Click Refresh to load.</div>
+                <div class="mt-1">No events found matching filters. Click Refresh to reload.</div>
             </div>
         }
         else
@@ -145,6 +166,124 @@
                         }
                     </tbody>
                 </table>
+            </div>
+        }
+    }
+    else if (_activeTab == "datalogging")
+    {
+        @if (_dataLogStatus != null)
+        {
+            <div style="font-size: 11px;">
+                <div class="mb-2 p-2" style="background: var(--bg-secondary); border-radius: 6px; border: 1px solid var(--border-color);">
+                    <div class="d-flex align-items-center gap-2 mb-2">
+                        <span style="font-size: 16px;">💾</span>
+                        <strong>History Database</strong>
+                        @if (_dataLogStatus.Found)
+                        {
+                            <span class="badge bg-success">Active</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-secondary">Not Found</span>
+                        }
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                        <div style="padding: 6px 8px; background: var(--bg-tertiary); border-radius: 4px;">
+                            📦 Provider: <strong>@_dataLogStatus.Provider</strong>
+                        </div>
+                        <div style="padding: 6px 8px; background: var(--bg-tertiary); border-radius: 4px;">
+                            📄 Table: <strong>@_dataLogStatus.TableName</strong>
+                        </div>
+                    </div>
+
+                    @if (_dataLogStatus.Found)
+                    {
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px;">
+                            <div style="padding: 6px 8px; background: var(--bg-tertiary); border-radius: 4px;">
+                                📊 Data Points: <strong>@_dataLogStatus.TotalRows.ToString("N0")</strong>
+                            </div>
+                            <div style="padding: 6px 8px; background: var(--bg-tertiary); border-radius: 4px;">
+                                🏷️ Variables: <strong>@_dataLogStatus.VariableCount.ToString("N0")</strong>
+                            </div>
+                            <div style="padding: 6px 8px; background: var(--bg-tertiary); border-radius: 4px;">
+                                ⏱️ Oldest: <strong>@(_dataLogStatus.OldestEntry?.ToLocalTime().ToString("yyyy-MM-dd HH:mm") ?? "—")</strong>
+                            </div>
+                            <div style="padding: 6px 8px; background: var(--bg-tertiary); border-radius: 4px;">
+                                ⏱️ Newest: <strong>@(_dataLogStatus.NewestEntry?.ToLocalTime().ToString("yyyy-MM-dd HH:mm") ?? "—")</strong>
+                            </div>
+                            <div style="padding: 6px 8px; background: var(--bg-tertiary); border-radius: 4px;">
+                                💿 DB Size: <strong>@FormatFileSize(_dataLogStatus.DbSizeBytes)</strong>
+                            </div>
+                            <div style="padding: 6px 8px; background: var(--bg-tertiary); border-radius: 4px;">
+                                📂 Path: <strong style="word-break: break-all;">@_dataLogStatus.DbPath</strong>
+                            </div>
+                        </div>
+
+                        @if (_dataLogStatus.TopVariables.Count > 0)
+                        {
+                            <div class="mt-2">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <strong>Variables by Data Points (@GetFilteredVariables().Count.ToString("N0") of @_dataLogStatus.TopVariables.Count.ToString("N0")):</strong>
+                                </div>
+                                <div class="d-flex gap-1 mb-1">
+                                    <input type="text" class="form-control form-control-sm" placeholder="Search variables..." 
+                                           value="@_varSearch" @oninput="OnVarSearchInput" style="font-size: 10px; max-width: 250px;" />
+                                </div>
+                                <div style="max-height: 300px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 4px;">
+                                    <table class="table table-sm table-hover mb-0">
+                                        <thead style="position: sticky; top: 0; background: var(--bg-secondary); z-index: 1;">
+                                            <tr>
+                                                <th style="font-size: 10px; width: 30px;">#</th>
+                                                <th style="font-size: 10px;">Variable</th>
+                                                <th style="font-size: 10px; width: 100px; text-align: right;">Data Points</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var (v, idx) in GetPagedVariables().Select((v, i) => (v, i)))
+                                            {
+                                                <tr>
+                                                    <td style="font-size: 9px; color: var(--text-muted);">@(_varPage * _varPageSize + idx + 1)</td>
+                                                    <td style="font-size: 9px; font-family: monospace; word-break: break-all;">@v.Name</td>
+                                                    <td style="font-size: 9px; text-align: right;">@v.Count.ToString("N0")</td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                                @if (GetVarTotalPages() > 1)
+                                {
+                                    <div class="d-flex justify-content-between align-items-center mt-1" style="font-size: 10px;">
+                                        <span>Page @(_varPage + 1) of @GetVarTotalPages()</span>
+                                        <div class="d-flex gap-1">
+                                            <button class="btn btn-sm btn-outline-secondary" style="font-size: 9px; padding: 1px 6px;" 
+                                                    disabled="@(_varPage == 0)" @onclick="() => _varPage = 0">⏮</button>
+                                            <button class="btn btn-sm btn-outline-secondary" style="font-size: 9px; padding: 1px 6px;" 
+                                                    disabled="@(_varPage == 0)" @onclick="() => _varPage--">◀ Prev</button>
+                                            <button class="btn btn-sm btn-outline-secondary" style="font-size: 9px; padding: 1px 6px;" 
+                                                    disabled="@(_varPage >= GetVarTotalPages() - 1)" @onclick="() => _varPage++">Next ▶</button>
+                                            <button class="btn btn-sm btn-outline-secondary" style="font-size: 9px; padding: 1px 6px;" 
+                                                    disabled="@(_varPage >= GetVarTotalPages() - 1)" @onclick="() => _varPage = GetVarTotalPages() - 1">⏭</button>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <div class="text-muted mt-2 text-center py-2">
+                            @_dataLogStatus.Message
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="text-muted small text-center py-4">
+                <div style="font-size: 32px;">📂</div>
+                <div class="mt-1">No project open. Open a project to view data logging status.</div>
             </div>
         }
     }
@@ -224,19 +363,74 @@
         public string? Details { get; set; }
     }
 
+    private class DataLogStatus
+    {
+        public bool Found { get; set; }
+        public string Provider { get; set; } = "";
+        public string TableName { get; set; } = "";
+        public string DbPath { get; set; } = "";
+        public long TotalRows { get; set; }
+        public int VariableCount { get; set; }
+        public DateTime? OldestEntry { get; set; }
+        public DateTime? NewestEntry { get; set; }
+        public long DbSizeBytes { get; set; }
+        public List<VariableDataPoint> TopVariables { get; set; } = new();
+        public string Message { get; set; } = "";
+    }
+
+    private record VariableDataPoint(string Name, long Count);
+
     private List<EventLogEntry> _events = new();
     private string _activeTab = "events";
     private long _expandedEventId;
-    private int _timeRangeMinutes = 60;
+    private int _timeRangeMinutes = 0;
     private string _categoryFilter = "";
     private string _severityFilter = "";
     private int _maxRows = 500;
     private bool _loading;
     private int _totalCount;
+    private string? _lastActiveProjectPath;
+    private string? _activeProjectName;
+    private string? _statusMessage;
+    private bool _dbFound;
+    private DataLogStatus? _dataLogStatus;
+    private int _varPage = 0;
+    private const int _varPageSize = 50;
+    private string _varSearch = "";
 
     protected override async Task OnInitializedAsync()
     {
+        Editor.StateChanged += OnEditorStateChanged;
+        _lastActiveProjectPath = Editor.ActiveProject?.FilePath;
+        _activeProjectName = Editor.ActiveProject?.Name;
         await RefreshData();
+    }
+
+    private void OnEditorStateChanged()
+    {
+        var currentPath = Editor.ActiveProject?.FilePath;
+        if (!string.Equals(currentPath, _lastActiveProjectPath, StringComparison.OrdinalIgnoreCase))
+        {
+            _lastActiveProjectPath = currentPath;
+            _activeProjectName = Editor.ActiveProject?.Name;
+            InvokeAsync(async () =>
+            {
+                _events.Clear();
+                    _totalCount = 0;
+                    _expandedEventId = 0;
+                    _statusMessage = null;
+                        _dataLogStatus = null;
+                        _varPage = 0;
+                        _varSearch = "";
+                        await RefreshData();
+                    StateHasChanged();
+            });
+        }
+    }
+
+    public void Dispose()
+    {
+        Editor.StateChanged -= OnEditorStateChanged;
     }
 
     private void SetTab(string tab)
@@ -244,24 +438,80 @@
         _activeTab = tab;
     }
 
+    private void OnVarSearchInput(ChangeEventArgs e)
+    {
+        _varSearch = e.Value?.ToString() ?? "";
+        _varPage = 0;
+    }
+
+    private List<VariableDataPoint> GetFilteredVariables()
+    {
+        if (_dataLogStatus?.TopVariables == null) return new();
+        if (string.IsNullOrWhiteSpace(_varSearch)) return _dataLogStatus.TopVariables;
+        return _dataLogStatus.TopVariables
+            .Where(v => v.Name.Contains(_varSearch, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+    }
+
+    private List<VariableDataPoint> GetPagedVariables()
+    {
+        var filtered = GetFilteredVariables();
+        var totalPages = GetVarTotalPages();
+        if (_varPage >= totalPages) _varPage = Math.Max(0, totalPages - 1);
+        return filtered.Skip(_varPage * _varPageSize).Take(_varPageSize).ToList();
+    }
+
+    private int GetVarTotalPages()
+    {
+        var filtered = _dataLogStatus?.TopVariables == null ? 0
+            : string.IsNullOrWhiteSpace(_varSearch) ? _dataLogStatus.TopVariables.Count
+            : _dataLogStatus.TopVariables.Count(v => v.Name.Contains(_varSearch, StringComparison.OrdinalIgnoreCase));
+        return Math.Max(1, (int)Math.Ceiling(filtered / (double)_varPageSize));
+    }
+
     private async Task RefreshData()
     {
         _loading = true;
+        _statusMessage = null;
+        _dbFound = false;
+        _dataLogStatus = null;
+        _varPage = 0;
         try
         {
-            // In a real scenario, you would fetch from the server's EventLogger
-            // For now, we'll create sample data or wait for the backend integration
+            var project = Editor.ActiveProject;
+            if (project == null)
+            {
+                _events.Clear();
+                _totalCount = 0;
+                _statusMessage = "No project open. Open a project to view events.";
+                return;
+            }
 
-            // This would be called from an actual service
-            // var service = new EventLogReaderService(projectService);
-            // _events = await service.ReadEventsAsync(_timeRangeMinutes, _maxRows, _categoryFilter);
+            _activeProjectName = project.Name;
 
-            // Sample data for demonstration
-            _events = GenerateSampleEvents();
-            _totalCount = _events.Count;
+            // Always read data logging / history DB status when a project is open
+            _dataLogStatus = await Task.Run(() => ReadDataLogStatus(project));
+
+            var dbPath = ResolveEventDbPath(project);
+            if (dbPath == null || !File.Exists(dbPath))
+            {
+                _events.Clear();
+                _totalCount = 0;
+                _statusMessage = $"Event database not found for '{project.Name}'. Start the server to generate events.";
+                return;
+            }
+
+            _dbFound = true;
+            int totalCount = 0;
+            _events = await Task.Run(() => ReadEventsFromDb(dbPath, out totalCount));
+            _totalCount = totalCount;
+
+            if (_events.Count == 0)
+                _statusMessage = null; // Let the markup handle the empty-with-filters message
         }
         catch (Exception ex)
         {
+            _statusMessage = $"Error reading events: {ex.Message}";
             Console.Error.WriteLine($"Failed to load events: {ex.Message}");
         }
         finally
@@ -270,43 +520,109 @@
         }
     }
 
-    private List<EventLogEntry> GenerateSampleEvents()
+    private string? ResolveEventDbPath(ProjectNode project)
     {
-        var now = DateTime.UtcNow;
-        var result = new List<EventLogEntry>();
+        var configPath = project.FilePath;
+        if (string.IsNullOrEmpty(configPath))
+            return null;
 
-        // Generate sample events
-        var categories = new[] { "Alarm", "Auth", "Driver", "System" };
-        var severities = new[] { "Critical", "High", "Medium", "Low", "Info" };
-        var sources = new[] { "ModbusDriver", "AuthService", "ScriptEngine", "SystemMonitor" };
-        var messages = new[] { 
-            "Value exceeded threshold",
-            "Connection lost",
-            "Authentication failed",
-            "Configuration reloaded",
-            "Warning threshold reached"
-        };
+        var evtCfg = project.Model?.Server?.EventLog;
+        var dbPath = evtCfg?.DbPath ?? "events.db";
 
-        for (int i = 0; i < 20; i++)
+        if (!Path.IsPathRooted(dbPath))
         {
-            result.Add(new EventLogEntry
+            var dir = Path.GetDirectoryName(Path.GetFullPath(configPath));
+            if (!string.IsNullOrEmpty(dir))
             {
-                Id = i + 1,
-                Time = now.AddMinutes(-i * 5),
-                Category = categories[i % categories.Length],
-                Severity = severities[i % severities.Length],
-                Source = sources[i % sources.Length],
-                Message = messages[i % messages.Length],
-                Details = i % 3 == 0 ? $"Additional details for event {i + 1}" : null
-            });
+                // Check Data subfolder first (new convention), then root (backward compat)
+                var dataPath = Path.Combine(dir, "Data", dbPath);
+                dbPath = File.Exists(dataPath) ? dataPath : Path.Combine(dir, dbPath);
+            }
         }
 
-        return result;
+        return dbPath;
+    }
+
+    private List<EventLogEntry> ReadEventsFromDb(string dbPath, out int totalCount)
+    {
+        var results = new List<EventLogEntry>();
+        totalCount = 0;
+
+        try
+        {
+            using var conn = new SqliteConnection($"Data Source={dbPath};Mode=ReadOnly");
+            conn.Open();
+
+            var conditions = new List<string>();
+
+            if (_timeRangeMinutes > 0)
+                conditions.Add("time >= @startTime");
+
+            if (!string.IsNullOrWhiteSpace(_categoryFilter))
+                conditions.Add("category = @cat");
+
+            if (!string.IsNullOrWhiteSpace(_severityFilter))
+                conditions.Add("severity = @sev");
+
+            var whereClause = conditions.Count > 0 ? "WHERE " + string.Join(" AND ", conditions) : "";
+
+            // Get total matching count first
+            using (var countCmd = conn.CreateCommand())
+            {
+                countCmd.CommandText = $"SELECT COUNT(*) FROM server_events {whereClause}";
+                if (_timeRangeMinutes > 0)
+                    countCmd.Parameters.AddWithValue("@startTime", DateTime.UtcNow.AddMinutes(-_timeRangeMinutes).ToString("o"));
+                if (!string.IsNullOrWhiteSpace(_categoryFilter))
+                    countCmd.Parameters.AddWithValue("@cat", _categoryFilter);
+                if (!string.IsNullOrWhiteSpace(_severityFilter))
+                    countCmd.Parameters.AddWithValue("@sev", _severityFilter);
+                totalCount = Convert.ToInt32(countCmd.ExecuteScalar() ?? 0);
+            }
+
+            // Fetch page of results
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = $@"
+                SELECT id, time, category, severity, source, message, details
+                FROM server_events
+                {whereClause}
+                ORDER BY time DESC
+                LIMIT @maxRows";
+
+            if (_timeRangeMinutes > 0)
+                cmd.Parameters.AddWithValue("@startTime", DateTime.UtcNow.AddMinutes(-_timeRangeMinutes).ToString("o"));
+            if (!string.IsNullOrWhiteSpace(_categoryFilter))
+                cmd.Parameters.AddWithValue("@cat", _categoryFilter);
+            if (!string.IsNullOrWhiteSpace(_severityFilter))
+                cmd.Parameters.AddWithValue("@sev", _severityFilter);
+            cmd.Parameters.AddWithValue("@maxRows", _maxRows > 0 ? _maxRows : 500);
+
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+            {
+                results.Add(new EventLogEntry
+                {
+                    Id = reader.GetInt64(0),
+                    Time = DateTime.TryParse(reader.GetString(1), null,
+                        System.Globalization.DateTimeStyles.RoundtripKind, out var t) ? t : DateTime.MinValue,
+                    Category = reader.GetString(2),
+                    Severity = reader.GetString(3),
+                    Source = reader.GetString(4),
+                    Message = reader.GetString(5),
+                    Details = reader.IsDBNull(6) ? null : reader.GetString(6)
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"EventLogReader error: {ex.Message}");
+        }
+
+        return results;
     }
 
     private void ClearFilters()
     {
-        _timeRangeMinutes = 60;
+        _timeRangeMinutes = 0;
         _categoryFilter = "";
         _severityFilter = "";
         _maxRows = 500;
@@ -358,5 +674,138 @@
         }
 
         return summary.Values.ToList();
+    }
+
+    private string? ResolveHistoryDbPath(ProjectNode project)
+    {
+        var configPath = project.FilePath;
+        if (string.IsNullOrEmpty(configPath))
+            return null;
+
+        var dbCfg = project.Model?.Database;
+        if (dbCfg == null)
+            return null;
+
+        // Only handle SQLite-style providers with a file-based connection string
+        var provider = dbCfg.Provider ?? "";
+        if (!provider.Contains("Sqlite", StringComparison.OrdinalIgnoreCase)
+            && !provider.Contains("SQLite", StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        var connStr = dbCfg.ConnectionString ?? "";
+        // Strip "Data Source=" prefix if present, otherwise treat as filename
+        var dbPath = connStr;
+        if (connStr.StartsWith("Data Source=", StringComparison.OrdinalIgnoreCase))
+            dbPath = connStr["Data Source=".Length..].Trim();
+
+        if (string.IsNullOrWhiteSpace(dbPath))
+            return null;
+
+        if (!Path.IsPathRooted(dbPath))
+        {
+            var dir = Path.GetDirectoryName(Path.GetFullPath(configPath));
+            if (!string.IsNullOrEmpty(dir))
+            {
+                var dataPath = Path.Combine(dir, "Data", dbPath);
+                dbPath = File.Exists(dataPath) ? dataPath : Path.Combine(dir, dbPath);
+            }
+        }
+
+        return dbPath;
+    }
+
+    private DataLogStatus ReadDataLogStatus(ProjectNode project)
+    {
+        var dbCfg = project.Model?.Database;
+        var provider = dbCfg?.Provider ?? "(not configured)";
+        var tableName = dbCfg?.TableName ?? "variable_data";
+
+        var status = new DataLogStatus
+        {
+            Provider = provider,
+            TableName = tableName
+        };
+
+        try
+        {
+            var dbPath = ResolveHistoryDbPath(project);
+            if (dbPath == null || !File.Exists(dbPath))
+            {
+                status.Message = dbCfg == null
+                    ? "No database configuration found in this project."
+                    : $"History database file not found. Start the server to generate data.";
+                return status;
+            }
+
+            status.DbPath = dbPath;
+            status.DbSizeBytes = new FileInfo(dbPath).Length;
+
+            using var conn = new SqliteConnection($"Data Source={dbPath};Mode=ReadOnly");
+            conn.Open();
+
+            // Total row count
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = $"SELECT COUNT(*) FROM [{tableName}]";
+                status.TotalRows = (long)(cmd.ExecuteScalar() ?? 0);
+            }
+
+            // Distinct variable count
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = $"SELECT COUNT(DISTINCT variable_name) FROM [{tableName}]";
+                status.VariableCount = Convert.ToInt32(cmd.ExecuteScalar() ?? 0);
+            }
+
+            // Oldest and newest entry
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = $"SELECT MIN(time), MAX(time) FROM [{tableName}]";
+                using var reader = cmd.ExecuteReader();
+                if (reader.Read())
+                {
+                    if (!reader.IsDBNull(0) && DateTime.TryParse(reader.GetString(0), null,
+                            System.Globalization.DateTimeStyles.RoundtripKind, out var oldest))
+                        status.OldestEntry = oldest;
+                    if (!reader.IsDBNull(1) && DateTime.TryParse(reader.GetString(1), null,
+                            System.Globalization.DateTimeStyles.RoundtripKind, out var newest))
+                        status.NewestEntry = newest;
+                }
+            }
+
+            // All variables by data point count
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = $@"
+                    SELECT variable_name, COUNT(*) as cnt
+                    FROM [{tableName}]
+                    GROUP BY variable_name
+                    ORDER BY cnt DESC";
+                using var reader = cmd.ExecuteReader();
+                while (reader.Read())
+                {
+                    status.TopVariables.Add(new VariableDataPoint(
+                        reader.GetString(0),
+                        reader.GetInt64(1)));
+                }
+            }
+
+            status.Found = true;
+        }
+        catch (Exception ex)
+        {
+            status.Message = $"Error reading history database: {ex.Message}";
+            System.Diagnostics.Debug.WriteLine($"DataLogStatus error: {ex.Message}");
+        }
+
+        return status;
+    }
+
+    private static string FormatFileSize(long bytes)
+    {
+        if (bytes < 1024) return $"{bytes} B";
+        if (bytes < 1024 * 1024) return $"{bytes / 1024.0:F1} KB";
+        if (bytes < 1024 * 1024 * 1024) return $"{bytes / (1024.0 * 1024.0):F1} MB";
+        return $"{bytes / (1024.0 * 1024.0 * 1024.0):F2} GB";
     }
 }

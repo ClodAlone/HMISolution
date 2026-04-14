@@ -1,4 +1,5 @@
 using System.Net.NetworkInformation;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
@@ -25,10 +26,17 @@ public static class LicenseManager
     // This key is safe to ship — it can only VERIFY, not create licenses.
 
     private const string EmbeddedPublicKey =
-        "REPLACE_WITH_YOUR_PUBLIC_KEY";
+        "MIIBCgKCAQEAyqnUfp8lHWOIgAVJVHYCegM3l8xBbvpl5gbjBR0bstIMEwz+6pZApXlUvfNI9q98hGDH9GYI1u5jxziRG5HZxYy0HpGxIjhK7NUbA7OmktPDjFQyvpRhN7/qOMX5hC0gBbgWRdkVBFak77Rex4fMiY6L/mlhXh+CMjvlEdOCZJMeKzTXEOtqYrTVY/Wr+wnGbtxBsnaJreMCtGD+Knja2/ylmBJVU1gEMEdNHVSXNN1KbhoCLtV4Ep6EGXNTddX9q7Z2kUdxSCf+c//9VT+oKtMb27aT5p8GlOh1Vm/j5G94DTXUBYnybxAVHJBWgci9TDKIjwHAPiF2w5UuTiF8AQIDAQAB";
 
     private static LicenseStatus? _cached;
     private static DateTime? _demoStartedUtc;
+
+#if !DEBUG
+    // ─── Release-Only Hardening State ───────────────────────────────
+    private static readonly string _sentinelPath = GetSentinelPath();
+    private static string? _assemblyHash;
+    private static readonly TimeSpan ClockDriftTolerance = TimeSpan.FromMinutes(5);
+#endif
 
     // ─── Hardware Fingerprint ───────────────────────────────────────
 
@@ -72,6 +80,7 @@ public static class LicenseManager
     /// <summary>
     /// Validate a license file and return the current license status.
     /// Checks: signature, expiration, machine ID.
+    /// In Release builds, also checks for clock manipulation and assembly tampering.
     /// </summary>
     public static LicenseStatus Validate(string? licenseFilePath)
     {
@@ -97,6 +106,17 @@ public static class LicenseManager
             var license = JsonSerializer.Deserialize<License>(json);
             if (license == null)
                 return Fail("Failed to parse license file.");
+
+            #if !DEBUG
+            // 0a. Assembly integrity check (Release only)
+            if (!VerifyAssemblyIntegrity())
+                return Fail("Application integrity check failed. The binaries may have been tampered with.");
+
+            // 0b. Clock manipulation check (Release only)
+            var clockCheck = DetectClockManipulation();
+            if (clockCheck != null)
+                return Fail(clockCheck);
+#endif
 
             // 1. Verify RSA signature (skip if public key not yet configured)
             if (!string.Equals(EmbeddedPublicKey, "REPLACE_WITH_YOUR_PUBLIC_KEY", StringComparison.Ordinal))
@@ -143,6 +163,12 @@ public static class LicenseManager
                     ? $"License valid — expires in {daysRemaining} day(s)."
                     : "License valid."
             };
+
+#if !DEBUG
+            // Persist timestamp for clock manipulation detection (Release only)
+            PersistValidationTimestamp();
+#endif
+
             return _cached;
         }
         catch (Exception ex)
@@ -327,4 +353,109 @@ public static class LicenseManager
         // When license is invalid/expired, fall back to trial limits
         status.License ??= LicenseTiers.CreateTrial("Trial User", "");
     }
+
+#if !DEBUG
+    // ─── Release-Only: Clock Manipulation Detection ─────────────────
+
+    /// <summary>
+    /// Returns the path to the sentinel file used to persist the last successful
+    /// validation timestamp. Stored next to the executing assembly.
+    /// </summary>
+    private static string GetSentinelPath()
+    {
+        var dir = AppContext.BaseDirectory;
+        return Path.Combine(dir, ".license.state");
+    }
+
+    /// <summary>
+    /// Detect if the system clock has been set backwards to bypass license expiration.
+    /// Compares current UTC time against the last persisted validation timestamp.
+    /// Returns an error message if manipulation is detected, or <c>null</c> if OK.
+    /// </summary>
+    private static string? DetectClockManipulation()
+    {
+        try
+        {
+            if (!File.Exists(_sentinelPath))
+                return null; // First run — nothing to compare
+
+            var raw = File.ReadAllText(_sentinelPath).Trim();
+            if (!long.TryParse(raw, out var ticks))
+                return null; // Corrupt sentinel — allow and overwrite on next success
+
+            var lastValidated = new DateTime(ticks, DateTimeKind.Utc);
+            var now = DateTime.UtcNow;
+
+            // If the clock moved backwards beyond tolerance, it's suspicious
+            if (now < lastValidated - ClockDriftTolerance)
+                return $"System clock appears to have been set backwards " +
+                       $"(expected >= {lastValidated:yyyy-MM-dd HH:mm} UTC, got {now:yyyy-MM-dd HH:mm} UTC). " +
+                       $"Please correct the system time and restart.";
+        }
+        catch
+        {
+            // If we can't read the sentinel, don't block
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Persist the current UTC timestamp after a successful validation.
+    /// </summary>
+    private static void PersistValidationTimestamp()
+    {
+        try
+        {
+            File.WriteAllText(_sentinelPath, DateTime.UtcNow.Ticks.ToString());
+        }
+        catch
+        {
+            // Non-fatal: if we can't write, clock check is skipped next run
+        }
+    }
+
+    // ─── Release-Only: Assembly Integrity Verification ──────────────
+
+    /// <summary>
+    /// Verify that the SharedModels assembly has not been modified since it was loaded.
+    /// Computes a SHA-256 hash of the assembly file on first call, then verifies it
+    /// matches on subsequent calls. Detects post-deployment binary patching.
+    /// </summary>
+    private static bool VerifyAssemblyIntegrity()
+    {
+        try
+        {
+            var assembly = typeof(LicenseManager).Assembly;
+            var assemblyPath = assembly.Location;
+
+            // If running from single-file or in-memory, skip check
+            if (string.IsNullOrEmpty(assemblyPath) || !File.Exists(assemblyPath))
+                return true;
+
+            var currentHash = ComputeFileHash(assemblyPath);
+
+            if (_assemblyHash == null)
+            {
+                // First call — record the baseline hash
+                _assemblyHash = currentHash;
+                return true;
+            }
+
+            // Subsequent calls — ensure it hasn't changed
+            return string.Equals(_assemblyHash, currentHash, StringComparison.Ordinal);
+        }
+        catch
+        {
+            // If we can't verify, don't block (e.g., assembly loaded from memory)
+            return true;
+        }
+    }
+
+    private static string ComputeFileHash(string filePath)
+    {
+        using var stream = File.OpenRead(filePath);
+        var hash = SHA256.HashData(stream);
+        return Convert.ToHexStringLower(hash);
+    }
+#endif
 }

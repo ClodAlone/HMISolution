@@ -436,6 +436,7 @@ public class NodeEditorService
         _openProjects.Add(proj);
         BuildProjectChildren(proj);
         RebuildFullTree();
+        NotifyStateChanged();
     }
 
     /// <summary>

@@ -358,7 +358,7 @@ public class NaturalLanguageQueryService
 
     private static async Task<string> CallOllamaAsync(string prompt, NaturalLanguageQueryConfig cfg, CancellationToken ct)
     {
-        var baseUrl = string.IsNullOrEmpty(cfg.OllamaBaseUrl) ? "http://localhost:11434" : cfg.OllamaBaseUrl;
+        var baseUrl = string.IsNullOrEmpty(cfg.OllamaBaseUrl) ? "http://127.0.0.1:11434" : cfg.OllamaBaseUrl;
         var model = string.IsNullOrEmpty(cfg.Model) ? "mistral" : cfg.Model;
 
         using var client = new HttpClient { Timeout = TimeSpan.FromMinutes(3) };

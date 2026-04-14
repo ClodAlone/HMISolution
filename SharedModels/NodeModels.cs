@@ -3078,8 +3078,8 @@ namespace SharedModels
         /// <summary>Model name for Ollama (e.g. "mistral", "llama3") or overridden OpenAI model.</summary>
         public string Model { get; set; } = "mistral";
 
-        /// <summary>Base URL for the Ollama API. Default: "http://localhost:11434".</summary>
-        public string OllamaBaseUrl { get; set; } = "http://localhost:11434";
+        /// <summary>Base URL for the Ollama API. Default: "http://127.0.0.1:11434".</summary>
+        public string OllamaBaseUrl { get; set; } = "http://127.0.0.1:11434";
 
         /// <summary>Maximum historical data points per variable in AI context. Default: 500.</summary>
         public int MaxDataPoints { get; set; } = 500;
