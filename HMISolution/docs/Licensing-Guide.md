@@ -1,33 +1,36 @@
 # HMISolution — Licensing Guide
 
-> **Version:** 1.1 · **Date:** July 2025 · **Applies to:** Server, ServerEditorWeb, RuntimeViewer
+> **Version:** 1.2 · **Date:** July 2025 · **Applies to:** Server, ServerEditorWeb, RuntimeViewer
 
 ---
 
 ## Table of Contents
 
 1. [Overview](#1-overview)
-2. [How Licensing Works](#2-how-licensing-works)
-3. [License Generator (WPF GUI Tool)](#3-license-generator-wpf-gui-tool)
-4. [License Tiers & Feature Limits](#4-license-tiers--feature-limits)
-5. [License File Format](#5-license-file-format)
-6. [Step-by-Step: Initial Setup (One-Time)](#6-step-by-step-initial-setup-one-time)
-7. [Step-by-Step: Issuing a License to a Customer](#7-step-by-step-issuing-a-license-to-a-customer)
-8. [Step-by-Step: Installing a License on a Target Machine](#8-step-by-step-installing-a-license-on-a-target-machine)
-9. [How Validation Works at Runtime](#9-how-validation-works-at-runtime)
-10. [Enforcement Details](#10-enforcement-details)
-11. [Hardware Fingerprint (Machine ID)](#11-hardware-fingerprint-machine-id)
-12. [Trial / Unlicensed Mode](#12-trial--unlicensed-mode)
-13. [License Display in the Editor](#13-license-display-in-the-editor)
-14. [Security Model](#14-security-model)
-15. [Troubleshooting](#15-troubleshooting)
-16. [API Reference](#16-api-reference)
+2. [Architecture Overview](#2-architecture-overview)
+3. [How Licensing Works](#3-how-licensing-works)
+4. [License Generator (WPF GUI Tool)](#4-license-generator-wpf-gui-tool)
+5. [License Tiers & Feature Limits](#5-license-tiers--feature-limits)
+6. [License File Format](#6-license-file-format)
+7. [Developer Quick-Start (End-to-End Walkthrough)](#7-developer-quick-start-end-to-end-walkthrough)
+8. [Step-by-Step: Initial Setup (One-Time)](#8-step-by-step-initial-setup-one-time)
+9. [Step-by-Step: Issuing a License to a Customer](#9-step-by-step-issuing-a-license-to-a-customer)
+10. [Step-by-Step: Installing a License on a Target Machine](#10-step-by-step-installing-a-license-on-a-target-machine)
+11. [How Validation Works at Runtime](#11-how-validation-works-at-runtime)
+12. [Enforcement Details](#12-enforcement-details)
+13. [Hardware Fingerprint (Machine ID)](#13-hardware-fingerprint-machine-id)
+14. [Trial / Unlicensed Mode](#14-trial--unlicensed-mode)
+15. [License Display in the Editor](#15-license-display-in-the-editor)
+16. [Security Model](#16-security-model)
+17. [Troubleshooting](#17-troubleshooting)
+18. [API Reference](#18-api-reference)
+19. [Known Issues & Fixes](#19-known-issues--fixes)
 
 ---
 
 ## 1. Overview
 
-HMISolution uses an **RSA-signed license file** system. A license is a JSON file (`license.json`) placed next to the project's `nodes.json` configuration file. The license is cryptographically signed with an RSA-2048 private key (kept secret by you, the developer) and verified at runtime using a public key embedded in the shipped binaries.
+HMISolution uses an **RSA-signed license file** system.
 
 ### Key Principles
 
@@ -40,7 +43,38 @@ HMISolution uses an **RSA-signed license file** system. A license is a JSON file
 
 ---
 
-## 2. How Licensing Works
+## 2. Architecture Overview
+
+The licensing system spans multiple projects in the solution. Each component has a distinct role:
+
+| Component | Project | Role |
+|---|---|---|
+| **LicenseManager** | `SharedModels/LicenseManager.cs` | RSA key generation, license signing, signature verification, hardware fingerprinting, validation logic |
+| **License / LicenseTiers** | `SharedModels/LicenseModel.cs` | Data models (`License`, `LicenseStatus`, `LicenseTiers` factory methods) |
+| **LicenseGenerator.Wpf** | `LicenseGenerator.Wpf/` | WPF GUI for developers — generate key pairs, create/sign/export/validate licenses |
+| **Server** | `Server/Program.cs` | Calls `Validate()` at startup, runs demo-expiry timer, enforces limits in the node manager |
+| **Editor** | `ServerEditorWeb/` | Displays license status/limits in the Server Panel; enforces AI feature gate |
+| **RuntimeViewer** | `RuntimeViewer/` | Validates license when loading a project |
+
+### File Flow
+
+```
+Developer machine                         Customer machine
+--------------------------                --------------------------
+LicenseGenerator.Wpf                      project-folder/
+  |                                         +-- nodes.json
+  +-- Generate Key Pair                     +-- license.json  <-- delivered
+  |     +-> private.pem  (SECRET)           |
+  |     +-> public.txt   (embed)           Server / Editor / RuntimeViewer
+  |                                         +-- LicenseManager.Validate()
+  +-- Sign & Export                              +-> signature check
+        +-> license.json  ----deliver--->         +-> expiration check
+                                                  +-> machine ID check
+```
+
+---
+
+## 3. How Licensing Works
 
 ### The Big Picture
 
@@ -126,9 +160,9 @@ HMISolution uses an **RSA-signed license file** system. A license is a JSON file
 
 ---
 
-## 3. License Generator (WPF GUI Tool)
+## 4. License Generator (WPF GUI Tool)
 
-HMISolution ships with a dedicated **WPF desktop application** (`LicenseGenerator.Wpf`) that provides a visual interface for the entire licensing workflow. This is the **recommended way** to manage licenses -- no coding required.
+HMISolution ships with a dedicated **WPF desktop application**
 
 ### Project Location
 
@@ -183,7 +217,7 @@ The application window is organized into five sections:
 
 | Feature | Description |
 |---|---|
-| **Generate Key Pair** | Creates an RSA-2048 key pair, saves `private.key` to a chosen folder, and copies the public key to clipboard |
+| **Generate Key Pair** | Creates an RSA-2048 key pair. Saves `private.pem` to your chosen folder and `public.txt` (Base64 public key) next to it. Displays a confirmation dialog with the public key preview. |
 | **Browse Private Key** | Load an existing PEM private key file for signing |
 | **Tier Selection** | Dropdown pre-fills all feature limits with the tier's defaults (Trial, Starter, Professional, Enterprise) |
 | **Customer Info** | Enter customer name, project name, optional machine ID, and validity period |
@@ -197,7 +231,7 @@ The application window is organized into five sections:
 
 ---
 
-## 4. License Tiers & Feature Limits
+## 5. License Tiers & Feature Limits
 
 | Feature | Demo | Trial | Starter | Professional | Enterprise |
 |---|:---:|:---:|:---:|:---:|:---:|
@@ -221,7 +255,7 @@ The application window is organized into five sections:
 
 ---
 
-## 5. License File Format
+## 6. License File Format
 
 A signed license file (`license.json`) looks like this:
 
@@ -269,7 +303,85 @@ A signed license file (`license.json`) looks like this:
 
 ---
 
-## 6. Step-by-Step: Initial Setup (One-Time)
+## 7. Developer Quick-Start (End-to-End Walkthrough)
+
+This section is a condensed, action-oriented guide for developers who need to generate a key pair, create a license, and deploy it. For full details on each step, see the sections that follow.
+
+### Prerequisites
+
+- Visual Studio with the **LicenseGenerator.Wpf** project (or `dotnet run` from the command line)
+- A secure location for your private key (password manager, encrypted drive, etc.)
+
+### 1. Generate the RSA-2048 Key Pair (one-time)
+
+1. Run **LicenseGenerator.Wpf** (set as startup project → F5, or `cd LicenseGenerator.Wpf && dotnet run`).
+2. Click **"Generate New Key Pair"** in the 🔐 RSA Private Key section.
+3. Choose a save location for `private.pem`.
+4. The tool saves two files:
+   - **`private.pem`** — your signing key. ⚠️ **KEEP SECRET — never commit to Git.**
+   - **`public.txt`** — Base64-encoded public key, saved next to the private key.
+5. A confirmation dialog shows the public key preview.
+
+> **Under the hood:** `LicenseManager.GenerateKeyPair()` calls `RSA.Create(2048)`, exports the private key as PEM and the public key as Base64.
+
+### 2. Embed the Public Key in Shipped Binaries (one-time)
+
+1. Open `SharedModels/LicenseManager.cs`.
+2. Replace the placeholder on line 27–28:
+
+```csharp
+// BEFORE:
+private const string EmbeddedPublicKey =
+    "REPLACE_WITH_YOUR_PUBLIC_KEY";
+
+// AFTER (paste the contents of public.txt):
+private const string EmbeddedPublicKey =
+    "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCg...your_key_here...";
+```
+
+3. Build the solution. All apps (Server, Editor, RuntimeViewer) will now verify signatures using this key.
+
+> The public key can only **verify** — it cannot sign. It is safe to ship.
+
+### 3. Create & Sign a License for a Customer
+
+1. **Load your private key:** Click **"Browse…"** → select `private.pem` (or it's already loaded if you just generated it).
+2. **Select a Tier:** Trial / Starter / Professional / Enterprise. Limits auto-populate from `LicenseTiers`.
+3. **Fill Customer Info:**
+   - **Licensed To** *(required)*: Customer name or company.
+   - **Project Name** *(optional)*: Their HMI project name.
+   - **Machine ID** *(optional)*: For machine-locked licenses, ask the customer for their hardware fingerprint (visible in Editor → Server Panel → License). Leave empty for floating licenses. Click **"This PC"** to use the local machine.
+   - **Validity (days)**: Default 365. Use 0 for perpetual (Enterprise).
+4. **Adjust limits** if needed (the defaults come from `LicenseTiers` but every field is editable).
+5. Click **"Preview"** to inspect the unsigned JSON.
+6. Click **"Sign & Export license.json"** → choose output path → done.
+
+### 4. Deliver & Install
+
+1. Send `license.json` to the customer (email, portal, USB).
+2. Customer places `license.json` **next to their `nodes.json`** file.
+3. Customer restarts the application — license is detected automatically.
+
+### 5. Validate an Existing License
+
+Click **"🔍 Validate Existing…"** (bottom-left of the WPF tool), select any `license.json`, and the tool checks:
+- **Signature** — RSA-SHA256 against the embedded public key
+- **Expiration** — `ExpiresUtc` vs. current UTC time
+- **Machine ID** — hardware fingerprint match (if set)
+
+### Summary Cheat Sheet
+
+| Step | Action | Output |
+|---:|---|---|
+| 1 | Generate Key Pair | `private.pem` (secret) + `public.txt` (embed) |
+| 2 | Embed public key | Update `EmbeddedPublicKey` in `LicenseManager.cs`, rebuild |
+| 3 | Create license | Fill form in WPF tool → **Sign & Export** → `license.json` |
+| 4 | Deliver | Customer places `license.json` next to `nodes.json` |
+| 5 | Validate | **Validate Existing…** button in WPF tool |
+
+---
+
+## 8. Step-by-Step: Initial Setup (One-Time)
 
 This is done **once** by the developer before shipping the product. The goal is to generate an RSA key pair and embed the public key in the binaries.
 
@@ -277,21 +389,21 @@ This is done **once** by the developer before shipping the product. The goal is 
 
 #### Option A -- Use the WPF License Generator (Recommended)
 
-1. Launch **LicenseGenerator.Wpf** (see [Section 3](#3-license-generator-wpf-gui-tool))
+1. Launch **LicenseGenerator.Wpf** (see [Section 4](#4-license-generator-wpf-gui-tool))
 2. In the **RSA Private Key** section, click **Generate New Key Pair**
-3. Choose a secure folder -- the tool saves `private.key` there and copies the public key to your clipboard
+3. Choose a save location — the tool saves `private.pem` there and `public.txt` (Base64 public key) next to it
 4. Store the private key in a secure vault (password manager, encrypted drive, HSM)
-5. Paste the public key into `SharedModels/LicenseManager.cs` (see Step 2 below)
+5. Open `public.txt` and copy the Base64 string into `SharedModels/LicenseManager.cs` (see Step 2 below)
 
 ```
 +--------------------------------------------------+
 |  RSA Private Key                                  |
-|  C:\secure\private.key                 [Browse..] |
-|  [Generate New Key Pair]  Key loaded              |
+|  C:\secure\private.pem                 [Browse..] |
+|  [Generate New Key Pair]  ✅ New key pair generated |
 +--------------------------------------------------+
         |
-        +-->  private.key saved to chosen folder
-        +-->  public key copied to clipboard
+        +-->  private.pem  saved to chosen folder
+        +-->  public.txt   saved next to it
 ```
 
 #### Option B -- Use Code (Console / C# REPL)
@@ -305,7 +417,7 @@ using SharedModels;
 var (privateKeyPem, publicKeyBase64) = LicenseManager.GenerateKeyPair();
 
 // Save the private key to a SECURE location -- NEVER ship this
-File.WriteAllText(@"C:\secure\license-private.key", privateKeyPem);
+File.WriteAllText(@"C:\secure\private.pem", privateKeyPem);
 
 // Print the public key to embed in the source code
 Console.WriteLine("=== PUBLIC KEY (embed this in LicenseManager.cs) ===");
@@ -316,8 +428,8 @@ Console.WriteLine(publicKeyBase64);
 
 | Output | Format | Where It Goes |
 |---|---|---|
-| **Private key** | PEM (`-----BEGIN RSA PRIVATE KEY-----...`) | Your secure vault. Never share. Never commit to Git. |
-| **Public key** | Base64 string | Embedded in `LicenseManager.cs` -> shipped with the binaries |
+| **Private key** (`private.pem`) | PEM (`-----BEGIN RSA PRIVATE KEY-----...`) | Your secure vault. Never share. Never commit to Git. |
+| **Public key** (`public.txt`) | Base64 string | Embedded in `LicenseManager.cs` → `EmbeddedPublicKey` → shipped with the binaries |
 
 ### Step 2 -- Embed the Public Key
 
@@ -342,10 +454,10 @@ Build the solution. The public key is now compiled into every binary (Server, Ed
 ```
 GenerateKeyPair()
     |
-    +-->  private.key   -> Store securely (your vault)
+    +-->  private.pem   -> Store securely (your vault)
     |                      Used to SIGN licenses
     |
-    +-->  public.key    -> Embed in LicenseManager.cs
+    +-->  public.txt    -> Embed in LicenseManager.cs -> EmbeddedPublicKey
                            Used to VERIFY licenses
                            Safe to ship with binaries
 ```
@@ -354,18 +466,18 @@ GenerateKeyPair()
 
 ---
 
-## 7. Step-by-Step: Issuing a License to a Customer
+## 9. Step-by-Step: Issuing a License to a Customer
 
 ### Prerequisites
 
-- Your RSA private key file (from Step 1)
+- Your RSA private key file (`private.pem` from the initial setup)
 - Customer information (name, project, machine ID if machine-locked)
 
 ### Using the WPF License Generator (Recommended)
 
-The fastest way to issue a license is with the **LicenseGenerator.Wpf** GUI (see [Section 3](#3-license-generator-wpf-gui-tool)):
+The fastest way to issue a license is with the **LicenseGenerator.Wpf** GUI (see [Section 4](#4-license-generator-wpf-gui-tool)):
 
-1. **Load your private key** -- click **Browse...** and select your `private.key` file
+1. **Load your private key** -- click **Browse...** and select your `private.pem` file
 2. **Select a tier** -- choose Trial / Starter / Professional / Enterprise from the dropdown (auto-fills limits)
 3. **Enter customer info** -- fill in *Licensed To*, *Project Name*, *Machine ID* (or leave empty for floating), and *Validity (days)*
 4. **Adjust feature limits** -- override any auto-filled defaults if needed
@@ -384,6 +496,8 @@ The fastest way to issue a license is with the **LicenseGenerator.Wpf** GUI (see
 ```
 
 > To validate a license you previously created, click **Validate Existing...** and open the `license.json` file.
+
+> **Note:** The WPF tool will warn you if no private key is loaded and offer to export an unsigned license. Unsigned licenses only work when the `EmbeddedPublicKey` is still set to the placeholder value (development mode).
 
 ### Using Code (Alternative)
 
@@ -448,7 +562,7 @@ var license = new License
 
 ```csharp
 // Load your private key
-var privateKey = File.ReadAllText(@"C:\secure\license-private.key");
+var privateKey = File.ReadAllText(@"C:\secure\private.pem");
 
 // Sign -- this sets the Signature field on the license object
 LicenseManager.SignLicense(license, privateKey);
@@ -471,7 +585,7 @@ Send the `license.json` file to the customer via a secure channel (email, downlo
 using SharedModels;
 
 // --- Configuration -----------------------------------------------
-var privateKey = File.ReadAllText(@"C:\secure\license-private.key");
+var privateKey = File.ReadAllText(@"C:\secure\private.pem");
 var customerName = "Acme Manufacturing GmbH";
 var machineId = "3f8a2b1c9d4e5f6a7b8c9d0e1f2a3b4c"; // from customer
 var outputPath = @"C:\licenses\acme-license.json";
@@ -496,7 +610,7 @@ Console.WriteLine($"  ID:         {license.Id}");
 
 ---
 
-## 8. Step-by-Step: Installing a License on a Target Machine
+## 10. Step-by-Step: Installing a License on a Target Machine
 
 ### For the Customer
 
@@ -540,7 +654,7 @@ Licensed to: Acme Manufacturing GmbH
 
 ---
 
-## 9. How Validation Works at Runtime
+## 11. How Validation Works at Runtime
 
 ### Where Validation Happens
 
@@ -594,7 +708,7 @@ This ensures that:
 
 ---
 
-## 10. Enforcement Details
+## 12. Enforcement Details
 
 License enforcement runs in the **Server's node manager** (`SimpleFileServerNodeManager`) during address space creation. Enforcement is **skipped in DEBUG builds** to allow unrestricted development.
 
@@ -639,7 +753,7 @@ The rule: `max == 0` means unlimited, otherwise `current <= max`.
 
 ---
 
-## 11. Hardware Fingerprint (Machine ID)
+## 13. Hardware Fingerprint (Machine ID)
 
 ### How It's Calculated
 
@@ -679,7 +793,7 @@ The fingerprint **will change** if:
 
 ---
 
-## 12. Demo & Trial Mode
+## 14. Demo & Trial Mode
 
 When no valid license is found (missing file), the system starts in **Demo mode** with full features for **10 minutes**, then degrades to **Trial mode**:
 
@@ -723,7 +837,7 @@ License: Trial -- License expired on 2025-06-01.
 
 ---
 
-## 13. License Display in the Editor
+## 15. License Display in the Editor
 
 The **Server Panel** in the web editor shows the current license status:
 
@@ -751,7 +865,7 @@ The Machine ID displayed here is what the customer should send you if you need t
 
 ---
 
-## 14. Security Model
+## 16. Security Model
 
 ### Cryptographic Details
 
@@ -795,7 +909,7 @@ Private Key (SECRET)           Public Key (SHIPPED)
 
 ---
 
-## 15. Troubleshooting
+## 17. Troubleshooting
 
 ### "No license file found. Running in Trial mode."
 
@@ -815,8 +929,8 @@ C:\projects\myplant\license.json   <-- license file (SAME folder)
 
 **Fix**:
 1. Do NOT edit the license JSON file manually -- any change invalidates the signature
-2. Re-sign the license with your private key if changes are needed (use **LicenseGenerator.Wpf** or code)
-3. Verify you embedded the correct public key matching your private key
+2. Re-sign the license with your private key if changes are needed (use **LicenseGenerator.Wpf** → load `private.pem` → recreate & sign)
+3. Verify you embedded the correct public key (from `public.txt`) matching your private key
 
 ---
 
@@ -859,7 +973,7 @@ Common reasons the Machine ID changed:
 
 ---
 
-## 16. API Reference
+## 18. API Reference
 
 ### `LicenseManager` (static class)
 
@@ -964,29 +1078,30 @@ public static class LicenseTiers
 ```
 ONE-TIME SETUP (GUI):
   1. Launch LicenseGenerator.Wpf
-  2. Click "Generate New Key Pair" -> saves private.key, copies public key
-  3. Store private.key in secure vault
-  4. Embed public key -> LicenseManager.cs -> EmbeddedPublicKey
+  2. Click "Generate New Key Pair" -> saves private.pem + public.txt
+  3. Store private.pem in secure vault (NEVER commit to Git)
+  4. Copy contents of public.txt -> LicenseManager.cs -> EmbeddedPublicKey
   5. Build & ship
 
 ONE-TIME SETUP (Code):
   1. var (privKey, pubKey) = LicenseManager.GenerateKeyPair();
-  2. Save privKey -> secure vault
+  2. File.WriteAllText("private.pem", privKey);  // store securely
   3. Embed pubKey -> LicenseManager.cs -> EmbeddedPublicKey
   4. Build & ship
 
 PER CUSTOMER (GUI):
   1. Launch LicenseGenerator.Wpf
-  2. Browse... -> load your private.key
+  2. Browse... -> load your private.pem
   3. Select tier, fill customer info, adjust limits
   4. Click "Sign & Export" -> saves license.json
   5. Deliver license.json to customer
 
 PER CUSTOMER (Code):
   1. var license = LicenseTiers.CreateProfessional("Customer", machineId);
-  2. LicenseManager.SignLicense(license, privateKey);
-  3. LicenseManager.ExportLicense(license, "license.json");
-  4. Deliver license.json to customer
+  2. var privKey = File.ReadAllText("private.pem");
+  3. LicenseManager.SignLicense(license, privKey);
+  4. LicenseManager.ExportLicense(license, "license.json");
+  5. Deliver license.json to customer
 
 VALIDATE (GUI):
   1. Launch LicenseGenerator.Wpf
@@ -1001,4 +1116,24 @@ CUSTOMER INSTALL:
 
 ---
 
-*Document generated from HMISolution source code -- `SharedModels/LicenseManager.cs`, `SharedModels/LicenseModel.cs`, and `LicenseGenerator.Wpf/`*
+## 19. Known Issues & Fixes
+
+### WPF License Generator — Dark Theme Readability (Fixed)
+
+**Issue:** The `MutedColor` used for all labels and secondary text (`#6C7086`) had a contrast ratio of only ~2.6:1 against the dark surface background (`#2A2A3C`). This made labels like "Licensed To", "Max Variables", "Machine ID", etc. nearly unreadable.
+
+**Fix:** Updated `MutedColor` in `LicenseGenerator.Wpf/App.xaml` from `#6C7086` to `#9399B2`, which provides ~5:1 contrast while still appearing visually muted relative to the primary text color (`#CDD6F4`).
+
+```xml
+<!-- App.xaml — before -->
+<Color x:Key="MutedColor">#6C7086</Color>
+
+<!-- App.xaml — after -->
+<Color x:Key="MutedColor">#9399B2</Color>
+```
+
+**Affected elements:** All `Label` controls, tier description text, key status text, and the status bar.
+
+---
+
+*Document generated from HMISolution source code — `SharedModels/LicenseManager.cs`, `SharedModels/LicenseModel.cs`, and `LicenseGenerator.Wpf/`*
