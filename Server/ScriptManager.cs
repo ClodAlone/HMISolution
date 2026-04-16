@@ -456,6 +456,22 @@ End Module";
         /// Subscribe to value changes on a variable. The callback fires each time
         /// the variable's value is updated (by a driver, OPC UA write, or script).
         /// </summary>
+        /// <summary>
+        /// Send a notification to all enabled channels from a script.
+        /// </summary>
+        public void SendNotification(string title, string message, ushort severity = 500, string? speakerAddresses = null, int volume = 0)
+        {
+            _manager.NotificationService?.SendNotification(title, message, severity, speakerAddresses, volume);
+        }
+
+        /// <summary>
+        /// Play a TTS message on specific IP speakers.
+        /// </summary>
+        public void PlayOnSpeakers(string message, string speakerAddresses, int volume = 50, string? language = null)
+        {
+            _manager.NotificationService?.PlayOnSpeakers(message, speakerAddresses, volume, language);
+        }
+
         public void OnChanged(string variableName, Action<VariableChangedEventArgs> handler)
         {
             _scriptManager.Subscribe(variableName, handler);

@@ -94,6 +94,7 @@ namespace SimpleOpcFileServer
 
         // Alarm notification service (Email, Telegram, WhatsApp)
         private NotificationService? _notificationService;
+        internal NotificationService? NotificationService => _notificationService;
 
         // Anomaly detection service
         private AnomalyDetectionService? _anomalyDetectionService;
@@ -2700,7 +2701,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 RecordAlarmAnalyticsEvent(AlarmAnalyticsEventKind.Activated, info.VariablePath, message);
 
                 if (cfg.NotifyOnActivation)
-                    _notificationService?.NotifyAlarmActivated(info.VariablePath, message, cfg.ConditionSeverity);
+                    _notificationService?.NotifyAlarmActivated(info.VariablePath, message, cfg.ConditionSeverity, cfg.SpeakerOverride, cfg.VolumeOverride);
             }
             else if (shouldDeactivate)
             {

@@ -195,6 +195,17 @@ namespace SharedModels
         /// (Email, Telegram, WhatsApp) in the server's AlarmNotification settings.
         /// </summary>
         public bool NotifyOnActivation { get; set; }
+
+        /// <summary>
+        /// Optional per-alarm IP speaker address override (comma-separated).
+        /// When set, only these speakers play instead of the global list.
+        /// </summary>
+        public string? SpeakerOverride { get; set; }
+
+        /// <summary>
+        /// Optional per-alarm volume override (0-100). When greater than 0, overrides global/severity volume.
+        /// </summary>
+        public int VolumeOverride { get; set; }
     }
 
     public class DataLoggingConfig
@@ -772,6 +783,12 @@ namespace SharedModels
 
         /// <summary>Web Push (VAPID) notification channel for browser push notifications.</summary>
         public WebPushNotificationChannel? WebPush { get; set; }
+
+        /// <summary>Alexa Proactive Events API notification channel.</summary>
+        public AlexaNotificationChannel? Alexa { get; set; }
+
+        /// <summary>IP Speaker (Sonos / UPnP) notification channel for audible TTS announcements.</summary>
+        public IpSpeakerNotificationChannel? IpSpeaker { get; set; }
     }
 
     /// <summary>
@@ -898,6 +915,90 @@ namespace SharedModels
 
         /// <summary>Language code for the template (e.g. "en_US"). Default "en_US".</summary>
         public string TemplateLanguage { get; set; } = "en_US";
+    }
+
+    /// <summary>
+    /// Alexa notification channel using the Alexa Proactive Events API.
+    /// Requires a Login with Amazon (LWA) security profile with Alexa Skill proactive events scope.
+    /// Sends a notification (yellow ring + chime) to all Alexa-enabled devices linked to the skill.
+    /// </summary>
+    public class AlexaNotificationChannel
+    {
+        /// <summary>Whether Alexa notifications are enabled.</summary>
+        public bool Enabled { get; set; }
+
+        /// <summary>
+        /// Login with Amazon (LWA) Client ID from the Alexa developer console security profile
+        /// (e.g. "amzn1.application-oa2-client.xxxx").
+        /// </summary>
+        public string ClientId { get; set; } = "";
+
+        /// <summary>Login with Amazon (LWA) Client Secret.</summary>
+        public string ClientSecret { get; set; } = "";
+
+        /// <summary>
+        /// Alexa API region endpoint. Use "NA" (North America), "EU" (Europe), or "FE" (Far East).
+        /// Default "EU".
+        /// </summary>
+        public string Region { get; set; } = "EU";
+
+        /// <summary>
+        /// Use the development sandbox instead of the live endpoint.
+        /// Set to true while testing with the Alexa Skills Kit simulator. Default false.
+        /// </summary>
+                public bool UseSandbox { get; set; }
+    }
+
+    /// <summary>
+    /// IP Speaker (Sonos / UPnP) notification channel.
+    /// Plays a text-to-speech alarm announcement on Sonos or other UPnP-compatible speakers
+    /// on the local network via the AVTransport SOAP service.
+    /// </summary>
+    public class IpSpeakerNotificationChannel
+    {
+        /// <summary>Whether IP Speaker notifications are enabled.</summary>
+        public bool Enabled { get; set; }
+
+        /// <summary>
+        /// Comma-separated list of speaker IP addresses or host:port pairs
+        /// (e.g. "192.168.1.50, 192.168.1.51:1400").
+        /// Default Sonos port is 1400.
+        /// </summary>
+        public string SpeakerAddresses { get; set; } = "";
+
+        /// <summary>
+        /// Volume level (0-100) to set before playing the announcement.
+        /// 0 = do not change volume (use current speaker volume). Default 50.
+        /// </summary>
+        public int Volume { get; set; } = 50;
+
+        /// <summary>Volume (0-100) for CRITICAL alarms (severity >= 800). 0 = use default Volume.</summary>
+        public int VolumeCritical { get; set; }
+
+        /// <summary>Volume (0-100) for WARNING alarms (severity 500-799). 0 = use default Volume.</summary>
+        public int VolumeWarning { get; set; }
+
+        /// <summary>Volume (0-100) for INFO alarms (severity below 500). 0 = use default Volume.</summary>
+        public int VolumeInfo { get; set; }
+
+        /// <summary>
+        /// Language/locale for text-to-speech (e.g. "en", "it", "de", "fr").
+        /// Default "en".
+        /// </summary>
+        public string TtsLanguage { get; set; } = "en";
+
+        /// <summary>
+        /// Optional custom TTS URL template. Use {text} and {lang} placeholders.
+        /// Example: "http://my-tts-server/api/speak?text={text}&amp;lang={lang}"
+        /// When empty, uses the built-in Google Translate TTS endpoint (not recommended for production).
+        /// </summary>
+        public string TtsUrlTemplate { get; set; } = "";
+
+        /// <summary>
+        /// Whether to restore the previous volume after the announcement finishes.
+        /// Default true.
+        /// </summary>
+        public bool RestoreVolume { get; set; } = true;
     }
 
     /// <summary>

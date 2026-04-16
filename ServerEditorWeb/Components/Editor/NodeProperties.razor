@@ -1453,7 +1453,7 @@ else if (Node is ServerSettingsNode ssNode)
         <hr />
         <h6>📨 Alarm Notifications</h6>
         <div class="form-text mb-2">
-            Send alarm notifications via Email, Telegram, and/or WhatsApp when alarms with "Notify on activation" fire.
+            Send alarm notifications via Email, Telegram, WhatsApp, Alexa, and/or IP Speakers (Sonos) when alarms with "Notify on activation" fire.
         </div>
         <div class="mb-3 form-check">
             <input class="form-check-input" type="checkbox"
@@ -1619,6 +1619,129 @@ else if (Node is ServerSettingsNode ssNode)
                             </div>
                         </div>
                         <div class="form-text">Use a template for initiating conversations. Leave empty for free-form text (24h session window only).</div>
+                    </div>
+                }
+            </div>
+
+
+            @* ── Alexa Channel ── *@
+            <div class="card mb-2">
+                <div class="card-header py-1 px-2 d-flex justify-content-between align-items-center" style="font-size: 12px;">
+                    <span>🔊 Alexa</span>
+                    <div class="form-check form-switch mb-0">
+                        <input class="form-check-input" type="checkbox"
+                               checked="@(ssNode.Settings.AlarmNotification.Alexa?.Enabled == true)"
+                               @onchange="(e) => { EnsureAlexaChannel(ssNode).Enabled = (bool)(e.Value ?? false); OnChanged(); }" />
+                    </div>
+                </div>
+                @if (ssNode.Settings.AlarmNotification.Alexa is { Enabled: true })
+                {
+                    <div class="card-body p-2">
+                        <div class="mb-1">
+                            <label class="form-label mb-0 small">Client ID</label>
+                            <input type="text" class="form-control form-control-sm"
+                                   @bind="ssNode.Settings.AlarmNotification.Alexa.ClientId" @bind:after="OnChanged"
+                                   placeholder="amzn1.application-oa2-client.xxxx" />
+                            <div class="form-text">Login with Amazon (LWA) Client ID from the Alexa developer console.</div>
+                        </div>
+                        <div class="mb-1">
+                            <label class="form-label mb-0 small">Client Secret</label>
+                            <input type="password" class="form-control form-control-sm"
+                                   @bind="ssNode.Settings.AlarmNotification.Alexa.ClientSecret" @bind:after="OnChanged"
+                                   placeholder="LWA client secret" />
+                        </div>
+                        <div class="row g-1 mb-1">
+                            <div class="col-6">
+                                <label class="form-label mb-0 small">Region</label>
+                                <select class="form-select form-select-sm"
+                                        @bind="ssNode.Settings.AlarmNotification.Alexa.Region" @bind:after="OnChanged">
+                                    <option value="EU">EU (Europe)</option>
+                                    <option value="NA">NA (North America)</option>
+                                    <option value="FE">FE (Far East)</option>
+                                </select>
+                            </div>
+                            <div class="col-6 d-flex align-items-end">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox"
+                                           @bind="ssNode.Settings.AlarmNotification.Alexa.UseSandbox" @bind:after="OnChanged" />
+                                    <label class="form-check-label small">Sandbox (development)</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-text">Requires an Alexa Skill with Proactive Events enabled. Sends a notification (yellow ring) to all linked Alexa devices.</div>
+                    </div>
+                }
+            </div>
+
+            @* ── IP Speaker (Sonos) Channel ── *@
+            <div class="card mb-2">
+                <div class="card-header py-1 px-2 d-flex justify-content-between align-items-center" style="font-size: 12px;">
+                    <span>🔈 IP Speaker (Sonos)</span>
+                    <div class="form-check form-switch mb-0">
+                        <input class="form-check-input" type="checkbox"
+                               checked="@(ssNode.Settings.AlarmNotification.IpSpeaker?.Enabled == true)"
+                               @onchange="(e) => { EnsureIpSpeakerChannel(ssNode).Enabled = (bool)(e.Value ?? false); OnChanged(); }" />
+                    </div>
+                </div>
+                @if (ssNode.Settings.AlarmNotification.IpSpeaker is { Enabled: true })
+                {
+                    <div class="card-body p-2">
+                        <div class="mb-1">
+                            <label class="form-label mb-0 small">Speaker Addresses (comma-separated)</label>
+                            <input type="text" class="form-control form-control-sm"
+                                   @bind="ssNode.Settings.AlarmNotification.IpSpeaker.SpeakerAddresses" @bind:after="OnChanged"
+                                   placeholder="192.168.1.50, 192.168.1.51:1400" />
+                            <div class="form-text">IP or IP:port of each Sonos/UPnP speaker. Default port: 1400.</div>
+                        </div>
+                        <div class="row g-1 mb-1">
+                            <div class="col-4">
+                                <label class="form-label mb-0 small">Volume (0-100)</label>
+                                <input type="number" class="form-control form-control-sm" min="0" max="100"
+                                       @bind="ssNode.Settings.AlarmNotification.IpSpeaker.Volume" @bind:after="OnChanged" />
+                                <div class="form-text">0 = keep current volume.</div>
+                            </div>
+                            <div class="col-4">
+                                <label class="form-label mb-0 small">TTS Language</label>
+                                <input type="text" class="form-control form-control-sm"
+                                       @bind="ssNode.Settings.AlarmNotification.IpSpeaker.TtsLanguage" @bind:after="OnChanged"
+                                       placeholder="en" />
+                            </div>
+                            <div class="col-4 d-flex align-items-end">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox"
+                                           @bind="ssNode.Settings.AlarmNotification.IpSpeaker.RestoreVolume" @bind:after="OnChanged" />
+                                    <label class="form-check-label small">Restore volume</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mb-1">
+                            <label class="form-label mb-0 small">Custom TTS URL (optional)</label>
+                            <input type="text" class="form-control form-control-sm"
+                                   @bind="ssNode.Settings.AlarmNotification.IpSpeaker.TtsUrlTemplate" @bind:after="OnChanged"
+                                   placeholder="http://my-tts/speak?text={text}&lang={lang}" />
+                            <div class="form-text">Use <code>{text}</code> and <code>{lang}</code> placeholders. Leave empty for Google Translate TTS.</div>
+                        </div>
+                        <div class="mb-1">
+                            <label class="form-label mb-0 small fw-semibold">Severity-based Volume (optional, 0 = use default)</label>
+                            <div class="row g-1">
+                                <div class="col-4">
+                                    <label class="form-label mb-0 small">Critical (≥800)</label>
+                                    <input type="number" class="form-control form-control-sm" min="0" max="100"
+                                           @bind="ssNode.Settings.AlarmNotification.IpSpeaker.VolumeCritical" @bind:after="OnChanged" />
+                                </div>
+                                <div class="col-4">
+                                    <label class="form-label mb-0 small">Warning (500-799)</label>
+                                    <input type="number" class="form-control form-control-sm" min="0" max="100"
+                                           @bind="ssNode.Settings.AlarmNotification.IpSpeaker.VolumeWarning" @bind:after="OnChanged" />
+                                </div>
+                                <div class="col-4">
+                                    <label class="form-label mb-0 small">Info (&lt;500)</label>
+                                    <input type="number" class="form-control form-control-sm" min="0" max="100"
+                                           @bind="ssNode.Settings.AlarmNotification.IpSpeaker.VolumeInfo" @bind:after="OnChanged" />
+                                </div>
+                            </div>
+                            <div class="form-text">Set per-severity volume. 0 = use the default volume above. Per-alarm VolumeOverride takes priority.</div>
+                        </div>
                     </div>
                 }
             </div>
@@ -3038,6 +3161,20 @@ else if (Node is UserNode uNode)
         EnsureAlarmNotification(ssNode);
         ssNode.Settings.AlarmNotification!.WhatsApp ??= new WhatsAppNotificationChannel();
         return ssNode.Settings.AlarmNotification.WhatsApp;
+    }
+
+    private AlexaNotificationChannel EnsureAlexaChannel(ServerSettingsNode ssNode)
+    {
+        EnsureAlarmNotification(ssNode);
+        ssNode.Settings.AlarmNotification!.Alexa ??= new AlexaNotificationChannel();
+        return ssNode.Settings.AlarmNotification.Alexa;
+    }
+
+    private IpSpeakerNotificationChannel EnsureIpSpeakerChannel(ServerSettingsNode ssNode)
+    {
+        EnsureAlarmNotification(ssNode);
+        ssNode.Settings.AlarmNotification!.IpSpeaker ??= new IpSpeakerNotificationChannel();
+        return ssNode.Settings.AlarmNotification.IpSpeaker;
     }
 
     // ── GDS Config helper ──

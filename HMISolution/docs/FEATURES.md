@@ -25,7 +25,7 @@ the REST API demo project.
 
 **Components:**
 - `Server/NotificationService.cs` — Sends alarm notifications via Email (SMTP),
-  Telegram Bot API, and WhatsApp (Twilio).
+  Telegram Bot API, WhatsApp (Cloud API), Alexa (Proactive Events API), and IP Speakers (Sonos/UPnP).
 - `SharedModels/NodeModels.cs` — `AlarmNotificationConfig` in `ServerSettings`;
   `NotifyOnActivation` flag on `AlarmConfig`.
 
@@ -57,7 +57,8 @@ a notification when the alarm activates.
 
 **Editor UI:**
 - Variable Properties → Alarm section → *Notify on Activation* checkbox
-- Server Settings → *Alarm Notification* section with SMTP/Telegram/WhatsApp fields
+- Server Settings → *Alarm Notification* section with SMTP/Telegram/WhatsApp/Alexa/IP Speaker fields
+- See [Alexa Notifications Setup](Alexa-Notifications-Setup.md) for the full Alexa Skill creation walkthrough
 
 ---
 
