@@ -95,6 +95,8 @@ namespace SimpleOpcFileServer
         // Alarm notification service (Email, Telegram, WhatsApp)
         private NotificationService? _notificationService;
         internal NotificationService? NotificationService => _notificationService;
+        internal EventLogger? EventLogger => _eventLogger;
+        internal RecipeManager? RecipeManager => _recipeManager;
 
         // Anomaly detection service
         private AnomalyDetectionService? _anomalyDetectionService;
@@ -2005,6 +2007,26 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 return true;
             variable = null;
             return false;
+        }
+
+        internal bool GetVariableQuality(string variableName)
+        {
+            return TryResolveVariable(variableName, out var v) && v.StatusCode == Opc.Ua.StatusCodes.Good;
+        }
+
+        internal DateTime? GetVariableTimestamp(string variableName)
+        {
+            return TryResolveVariable(variableName, out var v) ? v.Timestamp : null;
+        }
+
+        internal void SetVariableQuality(string variableName, bool good)
+        {
+            if (TryResolveVariable(variableName, out var v))
+            {
+                v.StatusCode = good ? Opc.Ua.StatusCodes.Good : Opc.Ua.StatusCodes.Bad;
+                v.ClearChangeMasks(SystemContext, false);
+            }
+            else throw new InvalidOperationException("Variable not found: " + variableName);
         }
 
         public object? ReadVariable(string variableName)

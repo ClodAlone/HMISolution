@@ -93,7 +93,7 @@ namespace SimpleOpcFileServer
                     if (!string.IsNullOrWhiteSpace(ttsTemplate))
                         audioUrl = ttsTemplate.Replace("{text}", Uri.EscapeDataString(message)).Replace("{lang}", Uri.EscapeDataString(lang));
                     else
-                        audioUrl = $"https://translate.google.com/translate_tts?ie=UTF-8&tl={Uri.EscapeDataString(lang)}&client=tw-ob&q={Uri.EscapeDataString(message)}";
+                        audioUrl = $"x-rincon-mp3radio://translate.google.com/translate_tts?ie=UTF-8&tl={Uri.EscapeDataString(lang)}&client=tw-ob&q={Uri.EscapeDataString(message)}";
                     var speakers = speakerAddresses.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
                     var tasks = new List<Task>();
                     foreach (var s in speakers) tasks.Add(PlayOnSpeakerAsync(s, audioUrl, volume, false));
@@ -489,7 +489,7 @@ namespace SimpleOpcFileServer
                 {
                     // Google Translate TTS (simple, zero-config â€” not for heavy production use)
                     var lang = string.IsNullOrWhiteSpace(cfg.TtsLanguage) ? "en" : cfg.TtsLanguage;
-                    audioUrl = $"https://translate.google.com/translate_tts?ie=UTF-8&tl={Uri.EscapeDataString(lang)}&client=tw-ob&q={Uri.EscapeDataString(ttsText)}";
+                    audioUrl = $"x-rincon-mp3radio://translate.google.com/translate_tts?ie=UTF-8&tl={Uri.EscapeDataString(lang)}&client=tw-ob&q={Uri.EscapeDataString(ttsText)}";
                 }
 
                 // Resolve volume: per-alarm override > severity tier > default

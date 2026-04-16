@@ -57,6 +57,8 @@ else
 {
 <div class="editor-container">
     @* Menubar *@
+    @if (!_isFullScreen)
+    {
     <div class="editor-toolbar">
         @if (_openMenu != null)
         {
@@ -173,7 +175,7 @@ else
                         }
                         <div class="menu-separator"></div>
                         <div class="menu-item" @onclick="ToggleMaximize" @onclick:stopPropagation>
-                            <span class="menu-check">@(_dockContainer?.IsMaximized == true ? "✓" : "")</span>
+                            <span class="menu-check">@(_isFullScreen || _dockContainer?.IsMaximized == true ? "✓" : "")</span>
                             <span class="menu-label">⬜ @L["menu.view.maximize"]</span>
                             <span class="menu-shortcut">Esc</span>
                         </div>
@@ -387,10 +389,10 @@ else
         <span class="iconbar-sep"></span>
 
         @* Layout *@
-        <button class="iconbar-btn @(_dockContainer?.IsMaximized == true ? "iconbar-btn-active" : "")"
-                title="@(_dockContainer?.IsMaximized == true ? $"{L["toolbar.restore"]} (Esc)" : L["toolbar.maximize"])"
+        <button class="iconbar-btn @(_isFullScreen ? "iconbar-btn-active" : _dockContainer?.IsMaximized == true ? "iconbar-btn-active" : "")"
+                title="@(_isFullScreen ? "Restore (Esc)" : _dockContainer?.IsMaximized == true ? $"{L["toolbar.restore"]} (Esc)" : L["toolbar.maximize"])"
                 @onclick="ToggleMaximize">
-            @(_dockContainer?.IsMaximized == true ? "🗗" : "⬜")
+            @(_isFullScreen || _dockContainer?.IsMaximized == true ? "🗗" : "⬜")
         </button>
         <button class="iconbar-btn @(_dockContainer?.IsFocusMode == true ? "iconbar-btn-active" : "")"
                 title="@(_dockContainer?.IsFocusMode == true ? "Exit Focus Mode (Esc)" : "Focus Mode (maximize with properties)")"
@@ -398,6 +400,14 @@ else
             @(_dockContainer?.IsFocusMode == true ? "🗗" : "🔲")
         </button>
     </div>
+
+    }
+
+    @* Floating restore button when full-screen *@
+    @if (_isFullScreen)
+    {
+        <div class="fullscreen-restore-btn" @onclick="ToggleMaximize" title="Restore (Esc)">🗗</div>
+    }
 
     @* Main Content *@
     <div class="editor-main">
@@ -867,6 +877,7 @@ else
     private bool _showAboutDialog;
     private bool _showSplash;
     private bool _showNewProjectWizard;
+    private bool _isFullScreen;
 
     private string _selectedFile = "";
     private string[] _availableFiles = [];
@@ -1656,10 +1667,22 @@ private void UnsavedDialogCancel()
             panel.Zone = "hidden";
     }
 
-    private void ToggleMaximize()
+    private async void ToggleMaximize()
     {
         CloseMenus();
-        _dockContainer?.ToggleMaximize();
+        _isFullScreen = !_isFullScreen;
+        if (_isFullScreen)
+        {
+            _dockContainer?.ToggleMaximize();
+            try { await JS.InvokeVoidAsync("eval", "document.documentElement.requestFullscreen?.()"); } catch { }
+        }
+        else
+        {
+            if (_dockContainer?.IsMaximized == true)
+                _dockContainer.ToggleMaximize();
+            try { await JS.InvokeVoidAsync("eval", "document.exitFullscreen?.()"); } catch { }
+        }
+        StateHasChanged();
     }
 
     private void ToggleFocusMode()
@@ -2064,16 +2087,23 @@ private void UnsavedDialogCancel()
     }
 
     [JSInvokable]
-    public void OnKeyboardEscape()
+    public async void OnKeyboardEscape()
     {
-        if (_dockContainer != null)
+        if (_isFullScreen)
+        {
+            _isFullScreen = false;
+            if (_dockContainer?.IsMaximized == true)
+                _dockContainer.ToggleMaximize();
+            try { await JS.InvokeVoidAsync("eval", "document.exitFullscreen?.()"); } catch { }
+        }
+        else if (_dockContainer != null)
         {
             if (_dockContainer.IsMaximized)
                 _dockContainer.ToggleMaximize();
             else if (_dockContainer.IsFocusMode)
                 _dockContainer.ToggleFocusMode();
         }
-        InvokeAsync(StateHasChanged);
+        await InvokeAsync(StateHasChanged);
     }
 
     [JSInvokable]

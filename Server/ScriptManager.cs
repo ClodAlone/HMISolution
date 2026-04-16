@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
+using System.Net.Http;
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Scripting;
@@ -476,5 +477,89 @@ End Module";
         {
             _scriptManager.Subscribe(variableName, handler);
         }
+
+        // -- 1. ReadString --
+        /// <summary>Read a variable value as string.</summary>
+        public string ReadString(string variableName) => Read(variableName)?.ToString() ?? "";
+
+        // -- 2. Delay --
+        /// <summary>Cancellation-aware delay.</summary>
+        public Task Delay(int milliseconds) => Task.Delay(milliseconds, _ct);
+
+        // -- 3. LogEvent --
+        /// <summary>Write an entry to the SQLite event journal.</summary>
+        public void LogEvent(string category, string severity, string source, string message, string? details = null)
+        {
+            switch (category)
+            {
+                case "Alarm": _manager.EventLogger?.LogAlarm(severity, source, message, details); break;
+                case "Auth": _manager.EventLogger?.LogAuth(severity, source, message, details); break;
+                case "Driver": _manager.EventLogger?.LogDriver(severity, source, message, details); break;
+                default: _manager.EventLogger?.LogSystem(severity, source, message, details); break;
+            }
+        }
+
+        // -- 4. ReadMultiple --
+        /// <summary>Batch-read multiple variables.</summary>
+        public Dictionary<string, object?> ReadMultiple(params string[] variableNames)
+        {
+            var result = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+            foreach (var name in variableNames) result[name] = Read(name);
+            return result;
+        }
+
+        // -- 5. WriteMultiple --
+        /// <summary>Batch-write multiple variables.</summary>
+        public void WriteMultiple(Dictionary<string, object> values)
+        {
+            foreach (var kvp in values) Write(kvp.Key, kvp.Value);
+        }
+
+        // -- 6. GetTimestamp --
+        /// <summary>Get the OPC UA source timestamp of a variable.</summary>
+        public DateTime? GetTimestamp(string variableName) => _manager.GetVariableTimestamp(variableName);
+
+        // -- 7. HttpGet / HttpPost --
+        private static readonly HttpClient s_scriptHttp = new() { Timeout = TimeSpan.FromSeconds(30) };
+
+        /// <summary>HTTP GET request. Returns response body.</summary>
+        public async Task<string> HttpGet(string url)
+        {
+            var resp = await s_scriptHttp.GetAsync(url, _ct);
+            resp.EnsureSuccessStatusCode();
+            return await resp.Content.ReadAsStringAsync(_ct);
+        }
+
+        /// <summary>HTTP POST request. Returns response body.</summary>
+        public async Task<string> HttpPost(string url, string body, string contentType = "application/json")
+        {
+            var content = new StringContent(body, System.Text.Encoding.UTF8, contentType);
+            var resp = await s_scriptHttp.PostAsync(url, content, _ct);
+            resp.EnsureSuccessStatusCode();
+            return await resp.Content.ReadAsStringAsync(_ct);
+        }
+
+        // -- 8. GenerateReport --
+        /// <summary>Trigger report generation by name.</summary>
+        public Task<string?> GenerateReport(string reportName) => _manager.GenerateReportAsync(reportName);
+
+        // -- 9. SetQuality --
+        /// <summary>Set the OPC UA quality of a variable (good or bad).</summary>
+        public void SetQuality(string variableName, bool good) => _manager.SetVariableQuality(variableName, good);
+
+        // -- 10. GetQuality --
+        /// <summary>Get the OPC UA quality of a variable. Returns true if Good.</summary>
+        public bool GetQuality(string variableName) => _manager.GetVariableQuality(variableName);
+
+        // -- 11. ExecuteRecipe --
+        /// <summary>Execute a recipe action: Load, Save, Activate, Delete.</summary>
+        public void ExecuteRecipe(string recipeName, string action, string targetRecipeName = "")
+        {
+            _manager.RecipeManager?.Execute(recipeName, action, string.IsNullOrEmpty(targetRecipeName) ? recipeName : targetRecipeName);
+        }
+
+        // -- 12. CancelToken --
+        /// <summary>Script cancellation token. Use: while (!CancelToken.IsCancellationRequested).</summary>
+        public CancellationToken CancelToken => _ct;
     }
 }
