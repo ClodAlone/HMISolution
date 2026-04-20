@@ -105,12 +105,14 @@ else if (Screen.LayoutMode == "responsive")
                                         Categories="@sym.EventLogCategories" />
                         break;
                     case "editbox":
+                        <div style="--editbox-bg: @fillColor; --editbox-border: @(sym.Stroke ?? "#475569"); @BuildHtmlAnimStyle(sym) width: 100%; height: 100%;">
                         <EditBoxWidget VariablePath="@ResolveAlias(sym.VariablePath, sym.InstanceAliases is { Count: > 0 } ? sym.InstanceAliases : null)"
                                        Step="@sym.EditBoxStep"
                                        Format="@sym.EditBoxFormat"
                                        Min="@sym.MinValue"
                                        Max="@sym.MaxValue"
                                        ShowStatistics="@sym.EditBoxShowStatistics" />
+                        </div>
                         break;
                     case "ipcamera":
                         <IpCameraWidget CameraId="@(sym.Camera?.CameraId ?? "")"
@@ -532,7 +534,7 @@ else
                         break;
                     case "editbox":
                         <foreignObject width="@sym.Width" height="@sym.Height">
-                            <div xmlns="http://www.w3.org/1999/xhtml" style="width: @(sym.Width)px; height: @(sym.Height)px; @WidgetFontStyle(sym)">
+                            <div xmlns="http://www.w3.org/1999/xhtml" style="width: @(sym.Width)px; height: @(sym.Height)px; --editbox-bg: @fillColor; --editbox-border: @(sym.Stroke ?? "#475569"); @BuildHtmlAnimStyle(sym) @WidgetFontStyle(sym)">
                                 <EditBoxWidget VariablePath="@ResolveAlias(sym.VariablePath, sym.InstanceAliases is { Count: > 0 } ? sym.InstanceAliases : null)"
                                                Step="@sym.EditBoxStep"
                                                Format="@sym.EditBoxFormat"
@@ -3386,6 +3388,40 @@ else
             }
         }
 
+        // Generate HTML-compatible keyframe variants for Fill/Stroke/Opacity animations
+        // These use background-color/border-color instead of SVG fill/stroke
+        foreach (var sym in Screen.Symbols)
+        {
+            foreach (var anim in sym.Animations)
+            {
+                if (!IsAnimActive(anim)) continue;
+                if (anim.Property is not ("Fill" or "Stroke" or "Opacity")) continue;
+
+                var animName = $"anim_{sym.Id}_{anim.Id}_html";
+                sb.AppendLine($"@keyframes {animName} {{");
+
+                foreach (var kf in anim.Keyframes.OrderBy(k => k.Percent))
+                {
+                    sb.Append($"  {kf.Percent.ToString("F0", _ci)}% {{ ");
+                    switch (anim.Property)
+                    {
+                        case "Fill":
+                            sb.Append($"background-color: {kf.Value}; ");
+                            break;
+                        case "Stroke":
+                            sb.Append($"border-color: {kf.Value}; ");
+                            break;
+                        case "Opacity":
+                            sb.Append($"opacity: {kf.Value}; ");
+                            break;
+                    }
+                    sb.AppendLine("}");
+                }
+
+                sb.AppendLine("}");
+            }
+        }
+
         return sb.ToString();
     }
 
@@ -3476,6 +3512,38 @@ else
         "Elastic" => "cubic-bezier(0.68, -0.55, 0.27, 1.55)",
         _ => "linear"
     };
+
+    /// <summary>
+    /// Builds an inline CSS animation style for an HTML widget wrapper (foreignObject content).
+    /// Translates SVG fill/stroke into background-color/border-color keyframes.
+    /// </summary>
+    private string BuildHtmlAnimStyle(ScreenSymbol sym)
+    {
+        if (sym.Animations.Count == 0) return "";
+        var hasHtmlAnim = sym.Animations.Any(a => IsAnimActive(a) && a.Property is "Fill" or "Stroke" or "Opacity");
+        if (!hasHtmlAnim) return "";
+
+        var sb = new System.Text.StringBuilder();
+        var first = true;
+        foreach (var anim in sym.Animations)
+        {
+            if (!IsAnimActive(anim)) continue;
+            if (anim.Property is not ("Fill" or "Stroke" or "Opacity")) continue;
+
+            var animName = $"anim_{sym.Id}_{anim.Id}_html";
+            var dur = (anim.DurationMs / 1000.0).ToString("F2", _ci);
+            var delay = (anim.DelayMs / 1000.0).ToString("F2", _ci);
+            var iteration = anim.RepeatCount == 0 ? "infinite" : anim.RepeatCount.ToString();
+            var direction = anim.AutoReverse ? "alternate" : "normal";
+            var easing = MapEasing(anim.Easing);
+
+            if (!first) sb.Append(", ");
+            sb.Append($"{animName} {dur}s {easing} {delay}s {iteration} {direction}");
+            first = false;
+        }
+
+        return sb.Length > 0 ? $"animation: {sb};" : "";
+    }
 
 
     // â”€â”€â”€ Animated Text rendering (SVG canvas via foreignObject) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
