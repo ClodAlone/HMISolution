@@ -3173,10 +3173,10 @@ namespace SharedModels
         /// <summary>Whether the NL query widget is available in the runtime viewer.</summary>
         public bool Enabled { get; set; }
 
-        /// <summary>AI engine to use: "OpenAI", "Gemini", or "Ollama". Default: "Ollama".</summary>
+        /// <summary>AI engine to use: "OpenAI", "Gemini", "Claude", or "Ollama". Default: "Ollama".</summary>
         public string Engine { get; set; } = "Ollama";
 
-        /// <summary>Model name for Ollama (e.g. "mistral", "llama3") or overridden OpenAI model.</summary>
+        /// <summary>Model name for Ollama (e.g. "mistral", "llama3"), Claude (e.g. "claude-3-5-sonnet-20241022"), or overridden OpenAI model.</summary>
         public string Model { get; set; } = "mistral";
 
         /// <summary>Base URL for the Ollama API. Default: "http://127.0.0.1:11434".</summary>
@@ -3191,7 +3191,7 @@ namespace SharedModels
         /// <summary>Placeholder text shown in the query input box.</summary>
         public string Placeholder { get; set; } = "Ask about your process data...";
 
-        /// <summary>Optional API key for OpenAI or Gemini. Falls back to OPENAI_API_KEY / GEMINI_API_KEY env var.</summary>
+        /// <summary>Optional API key for OpenAI, Gemini, or Claude. Falls back to OPENAI_API_KEY / GEMINI_API_KEY / ANTHROPIC_API_KEY env var.</summary>
         public string? ApiKey { get; set; }
     }
 

@@ -63,6 +63,7 @@ public class NaturalLanguageQueryService
             {
                 "OpenAI" => await CallOpenAiAsync(prompt, cfg, ct),
                 "Gemini" => await CallGeminiAsync(prompt, cfg, ct),
+                "Claude" => await CallClaudeAsync(prompt, cfg, ct),
                 _ => await CallOllamaAsync(prompt, cfg, ct)
             };
 
@@ -354,6 +355,39 @@ public class NaturalLanguageQueryService
         var json = await response.Content.ReadAsStringAsync(ct);
         using var doc = JsonDocument.Parse(json);
         return doc.RootElement.GetProperty("candidates")[0].GetProperty("content").GetProperty("parts")[0].GetProperty("text").GetString() ?? "";
+    }
+
+    private static async Task<string> CallClaudeAsync(string prompt, NaturalLanguageQueryConfig cfg, CancellationToken ct)
+    {
+        var apiKey = !string.IsNullOrEmpty(cfg.ApiKey) ? cfg.ApiKey : Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY") ?? "";
+        if (string.IsNullOrEmpty(apiKey))
+            return "Anthropic API key not configured. Set the ANTHROPIC_API_KEY environment variable.";
+
+        using var client = new HttpClient { Timeout = TimeSpan.FromMinutes(2) };
+        client.DefaultRequestHeaders.Add("x-api-key", apiKey);
+        client.DefaultRequestHeaders.Add("anthropic-version", "2023-06-01");
+
+        var model = string.IsNullOrEmpty(cfg.Model) || cfg.Model == "mistral" ? "claude-3-5-sonnet-20241022" : cfg.Model;
+        var body = new
+        {
+            model,
+            max_tokens = 2048,
+            messages = new[] { new { role = "user", content = prompt } },
+            temperature = 0.2
+        };
+
+        var content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
+        var response = await client.PostAsync("https://api.anthropic.com/v1/messages", content, ct);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var err = await response.Content.ReadAsStringAsync(ct);
+            return $"Claude error ({response.StatusCode}): {err}";
+        }
+
+        var json = await response.Content.ReadAsStringAsync(ct);
+        using var doc = JsonDocument.Parse(json);
+        return doc.RootElement.GetProperty("content")[0].GetProperty("text").GetString() ?? "";
     }
 
     private static async Task<string> CallOllamaAsync(string prompt, NaturalLanguageQueryConfig cfg, CancellationToken ct)

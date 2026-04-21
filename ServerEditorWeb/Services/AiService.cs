@@ -4,7 +4,7 @@ namespace ServerEditorWeb.Services;
 
 public class AiService
 {
-    public string[] AvailableEngines { get; } = ["OpenAI", "Gemini", "Ollama"];
+    public string[] AvailableEngines { get; } = ["OpenAI", "Gemini", "Claude", "Ollama"];
 
     // Ollama training state
     private bool _isTraining;
@@ -43,6 +43,7 @@ public class AiService
         {
             "OpenAI" => await CallOpenAiAsync(prompt, currentJson, referenceJson, referenceFileName),
             "Gemini" => await CallGeminiAsync(prompt, currentJson, referenceJson, referenceFileName),
+            "Claude" => await CallClaudeAsync(prompt, currentJson, referenceJson, referenceFileName),
             "Ollama" => await CallOllamaAsync(prompt, currentJson, referenceJson, referenceFileName),
             _ => ("", $"Engine '{engine}' is not supported.")
         };
@@ -216,6 +217,39 @@ Lines starting with # or ## are comments — read them for IP/port info. Parse d
         var responseString = await response.Content.ReadAsStringAsync();
         using var doc = JsonDocument.Parse(responseString);
         var contentText = doc.RootElement.GetProperty("candidates")[0].GetProperty("content").GetProperty("parts")[0].GetProperty("text").GetString();
+
+        return ParseAiResponse(contentText);
+    }
+
+    private async Task<(string, string)> CallClaudeAsync(string userPrompt, string oldJson, string? referenceJson = null, string? referenceFileName = null)
+    {
+        string apiKey = Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY") ?? "";
+        if (string.IsNullOrEmpty(apiKey))
+            return ("", "Set ANTHROPIC_API_KEY environment variable to use Claude.");
+
+        string endpoint = "https://api.anthropic.com/v1/messages";
+
+        using var client = new HttpClient();
+        client.DefaultRequestHeaders.Add("x-api-key", apiKey);
+        client.DefaultRequestHeaders.Add("anthropic-version", "2023-06-01");
+
+        var prompt = BuildPrompt(userPrompt, oldJson, referenceJson, referenceFileName);
+
+        var requestBody = new
+        {
+            model = "claude-3-5-sonnet-20241022",
+            max_tokens = 4096,
+            messages = new[] { new { role = "user", content = prompt } },
+            temperature = 0.1
+        };
+
+        var content = new StringContent(JsonSerializer.Serialize(requestBody), System.Text.Encoding.UTF8, "application/json");
+        var response = await client.PostAsync(endpoint, content);
+        response.EnsureSuccessStatusCode();
+
+        var responseString = await response.Content.ReadAsStringAsync();
+        using var doc = JsonDocument.Parse(responseString);
+        var contentText = doc.RootElement.GetProperty("content")[0].GetProperty("text").GetString();
 
         return ParseAiResponse(contentText);
     }
