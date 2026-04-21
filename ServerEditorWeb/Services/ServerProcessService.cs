@@ -393,7 +393,7 @@ public class ServerProcessService : IDisposable
     /// <summary>
     /// Read the project config file and check that OPC UA and diagnostics ports are available.
     /// </summary>
-    private static (bool success, string message) CheckServerPorts(string nodesPath)
+    private (bool success, string message) CheckServerPorts(string nodesPath)
     {
         int opcPort = 14840;
         int diagPort = 14841;
@@ -423,15 +423,29 @@ public class ServerProcessService : IDisposable
         {
         }
 
+        this.AppendOutput($"[Port Check] Checking availability: OPC UA port {opcPort}, Diagnostics port {diagPort}");
+
         var busy = new List<string>();
         if (IsPortInUse(opcPort))
+        {
             busy.Add("OPC UA port " + opcPort);
+            this.AppendOutput($"[Port Check] WARNING: OPC UA port {opcPort} is already in use");
+        }
         if (diagPort > 0 && IsPortInUse(diagPort))
+        {
             busy.Add("Diagnostics port " + diagPort);
+            this.AppendOutput($"[Port Check] WARNING: Diagnostics port {diagPort} is already in use");
+        }
 
         if (busy.Count > 0)
-            return (false, "Cannot start server: " + string.Join(" and ", busy) + " already in use.");
+        {
+            var portList = string.Join(" and ", busy);
+            var errorMsg = $"❌ Cannot start server: {portList} already in use. Please stop any running server instances or change the port configuration in ServerSettings.";
+            this.AppendOutput($"[Port Check] {errorMsg}");
+            return (false, errorMsg);
+        }
 
+        this.AppendOutput("[Port Check] OK: All required ports are available");
         return (true, "");
     }
 

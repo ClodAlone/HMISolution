@@ -67,8 +67,17 @@ public class RuntimeViewerProcessService : IDisposable
         bool isDesktop = mode == "desktop";
 
         // For web mode, check that the HTTP port is available before starting
-        if (!isDesktop && ServerProcessService.IsPortInUse(port))
-            return (false, $"Cannot start RuntimeViewer: HTTP port {port} is already in use.");
+        if (!isDesktop)
+        {
+            this.AppendOutput($"[Port Check] Checking availability: HTTP port {port}");
+            if (ServerProcessService.IsPortInUse(port))
+            {
+                var errorMsg = $"❌ Cannot start RuntimeViewer: HTTP port {port} is already in use. Please stop any running viewer instances, change the port number, or use Desktop mode which auto-selects a free port.";
+                this.AppendOutput($"[Port Check] {errorMsg}");
+                return (false, errorMsg);
+            }
+            this.AppendOutput($"[Port Check] OK: HTTP port {port} is available");
+        }
 
         string? viewerExe = isDesktop
             ? FindDesktopExecutable(nodesPath)
