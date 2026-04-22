@@ -266,6 +266,12 @@ public class ComplianceConfig
 
     /// <summary>Audit trail backup interval in hours.</summary>
     public int AuditBackupIntervalHours { get; set; } = 24;
+
+    /// <summary>Password policy configuration.</summary>
+    public PasswordPolicy PasswordPolicy { get; set; } = new();
+
+    /// <summary>Auto log-off timeout in minutes (0 = disabled).</summary>
+    public int AutoLogOffMinutes { get; set; } = 15;
 }
 
 /// <summary>

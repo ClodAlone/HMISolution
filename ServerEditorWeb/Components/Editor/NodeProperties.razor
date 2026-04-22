@@ -1449,6 +1449,119 @@ else if (Node is ServerSettingsNode ssNode)
             </div>
         }
 
+        @* ─── FDA 21 CFR Part 11 Compliance ──────────────────── *@
+        <hr />
+        <h6>🔒 FDA 21 CFR Part 11 Compliance</h6>
+        <div class="form-text mb-2">
+            Regulatory compliance for pharmaceutical/biotech: electronic signatures, tamper-proof audit trails, password policies, account lockout.
+        </div>
+        <div class="mb-2 form-check">
+            <input class="form-check-input" type="checkbox"
+                   checked="@(ssNode.Settings.Compliance?.Enabled == true)"
+                   @onchange="e => { EnsureComplianceConfig(ssNode).Enabled = (bool)(e.Value ?? false); OnChanged(); }" />
+            <label class="form-check-label">Enable FDA 21 CFR Part 11 Compliance</label>
+        </div>
+        @if (ssNode.Settings.Compliance is { Enabled: true })
+        {
+            <div class="mb-2">
+                <label class="form-label small">Audit Trail Database Path</label>
+                <input type="text" class="form-control form-control-sm"
+                       @bind="ssNode.Settings.Compliance.AuditDbPath" @bind:after="OnChanged"
+                       placeholder="audit_trail.db" />
+                <div class="form-text">SQLite file for tamper-proof audit storage. Default: <code>audit_trail.db</code>.</div>
+            </div>
+            <div class="mb-2">
+                <label class="form-label small">Audit Retention (days)</label>
+                <input type="number" class="form-control form-control-sm" min="0"
+                       @bind="ssNode.Settings.Compliance.AuditRetentionDays" @bind:after="OnChanged" />
+                <div class="form-text">Audit records older than this are purged. 0 = keep forever. Default: 2555 (7 years).</div>
+            </div>
+            <div class="mb-2 form-check">
+                <input class="form-check-input" type="checkbox"
+                       @bind="ssNode.Settings.Compliance.RequireElectronicSignatures" @bind:after="OnChanged" />
+                <label class="form-check-label">Require Electronic Signatures</label>
+                <div class="form-text">Re-authenticate users for critical operations (recipe changes, config modifications, user management).</div>
+            </div>
+            <div class="mb-2 form-check">
+                <input class="form-check-input" type="checkbox"
+                       @bind="ssNode.Settings.Compliance.RequireDualSignatures" @bind:after="OnChanged" />
+                <label class="form-check-label">Require Dual Signatures</label>
+                <div class="form-text">High-risk operations require approval from two users.</div>
+            </div>
+            <div class="mb-2 form-check">
+                <input class="form-check-input" type="checkbox"
+                       @bind="ssNode.Settings.Compliance.RequireReasonForChange" @bind:after="OnChanged" />
+                <label class="form-check-label">Require Reason for Change</label>
+                <div class="form-text">Users must provide a reason when making critical changes.</div>
+            </div>
+            <div class="mb-2 form-check">
+                <input class="form-check-input" type="checkbox"
+                       @bind="ssNode.Settings.Compliance.VerifyIntegrityOnStartup" @bind:after="OnChanged" />
+                <label class="form-check-label">Verify Integrity on Startup</label>
+                <div class="form-text">Validate audit trail hash chain on server startup (recommended).</div>
+            </div>
+
+            <h6 class="mt-3">Password Policy</h6>
+            <div class="mb-2">
+                <label class="form-label small">Minimum Password Length</label>
+                <input type="number" class="form-control form-control-sm" min="4" max="64"
+                       @bind="ssNode.Settings.Compliance.PasswordPolicy.MinLength" @bind:after="OnChanged" />
+                <div class="form-text">Minimum characters required. Default: 8.</div>
+            </div>
+            <div class="mb-2 form-check">
+                <input class="form-check-input" type="checkbox"
+                       @bind="ssNode.Settings.Compliance.PasswordPolicy.RequireUppercase" @bind:after="OnChanged" />
+                <label class="form-check-label">Require Uppercase</label>
+            </div>
+            <div class="mb-2 form-check">
+                <input class="form-check-input" type="checkbox"
+                       @bind="ssNode.Settings.Compliance.PasswordPolicy.RequireLowercase" @bind:after="OnChanged" />
+                <label class="form-check-label">Require Lowercase</label>
+            </div>
+            <div class="mb-2 form-check">
+                <input class="form-check-input" type="checkbox"
+                       @bind="ssNode.Settings.Compliance.PasswordPolicy.RequireDigit" @bind:after="OnChanged" />
+                <label class="form-check-label">Require Digit</label>
+            </div>
+            <div class="mb-2 form-check">
+                <input class="form-check-input" type="checkbox"
+                       @bind="ssNode.Settings.Compliance.PasswordPolicy.RequireSpecialChar" @bind:after="OnChanged" />
+                <label class="form-check-label">Require Special Character</label>
+            </div>
+            <div class="mb-2">
+                <label class="form-label small">Prevent Reuse (last N passwords)</label>
+                <input type="number" class="form-control form-control-sm" min="0" max="24"
+                       @bind="ssNode.Settings.Compliance.PasswordPolicy.HistoryCount" @bind:after="OnChanged" />
+                <div class="form-text">Users cannot reuse their last N passwords. 0 = no history. Default: 5.</div>
+            </div>
+            <div class="mb-2">
+                <label class="form-label small">Password Max Age (days)</label>
+                <input type="number" class="form-control form-control-sm" min="0"
+                       @bind="ssNode.Settings.Compliance.PasswordPolicy.MaxAgeDays" @bind:after="OnChanged" />
+                <div class="form-text">Force password change after N days. 0 = no expiration. Default: 90.</div>
+            </div>
+
+            <h6 class="mt-3">Account Lockout</h6>
+            <div class="mb-2">
+                <label class="form-label small">Max Failed Login Attempts</label>
+                <input type="number" class="form-control form-control-sm" min="1" max="100"
+                       @bind="ssNode.Settings.Compliance.MaxFailedLoginAttempts" @bind:after="OnChanged" />
+                <div class="form-text">Lock account after N failed attempts. Default: 5.</div>
+            </div>
+            <div class="mb-2">
+                <label class="form-label small">Lockout Duration (minutes)</label>
+                <input type="number" class="form-control form-control-sm" min="1" max="1440"
+                       @bind="ssNode.Settings.Compliance.LockoutDurationMinutes" @bind:after="OnChanged" />
+                <div class="form-text">How long the account remains locked. Default: 30.</div>
+            </div>
+            <div class="mb-2">
+                <label class="form-label small">Auto Log-Off (minutes)</label>
+                <input type="number" class="form-control form-control-sm" min="0"
+                       @bind="ssNode.Settings.Compliance.AutoLogOffMinutes" @bind:after="OnChanged" />
+                <div class="form-text">Automatically log off inactive users. 0 = disabled. Default: 15.</div>
+            </div>
+        }
+
         @* ─── Alarm Notifications ─────────────────────────────── *@
         <hr />
         <h6>📨 Alarm Notifications</h6>
@@ -3293,6 +3406,18 @@ else if (Node is UserNode uNode)
     {
         ssNode.Settings.EventLog ??= new EventLogConfig();
         return ssNode.Settings.EventLog;
+    }
+
+    // ── Compliance Config helper ──
+
+    private ComplianceConfig EnsureComplianceConfig(ServerSettingsNode ssNode)
+    {
+        ssNode.Settings.Compliance ??= new ComplianceConfig
+        {
+            PasswordPolicy = new PasswordPolicy()
+        };
+        ssNode.Settings.Compliance.PasswordPolicy ??= new PasswordPolicy();
+        return ssNode.Settings.Compliance;
     }
 
     private MultiSiteDashboardConfig EnsureMultiSiteConfig(ServerSettingsNode ssNode)
