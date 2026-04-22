@@ -7,6 +7,19 @@ The first open-source HMI / SCADA platform with AI built into every layer — fr
 [![GitHub Stars](https://img.shields.io/github/stars/ClodAlone/HMISolution?style=social)](https://github.com/ClodAlone/HMISolution)
 [![Docker Pulls](https://img.shields.io/docker/pulls/clodprogea/aicorehmi)](https://hub.docker.com/r/clodprogea/aicorehmi)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![FDA 21 CFR Part 11](https://img.shields.io/badge/FDA%2021%20CFR%20Part%2011-Compliant-green)](docs/FDA_21_CFR_Part_11_Implementation_Summary.md)
+
+---
+
+## ✨ Highlights
+
+🧠 **AI-Powered** - Anomaly detection, natural-language queries, AI-assisted engineering  
+🏭 **Industrial-Grade** - OPC UA, 13+ drivers, 100K+ variables, <3s startup  
+🔒 **FDA 21 CFR Part 11** - Electronic signatures, tamper-proof audit trails, validated workflows  
+🐳 **Docker Ready** - Single-command deployment with embedded AI (Ollama + Mistral)  
+⚡ **Modern Stack** - .NET 10, Blazor, TimescaleDB, real-time performance
+
+---
 
 ## 🐳 Docker Quick Start
 
@@ -142,8 +155,49 @@ Anomaly alerts delivered across multiple channels:
 - **🏷️ Runtime Tag Browser** - Hierarchical OPC UA browser with live search
 - **💾 Backup & Restore** - Automatic snapshots with retention management
 - **🔐 Security** - PBKDF2-SHA256, user groups, password policies
+- **📋 FDA 21 CFR Part 11** - Electronic signatures, tamper-proof audit trails, account lockout
 - **🌍 Localization** - EN, DE, IT, FR, JA, ZH support
 - **☁️ Cloud Bridge** - Extend to cloud with CloudBridge & CloudRelay
+
+## 🔒 FDA 21 CFR Part 11 Compliance
+
+Enterprise-ready regulatory compliance for pharmaceutical, biotech, and life sciences:
+
+### Electronic Signatures
+- **Re-authentication required** for critical operations (recipe changes, config modifications, user management)
+- **Dual signature workflows** for high-risk operations
+- **Reason-for-change enforcement** with full audit capture
+- Username + full name + timestamp + meaning captured for every signature
+
+### Tamper-Proof Audit Trail
+- **Cryptographic hash chaining** - Each audit record contains SHA256 hash of previous record
+- **SQLite with WAL mode** - Immutable, high-performance storage
+- **Automatic integrity verification** on startup
+- **7-year retention** (2555 days, configurable)
+- **Complete audit log** - Login/logout, data changes, config changes, signature events, access denied
+
+### Password & Access Controls
+- **Strong password policies** - Configurable complexity, minimum length, expiration
+- **Password history** - Prevents reuse of last 12 passwords
+- **Account lockout** - Automatic lockout after failed login attempts (configurable)
+- **Auto log-off** - Automatic session timeout for inactive users
+- **User groups & permissions** - Role-based access control
+
+### Configuration via Property Panel
+- **Project-level settings** - All compliance features configurable through the editor UI
+- **No manual JSON editing** - Settings saved with project and version controlled
+- **Type-safe validation** - Editor prevents invalid configurations
+
+### Compliance Reports
+- User activity reports with filterable audit trail
+- Signature verification and audit integrity checks
+- Export to CSV for regulatory submission
+
+**Documentation**:
+- [FDA 21 CFR Part 11 Implementation Guide](docs/FDA_21_CFR_Part_11_Implementation_Summary.md)
+- [Quick Start Guide](docs/FDA_21_CFR_Part_11_Quick_Start.md)
+- [Configuration Migration](docs/Compliance_Configuration_Migration.md)
+
 
 ## 🎨 Screen Editor & Widgets
 
@@ -216,11 +270,11 @@ Includes demo Blazor app with 7 interactive pages.
 
 ### Enterprise - **Custom**
 - Everything in Professional, plus:
+- **FDA 21 CFR Part 11 compliance** - Electronic signatures, tamper-proof audit trails, password policies
 - Unlimited instances / multi-site
 - 24x7 dedicated support
 - 1-hour critical SLA
 - Custom AI integration
-- 21 CFR Part 11 compliance
 - White-labeling & OEM
 - Priority feature development
 

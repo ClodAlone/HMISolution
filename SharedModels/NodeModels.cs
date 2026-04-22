@@ -242,6 +242,27 @@ namespace SharedModels
 
         /// <summary>Set to true after the user has logged in at least once.</summary>
         public bool HasLoggedInBefore { get; set; }
+
+        // ─── FDA 21 CFR Part 11 Compliance Fields ────────────────────────────
+
+        /// <summary>Full name of the user for display and audit purposes.</summary>
+        public string FullName { get; set; } = "";
+
+        /// <summary>Previous password hashes to prevent reuse (JSON serialized list).</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public string PasswordHistory { get; set; } = "[]";
+
+        /// <summary>Number of consecutive failed login attempts.</summary>
+        public int FailedLoginAttempts { get; set; }
+
+        /// <summary>UTC timestamp when account lockout expires (null if not locked).</summary>
+        public DateTime? LockedOutUntil { get; set; }
+
+        /// <summary>UTC timestamp of last successful login.</summary>
+        public DateTime? LastLoginAt { get; set; }
+
+        /// <summary>UTC timestamp of last failed login attempt.</summary>
+        public DateTime? LastFailedLoginAt { get; set; }
     }
 
     public class UserGroupConfig
@@ -431,6 +452,13 @@ namespace SharedModels
 
         /// <summary>Configuration for the server event log (alarms, auth, driver, system events).</summary>
         public EventLogConfig? EventLog { get; set; }
+
+        /// <summary>
+        /// FDA 21 CFR Part 11 compliance configuration. When enabled, the system enforces
+        /// electronic signatures, tamper-proof audit trails, password policies, and account lockout
+        /// for regulated pharmaceutical/medical device environments.
+        /// </summary>
+        public ComplianceConfig? Compliance { get; set; }
 
         /// <summary>
         /// HTTP port for the diagnostics API. Set to 0 to disable.
@@ -3433,3 +3461,4 @@ namespace SharedModels
     }
 
 }
+
