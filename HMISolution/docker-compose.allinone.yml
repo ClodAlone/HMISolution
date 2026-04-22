@@ -1,0 +1,136 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database for historical data
+  postgres:
+    image: timescale/timescaledb:latest-pg16
+    container_name: hmi-postgres
+    environment:
+      POSTGRES_DB: hmi
+      POSTGRES_USER: hmi
+      POSTGRES_PASSWORD: hmi123
+      POSTGRES_HOST_AUTH_METHOD: trust
+    volumes:
+      - hmi-pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hmi"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - hmi-network
+
+  # Ollama - Local LLM Server
+  ollama:
+    image: ollama/ollama:latest
+    container_name: hmi-ollama
+    volumes:
+      - hmi-ollama:/root/.ollama
+    ports:
+      - "11434:11434"
+    environment:
+      - OLLAMA_HOST=0.0.0.0:11434
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - hmi-network
+    # Pull Mistral model on startup (optional - comment out if not needed)
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        ollama serve &
+        sleep 10
+        ollama pull mistral
+        wait
+
+  # OPC UA Server + Alarm Engine + Anomaly Detection
+  server:
+    build:
+      context: ..
+      dockerfile: Server/Dockerfile
+    image: clodprogea/hmi-server:latest
+    container_name: hmi-server
+    ports:
+      - "14840:14840"  # OPC UA
+      - "14841:14841"  # Diagnostics/REST API
+    volumes:
+      - hmi-data:/data
+    environment:
+      - POSTGRES_CONNECTION=Host=postgres;Port=5432;Database=hmi;Username=hmi;Password=hmi123
+      - OLLAMA_HOST=http://ollama:11434
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    networks:
+      - hmi-network
+    restart: unless-stopped
+
+  # Web Editor with AI Assistant
+  editor:
+    build:
+      context: ..
+      dockerfile: ServerEditorWeb/Dockerfile
+    image: clodprogea/hmi-editor:latest
+    container_name: hmi-editor
+    ports:
+      - "8080:8080"
+      - "8081:8081"
+    volumes:
+      - hmi-data:/data
+    environment:
+      - ASPNETCORE_URLS=http://+:8080
+      - POSTGRES_CONNECTION=Host=postgres;Port=5432;Database=hmi;Username=hmi;Password=hmi123
+      - OLLAMA_HOST=http://ollama:11434
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - CLAUDE_API_KEY=${CLAUDE_API_KEY:-}
+    depends_on:
+      - postgres
+      - ollama
+      - server
+    networks:
+      - hmi-network
+    restart: unless-stopped
+
+  # Runtime Viewer with NL Query Chat
+  viewer:
+    build:
+      context: ..
+      dockerfile: RuntimeViewer/Dockerfile
+    image: clodprogea/hmi-viewer:latest
+    container_name: hmi-viewer
+    ports:
+      - "8088:8088"
+    volumes:
+      - hmi-data:/data
+    environment:
+      - ASPNETCORE_URLS=http://+:8088
+      - OPC_UA_SERVER=opc.tcp://server:14840
+      - REST_API_URL=http://server:14841
+      - OLLAMA_HOST=http://ollama:11434
+    depends_on:
+      - server
+      - ollama
+    networks:
+      - hmi-network
+    restart: unless-stopped
+
+volumes:
+  hmi-data:
+    driver: local
+  hmi-pgdata:
+    driver: local
+  hmi-ollama:
+    driver: local
+
+networks:
+  hmi-network:
+    driver: bridge
