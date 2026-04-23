@@ -129,6 +129,10 @@ try
         SharedModels.CrashReporter.ConfigureEmail(serverSection?.CrashEmail);
 
         SimpleOpcFileServer.DiagnosticsCollector.Instance.Start(diagPort);
+
+        // Store server settings for REST API initialization later
+        var serverApp = host.Services.GetRequiredService<OpcUaServerApp>();
+        serverApp.SetServerSettings(serverSection);
     }
     catch (Exception ex)
     {
@@ -137,6 +141,7 @@ try
 
     host.Run();
     SimpleOpcFileServer.DiagnosticsCollector.Instance.Dispose();
+    host.Services.GetRequiredService<OpcUaServerApp>().DisposeRestApi();
     return 0;
 }
 catch (Exception ex)
@@ -206,10 +211,22 @@ public class OpcUaWorker : BackgroundService
 public class OpcUaServerApp
 {
     private OpcUaServer _server;
+    private RestApiServer? _restApiServer;
+    private ServerSettings? _serverSettings;
+
+    public void SetServerSettings(ServerSettings? settings)
+    {
+        _serverSettings = settings;
+    }
 
     public void Stop()
     {
         _server?.Stop();
+    }
+
+    public void DisposeRestApi()
+    {
+        _restApiServer?.Dispose();
     }
 
     public async Task StartAsync(string configPath = "nodes.json")
@@ -384,6 +401,28 @@ public class OpcUaServerApp
         Log.Information("OPC UA transport listening on {Endpoint}. Loading address space...", endpointUrl);
         _server.CompleteDeferredLoad();
         Log.Information("Address space loaded successfully.");
+
+        // Initialize REST API server if enabled
+        if (_serverSettings?.Api?.Enabled == true)
+        {
+            try
+            {
+                var nodeManager = _server.GetNodeManager();
+                var eventManager = nodeManager?.EventManager;
+                var recipeManager = nodeManager?.RecipeManager;
+                var eventLogger = nodeManager?.EventLogger;
+                var redundancyService = nodeManager?.RedundancyService;
+
+                _restApiServer = new RestApiServer(_serverSettings.Api);
+                _restApiServer.SetServices(nodeManager, eventManager, recipeManager, eventLogger, redundancyService);
+                _restApiServer.Start();
+                Log.Information("REST API server initialized successfully.");
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Failed to initialize REST API server: {Message}", ex.Message);
+            }
+        }
     }
 }
 
@@ -416,6 +455,14 @@ public class OpcUaServer : StandardServer
     public void CompleteDeferredLoad()
     {
         _nodeManager?.CompleteDeferredLoad();
+    }
+
+    /// <summary>
+    /// Gets the node manager instance for accessing server services.
+    /// </summary>
+    public SimpleFileServerNodeManager? GetNodeManager()
+    {
+        return _nodeManager;
     }
 }
 

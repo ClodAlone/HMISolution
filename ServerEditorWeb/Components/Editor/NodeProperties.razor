@@ -1931,28 +1931,180 @@ else if (Node is ServerSettingsNode ssNode)
         <div class="mb-2">
             <div class="form-check">
                 <input class="form-check-input" type="checkbox"
-                       checked="@(ssNode.Settings.Api != null)"
-                       @onchange="e => { if ((bool)(e.Value ?? false)) ssNode.Settings.Api ??= new SharedModels.ApiConfig(); else ssNode.Settings.Api = null; OnChanged(); }" />
-                <label class="form-check-label">Enable REST API</label>
+                       checked="@(ssNode.Settings.Api?.Enabled == true)"
+                       @onchange="@(e => { EnsureApiConfig(ssNode).Enabled = (bool)(e.Value ?? false); OnChanged(); })" />
+                <label class="form-check-label fw-semibold">Enable REST API</label>
             </div>
-            <div class="form-text">Expose variables, alarms, recipes, and reports to external systems (MES/ERP).</div>
+            <div class="form-text mb-2">Expose variables, alarms, recipes, events, and diagnostics to external systems (MES, ERP, dashboards).</div>
         </div>
-        @if (ssNode.Settings.Api is { } apiCfg)
+        @if (ssNode.Settings.Api is { Enabled: true } apiCfg)
         {
-            <div class="mb-2 form-check">
-                <input class="form-check-input" type="checkbox" @bind="apiCfg.Enabled" @bind:after="OnChanged" />
-                <label class="form-check-label">Active</label>
+            <div class="card border-0 bg-light mb-3">
+                <div class="card-body p-3">
+                    <h6 class="card-subtitle mb-3 text-muted">
+                        <i class="bi bi-gear-fill"></i> Server Configuration
+                    </h6>
+
+                    <div class="mb-3">
+                        <label class="form-label mb-1 small fw-semibold">
+                            <i class="bi bi-hdd-network"></i> Port
+                        </label>
+                        <input type="number" class="form-control form-control-sm" 
+                               @bind="apiCfg.Port" @bind:after="OnChanged"
+                               min="1024" max="65535" />
+                        <div class="form-text">Default: 14842. Must be different from OPC UA port (14840) and diagnostics port (14841).</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label mb-1 small fw-semibold">
+                            <i class="bi bi-key-fill"></i> API Key (Authentication)
+                        </label>
+                        <div class="input-group input-group-sm">
+                            <input type="@(_showApiKey ? "text" : "password")" 
+                                   class="form-control form-control-sm font-monospace" 
+                                   @bind="apiCfg.ApiKey" @bind:after="OnChanged"
+                                   placeholder="Generate a secure key..." />
+                            <button class="btn btn-outline-secondary" type="button" 
+                                    @onclick="() => _showApiKey = !_showApiKey">
+                                <i class="bi @(_showApiKey ? "bi-eye-slash" : "bi-eye")"></i>
+                            </button>
+                            <button class="btn btn-outline-primary" type="button" 
+                                    @onclick="() => GenerateApiKey(apiCfg)">
+                                <i class="bi bi-arrow-clockwise"></i> Generate
+                            </button>
+                        </div>
+                        <div class="form-text">
+                            Clients authenticate via <code>X-API-Key: your-key</code> header or <code>?apiKey=your-key</code> query parameter.
+                            <br />
+                            <strong class="text-warning">⚠ Leave empty to disable authentication (NOT recommended for production)</strong>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-info py-2 px-3 mb-0 small">
+                        <i class="bi bi-info-circle-fill"></i> <strong>Base URL:</strong> 
+                        <code>http://your-server:@(apiCfg.Port)/api/</code>
+                    </div>
+                </div>
             </div>
-            <div class="mb-2">
-                <label class="form-label small">Port</label>
-                <input type="number" class="form-control form-control-sm" @bind="apiCfg.Port" @bind:after="OnChanged" />
-                <div class="form-text">Default: 14842</div>
+
+            <div class="card border-0 bg-light mb-3">
+                <div class="card-body p-3">
+                    <h6 class="card-subtitle mb-3 text-muted">
+                        <i class="bi bi-list-check"></i> Available Endpoints
+                    </h6>
+
+                    @* Variables *@
+                    <div class="mb-2">
+                        <button class="btn btn-sm btn-link text-decoration-none p-0 d-flex align-items-center w-100 text-start" 
+                                @onclick="() => _expandedApiSection = _expandedApiSection == 1 ? 0 : 1">
+                            <i class="bi @(_expandedApiSection == 1 ? "bi-chevron-down" : "bi-chevron-right") me-2"></i>
+                            <i class="bi bi-diagram-3-fill text-primary me-2"></i>
+                            <span class="fw-semibold small">Variables</span>
+                        </button>
+                        @if (_expandedApiSection == 1)
+                        {
+                            <div class="ms-4 mt-2">
+                                <ul class="list-unstyled mb-0 small font-monospace">
+                                    <li class="mb-1"><span class="badge bg-success me-1">GET</span> /api/variables - List all</li>
+                                    <li class="mb-1"><span class="badge bg-success me-1">GET</span> /api/variables/{path} - Read single</li>
+                                    <li class="mb-1"><span class="badge bg-info me-1">POST</span> /api/variables - Batch read</li>
+                                    <li class="mb-1"><span class="badge bg-warning me-1">PUT</span> /api/variables/{path} - Write single</li>
+                                    <li class="mb-1"><span class="badge bg-warning me-1">PUT</span> /api/variables - Batch write</li>
+                                </ul>
+                            </div>
+                        }
+                    </div>
+
+                    @* Alarms *@
+                    <div class="mb-2">
+                        <button class="btn btn-sm btn-link text-decoration-none p-0 d-flex align-items-center w-100 text-start" 
+                                @onclick="() => _expandedApiSection = _expandedApiSection == 2 ? 0 : 2">
+                            <i class="bi @(_expandedApiSection == 2 ? "bi-chevron-down" : "bi-chevron-right") me-2"></i>
+                            <i class="bi bi-exclamation-triangle-fill text-danger me-2"></i>
+                            <span class="fw-semibold small">Alarms</span>
+                        </button>
+                        @if (_expandedApiSection == 2)
+                        {
+                            <div class="ms-4 mt-2">
+                                <ul class="list-unstyled mb-0 small font-monospace">
+                                    <li class="mb-1"><span class="badge bg-success me-1">GET</span> /api/alarms - List active</li>
+                                    <li class="mb-1"><span class="badge bg-info me-1">POST</span> /api/alarms/{id}/acknowledge</li>
+                                    <li class="mb-1"><span class="badge bg-info me-1">POST</span> /api/alarms/{id}/shelve</li>
+                                    <li class="mb-1"><span class="badge bg-info me-1">POST</span> /api/alarms/{id}/unshelve</li>
+                                </ul>
+                            </div>
+                        }
+                    </div>
+
+                    @* Recipes *@
+                    <div class="mb-2">
+                        <button class="btn btn-sm btn-link text-decoration-none p-0 d-flex align-items-center w-100 text-start" 
+                                @onclick="() => _expandedApiSection = _expandedApiSection == 3 ? 0 : 3">
+                            <i class="bi @(_expandedApiSection == 3 ? "bi-chevron-down" : "bi-chevron-right") me-2"></i>
+                            <i class="bi bi-journal-text text-success me-2"></i>
+                            <span class="fw-semibold small">Recipes</span>
+                        </button>
+                        @if (_expandedApiSection == 3)
+                        {
+                            <div class="ms-4 mt-2">
+                                <ul class="list-unstyled mb-0 small font-monospace">
+                                    <li class="mb-1"><span class="badge bg-info me-1">POST</span> /api/recipes/{name}/execute</li>
+                                    <li class="ps-4 text-muted">Actions: Load, Save, Activate, Delete</li>
+                                </ul>
+                            </div>
+                        }
+                    </div>
+
+                    @* Events & Audit *@
+                    <div class="mb-2">
+                        <button class="btn btn-sm btn-link text-decoration-none p-0 d-flex align-items-center w-100 text-start" 
+                                @onclick="() => _expandedApiSection = _expandedApiSection == 4 ? 0 : 4">
+                            <i class="bi @(_expandedApiSection == 4 ? "bi-chevron-down" : "bi-chevron-right") me-2"></i>
+                            <i class="bi bi-calendar-event text-info me-2"></i>
+                            <span class="fw-semibold small">Events & Audit</span>
+                        </button>
+                        @if (_expandedApiSection == 4)
+                        {
+                            <div class="ms-4 mt-2">
+                                <ul class="list-unstyled mb-0 small font-monospace">
+                                    <li class="mb-1"><span class="badge bg-success me-1">GET</span> /api/events?category&severity&limit</li>
+                                    <li class="mb-1"><span class="badge bg-success me-1">GET</span> /api/audit?startTime&endTime</li>
+                                    <li class="mb-1"><span class="badge bg-success me-1">GET</span> /api/export/csv?category&limit</li>
+                                </ul>
+                            </div>
+                        }
+                    </div>
+
+                    @* Diagnostics *@
+                    <div class="mb-2">
+                        <button class="btn btn-sm btn-link text-decoration-none p-0 d-flex align-items-center w-100 text-start" 
+                                @onclick="() => _expandedApiSection = _expandedApiSection == 5 ? 0 : 5">
+                            <i class="bi @(_expandedApiSection == 5 ? "bi-chevron-down" : "bi-chevron-right") me-2"></i>
+                            <i class="bi bi-activity text-secondary me-2"></i>
+                            <span class="fw-semibold small">Diagnostics</span>
+                        </button>
+                        @if (_expandedApiSection == 5)
+                        {
+                            <div class="ms-4 mt-2">
+                                <ul class="list-unstyled mb-0 small font-monospace">
+                                    <li class="mb-1"><span class="badge bg-success me-1">GET</span> /api/health - Service status</li>
+                                    <li class="mb-1"><span class="badge bg-success me-1">GET</span> /api/diagnostics - Performance metrics</li>
+                                    <li class="mb-1"><span class="badge bg-success me-1">GET</span> /api/redundancy - HA status</li>
+                                </ul>
+                            </div>
+                        }
+                    </div>
+                </div>
             </div>
-            <div class="mb-2">
-                <label class="form-label small">API Key</label>
-                <input type="text" class="form-control form-control-sm" @bind="apiCfg.ApiKey" @bind:after="OnChanged"
-                       placeholder="Leave empty for no auth (not recommended)" />
-                <div class="form-text">Clients send this via <code>X-API-Key</code> header or <code>?apiKey=</code> query parameter.</div>
+
+            <div class="alert alert-warning py-2 px-3 small mb-3">
+                <i class="bi bi-shield-lock-fill"></i> <strong>Security Best Practices:</strong>
+                <ul class="mb-0 mt-1 ps-3">
+                    <li>Always use a strong, unique API key in production</li>
+                    <li>Use HTTPS reverse proxy (nginx/IIS) for encrypted transport</li>
+                    <li>Restrict access via firewall rules</li>
+                    <li>Monitor API access via event logs</li>
+                </ul>
             </div>
         }
 
@@ -3627,5 +3779,33 @@ else if (Node is UserNode uNode)
     {
         var step = node.Batch.Steps.FirstOrDefault(s => s.Id == stepId);
         return step?.Name ?? stepId;
+    }
+
+    // ─── REST API Helpers ───────────────────────────────────────────
+
+    private bool _showApiKey = false;
+    private int _expandedApiSection = 0; // 0=none, 1=Variables, 2=Alarms, 3=Recipes, 4=Events, 5=Diagnostics
+
+    private ApiConfig EnsureApiConfig(ServerSettingsNode ssNode)
+    {
+        ssNode.Settings.Api ??= new ApiConfig
+        {
+            Enabled = true,
+            Port = 14842,
+            ApiKey = ""
+        };
+        return ssNode.Settings.Api;
+    }
+
+    private void GenerateApiKey(ApiConfig apiCfg)
+    {
+        // Generate a cryptographically secure random API key
+        var bytes = new byte[32]; // 256 bits
+        using (var rng = System.Security.Cryptography.RandomNumberGenerator.Create())
+        {
+            rng.GetBytes(bytes);
+        }
+        apiCfg.ApiKey = Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        OnChanged();
     }
 }

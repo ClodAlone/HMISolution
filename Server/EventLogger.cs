@@ -175,6 +175,74 @@ public sealed class EventLogger : IDisposable
     // ─── Query helpers ─────────────────────────────────────────────────
 
     /// <summary>
+    /// Query events from the log with optional filtering.
+    /// Returns a list of dictionaries containing event data.
+    /// </summary>
+    public List<Dictionary<string, object>> QueryEvents(
+        string category = "",
+        string severity = "",
+        DateTime? startTime = null,
+        DateTime? endTime = null,
+        int limit = 100)
+    {
+        var results = new List<Dictionary<string, object>>();
+        if (!_initialized) return results;
+
+        try
+        {
+            lock (_lock)
+            {
+                if (_connection == null) return results;
+
+                var conditions = new List<string>();
+                if (!string.IsNullOrEmpty(category))
+                    conditions.Add("category = @category");
+                if (!string.IsNullOrEmpty(severity))
+                    conditions.Add("severity = @severity");
+                if (startTime.HasValue)
+                    conditions.Add("time >= @startTime");
+                if (endTime.HasValue)
+                    conditions.Add("time <= @endTime");
+
+                var whereClause = conditions.Count > 0 ? "WHERE " + string.Join(" AND ", conditions) : "";
+
+                using var cmd = _connection.CreateCommand();
+                cmd.CommandText = $"SELECT time, category, severity, source, message, details FROM {TableName} {whereClause} ORDER BY time DESC LIMIT @limit";
+
+                if (!string.IsNullOrEmpty(category))
+                    cmd.Parameters.AddWithValue("@category", category);
+                if (!string.IsNullOrEmpty(severity))
+                    cmd.Parameters.AddWithValue("@severity", severity);
+                if (startTime.HasValue)
+                    cmd.Parameters.AddWithValue("@startTime", startTime.Value.ToString("o"));
+                if (endTime.HasValue)
+                    cmd.Parameters.AddWithValue("@endTime", endTime.Value.ToString("o"));
+                cmd.Parameters.AddWithValue("@limit", limit);
+
+                using var reader = cmd.ExecuteReader();
+                while (reader.Read())
+                {
+                    results.Add(new Dictionary<string, object>
+                    {
+                        ["time"] = reader.GetString(0),
+                        ["category"] = reader.GetString(1),
+                        ["severity"] = reader.GetString(2),
+                        ["source"] = reader.GetString(3),
+                        ["message"] = reader.GetString(4),
+                        ["details"] = reader.IsDBNull(5) ? "" : reader.GetString(5)
+                    });
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "Event log query error: {Message}", ex.Message);
+        }
+
+        return results;
+    }
+
+    /// <summary>
     /// Returns the timestamp of the most recent event in the log, or null if the log is empty.
     /// Useful for determining when the server was last active.
     /// </summary>

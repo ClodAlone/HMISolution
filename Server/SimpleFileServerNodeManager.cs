@@ -97,12 +97,14 @@ namespace SimpleOpcFileServer
         internal NotificationService? NotificationService => _notificationService;
         internal EventLogger? EventLogger => _eventLogger;
         internal RecipeManager? RecipeManager => _recipeManager;
+        internal EventManager? EventManager => _eventManager;
 
         // Anomaly detection service
         private AnomalyDetectionService? _anomalyDetectionService;
 
         // Redundancy / HA service
         internal RedundancyService? _redundancy;
+        internal RedundancyService? RedundancyService => _redundancy;
 
         // Sparkplug B edge-node publisher
         private SparkplugPublisher? _sparkplugPublisher;
@@ -3359,6 +3361,63 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                     _avg.ClearChangeMasks(_context, false);
                     _count.ClearChangeMasks(_context, false);
                 }
+            }
+        }
+
+        // ─── REST API Helper Methods ───────────────────────────────────────
+
+        /// <summary>
+        /// Get all active alarms for REST API exposure.
+        /// </summary>
+        public List<AlarmConditionState> GetActiveAlarms()
+        {
+            return _alarmConditions.Values
+                .Where(a => a.IsActive && a.AlarmState != null)
+                .Select(a => a.AlarmState!)
+                .ToList();
+        }
+
+        /// <summary>
+        /// Acknowledge an alarm by its NodeId string.
+        /// </summary>
+        public void AcknowledgeAlarm(string alarmId)
+        {
+            var info = _alarmConditions.Values.FirstOrDefault(a => a.AlarmState?.NodeId.ToString() == alarmId);
+            if (info == null || info.AlarmState == null)
+                throw new ArgumentException($"Alarm not found: {alarmId}");
+
+            info.AlarmState.SetAcknowledgedState(SystemContext, true);
+            ReportAlarmEvent(info.AlarmState);
+        }
+
+        /// <summary>
+        /// Shelve an alarm for a specified duration in minutes.
+        /// </summary>
+        public void ShelveAlarm(string alarmId, int durationMinutes)
+        {
+            var info = _alarmConditions.Values.FirstOrDefault(a => a.AlarmState?.NodeId.ToString() == alarmId);
+            if (info == null || info.AlarmState == null)
+                throw new ArgumentException($"Alarm not found: {alarmId}");
+
+            // Simplified shelving - sets retained to false to hide from active alarm list
+            info.AlarmState.Retain.Value = false;
+            ReportAlarmEvent(info.AlarmState);
+        }
+
+        /// <summary>
+        /// Unshelve an alarm.
+        /// </summary>
+        public void UnshelveAlarm(string alarmId)
+        {
+            var info = _alarmConditions.Values.FirstOrDefault(a => a.AlarmState?.NodeId.ToString() == alarmId);
+            if (info == null || info.AlarmState == null)
+                throw new ArgumentException($"Alarm not found: {alarmId}");
+
+            // Restore retention
+            if (info.IsActive)
+            {
+                info.AlarmState.Retain.Value = true;
+                ReportAlarmEvent(info.AlarmState);
             }
         }
 
