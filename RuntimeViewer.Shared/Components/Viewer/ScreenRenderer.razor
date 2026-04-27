@@ -1,4 +1,4 @@
-@using SharedModels
+﻿@using SharedModels
 @using RuntimeViewer.Shared.Services
 @using Microsoft.JSInterop
 @using System.Globalization
@@ -903,7 +903,6 @@ else
 
     private ElementReference _svgRef;
     private IJSObjectReference? _jsModule;
-    private System.Threading.Timer? _refreshTimer;
     private string? _pressedSymbolId;
     private readonly string _callerId = Guid.NewGuid().ToString("N");
 
@@ -952,7 +951,11 @@ else
     private string? _pendingDragValue;
     private DotNetObjectReference<ScreenRenderer>? _dotnetRef;
     private bool _jsDragActive;
-    private volatile bool _valuesDirty;
+
+    // Debounced render state - replaces polling timer
+    private CancellationTokenSource? _debounceCts;
+    private const int DebounceDelayMs = 50; // Batch rapid updates within 50ms
+
     private string? _lastMonitoredScreenName;
     private HashSet<string> _lastMonitoredPaths = new();
     private Dictionary<string, string>? _imageCache;
@@ -992,14 +995,6 @@ else
     {
         Opc.ValuesChanged += OnValuesChanged;
         Localization.LanguageChanged += OnLanguageChanged;
-        _refreshTimer = new System.Threading.Timer(_ =>
-        {
-            if (_valuesDirty)
-            {
-                _valuesDirty = false;
-                InvokeAsync(StateHasChanged);
-            }
-        }, null, 500, 500);
     }
 
     protected override void OnParametersSet()
@@ -1123,12 +1118,43 @@ else
         return Opc.GetValue(ResolveAlias(path, aliases));
     }
 
+    /// <summary>
+    /// Triggers a debounced render to batch multiple rapid variable changes.
+    /// If called multiple times within DebounceDelayMs, only one render occurs.
+    /// </summary>
+    private void TriggerDebouncedRender()
+    {
+        // Cancel any pending render
+        _debounceCts?.Cancel();
+        _debounceCts?.Dispose();
+
+        // Create a new cancellation token and schedule the render
+        _debounceCts = new CancellationTokenSource();
+        var token = _debounceCts.Token;
+
+        // Start debounced render task
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(DebounceDelayMs, token);
+                if (!token.IsCancellationRequested)
+                {
+                    await InvokeAsync(StateHasChanged);
+                }
+            }
+            catch (TaskCanceledException)
+            {
+                // Expected when a new change arrives during debounce
+            }
+        }, token);
+    }
+
     private void OnValuesChanged()
     {
-        // Signal the timer to re-render on its next tick.
-        // Do NOT call StateHasChanged here â€” it would fire on every
-        // OPC notification and create a render storm.
-        _valuesDirty = true;
+        // Trigger event-driven render with debouncing to batch rapid changes.
+        // Multiple changes within 50ms will be batched into a single render.
+        TriggerDebouncedRender();
     }
 
     private void OnLanguageChanged()
@@ -6404,7 +6430,11 @@ else
 
         Opc.ValuesChanged -= OnValuesChanged;
         Localization.LanguageChanged -= OnLanguageChanged;
-        _refreshTimer?.Dispose();
+
+        // Cancel any pending debounced render
+        _debounceCts?.Cancel();
+        _debounceCts?.Dispose();
+
         _dotnetRef?.Dispose();
         if (_jsModule != null)
         {
