@@ -1,0 +1,189 @@
+@using Microsoft.JSInterop
+@using ServerEditorWeb.Services
+@inject NodeEditorService Editor
+@inject IJSRuntime JS
+
+@if (_showQuickStart)
+{
+    <QuickStartGuideSimple OnClosed="CloseQuickStart" />
+}
+
+<div class="landing-page">
+    <div class="landing-container">
+        <div class="landing-header">
+            <div class="landing-logo">
+                <svg width="80" height="80" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="50" cy="50" r="45" fill="#667eea" opacity="0.1"/>
+                    <path d="M30 30 L50 20 L70 30 L70 50 L50 60 L30 50 Z" fill="#667eea" stroke="#764ba2" stroke-width="2"/>
+                    <circle cx="50" cy="40" r="8" fill="#fff"/>
+                    <path d="M40 50 L50 55 L60 50" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round"/>
+                </svg>
+            </div>
+            <h1 class="landing-title">AI Core HMI Server Editor</h1>
+            <p class="landing-subtitle">Professional Industrial Automation Platform with AI-Powered Engineering</p>
+        </div>
+
+        <div class="landing-actions">
+            <div class="action-card action-card-primary" @onclick="OnNewProject">
+                <div class="action-icon">📄</div>
+                <h3 class="action-title">Create New Project</h3>
+                <p class="action-description">Start a new HMI project from scratch</p>
+                <div class="action-button">
+                    <span>New Project</span>
+                    <span class="action-shortcut">Ctrl+N</span>
+                </div>
+            </div>
+
+            <div class="action-card" @onclick="OnOpenProject">
+                <div class="action-icon">📂</div>
+                <h3 class="action-title">Open Existing Project</h3>
+                <p class="action-description">Browse and open a project file</p>
+                <div class="action-button">
+                    <span>Open Project</span>
+                    <span class="action-shortcut">Ctrl+O</span>
+                </div>
+            </div>
+
+            <div class="action-card" @onclick="OnOpenSamples">
+                <div class="action-icon">🎯</div>
+                <h3 class="action-title">Sample Projects</h3>
+                <p class="action-description">Explore pre-built example projects</p>
+                <div class="action-button">
+                    <span>Browse Samples</span>
+                </div>
+            </div>
+        </div>
+
+        @if (_recentFiles.Count > 0)
+        {
+            <div class="landing-section">
+                <h2 class="section-title">Recent Projects</h2>
+                <div class="recent-files">
+                    @foreach (var file in _recentFiles.Take(5))
+                    {
+                        var fileName = System.IO.Path.GetFileName(file);
+                        var filePath = System.IO.Path.GetDirectoryName(file);
+                        <div class="recent-file-item" @onclick="() => OnOpenRecent(file)">
+                            <div class="recent-file-icon">📋</div>
+                            <div class="recent-file-info">
+                                <div class="recent-file-name">@fileName</div>
+                                <div class="recent-file-path">@filePath</div>
+                            </div>
+                            <div class="recent-file-arrow">→</div>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+
+        <div class="landing-section">
+            <h2 class="section-title">Getting Started</h2>
+            <div class="getting-started-grid">
+                <div class="info-card" @onclick="OpenQuickStart">
+                    <div class="info-icon">🚀</div>
+                    <h3 class="info-title">Quick Start Guide</h3>
+                    <p class="info-description">Learn the basics in 5 minutes</p>
+                </div>
+
+                <div class="info-card" @onclick="@(() => OnOpenGuide("documentation"))">
+                    <div class="info-icon">📚</div>
+                    <h3 class="info-title">Documentation</h3>
+                    <p class="info-description">Comprehensive user manual</p>
+                </div>
+
+                <div class="info-card" @onclick="@(() => OnOpenGuide("tutorials"))">
+                    <div class="info-icon">🎓</div>
+                    <h3 class="info-title">Video Tutorials</h3>
+                    <p class="info-description">Step-by-step video guides</p>
+                </div>
+
+                <div class="info-card" @onclick="@(() => OnOpenGuide("community"))">
+                    <div class="info-icon">💬</div>
+                    <h3 class="info-title">Community & Support</h3>
+                    <p class="info-description">Get help from the community</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="landing-footer">
+            <div class="footer-links">
+                <a href="https://github.com/ClodAlone/HMISolution" target="_blank">GitHub</a>
+                <span class="footer-separator">�</span>
+                <a href="https://github.com/ClodAlone/HMISolution/blob/master/docs/FDA_21_CFR_Part_11_Implementation_Summary.md" target="_blank">FDA 21 CFR Part 11</a>
+                <span class="footer-separator">�</span>
+                <a @onclick="@(() => OnOpenGuide("shortcuts"))">Keyboard Shortcuts</a>
+            </div>
+            <div class="footer-version">Version 1.0.0 � .NET 10 � OPC UA</div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public EventCallback OnNewProjectClicked { get; set; }
+    [Parameter] public EventCallback OnOpenProjectClicked { get; set; }
+    [Parameter] public EventCallback OnOpenSamplesClicked { get; set; }
+    [Parameter] public EventCallback<string> OnOpenRecentClicked { get; set; }
+
+    private List<string> _recentFiles = new();
+    private bool _showQuickStart = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _recentFiles = Editor.RecentFiles.ToList();
+        
+        // Auto-show quick start guide on first load if user hasn't disabled it
+        try
+        {
+            var hideQuickStart = await JS.InvokeAsync<string>("localStorage.getItem", "hideQuickStart");
+            _showQuickStart = hideQuickStart != "true" && _recentFiles.Count == 0;
+        }
+        catch
+        {
+            _showQuickStart = false;
+        }
+    }
+
+    private async Task OnNewProject()
+    {
+        await OnNewProjectClicked.InvokeAsync();
+    }
+
+    private async Task OnOpenProject()
+    {
+        await OnOpenProjectClicked.InvokeAsync();
+    }
+
+    private async Task OnOpenSamples()
+    {
+        await OnOpenSamplesClicked.InvokeAsync();
+    }
+
+    private async Task OnOpenRecent(string filePath)
+    {
+        await OnOpenRecentClicked.InvokeAsync(filePath);
+    }
+
+    private void OpenQuickStart()
+    {
+        _showQuickStart = true;
+    }
+
+    private void CloseQuickStart()
+    {
+        _showQuickStart = false;
+    }
+
+    private async Task OnOpenGuide(string guide = "shortcuts")
+    {
+        var url = guide switch
+        {
+            "documentation" => "https://github.com/ClodAlone/HMISolution/blob/master/README.md",
+            "tutorials" => "https://github.com/ClodAlone/HMISolution/wiki/Tutorials",
+            "community" => "https://github.com/ClodAlone/HMISolution/discussions",
+            _ => "https://github.com/ClodAlone/HMISolution/wiki/Keyboard-Shortcuts"
+        };
+
+        await JS.InvokeVoidAsync("open", url, "_blank");
+    }
+}
+

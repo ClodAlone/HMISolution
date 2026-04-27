@@ -1,0 +1,127 @@
+@using Microsoft.JSInterop
+@inject IJSRuntime JS
+
+<div class="quickstart-overlay" @onclick="OnClose">
+    <div class="quickstart-modal" @onclick:stopPropagation>
+        <div class="quickstart-header">
+            <h2 class="quickstart-title">
+                <span class="quickstart-icon">🚀</span>
+                Quick Start Guide
+            </h2>
+            <button class="quickstart-close" @onclick="OnClose" title="Close (Esc)">
+                <span>✕</span>
+            </button>
+        </div>
+
+        <div class="quickstart-body">
+            <div class="quickstart-progress">
+                <div class="progress-bar">
+                    @for (int i = 0; i < _steps.Count; i++)
+                    {
+                        var step = i;
+                        <div class="progress-step @(step == _currentStep ? "active" : step < _currentStep ? "completed" : "")">
+                            <div class="progress-dot"></div>
+                            @if (i < _steps.Count - 1)
+                            {
+                                <div class="progress-line"></div>
+                            }
+                        </div>
+                    }
+                </div>
+                <div class="progress-label">Step @(_currentStep + 1) of @_steps.Count</div>
+            </div>
+
+            <div class="quickstart-content">
+                @* Step content - see QUICK-START-INTEGRATION.md for full implementation *@
+                <p>Step @(_currentStep + 1): @_steps[_currentStep]</p>
+            </div>
+        </div>
+
+        <div class="quickstart-footer">
+            <button class="btn-secondary" @onclick="OnPrevious" disabled="@(_currentStep == 0)">
+                ← Previous
+            </button>
+            <div class="footer-center">
+                <label class="checkbox-label">
+                    <input type="checkbox" @bind="_dontShowAgain" />
+                    Don't show this again
+                </label>
+            </div>
+            @if (_currentStep < _steps.Count - 1)
+            {
+                <button class="btn-primary" @onclick="OnNext">
+                    Next →
+                </button>
+            }
+            else
+            {
+                <button class="btn-primary" @onclick="OnClose">
+                    Get Started! 🚀
+                </button>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public EventCallback OnClosed { get; set; }
+
+    private int _currentStep = 0;
+    private bool _dontShowAgain = false;
+
+    private readonly List<string> _steps = new()
+    {
+        "Welcome",
+        "Create Project",
+        "Interface",
+        "Variables",
+        "Screen Design",
+        "Test & Run",
+        "Next Steps"
+    };
+
+    private void OnNext()
+    {
+        if (_currentStep < _steps.Count - 1)
+        {
+            _currentStep++;
+        }
+    }
+
+    private void OnPrevious()
+    {
+        if (_currentStep > 0)
+        {
+            _currentStep--;
+        }
+    }
+
+    private async Task OnClose()
+    {
+        if (_dontShowAgain)
+        {
+            await JS.InvokeVoidAsync("localStorage.setItem", "hideQuickStart", "true");
+        }
+        await OnClosed.InvokeAsync();
+    }
+
+    private async Task OpenResource(string resource)
+    {
+        var url = resource switch
+        {
+            "drivers" => "https://github.com/ClodAlone/HMISolution/wiki/Drivers",
+            "alarms" => "https://github.com/ClodAlone/HMISolution/wiki/Alarms",
+            "trends" => "https://github.com/ClodAlone/HMISolution/wiki/Trends",
+            "recipes" => "https://github.com/ClodAlone/HMISolution/wiki/Recipes",
+            "scripts" => "https://github.com/ClodAlone/HMISolution/wiki/Scripting",
+            "ai" => "https://github.com/ClodAlone/HMISolution/wiki/AI-Features",
+            "docs" => "https://github.com/ClodAlone/HMISolution/blob/master/README.md",
+            "tutorials" => "https://github.com/ClodAlone/HMISolution/wiki/Tutorials",
+            "samples" => "https://github.com/ClodAlone/HMISolution/tree/master/docker/samples",
+            "community" => "https://github.com/ClodAlone/HMISolution/discussions",
+            _ => "https://github.com/ClodAlone/HMISolution"
+        };
+
+        await JS.InvokeVoidAsync("open", url, "_blank");
+    }
+}

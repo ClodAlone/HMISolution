@@ -53,6 +53,15 @@ else if (Auth.MustChangePassword)
         </div>
     </div>
 }
+else if (Editor.ActiveProject == null && !_showFileBrowser)
+{
+    @* Landing Page - shown when no project is open *@
+    <LandingPage 
+        OnNewProjectClicked="NewFileMenu"
+        OnOpenProjectClicked="OpenFileBrowser"
+        OnOpenSamplesClicked="OpenSamplesDialog"
+        OnOpenRecentClicked="QuickLoadFile" />
+}
 else
 {
 <div class="editor-container">
@@ -1620,6 +1629,27 @@ private void UnsavedDialogCancel()
         _showDriveList = false;
         RefreshBrowseList();
         _showFileBrowser = true;
+    }
+
+    private void OpenSamplesDialog()
+    {
+        CloseMenus();
+        // Navigate to samples directory if it exists
+        var samplesPath = Path.Combine(Editor.GetBrowseStartPath(), "samples");
+        if (Directory.Exists(samplesPath))
+        {
+            _browseDrives = Editor.GetDrives();
+            _browsePath = samplesPath;
+            _browseSelectedFile = "";
+            _showDriveList = false;
+            RefreshBrowseList();
+            _showFileBrowser = true;
+        }
+        else
+        {
+            // Fallback to regular file browser if samples directory doesn't exist
+            OpenFileBrowser();
+        }
     }
 
     private void BrowseTo(string path)
