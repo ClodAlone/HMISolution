@@ -1,0 +1,1071 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Core HMI — Dashboard Showcase</title>
+    <meta name="description" content="Live dashboard showcase of AI Core HMI with real-time widgets and industrial symbols">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg: #0b0f19;
+            --surface: #131927;
+            --card: #1a2236;
+            --border: #25304a;
+            --text: #c9d1d9;
+            --heading: #e6edf3;
+            --accent: #58a6ff;
+            --accent2: #3fb950;
+            --danger: #f85149;
+            --warning: #d29922;
+            --success: #3fb950;
+            --radius: 10px;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background: linear-gradient(135deg, #0b0f19 0%, #1a1f2e 100%);
+            color: var(--text);
+            line-height: 1.65;
+            padding: 2rem;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 3rem;
+            animation: slideDown 0.8s ease-out;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            background: linear-gradient(135deg, #a855f7, var(--accent), var(--accent2));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.5rem;
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            color: var(--text);
+            margin-bottom: 2rem;
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .tab-btn {
+            padding: 0.8rem 1.5rem;
+            background: var(--card);
+            border: 1px solid var(--border);
+            color: var(--text);
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: 0.3s;
+        }
+
+        .tab-btn.active {
+            background: linear-gradient(135deg, #a855f7, #7c3aed);
+            color: white;
+            border-color: #a855f7;
+        }
+
+        .tab-btn:hover:not(.active) {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .tab-content {
+            display: none;
+            animation: fadeIn 0.5s ease-out;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+
+        /* Dashboard Grid */
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        /* Widget Styles */
+        .widget {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 1.5rem;
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .widget:hover {
+            border-color: var(--accent);
+            box-shadow: 0 0 20px rgba(88, 166, 255, 0.3);
+            transform: translateY(-5px);
+        }
+
+        .widget::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--accent), var(--accent2));
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .widget:hover::before {
+            opacity: 1;
+        }
+
+        .widget-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+        }
+
+        .widget-title {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 1rem;
+            color: var(--heading);
+            font-weight: 600;
+        }
+
+        .widget-icon {
+            font-size: 1.4rem;
+        }
+
+        .widget-status {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--success);
+            animation: pulse 2s infinite;
+        }
+
+        .widget-status.warning {
+            background: var(--warning);
+        }
+
+        .widget-status.danger {
+            background: var(--danger);
+            animation: pulse-danger 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        @keyframes pulse-danger {
+            0%, 100% {
+                opacity: 1;
+                box-shadow: 0 0 5px var(--danger);
+            }
+            50% {
+                opacity: 0.7;
+                box-shadow: 0 0 15px var(--danger);
+            }
+        }
+
+        /* Gauge Widget */
+        .gauge-container {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+        }
+
+        .gauge {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: conic-gradient(from 0deg, var(--success) 0%, var(--warning) 70%, var(--danger) 90%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .gauge::before {
+            content: '';
+            width: 90%;
+            height: 90%;
+            background: var(--card);
+            border-radius: 50%;
+        }
+
+        .gauge-value {
+            position: absolute;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            z-index: 1;
+        }
+
+        .gauge-number {
+            font-size: 1.8rem;
+            font-weight: bold;
+            color: var(--accent);
+        }
+
+        .gauge-unit {
+            font-size: 0.7rem;
+            color: var(--text);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .gauge-info {
+            flex: 1;
+        }
+
+        .gauge-label {
+            font-size: 0.9rem;
+            color: var(--text);
+            margin-bottom: 0.3rem;
+        }
+
+        .gauge-range {
+            font-size: 0.8rem;
+            color: var(--border);
+        }
+
+        /* Bar Chart Widget */
+        .bars {
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-around;
+            gap: 0.5rem;
+            height: 100px;
+        }
+
+        .bar {
+            flex: 1;
+            background: linear-gradient(180deg, var(--accent), var(--accent2));
+            border-radius: 4px 4px 0 0;
+            min-height: 20px;
+            position: relative;
+            transition: all 0.3s;
+        }
+
+        .bar:hover {
+            filter: brightness(1.2);
+        }
+
+        .bar-label {
+            position: absolute;
+            bottom: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 0.7rem;
+            color: var(--text);
+            white-space: nowrap;
+        }
+
+        /* Metric List */
+        .metric-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .metric-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.8rem;
+            background: rgba(88, 166, 255, 0.05);
+            border-left: 3px solid var(--accent);
+            border-radius: 4px;
+        }
+
+        .metric-label {
+            font-size: 0.9rem;
+            color: var(--text);
+        }
+
+        .metric-value {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: var(--heading);
+        }
+
+        /* Real-time Chart */
+        .chart-container {
+            height: 140px;
+            margin-top: 1rem;
+        }
+
+        .line-chart {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            background: linear-gradient(180deg, rgba(88, 166, 255, 0.1) 0%, transparent 100%);
+            border-radius: 6px;
+            overflow: hidden;
+        }
+
+        .chart-line {
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+
+        svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* System Status */
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+        }
+
+        .status-item {
+            padding: 1rem;
+            background: rgba(63, 185, 80, 0.1);
+            border: 1px solid var(--success);
+            border-radius: 6px;
+            text-align: center;
+        }
+
+        .status-item.warning {
+            background: rgba(210, 153, 34, 0.1);
+            border-color: var(--warning);
+        }
+
+        .status-item.error {
+            background: rgba(248, 81, 73, 0.1);
+            border-color: var(--danger);
+        }
+
+        .status-label {
+            font-size: 0.85rem;
+            color: var(--text);
+            margin-bottom: 0.5rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .status-value {
+            font-size: 1.6rem;
+            font-weight: bold;
+            color: var(--success);
+        }
+
+        .status-item.warning .status-value {
+            color: var(--warning);
+        }
+
+        .status-item.error .status-value {
+            color: var(--danger);
+        }
+
+        /* Alarm Table */
+        .alarm-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .alarm-table thead {
+            background: rgba(88, 166, 255, 0.1);
+        }
+
+        .alarm-table th {
+            padding: 0.8rem;
+            text-align: left;
+            font-size: 0.85rem;
+            color: var(--accent);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .alarm-table td {
+            padding: 0.8rem;
+            border-bottom: 1px solid var(--border);
+            font-size: 0.9rem;
+        }
+
+        .alarm-level {
+            display: inline-block;
+            padding: 0.3rem 0.8rem;
+            border-radius: 4px;
+            font-weight: 600;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .alarm-level.critical {
+            background: rgba(248, 81, 73, 0.2);
+            color: var(--danger);
+        }
+
+        .alarm-level.warning {
+            background: rgba(210, 153, 34, 0.2);
+            color: var(--warning);
+        }
+
+        .alarm-level.info {
+            background: rgba(88, 166, 255, 0.2);
+            color: var(--accent);
+        }
+
+        /* Industrial Symbols */
+        .symbol-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .symbol {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            padding: 1rem;
+            background: rgba(88, 166, 255, 0.05);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+
+        .symbol:hover {
+            background: rgba(168, 85, 247, 0.15);
+            border-color: var(--accent);
+            transform: scale(1.05);
+        }
+
+        .symbol-icon {
+            font-size: 2rem;
+        }
+
+        .symbol-label {
+            font-size: 0.8rem;
+            color: var(--text);
+            text-align: center;
+        }
+
+        /* Large Dashboard Layout */
+        .large-dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .large-widget {
+            grid-column: span 1;
+        }
+
+        .large-widget.full {
+            grid-column: span 2;
+        }
+
+        @media (max-width: 1200px) {
+            .large-widget.full {
+                grid-column: span 1;
+            }
+        }
+
+        /* Animations */
+        .animate-in {
+            animation: slideInUp 0.6s ease-out forwards;
+        }
+
+        @keyframes slideInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Back Button */
+        .back-btn {
+            display: inline-block;
+            margin-bottom: 2rem;
+            padding: 0.7rem 1.5rem;
+            background: var(--card);
+            border: 1px solid var(--border);
+            color: var(--accent);
+            border-radius: 6px;
+            cursor: pointer;
+            text-decoration: none;
+            font-weight: 600;
+            transition: 0.3s;
+        }
+
+        .back-btn:hover {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/" class="back-btn">← Back to Home</a>
+
+        <div class="header">
+            <h1>🎛️ Live Dashboard Showcase</h1>
+            <p>Interactive widgets and real-time monitoring interfaces for industrial automation</p>
+        </div>
+
+        <!-- Tabs -->
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('production')">Production Overview</button>
+            <button class="tab-btn" onclick="switchTab('energy')">Energy Monitoring</button>
+            <button class="tab-btn" onclick="switchTab('alarms')">Alarm Management</button>
+            <button class="tab-btn" onclick="switchTab('symbols')">Industrial Symbols</button>
+        </div>
+
+        <!-- Production Overview Tab -->
+        <div id="production" class="tab-content active">
+            <div class="large-dashboard">
+                <!-- Temperature Monitor -->
+                <div class="widget animate-in">
+                    <div class="widget-header">
+                        <span class="widget-title">
+                            <span class="widget-icon">🌡️</span>
+                            Temperature Control
+                        </span>
+                        <span class="widget-status"></span>
+                    </div>
+                    <div class="gauge-container">
+                        <div class="gauge">
+                            <div class="gauge-value">
+                                <div class="gauge-number">72.5</div>
+                                <div class="gauge-unit">°C</div>
+                            </div>
+                        </div>
+                        <div class="gauge-info">
+                            <div class="gauge-label">Reactor Zone A</div>
+                            <div class="gauge-range">Range: 65-85°C</div>
+                            <div class="metric-list" style="margin-top: 0.8rem;">
+                                <div class="metric-item" style="margin: 0;">
+                                    <span class="metric-label">Status</span>
+                                    <span class="metric-value" style="color: var(--success);">Optimal</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pressure Monitor -->
+                <div class="widget animate-in" style="animation-delay: 0.1s;">
+                    <div class="widget-header">
+                        <span class="widget-title">
+                            <span class="widget-icon">📊</span>
+                            Pressure Level
+                        </span>
+                        <span class="widget-status"></span>
+                    </div>
+                    <div class="gauge-container">
+                        <div class="gauge">
+                            <div class="gauge-value">
+                                <div class="gauge-number">3.8</div>
+                                <div class="gauge-unit">bar</div>
+                            </div>
+                        </div>
+                        <div class="gauge-info">
+                            <div class="gauge-label">Main Line</div>
+                            <div class="gauge-range">Range: 2-5 bar</div>
+                            <div class="metric-list" style="margin-top: 0.8rem;">
+                                <div class="metric-item" style="margin: 0;">
+                                    <span class="metric-label">Flow Rate</span>
+                                    <span class="metric-value">1.2 m³/h</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Production Rate -->
+                <div class="widget animate-in" style="animation-delay: 0.2s;">
+                    <div class="widget-header">
+                        <span class="widget-title">
+                            <span class="widget-icon">⚙️</span>
+                            Production Rate
+                        </span>
+                        <span class="widget-status"></span>
+                    </div>
+                    <div class="bars">
+                        <div class="bar" style="height: 45%;"><span class="bar-label">Mon</span></div>
+                        <div class="bar" style="height: 65%;"><span class="bar-label">Tue</span></div>
+                        <div class="bar" style="height: 55%;"><span class="bar-label">Wed</span></div>
+                        <div class="bar" style="height: 80%;"><span class="bar-label">Thu</span></div>
+                        <div class="bar" style="height: 70%;"><span class="bar-label">Fri</span></div>
+                    </div>
+                    <div class="metric-list" style="margin-top: 2rem;">
+                        <div class="metric-item" style="margin: 0;">
+                            <span class="metric-label">Weekly Average</span>
+                            <span class="metric-value">3,250 units</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- System Health (Full Width) -->
+                <div class="widget full animate-in" style="animation-delay: 0.3s;">
+                    <div class="widget-header">
+                        <span class="widget-title">
+                            <span class="widget-icon">💚</span>
+                            System Health Status
+                        </span>
+                        <span class="widget-status"></span>
+                    </div>
+                    <div class="status-grid">
+                        <div class="status-item">
+                            <div class="status-label">CPU Usage</div>
+                            <div class="status-value">34%</div>
+                        </div>
+                        <div class="status-item">
+                            <div class="status-label">Memory</div>
+                            <div class="status-value">58%</div>
+                        </div>
+                        <div class="status-item">
+                            <div class="status-label">Network I/O</div>
+                            <div class="status-value">12 Mbps</div>
+                        </div>
+                        <div class="status-item">
+                            <div class="status-label">Uptime</div>
+                            <div class="status-value">45d 8h</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Real-time Metrics -->
+                <div class="widget animate-in" style="animation-delay: 0.4s;">
+                    <div class="widget-header">
+                        <span class="widget-title">
+                            <span class="widget-icon">📈</span>
+                            Real-time Trends
+                        </span>
+                        <span class="widget-status"></span>
+                    </div>
+                    <div class="metric-list">
+                        <div class="metric-item">
+                            <span class="metric-label">Throughput</span>
+                            <span class="metric-value">↑ 2,847</span>
+                        </div>
+                        <div class="metric-item">
+                            <span class="metric-label">Efficiency</span>
+                            <span class="metric-value">↑ 94.2%</span>
+                        </div>
+                        <div class="metric-item">
+                            <span class="metric-label">Uptime SLA</span>
+                            <span class="metric-value">✓ 99.97%</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Connected Devices -->
+                <div class="widget animate-in" style="animation-delay: 0.5s;">
+                    <div class="widget-header">
+                        <span class="widget-title">
+                            <span class="widget-icon">🔗</span>
+                            Connected Devices
+                        </span>
+                        <span class="widget-status"></span>
+                    </div>
+                    <div class="metric-list">
+                        <div class="metric-item">
+                            <span class="metric-label">OPC UA Servers</span>
+                            <span class="metric-value">12</span>
+                        </div>
+                        <div class="metric-item">
+                            <span class="metric-label">Active Variables</span>
+                            <span class="metric-value">8,340</span>
+                        </div>
+                        <div class="metric-item">
+                            <span class="metric-label">Data Points/sec</span>
+                            <span class="metric-value">45.2K</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Energy Monitoring Tab -->
+        <div id="energy" class="tab-content">
+            <div class="large-dashboard">
+                <!-- Power Consumption -->
+                <div class="widget animate-in">
+                    <div class="widget-header">
+                        <span class="widget-title">
+                            <span class="widget-icon">⚡</span>
+                            Power Consumption
+                        </span>
+                        <span class="widget-status warning"></span>
+                    </div>
+                    <div class="gauge-container">
+                        <div class="gauge">
+                            <div class="gauge-value">
+                                <div class="gauge-number">245</div>
+                                <div class="gauge-unit">kW</div>
+                            </div>
+                        </div>
+                        <div class="gauge-info">
+                            <div class="gauge-label">Total Usage</div>
+                            <div class="gauge-range">Peak: 450 kW</div>
+                            <div class="metric-list" style="margin-top: 0.8rem;">
+                                <div class="metric-item" style="margin: 0;">
+                                    <span class="metric-label">Daily Cost</span>
+                                    <span class="metric-value">$125.60</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Energy Efficiency -->
+                <div class="widget animate-in" style="animation-delay: 0.1s;">
+                    <div class="widget-header">
+                        <span class="widget-title">
+                            <span class="widget-icon">🌱</span>
+                            Energy Efficiency
+                        </span>
+                        <span class="widget-status"></span>
+                    </div>
+                    <div class="gauge-container">
+                        <div class="gauge">
+                            <div class="gauge-value">
+                                <div class="gauge-number">87</div>
+                                <div class="gauge-unit">%</div>
+                            </div>
+                        </div>
+                        <div class="gauge-info">
+                            <div class="gauge-label">Optimization Score</div>
+                            <div class="gauge-range">Target: >90%</div>
+                            <div class="metric-list" style="margin-top: 0.8rem;">
+                                <div class="metric-item" style="margin: 0;">
+                                    <span class="metric-label">CO₂ Saved</span>
+                                    <span class="metric-value">245 kg</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Power Distribution -->
+                <div class="widget animate-in" style="animation-delay: 0.2s;">
+                    <div class="widget-header">
+                        <span class="widget-title">
+                            <span class="widget-icon">📡</span>
+                            Power Distribution
+                        </span>
+                        <span class="widget-status"></span>
+                    </div>
+                    <div class="bars">
+                        <div class="bar" style="height: 70%;"><span class="bar-label">Area A</span></div>
+                        <div class="bar" style="height: 55%;"><span class="bar-label">Area B</span></div>
+                        <div class="bar" style="height: 65%;"><span class="bar-label">Area C</span></div>
+                        <div class="bar" style="height: 45%;"><span class="bar-label">Area D</span></div>
+                        <div class="bar" style="height: 60%;"><span class="bar-label">Area E</span></div>
+                    </div>
+                </div>
+
+                <!-- Cost Analysis (Full Width) -->
+                <div class="widget full animate-in" style="animation-delay: 0.3s;">
+                    <div class="widget-header">
+                        <span class="widget-title">
+                            <span class="widget-icon">💰</span>
+                            Energy Cost Analysis
+                        </span>
+                        <span class="widget-status"></span>
+                    </div>
+                    <div class="status-grid">
+                        <div class="status-item">
+                            <div class="status-label">Today Cost</div>
+                            <div class="status-value">$125.60</div>
+                        </div>
+                        <div class="status-item">
+                            <div class="status-label">Weekly Cost</div>
+                            <div class="status-value">$742.35</div>
+                        </div>
+                        <div class="status-item">
+                            <div class="status-label">Monthly Avg</div>
+                            <div class="status-value">$3,168</div>
+                        </div>
+                        <div class="status-item warning">
+                            <div class="status-label">Budget Status</div>
+                            <div class="status-value">84% Used</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Alarm Management Tab -->
+        <div id="alarms" class="tab-content">
+            <div class="large-dashboard">
+                <!-- Alarm Summary -->
+                <div class="widget full animate-in">
+                    <div class="widget-header">
+                        <span class="widget-title">
+                            <span class="widget-icon">🚨</span>
+                            Alarm Summary
+                        </span>
+                    </div>
+                    <div class="status-grid">
+                        <div class="status-item error">
+                            <div class="status-label">Critical</div>
+                            <div class="status-value">2</div>
+                        </div>
+                        <div class="status-item warning">
+                            <div class="status-label">Warning</div>
+                            <div class="status-value">5</div>
+                        </div>
+                        <div class="status-item">
+                            <div class="status-label">Info</div>
+                            <div class="status-value">12</div>
+                        </div>
+                        <div class="status-item">
+                            <div class="status-label">Resolved Today</div>
+                            <div class="status-value">8</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recent Alarms -->
+                <div class="widget full animate-in" style="animation-delay: 0.1s;">
+                    <div class="widget-header">
+                        <span class="widget-title">
+                            <span class="widget-icon">📋</span>
+                            Recent Alarms
+                        </span>
+                    </div>
+                    <table class="alarm-table">
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Source</th>
+                                <th>Message</th>
+                                <th>Level</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>14:32:15</td>
+                                <td>Reactor Zone A</td>
+                                <td>Temperature exceeded 80°C</td>
+                                <td><span class="alarm-level critical">Critical</span></td>
+                                <td>⏳ Active</td>
+                            </tr>
+                            <tr>
+                                <td>14:28:42</td>
+                                <td>Main Pump</td>
+                                <td>Pressure dropping below 2.5 bar</td>
+                                <td><span class="alarm-level warning">Warning</span></td>
+                                <td>✓ Resolved</td>
+                            </tr>
+                            <tr>
+                                <td>14:25:08</td>
+                                <td>Cooling System</td>
+                                <td>Fan speed degradation detected</td>
+                                <td><span class="alarm-level warning">Warning</span></td>
+                                <td>⏳ Active</td>
+                            </tr>
+                            <tr>
+                                <td>14:20:33</td>
+                                <td>System Monitor</td>
+                                <td>Backup battery low</td>
+                                <td><span class="alarm-level info">Info</span></td>
+                                <td>✓ Resolved</td>
+                            </tr>
+                            <tr>
+                                <td>14:15:12</td>
+                                <td>Network I/O</td>
+                                <td>Latency spike detected</td>
+                                <td><span class="alarm-level info">Info</span></td>
+                                <td>✓ Resolved</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Industrial Symbols Tab -->
+        <div id="symbols" class="tab-content">
+            <div class="widget full animate-in">
+                <div class="widget-header">
+                    <span class="widget-title">
+                        <span class="widget-icon">⚙️</span>
+                        Industrial Symbols & Equipment Icons
+                    </span>
+                </div>
+                <div class="symbol-grid">
+                    <div class="symbol">
+                        <div class="symbol-icon">🔌</div>
+                        <div class="symbol-label">Power Source</div>
+                    </div>
+                    <div class="symbol">
+                        <div class="symbol-icon">⚡</div>
+                        <div class="symbol-label">High Voltage</div>
+                    </div>
+                    <div class="symbol">
+                        <div class="symbol-icon">🔋</div>
+                        <div class="symbol-label">Battery</div>
+                    </div>
+                    <div class="symbol">
+                        <div class="symbol-icon">💨</div>
+                        <div class="symbol-label">Compressor</div>
+                    </div>
+                    <div class="symbol">
+                        <div class="symbol-icon">🌊</div>
+                        <div class="symbol-label">Pump</div>
+                    </div>
+                    <div class="symbol">
+                        <div class="symbol-icon">🔥</div>
+                        <div class="symbol-label">Heater</div>
+                    </div>
+                    <div class="symbol">
+                        <div class="symbol-icon">❄️</div>
+                        <div class="symbol-label">Cooler</div>
+                    </div>
+                    <div class="symbol">
+                        <div class="symbol-icon">⚙️</div>
+                        <div class="symbol-label">Motor</div>
+                    </div>
+                    <div class="symbol">
+                        <div class="symbol-icon">🚀</div>
+                        <div class="symbol-label">Turbine</div>
+                    </div>
+                    <div class="symbol">
+                        <div class="symbol-icon">📡</div>
+                        <div class="symbol-label">Sensor</div>
+                    </div>
+                    <div class="symbol">
+                        <div class="symbol-icon">🎯</div>
+                        <div class="symbol-label">Target</div>
+                    </div>
+                    <div class="symbol">
+                        <div class="symbol-icon">🔧</div>
+                        <div class="symbol-label">Valve</div>
+                    </div>
+                    <div class="symbol">
+                        <div class="symbol-icon">🪁</div>
+                        <div class="symbol-label">Fan</div>
+                    </div>
+                    <div class="symbol">
+                        <div class="symbol-icon">🏭</div>
+                        <div class="symbol-label">Factory</div>
+                    </div>
+                    <div class="symbol">
+                        <div class="symbol-icon">📊</div>
+                        <div class="symbol-label">Meter</div>
+                    </div>
+                    <div class="symbol">
+                        <div class="symbol-icon">🔐</div>
+                        <div class="symbol-label">Control Valve</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function switchTab(tabName) {
+            // Hide all tabs
+            const tabs = document.querySelectorAll('.tab-content');
+            tabs.forEach(tab => tab.classList.remove('active'));
+
+            // Deactivate all buttons
+            const buttons = document.querySelectorAll('.tab-btn');
+            buttons.forEach(btn => btn.classList.remove('active'));
+
+            // Show selected tab
+            document.getElementById(tabName).classList.add('active');
+
+            // Activate corresponding button
+            event.target.classList.add('active');
+        }
+
+        // Simulate real-time updates
+        function updateMetrics() {
+            // Simulate temperature fluctuation
+            const tempEl = document.querySelector('.gauge-number');
+            if (tempEl) {
+                const current = parseFloat(tempEl.textContent);
+                const change = (Math.random() - 0.5) * 0.5;
+                const newVal = Math.max(65, Math.min(85, current + change)).toFixed(1);
+                tempEl.textContent = newVal;
+            }
+
+            // Simulate CPU usage
+            const cpuEl = document.querySelector('.status-item .status-value');
+            if (cpuEl && cpuEl.textContent.includes('%')) {
+                const current = parseInt(cpuEl.textContent);
+                const change = Math.floor((Math.random() - 0.5) * 6);
+                const newVal = Math.max(10, Math.min(80, current + change));
+                cpuEl.textContent = newVal + '%';
+            }
+        }
+
+        // Update metrics every 2 seconds
+        setInterval(updateMetrics, 2000);
+    </script>
+</body>
+</html>
