@@ -632,3 +632,150 @@ window.focusElement = function (element) {
     if (element && element.focus) element.focus();
 };
 
+// Snippet insertion helper
+window.codeSnippet = {
+    /// Insert a code snippet at the current cursor position
+    insert: function (elementId, snippetCode, indentToCurrentLevel) {
+        var element = document.getElementById(elementId);
+        if (!element || !element._cm) {
+            console.warn('CodeMirror editor not found for element:', elementId);
+            return false;
+        }
+
+        var editor = element._cm;
+        var cursor = editor.getCursor();
+        var line = editor.getLine(cursor.line);
+
+        // Detect current indentation level
+        var currentIndent = '';
+        if (indentToCurrentLevel !== false) {
+            var match = line.match(/^\s*/);
+            if (match) currentIndent = match[0];
+        }
+
+        // Split snippet code into lines and add indentation
+        var lines = snippetCode.split('\n');
+        var indentedCode = lines.map(function (codeLine, index) {
+            // Don't add indent to first line if it's on the same line as cursor
+            if (index === 0 && cursor.ch > 0 && line.trim().length > 0) {
+                return codeLine;
+            }
+            // Add current indentation to other lines
+            return currentIndent + codeLine;
+        }).join('\n');
+
+        // Insert the code and set new cursor position
+        editor.replaceSelection(indentedCode);
+
+        // Try to place cursor at a sensible position (after indentation, if on last line)
+        var endCursor = editor.getCursor();
+        editor.setCursor(endCursor.line, endCursor.ch);
+        editor.focus();
+
+        return true;
+    },
+
+    /// Insert a snippet and automatically indent it to match current level
+    insertWithIndent: function (elementId, snippetCode) {
+        return window.codeSnippet.insert(elementId, snippetCode, true);
+    },
+
+    /// Insert a snippet at the end of the document
+    insertAtEnd: function (elementId, snippetCode) {
+        var element = document.getElementById(elementId);
+        if (!element || !element._cm) {
+            console.warn('CodeMirror editor not found for element:', elementId);
+            return false;
+        }
+
+        var editor = element._cm;
+        var lastLine = editor.lastLine();
+        var lastChar = editor.getLine(lastLine).length;
+
+        editor.setCursor(lastLine, lastChar);
+        editor.replaceSelection('\n' + snippetCode);
+        editor.focus();
+
+        return true;
+    },
+
+    /// Insert a snippet at the beginning of the document
+    insertAtBegin: function (elementId, snippetCode) {
+        var element = document.getElementById(elementId);
+        if (!element || !element._cm) {
+            console.warn('CodeMirror editor not found for element:', elementId);
+            return false;
+        }
+
+        var editor = element._cm;
+        editor.setCursor(0, 0);
+        editor.replaceSelection(snippetCode + '\n');
+        editor.focus();
+
+        return true;
+    },
+
+    /// Replace the current selection with a snippet
+    replaceSelection: function (elementId, snippetCode) {
+        var element = document.getElementById(elementId);
+        if (!element || !element._cm) {
+            console.warn('CodeMirror editor not found for element:', elementId);
+            return false;
+        }
+
+        var editor = element._cm;
+        if (!editor.somethingSelected()) {
+            return window.codeSnippet.insert(elementId, snippetCode);
+        }
+
+        editor.replaceSelection(snippetCode);
+        editor.focus();
+        return true;
+    },
+
+    /// Wrap selection with a snippet (e.g., if/else around selected code)
+    wrapSelection: function (elementId, beforeSnippet, afterSnippet) {
+        var element = document.getElementById(elementId);
+        if (!element || !element._cm) {
+            console.warn('CodeMirror editor not found for element:', elementId);
+            return false;
+        }
+
+        var editor = element._cm;
+        if (!editor.somethingSelected()) {
+            console.warn('No selection to wrap');
+            return false;
+        }
+
+        var selection = editor.getSelection();
+        var wrapped = beforeSnippet + '\n' + selection + '\n' + afterSnippet;
+        editor.replaceSelection(wrapped);
+        editor.focus();
+
+        return true;
+    },
+
+    /// Get the current editor content
+    getValue: function (elementId) {
+        var element = document.getElementById(elementId);
+        if (!element || !element._cm) return '';
+        return element._cm.getValue();
+    },
+
+    /// Set the editor content
+    setValue: function (elementId, value) {
+        var element = document.getElementById(elementId);
+        if (!element || !element._cm) return false;
+        element._cm.setValue(value);
+        return true;
+    },
+
+    /// Get current cursor position
+    getCursorPosition: function (elementId) {
+        var element = document.getElementById(elementId);
+        if (!element || !element._cm) return null;
+        var cursor = element._cm.getCursor();
+        return { line: cursor.line, ch: cursor.ch };
+    }
+};
+

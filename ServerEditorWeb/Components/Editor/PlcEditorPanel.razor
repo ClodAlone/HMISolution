@@ -52,20 +52,27 @@
             </div>
         </div>
 
-        @* Code Editor + Debug *@
+        @* Code Editor + Debug + Snippet Toolbox *@
         <div class="plc-editor-body">
-            <CodeEditor @ref="_editor" @bind-Value="plc.Code" @bind-Value:after="OnCodeChanged"
-                        Language="@GetPlcEditorLanguage(plc.Language)" Height="100%"
-                        Completions="_completions"
-                        EnableBreakpoints="true"
-                        BreakpointsChanged="OnBreakpointsChanged"
-                        Initialized="OnEditorInitialized" />
-            <ProgramDebugPanel Category="PlcProgram" ProgramName="@plc.Name"
-                              ServerRunning="ServerProcess.IsServerRunning"
-                              SourceCode="@plc.Code" Height="100%"
-                              EditorElement="@(_editor?.EditorElement ?? default)"
-                              OnDebugSessionChanged="OnDebugSessionUpdated"
-                              OnExecutionLineChanged="OnExecutionLineChanged" />
+            <div class="plc-editor-main">
+                <CodeEditor @ref="_editor" @bind-Value="plc.Code" @bind-Value:after="OnCodeChanged"
+                            Language="@GetPlcEditorLanguage(plc.Language)" Height="100%"
+                            Completions="_completions"
+                            EnableBreakpoints="true"
+                            BreakpointsChanged="OnBreakpointsChanged"
+                            Initialized="OnEditorInitialized" />
+                <ProgramDebugPanel Category="PlcProgram" ProgramName="@plc.Name"
+                                  ServerRunning="ServerProcess.IsServerRunning"
+                                  SourceCode="@plc.Code" Height="100%"
+                                  EditorElement="@(_editor?.EditorElement ?? default)"
+                                  OnDebugSessionChanged="OnDebugSessionUpdated"
+                                  OnExecutionLineChanged="OnExecutionLineChanged" />
+            </div>
+
+            @* Snippet Toolbox Sidebar *@
+            <SnippetToolboxPanel Language="@GetSnippetLanguageCode(plc.Language)"
+                                OnInsertCode="InsertSnippetAsync"
+                                OnSnippetAdded="OnSnippetAdded" />
         </div>
     }
 </div>
@@ -88,7 +95,15 @@
         min-height: 0;
         overflow: hidden;
         display: flex;
+        flex-direction: row;
+    }
+    .plc-editor-main {
+        flex: 1;
+        min-height: 0;
+        overflow: hidden;
+        display: flex;
         flex-direction: column;
+        position: relative;
     }
     .plc-editor-body > div:first-child {
         flex: 1;
@@ -387,8 +402,41 @@
         }
     }
 
+    // --- Snippet Insertion -----
+
+    [Inject] private IJSRuntime JS { get; set; } = default!;
+
+    private string GetSnippetLanguageCode(string language) => language?.ToUpperInvariant() switch
+    {
+        "IL" => "PlcIl",
+        "LD" => "PlcLd",
+        _ => "PlcSt"
+    };
+
+    private async Task InsertSnippetAsync(string snippetCode)
+    {
+        if (_editor?.EditorElement.Id == null) return;
+
+        try
+        {
+            await JS.InvokeVoidAsync("codeSnippet.insertWithIndent", 
+                _editor.EditorElement, snippetCode);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Error inserting snippet: {ex.Message}");
+        }
+    }
+
+    private Task OnSnippetAdded(CodeSnippet snippet)
+    {
+        // Optionally add to completions or refresh UI
+        return Task.CompletedTask;
+    }
+
     public void Dispose()
     {
         ServerProcess.StateChanged -= OnServerStateChanged;
     }
 }
+

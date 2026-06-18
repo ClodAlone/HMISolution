@@ -41,6 +41,7 @@ builder.Services.AddSingleton<ProjectDiffService>();
 builder.Services.AddSingleton<AiService>();
 builder.Services.AddSingleton<SyntaxCheckService>();
 builder.Services.AddSingleton<ScriptCompletionService>();
+builder.Services.AddSingleton<CodeSnippetService>();  // ← NEW: Code snippet management
 builder.Services.AddSingleton<PropertyGridService>();
 builder.Services.AddSingleton<DockLayoutService>();
 builder.Services.AddSingleton<ThemeService>();
