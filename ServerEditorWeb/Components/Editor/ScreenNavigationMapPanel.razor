@@ -1,0 +1,369 @@
+@using SharedModels
+@using ServerEditorWeb.Services
+@using ServerEditorWeb.Models
+
+@inject NodeEditorService Editor
+@implements IDisposable
+
+<div class="nav-map-panel">
+
+    <div class="nav-map-toolbar">
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <strong class="small">🗺️ Screen Navigation Map</strong>
+            <button class="btn btn-sm btn-outline-primary ms-auto" @onclick="Rebuild">⟳ Refresh</button>
+            @if (_nodes.Count > 0)
+            {
+                <span class="badge bg-secondary">@_nodes.Count screen(s) · @_edges.Count link(s)</span>
+            }
+        </div>
+        @if (_orphans.Count > 0)
+        {
+            <div class="small text-warning mt-1">
+                ⚠️ @_orphans.Count orphaned screen(s) with no incoming links:
+                @string.Join(", ", _orphans)
+            </div>
+        }
+    </div>
+
+    @if (_nodes.Count == 0)
+    {
+        <div class="nav-map-empty">
+            <div style="font-size:2.5rem;opacity:.25;">🗺️</div>
+            <div class="mt-2 text-muted small">No screens found in the project.</div>
+        </div>
+    }
+    else
+    {
+        <div class="nav-map-scroll" @onwheel="OnWheel">
+            <svg width="@_svgWidth" height="@_svgHeight" class="nav-map-svg"
+                 @onmousedown="OnSvgMouseDown" @onmousemove="OnSvgMouseMove" @onmouseup="OnSvgMouseUp">
+                <defs>
+                    <marker id="nav-arrow" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+                        <path d="M0,0 L0,6 L8,3 z" fill="#0d6efd" />
+                    </marker>
+                    <marker id="nav-arrow-back" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+                        <path d="M0,0 L0,6 L8,3 z" fill="#6c757d" />
+                    </marker>
+                </defs>
+
+                <g transform="translate(@_panX, @_panY) scale(@_zoom)">
+
+                    @* Edges — draw behind nodes *@
+                    @foreach (var edge in _edges)
+                    {
+                        if (!_nodes.TryGetValue(edge.From, out var src)) continue;
+                        if (!_nodes.TryGetValue(edge.To, out var dst)) continue;
+
+                        var (x1, y1, x2, y2) = EdgePoints(src, dst);
+                        var isBidirectional = _edges.Any(e => e.From == edge.To && e.To == edge.From);
+                        var color = isBidirectional ? "#6c757d" : "#0d6efd";
+                        var marker = isBidirectional ? "url(#nav-arrow-back)" : "url(#nav-arrow)";
+                        var offset = isBidirectional && edge.From.CompareTo(edge.To) > 0 ? 8.0 : 0.0;
+
+                        <line x1="@(x1 + offset)" y1="@(y1 + offset)" x2="@(x2 + offset)" y2="@(y2 + offset)"
+                              stroke="@color" stroke-width="1.5" marker-end="@marker" opacity="0.8" />
+                    }
+
+                    @* Nodes *@
+                    @foreach (var (id, node) in _nodes)
+                    {
+                        var isSelected = id == _selectedScreen;
+                        var isOrphan = _orphans.Contains(id);
+                        var strokeColor = isSelected ? "#ffc107" : isOrphan ? "#dc3545" : "#0d6efd";
+                        var strokeWidth = isSelected ? 2.5 : 1.5;
+                        var fillColor = isSelected
+                            ? "#1a3a5c"
+                            : isOrphan ? "#3a1a1a" : "#1e2a3a";
+
+                        <g @onclick="() => SelectScreen(id)" style="cursor:pointer" @key="id">
+                            <rect x="@node.X" y="@node.Y" width="@NodeW" height="@NodeH"
+                                  rx="6" ry="6" fill="@fillColor"
+                                  stroke="@strokeColor" stroke-width="@strokeWidth" />
+                            <text x="@(node.X + NodeW / 2)" y="@(node.Y + 16)"
+                                  text-anchor="middle" dominant-baseline="middle"
+                                  font-size="11" fill="#fff">
+                                🖼️
+                            </text>
+                            <text x="@(node.X + NodeW / 2)" y="@(node.Y + 30)"
+                                  text-anchor="middle" dominant-baseline="middle"
+                                  font-size="9" fill="#fff" font-weight="bold">
+                                @Truncate(id, 16)
+                            </text>
+                            @{
+                                var outCount = _edges.Count(e => e.From == id);
+                                var inCount = _edges.Count(e => e.To == id);
+                            }
+                            <text x="@(node.X + NodeW / 2)" y="@(node.Y + 42)"
+                                  text-anchor="middle" dominant-baseline="middle"
+                                  font-size="8" fill="rgba(255,255,255,.6)">
+                                in:@inCount out:@outCount
+                            </text>
+                        </g>
+                    }
+                </g>
+            </svg>
+        </div>
+
+        @if (!string.IsNullOrEmpty(_selectedScreen))
+        {
+            var outLinks = _edges.Where(e => e.From == _selectedScreen).ToList();
+            var inLinks = _edges.Where(e => e.To == _selectedScreen).ToList();
+            <div class="nav-map-details">
+                <strong class="small">🖼️ @_selectedScreen</strong>
+                @if (inLinks.Count > 0)
+                {
+                    <div class="small mt-1"><span class="text-muted">Incoming from:</span> @string.Join(", ", inLinks.Select(e => e.From))</div>
+                }
+                @if (outLinks.Count > 0)
+                {
+                    <div class="small"><span class="text-muted">Navigates to:</span> @string.Join(", ", outLinks.Select(e => e.To))</div>
+                }
+                @if (inLinks.Count == 0)
+                {
+                    <div class="small text-danger">⚠️ No screens navigate to this screen (orphan)</div>
+                }
+            </div>
+        }
+
+        <div class="nav-map-legend">
+            <span class="nav-legend-item" style="--c:#0d6efd">Navigation link</span>
+            <span class="nav-legend-item" style="--c:#6c757d">Bidirectional</span>
+            <span class="nav-legend-item" style="--c:#dc3545">Orphan screen</span>
+            <span class="nav-legend-item" style="--c:#ffc107">Selected</span>
+        </div>
+    }
+</div>
+
+<style>
+    .nav-map-panel {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        overflow: hidden;
+        background: var(--bs-body-bg, #1e1e1e);
+    }
+
+    .nav-map-toolbar {
+        padding: 6px 10px;
+        border-bottom: 1px solid var(--bs-border-color, #333);
+        flex-shrink: 0;
+    }
+
+    .nav-map-empty {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        padding: 24px;
+    }
+
+    .nav-map-scroll {
+        flex: 1;
+        overflow: auto;
+        cursor: grab;
+        min-height: 0;
+    }
+
+    .nav-map-scroll:active { cursor: grabbing; }
+
+    .nav-map-svg { display: block; }
+
+    .nav-map-details {
+        padding: 6px 10px;
+        border-top: 1px solid var(--bs-border-color, #333);
+        flex-shrink: 0;
+        background: var(--bs-secondary-bg, #2a2a2a);
+    }
+
+    .nav-map-legend {
+        display: flex;
+        gap: 14px;
+        padding: 4px 10px;
+        border-top: 1px solid var(--bs-border-color, #333);
+        flex-shrink: 0;
+        flex-wrap: wrap;
+    }
+
+    .nav-legend-item {
+        font-size: 10px;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+    .nav-legend-item::before {
+        content: '';
+        display: inline-block;
+        width: 20px;
+        height: 3px;
+        background: var(--c, #666);
+    }
+</style>
+
+@code {
+    private const double NodeW = 120;
+    private const double NodeH = 52;
+
+    private record NavNode(string Id, double X, double Y);
+    private record NavEdge(string From, string To);
+
+    private Dictionary<string, NavNode> _nodes = new();
+    private List<NavEdge> _edges = new();
+    private HashSet<string> _orphans = new();
+    private string _selectedScreen = "";
+
+    private double _svgWidth = 800;
+    private double _svgHeight = 500;
+    private double _zoom = 1.0;
+    private double _panX;
+    private double _panY;
+    private bool _isPanning;
+    private double _panStartX, _panStartY;
+
+    protected override void OnInitialized()
+    {
+        Editor.StateChanged += OnEditorChanged;
+        Rebuild();
+    }
+
+    private void OnEditorChanged()
+    {
+        Rebuild();
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void Rebuild()
+    {
+        _nodes = new();
+        _edges = new();
+        _orphans = new();
+        _selectedScreen = "";
+
+        var model = Editor.RootModel;
+        if (model == null) return;
+
+        // Add a node for every screen
+        foreach (var screen in model.Screens)
+            _nodes[screen.Name] = new NavNode(screen.Name, 0, 0);
+
+        // Find NavigateScreen / OpenScreenPopup / OpenScreenModal commands
+        foreach (var screen in model.Screens)
+        {
+            foreach (var sym in screen.Symbols)
+            {
+                foreach (var cmd in sym.Commands)
+                {
+                    if (cmd.Action is "NavigateScreen" or "OpenScreenPopup" or "OpenScreenModal"
+                        && !string.IsNullOrWhiteSpace(cmd.TargetScreen)
+                        && _nodes.ContainsKey(cmd.TargetScreen)
+                        && cmd.TargetScreen != screen.Name)
+                    {
+                        if (!_edges.Any(e => e.From == screen.Name && e.To == cmd.TargetScreen))
+                            _edges.Add(new NavEdge(screen.Name, cmd.TargetScreen));
+                    }
+                }
+            }
+        }
+
+        // Detect orphans (screens with no incoming links, excluding those hidden from nav)
+        var hasIncoming = _edges.Select(e => e.To).ToHashSet();
+        foreach (var screen in model.Screens)
+        {
+            if (!hasIncoming.Contains(screen.Name))
+                _orphans.Add(screen.Name);
+        }
+
+        LayoutGraph();
+    }
+
+    private void LayoutGraph()
+    {
+        int count = _nodes.Count;
+        if (count == 0) return;
+
+        // Grid layout: arrange screens in rows
+        int cols = Math.Max(1, (int)Math.Ceiling(Math.Sqrt(count * 1.5)));
+        double hSpacing = NodeW + 80;
+        double vSpacing = NodeH + 60;
+        double startX = 60, startY = 60;
+
+        int i = 0;
+        foreach (var key in _nodes.Keys.ToList())
+        {
+            int col = i % cols;
+            int row = i / cols;
+            _nodes[key] = _nodes[key] with
+            {
+                X = startX + col * hSpacing,
+                Y = startY + row * vSpacing
+            };
+            i++;
+        }
+
+        int rows = (count + cols - 1) / cols;
+        _svgWidth = Math.Max(700, startX + cols * hSpacing + 80);
+        _svgHeight = Math.Max(400, startY + rows * vSpacing + 60);
+    }
+
+    private (double x1, double y1, double x2, double y2) EdgePoints(NavNode src, NavNode dst)
+    {
+        double cx1 = src.X + NodeW / 2, cy1 = src.Y + NodeH / 2;
+        double cx2 = dst.X + NodeW / 2, cy2 = dst.Y + NodeH / 2;
+
+        // Intersect with the rectangle border
+        double dx = cx2 - cx1, dy = cy2 - cy1;
+        double len = Math.Sqrt(dx * dx + dy * dy);
+        if (len < 1) return (cx1, cy1, cx2, cy2);
+
+        double ux = dx / len, uy = dy / len;
+        // Simple offset from centre to edge
+        double srcOffset = EdgeOffset(ux, uy, NodeW / 2, NodeH / 2);
+        double dstOffset = EdgeOffset(-ux, -uy, NodeW / 2, NodeH / 2) + 6; // +6 for arrowhead
+
+        return (cx1 + ux * srcOffset, cy1 + uy * srcOffset,
+                cx2 - ux * dstOffset, cy2 - uy * dstOffset);
+    }
+
+    private static double EdgeOffset(double ux, double uy, double hw, double hh)
+    {
+        double tx = ux == 0 ? double.MaxValue : Math.Abs(hw / ux);
+        double ty = uy == 0 ? double.MaxValue : Math.Abs(hh / uy);
+        return Math.Min(tx, ty);
+    }
+
+    private void SelectScreen(string name) => _selectedScreen = _selectedScreen == name ? "" : name;
+
+    private void OnWheel(WheelEventArgs e)
+        => _zoom = Math.Clamp(_zoom - e.DeltaY * 0.001, 0.2, 3.0);
+
+    private void OnSvgMouseDown(MouseEventArgs e)
+    {
+        if (e.Button == 0)
+        {
+            _isPanning = true;
+            _panStartX = e.ClientX - _panX;
+            _panStartY = e.ClientY - _panY;
+        }
+    }
+
+    private void OnSvgMouseMove(MouseEventArgs e)
+    {
+        if (_isPanning)
+        {
+            _panX = e.ClientX - _panStartX;
+            _panY = e.ClientY - _panStartY;
+        }
+    }
+
+    private void OnSvgMouseUp(MouseEventArgs e) => _isPanning = false;
+
+    private static string Truncate(string s, int maxLen)
+        => s.Length <= maxLen ? s : s[..(maxLen - 1)] + "…";
+
+    public void Dispose()
+    {
+        Editor.StateChanged -= OnEditorChanged;
+    }
+}

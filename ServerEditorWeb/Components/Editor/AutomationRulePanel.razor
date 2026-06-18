@@ -1,0 +1,588 @@
+@using SharedModels
+@using ServerEditorWeb.Services
+@using ServerEditorWeb.Models
+
+@inject NodeEditorService Editor
+
+<div class="ar-panel">
+
+    @* Left sidebar: rule list *@
+    <div class="ar-sidebar">
+        <div class="ar-sidebar-toolbar">
+            <strong class="small">⚙️ Automation Rules</strong>
+            <button class="btn btn-sm btn-outline-primary" @onclick="AddRule" title="Add new rule">➕</button>
+        </div>
+
+        @if (!_rules.Any())
+        {
+            <div class="ar-list-empty small text-muted">No rules yet. Click ➕ to create one.</div>
+        }
+        else
+        {
+            <div class="ar-list">
+                @foreach (var rule in _rules)
+                {
+                    var r = rule;
+                    <div class="ar-list-item @(r == _selected ? "active" : "")"
+                         @onclick="() => SelectRule(r)">
+                        <span class="ar-list-icon">@(r.Enabled ? "🟢" : "⚫")</span>
+                        <span class="ar-list-name">@r.Name</span>
+                        @if (!string.IsNullOrEmpty(r.Group))
+                        {
+                            <span class="ar-list-group">@r.Group</span>
+                        }
+                        <button class="ar-list-delete btn btn-link p-0 ms-auto"
+                                @onclick="() => DeleteRule(r)" @onclick:stopPropagation title="Delete rule">🗑</button>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+
+    @* Right: rule editor *@
+    <div class="ar-editor">
+        @if (_selected == null)
+        {
+            <div class="ar-editor-empty">
+                <div style="font-size:2.5rem;opacity:.2;">⚙️</div>
+                <div class="mt-2 text-muted small">Select a rule to edit, or click ➕ to create one.</div>
+            </div>
+        }
+        else
+        {
+            <div class="ar-editor-scroll">
+
+                @* ── Header ── *@
+                <div class="ar-section ar-header-section">
+                    <div class="row g-2 align-items-center mb-2">
+                        <div class="col-auto">
+                            <div class="form-check form-switch mb-0">
+                                <input class="form-check-input" type="checkbox"
+                                       @bind="_selected.Enabled"
+                                       @bind:after="NotifyChanged"
+                                       id="ar-enabled" />
+                                <label class="form-check-label small" for="ar-enabled">Enabled</label>
+                            </div>
+                        </div>
+                        <div class="col">
+                            <input type="text" class="form-control form-control-sm"
+                                   placeholder="Rule name"
+                                   @bind="_selected.Name"
+                                   @bind:after="NotifyChanged" />
+                        </div>
+                        <div class="col-auto">
+                            <input type="number" class="form-control form-control-sm" style="width:90px;"
+                                   placeholder="Cooldown s"
+                                   title="Cooldown in seconds (0 = every scan)"
+                                   @bind="_selected.CooldownSeconds"
+                                   @bind:after="NotifyChanged" />
+                        </div>
+                    </div>
+                    <div class="row g-2">
+                        <div class="col">
+                            <input type="text" class="form-control form-control-sm"
+                                   placeholder="Description (optional)"
+                                   @bind="_selected.Description"
+                                   @bind:after="NotifyChanged" />
+                        </div>
+                        <div class="col-auto">
+                            <input type="text" class="form-control form-control-sm" style="width:120px;"
+                                   placeholder="Group"
+                                   @bind="_selected.Group"
+                                   @bind:after="NotifyChanged" />
+                        </div>
+                    </div>
+                </div>
+
+                @* ── WHEN (conditions) ── *@
+                <div class="ar-section">
+                    <div class="ar-section-header">
+                        <span class="ar-section-title">🔵 WHEN</span>
+                        <div class="d-flex align-items-center gap-2">
+                            <label class="form-label small mb-0">Logic:</label>
+                            <select class="form-select form-select-sm" style="width:80px;"
+                                    @bind="_selected.ConditionLogic"
+                                    @bind:after="NotifyChanged">
+                                <option value="All">ALL</option>
+                                <option value="Any">ANY</option>
+                            </select>
+                            <button class="btn btn-sm btn-outline-primary" @onclick="AddCondition">➕ Condition</button>
+                        </div>
+                    </div>
+
+                    @if (!_selected.Conditions.Any())
+                    {
+                        <div class="ar-empty-hint small text-muted">No conditions — rule fires on every scan cycle.</div>
+                    }
+                    else
+                    {
+                        @foreach (var cond in _selected.Conditions)
+                        {
+                            var c = cond;
+                            <div class="ar-card">
+                                <div class="ar-card-header">
+                                    <select class="form-select form-select-sm ar-type-select"
+                                            @bind="c.Type" @bind:after="NotifyChanged">
+                                        <option value="VariableThreshold">Variable Threshold</option>
+                                        <option value="VariableChange">Variable Changed</option>
+                                        <option value="AlarmActive">Alarm Active</option>
+                                        <option value="TimeOfDay">Time of Day</option>
+                                    </select>
+                                    <button class="btn btn-link p-0 ms-auto" @onclick="() => RemoveCondition(c)">🗑</button>
+                                </div>
+
+                                @if (c.Type == "VariableThreshold")
+                                {
+                                    <div class="ar-row">
+                                        <VariablePathPicker Value="@c.VariablePath"
+                                                           ValueChanged="v => { c.VariablePath = v; NotifyChanged(); }"
+                                                           Placeholder="Variable path..." />
+                                        <select class="form-select form-select-sm ar-op-select"
+                                                @bind="c.Operator" @bind:after="NotifyChanged">
+                                            <option value=">">&gt;</option>
+                                            <option value=">=">&gt;=</option>
+                                            <option value="<">&lt;</option>
+                                            <option value="<=">&lt;=</option>
+                                            <option value="==">==</option>
+                                            <option value="!=">!=</option>
+                                        </select>
+                                        <input type="text" class="form-control form-control-sm"
+                                               placeholder="Value" style="max-width:100px;"
+                                               @bind="c.ThresholdValue" @bind:after="NotifyChanged" />
+                                    </div>
+                                }
+                                else if (c.Type == "VariableChange")
+                                {
+                                    <div class="ar-row">
+                                        <VariablePathPicker Value="@c.VariablePath"
+                                                           ValueChanged="v => { c.VariablePath = v; NotifyChanged(); }"
+                                                           Placeholder="Variable path..." />
+                                    </div>
+                                }
+                                else if (c.Type == "AlarmActive")
+                                {
+                                    <div class="ar-row">
+                                        <VariablePathPicker Value="@c.VariablePath"
+                                                           ValueChanged="v => { c.VariablePath = v; NotifyChanged(); }"
+                                                           Placeholder="Variable with alarm..." />
+                                    </div>
+                                }
+                                else if (c.Type == "TimeOfDay")
+                                {
+                                    <div class="ar-row">
+                                        <label class="form-label small mb-0">From</label>
+                                        <input type="time" class="form-control form-control-sm" style="width:110px;"
+                                               value="@c.TimeStart"
+                                               @onchange="e => { c.TimeStart = e.Value?.ToString() ?? string.Empty; NotifyChanged(); }" />
+                                        <label class="form-label small mb-0">To</label>
+                                        <input type="time" class="form-control form-control-sm" style="width:110px;"
+                                               value="@c.TimeEnd"
+                                               @onchange="e => { c.TimeEnd = e.Value?.ToString() ?? string.Empty; NotifyChanged(); }" />
+                                    </div>
+                                }
+                            </div>
+                        }
+                    }
+                </div>
+
+                @* ── THEN (actions) ── *@
+                <div class="ar-section">
+                    <div class="ar-section-header">
+                        <span class="ar-section-title">🟢 THEN</span>
+                        <button class="btn btn-sm btn-outline-success ms-auto" @onclick="() => AddAction(false)">➕ Action</button>
+                    </div>
+                    @RenderActions(_selected.Actions, false)
+                </div>
+
+                @* ── OTHERWISE (clear actions) ── *@
+                <div class="ar-section">
+                    <div class="ar-section-header">
+                        <span class="ar-section-title">🔴 OTHERWISE (on clear)</span>
+                        <button class="btn btn-sm btn-outline-secondary ms-auto" @onclick="() => AddAction(true)">➕ Action</button>
+                    </div>
+                    @RenderActions(_selected.ClearActions, true)
+                </div>
+
+            </div>
+        }
+    </div>
+</div>
+
+<style>
+    .ar-panel {
+        display: flex;
+        height: 100%;
+        overflow: hidden;
+    }
+
+    .ar-sidebar {
+        width: 220px;
+        flex-shrink: 0;
+        border-right: 1px solid var(--bs-border-color, #333);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    .ar-sidebar-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 6px 8px;
+        border-bottom: 1px solid var(--bs-border-color, #333);
+        flex-shrink: 0;
+    }
+
+    .ar-list {
+        flex: 1;
+        overflow-y: auto;
+    }
+
+    .ar-list-empty {
+        padding: 12px;
+        text-align: center;
+    }
+
+    .ar-list-item {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        padding: 6px 8px;
+        cursor: pointer;
+        border-bottom: 1px solid var(--bs-border-color-translucent, #2a2a2a);
+        font-size: 12px;
+    }
+
+    .ar-list-item:hover {
+        background: var(--bs-primary-bg-subtle, #0d6efd1a);
+    }
+
+    .ar-list-item.active {
+        background: var(--bs-primary-bg-subtle, #0d6efd2a);
+        border-left: 3px solid #0d6efd;
+        padding-left: 5px;
+    }
+
+    .ar-list-name {
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .ar-list-group {
+        font-size: 9px;
+        color: var(--bs-secondary);
+        background: var(--bs-secondary-bg);
+        border-radius: 3px;
+        padding: 1px 3px;
+    }
+
+    .ar-list-delete {
+        opacity: 0;
+        color: #dc3545;
+        font-size: 11px;
+    }
+
+    .ar-list-item:hover .ar-list-delete {
+        opacity: 1;
+    }
+
+    .ar-editor {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    .ar-editor-empty {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        padding: 24px;
+    }
+
+    .ar-editor-scroll {
+        flex: 1;
+        overflow-y: auto;
+        padding: 10px;
+    }
+
+    .ar-section {
+        margin-bottom: 12px;
+        border: 1px solid var(--bs-border-color, #333);
+        border-radius: 6px;
+        overflow: hidden;
+    }
+
+    .ar-header-section {
+        padding: 8px 10px;
+        background: var(--bs-secondary-bg, #252525);
+    }
+
+    .ar-section-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 10px;
+        background: var(--bs-secondary-bg, #252525);
+        border-bottom: 1px solid var(--bs-border-color, #333);
+        flex-wrap: wrap;
+    }
+
+    .ar-section-title {
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+    .ar-card {
+        padding: 8px 10px;
+        border-bottom: 1px solid var(--bs-border-color-translucent, #2a2a2a);
+    }
+
+    .ar-card:last-child { border-bottom: none; }
+
+    .ar-card-header {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 6px;
+    }
+
+    .ar-type-select {
+        width: auto;
+        font-size: 11px;
+    }
+
+    .ar-op-select {
+        width: 60px;
+        font-size: 11px;
+    }
+
+    .ar-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+    }
+
+    .ar-empty-hint {
+        padding: 8px 10px;
+    }
+</style>
+
+@code {
+    private List<AutomationRule> _rules = new();
+    private AutomationRule? _selected;
+
+    protected override void OnInitialized()
+    {
+        Editor.StateChanged += OnEditorChanged;
+        LoadRules();
+    }
+
+    protected override void OnParametersSet() => LoadRules();
+
+    private void LoadRules()
+    {
+        _rules = Editor.RootModel?.AutomationRules ?? new();
+        if (_selected != null && !_rules.Contains(_selected))
+            _selected = null;
+    }
+
+    private void OnEditorChanged()
+    {
+        LoadRules();
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void SelectRule(AutomationRule rule) => _selected = rule;
+
+    private void AddRule()
+    {
+        if (Editor.RootModel == null) return;
+        var rule = new AutomationRule { Name = $"Rule {_rules.Count + 1}" };
+        _rules.Add(rule);
+        _selected = rule;
+        Editor.HasUnsavedChanges = true;
+    }
+
+    private void DeleteRule(AutomationRule rule)
+    {
+        if (Editor.RootModel == null) return;
+        _rules.Remove(rule);
+        if (_selected == rule) _selected = _rules.FirstOrDefault();
+        Editor.HasUnsavedChanges = true;
+    }
+
+    private void AddCondition()
+    {
+        _selected?.Conditions.Add(new AutomationCondition());
+        NotifyChanged();
+    }
+
+    private void RemoveCondition(AutomationCondition c)
+    {
+        _selected?.Conditions.Remove(c);
+        NotifyChanged();
+    }
+
+    private void AddAction(bool isClear)
+    {
+        if (_selected == null) return;
+        var list = isClear ? _selected.ClearActions : _selected.Actions;
+        list.Add(new AutomationAction());
+        NotifyChanged();
+    }
+
+    private void RemoveAction(AutomationAction a, bool isClear)
+    {
+        if (_selected == null) return;
+        var list = isClear ? _selected.ClearActions : _selected.Actions;
+        list.Remove(a);
+        NotifyChanged();
+    }
+
+    private void NotifyChanged()
+    {
+        Editor.HasUnsavedChanges = true;
+        StateHasChanged();
+    }
+
+    private RenderFragment RenderActions(List<AutomationAction> actions, bool isClear) => builder =>
+    {
+        if (!actions.Any())
+        {
+            builder.OpenElement(0, "div");
+            builder.AddAttribute(1, "class", "ar-empty-hint small text-muted");
+            builder.AddContent(2, "No actions defined.");
+            builder.CloseElement();
+            return;
+        }
+
+        int seq = 10;
+        foreach (var action in actions.ToList())
+        {
+            var a = action;
+            builder.OpenElement(seq++, "div");
+            builder.AddAttribute(seq++, "class", "ar-card");
+
+            // Card header: type selector + delete
+            builder.OpenElement(seq++, "div");
+            builder.AddAttribute(seq++, "class", "ar-card-header");
+
+            builder.OpenElement(seq++, "select");
+            builder.AddAttribute(seq++, "class", "form-select form-select-sm ar-type-select");
+            builder.AddAttribute(seq++, "value", a.Type);
+            builder.AddAttribute(seq++, "onchange", Microsoft.AspNetCore.Components.EventCallback.Factory.Create<Microsoft.AspNetCore.Components.ChangeEventArgs>(this,
+                e => { a.Type = e.Value?.ToString() ?? "WriteVariable"; NotifyChanged(); }));
+            foreach (var opt in new[] { ("WriteVariable", "Write Variable"), ("SendNotification", "Send Notification"), ("ActivateRecipe", "Activate Recipe"), ("ExecuteScript", "Execute Script"), ("LogEvent", "Log Event") })
+            {
+                builder.OpenElement(seq++, "option");
+                builder.AddAttribute(seq++, "value", opt.Item1);
+                if (a.Type == opt.Item1) builder.AddAttribute(seq++, "selected", true);
+                builder.AddContent(seq++, opt.Item2);
+                builder.CloseElement();
+            }
+            builder.CloseElement(); // select
+
+            // Delete button
+            builder.OpenElement(seq++, "button");
+            builder.AddAttribute(seq++, "class", "btn btn-link p-0 ms-auto");
+            builder.AddAttribute(seq++, "onclick", Microsoft.AspNetCore.Components.EventCallback.Factory.Create(this, () => RemoveAction(a, isClear)));
+            builder.AddContent(seq++, "🗑");
+            builder.CloseElement();
+
+            builder.CloseElement(); // ar-card-header
+
+            // Action-specific fields rendered below the header
+            builder.OpenElement(seq++, "div");
+            builder.AddAttribute(seq++, "class", "ar-row");
+
+            if (a.Type == "WriteVariable")
+            {
+                builder.OpenComponent<VariablePathPicker>(seq++);
+                builder.AddComponentParameter(seq++, "Value", a.VariablePath);
+                builder.AddComponentParameter(seq++, "ValueChanged", Microsoft.AspNetCore.Components.EventCallback.Factory.Create<string>(this, v => { a.VariablePath = v; NotifyChanged(); }));
+                builder.AddComponentParameter(seq++, "Placeholder", "Variable path...");
+                builder.CloseComponent();
+
+                builder.OpenElement(seq++, "input");
+                builder.AddAttribute(seq++, "type", "text");
+                builder.AddAttribute(seq++, "class", "form-control form-control-sm");
+                builder.AddAttribute(seq++, "style", "max-width:120px;");
+                builder.AddAttribute(seq++, "placeholder", "Value to write");
+                builder.AddAttribute(seq++, "value", a.Value);
+                builder.AddAttribute(seq++, "onchange", Microsoft.AspNetCore.Components.EventCallback.Factory.Create<Microsoft.AspNetCore.Components.ChangeEventArgs>(this,
+                    e => { a.Value = e.Value?.ToString() ?? ""; NotifyChanged(); }));
+                builder.CloseElement();
+            }
+            else if (a.Type is "SendNotification" or "LogEvent")
+            {
+                builder.OpenElement(seq++, "input");
+                builder.AddAttribute(seq++, "type", "text");
+                builder.AddAttribute(seq++, "class", "form-control form-control-sm");
+                builder.AddAttribute(seq++, "placeholder", "Message...");
+                builder.AddAttribute(seq++, "value", a.Message);
+                builder.AddAttribute(seq++, "onchange", Microsoft.AspNetCore.Components.EventCallback.Factory.Create<Microsoft.AspNetCore.Components.ChangeEventArgs>(this,
+                    e => { a.Message = e.Value?.ToString() ?? ""; NotifyChanged(); }));
+                builder.CloseElement();
+            }
+            else if (a.Type == "ActivateRecipe")
+            {
+                var recipeNames = Editor.RootModel?.Recipes.Select(r => r.Name).ToList() ?? new();
+                builder.OpenElement(seq++, "select");
+                builder.AddAttribute(seq++, "class", "form-select form-select-sm");
+                builder.AddAttribute(seq++, "value", a.RecipeName);
+                builder.AddAttribute(seq++, "onchange", Microsoft.AspNetCore.Components.EventCallback.Factory.Create<Microsoft.AspNetCore.Components.ChangeEventArgs>(this,
+                    e => { a.RecipeName = e.Value?.ToString() ?? ""; NotifyChanged(); }));
+                builder.OpenElement(seq++, "option");
+                builder.AddAttribute(seq++, "value", "");
+                builder.AddContent(seq++, "— Select recipe —");
+                builder.CloseElement();
+                foreach (var rn in recipeNames)
+                {
+                    builder.OpenElement(seq++, "option");
+                    builder.AddAttribute(seq++, "value", rn);
+                    if (a.RecipeName == rn) builder.AddAttribute(seq++, "selected", true);
+                    builder.AddContent(seq++, rn);
+                    builder.CloseElement();
+                }
+                builder.CloseElement();
+            }
+            else if (a.Type == "ExecuteScript")
+            {
+                var scriptNames = Editor.RootModel?.Scripts.Select(s => s.Name).ToList() ?? new();
+                builder.OpenElement(seq++, "select");
+                builder.AddAttribute(seq++, "class", "form-select form-select-sm");
+                builder.AddAttribute(seq++, "value", a.ScriptName);
+                builder.AddAttribute(seq++, "onchange", Microsoft.AspNetCore.Components.EventCallback.Factory.Create<Microsoft.AspNetCore.Components.ChangeEventArgs>(this,
+                    e => { a.ScriptName = e.Value?.ToString() ?? ""; NotifyChanged(); }));
+                builder.OpenElement(seq++, "option");
+                builder.AddAttribute(seq++, "value", "");
+                builder.AddContent(seq++, "— Select script —");
+                builder.CloseElement();
+                foreach (var sn in scriptNames)
+                {
+                    builder.OpenElement(seq++, "option");
+                    builder.AddAttribute(seq++, "value", sn);
+                    if (a.ScriptName == sn) builder.AddAttribute(seq++, "selected", true);
+                    builder.AddContent(seq++, sn);
+                    builder.CloseElement();
+                }
+                builder.CloseElement();
+            }
+
+            builder.CloseElement(); // ar-row
+            builder.CloseElement(); // ar-card
+        }
+    };
+
+    public void Dispose()
+    {
+        Editor.StateChanged -= OnEditorChanged;
+    }
+}

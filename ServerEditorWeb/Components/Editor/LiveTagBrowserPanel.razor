@@ -1,0 +1,269 @@
+@using SharedModels
+@using ServerEditorWeb.Services
+@using ServerEditorWeb.Models
+
+@inject NodeEditorService Editor
+@inject LiveTagService LiveTags
+@implements IDisposable
+
+<div class="live-tag-panel">
+
+    <div class="live-tag-toolbar">
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <input type="text" class="form-control form-control-sm" style="max-width:200px;"
+                   placeholder="🔍 Filter variables..."
+                   @bind="_filter" @bind:event="oninput" />
+
+            @if (!LiveTags.IsConnected)
+            {
+                <button class="btn btn-sm btn-primary" @onclick="Connect" disabled="@_connecting">
+                    @if (_connecting)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1"></span>
+                    }
+                    🔌 Connect
+                </button>
+            }
+            else
+            {
+                <span class="badge bg-success">● Live</span>
+                <button class="btn btn-sm btn-outline-secondary" @onclick="Disconnect">Disconnect</button>
+            }
+
+            @if (!string.IsNullOrEmpty(LiveTags.Error))
+            {
+                <span class="text-danger small" title="@LiveTags.Error">⚠️ Error</span>
+            }
+        </div>
+    </div>
+
+    @if (Editor.RootModel == null)
+    {
+        <div class="live-tag-empty">
+            <div class="text-muted small">Open a project first.</div>
+        </div>
+    }
+    else
+    {
+        var entries = LiveTags.IsConnected
+            ? FilteredEntries()
+            : AllPaths().Where(p => string.IsNullOrEmpty(_filter) || p.Contains(_filter, StringComparison.OrdinalIgnoreCase))
+                        .Select(p => new LiveTagEntry { Path = p })
+                        .ToList();
+
+        <div class="live-tag-table-wrap">
+            <table class="live-tag-table">
+                <thead>
+                    <tr>
+                        <th>Variable Path</th>
+                        <th>Value</th>
+                        <th>Quality</th>
+                        <th>Time</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var entry in entries)
+                    {
+                        var quality = entry.Quality;
+                        var isGood = quality.Contains("Good", StringComparison.OrdinalIgnoreCase);
+                        <tr class="@(isGood ? "" : "live-tag-row-bad")">
+                            <td class="live-tag-path" title="@entry.Path">
+                                <span class="live-tag-icon">🏷️</span>
+                                @entry.Path
+                            </td>
+                            <td class="live-tag-value">
+                                @if (LiveTags.IsConnected && !string.IsNullOrEmpty(entry.Value))
+                                {
+                                    <strong>@entry.Value</strong>
+                                }
+                                else if (!LiveTags.IsConnected)
+                                {
+                                    <span class="text-muted small">Not connected</span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">—</span>
+                                }
+                            </td>
+                            <td class="live-tag-quality">
+                                @if (LiveTags.IsConnected)
+                                {
+                                    <span class="@(isGood ? "live-tag-good" : "live-tag-bad")">
+                                        @(isGood ? "✓" : "✗")
+                                    </span>
+                                }
+                            </td>
+                            <td class="live-tag-time">@entry.Timestamp</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <div class="live-tag-footer">
+            <span class="small text-muted">
+                @(LiveTags.IsConnected ? $"{FilteredEntries().Count} / {LiveTags.Entries.Count} variables" : $"{AllPaths().Count} variables")
+            </span>
+        </div>
+    }
+</div>
+
+<style>
+    .live-tag-panel {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        overflow: hidden;
+        font-size: 12px;
+    }
+
+    .live-tag-toolbar {
+        padding: 6px 8px;
+        border-bottom: 1px solid var(--bs-border-color, #333);
+        flex-shrink: 0;
+    }
+
+    .live-tag-empty {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        padding: 20px;
+    }
+
+    .live-tag-table-wrap {
+        flex: 1;
+        overflow-y: auto;
+        min-height: 0;
+    }
+
+    .live-tag-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .live-tag-table thead th {
+        position: sticky;
+        top: 0;
+        background: var(--bs-secondary-bg, #2a2a2a);
+        padding: 4px 6px;
+        font-weight: 600;
+        font-size: 11px;
+        border-bottom: 1px solid var(--bs-border-color, #444);
+        white-space: nowrap;
+    }
+
+    .live-tag-table tbody tr {
+        border-bottom: 1px solid var(--bs-border-color-translucent, #3a3a3a);
+        transition: background 0.15s;
+    }
+
+    .live-tag-table tbody tr:hover {
+        background: var(--bs-primary-bg-subtle, #0d6efd1a);
+    }
+
+    .live-tag-table td {
+        padding: 3px 6px;
+        vertical-align: middle;
+    }
+
+    .live-tag-path {
+        font-family: monospace;
+        font-size: 11px;
+        max-width: 200px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .live-tag-icon {
+        margin-right: 3px;
+        opacity: .6;
+    }
+
+    .live-tag-value {
+        font-family: monospace;
+        font-size: 11px;
+        color: #7ec8e3;
+    }
+
+    .live-tag-quality { text-align: center; }
+
+    .live-tag-good { color: #198754; font-size: 13px; }
+    .live-tag-bad  { color: #dc3545; font-size: 13px; }
+
+    .live-tag-time {
+        font-size: 10px;
+        color: var(--bs-secondary, #888);
+        white-space: nowrap;
+    }
+
+    .live-tag-row-bad td {
+        background: rgba(220,53,69,.08);
+    }
+
+    .live-tag-footer {
+        padding: 3px 8px;
+        border-top: 1px solid var(--bs-border-color, #333);
+        flex-shrink: 0;
+        background: var(--bs-secondary-bg, #2a2a2a);
+    }
+</style>
+
+@code {
+    private string _filter = "";
+    private bool _connecting;
+
+    protected override void OnInitialized()
+    {
+        LiveTags.StateChanged += OnLiveTagChanged;
+        Editor.StateChanged += OnEditorChanged;
+    }
+
+    private void OnLiveTagChanged() => InvokeAsync(StateHasChanged);
+    private void OnEditorChanged() => InvokeAsync(StateHasChanged);
+
+    private async Task Connect()
+    {
+        if (Editor.RootModel == null) return;
+        _connecting = true;
+        StateHasChanged();
+        await LiveTags.ConnectAsync(Editor.ServerEndpointUrl, Editor.RootModel);
+        _connecting = false;
+    }
+
+    private void Disconnect() => LiveTags.Disconnect();
+
+    private List<LiveTagEntry> FilteredEntries()
+    {
+        if (string.IsNullOrEmpty(_filter))
+            return LiveTags.Entries;
+        return LiveTags.Entries
+            .Where(e => e.Path.Contains(_filter, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+    }
+
+    private List<string> AllPaths()
+    {
+        if (Editor.RootModel == null) return new();
+        var paths = new List<string>();
+        if (Editor.RootModel.Folder != null)
+            CollectPaths(Editor.RootModel.Folder, "", paths);
+        return paths;
+    }
+
+    private static void CollectPaths(Folder folder, string prefix, List<string> paths)
+    {
+        foreach (var v in folder.Variables)
+            paths.Add(string.IsNullOrEmpty(prefix) ? v.Name : $"{prefix}.{v.Name}");
+        foreach (var sub in folder.Folders)
+            CollectPaths(sub, string.IsNullOrEmpty(prefix) ? sub.Name : $"{prefix}.{sub.Name}", paths);
+    }
+
+    public void Dispose()
+    {
+        LiveTags.StateChanged -= OnLiveTagChanged;
+        Editor.StateChanged -= OnEditorChanged;
+    }
+}

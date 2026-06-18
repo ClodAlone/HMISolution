@@ -61,6 +61,7 @@ builder.Services.AddSingleton<CertificateService>();
 builder.Services.AddSingleton<BackupService>();
 builder.Services.AddSingleton<ScriptDebugService>();
 builder.Services.AddSingleton<FindReplaceService>();
+builder.Services.AddSingleton<LiveTagService>();
 
 builder.Services.AddRateLimiter(options =>
 {

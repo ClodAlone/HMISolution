@@ -482,3 +482,19 @@ public class AliasMapNode : TreeNode
     public AliasMapNode(VariableAliasMap map) { AliasMap = map; Name = map.Name; }
     public void SyncName() => AliasMap.Name = Name;
 }
+
+public class AutomationRuleGroupNode : TreeNode
+{
+    public override string TypeName => "AutomationRuleGroup";
+    public override string Icon => "⚙️";
+    public AutomationRuleGroupNode() { Name = "Automation Rules"; }
+}
+
+public class AutomationRuleNode : TreeNode
+{
+    public override string TypeName => "AutomationRule";
+    public override string Icon => "🔁";
+    public AutomationRule Rule { get; }
+    public AutomationRuleNode(AutomationRule rule) { Rule = rule; Name = rule.Name; }
+    public void SyncName() => Rule.Name = Name;
+}

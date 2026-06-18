@@ -36,6 +36,7 @@ namespace SharedModels
         public List<EventConfig> Events { get; set; } = new();
         public List<VariableAliasMap> AliasMaps { get; set; } = new();
         public List<UserSymbolGroup> UserSymbolGroups { get; set; } = new();
+        public List<AutomationRule> AutomationRules { get; set; } = new();
 
         /// <summary>
         /// PBKDF2-SHA256 hash of the project protection password.
@@ -3458,6 +3459,104 @@ namespace SharedModels
 
         /// <summary>Optional folder path for editor organization.</summary>
         public string Group { get; set; } = "";
+    }
+
+    // ─── No-Code Automation Rules ───────────────────────────────────────────────
+
+    /// <summary>
+    /// A no-code automation rule: When [Condition] → Then [Actions].
+    /// Evaluated cyclically at runtime without writing C# scripts.
+    /// </summary>
+    public class AutomationRule
+    {
+        public string Id { get; set; } = Guid.NewGuid().ToString("N")[..8];
+        public string Name { get; set; } = "New Rule";
+        public bool Enabled { get; set; } = true;
+        public string Description { get; set; } = "";
+        public string Group { get; set; } = "";
+
+        /// <summary>How to combine multiple conditions: "All" (AND) or "Any" (OR).</summary>
+        public string ConditionLogic { get; set; } = "All";
+
+        public List<AutomationCondition> Conditions { get; set; } = new();
+        public List<AutomationAction> Actions { get; set; } = new();
+
+        /// <summary>Optional actions executed when the rule condition clears (rising-edge reset).</summary>
+        public List<AutomationAction> ClearActions { get; set; } = new();
+
+        /// <summary>Minimum seconds between consecutive firings. 0 = every scan.</summary>
+        public int CooldownSeconds { get; set; }
+    }
+
+    /// <summary>A single condition in an automation rule.</summary>
+    public class AutomationCondition
+    {
+        public string Id { get; set; } = Guid.NewGuid().ToString("N")[..8];
+
+        /// <summary>
+        /// Condition type:
+        /// VariableThreshold — variable vs constant or another variable
+        /// VariableChange    — variable changed value
+        /// AlarmActive       — alarm on variable is active
+        /// TimeOfDay         — current time within a range
+        /// Elapsed           — time since last trigger exceeded N seconds
+        /// </summary>
+        public string Type { get; set; } = "VariableThreshold";
+
+        /// <summary>OPC variable path for condition evaluation.</summary>
+        public string VariablePath { get; set; } = "";
+
+        /// <summary>Comparison operator: ==, !=, >, >=, <, <=</summary>
+        public string Operator { get; set; } = ">";
+
+        /// <summary>Threshold constant value.</summary>
+        public string ThresholdValue { get; set; } = "0";
+
+        /// <summary>Optional: compare against another variable path instead of a constant.</summary>
+        public string CompareVariablePath { get; set; } = "";
+
+        /// <summary>For TimeOfDay: start time as "HH:mm".</summary>
+        public string TimeStart { get; set; } = "08:00";
+
+        /// <summary>For TimeOfDay: end time as "HH:mm".</summary>
+        public string TimeEnd { get; set; } = "17:00";
+
+        /// <summary>For Elapsed: seconds since last trigger.</summary>
+        public int ElapsedSeconds { get; set; } = 60;
+    }
+
+    /// <summary>A single action in an automation rule.</summary>
+    public class AutomationAction
+    {
+        public string Id { get; set; } = Guid.NewGuid().ToString("N")[..8];
+
+        /// <summary>
+        /// Action type:
+        /// WriteVariable      — write a constant value to an OPC variable
+        /// SendNotification   — send email/Telegram notification
+        /// ActivateRecipe     — load and activate a named recipe
+        /// ExecuteScript      — run a named script once
+        /// LogEvent           — write an entry to the event log
+        /// </summary>
+        public string Type { get; set; } = "WriteVariable";
+
+        /// <summary>OPC variable path (WriteVariable).</summary>
+        public string VariablePath { get; set; } = "";
+
+        /// <summary>Value to write (WriteVariable).</summary>
+        public string Value { get; set; } = "";
+
+        /// <summary>Notification message body (SendNotification, LogEvent).</summary>
+        public string Message { get; set; } = "";
+
+        /// <summary>Recipe name (ActivateRecipe).</summary>
+        public string RecipeName { get; set; } = "";
+
+        /// <summary>Script name (ExecuteScript).</summary>
+        public string ScriptName { get; set; } = "";
+
+        /// <summary>Event log category (LogEvent).</summary>
+        public string EventCategory { get; set; } = "Rule";
     }
 
 }

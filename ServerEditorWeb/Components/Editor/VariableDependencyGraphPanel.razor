@@ -1,0 +1,473 @@
+@using SharedModels
+@using ServerEditorWeb.Services
+@using ServerEditorWeb.Models
+
+@inject NodeEditorService Editor
+@inject CrossReferenceService XRef
+
+<div class="dep-graph-panel">
+
+    <div class="dep-graph-toolbar">
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <div class="dep-combo" @onfocusout="OnComboFocusOut">
+                <div class="dep-combo-input">
+                    <span>🔍</span>
+                    <input type="text" class="form-control form-control-sm"
+                           placeholder="Variable path to analyse..."
+                           @bind="_searchText" @bind:event="oninput" @bind:after="OnSearchChanged"
+                           @onfocus="() => _dropdownOpen = true" />
+                    <button class="btn btn-sm btn-link p-0" @onclick="ToggleDropdown" tabindex="-1">▾</button>
+                </div>
+                @if (_dropdownOpen && _filteredPaths.Count > 0)
+                {
+                    <div class="dep-combo-dropdown">
+                        @foreach (var p in _filteredPaths)
+                        {
+                            <div class="dep-combo-option" @onmousedown="() => SelectPath(p)" @onmousedown:preventDefault>@p</div>
+                        }
+                    </div>
+                }
+            </div>
+            <button class="btn btn-sm btn-primary" @onclick="BuildGraph"
+                    disabled="@(string.IsNullOrWhiteSpace(_searchText))">
+                Analyse
+            </button>
+            <div class="form-check form-check-inline mb-0">
+                <input class="form-check-input" type="checkbox" id="dep-prefix" @bind="_prefixMatch" />
+                <label class="form-check-label small" for="dep-prefix">Prefix match</label>
+            </div>
+            @if (_nodes.Count > 0)
+            {
+                <span class="badge bg-secondary ms-auto">@_edges.Count connection(s)</span>
+            }
+            @if (_nodes.Count > 0)
+            {
+                <button class="btn btn-sm btn-outline-secondary" @onclick="Reset">✕ Clear</button>
+            }
+        </div>
+    </div>
+
+    @if (_nodes.Count == 0 && _lastPath == null)
+    {
+        <div class="dep-graph-empty">
+            <div style="font-size:2.5rem; opacity:.25;">🕸️</div>
+            <div class="mt-2 text-muted small">Select a variable path and click <strong>Analyse</strong> to see its dependency network.</div>
+            @if (Editor.SelectedItem is VariableNode vn)
+            {
+                <button class="btn btn-sm btn-outline-primary mt-2" @onclick="() => AnalyseFromNode(vn)">
+                    Analyse @vn.Name
+                </button>
+            }
+        </div>
+    }
+    else if (_nodes.Count == 0 && _lastPath != null)
+    {
+        <div class="dep-graph-empty">
+            <div class="text-muted small">No consumers found for <strong>@_lastPath</strong>.</div>
+        </div>
+    }
+    else
+    {
+        <div class="dep-graph-scroll" @onwheel="OnWheel">
+            <svg width="@_svgWidth" height="@_svgHeight" class="dep-graph-svg"
+                 @onmousedown="OnSvgMouseDown" @onmousemove="OnSvgMouseMove" @onmouseup="OnSvgMouseUp">
+                <defs>
+                    <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+                        <path d="M0,0 L0,6 L8,3 z" fill="#6c757d" />
+                    </marker>
+                </defs>
+
+                <g transform="translate(@_panX, @_panY) scale(@_zoom)">
+                    @* Edges *@
+                    @foreach (var edge in _edges)
+                    {
+                        var src = _nodes[edge.From];
+                        var dst = _nodes[edge.To];
+                        var x1 = src.X + src.W / 2;
+                        var y1 = src.Y + src.H / 2;
+                        var x2 = dst.X + dst.W / 2;
+                        var y2 = dst.Y + dst.H / 2;
+                        <line x1="@x1" y1="@y1" x2="@x2" y2="@y2"
+                              stroke="#6c757d" stroke-width="1.5" stroke-dasharray="@(edge.EdgeType == "write" ? "none" : "4,3")"
+                              marker-end="url(#arrow)" />
+                    }
+
+                    @* Nodes *@
+                    @foreach (var (id, node) in _nodes)
+                    {
+                        var isRoot = id == _rootNodeId;
+                        var fillColor = NodeColor(node.Category, isRoot);
+                        <g @onclick="() => OnNodeClick(id)" style="cursor:pointer" @key="id">
+                            <rect x="@node.X" y="@node.Y" width="@node.W" height="@node.H"
+                                  rx="6" ry="6"
+                                  fill="@fillColor"
+                                  stroke="@(isRoot ? "#0d6efd" : "#555")"
+                                  stroke-width="@(isRoot ? "2.5" : "1.5")" />
+                            <text x="@(node.X + node.W / 2)" y="@(node.Y + 15)"
+                                  text-anchor="middle" dominant-baseline="middle"
+                                  font-size="10" font-weight="@(isRoot ? "bold" : "normal")"
+                                  fill="#fff">
+                                @node.Icon
+                            </text>
+                            <text x="@(node.X + node.W / 2)" y="@(node.Y + 28)"
+                                  text-anchor="middle" dominant-baseline="middle"
+                                  font-size="9" fill="#fff">
+                                @Truncate(node.Label, 16)
+                            </text>
+                            @if (!string.IsNullOrEmpty(node.SubLabel))
+                            {
+                                <svg:text x="@(node.X + node.W / 2)" y="@(node.Y + 40)"
+                                      text-anchor="middle" dominant-baseline="middle"
+                                      font-size="8" fill="rgba(255,255,255,.7)">
+                                    @Truncate(node.SubLabel, 18)
+                                </svg:text>
+                            }
+                        </g>
+                    }
+                </g>
+            </svg>
+        </div>
+
+        <div class="dep-graph-legend">
+            <span class="dep-legend-item" style="--c:#0d6efd">Variable</span>
+            <span class="dep-legend-item" style="--c:#198754">Screen</span>
+            <span class="dep-legend-item" style="--c:#fd7e14">Script</span>
+            <span class="dep-legend-item" style="--c:#6f42c1">PLC</span>
+            <span class="dep-legend-item" style="--c:#dc3545">Alarm</span>
+            <span class="dep-legend-item" style="--c:#0dcaf0">Recipe</span>
+            <span class="dep-legend-item" style="--c:#6c757d">Other</span>
+        </div>
+    }
+</div>
+
+<style>
+    .dep-graph-panel {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        overflow: hidden;
+        background: var(--bs-body-bg, #1e1e1e);
+    }
+
+    .dep-graph-toolbar {
+        padding: 6px 8px;
+        border-bottom: 1px solid var(--bs-border-color, #333);
+        flex-shrink: 0;
+    }
+
+    .dep-combo {
+        position: relative;
+        flex: 1;
+        min-width: 200px;
+    }
+
+    .dep-combo-input {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        border: 1px solid var(--bs-border-color, #444);
+        border-radius: 4px;
+        padding: 2px 6px;
+        background: var(--bs-body-bg);
+    }
+
+    .dep-combo-input .form-control {
+        border: none;
+        box-shadow: none;
+        background: transparent;
+        padding: 0;
+        flex: 1;
+    }
+
+    .dep-combo-dropdown {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: var(--bs-body-bg, #2d2d2d);
+        border: 1px solid var(--bs-border-color, #555);
+        border-radius: 4px;
+        z-index: 200;
+        max-height: 200px;
+        overflow-y: auto;
+    }
+
+    .dep-combo-option {
+        padding: 4px 8px;
+        font-size: 12px;
+        cursor: pointer;
+    }
+
+    .dep-combo-option:hover {
+        background: var(--bs-primary-bg-subtle, #0d6efd33);
+    }
+
+    .dep-graph-empty {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        text-align: center;
+    }
+
+    .dep-graph-scroll {
+        flex: 1;
+        overflow: auto;
+        position: relative;
+        cursor: grab;
+    }
+
+    .dep-graph-scroll:active {
+        cursor: grabbing;
+    }
+
+    .dep-graph-svg {
+        display: block;
+    }
+
+    .dep-graph-legend {
+        display: flex;
+        gap: 12px;
+        padding: 4px 10px;
+        border-top: 1px solid var(--bs-border-color, #333);
+        flex-shrink: 0;
+        flex-wrap: wrap;
+    }
+
+    .dep-legend-item {
+        font-size: 10px;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+    .dep-legend-item::before {
+        content: '';
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 3px;
+        background: var(--c, #666);
+    }
+</style>
+
+@code {
+    private record GraphNode(string Id, string Label, string SubLabel, string Category, string Icon, double X, double Y, double W = 120, double H = 50);
+    private record GraphEdge(string From, string To, string EdgeType = "read");
+
+    private string _searchText = "";
+    private string? _lastPath;
+    private bool _prefixMatch;
+    private bool _dropdownOpen;
+    private List<string> _allPaths = new();
+    private List<string> _filteredPaths = new();
+
+    private Dictionary<string, GraphNode> _nodes = new();
+    private List<GraphEdge> _edges = new();
+    private string _rootNodeId = "";
+
+    private double _svgWidth = 800;
+    private double _svgHeight = 500;
+    private double _zoom = 1.0;
+    private double _panX;
+    private double _panY;
+    private bool _isPanning;
+    private double _panStartX, _panStartY;
+
+    protected override void OnInitialized()
+    {
+        Editor.StateChanged += OnEditorChanged;
+        RefreshPaths();
+    }
+
+    private void OnEditorChanged()
+    {
+        RefreshPaths();
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void RefreshPaths()
+    {
+        if (Editor.RootModel != null)
+            _allPaths = XRef.GetAllVariablePaths(Editor.RootModel);
+    }
+
+    private void OnSearchChanged()
+    {
+        _filteredPaths = string.IsNullOrWhiteSpace(_searchText)
+            ? _allPaths.Take(30).ToList()
+            : _allPaths.Where(p => p.Contains(_searchText, StringComparison.OrdinalIgnoreCase)).Take(30).ToList();
+        _dropdownOpen = _filteredPaths.Count > 0;
+    }
+
+    private void ToggleDropdown()
+    {
+        _dropdownOpen = !_dropdownOpen;
+        if (_dropdownOpen)
+            _filteredPaths = _allPaths.Take(30).ToList();
+    }
+
+    private void OnComboFocusOut()
+    {
+        Task.Delay(150).ContinueWith(_ => InvokeAsync(() => { _dropdownOpen = false; StateHasChanged(); }));
+    }
+
+    private void SelectPath(string path)
+    {
+        _searchText = path;
+        _dropdownOpen = false;
+    }
+
+    private void AnalyseFromNode(VariableNode vn)
+    {
+        _searchText = vn.Name;
+        BuildGraph();
+    }
+
+    private void BuildGraph()
+    {
+        if (string.IsNullOrWhiteSpace(_searchText) || Editor.RootModel == null) return;
+        _lastPath = _searchText.Trim();
+        _nodes = new();
+        _edges = new();
+
+        var refs = XRef.FindReferences(Editor.RootModel, _lastPath, _prefixMatch);
+
+        // Root variable node
+        _rootNodeId = $"var:{_lastPath}";
+        _nodes[_rootNodeId] = new GraphNode(_rootNodeId, _lastPath, "variable", "Variable", "🏷️", 0, 0);
+
+        // Group references by category+location
+        var groups = refs.GroupBy(r => (r.Category, r.Location));
+        int col = 0;
+        var categories = refs.Select(r => r.Category).Distinct().ToList();
+
+        foreach (var grp in groups)
+        {
+            var (cat, loc) = grp.Key;
+            var nodeId = $"{cat}:{loc}";
+            if (!_nodes.ContainsKey(nodeId))
+            {
+                var (icon, catKey) = CategoryMeta(cat);
+                _nodes[nodeId] = new GraphNode(nodeId, loc, cat, catKey, icon, 0, 0);
+            }
+
+            // Determine edge type based on details
+            var edgeType = grp.Any(r => r.Detail.Contains("Write", StringComparison.OrdinalIgnoreCase)) ? "write" : "read";
+            var edgeId = $"{_rootNodeId}->{nodeId}";
+            if (!_edges.Any(e => e.From == _rootNodeId && e.To == nodeId))
+                _edges.Add(new GraphEdge(_rootNodeId, nodeId, edgeType));
+
+            col++;
+        }
+
+        LayoutGraph();
+        StateHasChanged();
+    }
+
+    private void LayoutGraph()
+    {
+        // Star layout: root in centre, consumers in a circle
+        var consumers = _nodes.Keys.Where(k => k != _rootNodeId).ToList();
+        int n = consumers.Count;
+        double cx = 350, cy = 250;
+        double radius = Math.Min(200, 60 + n * 30);
+
+        var rootNode = _nodes[_rootNodeId];
+        _nodes[_rootNodeId] = rootNode with { X = cx - rootNode.W / 2, Y = cy - rootNode.H / 2 };
+
+        for (int i = 0; i < n; i++)
+        {
+            double angle = (2 * Math.PI * i / n) - Math.PI / 2;
+            double x = cx + radius * Math.Cos(angle);
+            double y = cy + radius * Math.Sin(angle);
+            var node = _nodes[consumers[i]];
+            _nodes[consumers[i]] = node with { X = x - node.W / 2, Y = y - node.H / 2 };
+        }
+
+        _svgWidth = Math.Max(800, cx + radius + 150);
+        _svgHeight = Math.Max(500, cy + radius + 100);
+    }
+
+    private void Reset()
+    {
+        _nodes = new();
+        _edges = new();
+        _lastPath = null;
+        _searchText = "";
+        _zoom = 1;
+        _panX = 0;
+        _panY = 0;
+    }
+
+    private void OnNodeClick(string id)
+    {
+        // If a variable node, trigger cross-ref for it
+        if (id.StartsWith("var:"))
+        {
+            _searchText = id[4..];
+            BuildGraph();
+        }
+    }
+
+    private void OnWheel(WheelEventArgs e)
+    {
+        _zoom = Math.Clamp(_zoom - e.DeltaY * 0.001, 0.2, 3.0);
+    }
+
+    private void OnSvgMouseDown(MouseEventArgs e)
+    {
+        if (e.Button == 0)
+        {
+            _isPanning = true;
+            _panStartX = e.ClientX - _panX;
+            _panStartY = e.ClientY - _panY;
+        }
+    }
+
+    private void OnSvgMouseMove(MouseEventArgs e)
+    {
+        if (_isPanning)
+        {
+            _panX = e.ClientX - _panStartX;
+            _panY = e.ClientY - _panStartY;
+        }
+    }
+
+    private void OnSvgMouseUp(MouseEventArgs e) => _isPanning = false;
+
+    private static string NodeColor(string category, bool isRoot) => category switch
+    {
+        "Variable" when isRoot => "#0d6efd",
+        "Screen" => "#198754",
+        "Script" => "#fd7e14",
+        "PLC Program" => "#6f42c1",
+        "Alarm" => "#dc3545",
+        "Recipe" => "#0dcaf0",
+        _ => "#6c757d"
+    };
+
+    private static (string icon, string catKey) CategoryMeta(string cat) => cat switch
+    {
+        "Screen" => ("🖼️", "Screen"),
+        "Script" => ("⚡", "Script"),
+        "PLC Program" => ("⚙️", "PLC Program"),
+        "Alarm" => ("🔔", "Alarm"),
+        "Data Logging" => ("📊", "Data Logging"),
+        "Recipe" => ("📋", "Recipe"),
+        "Report" => ("📄", "Report"),
+        "Camera" => ("📷", "Camera"),
+        "Scheduler" => ("📅", "Scheduler"),
+        _ => ("📌", cat)
+    };
+
+    private static string Truncate(string s, int maxLen) =>
+        s.Length <= maxLen ? s : s[..(maxLen - 1)] + "…";
+
+    public void Dispose()
+    {
+        Editor.StateChanged -= OnEditorChanged;
+    }
+}

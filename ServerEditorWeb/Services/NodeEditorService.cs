@@ -565,8 +565,18 @@ public class NodeEditorService
         }
         proj.Children.Add(aliasMapGroup);
 
-        var screenGroup = new ScreenGroupNode() { Parent = proj };
-        if (proj.Model.Screens != null)
+        var automationRuleGroup = new AutomationRuleGroupNode() { Parent = proj };
+        if (proj.Model.AutomationRules != null)
+        {
+            foreach (var rule in proj.Model.AutomationRules)
+            {
+                var rNode = new AutomationRuleNode(rule) { Parent = automationRuleGroup };
+                automationRuleGroup.Children.Add(rNode);
+            }
+        }
+        proj.Children.Add(automationRuleGroup);
+
+        var screenGroup = new ScreenGroupNode() { Parent = proj };        if (proj.Model.Screens != null)
         {
             BuildResourceTree(screenGroup, proj.Model.Screens, "Screen",
                 s => s.Group, s => new ScreenNode(s) { });
@@ -1012,6 +1022,21 @@ public class NodeEditorService
             parent.Children.Add(newNode);
             parent.IsExpanded = true;
             _rootModel?.AliasMaps.Add(newMap);
+            SetSingleSelection(newNode);
+            HasUnsavedChanges = true;
+            NotifyStateChanged();
+        }
+    }
+
+    public void AddAutomationRule()
+    {
+        if (SelectedItem is AutomationRuleGroupNode parent)
+        {
+            var newRule = new AutomationRule { Name = "New Rule" };
+            var newNode = new AutomationRuleNode(newRule) { Parent = parent };
+            parent.Children.Add(newNode);
+            parent.IsExpanded = true;
+            _rootModel?.AutomationRules.Add(newRule);
             SetSingleSelection(newNode);
             HasUnsavedChanges = true;
             NotifyStateChanged();
@@ -2021,6 +2046,18 @@ public class NodeEditorService
                     {
                         mNode.SyncName();
                         _rootModel.AliasMaps.Add(mNode.AliasMap);
+                    }
+                }
+            }
+            else if (root is AutomationRuleGroupNode ruleGrpNode && _rootModel != null)
+            {
+                _rootModel.AutomationRules.Clear();
+                foreach (var child in ruleGrpNode.Children)
+                {
+                    if (child is AutomationRuleNode rNode)
+                    {
+                        rNode.SyncName();
+                        _rootModel.AutomationRules.Add(rNode.Rule);
                     }
                 }
             }
