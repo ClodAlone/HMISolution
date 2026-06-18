@@ -497,6 +497,10 @@ else
                 {
                     <ScreenToolboxPanel OnSymbolTypeSelected="OnToolboxSymbolSelected" />
                 }
+                else if (context.Id == "snippets")
+                {
+                    <SnippetToolboxPanel Language="@GetCurrentEditorLanguage()" OnInsertCode="InsertSnippetCode" />
+                }
                 else if (context.Id == "serverlog")
                 {
                     <LogViewer Title="Server Logs" Service="_serverLogService" />
@@ -527,11 +531,11 @@ else
                 }
                 else if (context.Id == "scripteditor")
                 {
-                    <ScriptEditorPanel Node="Editor.SelectedItem" OnPropertyChanged="OnPropertyChanged" />
+                    <ScriptEditorPanel @ref="_scriptEditorPanel" Node="Editor.SelectedItem" OnPropertyChanged="OnPropertyChanged" />
                 }
                 else if (context.Id == "plceditor")
                 {
-                    <PlcEditorPanel Node="Editor.SelectedItem" OnPropertyChanged="OnPropertyChanged" />
+                    <PlcEditorPanel @ref="_plcEditorPanel" Node="Editor.SelectedItem" OnPropertyChanged="OnPropertyChanged" />
                 }
                 else if (context.Id == "scheduler")
                 {
@@ -955,6 +959,7 @@ else
         new() { Id = "opc", Title = "OPC Browse", Icon = "🔌", Zone = "right" },
         new() { Id = "symbols", Title = "Symbol Library", Icon = "🏭", Zone = "right" },
         new() { Id = "toolbox", Title = "Toolbox", Icon = "🧰", Zone = "right" },
+        new() { Id = "snippets", Title = "Code Snippets", Icon = "📋", Zone = "right" },
         new() { Id = "users", Title = "Users", Icon = "👥", Zone = "center" },
         new() { Id = "strings", Title = "Strings", Icon = "🌐", Zone = "center" },
         new() { Id = "images", Title = "Images", Icon = "🖼️", Zone = "center" },
@@ -2259,6 +2264,37 @@ private void UnsavedDialogCancel()
             if (found != null) return found;
         }
         return null;
+    }
+
+    // --- Snippet Toolbox Integration ---
+
+    private ScriptEditorPanel? _scriptEditorPanel;
+    private PlcEditorPanel? _plcEditorPanel;
+
+    private string GetCurrentEditorLanguage()
+    {
+        if (Editor.SelectedItem is ScriptNode scriptNode)
+        {
+            return scriptNode.Script?.Language == "VB" ? "VbNet" : "CSharp";
+        }
+        else if (Editor.SelectedItem is PlcProgramNode plcNode)
+        {
+            return plcNode.PlcProgram?.Language?.ToUpperInvariant() switch
+            {
+                "IL" => "PlcIl",
+                "LD" => "PlcLd",
+                _ => "PlcSt"
+            };
+        }
+        return "CSharp"; // Default
+    }
+
+    private async Task InsertSnippetCode(string snippetCode)
+    {
+        if (Editor.SelectedItem is ScriptNode && _scriptEditorPanel != null)
+            await _scriptEditorPanel.InsertSnippetAsync(snippetCode);
+        else if (Editor.SelectedItem is PlcProgramNode && _plcEditorPanel != null)
+            await _plcEditorPanel.InsertSnippetAsync(snippetCode);
     }
 
     public void Dispose()

@@ -634,11 +634,17 @@ window.focusElement = function (element) {
 
 // Snippet insertion helper
 window.codeSnippet = {
+    /// Accepts either a Blazor ElementReference (DOM element) or a plain string id
+    _resolveElement: function (elementOrId) {
+        if (!elementOrId) return null;
+        return typeof elementOrId === 'string' ? document.getElementById(elementOrId) : elementOrId;
+    },
+
     /// Insert a code snippet at the current cursor position
-    insert: function (elementId, snippetCode, indentToCurrentLevel) {
-        var element = document.getElementById(elementId);
+    insert: function (elementOrId, snippetCode, indentToCurrentLevel) {
+        var element = window.codeSnippet._resolveElement(elementOrId);
         if (!element || !element._cm) {
-            console.warn('CodeMirror editor not found for element:', elementId);
+            console.warn('CodeMirror editor not found for element:', elementOrId);
             return false;
         }
 
@@ -676,15 +682,15 @@ window.codeSnippet = {
     },
 
     /// Insert a snippet and automatically indent it to match current level
-    insertWithIndent: function (elementId, snippetCode) {
-        return window.codeSnippet.insert(elementId, snippetCode, true);
+    insertWithIndent: function (elementOrId, snippetCode) {
+        return window.codeSnippet.insert(elementOrId, snippetCode, true);
     },
 
     /// Insert a snippet at the end of the document
-    insertAtEnd: function (elementId, snippetCode) {
-        var element = document.getElementById(elementId);
+    insertAtEnd: function (elementOrId, snippetCode) {
+        var element = window.codeSnippet._resolveElement(elementOrId);
         if (!element || !element._cm) {
-            console.warn('CodeMirror editor not found for element:', elementId);
+            console.warn('CodeMirror editor not found for element:', elementOrId);
             return false;
         }
 
@@ -700,10 +706,10 @@ window.codeSnippet = {
     },
 
     /// Insert a snippet at the beginning of the document
-    insertAtBegin: function (elementId, snippetCode) {
-        var element = document.getElementById(elementId);
+    insertAtBegin: function (elementOrId, snippetCode) {
+        var element = window.codeSnippet._resolveElement(elementOrId);
         if (!element || !element._cm) {
-            console.warn('CodeMirror editor not found for element:', elementId);
+            console.warn('CodeMirror editor not found for element:', elementOrId);
             return false;
         }
 
@@ -716,16 +722,16 @@ window.codeSnippet = {
     },
 
     /// Replace the current selection with a snippet
-    replaceSelection: function (elementId, snippetCode) {
-        var element = document.getElementById(elementId);
+    replaceSelection: function (elementOrId, snippetCode) {
+        var element = window.codeSnippet._resolveElement(elementOrId);
         if (!element || !element._cm) {
-            console.warn('CodeMirror editor not found for element:', elementId);
+            console.warn('CodeMirror editor not found for element:', elementOrId);
             return false;
         }
 
         var editor = element._cm;
         if (!editor.somethingSelected()) {
-            return window.codeSnippet.insert(elementId, snippetCode);
+            return window.codeSnippet.insert(elementOrId, snippetCode);
         }
 
         editor.replaceSelection(snippetCode);
@@ -734,10 +740,10 @@ window.codeSnippet = {
     },
 
     /// Wrap selection with a snippet (e.g., if/else around selected code)
-    wrapSelection: function (elementId, beforeSnippet, afterSnippet) {
-        var element = document.getElementById(elementId);
+    wrapSelection: function (elementOrId, beforeSnippet, afterSnippet) {
+        var element = window.codeSnippet._resolveElement(elementOrId);
         if (!element || !element._cm) {
-            console.warn('CodeMirror editor not found for element:', elementId);
+            console.warn('CodeMirror editor not found for element:', elementOrId);
             return false;
         }
 
@@ -756,23 +762,23 @@ window.codeSnippet = {
     },
 
     /// Get the current editor content
-    getValue: function (elementId) {
-        var element = document.getElementById(elementId);
+    getValue: function (elementOrId) {
+        var element = window.codeSnippet._resolveElement(elementOrId);
         if (!element || !element._cm) return '';
         return element._cm.getValue();
     },
 
     /// Set the editor content
-    setValue: function (elementId, value) {
-        var element = document.getElementById(elementId);
+    setValue: function (elementOrId, value) {
+        var element = window.codeSnippet._resolveElement(elementOrId);
         if (!element || !element._cm) return false;
         element._cm.setValue(value);
         return true;
     },
 
     /// Get current cursor position
-    getCursorPosition: function (elementId) {
-        var element = document.getElementById(elementId);
+    getCursorPosition: function (elementOrId) {
+        var element = window.codeSnippet._resolveElement(elementOrId);
         if (!element || !element._cm) return null;
         var cursor = element._cm.getCursor();
         return { line: cursor.line, ch: cursor.ch };

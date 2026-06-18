@@ -91,28 +91,21 @@
             </div>
         }
 
-        @* Code Editor + Debug + Snippet Toolbox *@
+        @* Code Editor + Debug *@
         <div class="script-editor-body">
-            <div class="script-editor-main">
-                <CodeEditor @ref="_editor" @bind-Value="script.Code" @bind-Value:after="OnCodeChanged"
-                            Language="@GetEditorLanguage(script.Language)" Height="100%"
-                            Completions="_completions"
-                            EnableBreakpoints="true"
-                            BreakpointsChanged="OnBreakpointsChanged"
-                            Initialized="OnEditorInitialized"
-                            RequestCompletions="HandleCompletionRequest" />
-                <ProgramDebugPanel Category="Script" ProgramName="@script.Name"
-                                  ServerRunning="ServerProcess.IsServerRunning"
-                                  SourceCode="@script.Code" Height="100%"
-                                  EditorElement="@(_editor?.EditorElement ?? default)"
-                                  OnDebugSessionChanged="OnDebugSessionUpdated"
-                                  OnExecutionLineChanged="OnExecutionLineChanged" />
-            </div>
-
-            @* Snippet Toolbox Sidebar *@
-            <SnippetToolboxPanel Language="@script.Language"
-                                OnInsertCode="InsertSnippetAsync"
-                                OnSnippetAdded="OnSnippetAdded" />
+            <CodeEditor @ref="_editor" @bind-Value="script.Code" @bind-Value:after="OnCodeChanged"
+                        Language="@GetEditorLanguage(script.Language)" Height="100%"
+                        Completions="_completions"
+                        EnableBreakpoints="true"
+                        BreakpointsChanged="OnBreakpointsChanged"
+                        Initialized="OnEditorInitialized"
+                        RequestCompletions="HandleCompletionRequest" />
+            <ProgramDebugPanel Category="Script" ProgramName="@script.Name"
+                              ServerRunning="ServerProcess.IsServerRunning"
+                              SourceCode="@script.Code" Height="100%"
+                              EditorElement="@(_editor?.EditorElement ?? default)"
+                              OnDebugSessionChanged="OnDebugSessionUpdated"
+                              OnExecutionLineChanged="OnExecutionLineChanged" />
         </div>
     }
 </div>
@@ -131,13 +124,6 @@
         flex-shrink: 0;
     }
     .script-editor-body {
-        flex: 1;
-        min-height: 0;
-        overflow: hidden;
-        display: flex;
-        flex-direction: row;
-    }
-    .script-editor-main {
         flex: 1;
         min-height: 0;
         overflow: hidden;
@@ -181,7 +167,20 @@
     [Inject] private NodeEditorService Editor { get; set; } = default!;
     [Inject] private ScriptDebugService DebugService { get; set; } = default!;
     [Inject] private ScriptCompletionService CompletionService { get; set; } = default!;
+    [Inject] private IJSRuntime JS { get; set; } = default!;
 
+    public async Task InsertSnippetAsync(string snippetCode)
+    {
+        if (_editor?.EditorElement.Id == null) return;
+        try
+        {
+            await JS.InvokeVoidAsync("codeSnippet.insertWithIndent", _editor.EditorElement, snippetCode);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Error inserting snippet: {ex.Message}");
+        }
+    }
     private CodeEditor? _editor;
     private ScriptNode? _scriptNode;
     private ScriptConfig? _lastScript;
@@ -475,31 +474,6 @@
         {
             return new();
         }
-    }
-
-    // --- Snippet Insertion -----
-
-    [Inject] private IJSRuntime JS { get; set; } = default!;
-
-    private async Task InsertSnippetAsync(string snippetCode)
-    {
-        if (_editor?.EditorElement.Id == null) return;
-
-        try
-        {
-            await JS.InvokeVoidAsync("codeSnippet.insertWithIndent", 
-                _editor.EditorElement, snippetCode);
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"Error inserting snippet: {ex.Message}");
-        }
-    }
-
-    private Task OnSnippetAdded(CodeSnippet snippet)
-    {
-        // Optionally add to completions or refresh UI
-        return Task.CompletedTask;
     }
 
     public void Dispose()
