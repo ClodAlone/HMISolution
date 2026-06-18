@@ -113,7 +113,7 @@
                         <li class="dock-tab @(panelId == _activeCenterTab ? "active" : "")"
                             @onclick="() => ActivateTab(panelId, zone)"
                             @ondblclick="() => MaximizePanel(panelId)"
-                            @oncontextmenu="(e) => ShowTabContextMenu(e, panelId, zone)" @oncontextmenu:preventDefault
+                            @oncontextmenu="(e) => ShowTabContextMenu(e, panelId, zone)" @oncontextmenu:preventDefault @oncontextmenu:stopPropagation
                             @onmousedown="(e) => OnTabMouseDown(e, panelId, zone)">
                             <span>@p.Icon @p.Title</span>
                             <button class="dock-tab-close" @onclick="() => HidePanel(panelId)" @onclick:stopPropagation>✕</button>
@@ -126,7 +126,7 @@
                 </ul>
                 var activeCenter = centerPanels.FirstOrDefault(p => p.Id == _activeCenterTab) ?? centerPanels.First();
                 <div class="dock-tab-content"
-                     @oncontextmenu="(e) => ShowPaneContextMenu(e, _activeCenterTab, centerPanels)" @oncontextmenu:preventDefault>
+                     @oncontextmenu="(e) => ShowPaneContextMenu(e, _activeCenterTab, centerPanels)" @oncontextmenu:preventDefault @oncontextmenu:stopPropagation>
                     @RenderPanel(activeCenter)
                 </div>
             }
@@ -146,7 +146,7 @@
                         <li class="dock-tab @(panelId == _activeRightTab ? "active" : "")"
                             @onclick="() => ActivateTab(panelId, zone)"
                             @ondblclick="() => MaximizePanel(panelId)"
-                            @oncontextmenu="(e) => ShowTabContextMenu(e, panelId, zone)" @oncontextmenu:preventDefault
+                            @oncontextmenu="(e) => ShowTabContextMenu(e, panelId, zone)" @oncontextmenu:preventDefault @oncontextmenu:stopPropagation
                             @onmousedown="(e) => OnTabMouseDown(e, panelId, zone)">
                             <span>@p.Icon @p.Title</span>
                             <button class="dock-tab-close" @onclick="() => HidePanel(panelId)" @onclick:stopPropagation>✕</button>
@@ -158,7 +158,7 @@
                     </li>
                 </ul>
                 <div class="dock-tab-content"
-                     @oncontextmenu="(e) => ShowPaneContextMenu(e, _activeRightTab, rightPanels)" @oncontextmenu:preventDefault>
+                     @oncontextmenu="(e) => ShowPaneContextMenu(e, _activeRightTab, rightPanels)" @oncontextmenu:preventDefault @oncontextmenu:stopPropagation>
                     @RenderPanel(activeRight)
                 </div>
             </div>
@@ -173,7 +173,7 @@
                     var panelId = p.Id;
                     <div class="dock-autohide-tab dock-autohide-tab-right @(_autoHideRevealedId == panelId ? "active" : "")"
                          @onclick="() => ToggleAutoHideReveal(panelId)"
-                         @oncontextmenu="(e) => ShowTabContextMenu(e, panelId, zoneAutoRight)" @oncontextmenu:preventDefault
+                         @oncontextmenu="(e) => ShowTabContextMenu(e, panelId, zoneAutoRight)" @oncontextmenu:preventDefault @oncontextmenu:stopPropagation
                          title="@p.Title">
                         <span>@p.Icon</span>
                         <span class="dock-autohide-label">@p.Title</span>
@@ -197,7 +197,7 @@
                     <li class="dock-tab @(panelId == _activeBottomTab ? "active" : "")"
                         @onclick="() => ActivateTab(panelId, zone)"
                         @ondblclick="() => MaximizePanel(panelId)"
-                        @oncontextmenu="(e) => ShowTabContextMenu(e, panelId, zone)" @oncontextmenu:preventDefault
+                        @oncontextmenu="(e) => ShowTabContextMenu(e, panelId, zone)" @oncontextmenu:preventDefault @oncontextmenu:stopPropagation
                         @onmousedown="(e) => OnTabMouseDown(e, panelId, zone)">
                         <span>@p.Icon @p.Title</span>
                         <button class="dock-tab-close" @onclick="() => HidePanel(panelId)" @onclick:stopPropagation>✕</button>
@@ -209,7 +209,7 @@
                 </li>
             </ul>
             <div class="dock-tab-content"
-                 @oncontextmenu="(e) => ShowPaneContextMenu(e, _activeBottomTab, bottomPanels)" @oncontextmenu:preventDefault>
+                 @oncontextmenu="(e) => ShowPaneContextMenu(e, _activeBottomTab, bottomPanels)" @oncontextmenu:preventDefault @oncontextmenu:stopPropagation>
                 @RenderPanel(activeBottom)
             </div>
         </div>
@@ -223,7 +223,7 @@
                 var panelId = p.Id;
                 <div class="dock-autohide-tab dock-autohide-tab-bottom @(_autoHideRevealedId == panelId ? "active" : "")"
                      @onclick="() => ToggleAutoHideReveal(panelId)"
-                     @oncontextmenu="(e) => ShowTabContextMenu(e, panelId, zoneAutoBottom)" @oncontextmenu:preventDefault
+                     @oncontextmenu="(e) => ShowTabContextMenu(e, panelId, zoneAutoBottom)" @oncontextmenu:preventDefault @oncontextmenu:stopPropagation
                      title="@p.Title">
                     <span>@p.Icon</span>
                     <span class="dock-autohide-label">@p.Title</span>
@@ -326,6 +326,14 @@
         <div class="dock-context-item" @onclick='() => MaximizePanelFromMenu(_contextMenuPanelId)'>⬜ Maximize</div>
         <div class="dock-context-separator"></div>
         <div class="dock-context-item dock-context-danger" @onclick='() => { HidePanel(_contextMenuPanelId); CloseContextMenu(); }'>✕ Close</div>
+        @{
+            var sameZonePanels = Panels.Where(p => p.Zone == _contextMenuZone).ToList();
+        }
+        @if (sameZonePanels.Count > 1)
+        {
+            <div class="dock-context-item dock-context-danger" @onclick='() => CloseOthersInZone(_contextMenuZone, _contextMenuPanelId)'>✕ Close Others</div>
+        }
+        <div class="dock-context-item dock-context-danger" @onclick='() => CloseAllInZone(_contextMenuZone)'>✕ Close All</div>
     </ContextMenu>
 
     @* Container context menu — toggle hidden panels *@
@@ -553,6 +561,34 @@
         if (p != null) p.Zone = "hidden";
         if (_autoHideRevealedId == id) _autoHideRevealedId = "";
         NotifyLayoutChanged();
+    }
+
+    private void CloseAllInZone(string zone)
+    {
+        CloseContextMenu();
+        foreach (var p in Panels.Where(x => x.Zone == zone).ToList())
+        {
+            p.Zone = "hidden";
+            if (_autoHideRevealedId == p.Id) _autoHideRevealedId = "";
+        }
+        NotifyLayoutChanged();
+        StateHasChanged();
+    }
+
+    private void CloseOthersInZone(string zone, string keepId)
+    {
+        CloseContextMenu();
+        foreach (var p in Panels.Where(x => x.Zone == zone && x.Id != keepId).ToList())
+        {
+            p.Zone = "hidden";
+            if (_autoHideRevealedId == p.Id) _autoHideRevealedId = "";
+        }
+        // Ensure the kept panel is the active tab
+        if (zone == "center") _activeCenterTab = keepId;
+        else if (zone == "right") _activeRightTab = keepId;
+        else if (zone == "bottom") _activeBottomTab = keepId;
+        NotifyLayoutChanged();
+        StateHasChanged();
     }
 
     private void MovePanel(string id, string targetZone)
