@@ -102,6 +102,19 @@ namespace SimpleOpcFileServer
             _changeHandlers.Clear();
             _cts.Dispose();
         }
+
+        /// <summary>
+        /// Fires a single execution of a named script immediately (best-effort, async fire-and-forget).
+        /// </summary>
+        public void TriggerByName(string scriptName)
+        {
+            var runner = _runners.FirstOrDefault(r =>
+                r.ScriptName.Equals(scriptName, StringComparison.OrdinalIgnoreCase));
+            if (runner != null)
+                _ = runner.RunOnceAsync();
+            else
+                Log.Warning("[AutomationRule] TriggerByName: script '{Name}' not found or not running.", scriptName);
+        }
     }
 
     public class ScriptRunner
@@ -383,6 +396,28 @@ End Module";
         }
 
         public void Stop() { }
+
+        public string ScriptName => _config.Name;
+
+        /// <summary>
+        /// Runs a single execution of this script immediately (fire-and-forget).
+        /// Used by AutomationRuleManager for the ExecuteScript action.
+        /// </summary>
+        public async Task RunOnceAsync()
+        {
+            try
+            {
+                var globals = new ScriptGlobals(_nodeManager, _scriptManager, _config.Name, _token, false);
+                if (IsVb)
+                    await RunVbAsync(globals);
+                else
+                    await RunCSharpAsync(globals);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "[AutomationRule] RunOnce failed for script '{Name}': {Error}", _config.Name, ex.Message);
+            }
+        }
     }
 
     public class ScriptGlobals

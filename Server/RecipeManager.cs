@@ -96,6 +96,25 @@ namespace SimpleOpcFileServer
             foreach (var rt in _runtimes) rt.Dispose();
             _runtimes.Clear();
         }
+
+        /// <summary>
+        /// Activates a named recipe across the first runtime that contains it.
+        /// Convenience method for AutomationRuleManager and other callers.
+        /// </summary>
+        public void ActivateRecipe(string recipeName)
+        {
+            // Try each runtime until one succeeds (recipe may exist in any of them)
+            foreach (var rt in _runtimes)
+            {
+                try
+                {
+                    rt.ActivateRecipe(recipeName);
+                    return;
+                }
+                catch { }
+            }
+            Log.Warning("RecipeManager.ActivateRecipe: recipe '{Name}' not found in any runtime.", recipeName);
+        }
     }
 
     internal class RecipeRuntime : IDisposable

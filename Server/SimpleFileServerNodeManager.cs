@@ -35,6 +35,7 @@ namespace SimpleOpcFileServer
         private AssetManager? _assetManager;
         private BatchSequenceManager? _batchManager;
         private EventManager? _eventManager;
+        private AutomationRuleManager? _automationRuleManager;
 
         // Cached configs for deferred start on redundancy failover
         private List<ScriptConfig>? _cachedScripts;
@@ -98,6 +99,7 @@ namespace SimpleOpcFileServer
         internal EventLogger? EventLogger => _eventLogger;
         internal RecipeManager? RecipeManager => _recipeManager;
         internal EventManager? EventManager => _eventManager;
+        internal ScriptManager? ScriptManager => _scriptManager;
 
         // Anomaly detection service
         private AnomalyDetectionService? _anomalyDetectionService;
@@ -511,6 +513,7 @@ namespace SimpleOpcFileServer
             if (_scriptManager != null) { _scriptManager.Dispose(); _scriptManager = null; }
             if (_plcManager != null) { _plcManager.Dispose(); _plcManager = null; }
             if (_recipeManager != null) { _recipeManager.Dispose(); _recipeManager = null; }
+            if (_automationRuleManager != null) { _automationRuleManager.Dispose(); _automationRuleManager = null; }
 
             if (_assetManager != null) { _assetManager.Dispose(); _assetManager = null; }
             _variables.Clear();
@@ -984,6 +987,13 @@ namespace SimpleOpcFileServer
                               {
                                   _schedulerManager = new SchedulerManager(this);
                                   _schedulerManager.Initialize(nodeModel.Schedulers);
+                              }
+
+                              // Automation Rules
+                              if (nodeModel.AutomationRules != null && nodeModel.AutomationRules.Count > 0)
+                              {
+                                  _automationRuleManager = new AutomationRuleManager(this);
+                                  _automationRuleManager.Initialize(nodeModel.AutomationRules);
                               }
 
 // Reports
@@ -2900,6 +2910,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 _plcManager?.Dispose();
                 _recipeManager?.Dispose();
                 _schedulerManager?.Dispose();
+                _automationRuleManager?.Dispose();
                 _reportManager?.Dispose();
                 _assetManager?.Dispose();
                 _notificationService?.Dispose();
