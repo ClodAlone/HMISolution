@@ -94,18 +94,27 @@
         var autoRight = Panels.Where(p => p.Zone == "autohide-right").ToList();
         var autoBottom = Panels.Where(p => p.Zone == "autohide-bottom").ToList();
         var centerPanels = Panels.Where(p => p.Zone == "center").ToList();
+        var center2Panels = Panels.Where(p => p.Zone == "center2").ToList();
         var rightPanels = Panels.Where(p => p.Zone == "right").ToList();
         var bottomPanels = Panels.Where(p => p.Zone == "bottom").ToList();
         var zoneAutoRight = "autohide-right";
         var zoneAutoBottom = "autohide-bottom";
 
-    @* Top row: center + right *@
+    @* Top row: center + center2 + right *@
     <div class="dock-row-top">
         @* Center zone — tabbed panels *@
         <div class="dock-zone dock-zone-center">
             @if (centerPanels.Count > 0)
             {
                 <ul class="dock-tabs">
+                    <li class="dock-tab-action @(_historyIdx > 0 ? "" : "dock-tab-action-disabled")"
+                        @onclick="HistoryBack" title="Navigate back (Alt+←)">
+                        <span>←</span>
+                    </li>
+                    <li class="dock-tab-action @(_historyIdx < _tabHistory.Count - 1 ? "" : "dock-tab-action-disabled")"
+                        @onclick="HistoryForward" title="Navigate forward (Alt+→)">
+                        <span>→</span>
+                    </li>
                     @foreach (var p in centerPanels)
                     {
                         var panelId = p.Id;
@@ -131,6 +140,34 @@
                 </div>
             }
         </div>
+
+        @* Center2 zone — split editor pane *@
+        @if (center2Panels.Count > 0)
+        {
+            var activeCenter2 = center2Panels.FirstOrDefault(p => p.Id == _activeCenter2Tab) ?? center2Panels.First();
+            <div class="dock-splitter dock-splitter-v" @onmousedown="OnCenter2SplitterDown" @onmousedown:preventDefault></div>
+            <div class="dock-zone dock-zone-center2" style="width: @(_center2Width)px;">
+                <ul class="dock-tabs">
+                    @foreach (var p in center2Panels)
+                    {
+                        var panelId = p.Id;
+                        var zone = "center2";
+                        <li class="dock-tab @(panelId == _activeCenter2Tab ? "active" : "")"
+                            @onclick="() => ActivateTab(panelId, zone)"
+                            @ondblclick="() => MaximizePanel(panelId)"
+                            @oncontextmenu="(e) => ShowTabContextMenu(e, panelId, zone)" @oncontextmenu:preventDefault @oncontextmenu:stopPropagation
+                            @onmousedown="(e) => OnTabMouseDown(e, panelId, zone)">
+                            <span>@p.Icon @p.Title</span>
+                            <button class="dock-tab-close" @onclick="() => HidePanel(panelId)" @onclick:stopPropagation>✕</button>
+                        </li>
+                    }
+                    <li class="dock-tab-spacer"></li>
+                </ul>
+                <div class="dock-tab-content">
+                    @RenderPanel(activeCenter2)
+                </div>
+            </div>
+        }
 
         @* Right zone — tabbed panels *@
         @if (rightPanels.Count > 0)
@@ -301,6 +338,10 @@
         {
             <div class="dock-context-item" @onclick='() => MovePanel(_contextMenuPanelId, "center")'>📋 Move to Center</div>
         }
+        @if (_contextMenuZone is not "center2")
+        {
+            <div class="dock-context-item" @onclick='() => MovePanel(_contextMenuPanelId, "center2")'>⬛ Move to Split Pane</div>
+        }
         @if (_contextMenuZone is not "right" and not "autohide-right")
         {
             <div class="dock-context-item" @onclick='() => MovePanel(_contextMenuPanelId, "right")'>▶ Move to Right</div>
@@ -367,11 +408,18 @@
     [Inject] private DockLayoutService LayoutService { get; set; } = default!;
 
     private string _activeCenterTab = "";
+    private string _activeCenter2Tab = "";
     private string _activeRightTab = "";
     private string _activeBottomTab = "";
 
+    // Tab navigation history (center zone only)
+    private readonly List<string> _tabHistory = new();
+    private int _historyIdx = -1;
+    private bool _historyNavigating;
+
     private int _rightWidth = 400;
     private int _bottomHeight = 200;
+    private int _center2Width = 500;
 
     // Maximize state
     private bool _isMaximized;
@@ -424,6 +472,10 @@
         var centerPanels = Panels.Where(p => p.Zone == "center").ToList();
         if (centerPanels.Count > 0 && !centerPanels.Any(p => p.Id == _activeCenterTab))
             _activeCenterTab = centerPanels.First().Id;
+
+        var center2Panels2 = Panels.Where(p => p.Zone == "center2").ToList();
+        if (center2Panels2.Count > 0 && !center2Panels2.Any(p => p.Id == _activeCenter2Tab))
+            _activeCenter2Tab = center2Panels2.First().Id;
 
         var rightPanels = Panels.Where(p => p.Zone == "right").ToList();
         if (rightPanels.Count > 0 && !rightPanels.Any(p => p.Id == _activeRightTab))
@@ -511,10 +563,53 @@
 
     private void ActivateTab(string panelId, string zone)
     {
-        if (zone == "center") _activeCenterTab = panelId;
+        if (zone == "center")
+        {
+            if (!_historyNavigating && _activeCenterTab != panelId)
+            {
+                // Truncate forward history on new navigation
+                if (_historyIdx < _tabHistory.Count - 1)
+                    _tabHistory.RemoveRange(_historyIdx + 1, _tabHistory.Count - _historyIdx - 1);
+
+                // Avoid consecutive duplicates
+                if (_tabHistory.Count == 0 || _tabHistory[^1] != panelId)
+                {
+                    _tabHistory.Add(panelId);
+                    _historyIdx = _tabHistory.Count - 1;
+                }
+            }
+            _activeCenterTab = panelId;
+        }
         else if (zone == "right") _activeRightTab = panelId;
+        else if (zone == "center2") _activeCenter2Tab = panelId;
         else if (zone == "bottom") _activeBottomTab = panelId;
         SaveLayoutDebounced();
+    }
+
+    private void HistoryBack()
+    {
+        if (_historyIdx <= 0) return;
+        _historyIdx--;
+        var target = _tabHistory[_historyIdx];
+        var p = Panels.FirstOrDefault(x => x.Id == target && x.Zone == "center");
+        if (p == null) { _tabHistory.RemoveAt(_historyIdx); return; }
+        _historyNavigating = true;
+        ActivateTab(target, "center");
+        _historyNavigating = false;
+        StateHasChanged();
+    }
+
+    private void HistoryForward()
+    {
+        if (_historyIdx >= _tabHistory.Count - 1) return;
+        _historyIdx++;
+        var target = _tabHistory[_historyIdx];
+        var p = Panels.FirstOrDefault(x => x.Id == target && x.Zone == "center");
+        if (p == null) { _tabHistory.RemoveAt(_historyIdx); return; }
+        _historyNavigating = true;
+        ActivateTab(target, "center");
+        _historyNavigating = false;
+        StateHasChanged();
     }
 
     // ─── Panel operations ───────────────────────────────────
@@ -526,6 +621,7 @@
         {
             p.Zone = zone;
             if (zone == "center") _activeCenterTab = id;
+            else if (zone == "center2") _activeCenter2Tab = id;
             else if (zone == "right") _activeRightTab = id;
             else if (zone == "bottom") _activeBottomTab = id;
         }
@@ -600,6 +696,7 @@
         {
             p.Zone = targetZone;
             if (targetZone == "center") _activeCenterTab = id;
+            else if (targetZone == "center2") _activeCenter2Tab = id;
             else if (targetZone == "right") _activeRightTab = id;
             else if (targetZone == "bottom") _activeBottomTab = id;
         }
@@ -727,6 +824,14 @@
             {
                 CloseAutoHideReveal();
             }
+        }
+        else if (e.AltKey && e.Key == "ArrowLeft")
+        {
+            HistoryBack();
+        }
+        else if (e.AltKey && e.Key == "ArrowRight")
+        {
+            HistoryForward();
         }
     }
 
@@ -887,6 +992,13 @@
         await StartJsDrag("splitter-right");
     }
 
+    private async Task OnCenter2SplitterDown(MouseEventArgs e)
+    {
+        _splitterStart = e.ClientX;
+        _splitterOriginalSize = _center2Width;
+        await StartJsDrag("splitter-center2");
+    }
+
     private async Task OnBottomSplitterDown(MouseEventArgs e)
     {
         _splitterStart = e.ClientY;
@@ -955,6 +1067,12 @@
             case "splitter-right":
                 var deltaR = _splitterStart - clientX;
                 _rightWidth = Math.Max(200, Math.Min(800, _splitterOriginalSize + (int)deltaR));
+                InvokeAsync(StateHasChanged);
+                break;
+
+            case "splitter-center2":
+                var deltaC2 = clientX - _splitterStart;
+                _center2Width = Math.Max(200, Math.Min(900, _splitterOriginalSize + (int)deltaC2));
                 InvokeAsync(StateHasChanged);
                 break;
 

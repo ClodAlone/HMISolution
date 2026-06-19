@@ -76,6 +76,25 @@ public class VariableNode : TreeNode
     public void SyncName() { PreviousName = Variable.Name; Variable.Name = Name; }
     public void AcceptName() => PreviousName = Name;
 
+    /// <summary>Returns the dot-separated OPC path of this variable (e.g. "SubFolder.TagName").
+    /// The root folder is transparent — it is excluded from the path, matching the server's node ID scheme.</summary>
+    public string GetFullPath()
+    {
+        var parts = new List<string> { Name };
+        TreeNode? current = Parent;
+        while (current is FolderNode fn)
+        {
+            // Stop if this folder's parent is NOT another FolderNode — it is the root folder
+            // whose name is excluded from OPC node IDs (childPrefix="" on server side).
+            if (fn.Parent is not FolderNode)
+                break;
+            parts.Add(fn.Name);
+            current = fn.Parent;
+        }
+        parts.Reverse();
+        return string.Join(".", parts);
+    }
+
     public string DriverSettingsJson
     {
         get => _driverSettingsJson;
@@ -497,4 +516,19 @@ public class AutomationRuleNode : TreeNode
     public AutomationRule Rule { get; }
     public AutomationRuleNode(AutomationRule rule) { Rule = rule; Name = rule.Name; }
     public void SyncName() => Rule.Name = Name;
+}
+
+public class PinnedGroupNode : TreeNode
+{
+    public override string TypeName => "PinnedGroup";
+    public override string Icon => "⭐";
+    public PinnedGroupNode() { Name = "Pinned Variables"; }
+}
+
+public class PinnedVariableNode : TreeNode
+{
+    public override string TypeName => "PinnedVariable";
+    public override string Icon => "⭐";
+    public string VariablePath { get; }
+    public PinnedVariableNode(string path) { VariablePath = path; Name = path; }
 }

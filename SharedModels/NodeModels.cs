@@ -38,6 +38,9 @@ namespace SharedModels
         public List<UserSymbolGroup> UserSymbolGroups { get; set; } = new();
         public List<AutomationRule> AutomationRules { get; set; } = new();
 
+        /// <summary>Variable paths pinned/starred to the quick-access group at the top of the project tree.</summary>
+        public List<string> PinnedVariables { get; set; } = new();
+
         /// <summary>
         /// PBKDF2-SHA256 hash of the project protection password.
         /// When set, the project is locked and cannot be edited without entering the correct password.

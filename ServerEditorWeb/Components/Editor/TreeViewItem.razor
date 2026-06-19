@@ -26,6 +26,16 @@
             <span class="tree-name">@projNode.Name@(projNode.HasUnsavedChanges ? " *" : "")</span>
             <span class="tree-type project-path" title="@projNode.FilePath">@(string.IsNullOrEmpty(projNode.FilePath) ? "(unsaved)" : projNode.FilePath)</span>
         }
+        else if (Node is VariableNode varNode && GetLiveValue != null)
+        {
+            var liveVal = GetLiveValue(varNode.GetFullPath());
+            <span class="tree-name">@Node.Name</span>
+            <span class="tree-type">(@Node.TypeName)</span>
+            @if (liveVal != null)
+            {
+                <span class="tree-live-value" title="Live value">@liveVal</span>
+            }
+        }
         else
         {
             <span class="tree-name">@Node.Name</span>
@@ -59,6 +69,8 @@
             OnCloseProject="OnCloseProject"
             OnFindReferences="OnFindReferences"
             OnAddToWatch="OnAddToWatch"
+            OnPinVariable="OnPinVariable"
+            OnUnpinVariable="OnUnpinVariable"
             OnFindInEditor="OnFindInEditor"
             OnFindInProject="OnFindInProject" />
     }
@@ -78,6 +90,9 @@
                         OnSetActiveProject="OnSetActiveProject" OnCloseProject="OnCloseProject"
                         OnFindReferences="OnFindReferences"
                         OnAddToWatch="OnAddToWatch"
+                        OnPinVariable="OnPinVariable"
+                        OnUnpinVariable="OnUnpinVariable"
+                        GetLiveValue="GetLiveValue"
                         OnFindInEditor="OnFindInEditor"
                         OnFindInProject="OnFindInProject" />
                 }
@@ -90,6 +105,7 @@
     [Parameter] public TreeNode Node { get; set; } = default!;
     [Parameter] public TreeNode? SelectedNode { get; set; }
     [Parameter] public string FilterText { get; set; } = "";
+    [Parameter] public Func<string, string?>? GetLiveValue { get; set; }
     [Parameter] public EventCallback<TreeNodeClickArgs> OnSelect { get; set; }
     [Parameter] public EventCallback<TreeNode> OnDoubleClick { get; set; }
     [Parameter] public EventCallback<TreeNode> OnAddFolder { get; set; }
@@ -116,6 +132,8 @@
     [Parameter] public EventCallback<TreeNode> OnCloseProject { get; set; }
     [Parameter] public EventCallback<TreeNode> OnFindReferences { get; set; }
     [Parameter] public EventCallback<TreeNode> OnAddToWatch { get; set; }
+    [Parameter] public EventCallback<TreeNode> OnPinVariable { get; set; }
+    [Parameter] public EventCallback<TreeNode> OnUnpinVariable { get; set; }
     [Parameter] public EventCallback OnFindInEditor { get; set; }
     [Parameter] public EventCallback OnFindInProject { get; set; }
 

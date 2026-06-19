@@ -190,15 +190,38 @@ This is a mandatory deliverable in regulated industries (pharmaceutical, oil & g
 
 ## Quick-Win Smaller Features
 
-| Feature | Area | Notes |
-|---|---|---|
-| **Tab history navigation (← →)** | Editor UX | Jump back to previously active dock tabs like browser history |
-| **Split editor panes** | Screen / Script Editors | Show two scripts or screens side-by-side in the center zone |
-| **Pinned / favourite variables** | Project Tree | Star variables to a quick-access list at the top of the tree |
-| **Diff view for scripts in Git panel** | Git Integration | Side-by-side diff of script files within `GitPanel` |
-| **Screen thumbnail strip** | Screen Editor | Horizontal scrollable miniature preview of all project screens |
-| **Live filter in project tree** | Project Tree | Filter tree nodes to matching variables as you type |
-| **Export / Import variable list as Excel** | Variable Editor | Common engineer workflow for bulk tag configuration via spreadsheet |
+| # | Feature | Area | Notes |
+|---|---|---|---|
+| QW-1 | **Tab history navigation (← →)** | Editor UX | Jump back to previously active dock tabs like browser history |
+| QW-2 | **Split editor panes** | Screen / Script Editors | Show two scripts or screens side-by-side in the center zone |
+| QW-3 | **Pinned / favourite variables** | Project Tree | Star variables to a quick-access list at the top of the tree |
+| QW-4 | **Diff view for scripts in Git panel** | Git Integration | Side-by-side diff of script files within `GitPanel` |
+| QW-5 | **Screen thumbnail strip** | Screen Editor | Horizontal scrollable miniature preview of all project screens |
+| QW-6 | **Live filter in project tree** | Project Tree | Filter tree nodes to matching variables as you type |
+| QW-7 | **Export / Import variable list as Excel** | Variable Editor | Common engineer workflow for bulk tag configuration via spreadsheet |
+| QW-8 | **Zoom / Pan on screen canvas** | Screen Editor | Ctrl+scroll or pinch to zoom; middle-mouse drag to pan the design canvas |
+| QW-9 | **Recent projects list** | Editor UX | Quick-open dropdown of last N project files on the home / start panel |
+| QW-10 | **Variable rename with propagation** | Project Tree | Rename a tag and auto-update all referencing scripts, alarms, and screens in one pass |
+| QW-11 | **Column chooser for grids** | Alarm / Variable Editors | Show / hide columns in `AlarmListPanel` and variable grids to reduce visual noise |
+| QW-12 | **Multi-select delete in variable editor** | Variable Editor | Checkbox-select multiple rows and delete or move them in a single action |
+| QW-13 | **Script execution time badge** | Script Editor | Display last run duration and cycle count next to each script name in the list panel |
+| QW-14 | **Tag description tooltip** | Project Tree | Show full description, engineering unit, range, and driver address on hover over a tree node |
+| QW-15 | **Connection status badge in nav bar** | Runtime Integration | OPC UA server online / offline indicator with latency reading in the top navigation bar |
+| QW-16 | **Auto-save / crash recovery** | Project Management | Write a periodic recovery snapshot; offer restore on next open after unclean exit |
+| QW-17 | **Search in alarm history** | Alarm Management | Full-text search with date-range picker across the historical log in `AlarmHistoryPanel` |
+| QW-18 | **Collapse / Expand all in project tree** | Project Tree | Single toolbar button to collapse or expand the entire tree in one click |
+| QW-19 | **Copy screen as PNG** | Screen Editor | Export the current screen canvas to clipboard or a file as a PNG image with one click |
+| QW-20 | **Undo history panel** | Editor UX | Scrollable visual list of recent edit operations with click-to-jump for multi-level undo |
+| QW-21 | **Variable unit quick-convert** | Variable Editor | Display raw values in alternate engineering units inline (°C ↔ °F, bar ↔ psi, m³/h ↔ GPM) |
+| QW-22 | **Alarm shelving from alarm list** | Alarm Management | Right-click an active alarm to shelve it for N minutes without leaving `AlarmListPanel` |
+| QW-23 | **Driver polling interval override** | Driver Config | Per-variable override of the driver scan rate without editing the global driver config |
+| QW-24 | **Duplicate screen / script** | Screen / Script Editors | Right-click to clone an existing screen or script as a starting point for a new one |
+| QW-25 | **Variable bulk enable / disable logging** | Variable Editor | Multi-select rows and toggle historian logging on or off in a single action |
+| QW-26 | **Keyboard shortcut cheatsheet overlay** | Editor UX | Press `?` anywhere in the editor to reveal a full hotkey reference card as an overlay |
+| QW-27 | **Inline alarm limit editing in project tree** | Project Tree | Click a variable's alarm icon to edit High / Low / HiHi / LoLo thresholds in a popover |
+| QW-28 | **Script output / log viewer** | Script Editor | Dedicated scrollable pane showing `Log()` and `Console.Write` output from the last script run |
+| QW-29 | **Driver connection test button** | Driver Config | One-click "Test Connection" in the driver editor that returns a pass/fail with round-trip time |
+| QW-30 | **Dark / light theme toggle** | Editor UX | Persist a dark or light CSS theme preference alongside the dock layout in `DockLayoutService` |
 
 ---
 
@@ -218,3 +241,33 @@ This is a mandatory deliverable in regulated industries (pharmaceutical, oil & g
 | 7 | Protocol Traffic Monitor | ★★★ | Medium | 🟡 High Value |
 | 12 | Alarm Rationalization (ISA-18.2) | ★★★ | High | 🔵 Long Term |
 | 11 | Keyboard Shortcut Customizer | ★★★ | Low | 🟢 Quick Win |
+| QW-10 | Variable rename with propagation | ★★★★★ | Low | 🟢 Quick Win |
+| QW-16 | Auto-save / crash recovery | ★★★★ | Low | 🟢 Quick Win |
+| QW-15 | Connection status badge in nav bar | ★★★★ | Low | 🟢 Quick Win |
+| QW-29 | Driver connection test button | ★★★★ | Low | 🟢 Quick Win |
+| QW-8 | Zoom / Pan on screen canvas | ★★★★ | Low | 🟢 Quick Win |
+| QW-2 | Split editor panes | ★★★★ | Low | 🟢 Quick Win |
+| QW-17 | Search in alarm history | ★★★ | Low | 🟢 Quick Win |
+| QW-13 | Script execution time badge | ★★★ | Low | 🟢 Quick Win |
+| QW-28 | Script output / log viewer | ★★★ | Low | 🟢 Quick Win |
+| QW-21 | Variable unit quick-convert | ★★★ | Low | 🟢 Quick Win |
+| QW-22 | Alarm shelving from alarm list | ★★★ | Low | 🟢 Quick Win |
+| QW-23 | Driver polling interval override | ★★★ | Low | 🟢 Quick Win |
+| QW-9 | Recent projects list | ★★★ | Low | 🟢 Quick Win |
+| QW-30 | Dark / light theme toggle | ★★★ | Low | 🟢 Quick Win |
+| QW-6 | Live filter in project tree | ★★★ | Low | 🟢 Quick Win |
+| QW-7 | Export / Import variable list as Excel | ★★★ | Low | 🟢 Quick Win |
+| QW-25 | Variable bulk enable / disable logging | ★★★ | Low | 🟢 Quick Win |
+| QW-24 | Duplicate screen / script | ★★★ | Low | 🟢 Quick Win |
+| QW-19 | Copy screen as PNG | ★★ | Low | 🟢 Quick Win |
+| QW-11 | Column chooser for grids | ★★ | Low | 🟢 Quick Win |
+| QW-14 | Tag description tooltip | ★★ | Low | 🟢 Quick Win |
+| QW-3 | Pinned / favourite variables | ★★ | Low | 🟢 Quick Win |
+| QW-20 | Undo history panel | ★★ | Low | 🟢 Quick Win |
+| QW-26 | Keyboard shortcut cheatsheet overlay | ★★ | Low | 🟢 Quick Win |
+| QW-27 | Inline alarm limit editing | ★★ | Low | 🟢 Quick Win |
+| QW-5 | Screen thumbnail strip | ★★ | Low | 🟢 Quick Win |
+| QW-4 | Diff view for scripts in Git panel | ★★ | Low | 🟢 Quick Win |
+| QW-18 | Collapse / Expand all in project tree | ★★ | Low | 🟢 Quick Win |
+| QW-12 | Multi-select delete in variable editor | ★★ | Low | 🟢 Quick Win |
+| QW-1 | Tab history navigation | ★★ | Low | 🟢 Quick Win |

@@ -422,7 +422,7 @@ else
         @* Left Panel: Tree (hidden when maximized or in focus mode) *@
         @if (_dockContainer?.IsMaximized != true && _dockContainer?.IsFocusMode != true)
         {
-        <div class="editor-tree">
+        <div class="editor-tree" id="tree-panel" style="width:@(_treeWidth)px">
             <TreeView Nodes="Editor.RootItems" SelectedNode="Editor.SelectedItem" OnSelect="SelectNode"
                     OnDoubleClick="OnNodeDoubleClick"
                     OnAddFolder="OnAddFolder" OnAddVariable="OnAddVariable" OnAddScript="OnAddScript"
@@ -434,9 +434,13 @@ else
                     OnSetActiveProject="OnSetActiveProject" OnCloseProject="OnCloseProject"
                     OnFindReferences="OnFindReferences"
                     OnAddToWatch="OnAddToWatch"
+                    OnPinVariable="OnPinVariable"
+                    OnUnpinVariable="OnUnpinVariable"
                     OnFindInEditor="FindInEditorMenu"
                     OnFindInProject="FindInProjectMenu" />
         </div>
+        <div class="tree-splitter" id="tree-splitter" title="Drag to resize"
+             @onmousedown="OnTreeSplitterDown" @onmousedown:preventDefault></div>
         }
 
         @* Dockable Content Area *@
@@ -891,11 +895,14 @@ else
     [Inject] private EditorLocalizationService L { get; set; } = default!;
     [Inject] private ServerProcessService ServerProcess { get; set; } = default!;
     [Inject] private RuntimeViewerProcessService ViewerProcess { get; set; } = default!;
+    [Inject] private LiveTagService LiveTags { get; set; } = default!;
 
     private LogViewerService _serverLogService = new();
     private LogViewerService _appLogService = new();
     private JsonEditor? _jsonEditor;
     private DockContainer? _dockContainer;
+    private int _treeWidth = 300;
+    private DotNetObjectReference<Home>? _treeDotNetRef;
     private ScreenEditorPanel? _screenEditorPanel;
     private CrossReferencePanel? _crossRefPanel;
     private WatchTablePanel? _watchTablePanel;
@@ -1132,6 +1139,36 @@ private async Task OnAddToWatch(TreeNode node)
         await _watchTablePanel.AddVariableExternal(path);
 }
 
+private void OnPinVariable(TreeNode node)
+{
+    string path = node switch
+    {
+        VariableNode vn => BuildVariablePath(vn),
+        PinnedVariableNode pv => pv.VariablePath,
+        _ => ""
+    };
+    if (!string.IsNullOrEmpty(path))
+    {
+        Editor.PinVariable(path);
+        StateHasChanged();
+    }
+}
+
+private void OnUnpinVariable(TreeNode node)
+{
+    string path = node switch
+    {
+        PinnedVariableNode pv => pv.VariablePath,
+        VariableNode vn => BuildVariablePath(vn),
+        _ => ""
+    };
+    if (!string.IsNullOrEmpty(path))
+    {
+        Editor.UnpinVariable(path);
+        StateHasChanged();
+    }
+}
+
 private void OnProblemNavigate(string target)
 {
     if (target.StartsWith("screen:"))
@@ -1237,6 +1274,13 @@ private void UnsavedDialogCancel()
             await JS.InvokeVoidAsync("themeManager.setTheme", Theme.Theme);
             _shortcutRef = DotNetObjectReference.Create(this);
             await JS.InvokeVoidAsync("editorShortcuts.init", _shortcutRef);
+            try
+            {
+                var saved = await JS.InvokeAsync<int>("dockManager.restoreTreeWidth", "tree-panel-width");
+                if (saved > 0) _treeWidth = saved;
+                _treeDotNetRef ??= DotNetObjectReference.Create(this);
+            }
+            catch { }
 
             // Restore previously open projects asynchronously
             if (!Editor.IsSessionRestored)
@@ -1546,7 +1590,33 @@ private void UnsavedDialogCancel()
     private void ShowAboutDialog() { CloseMenus(); _showAboutDialog = true; }
 
     // --- Server / Runtime commands ---
-    private void OnProcessStateChanged() => InvokeAsync(StateHasChanged);
+    private void OnProcessStateChanged() => InvokeAsync(HandleProcessStateChangedAsync);
+
+    private async Task OnTreeSplitterDown(MouseEventArgs e)
+    {
+        _treeDotNetRef ??= DotNetObjectReference.Create(this);
+        await JS.InvokeVoidAsync("dockManager.startTreeSplitter", _treeDotNetRef, e.ClientX, _treeWidth, "tree-panel-width");
+    }
+
+    [JSInvokable]
+    public void OnTreeSplitterMove(int newWidth)
+    {
+        _treeWidth = newWidth;
+        StateHasChanged();
+    }
+
+    private async Task HandleProcessStateChangedAsync()
+    {
+        StateHasChanged();
+        // Auto-connect live tags when server becomes running
+        if (ServerProcess.IsServerRunning && Editor.RootModel != null && !LiveTags.IsConnected)
+        {
+            // Give the OPC server 2 s to finish booting
+            await Task.Delay(2000);
+            if (ServerProcess.IsServerRunning) // still running after delay
+                await LiveTags.ConnectAsync(Editor.ServerEndpointUrl, Editor.RootModel);
+        }
+    }
 
     private async Task StartServerCmd()
     {
@@ -2332,6 +2402,7 @@ private void UnsavedDialogCancel()
         _serverLogService.Dispose();
         _appLogService.Dispose();
         _shortcutRef?.Dispose();
+        _treeDotNetRef?.Dispose();
         _idleTimer?.Dispose();
         _idleRef?.Dispose();
     }

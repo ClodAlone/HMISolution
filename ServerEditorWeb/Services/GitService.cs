@@ -193,6 +193,20 @@ public class GitService
         }
     }
 
+    /// <summary>Returns the unified diff for <paramref name="filePath"/> between two commits (or working-tree vs HEAD when <paramref name="newHash"/> is null).</summary>
+    public async Task<string> GetFileDiffAsync(string filePath, string oldHash, string? newHash = null)
+    {
+        if (!IsGitRepository()) return "";
+        try
+        {
+            var range = newHash is null
+                ? $"{oldHash} -- \"{filePath}\""
+                : $"{oldHash} {newHash} -- \"{filePath}\"";
+            return await RunGitCommandAsync($"diff {range}");
+        }
+        catch { return ""; }
+    }
+
     private async Task<string> RunGitCommandAsync(string arguments)
     {
         var process = new Process

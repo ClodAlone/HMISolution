@@ -27,6 +27,28 @@ public class NodeEditorService
 
     public List<TreeNode> RootItems { get; } = new();
     public TreeNode? SelectedItem { get; set; }
+
+    // ── Pinned Variables ────────────────────────────────────────────────────
+    private readonly HashSet<string> _pinnedPaths = new(StringComparer.OrdinalIgnoreCase);
+    public IReadOnlyCollection<string> PinnedPaths => _pinnedPaths;
+
+    public void PinVariable(string path)
+    {
+        if (_pinnedPaths.Add(path))
+        {
+            RebuildFullTree();
+            SaveSettings();
+        }
+    }
+
+    public void UnpinVariable(string path)
+    {
+        if (_pinnedPaths.Remove(path))
+        {
+            RebuildFullTree();
+            SaveSettings();
+        }
+    }
     public List<TreeNode> SelectedItems { get; } = new();
     public bool HasUnsavedChanges
     {
@@ -446,6 +468,15 @@ public class NodeEditorService
     {
         proj.Children.Clear();
 
+        // Pinned variables (always at top when any are starred)
+        if (proj.Model.PinnedVariables?.Count > 0)
+        {
+            var pinnedGroup = new PinnedGroupNode() { Parent = proj, IsExpanded = true };
+            foreach (var path in proj.Model.PinnedVariables)
+                pinnedGroup.Children.Add(new PinnedVariableNode(path) { Parent = pinnedGroup });
+            proj.Children.Add(pinnedGroup);
+        }
+
         // Server settings node
         var serverSettingsNode = new ServerSettingsNode(proj.Model.Server) { Parent = proj };
         proj.Children.Add(serverSettingsNode);
@@ -621,13 +652,22 @@ public class NodeEditorService
     }
 
     /// <summary>
-    /// Rebuilds RootItems from all open ProjectNodes.
+    /// Rebuilds RootItems from all open ProjectNodes, with the Pinned group at the top.
     /// </summary>
     private void RebuildFullTree()
     {
         RootItems.Clear();
         SelectedItems.Clear();
         SelectedItem = null;
+
+        if (_pinnedPaths.Count > 0)
+        {
+            var pinnedGroup = new PinnedGroupNode { IsExpanded = true };
+            foreach (var path in _pinnedPaths)
+                pinnedGroup.Children.Add(new PinnedVariableNode(path) { Parent = pinnedGroup });
+            RootItems.Add(pinnedGroup);
+        }
+
         foreach (var proj in _openProjects)
             RootItems.Add(proj);
         NotifyStateChanged();
@@ -2183,6 +2223,11 @@ public class NodeEditorService
                     _pendingOpenPaths = settings.OpenProjectPaths;
                     _pendingActivePath = settings.ActiveProjectPath;
                 }
+                if (settings?.PinnedPaths != null)
+                {
+                    foreach (var p in settings.PinnedPaths)
+                        _pinnedPaths.Add(p);
+                }
             }
         }
         catch { }
@@ -2199,7 +2244,8 @@ public class NodeEditorService
             {
                 RecentFiles = new List<string>(RecentFiles),
                 OpenProjectPaths = _openProjects.Where(p => !string.IsNullOrEmpty(p.FilePath)).Select(p => p.FilePath).ToList(),
-                ActiveProjectPath = ActiveProject?.FilePath
+                ActiveProjectPath = ActiveProject?.FilePath,
+                PinnedPaths = new List<string>(_pinnedPaths)
             };
             File.WriteAllText(settingsPath, JsonSerializer.Serialize(settings));
         }
@@ -2211,5 +2257,6 @@ public class NodeEditorService
         public List<string> RecentFiles { get; set; } = new();
         public List<string> OpenProjectPaths { get; set; } = new();
         public string? ActiveProjectPath { get; set; }
+        public List<string> PinnedPaths { get; set; } = new();
     }
 }

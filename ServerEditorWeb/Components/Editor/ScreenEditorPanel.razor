@@ -134,6 +134,30 @@
             </div>
         </div>
 
+        @* Screen thumbnail strip *@
+        @if ((Editor.RootModel?.Screens?.Count ?? 0) > 1)
+        {
+            <div class="screen-thumbnail-strip">
+                @foreach (var s in Editor.RootModel!.Screens)
+                {
+                    var isActive = s.Name == screen.Name;
+                    <div class="screen-thumbnail @(isActive ? "active" : "")" title="@s.Name"
+                         @onclick="() => OnSwitchScreen(s)">
+                        <svg xmlns="http://www.w3.org/2000/svg"
+                             viewBox="0 0 @(s.Width) @(s.Height)"
+                             style="background:@s.Background;width:80px;height:50px;display:block;">
+                            @foreach (var sym in s.Symbols.Take(60))
+                            {
+                                <rect x="@sym.X" y="@sym.Y" width="@sym.Width" height="@sym.Height"
+                                      fill="rgba(100,160,240,0.4)" stroke="rgba(80,120,200,0.6)" stroke-width="1" rx="1" />
+                            }
+                        </svg>
+                        <span class="screen-thumb-label">@s.Name</span>
+                    </div>
+                }
+            </div>
+        }
+
         <div class="screen-editor-body">
             @* SVG Canvas *@
             <div class="screen-canvas-wrap">
@@ -1612,6 +1636,30 @@ Right-click a symbol for actions</div>
     private ScreenConfig? GetScreen()
     {
         return (Node as ScreenNode)?.Screen;
+    }
+
+    private void OnSwitchScreen(ScreenConfig targetScreen)
+    {
+        foreach (var root in Editor.RootItems)
+        {
+            var found = FindScreenNodeByConfig(root, targetScreen);
+            if (found != null)
+            {
+                Editor.SelectNode(found);
+                break;
+            }
+        }
+    }
+
+    private static ScreenNode? FindScreenNodeByConfig(TreeNode node, ScreenConfig target)
+    {
+        if (node is ScreenNode sn && ReferenceEquals(sn.Screen, target)) return sn;
+        foreach (var child in node.Children)
+        {
+            var found = FindScreenNodeByConfig(child, target);
+            if (found != null) return found;
+        }
+        return null;
     }
 
     protected override void OnParametersSet()

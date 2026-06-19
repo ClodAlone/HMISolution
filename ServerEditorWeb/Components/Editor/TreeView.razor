@@ -1,10 +1,27 @@
 @using ServerEditorWeb.Models
 @using ServerEditorWeb.Services
+@inject LiveTagService LiveTags
+@inject NodeEditorService Editor
+@implements IDisposable
 
 <div class="tree-view">
     <TreeFilterBar FilterText="@_filterText" FilterTextChanged="OnFilterChanged"
                    RecentFilters="_recentTreeFilters" RecentFiltersChanged="v => _recentTreeFilters = v"
                    Placeholder="Filter tree..." />
+    @if (LiveTags.IsConnected)
+    {
+        <div class="tree-live-bar">
+            <span class="tree-live-dot">●</span> Live
+            <button class="tree-live-refresh" title="Refresh live values" @onclick="RefreshLive">↺</button>
+        </div>
+    }
+    else if (LiveTags.Error != null)
+    {
+        <div class="tree-live-bar tree-live-bar-error" title="@LiveTags.Error">
+            <span>⚠ Live data unavailable</span>
+            <button class="tree-live-refresh" title="Retry connection" @onclick="RefreshLive">↺</button>
+        </div>
+    }
     @foreach (var node in Nodes)
     {
         @if (string.IsNullOrEmpty(_filterText) || NodeMatchesFilter(node, _filterText))
@@ -18,6 +35,9 @@
                 OnSetActiveProject="OnSetActiveProject" OnCloseProject="OnCloseProject"
                 OnFindReferences="OnFindReferences"
                 OnAddToWatch="OnAddToWatch"
+                OnPinVariable="OnPinVariable"
+                OnUnpinVariable="OnUnpinVariable"
+                GetLiveValue="LiveTagLookup"
                 OnFindInEditor="OnFindInEditor"
                 OnFindInProject="OnFindInProject" />
         }
@@ -54,11 +74,45 @@
     [Parameter] public EventCallback<TreeNode> OnCloseProject { get; set; }
     [Parameter] public EventCallback<TreeNode> OnFindReferences { get; set; }
     [Parameter] public EventCallback<TreeNode> OnAddToWatch { get; set; }
+    [Parameter] public EventCallback<TreeNode> OnPinVariable { get; set; }
+    [Parameter] public EventCallback<TreeNode> OnUnpinVariable { get; set; }
     [Parameter] public EventCallback OnFindInEditor { get; set; }
     [Parameter] public EventCallback OnFindInProject { get; set; }
 
     private string _filterText = "";
     private static List<string> _recentTreeFilters = new();
+
+    // value lookup dictionary rebuilt when LiveTagService fires StateChanged
+    private Dictionary<string, string> _liveValues = new(StringComparer.OrdinalIgnoreCase);
+
+    protected override void OnInitialized()
+    {
+        LiveTags.StateChanged += OnLiveTagsChanged;
+        RebuildLookup();
+    }
+
+    public void Dispose() => LiveTags.StateChanged -= OnLiveTagsChanged;
+
+    private void OnLiveTagsChanged()
+    {
+        RebuildLookup();
+        InvokeAsync(StateHasChanged);
+    }
+
+    private async Task RefreshLive()
+    {
+        if (Editor.RootModel == null) return;
+        await LiveTags.ConnectAsync(Editor.ServerEndpointUrl, Editor.RootModel);
+    }
+    private void RebuildLookup()
+    {
+        _liveValues = LiveTags.Entries
+            .Where(e => !string.IsNullOrEmpty(e.Value))
+            .ToDictionary(e => e.Path, e => e.Value, StringComparer.OrdinalIgnoreCase);
+    }
+
+    private string? LiveTagLookup(string path) =>
+        _liveValues.TryGetValue(path, out var v) ? v : null;
 
     private void OnFilterChanged(string text) { _filterText = text; }
 

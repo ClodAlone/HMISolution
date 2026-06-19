@@ -1,6 +1,7 @@
 @using ServerEditorWeb.Models
 @using ServerEditorWeb.Services
 @using SharedModels
+@inject IJSRuntime JS
 @implements IDisposable
 
 @if (Node == null)
@@ -20,6 +21,27 @@ else if (Node is FolderNode folder)
         <div class="text-muted">
             @L["prop.children"]: @folder.Children.Count (@L["prop.folders"]: @(folder.Children.OfType<FolderNode>().Count()), @L["prop.variables"]: @(folder.Children.OfType<VariableNode>().Count()))
         </div>
+        @{
+            var varCount = folder.Children.OfType<VariableNode>().Count();
+        }
+        @if (varCount > 0 || true)
+        {
+            <hr class="my-3" />
+            <div class="d-flex gap-2 flex-wrap align-items-center">
+                <span class="small fw-semibold">Variables:</span>
+                <button class="btn btn-sm btn-outline-secondary" @onclick="() => ExportVariablesCsv(folder)" title="Export all variables in this folder to CSV">
+                    📥 Export CSV
+                </button>
+                <label class="btn btn-sm btn-outline-secondary mb-0" title="Import variables from CSV file">
+                    📤 Import CSV
+                    <InputFile OnChange="(e) => ImportVariablesCsv(folder, e)" accept=".csv" style="display:none;" />
+                </label>
+            </div>
+            @if (!string.IsNullOrEmpty(_csvMessage))
+            {
+                <div class="mt-2 alert @(_csvSuccess ? "alert-success" : "alert-danger") py-1 small">@_csvMessage</div>
+            }
+        }
     </div>
 }
 else if (Node is VariableNode variable)
@@ -3251,8 +3273,110 @@ else if (Node is UserNode uNode)
     [Inject] private UndoRedoService UndoRedo { get; set; } = default!;
     [Inject] private NodeEditorService Editor { get; set; } = default!;
     [Inject] private EditorLocalizationService L { get; set; } = default!;
+    [Inject] private IJSRuntime JSRuntime { get; set; } = default!;
 
     private bool _showDriverJson;
+
+    // CSV export / import
+    private string _csvMessage = "";
+    private bool _csvSuccess;
+
+    private async Task ExportVariablesCsv(FolderNode folder)
+    {
+        var lines = new System.Text.StringBuilder();
+        lines.AppendLine("Name,Type,Access,InitialValue,Retentive,EngineeringUnit");
+        foreach (var vn in GetAllVariableNodes(folder))
+        {
+            var v = vn.Variable;
+            lines.AppendLine($"{CsvEscape(vn.Name)},{CsvEscape(v.Type)},{CsvEscape(v.Access)},{CsvEscape(v.InitialValue ?? "")},{v.Retentive},{CsvEscape(v.EngineeringUnit ?? "")}");
+        }
+        await JSRuntime.InvokeVoidAsync("dockManager.downloadText",
+            $"{folder.Name}_variables.csv", "text/csv", lines.ToString());
+    }
+
+    private async Task ImportVariablesCsv(FolderNode folder, Microsoft.AspNetCore.Components.Forms.InputFileChangeEventArgs e)
+    {
+        _csvMessage = "";
+        try
+        {
+            using var stream = e.File.OpenReadStream(maxAllowedSize: 4 * 1024 * 1024);
+            using var reader = new System.IO.StreamReader(stream);
+            var text = await reader.ReadToEndAsync();
+            var lines = text.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+            int added = 0, updated = 0;
+            foreach (var line in lines.Skip(1)) // skip header
+            {
+                var cols = SplitCsvLine(line);
+                if (cols.Length < 2) continue;
+                var name = cols[0].Trim();
+                if (string.IsNullOrEmpty(name)) continue;
+                var type = cols.Length > 1 ? cols[1].Trim() : "Double";
+                var access = cols.Length > 2 ? cols[2].Trim() : "ReadWrite";
+                var initialValue = cols.Length > 3 ? cols[3].Trim() : "";
+                var retentive = cols.Length > 4 && cols[4].Trim().Equals("true", StringComparison.OrdinalIgnoreCase);
+                var engineeringUnit = cols.Length > 5 ? cols[5].Trim() : "";
+
+                var existing = folder.Children.OfType<VariableNode>().FirstOrDefault(v => v.Name == name);
+                if (existing != null)
+                {
+                    existing.Variable.Type = type;
+                    existing.Variable.Access = access;
+                    existing.Variable.InitialValue = string.IsNullOrEmpty(initialValue) ? "" : initialValue;
+                    existing.Variable.Retentive = retentive;
+                    existing.Variable.EngineeringUnit = engineeringUnit;
+                    updated++;
+                }
+                else
+                {
+                    var variable = new Variable { Name = name, Type = type, Access = access, InitialValue = string.IsNullOrEmpty(initialValue) ? "" : initialValue, Retentive = retentive, EngineeringUnit = engineeringUnit };
+                    var node = new VariableNode(variable) { Parent = folder };
+                    folder.Children.Add(node);
+                    added++;
+                }
+            }
+            Editor.MarkChanged();
+            OnPropertyChanged.InvokeAsync();
+            _csvSuccess = true;
+            _csvMessage = $"Imported: {added} added, {updated} updated.";
+        }
+        catch (Exception ex)
+        {
+            _csvSuccess = false;
+            _csvMessage = $"Import failed: {ex.Message}";
+        }
+    }
+
+    private static IEnumerable<VariableNode> GetAllVariableNodes(TreeNode node)
+    {
+        foreach (var child in node.Children)
+        {
+            if (child is VariableNode vn) yield return vn;
+            else foreach (var d in GetAllVariableNodes(child)) yield return d;
+        }
+    }
+
+    private static string CsvEscape(string v)
+    {
+        if (v.Contains(',') || v.Contains('"') || v.Contains('\n'))
+            return '"' + v.Replace("\"", "\"\"") + '"';
+        return v;
+    }
+
+    private static string[] SplitCsvLine(string line)
+    {
+        var result = new List<string>();
+        var sb = new System.Text.StringBuilder();
+        bool inQuotes = false;
+        for (int i = 0; i < line.Length; i++)
+        {
+            var c = line[i];
+            if (c == '"') { inQuotes = !inQuotes; continue; }
+            if (c == ',' && !inQuotes) { result.Add(sb.ToString()); sb.Clear(); continue; }
+            sb.Append(c);
+        }
+        result.Add(sb.ToString());
+        return result.ToArray();
+    }
 
     // Password reset fields
     private string _resetPassword = "";

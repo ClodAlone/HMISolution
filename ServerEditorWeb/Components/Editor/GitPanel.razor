@@ -66,6 +66,66 @@
             <pre class="p-2 bg-light border rounded small" style="user-select:text;-webkit-user-select:text;white-space:pre-wrap;word-break:break-all;max-height:300px;overflow:auto;">@_result</pre>
         </div>
     }
+
+    @* ── Script / File Diff Viewer ── *@
+    <hr class="my-3" />
+    <h6>📜 File Diff</h6>
+    <div class="mb-2">
+        <label class="form-label small">File path (relative to repo root)</label>
+        <input type="text" class="form-control form-control-sm" @bind="_diffFilePath" placeholder="e.g. scripts/MyScript.js" />
+    </div>
+    <button class="btn btn-sm btn-outline-secondary mb-2" @onclick="LoadCommitLog"
+            disabled="@(_busy || !_gitService.IsGitRepository() || string.IsNullOrWhiteSpace(_diffFilePath))">
+        📋 Load History
+    </button>
+
+    @if (_commitLog.Count > 0)
+    {
+        <div class="mb-2" style="max-height:160px;overflow-y:auto;">
+            <table class="table table-sm table-hover" style="font-size:11px;">
+                <thead><tr><th>Hash</th><th>Date</th><th>Author</th><th>Subject</th><th></th></tr></thead>
+                <tbody>
+                    @for (int i = 0; i < _commitLog.Count; i++)
+                    {
+                        var idx = i;
+                        var c = _commitLog[i];
+                        <tr class="@(_selectedCommitIdx == idx ? "table-primary" : "")" style="cursor:pointer;" @onclick="() => SelectCommit(idx)">
+                            <td><code>@c.ShortHash</code></td>
+                            <td>@c.Date.LocalDateTime.ToString("MM/dd HH:mm")</td>
+                            <td>@c.Author</td>
+                            <td>@c.Subject</td>
+                            <td>
+                                @if (idx + 1 < _commitLog.Count)
+                                {
+                                    <button class="btn btn-sm btn-outline-primary py-0 px-1" style="font-size:10px;"
+                                            @onclick:stopPropagation
+                                            @onclick="() => ShowDiff(idx)" title="Diff vs previous commit">
+                                        ↔
+                                    </button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(_diffContent))
+    {
+        <div class="mt-1 position-relative">
+            <span class="small fw-bold">Diff: @_diffLabel</span>
+            <button class="btn btn-sm btn-outline-secondary position-absolute" style="top:0;right:0;padding:1px 6px;font-size:10px;"
+                    @onclick="ClearDiff" title="Close">✕</button>
+        </div>
+        <pre class="border rounded p-1" style="font-size:11px;white-space:pre;overflow:auto;max-height:380px;line-height:1.3;">
+            @foreach (var line in _diffLines)
+            {
+                <span class="@DiffLineClass(line)">@line
+</span>
+            }
+        </pre>
+    }
 </div>
 
 @code {
@@ -78,6 +138,58 @@
     private string _userEmail = "";
     private string _remoteUrl = "";
     private string _result = "";
+
+    // diff viewer
+    private string _diffFilePath = "";
+    private List<GitCommitInfo> _commitLog = new();
+    private int _selectedCommitIdx = -1;
+    private string _diffContent = "";
+    private string _diffLabel = "";
+    private string[] _diffLines = [];
+
+    private static string DiffLineClass(string line) => line.Length > 0 ? line[0] switch
+    {
+        '+' => "text-success",
+        '-' => "text-danger",
+        '@' => "text-info fw-bold",
+        _ => ""
+    } : "";
+
+    private async Task LoadCommitLog()
+    {
+        await RunBusy("log", "Loading history…", async () =>
+        {
+            _commitLog = await _gitService.GetLogAsync(_diffFilePath, 30);
+            _selectedCommitIdx = -1;
+            _diffContent = "";
+            _diffLines = [];
+        });
+    }
+
+    private void SelectCommit(int idx)
+    {
+        _selectedCommitIdx = idx;
+    }
+
+    private async Task ShowDiff(int idx)
+    {
+        if (idx + 1 >= _commitLog.Count) return;
+        var newer = _commitLog[idx];
+        var older = _commitLog[idx + 1];
+        await RunBusy("diff", "Loading diff…", async () =>
+        {
+            _diffContent = await _gitService.GetFileDiffAsync(_diffFilePath, older.Hash, newer.Hash);
+            _diffLabel = $"{older.ShortHash} → {newer.ShortHash} ({newer.Date.LocalDateTime:MM/dd HH:mm})";
+            _diffLines = _diffContent.Split('\n');
+        });
+    }
+
+    private void ClearDiff()
+    {
+        _diffContent = "";
+        _diffLines = [];
+    }
+
     private string _currentBranch = "";
     private bool _configLoaded;
     private bool _copied;
