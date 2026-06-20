@@ -398,7 +398,7 @@ public class ServerSettingsNode : TreeNode
 public class ProjectNode : TreeNode
 {
     public override string TypeName => "Project";
-    public override string Icon => "📂";
+    public override string Icon => IsChildProject ? "🔗" : "📂";
 
     /// <summary>The deserialized model for this project.</summary>
     public NodeModel Model { get; set; }
@@ -418,6 +418,15 @@ public class ProjectNode : TreeNode
     /// </summary>
     public bool IsLocked { get; set; }
 
+    /// <summary>True when this ProjectNode is a child of another project (nested in ChildProjectsGroupNode).</summary>
+    public bool IsChildProject { get; set; }
+
+    /// <summary>The parent ProjectNode when IsChildProject is true.</summary>
+    public ProjectNode? ParentProject { get; set; }
+
+    /// <summary>The ChildProjectRef entry in the parent model that this node corresponds to.</summary>
+    public ChildProjectRef? ChildRef { get; set; }
+
     public ProjectNode(NodeModel model, string filePath)
     {
         Model = model;
@@ -427,6 +436,20 @@ public class ProjectNode : TreeNode
         IsLocked = !string.IsNullOrEmpty(model.ProjectPasswordHash);
     }
 
+}
+
+/// <summary>
+/// Group node for child projects nested under a parent project.
+/// </summary>
+public class ChildProjectsGroupNode : TreeNode
+{
+    public override string TypeName => "ChildProjectsGroup";
+    public override string Icon => "🗂️";
+
+    public ChildProjectsGroupNode()
+    {
+        Name = "Child Projects";
+    }
 }
 public class AssetGroupNode : TreeNode
 {

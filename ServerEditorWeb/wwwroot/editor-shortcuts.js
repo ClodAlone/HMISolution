@@ -23,6 +23,19 @@ window.editorShortcuts = {
         if (element) element.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     },
 
+    clampPopup: function (element) {
+        if (!element) return;
+        var rect = element.getBoundingClientRect();
+        var vw = window.innerWidth || document.documentElement.clientWidth;
+        var vh = window.innerHeight || document.documentElement.clientHeight;
+        var left = parseFloat(element.style.left) || 0;
+        var top = parseFloat(element.style.top) || 0;
+        if (left + rect.width > vw) left = Math.max(0, vw - rect.width - 4);
+        if (top + rect.height > vh) top = Math.max(0, vh - rect.height - 4);
+        element.style.left = left + 'px';
+        element.style.top = top + 'px';
+    },
+
     _onBeforeUnload: function (e) {
         if (window.editorShortcuts._hasUnsavedChanges) {
             e.preventDefault();

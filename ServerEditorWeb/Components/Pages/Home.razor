@@ -487,6 +487,7 @@ else
                     OnDelete="OnDelete"
                     OnCopy="OnCopyNode" OnDuplicate="OnDuplicateNode" OnPaste="OnPasteNode"
                     OnSetActiveProject="OnSetActiveProject" OnCloseProject="OnCloseProject"
+                    OnAddChildProject="OnAddChildProject" OnCreateChildProject="OnCreateChildProject" OnRemoveChildProject="OnRemoveChildProject"
                     OnFindReferences="OnFindReferences"
                     OnAddToWatch="OnAddToWatch"
                     OnPinVariable="OnPinVariable"
@@ -895,6 +896,126 @@ else
     </div>
 }
 
+@if (_showChildProjectBrowser)
+{
+    <div class="modal-backdrop show" @onclick="() => { _showChildProjectBrowser = false; _childProjectParent = null; }"></div>
+    <div class="modal show d-block" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content">
+                <div class="modal-header py-2">
+                    <h6 class="modal-title">🔗 Add Existing Child Project — @(_childProjectParent?.Name ?? "")</h6>
+                    <button type="button" class="btn-close btn-close-sm" @onclick="() => { _showChildProjectBrowser = false; _childProjectParent = null; }"></button>
+                </div>
+                <div class="modal-body p-0" style="max-height: 450px; display: flex; flex-direction: column;">
+                    <div class="d-flex align-items-center gap-1 px-3 py-2 border-bottom" style="background: var(--bg-secondary, #f8f9fa);">
+                        <button class="btn btn-sm btn-outline-secondary px-2" title="Up"
+                                disabled="@(string.IsNullOrEmpty(_browsePath) || Path.GetDirectoryName(_browsePath) == null)"
+                                @onclick="BrowseUp">⬆</button>
+                        <input type="text" class="form-control form-control-sm" value="@_browsePath"
+                               @onchange="OnBrowsePathChanged" placeholder="Enter path…" />
+                        <div class="dropdown">
+                            <button class="btn btn-sm btn-outline-secondary px-2 dropdown-toggle" title="Drives"
+                                    @onclick="() => _showDriveList = !_showDriveList" @onclick:stopPropagation>💻</button>
+                            @if (_showDriveList)
+                            {
+                                <div class="dropdown-menu show" style="min-width: 80px;">
+                                    @foreach (var drive in _browseDrives)
+                                    {
+                                        var d = drive;
+                                        <button class="dropdown-item small" @onclick="() => BrowseTo(d)" @onclick:stopPropagation>@d</button>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+                    <div style="overflow-y: auto; flex: 1; min-height: 200px;" @onclick="() => _showDriveList = false">
+                        <table class="table table-sm table-hover mb-0" style="font-size: 13px;">
+                            <thead>
+                                <tr><th style="width: 30px;"></th><th>Name</th><th style="width: 100px;">Size</th></tr>
+                            </thead>
+                            <tbody>
+                                @if (_browseDirs.Length == 0 && _browseFiles.Length == 0)
+                                {
+                                    <tr><td colspan="3" class="text-center text-muted py-3">
+                                        @(string.IsNullOrEmpty(_browsePath) ? "No drives available" : "Empty folder")
+                                    </td></tr>
+                                }
+                                @foreach (var dir in _browseDirs)
+                                {
+                                    var d = dir;
+                                    var name = Path.GetFileName(d);
+                                    <tr class="cursor-pointer" style="cursor: pointer;" @ondblclick="() => BrowseTo(d)">
+                                        <td>📁</td><td>@name</td><td></td>
+                                    </tr>
+                                }
+                                @foreach (var file in _browseFiles)
+                                {
+                                    var f = file;
+                                    var name = Path.GetFileName(f);
+                                    var size = "";
+                                    try { var fi = new FileInfo(f); size = fi.Length < 1024 ? $"{fi.Length} B" : $"{fi.Length / 1024} KB"; } catch { }
+                                    var isSelected = f == _browseSelectedFile;
+                                    <tr class="@(isSelected ? "table-primary" : "")" style="cursor: pointer;"
+                                        @onclick="() => _browseSelectedFile = f"
+                                        @ondblclick="async () => await ConfirmAddChildProject()">
+                                        <td>📄</td><td>@name</td><td class="text-muted">@size</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    @if (!string.IsNullOrEmpty(_browseSelectedFile))
+                    {
+                        <div class="px-3 py-1 border-top small text-muted" style="background: var(--bg-secondary, #f8f9fa);">
+                            <code>@_browseSelectedFile</code>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer py-2">
+                    <button class="btn btn-sm btn-secondary" @onclick="() => { _showChildProjectBrowser = false; _childProjectParent = null; }">Cancel</button>
+                    <button class="btn btn-sm btn-primary" @onclick="ConfirmAddChildProject"
+                            disabled="@string.IsNullOrEmpty(_browseSelectedFile)">🔗 Add Child Project</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_showCreateChildDialog)
+{
+    <div class="modal-backdrop show" @onclick="() => { _showCreateChildDialog = false; _childProjectParent = null; }"></div>
+    <div class="modal show d-block" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header py-2">
+                    <h6 class="modal-title">➕ Create New Child Project — @(_childProjectParent?.Name ?? "")</h6>
+                    <button type="button" class="btn-close btn-close-sm" @onclick="() => { _showCreateChildDialog = false; _childProjectParent = null; }"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold">Project Name</label>
+                        <input type="text" class="form-control form-control-sm" @bind="_newChildProjectName"
+                               placeholder="e.g. SubSystem1"
+                               @onkeydown="@(async e => { if (e.Key == "Enter") ConfirmCreateChildProject(); })" />
+                        <div class="form-text small text-muted">A new JSON file will be created with this name.</div>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-semibold">Directory</label>
+                        <input type="text" class="form-control form-control-sm" @bind="_newChildProjectDir"
+                               placeholder="Folder to create the project in" />
+                        <div class="form-text small text-muted">Leave as parent folder to keep projects together.</div>
+                    </div>
+                </div>
+                <div class="modal-footer py-2">
+                    <button class="btn btn-sm btn-secondary" @onclick="() => { _showCreateChildDialog = false; _childProjectParent = null; }">Cancel</button>
+                    <button class="btn btn-sm btn-primary" @onclick="ConfirmCreateChildProject"
+                            disabled="@string.IsNullOrWhiteSpace(_newChildProjectName)">➕ Create</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 @if (_isLoadingProject && !_showSplash)
 {
     <div class="project-loading-overlay">
@@ -1090,6 +1211,14 @@ else
     private string[] _browseDrives = [];
     private bool _showDriveList;
 
+    // Child project dialog state
+    private bool _showChildProjectBrowser;
+    private bool _showCreateChildDialog;
+    private ProjectNode? _childProjectParent;
+    private string _childProjectMode = "existing";
+    private string _newChildProjectName = "";
+    private string _newChildProjectDir = "";
+
     // Menu state
     private string? _openMenu;
     private bool _requiresLogin;
@@ -1269,6 +1398,68 @@ private void OnCloseProject(TreeNode node)
     {
         Editor.CloseProject(pn);
     }
+}
+
+private void OnAddChildProject(TreeNode node)
+{
+    var pn = node switch
+    {
+        ProjectNode p when !p.IsChildProject => p,
+        ChildProjectsGroupNode g when g.Parent is ProjectNode p => p,
+        _ => null
+    };
+    if (pn == null) return;
+    _childProjectParent = pn;
+    _childProjectMode = "existing";
+    _browsePath = Editor.GetBrowseStartPath();
+    _browseSelectedFile = "";
+    (_browseDirs, _browseFiles) = Editor.ListDirectory(_browsePath);
+    _showChildProjectBrowser = true;
+}
+
+private void OnCreateChildProject(TreeNode node)
+{
+    var pn = node switch
+    {
+        ProjectNode p when !p.IsChildProject => p,
+        ChildProjectsGroupNode g when g.Parent is ProjectNode p => p,
+        _ => null
+    };
+    if (pn == null) return;
+    _childProjectParent = pn;
+    _childProjectMode = "new";
+    _newChildProjectName = "";
+    _newChildProjectDir = string.IsNullOrEmpty(pn.FilePath) ? "" : System.IO.Path.GetDirectoryName(pn.FilePath) ?? "";
+    _showChildProjectBrowser = false;
+    _showCreateChildDialog = true;
+}
+
+private void OnRemoveChildProject(TreeNode node)
+{
+    if (node is not ProjectNode child || !child.IsChildProject) return;
+    var parent = child.ParentProject;
+    if (parent == null) return;
+    Editor.RemoveChildProject(parent, child);
+    ShowToast(true, $"Removed child project: {child.Name}");
+}
+
+private async Task ConfirmAddChildProject()
+{
+    if (_childProjectParent == null || string.IsNullOrEmpty(_browseSelectedFile)) return;
+    _showChildProjectBrowser = false;
+    var (success, msg) = Editor.AddExistingChildProject(_childProjectParent, _browseSelectedFile);
+    ShowToast(success, msg);
+    _childProjectParent = null;
+    await Task.CompletedTask;
+}
+
+private void ConfirmCreateChildProject()
+{
+    if (_childProjectParent == null || string.IsNullOrWhiteSpace(_newChildProjectName)) return;
+    _showCreateChildDialog = false;
+    var (success, msg) = Editor.CreateNewChildProject(_childProjectParent, _newChildProjectName, _newChildProjectDir);
+    ShowToast(success, msg);
+    _childProjectParent = null;
 }
 
 private void OnFindReferences(TreeNode node)
@@ -1701,12 +1892,8 @@ private void UnsavedDialogCancel()
 
     private static ProjectNode? FindAncestorProject(TreeNode? node)
     {
-        while (node != null)
-        {
-            if (node is ProjectNode pn) return pn;
-            node = node.Parent;
-        }
-        return null;
+        // Walk up to the topmost ProjectNode (root-level, non-child project)
+        return NodeEditorService.FindAncestorTopLevelProject(node);
     }
 
     private void OnNodeDoubleClick(TreeNode node)

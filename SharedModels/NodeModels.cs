@@ -42,6 +42,13 @@ namespace SharedModels
         public List<string> PinnedVariables { get; set; } = new();
 
         /// <summary>
+        /// References to child projects linked to this project.
+        /// Child projects are displayed nested under this project in the editor tree and can be
+        /// edited independently. Paths are stored relative to this project file's directory when possible.
+        /// </summary>
+        public List<ChildProjectRef> ChildProjects { get; set; } = new();
+
+        /// <summary>
         /// PBKDF2-SHA256 hash of the project protection password.
         /// When set, the project is locked and cannot be edited without entering the correct password.
         /// </summary>
@@ -49,6 +56,26 @@ namespace SharedModels
 
         [JsonPropertyName("Server")]
         public ServerSettings Server { get; set; } = new();
+    }
+
+    /// <summary>
+    /// Reference to a child project linked to a parent project.
+    /// The path is stored relative to the parent project's directory when possible.
+    /// </summary>
+    public class ChildProjectRef
+    {
+        /// <summary>
+        /// Path to the child project JSON file.
+        /// Stored as a relative path when the child is under the parent's directory (e.g. "child\project.json"),
+        /// or as an absolute path when on a different drive.
+        /// </summary>
+        public string RelativePath { get; set; } = "";
+
+        /// <summary>
+        /// Optional display name override for this child project in the tree.
+        /// When empty, the file name without extension is used.
+        /// </summary>
+        public string DisplayName { get; set; } = "";
     }
 
     public class DatabaseConfig

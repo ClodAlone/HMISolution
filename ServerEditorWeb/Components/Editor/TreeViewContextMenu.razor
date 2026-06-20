@@ -6,14 +6,32 @@
 @if (Visible)
 {
     <div class="dock-context-backdrop" @onclick="Close"></div>
-    <div class="dock-context-menu" style="left: @(X)px; top: @(Y)px;">
+    <div class="dock-context-menu" style="left: @(X)px; top: @(Y)px;" @ref="_menuRef">
         @if (Node is ProjectNode projectNode)
         {
             @if (!projectNode.IsActive)
             {
                 <div class="dock-context-item" @onclick="SetActiveProject">⭐ Set Active Project</div>
             }
-            <div class="dock-context-item dock-context-danger" @onclick="CloseProject">❌ Close Project</div>
+            @if (!projectNode.IsChildProject)
+            {
+                <div class="dock-context-separator"></div>
+                <div class="dock-context-item" @onclick="AddChildProject">🔗 Add Existing Child Project…</div>
+                <div class="dock-context-item" @onclick="CreateChildProject">➕ Create New Child Project…</div>
+                <div class="dock-context-separator"></div>
+                <div class="dock-context-item dock-context-danger" @onclick="CloseProject">❌ Close Project</div>
+            }
+            else
+            {
+                <div class="dock-context-separator"></div>
+                <div class="dock-context-item dock-context-danger" @onclick="RemoveChildProject">🔓 Detach Child Project</div>
+            }
+            <div class="dock-context-separator"></div>
+        }
+        @if (Node is ChildProjectsGroupNode)
+        {
+            <div class="dock-context-item" @onclick="AddChildProject">🔗 Add Existing Child Project…</div>
+            <div class="dock-context-item" @onclick="CreateChildProject">➕ Create New Child Project…</div>
             <div class="dock-context-separator"></div>
         }
         @if (Node is FolderNode or VariableGroupNode)
@@ -92,7 +110,7 @@
             <div class="dock-context-separator"></div>
             <div class="dock-context-item" @onclick="UnpinVariable">⭐ Remove from Pinned</div>
         }
-        @if (Node is not ProjectNode)
+        @if (Node is not ProjectNode and not ChildProjectsGroupNode)
         {
             <div class="dock-context-separator"></div>
             @if (Node is VariableNode or FolderNode { Parent: not null } or ScriptNode or PlcProgramNode or RecipeNode or SchedulerNode or ReportNode or CalculatedNode or AssetNode or BatchNode or EventNode or AliasMapNode or ScreenNode or UserNode or UserGroupNode or ResourceFolderNode)
@@ -117,6 +135,16 @@
 }
 
 @code {
+    private ElementReference _menuRef;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (Visible)
+        {
+            try { await JS.InvokeVoidAsync("editorShortcuts.clampPopup", _menuRef); } catch { }
+        }
+    }
+
     [Parameter] public bool Visible { get; set; }
     [Parameter] public double X { get; set; }
     [Parameter] public double Y { get; set; }
@@ -145,6 +173,9 @@
     [Parameter] public EventCallback<TreeNode> OnPaste { get; set; }
     [Parameter] public EventCallback<TreeNode> OnSetActiveProject { get; set; }
     [Parameter] public EventCallback<TreeNode> OnCloseProject { get; set; }
+    [Parameter] public EventCallback<TreeNode> OnAddChildProject { get; set; }
+    [Parameter] public EventCallback<TreeNode> OnCreateChildProject { get; set; }
+    [Parameter] public EventCallback<TreeNode> OnRemoveChildProject { get; set; }
     [Parameter] public EventCallback<TreeNode> OnFindReferences { get; set; }
     [Parameter] public EventCallback<TreeNode> OnAddToWatch { get; set; }
     [Parameter] public EventCallback<TreeNode> OnPinVariable { get; set; }
@@ -176,6 +207,9 @@
     private void Paste() { OnPaste.InvokeAsync(Node!); Close(); }
     private void SetActiveProject() { OnSetActiveProject.InvokeAsync(Node!); Close(); }
     private void CloseProject() { OnCloseProject.InvokeAsync(Node!); Close(); }
+    private void AddChildProject() { OnAddChildProject.InvokeAsync(Node!); Close(); }
+    private void CreateChildProject() { OnCreateChildProject.InvokeAsync(Node!); Close(); }
+    private void RemoveChildProject() { OnRemoveChildProject.InvokeAsync(Node!); Close(); }
     private void FindReferences() { OnFindReferences.InvokeAsync(Node!); Close(); }
     private void AddToWatch() { OnAddToWatch.InvokeAsync(Node!); Close(); }
     private void PinVariable() { OnPinVariable.InvokeAsync(Node!); Close(); }

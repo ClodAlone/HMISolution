@@ -137,6 +137,39 @@
             }
         }
 
+        // Include variables from child projects, prefixed with the child project name
+        if (Editor.ActiveProject != null)
+        {
+            foreach (var childProj in NodeEditorService.GetAllChildProjects(Editor.ActiveProject))
+            {
+                var projectPrefix = childProj.Name;
+                var childRoot = childProj.Model.Folder;
+                if (childRoot != null)
+                {
+                    _allPaths.Add(new VarPathEntry { Path = projectPrefix, IsFolder = true });
+                    foreach (var sub in childRoot.Folders)
+                        CollectPaths(sub, projectPrefix);
+                    foreach (var v in childRoot.Variables)
+                        _allPaths.Add(new VarPathEntry { Path = $"{projectPrefix}.{v.Name}", Type = v.Type, IsFolder = false });
+                }
+                var childCalc = childProj.Model.CalculatedVariables;
+                if (childCalc != null)
+                {
+                    foreach (var cv in childCalc)
+                    {
+                        if (!cv.Enabled || string.IsNullOrWhiteSpace(cv.Name)) continue;
+                        var folder = string.IsNullOrWhiteSpace(cv.FolderPath)
+                            ? $"{projectPrefix}._Calculated"
+                            : $"{projectPrefix}.{cv.FolderPath}";
+                        var fullPath = $"{folder}.{cv.Name}";
+                        if (!_allPaths.Any(p => p.IsFolder && p.Path == folder))
+                            _allPaths.Add(new VarPathEntry { Path = folder, IsFolder = true });
+                        _allPaths.Add(new VarPathEntry { Path = fullPath, Type = cv.Type, IsFolder = false });
+                    }
+                }
+            }
+        }
+
         ApplyFilter();
     }
 
@@ -368,6 +401,41 @@
             }
             if (calcFolder.Children.Count > 0)
                 _treeRoots.Add(calcFolder);
+        }
+
+        // Add child project variable trees
+        if (Editor.ActiveProject != null)
+        {
+            foreach (var childProj in NodeEditorService.GetAllChildProjects(Editor.ActiveProject))
+            {
+                var projPrefix = childProj.Name;
+                var projNode = new TreeVarNode { Name = $"🔗 {projPrefix}", IsFolder = true, FullPath = projPrefix };
+                var childRoot = childProj.Model.Folder;
+                if (childRoot != null)
+                {
+                    foreach (var sub in childRoot.Folders)
+                    {
+                        var child = BuildFolderNode(sub, projPrefix);
+                        if (child != null) projNode.Children.Add(child);
+                    }
+                    foreach (var v in childRoot.Variables)
+                        projNode.Children.Add(new TreeVarNode { Name = v.Name, FullPath = $"{projPrefix}.{v.Name}", Type = v.Type, IsFolder = false });
+                }
+                var childCalc = childProj.Model.CalculatedVariables;
+                if (childCalc?.Count > 0)
+                {
+                    var calcNode = new TreeVarNode { Name = "_Calculated", IsFolder = true, FullPath = $"{projPrefix}._Calculated" };
+                    foreach (var cv in childCalc)
+                    {
+                        if (!cv.Enabled || string.IsNullOrWhiteSpace(cv.Name)) continue;
+                        var folder = string.IsNullOrWhiteSpace(cv.FolderPath) ? $"{projPrefix}._Calculated" : $"{projPrefix}.{cv.FolderPath}";
+                        calcNode.Children.Add(new TreeVarNode { Name = cv.Name, FullPath = $"{folder}.{cv.Name}", Type = cv.Type, IsFolder = false });
+                    }
+                    if (calcNode.Children.Count > 0) projNode.Children.Add(calcNode);
+                }
+                if (projNode.Children.Count > 0)
+                    _treeRoots.Add(projNode);
+            }
         }
 
         // Auto-expand to the currently selected value

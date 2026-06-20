@@ -739,6 +739,212 @@ public class NodeEditorService
             }
         }
         proj.Children.Add(userGroupList);
+
+        // Child Projects group — built from ChildProjectRef entries in the model
+        if (!proj.IsChildProject)
+        {
+            var childProjectsGroup = new ChildProjectsGroupNode() { Parent = proj };
+            if (proj.Model.ChildProjects != null)
+            {
+                foreach (var childRef in proj.Model.ChildProjects)
+                {
+                    var childNode = LoadChildProjectNode(childRef, proj);
+                    if (childNode != null)
+                    {
+                        childNode.Parent = childProjectsGroup;
+                        childProjectsGroup.Children.Add(childNode);
+                    }
+                }
+            }
+            proj.Children.Add(childProjectsGroup);
+        }
+    }
+
+    // ── Child Project Management ────────────────────────────────────────────────
+
+    /// <summary>
+    /// Resolves a ChildProjectRef path to an absolute path using the parent project's directory.
+    /// </summary>
+    private static string ResolveChildPath(string parentFilePath, string relativePath)
+    {
+        if (string.IsNullOrEmpty(relativePath)) return "";
+        if (Path.IsPathRooted(relativePath)) return relativePath;
+        var dir = Path.GetDirectoryName(Path.GetFullPath(parentFilePath)) ?? "";
+        return Path.GetFullPath(Path.Combine(dir, relativePath));
+    }
+
+    /// <summary>
+    /// Computes a relative path from the parent project's directory to the child file.
+    /// Returns an absolute path when they are on different drives.
+    /// </summary>
+    private static string MakeRelativePath(string parentFilePath, string childFilePath)
+    {
+        try
+        {
+            var parentDir = Path.GetDirectoryName(Path.GetFullPath(parentFilePath));
+            if (string.IsNullOrEmpty(parentDir)) return childFilePath;
+            var rel = Path.GetRelativePath(parentDir, Path.GetFullPath(childFilePath));
+            return rel;
+        }
+        catch
+        {
+            return childFilePath;
+        }
+    }
+
+    /// <summary>
+    /// Loads a child project from a ChildProjectRef and builds its tree children.
+    /// Returns null if the file cannot be found or parsed.
+    /// </summary>
+    private ProjectNode? LoadChildProjectNode(ChildProjectRef childRef, ProjectNode parent)
+    {
+        if (string.IsNullOrEmpty(parent.FilePath)) return null;
+        var absPath = ResolveChildPath(parent.FilePath, childRef.RelativePath);
+        if (!File.Exists(absPath)) return null;
+        try
+        {
+            var json = File.ReadAllText(absPath);
+            var model = System.Text.Json.JsonSerializer.Deserialize<NodeModel>(json);
+            if (model == null) return null;
+            ResourceFileManager.LoadExternalResources(model, absPath);
+            model.Server ??= new ServerSettings();
+
+            var childNode = new ProjectNode(model, absPath)
+            {
+                IsChildProject = true,
+                ParentProject = parent,
+                ChildRef = childRef,
+                IsExpanded = false
+            };
+            if (!string.IsNullOrEmpty(childRef.DisplayName))
+                childNode.Name = childRef.DisplayName;
+            BuildProjectChildren(childNode);
+            return childNode;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Adds an existing project file as a child of the given parent project.
+    /// </summary>
+    public (bool success, string message) AddExistingChildProject(ProjectNode parent, string childFilePath)
+    {
+        if (!File.Exists(childFilePath))
+            return (false, $"File not found: {childFilePath}");
+
+        var absChild = Path.GetFullPath(childFilePath);
+        var absParent = Path.GetFullPath(parent.FilePath);
+
+        // Prevent self-reference
+        if (string.Equals(absChild, absParent, StringComparison.OrdinalIgnoreCase))
+            return (false, "A project cannot be its own child.");
+
+        // Prevent duplicate
+        if (parent.Model.ChildProjects.Any(c =>
+                string.Equals(ResolveChildPath(absParent, c.RelativePath), absChild, StringComparison.OrdinalIgnoreCase)))
+            return (false, "This project is already a child of the selected parent.");
+
+        var relPath = MakeRelativePath(absParent, absChild);
+        var childRef = new ChildProjectRef { RelativePath = relPath };
+        parent.Model.ChildProjects.Add(childRef);
+
+        // Rebuild the child projects group in the tree
+        RefreshChildProjectsGroup(parent);
+
+        parent.HasUnsavedChanges = true;
+        NotifyStateChanged();
+        return (true, $"Added child project: {Path.GetFileNameWithoutExtension(absChild)}");
+    }
+
+    /// <summary>
+    /// Creates a new blank child project in the specified directory and links it to the parent.
+    /// </summary>
+    public (bool success, string message) CreateNewChildProject(ProjectNode parent, string name, string directory)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return (false, "Project name cannot be empty.");
+
+        if (!Directory.Exists(directory))
+        {
+            try { Directory.CreateDirectory(directory); }
+            catch (Exception ex) { return (false, $"Cannot create directory: {ex.Message}"); }
+        }
+
+        var fileName = name.Trim().Replace(" ", "_") + ".json";
+        var filePath = Path.GetFullPath(Path.Combine(directory, fileName));
+
+        if (File.Exists(filePath))
+            return (false, $"A file named '{fileName}' already exists in that directory.");
+
+        var newModel = new NodeModel
+        {
+            Folder = new Folder { Name = "Root" },
+            Server = new ServerSettings()
+        };
+
+        try
+        {
+            var options = new System.Text.Json.JsonSerializerOptions { WriteIndented = true };
+            var json = System.Text.Json.JsonSerializer.Serialize(newModel, options);
+            File.WriteAllText(filePath, json);
+        }
+        catch (Exception ex)
+        {
+            return (false, $"Cannot write project file: {ex.Message}");
+        }
+
+        return AddExistingChildProject(parent, filePath);
+    }
+
+    /// <summary>
+    /// Removes a child project node from its parent and updates the parent model.
+    /// </summary>
+    public void RemoveChildProject(ProjectNode parent, ProjectNode childNode)
+    {
+        if (childNode.ChildRef != null)
+            parent.Model.ChildProjects.Remove(childNode.ChildRef);
+
+        RefreshChildProjectsGroup(parent);
+        parent.HasUnsavedChanges = true;
+        NotifyStateChanged();
+    }
+
+    /// <summary>
+    /// Rebuilds the ChildProjectsGroupNode under the given parent project from its model.
+    /// </summary>
+    private void RefreshChildProjectsGroup(ProjectNode parent)
+    {
+        var groupNode = parent.Children.OfType<ChildProjectsGroupNode>().FirstOrDefault();
+        if (groupNode == null) return;
+
+        groupNode.Children.Clear();
+        foreach (var childRef in parent.Model.ChildProjects)
+        {
+            var childNode = LoadChildProjectNode(childRef, parent);
+            if (childNode != null)
+            {
+                childNode.Parent = groupNode;
+                groupNode.Children.Add(childNode);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Collects all child project nodes recursively from a parent project node's ChildProjectsGroupNode.
+    /// </summary>
+    public static IEnumerable<ProjectNode> GetAllChildProjects(ProjectNode parent)
+    {
+        var group = parent.Children.OfType<ChildProjectsGroupNode>().FirstOrDefault();
+        if (group == null) yield break;
+        foreach (var child in group.Children.OfType<ProjectNode>())
+        {
+            yield return child;
+            foreach (var nested in GetAllChildProjects(child))
+                yield return nested;
+        }
     }
 
     /// <summary>
@@ -791,6 +997,10 @@ public class NodeEditorService
                 ResourceFileManager.ReattachResources(_rootModel, snapshot);
             }
 
+            // Save any modified child projects
+            if (ActiveProject != null)
+                SaveChildProjects(ActiveProject);
+
             HasUnsavedChanges = false;
             StopAutoSave(deleteRecovery: true);
             StartAutoSave();
@@ -801,6 +1011,115 @@ public class NodeEditorService
         {
             return (false, $"Error saving: {ex.Message}");
         }
+    }
+
+    /// <summary>Saves all modified child projects recursively under the given parent.</summary>
+    private static void SaveChildProjects(ProjectNode parent)
+    {
+        foreach (var child in GetAllChildProjects(parent))
+        {
+            if (string.IsNullOrEmpty(child.FilePath)) continue;
+            try
+            {
+                // Sync the child's model from its tree nodes before saving
+                RebuildModelForProject(child);
+
+                ResourceFileManager.SaveExternalResources(child.Model, child.FilePath);
+                var snapshot = ResourceFileManager.DetachResources(child.Model);
+                try
+                {
+                    var options = new JsonSerializerOptions { WriteIndented = true };
+                    var json = JsonSerializer.Serialize(child.Model, options);
+                    File.WriteAllText(child.FilePath, json);
+                }
+                finally
+                {
+                    ResourceFileManager.ReattachResources(child.Model, snapshot);
+                }
+                child.HasUnsavedChanges = false;
+            }
+            catch { /* non-fatal — child save failure should not block parent */ }
+        }
+    }
+
+    /// <summary>Rebuilds a project's model from its tree node children (same logic as RebuildModelStructure but for any ProjectNode).</summary>
+    private static void RebuildModelForProject(ProjectNode proj)
+    {
+        var model = proj.Model;
+        foreach (var root in proj.Children)
+        {
+            if (root is VariableGroupNode vgNode)
+            {
+                var fNode = vgNode.Children.OfType<FolderNode>().FirstOrDefault();
+                if (fNode != null) { model.Folder = fNode.Folder; RebuildFolderModel(fNode); }
+            }
+            else if (root is FolderNode fNode2) { model.Folder = fNode2.Folder; RebuildFolderModel(fNode2); }
+            else if (root is ScriptGroupNode sgNode)
+            {
+                model.Scripts.Clear();
+                CollectResourceItems<ScriptNode, ScriptConfig>(sgNode, "", n => { n.SyncName(); return n.Script; },
+                    (item, group) => item.Group = group, model.Scripts);
+            }
+            else if (root is PlcGroupNode pgNode)
+            {
+                model.PlcPrograms.Clear();
+                CollectResourceItems<PlcProgramNode, PlcProgramConfig>(pgNode, "", n => { n.SyncName(); return n.PlcProgram; },
+                    (item, group) => item.Group = group, model.PlcPrograms);
+            }
+            else if (root is ScreenGroupNode scrNode)
+            {
+                model.Screens.Clear();
+                CollectResourceItems<ScreenNode, ScreenConfig>(scrNode, "", n => { n.SyncName(); return n.Screen; },
+                    (item, group) => item.Group = group, model.Screens);
+            }
+            else if (root is RecipeGroupNode rgNode) { model.Recipes.Clear(); foreach (var c in rgNode.Children) { if (c is RecipeNode rn) { rn.SyncName(); model.Recipes.Add(rn.Recipe); } } }
+            else if (root is SchedulerGroupNode sng) { model.Schedulers.Clear(); foreach (var c in sng.Children) { if (c is SchedulerNode sn) { sn.SyncName(); model.Schedulers.Add(sn.Scheduler); } } }
+            else if (root is ReportGroupNode rpg) { model.Reports.Clear(); foreach (var c in rpg.Children) { if (c is ReportNode rn) { rn.SyncName(); model.Reports.Add(rn.Report); } } }
+            else if (root is CalculatedGroupNode cg) { model.CalculatedVariables.Clear(); foreach (var c in cg.Children) { if (c is CalculatedNode cn) { cn.SyncName(); model.CalculatedVariables.Add(cn.Config); } } }
+            else if (root is AssetGroupNode ag) { model.Assets.Clear(); foreach (var c in ag.Children) { if (c is AssetNode an) { an.SyncName(); model.Assets.Add(an.Asset); } } }
+            else if (root is BatchGroupNode bg) { model.BatchSequences.Clear(); foreach (var c in bg.Children) { if (c is BatchNode bn) { bn.SyncName(); model.BatchSequences.Add(bn.Batch); } } }
+            else if (root is EventGroupNode eg) { model.Events.Clear(); foreach (var c in eg.Children) { if (c is EventNode en) { en.SyncName(); model.Events.Add(en.Event); } } }
+            else if (root is AliasMapGroupNode amg) { model.AliasMaps.Clear(); foreach (var c in amg.Children) { if (c is AliasMapNode mn) { mn.SyncName(); model.AliasMaps.Add(mn.AliasMap); } } }
+            else if (root is AutomationRuleGroupNode arg) { model.AutomationRules.Clear(); foreach (var c in arg.Children) { if (c is AutomationRuleNode rn) { rn.SyncName(); model.AutomationRules.Add(rn.Rule); } } }
+            else if (root is UserGroupListNode ugln)
+            {
+                model.UserGroups.Clear(); model.Users.Clear();
+                foreach (var c in ugln.Children)
+                {
+                    if (c is UserGroupNode gn) { gn.SyncName(); model.UserGroups.Add(gn.UserGroup); foreach (var u in gn.Children.OfType<UserNode>()) { u.SyncName(); model.Users.Add(u.User); } }
+                    else if (c is UserNode un) { un.SyncName(); model.Users.Add(un.User); }
+                }
+            }
+        }
+    }
+
+    private static void RebuildFolderModel(FolderNode fNode)
+    {
+        fNode.SyncName(); fNode.Folder.Folders.Clear(); fNode.Folder.Variables.Clear();
+        foreach (var child in fNode.Children)
+        {
+            if (child is FolderNode cf) { fNode.Folder.Folders.Add(cf.Folder); RebuildFolderModel(cf); }
+            else if (child is VariableNode vn) { vn.SyncName(); fNode.Folder.Variables.Add(vn.Variable); }
+        }
+    }
+
+    /// <summary>
+    /// Walks up the tree to find the topmost (root-level) ProjectNode ancestor.
+    /// Returns null if the node is not under any project.
+    /// </summary>
+    public static ProjectNode? FindAncestorTopLevelProject(TreeNode? node)
+    {
+        ProjectNode? topmost = null;
+        var current = node;
+        while (current != null)
+        {
+            if (current is ProjectNode pn) topmost = pn;
+            current = current.Parent;
+        }
+        // Return the topmost found; if it's a child project, keep walking up via ParentProject
+        if (topmost is { IsChildProject: true } childProj)
+            return childProj.ParentProject ?? topmost;
+        return topmost;
     }
 
     public (bool success, string message) SaveAs(string path)
