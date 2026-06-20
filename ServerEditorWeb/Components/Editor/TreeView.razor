@@ -5,9 +5,14 @@
 @implements IDisposable
 
 <div class="tree-view">
-    <TreeFilterBar FilterText="@_filterText" FilterTextChanged="OnFilterChanged"
-                   RecentFilters="_recentTreeFilters" RecentFiltersChanged="v => _recentTreeFilters = v"
-                   Placeholder="Filter tree..." />
+    <div class="tree-toolbar">
+        <TreeFilterBar FilterText="@_filterText" FilterTextChanged="OnFilterChanged"
+                       RecentFilters="_recentTreeFilters" RecentFiltersChanged="v => _recentTreeFilters = v"
+                       Placeholder="Filter tree..." />
+        @* QW-18: Collapse / Expand All *@
+        <button class="tree-toolbar-btn" title="Expand All" @onclick="ExpandAll">▼▼</button>
+        <button class="tree-toolbar-btn" title="Collapse All" @onclick="CollapseAll">▶▶</button>
+    </div>
     @if (LiveTags.IsConnected)
     {
         <div class="tree-live-bar">
@@ -31,7 +36,7 @@
                 OnAddPlcProgram="OnAddPlcProgram" OnAddRecipe="OnAddRecipe" OnAddScheduler="OnAddScheduler" OnAddReport="OnAddReport"
                 OnAddCalculated="OnAddCalculated" OnAddAsset="OnAddAsset" OnAddBatch="OnAddBatch" OnAddEvent="OnAddEvent" OnAddAliasMap="OnAddAliasMap" OnAddAutomationRule="OnAddAutomationRule" OnAddScreen="OnAddScreen" OnAddUserGroup="OnAddUserGroup" OnAddUser="OnAddUser"
                 OnRename="OnRename" OnDelete="OnDelete"
-                OnCopy="OnCopy" OnPaste="OnPaste"
+                OnCopy="OnCopy" OnDuplicate="OnDuplicate" OnPaste="OnPaste"
                 OnSetActiveProject="OnSetActiveProject" OnCloseProject="OnCloseProject"
                 OnFindReferences="OnFindReferences"
                 OnAddToWatch="OnAddToWatch"
@@ -69,6 +74,7 @@
     [Parameter] public EventCallback<TreeNode> OnRename { get; set; }
     [Parameter] public EventCallback<TreeNode> OnDelete { get; set; }
     [Parameter] public EventCallback<TreeNode> OnCopy { get; set; }
+    [Parameter] public EventCallback<TreeNode> OnDuplicate { get; set; }
     [Parameter] public EventCallback<TreeNode> OnPaste { get; set; }
     [Parameter] public EventCallback<TreeNode> OnSetActiveProject { get; set; }
     [Parameter] public EventCallback<TreeNode> OnCloseProject { get; set; }
@@ -115,6 +121,18 @@
         _liveValues.TryGetValue(path, out var v) ? v : null;
 
     private void OnFilterChanged(string text) { _filterText = text; }
+
+    // QW-18: Collapse / Expand All
+    private void ExpandAll()  => SetExpanded(Nodes, true);
+    private void CollapseAll() => SetExpanded(Nodes, false);
+    private static void SetExpanded(IEnumerable<TreeNode> nodes, bool expanded)
+    {
+        foreach (var n in nodes)
+        {
+            if (n.Children.Count > 0) n.IsExpanded = expanded;
+            SetExpanded(n.Children, expanded);
+        }
+    }
 
     private static bool NodeMatchesFilter(TreeNode node, string filter)
     {

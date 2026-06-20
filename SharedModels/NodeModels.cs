@@ -93,6 +93,12 @@ namespace SharedModels
         /// <summary>Optional anomaly detection configuration for this variable. Requires DataLogging to be enabled.</summary>
         public AnomalyDetectionConfig? AnomalyDetection { get; set; }
 
+        /// <summary>QW-23: Per-variable driver polling interval override in milliseconds. Null = use driver default.</summary>
+        public int? PollIntervalMs { get; set; }
+
+        /// <summary>QW-23: Description for display in documentation and tooltips.</summary>
+        public string Description { get; set; } = "";
+
         [JsonExtensionData]
         public Dictionary<string, JsonElement>? DriverConfigs { get; set; }
     }

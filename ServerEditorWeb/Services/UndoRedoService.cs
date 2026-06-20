@@ -105,6 +105,11 @@ public class UndoRedoService
     public int UndoCount => _undoStack.Count;
     public int RedoCount => _redoStack.Count;
 
+    /// <summary>QW-20: Descriptions of all queued undo actions, most recent first.</summary>
+    public IEnumerable<string> UndoHistory => _undoStack.Select(a => a.Description ?? "");
+    /// <summary>QW-20: Descriptions of all queued redo actions, most recent first.</summary>
+    public IEnumerable<string> RedoHistory => _redoStack.Select(a => a.Description ?? "");
+
     public event Action? StateChanged;
 
     /// <summary>

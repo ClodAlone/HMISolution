@@ -51,6 +51,13 @@
                     {
                         <span class="badge bg-info">Stepping</span>
                     }
+                    @* QW-13: Execution time badge *@
+                    @if (_lastCycleMs > 0)
+                    {
+                        <span class="badge bg-secondary" title="Last / Average cycle time">
+                            ⏱ @(_lastCycleMs.ToString("F1"))ms  avg @(_avgCycleMs.ToString("F1"))ms  #@_cycleCount
+                        </span>
+                    }
                 }
             </div>
         </div>
@@ -107,6 +114,34 @@
                               OnDebugSessionChanged="OnDebugSessionUpdated"
                               OnExecutionLineChanged="OnExecutionLineChanged" />
         </div>
+
+        @* QW-28: Script output / console log *@
+        <div class="script-output-bar">
+            <button class="script-output-toggle" @onclick="() => _showScriptOutput = !_showScriptOutput"
+                    title="Toggle script output log">
+                📋 Output @(_scriptOutput.Count > 0 ? $"({_scriptOutput.Count})" : "") @(_showScriptOutput ? "▲" : "▼")
+            </button>
+            @if (_showScriptOutput)
+            {
+                <button class="script-output-clear btn btn-xs btn-outline-secondary" @onclick="() => _scriptOutput.Clear()">Clear</button>
+            }
+        </div>
+        @if (_showScriptOutput)
+        {
+            <div class="script-output-pane">
+                @if (_scriptOutput.Count == 0)
+                {
+                    <span class="text-muted small">No output yet. Script Log() calls and errors appear here while the server is running.</span>
+                }
+                else
+                {
+                    @foreach (var line in Enumerable.Reverse(_scriptOutput).Take(200))
+                    {
+                        <div class="script-output-line @(line.Contains("error", StringComparison.OrdinalIgnoreCase) ? "text-danger" : "")">@line</div>
+                    }
+                }
+            </div>
+        }
     }
 </div>
 
@@ -156,6 +191,38 @@
         max-height: 100px;
         overflow-y: auto;
     }
+    /* QW-28: Script output pane */
+    .script-output-bar {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 2px 8px;
+        border-top: 1px solid var(--bs-border-color);
+        background: #f8f9fa;
+        flex-shrink: 0;
+        font-size: 12px;
+    }
+    .script-output-toggle {
+        border: none;
+        background: transparent;
+        cursor: pointer;
+        font-size: 12px;
+        padding: 2px 6px;
+        border-radius: 3px;
+    }
+    .script-output-toggle:hover { background: rgba(0,0,0,.07); }
+    .script-output-clear { font-size: 11px; padding: 1px 6px; }
+    .script-output-pane {
+        max-height: 160px;
+        overflow-y: auto;
+        background: #1e1e1e;
+        color: #d4d4d4;
+        font-family: monospace;
+        font-size: 11px;
+        padding: 6px 10px;
+        flex-shrink: 0;
+    }
+    .script-output-line { padding: 1px 0; white-space: pre-wrap; word-break: break-all; }
 </style>
 
 @code {
@@ -196,6 +263,15 @@
     private bool _showReferences;
     private bool _showAddReference;
     private string _newReferencePath = "";
+
+    // QW-13: Execution time stats
+    private double _lastCycleMs;
+    private double _avgCycleMs;
+    private long _cycleCount;
+
+    // QW-28: Script output log
+    private readonly List<string> _scriptOutput = new();
+    private bool _showScriptOutput;
 
     private ScriptConfig? GetScript()
     {
@@ -372,6 +448,8 @@
     protected override void OnInitialized()
     {
         ServerProcess.StateChanged += OnServerStateChanged;
+        _diagTimer = new System.Threading.Timer(_ => InvokeAsync(PollExecStatsAsync),
+            null, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(2));
     }
 
     private async void OnServerStateChanged()
@@ -476,8 +554,42 @@
         }
     }
 
+    // QW-13: Poll execution stats from server diagnostics
+    private System.Threading.Timer? _diagTimer;
+
+    private async Task PollExecStatsAsync()
+    {
+        if (!ServerProcess.IsServerRunning) return;
+        var script = GetScript();
+        if (script == null) return;
+        try
+        {
+            var diag = await DebugService.PollDiagnosticsAsync();
+            if (diag?.Subsystems == null) return;
+            var sub = diag.Subsystems.FirstOrDefault(s => s.Category == "Script" && s.Name == script.Name);
+            if (sub == null) return;
+            _lastCycleMs = sub.LastCycleMs;
+            _avgCycleMs  = sub.AvgCycleMs;
+            _cycleCount  = sub.CycleCount;
+
+            // QW-28: collect any script console output from diagnostics
+            if (!string.IsNullOrEmpty(sub.LastError))
+            {
+                var entry = $"[{DateTime.Now:HH:mm:ss}] {sub.LastError}";
+                if (_scriptOutput.Count == 0 || _scriptOutput[^1] != entry)
+                {
+                    _scriptOutput.Add(entry);
+                    if (_scriptOutput.Count > 500) _scriptOutput.RemoveAt(0);
+                }
+            }
+            StateHasChanged();
+        }
+        catch { }
+    }
+
     public void Dispose()
     {
         ServerProcess.StateChanged -= OnServerStateChanged;
+        _diagTimer?.Dispose();
     }
 }

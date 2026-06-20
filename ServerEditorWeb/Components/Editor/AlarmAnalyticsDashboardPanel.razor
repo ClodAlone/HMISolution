@@ -6,6 +6,16 @@
     <div class="d-flex justify-content-between align-items-center mb-2">
         <h6 class="mb-0">📊 Alarm Analytics</h6>
         <div class="d-flex gap-1 align-items-center">
+            @* QW-17: search + window selector *@
+            <input type="search" class="form-control form-control-sm" style="width:160px; font-size:11px;"
+                   placeholder="🔍 Search alarms…" @bind="_alarmSearch" @bind:event="oninput" title="Filter by variable path or message" />
+            <select class="form-select form-select-sm" style="width:90px; font-size:11px;" @bind="_alarmWindow">
+                <option value="60">1 hour</option>
+                <option value="360">6 hours</option>
+                <option value="1440">24 hours</option>
+                <option value="10080">7 days</option>
+                <option value="43200">30 days</option>
+            </select>
             @if (_snapshot != null)
             {
                 <span class="badge bg-secondary" style="font-size: 9px;">Window: @(_snapshot.WindowMinutes) min</span>
@@ -70,12 +80,13 @@
 
         @* ── Top-10 most frequent alarms ── *@
         <h6 class="mb-1" style="font-size: 12px;">🔝 Top-10 Most Frequent Alarms</h6>
-        @if (_snapshot.TopAlarms.Count == 0)
+        @if (FilteredAlarms.Count == 0)
         {
-            <div class="text-muted small text-center py-2">No alarm activations in the current window.</div>
+            <div class="text-muted small text-center py-2">@(string.IsNullOrWhiteSpace(_alarmSearch) ? "No alarm activations in the current window." : "No alarms match your search.")</div>
         }
         else
         {
+            var filteredAlarms2 = FilteredAlarms;
             <div class="table-responsive" style="max-height: 320px; overflow-y: auto;">
                 <table class="table table-sm table-hover mb-0" style="font-size: 11px;">
                     <thead class="table-light">
@@ -89,8 +100,8 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @{ int rank = 0; int maxCount = _snapshot.TopAlarms.Max(a => a.ActivationCount); }
-                        @foreach (var alarm in _snapshot.TopAlarms)
+                        @{ int rank = 0; int maxCount = filteredAlarms2.Max(a => a.ActivationCount); }
+                        @foreach (var alarm in filteredAlarms2)
                         {
                             rank++;
                             double pct = maxCount > 0 ? (double)alarm.ActivationCount / maxCount * 100 : 0;
@@ -164,6 +175,16 @@
     private bool _loading;
     private string? _error;
     private Timer? _refreshTimer;
+    private string _alarmSearch = "";  // QW-17
+    private int _alarmWindow = 1440;   // QW-17 default: 24h
+
+    private List<AlarmFrequencyEntry> FilteredAlarms =>
+        _snapshot == null ? [] :
+        string.IsNullOrWhiteSpace(_alarmSearch)
+            ? _snapshot.TopAlarms
+            : _snapshot.TopAlarms.Where(a =>
+                a.VariablePath.Contains(_alarmSearch, StringComparison.OrdinalIgnoreCase) ||
+                a.Message.Contains(_alarmSearch, StringComparison.OrdinalIgnoreCase)).ToList();
 
     protected override async Task OnInitializedAsync()
     {

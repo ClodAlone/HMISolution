@@ -106,6 +106,29 @@ Wireshark scoped to the project's configured drivers.
 - Instant diagnosis of polling failures, bad addresses, or malformed responses
 - Builds trust with industrial engineers used to protocol analysers
 
+**Implementation status: ✅ Implemented**
+
+The panel is available in the bottom dock as **"🦈 Protocol Traffic Monitor"**.
+
+**Architecture:**
+- `ProtocolTrafficService` tails the same Serilog log file as the Server Logs panel, classifying
+  each structured log line by protocol keyword (Modbus, MQTT, OPC UA, REST, S7, TCP, EtherNet/IP,
+  KNX) and by direction (↑ Tx / ↓ Rx / • Internal). A ring buffer of 5 000 frames is maintained.
+- `ProtocolTrafficMonitorPanel.razor` renders the frame table with:
+  - Per-protocol colour-coded badges (red = Modbus, purple = MQTT, blue = OPC UA, green = REST …)
+  - Protocol filter chips and direction (Tx / Rx / Internal) toggles
+  - Free-text search across protocol, source, and message fields
+  - ⏸ Pause / ▶ Resume without losing buffered frames
+  - 🗑 Clear and 📥 CSV export to the project's Logs directory
+  - Tail-mode auto-scroll toggle
+  - Click-to-expand raw log line detail pane at the bottom
+
+**Possible future enhancements:**
+- Server-side binary frame capture (actual Modbus ADU bytes via NModbus hooks)
+- MQTT message payload preview with JSON/hex formatting
+- Timeline heat-map showing polling rate per driver
+- Per-variable trace filter to watch a single tag's traffic
+
 ---
 
 ### 8. Integrated REST API Tester
@@ -194,34 +217,34 @@ This is a mandatory deliverable in regulated industries (pharmaceutical, oil & g
 |---|---|---|---|
 | QW-1 | **Tab history navigation (← →)** | Editor UX | Jump back to previously active dock tabs like browser history |
 | QW-2 | **Split editor panes** | Screen / Script Editors | Show two scripts or screens side-by-side in the center zone |
-| QW-3 | **Pinned / favourite variables** | Project Tree | Star variables to a quick-access list at the top of the tree |
-| QW-4 | **Diff view for scripts in Git panel** | Git Integration | Side-by-side diff of script files within `GitPanel` |
-| QW-5 | **Screen thumbnail strip** | Screen Editor | Horizontal scrollable miniature preview of all project screens |
-| QW-6 | **Live filter in project tree** | Project Tree | Filter tree nodes to matching variables as you type |
-| QW-7 | **Export / Import variable list as Excel** | Variable Editor | Common engineer workflow for bulk tag configuration via spreadsheet |
-| QW-8 | **Zoom / Pan on screen canvas** | Screen Editor | Ctrl+scroll or pinch to zoom; middle-mouse drag to pan the design canvas |
-| QW-9 | **Recent projects list** | Editor UX | Quick-open dropdown of last N project files on the home / start panel |
-| QW-10 | **Variable rename with propagation** | Project Tree | Rename a tag and auto-update all referencing scripts, alarms, and screens in one pass |
-| QW-11 | **Column chooser for grids** | Alarm / Variable Editors | Show / hide columns in `AlarmListPanel` and variable grids to reduce visual noise |
-| QW-12 | **Multi-select delete in variable editor** | Variable Editor | Checkbox-select multiple rows and delete or move them in a single action |
-| QW-13 | **Script execution time badge** | Script Editor | Display last run duration and cycle count next to each script name in the list panel |
-| QW-14 | **Tag description tooltip** | Project Tree | Show full description, engineering unit, range, and driver address on hover over a tree node |
-| QW-15 | **Connection status badge in nav bar** | Runtime Integration | OPC UA server online / offline indicator with latency reading in the top navigation bar |
-| QW-16 | **Auto-save / crash recovery** | Project Management | Write a periodic recovery snapshot; offer restore on next open after unclean exit |
-| QW-17 | **Search in alarm history** | Alarm Management | Full-text search with date-range picker across the historical log in `AlarmHistoryPanel` |
-| QW-18 | **Collapse / Expand all in project tree** | Project Tree | Single toolbar button to collapse or expand the entire tree in one click |
-| QW-19 | **Copy screen as PNG** | Screen Editor | Export the current screen canvas to clipboard or a file as a PNG image with one click |
-| QW-20 | **Undo history panel** | Editor UX | Scrollable visual list of recent edit operations with click-to-jump for multi-level undo |
-| QW-21 | **Variable unit quick-convert** | Variable Editor | Display raw values in alternate engineering units inline (°C ↔ °F, bar ↔ psi, m³/h ↔ GPM) |
-| QW-22 | **Alarm shelving from alarm list** | Alarm Management | Right-click an active alarm to shelve it for N minutes without leaving `AlarmListPanel` |
-| QW-23 | **Driver polling interval override** | Driver Config | Per-variable override of the driver scan rate without editing the global driver config |
-| QW-24 | **Duplicate screen / script** | Screen / Script Editors | Right-click to clone an existing screen or script as a starting point for a new one |
-| QW-25 | **Variable bulk enable / disable logging** | Variable Editor | Multi-select rows and toggle historian logging on or off in a single action |
-| QW-26 | **Keyboard shortcut cheatsheet overlay** | Editor UX | Press `?` anywhere in the editor to reveal a full hotkey reference card as an overlay |
-| QW-27 | **Inline alarm limit editing in project tree** | Project Tree | Click a variable's alarm icon to edit High / Low / HiHi / LoLo thresholds in a popover |
-| QW-28 | **Script output / log viewer** | Script Editor | Dedicated scrollable pane showing `Log()` and `Console.Write` output from the last script run |
-| QW-29 | **Driver connection test button** | Driver Config | One-click "Test Connection" in the driver editor that returns a pass/fail with round-trip time |
-| QW-30 | **Dark / light theme toggle** | Editor UX | Persist a dark or light CSS theme preference alongside the dock layout in `DockLayoutService` |
+| QW-3 | **Pinned / favourite variables** | Project Tree | Star variables to a quick-access list at the top of the tree — ✅ Implemented |
+| QW-4 | **Diff view for scripts in Git panel** | Git Integration | Side-by-side diff of script files within `GitPanel` — ✅ Implemented |
+| QW-5 | **Screen thumbnail strip** | Screen Editor | Horizontal scrollable miniature preview of all project screens — ✅ Implemented |
+| QW-6 | **Live filter in project tree** | Project Tree | Filter tree nodes to matching variables as you type — ✅ Implemented |
+| QW-7 | **Export / Import variable list as Excel** | Variable Editor | Common engineer workflow for bulk tag configuration via spreadsheet — ✅ Implemented (CSV) |
+| QW-8 | **Zoom / Pan on screen canvas** | Screen Editor | Ctrl+scroll or pinch to zoom; middle-mouse drag to pan the design canvas — ✅ Implemented |
+| QW-9 | **Recent projects list** | Editor UX | Quick-open dropdown of last N project files on the home / start panel — ✅ Implemented |
+| QW-10 | **Variable rename with propagation** | Project Tree | Rename a tag and auto-update all referencing scripts, alarms, and screens in one pass — ✅ Implemented |
+| QW-11 | **Column chooser for grids** | Alarm / Variable Editors | Show / hide columns in variable grids to reduce visual noise — ✅ Implemented |
+| QW-12 | **Multi-select delete in variable editor** | Variable Editor | Checkbox-select multiple rows and delete or move them in a single action — ✅ Implemented |
+| QW-13 | **Script execution time badge** | Script Editor | Display last run duration and cycle count in script toolbar — ✅ Implemented |
+| QW-14 | **Tag description tooltip** | Project Tree | Show full description, engineering unit, range, and driver address on hover over a tree node — ✅ Implemented |
+| QW-15 | **Connection status badge in nav bar** | Runtime Integration | OPC UA server online / offline indicator in the top navigation bar — ✅ Implemented |
+| QW-16 | **Auto-save / crash recovery** | Project Management | 60 s recovery snapshot; restore prompt on next open after unclean exit — ✅ Implemented |
+| QW-17 | **Search in alarm history** | Alarm Management | Full-text search + window selector in `AlarmAnalyticsDashboardPanel` — ✅ Implemented |
+| QW-18 | **Collapse / Expand all in project tree** | Project Tree | Single toolbar button to collapse or expand the entire tree in one click — ✅ Implemented |
+| QW-19 | **Copy screen as PNG** | Screen Editor | Export the current screen canvas to clipboard or a file as a PNG image with one click — ✅ Implemented |
+| QW-20 | **Undo history panel** | Editor UX | Caret dropdown on the Undo button showing up to 20 recent actions; click any row to undo to that point — ✅ Implemented |
+| QW-21 | **Variable unit quick-convert** | Variable Editor | Inline badges showing converted values (°C ↔ °F, bar ↔ psi, m³/h ↔ GPM, etc.) — ✅ Implemented |
+| QW-22 | **Alarm shelving from alarm list** | Alarm Management | Right-click an active alarm to shelve it for N minutes (available in `AlarmListWidget` in RuntimeViewer) — ✅ Implemented in RuntimeViewer |
+| QW-23 | **Driver polling interval override** | Driver Config | Per-variable `PollIntervalMs` override in the variable properties panel — ✅ Implemented |
+| QW-24 | **Duplicate screen / script** | Screen / Script Editors | Right-click to clone a screen, script, or PLC program as a starting point for a new one — ✅ Implemented |
+| QW-25 | **Variable bulk enable / disable logging** | Variable Editor | Multi-select rows and toggle historian logging on or off in a single action — ✅ Implemented |
+| QW-26 | **Keyboard shortcut cheatsheet overlay** | Editor UX | Press `?` or Help → Keyboard Shortcuts to reveal a full hotkey reference card — ✅ Implemented |
+| QW-27 | **Inline alarm limit editing** | Variable Editor | HH/High/Low/LL quick-edit inputs at the top of the variable properties panel — ✅ Implemented |
+| QW-28 | **Script output / log viewer** | Script Editor | Collapsible console pane at the bottom of the script editor showing `Log()` output and errors — ✅ Implemented |
+| QW-29 | **Driver connection test button** | Driver Config | One-click "Test Connection" in the driver editor that returns a pass/fail with round-trip time — ✅ Implemented |
+| QW-30 | **Dark / light theme toggle** | Editor UX | ☀️/🌙 button in the status bar; also accessible from Settings → Theme menu — ✅ Implemented |
 
 ---
 

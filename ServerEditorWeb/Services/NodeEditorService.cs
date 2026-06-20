@@ -68,6 +68,95 @@ public class NodeEditorService
     public void SetUndoService(UndoRedoService undoRedo) => _undoRedo = undoRedo;
 
     public event Action? StateChanged;
+
+    // ── QW-16: Auto-save / crash recovery ───────────────────────────────────
+    private System.Threading.Timer? _autoSaveTimer;
+    private const int AutoSaveIntervalMs = 60_000; // every 60 s
+    private static string RecoveryPath(string projectPath) => projectPath + ".recovery";
+
+    /// <summary>
+    /// Starts (or restarts) the auto-save timer for the active project.
+    /// Call this whenever a project is opened or activated.
+    /// </summary>
+    public void StartAutoSave()
+    {
+        _autoSaveTimer?.Dispose();
+        _autoSaveTimer = new System.Threading.Timer(_ => WriteRecovery(),
+            null, AutoSaveIntervalMs, AutoSaveIntervalMs);
+    }
+
+    /// <summary>
+    /// Stops the auto-save timer and removes the recovery file (called on clean save).
+    /// </summary>
+    public void StopAutoSave(bool deleteRecovery = true)
+    {
+        _autoSaveTimer?.Dispose();
+        _autoSaveTimer = null;
+        if (deleteRecovery && !string.IsNullOrEmpty(_nodesPath))
+        {
+            var rec = RecoveryPath(_nodesPath);
+            if (File.Exists(rec)) try { File.Delete(rec); } catch { }
+        }
+    }
+
+    /// <summary>
+    /// Writes a recovery snapshot next to the project file (.json.recovery).
+    /// </summary>
+    public void WriteRecovery()
+    {
+        if (_rootModel == null || string.IsNullOrEmpty(_nodesPath) || !HasUnsavedChanges) return;
+        try
+        {
+            RebuildModelStructure();
+            var snapshot = ResourceFileManager.DetachResources(_rootModel);
+            try
+            {
+                var options = new JsonSerializerOptions { WriteIndented = true };
+                var json = JsonSerializer.Serialize(_rootModel, options);
+                File.WriteAllText(RecoveryPath(_nodesPath), json);
+            }
+            finally
+            {
+                ResourceFileManager.ReattachResources(_rootModel, snapshot);
+            }
+        }
+        catch { }
+    }
+
+    /// <summary>
+    /// Returns the recovery file path if an unclean recovery snapshot exists for the given project file.
+    /// </summary>
+    public static string? FindRecoveryFile(string projectPath)
+    {
+        var rec = RecoveryPath(projectPath);
+        if (!File.Exists(rec)) return null;
+        // Only offer recovery if the snapshot is newer than the project file
+        var recTime = File.GetLastWriteTimeUtc(rec);
+        var projTime = File.Exists(projectPath) ? File.GetLastWriteTimeUtc(projectPath) : DateTime.MinValue;
+        return recTime > projTime ? rec : null;
+    }
+
+    /// <summary>
+    /// Restores the project from its recovery file, then removes the snapshot.
+    /// </summary>
+    public (bool success, string message) RestoreFromRecovery(string projectPath)
+    {
+        var rec = RecoveryPath(projectPath);
+        if (!File.Exists(rec))
+            return (false, "No recovery file found.");
+        try
+        {
+            File.Copy(rec, projectPath, overwrite: true);
+            File.Delete(rec);
+            var result = OpenProject(projectPath);
+            return result.success ? (true, "Project restored from recovery snapshot.") : result;
+        }
+        catch (Exception ex)
+        {
+            return (false, $"Restore failed: {ex.Message}");
+        }
+    }
+
     public event Action? UserSymbolGroupsChanged;
     public void NotifyUserSymbolGroupsChanged() => UserSymbolGroupsChanged?.Invoke();
 
@@ -332,6 +421,7 @@ public class NodeEditorService
             while (RecentFiles.Count > 10) RecentFiles.RemoveAt(RecentFiles.Count - 1);
             SaveSettings();
 
+            StartAutoSave();
             return (true, $"Loaded {Path.GetFileName(path)}");
         }
         catch (Exception ex)
@@ -702,6 +792,8 @@ public class NodeEditorService
             }
 
             HasUnsavedChanges = false;
+            StopAutoSave(deleteRecovery: true);
+            StartAutoSave();
             NotifyStateChanged();
             return (true, $"Saved to {_nodesPath}");
         }
@@ -854,6 +946,78 @@ public class NodeEditorService
             HasUnsavedChanges = true;
             NotifyStateChanged();
         }
+    }
+
+    // ── QW-24: Duplicate screen / script ────────────────────────────────────
+    public void DuplicateNode(TreeNode node)
+    {
+        TreeNode? clone = null;
+        var parent = node.Parent;
+        if (parent == null) return;
+
+        if (node is ScriptNode sn)
+        {
+            var orig = sn.Script;
+            var copy = new ScriptConfig
+            {
+                Name = UniqueName(parent, orig.Name + " Copy"),
+                Language = orig.Language,
+                Code = orig.Code,
+                IntervalMs = orig.IntervalMs,
+                Enabled = orig.Enabled,
+                Group = orig.Group,
+                References = new List<string>(orig.References),
+                Breakpoints = new List<int>(orig.Breakpoints ?? [])
+            };
+            clone = new ScriptNode(copy) { Parent = parent };
+        }
+        else if (node is ScreenNode scn)
+        {
+            var orig = scn.Screen;
+            var options = new JsonSerializerOptions { WriteIndented = false };
+            var json = JsonSerializer.Serialize(orig, options);
+            var copy = JsonSerializer.Deserialize<ScreenConfig>(json, options);
+            if (copy == null) return;
+            copy.Name = UniqueName(parent, orig.Name + " Copy");
+            clone = new ScreenNode(copy) { Parent = parent };
+        }
+        else if (node is PlcProgramNode pn)
+        {
+            var orig = pn.PlcProgram;
+            var copy = new PlcProgramConfig
+            {
+                Name = UniqueName(parent, orig.Name + " Copy"),
+                Language = orig.Language,
+                Code = orig.Code,
+                IntervalMs = orig.IntervalMs,
+                Enabled = orig.Enabled,
+                Group = orig.Group
+            };
+            clone = new PlcProgramNode(copy) { Parent = parent };
+        }
+
+        if (clone == null) return;
+
+        int idx = parent.Children.IndexOf(node);
+        parent.Children.Insert(idx + 1, clone);
+        parent.IsExpanded = true;
+        SetSingleSelection(clone);
+        HasUnsavedChanges = true;
+        NotifyStateChanged();
+    }
+
+    private static string UniqueName(TreeNode parent, string baseName)
+    {
+        var siblings = new HashSet<string>(
+            parent.Children.Select(c => c.Name ?? ""),
+            StringComparer.OrdinalIgnoreCase);
+        if (!siblings.Contains(baseName)) return baseName;
+        for (int i = 2; i < 1000; i++)
+        {
+            var candidate = $"{baseName} ({i})";
+            if (!siblings.Contains(candidate)) return candidate;
+        }
+        return baseName + " " + Guid.NewGuid().ToString("N")[..6];
     }
 
     public void AddScript()

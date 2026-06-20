@@ -1,0 +1,446 @@
+@using ServerEditorWeb.Services
+@using ServerEditorWeb.Components.Editor
+@implements IDisposable
+
+@inject ProtocolTrafficService Traffic
+@inject NodeEditorService Editor
+
+<div class="ptm-panel">
+
+    @* ─── Toolbar ──────────────────────────────────────────────────────────── *@
+    <div class="ptm-toolbar">
+
+        @* Protocol filter chips *@
+        <div class="ptm-chips">
+            @foreach (var proto in _allProtocols)
+            {
+                var active = _protoFilter.Contains(proto);
+                <button class="ptm-chip @(active ? "ptm-chip-active " + ProtocolCssName(proto) : "")"
+                        @onclick="() => ToggleProto(proto)"
+                        title="@proto.ToString()">
+                    @ProtocolIcon(proto) @proto.ToString()
+                </button>
+            }
+        </div>
+
+        @* Direction chips *@
+        <div class="ptm-chips ms-2">
+            @foreach (var dir in _allDirections)
+            {
+                var active = _dirFilter.Contains(dir);
+                <button class="ptm-chip @(active ? "ptm-chip-active" : "")"
+                        @onclick="() => ToggleDir(dir)"
+                        title="@dir.ToString()">
+                    @DirLabel(dir)
+                </button>
+            }
+        </div>
+
+        <div class="ms-auto d-flex align-items-center gap-2">
+            <input type="text" class="form-control form-control-sm ptm-search"
+                   placeholder="Search frames..."
+                   @bind="_search" @bind:event="oninput" />
+
+            @if (Traffic.IsPaused)
+            {
+                <button class="btn btn-sm btn-success" @onclick="OnResume" title="Resume capture">Resume</button>
+            }
+            else
+            {
+                <button class="btn btn-sm btn-outline-warning" @onclick="OnPause" title="Pause capture">Pause</button>
+            }
+
+            <button class="btn btn-sm btn-outline-secondary" @onclick="OnClear" title="Clear frames">Clear</button>
+            <button class="btn btn-sm btn-outline-secondary" @onclick="OnExportCsv" title="Export CSV">CSV</button>
+
+            <span class="badge bg-secondary">@_displayFrames.Count frames</span>
+
+            <label class="form-check-label d-flex align-items-center gap-1 small" style="cursor:pointer">
+                <input type="checkbox" class="form-check-input" @bind="_autoScroll" /> Tail
+            </label>
+        </div>
+    </div>
+
+    @* ─── Status banner when not running ───────────────────────────────────── *@
+    @if (!Traffic.IsRunning && Editor.RootModel != null)
+    {
+        <div class="ptm-status-banner ptm-banner-warn">
+            Protocol Traffic Monitor is not active. Start the server to begin capture.
+        </div>
+    }
+    else if (Editor.RootModel == null)
+    {
+        <div class="ptm-status-banner">
+            Open a project to enable the Protocol Traffic Monitor.
+        </div>
+    }
+
+    @* ─── Frame table ─────────────────────────────────────────────────────── *@
+    <div class="ptm-frame-list" @ref="_listRef">
+        @if (_displayFrames.Count == 0)
+        {
+            <div class="ptm-empty">
+                <span>No protocol frames captured yet.</span>
+                <span class="small text-muted">Frames appear as the server communicates with drivers.</span>
+            </div>
+        }
+        else
+        {
+            <table class="ptm-table">
+                <thead>
+                    <tr>
+                        <th style="width:45px">#</th>
+                        <th style="width:160px">Time</th>
+                        <th style="width:80px">Protocol</th>
+                        <th style="width:30px">Dir</th>
+                        <th style="width:45px">Level</th>
+                        <th style="width:110px">Source</th>
+                        <th>Message</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var frame in _displayFrames)
+                    {
+                        var sel = (_selected == frame);
+                        <tr class="ptm-row @frame.LevelCss @(sel ? "ptm-row-selected" : "")"
+                            @onclick="() => SelectFrame(frame)">
+                            <td class="ptm-seq">@frame.Sequence</td>
+                            <td class="ptm-ts">@frame.Timestamp.ToString("HH:mm:ss.fff")</td>
+                            <td><span class="ptm-proto-badge @frame.ProtocolCss">@frame.Protocol</span></td>
+                            <td class="ptm-dir" title="@frame.Direction.ToString()">@frame.DirectionIcon</td>
+                            <td><span class="ptm-lvl">@frame.Level</span></td>
+                            <td class="ptm-src" title="@frame.Source">@frame.Source</td>
+                            <td class="ptm-msg" title="@frame.Raw">@frame.Summary</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            <div @ref="_anchorRef" tabindex="-1"></div>
+        }
+    </div>
+
+    @* ─── Detail pane for selected frame ──────────────────────────────────── *@
+    @if (_selected != null)
+    {
+        <div class="ptm-detail">
+            <div class="ptm-detail-header">
+                <span class="ptm-proto-badge @_selected.ProtocolCss">@_selected.Protocol</span>
+                <span class="ms-2 small text-muted">@_selected.Timestamp.ToString("yyyy-MM-dd HH:mm:ss.fff")</span>
+                <span class="ms-2 small">@_selected.Direction.ToString() via @_selected.Source</span>
+                <button class="btn-close btn-close-sm ms-auto" @onclick="CloseDetail"></button>
+            </div>
+            <pre class="ptm-detail-raw">@_selected.Raw</pre>
+        </div>
+    }
+</div>
+
+@code {
+    private static readonly TrafficProtocol[] _allProtocols =
+        (TrafficProtocol[])Enum.GetValues(typeof(TrafficProtocol));
+
+    private static readonly TrafficDirection[] _allDirections =
+        (TrafficDirection[])Enum.GetValues(typeof(TrafficDirection));
+
+    private readonly HashSet<TrafficProtocol> _protoFilter = new(_allProtocols);
+    private readonly HashSet<TrafficDirection> _dirFilter  = new(_allDirections);
+
+    private string _search = "";
+    private bool _autoScroll = true;
+    private TrafficFrame? _selected;
+    private List<TrafficFrame> _displayFrames = new();
+    private int _lastCount;
+
+    private ElementReference _listRef;
+    private ElementReference _anchorRef;
+
+    // ─── Lifecycle ─────────────────────────────────────────────────────────
+
+    protected override void OnInitialized()
+    {
+        Traffic.StateChanged += OnTrafficChanged;
+        Rebuild();
+    }
+
+    private void OnTrafficChanged()
+    {
+        Rebuild();
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void Rebuild()
+    {
+        var all = Traffic.Frames;
+        _displayFrames = all
+            .Where(f => _protoFilter.Contains(f.Protocol)
+                     && _dirFilter.Contains(f.Direction)
+                     && (string.IsNullOrEmpty(_search)
+                         || f.Summary.Contains(_search, StringComparison.OrdinalIgnoreCase)
+                         || f.Source.Contains(_search, StringComparison.OrdinalIgnoreCase)
+                         || f.Protocol.ToString().Contains(_search, StringComparison.OrdinalIgnoreCase)))
+            .ToList();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_autoScroll && _displayFrames.Count != _lastCount && _displayFrames.Count > 0)
+        {
+            _lastCount = _displayFrames.Count;
+            try { await _anchorRef.FocusAsync(); } catch { }
+        }
+    }
+
+    public void Dispose() => Traffic.StateChanged -= OnTrafficChanged;
+
+    // ─── Toolbar actions ────────────────────────────────────────────────────
+
+    private void ToggleProto(TrafficProtocol p)
+    {
+        if (!_protoFilter.Remove(p)) _protoFilter.Add(p);
+        Rebuild();
+    }
+
+    private void ToggleDir(TrafficDirection d)
+    {
+        if (!_dirFilter.Remove(d)) _dirFilter.Add(d);
+        Rebuild();
+    }
+
+    private void OnPause()  { Traffic.Pause();  Rebuild(); }
+    private void OnResume() { Traffic.Resume(); Rebuild(); }
+    private void CloseDetail() => _selected = null;
+
+    private void OnClear()
+    {
+        Traffic.Clear();
+        _selected = null;
+        Rebuild();
+    }
+
+    private void SelectFrame(TrafficFrame f)
+    {
+        _selected = (_selected == f) ? null : f;
+    }
+
+    private void OnExportCsv()
+    {
+        var frames = _displayFrames;
+        if (frames.Count == 0) return;
+        try
+        {
+            var dir = string.IsNullOrEmpty(Editor.CurrentFilePath)
+                ? Path.GetTempPath()
+                : Path.Combine(Path.GetDirectoryName(Path.GetFullPath(Editor.CurrentFilePath))!, "Logs");
+            Directory.CreateDirectory(dir);
+            var ts   = DateTime.Now.ToString("yyyyMMdd-HHmmss");
+            var path = Path.Combine(dir, "traffic-" + ts + ".csv");
+            using var w = new System.IO.StreamWriter(path, false, System.Text.Encoding.UTF8);
+            w.WriteLine("Seq,Timestamp,Protocol,Direction,Level,Source,Message");
+            foreach (var f in frames)
+                w.WriteLine(TrafficCsvHelper.FormatRow(f));
+        }
+        catch { }
+    }
+
+    // ─── Display helpers ────────────────────────────────────────────────────
+
+    private static string ProtocolCssName(TrafficProtocol p) => p switch
+    {
+        TrafficProtocol.Modbus     => "ptm-proto-modbus",
+        TrafficProtocol.MQTT       => "ptm-proto-mqtt",
+        TrafficProtocol.OpcUa      => "ptm-proto-opcua",
+        TrafficProtocol.REST       => "ptm-proto-rest",
+        TrafficProtocol.S7         => "ptm-proto-s7",
+        TrafficProtocol.TCP        => "ptm-proto-tcp",
+        TrafficProtocol.EtherNetIP => "ptm-proto-enip",
+        TrafficProtocol.KNX        => "ptm-proto-knx",
+        _                          => "ptm-proto-other"
+    };
+
+    private static string ProtocolIcon(TrafficProtocol p) => p switch
+    {
+        TrafficProtocol.Modbus     => "Mb",
+        TrafficProtocol.MQTT       => "MQ",
+        TrafficProtocol.OpcUa      => "UA",
+        TrafficProtocol.REST       => "RE",
+        TrafficProtocol.S7         => "S7",
+        TrafficProtocol.TCP        => "TC",
+        TrafficProtocol.EtherNetIP => "EI",
+        TrafficProtocol.KNX        => "KX",
+        _                          => "?"
+    };
+
+    private static string DirLabel(TrafficDirection d) => d switch
+    {
+        TrafficDirection.Rx => "Rx",
+        TrafficDirection.Tx => "Tx",
+        _                   => "Int"
+    };
+}
+
+<style>
+    :root {
+        --ptm-bg:       #1e1e1e;
+        --ptm-hdr-bg:   #252526;
+        --ptm-border:   #3c3c3c;
+        --ptm-text:     #d4d4d4;
+        --ptm-muted:    #858585;
+        --ptm-sel-bg:   #094771;
+        --ptm-row-hover:#2a2d2e;
+    }
+
+    .ptm-panel {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        overflow: hidden;
+        background: var(--ptm-bg);
+        color: var(--ptm-text);
+        font-size: 12px;
+        font-family: 'Consolas', 'Cascadia Code', monospace;
+    }
+
+    /* Toolbar */
+    .ptm-toolbar {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 4px;
+        padding: 4px 8px;
+        background: var(--ptm-hdr-bg);
+        border-bottom: 1px solid var(--ptm-border);
+        min-height: 36px;
+    }
+
+    .ptm-chips { display: flex; gap: 3px; flex-wrap: wrap; }
+
+    .ptm-chip {
+        padding: 1px 7px;
+        border-radius: 10px;
+        border: 1px solid var(--ptm-border);
+        background: transparent;
+        color: var(--ptm-muted);
+        font-size: 11px;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: background 0.15s, color 0.15s;
+    }
+    .ptm-chip:hover { background: #2d2d2d; color: var(--ptm-text); }
+    .ptm-chip-active { color: #fff !important; }
+
+    .ptm-search { min-width: 150px; max-width: 200px; font-size: 11px; }
+
+    /* Status banners */
+    .ptm-status-banner {
+        padding: 4px 12px;
+        font-size: 11px;
+        background: #2d2d2d;
+        color: var(--ptm-muted);
+        border-bottom: 1px solid var(--ptm-border);
+    }
+    .ptm-banner-warn { background: #3a2f00; color: #e8c84e; }
+
+    /* Frame list */
+    .ptm-frame-list {
+        flex: 1;
+        overflow-y: auto;
+        overflow-x: auto;
+        scrollbar-width: thin;
+    }
+
+    .ptm-empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        color: var(--ptm-muted);
+        gap: 6px;
+    }
+
+    .ptm-table {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+    }
+
+    .ptm-table thead th {
+        position: sticky;
+        top: 0;
+        background: var(--ptm-hdr-bg);
+        border-bottom: 1px solid var(--ptm-border);
+        padding: 3px 6px;
+        text-align: left;
+        color: var(--ptm-muted);
+        font-size: 11px;
+        font-weight: 600;
+        z-index: 1;
+    }
+
+    .ptm-row {
+        cursor: pointer;
+        border-bottom: 1px solid #2a2a2a;
+        transition: background 0.1s;
+    }
+    .ptm-row:hover { background: var(--ptm-row-hover); }
+    .ptm-row-selected { background: var(--ptm-sel-bg) !important; }
+
+    .ptm-row td { padding: 2px 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    .ptm-seq { color: var(--ptm-muted); font-size: 10px; }
+    .ptm-ts  { color: #9cdcfe; font-size: 11px; }
+    .ptm-dir { text-align: center; }
+    .ptm-src { color: #c586c0; }
+    .ptm-msg { color: var(--ptm-text); }
+    .ptm-lvl { font-size: 10px; color: var(--ptm-muted); }
+
+    /* Level tints */
+    .ptm-level-error { background: rgba(200,50,50,0.12) !important; }
+    .ptm-level-warn  { background: rgba(200,160,30,0.10) !important; }
+    .ptm-level-debug { color: #666; }
+
+    /* Protocol badges */
+    .ptm-proto-badge {
+        display: inline-block;
+        padding: 0 5px;
+        border-radius: 3px;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .4px;
+        color: #fff;
+    }
+
+    .ptm-proto-modbus, .ptm-chip.ptm-proto-modbus.ptm-chip-active { background: #c0392b; }
+    .ptm-proto-mqtt,   .ptm-chip.ptm-proto-mqtt.ptm-chip-active   { background: #8e44ad; }
+    .ptm-proto-opcua,  .ptm-chip.ptm-proto-opcua.ptm-chip-active  { background: #1565c0; }
+    .ptm-proto-rest,   .ptm-chip.ptm-proto-rest.ptm-chip-active   { background: #27ae60; }
+    .ptm-proto-s7,     .ptm-chip.ptm-proto-s7.ptm-chip-active     { background: #e67e22; }
+    .ptm-proto-tcp,    .ptm-chip.ptm-proto-tcp.ptm-chip-active    { background: #16a085; }
+    .ptm-proto-enip,   .ptm-chip.ptm-proto-enip.ptm-chip-active   { background: #d35400; }
+    .ptm-proto-knx,    .ptm-chip.ptm-proto-knx.ptm-chip-active    { background: #2980b9; }
+    .ptm-proto-other,  .ptm-chip.ptm-proto-other.ptm-chip-active  { background: #555; }
+
+    /* Detail pane */
+    .ptm-detail {
+        border-top: 2px solid var(--ptm-border);
+        background: #141414;
+        max-height: 120px;
+        overflow-y: auto;
+        flex-shrink: 0;
+    }
+    .ptm-detail-header {
+        display: flex;
+        align-items: center;
+        padding: 4px 8px;
+        background: var(--ptm-hdr-bg);
+        border-bottom: 1px solid var(--ptm-border);
+        font-size: 11px;
+    }
+    .ptm-detail-raw {
+        margin: 0;
+        padding: 6px 10px;
+        font-size: 11px;
+        color: #ce9178;
+        white-space: pre-wrap;
+        word-break: break-all;
+    }
+</style>

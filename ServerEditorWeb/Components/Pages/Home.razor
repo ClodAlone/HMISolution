@@ -287,6 +287,9 @@ else
                         <div class="menu-item" @onclick="ShowProblemsPanel" @onclick:stopPropagation>
                             <span class="menu-icon">&#x26A0;&#xFE0F;</span><span class="menu-label">@L["menu.help.validate"]</span>
                         </div>
+                        <div class="menu-item" @onclick="() => { _showShortcutCheatsheet = true; _openMenu = null; }" @onclick:stopPropagation>
+                            <span class="menu-icon">&#x2328;&#xFE0F;</span><span class="menu-label">Keyboard Shortcuts</span><span class="menu-shortcut">?</span>
+                        </div>
                         <div class="menu-separator"></div>
                         <div class="menu-item" @onclick="ShowAboutDialog" @onclick:stopPropagation>
                             <span class="menu-icon">&#x2139;&#xFE0F;</span><span class="menu-label">@L["menu.help.about"]</span>
@@ -324,6 +327,15 @@ else
                 {
                     <span class="badge bg-success" style="font-size: 10px;">&#x25B6; Runtime</span>
                 }
+                @* QW-15: OPC UA connection status badge *@
+                @if (LiveTags.IsConnected)
+                {
+                    <span class="badge bg-info text-dark" style="font-size:10px;" title="OPC UA live data connected">🔌 OPC ●</span>
+                }
+                else if (Editor.RootModel != null && ServerProcess.IsServerRunning)
+                {
+                    <span class="badge bg-secondary" style="font-size:10px;" title="Server running but OPC UA not subscribed">🔌 OPC ○</span>
+                }
                 @if (!string.IsNullOrEmpty(Editor.CurrentFilePath))
                 {
                     <span title="@Editor.CurrentFilePath">@Path.GetFileName(Editor.CurrentFilePath)</span>
@@ -342,12 +354,55 @@ else
         <button class="iconbar-btn" title="@($"{L["toolbar.save"]} (Ctrl+S)")" @onclick="Save"
                 disabled="@(!Editor.HasUnsavedChanges)">💾</button>
         <button class="iconbar-btn" title="@($"{L["toolbar.saveAs"]} (Ctrl+Shift+S)")" @onclick="() => { _saveAsPath = Editor.CurrentFilePath ?? string.Empty; _showSaveAsDialog = true; }">📥</button>
+        @* QW-9: Recent projects quick-open *@
+        @if (Editor.RecentFiles.Count > 0)
+        {
+            <div class="iconbar-recent-wrap">
+                <button class="iconbar-btn" title="Recent Projects" @onclick="() => _showRecentDropdown = !_showRecentDropdown">🕐</button>
+                @if (_showRecentDropdown)
+                {
+                    <div class="iconbar-backdrop" @onclick="() => _showRecentDropdown = false"></div>
+                    <div class="iconbar-dropdown">
+                        <div class="iconbar-dropdown-header">Recent Projects</div>
+                        @foreach (var f in Editor.RecentFiles.Take(10))
+                        {
+                            var fn = f;
+                            <div class="iconbar-dropdown-item" @onclick="() => { _showRecentDropdown = false; QuickLoadFile(fn); }" title="@fn">
+                                📋 @System.IO.Path.GetFileName(fn)
+                                <span class="iconbar-dropdown-sub">@System.IO.Path.GetDirectoryName(fn)</span>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        }
 
         <span class="iconbar-sep"></span>
 
         @* Edit operations *@
-        <button class="iconbar-btn" title="@($"{L["toolbar.undo"]}{(UndoRedo.UndoDescription != null ? $" — {UndoRedo.UndoDescription}" : "")} (Ctrl+Z)")" @onclick="PerformUndo"
-                disabled="@(!UndoRedo.CanUndo)">&#x21A9;&#xFE0F;</button>
+        <div class="iconbar-dropdown-wrap" @onfocusout="() => _showUndoHistory = false">
+            <button class="iconbar-btn" title="@($"{L["toolbar.undo"]}{(UndoRedo.UndoDescription != null ? $" — {UndoRedo.UndoDescription}" : "")} (Ctrl+Z)")" @onclick="PerformUndo"
+                    disabled="@(!UndoRedo.CanUndo)">&#x21A9;&#xFE0F;</button>
+            <button class="iconbar-btn iconbar-btn-caret" title="Undo history" @onclick="() => _showUndoHistory = !_showUndoHistory"
+                    disabled="@(!UndoRedo.CanUndo)">▾</button>
+            @if (_showUndoHistory)
+            {
+                <div class="iconbar-dropdown undo-history-dropdown">
+                    @{ int idx = 0; }
+                    @foreach (var desc in UndoRedo.UndoHistory.Take(20))
+                    {
+                        var captIdx = ++idx;
+                        <div class="iconbar-dropdown-item undo-history-item" @onclick="() => UndoToStep(captIdx)" title="Undo to this point">
+                            <span class="undo-history-num">@captIdx</span> @desc
+                        </div>
+                    }
+                    @if (!UndoRedo.CanUndo)
+                    {
+                        <div class="iconbar-dropdown-item text-muted small">No undo history</div>
+                    }
+                </div>
+            }
+        </div>
         <button class="iconbar-btn" title="@($"{L["toolbar.redo"]}{(UndoRedo.RedoDescription != null ? $" — {UndoRedo.RedoDescription}" : "")} (Ctrl+Y)")" @onclick="PerformRedo"
                 disabled="@(!UndoRedo.CanRedo)">&#x21AA;&#xFE0F;</button>
         <button class="iconbar-btn" title="@($"{L["toolbar.copy"]} (Ctrl+C)")" @onclick="() => Editor.CopySelected(Clipboard)"
@@ -430,7 +485,7 @@ else
                     OnAddScreen="OnAddScreen" OnAddUserGroup="OnAddUserGroup" OnAddUser="OnAddUser"
                     OnRename="OnRenameNode"
                     OnDelete="OnDelete"
-                    OnCopy="OnCopyNode" OnPaste="OnPasteNode"
+                    OnCopy="OnCopyNode" OnDuplicate="OnDuplicateNode" OnPaste="OnPasteNode"
                     OnSetActiveProject="OnSetActiveProject" OnCloseProject="OnCloseProject"
                     OnFindReferences="OnFindReferences"
                     OnAddToWatch="OnAddToWatch"
@@ -601,6 +656,10 @@ else
                 {
                     <AutomationRulePanel />
                 }
+                else if (context.Id == "trafficmonitor")
+                {
+                    <ProtocolTrafficMonitorPanel />
+                }
             </PanelContent>
         </DockContainer>
     </div>
@@ -631,6 +690,94 @@ else
                 <div class="modal-footer py-2">
                     <button class="btn btn-sm btn-secondary" @onclick="() => _showSaveAsDialog = false">@L["dialog.saveAs.cancel"]</button>
                     <button class="btn btn-sm btn-success" @onclick="SaveAs" disabled="@string.IsNullOrEmpty(_saveAsPath)">💾 @L["dialog.saveAs.save"]</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* QW-16: Crash recovery prompt *@
+@if (_showRecoveryPrompt)
+{
+    <div class="modal-backdrop show"></div>
+    <div class="modal show d-block" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-warning">
+                <div class="modal-header py-2 bg-warning text-dark">
+                    <h6 class="modal-title">⚠️ Unsaved Changes Recovered</h6>
+                </div>
+                <div class="modal-body small">
+                    <p>A recovery snapshot was found for:</p>
+                    <code>@_recoveryFile</code>
+                    <p class="mt-2">This snapshot may contain unsaved changes from a previous session that ended unexpectedly. Would you like to restore it?</p>
+                </div>
+                <div class="modal-footer py-2">
+                    <button class="btn btn-sm btn-secondary" @onclick="DismissRecovery">Discard Recovery</button>
+                    <button class="btn btn-sm btn-warning" @onclick="AcceptRecovery">⚡ Restore</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* QW-26: Keyboard shortcut cheatsheet *@
+@if (_showShortcutCheatsheet)
+{
+    <div class="modal-backdrop show" @onclick="() => _showShortcutCheatsheet = false"></div>
+    <div class="modal show d-block" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content">
+                <div class="modal-header py-2">
+                    <h6 class="modal-title">⌨️ Keyboard Shortcuts</h6>
+                    <button type="button" class="btn-close btn-close-sm" @onclick="() => _showShortcutCheatsheet = false"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3" style="font-size:13px;">
+                        <div class="col-md-6">
+                            <h6 class="text-muted mb-2">File</h6>
+                            <table class="table table-sm table-borderless mb-0">
+                                <tbody>
+                                    <tr><td><kbd>Ctrl+S</kbd></td><td>Save</td></tr>
+                                    <tr><td><kbd>Ctrl+Shift+S</kbd></td><td>Save As</td></tr>
+                                    <tr><td><kbd>Ctrl+O</kbd></td><td>Open Project</td></tr>
+                                </tbody>
+                            </table>
+                            <h6 class="text-muted mb-2 mt-3">Edit</h6>
+                            <table class="table table-sm table-borderless mb-0">
+                                <tbody>
+                                    <tr><td><kbd>Ctrl+Z</kbd></td><td>Undo</td></tr>
+                                    <tr><td><kbd>Ctrl+Y</kbd></td><td>Redo</td></tr>
+                                    <tr><td><kbd>Ctrl+C</kbd></td><td>Copy node</td></tr>
+                                    <tr><td><kbd>Ctrl+V</kbd></td><td>Paste node</td></tr>
+                                    <tr><td><kbd>Del</kbd></td><td>Delete selected</td></tr>
+                                    <tr><td><kbd>F2</kbd></td><td>Rename node</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <h6 class="text-muted mb-2">Search</h6>
+                            <table class="table table-sm table-borderless mb-0">
+                                <tbody>
+                                    <tr><td><kbd>Ctrl+F</kbd></td><td>Find in editor</td></tr>
+                                    <tr><td><kbd>Ctrl+Shift+F</kbd></td><td>Find in project</td></tr>
+                                    <tr><td><kbd>Ctrl+H</kbd></td><td>Find &amp; Replace</td></tr>
+                                </tbody>
+                            </table>
+                            <h6 class="text-muted mb-2 mt-3">Navigation</h6>
+                            <table class="table table-sm table-borderless mb-0">
+                                <tbody>
+                                    <tr><td><kbd>Tab</kbd></td><td>Next symbol on canvas</td></tr>
+                                    <tr><td><kbd>Shift+Tab</kbd></td><td>Previous symbol</td></tr>
+                                    <tr><td><kbd>Escape</kbd></td><td>Restore / close overlay</td></tr>
+                                    <tr><td><kbd>Ctrl+Scroll</kbd></td><td>Zoom canvas</td></tr>
+                                    <tr><td><kbd>?</kbd></td><td>This cheatsheet</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer py-2">
+                    <button class="btn btn-sm btn-secondary" @onclick="() => _showShortcutCheatsheet = false">Close</button>
                 </div>
             </div>
         </div>
@@ -896,9 +1043,13 @@ else
     [Inject] private ServerProcessService ServerProcess { get; set; } = default!;
     [Inject] private RuntimeViewerProcessService ViewerProcess { get; set; } = default!;
     [Inject] private LiveTagService LiveTags { get; set; } = default!;
+    [Inject] private ProtocolTrafficService ProtocolTraffic { get; set; } = default!;
 
     private LogViewerService _serverLogService = new();
     private LogViewerService _appLogService = new();
+    private bool _showRecentDropdown; // QW-9
+    private bool _showUndoHistory;    // QW-20
+    private bool _showShortcutCheatsheet; // QW-26
     private JsonEditor? _jsonEditor;
     private DockContainer? _dockContainer;
     private int _treeWidth = 300;
@@ -921,6 +1072,9 @@ else
     private bool _serverBusy;
     private bool _runtimeBusy;
     private bool _showSaveAsDialog;
+    // QW-16: crash recovery
+    private bool _showRecoveryPrompt;
+    private string _recoveryFile = "";
     private string _saveAsPath = "";
 
     // Unsaved changes dialog state
@@ -1007,6 +1161,7 @@ else
         new() { Id = "navmap", Title = "Screen Nav Map", Icon = "🗺️", Zone = "bottom" },
         new() { Id = "livetags", Title = "Live Tags", Icon = "📡", Zone = "right" },
         new() { Id = "automationrules", Title = "Automation Rules", Icon = "⚙️", Zone = "center" },
+        new() { Id = "trafficmonitor", Title = "Protocol Traffic Monitor", Icon = "🦈", Zone = "bottom" },
     ];
 
 private void OnAddFolder(TreeNode node)
@@ -1088,6 +1243,16 @@ private void OnCopyNode(TreeNode node)
     if (!Editor.SelectedItems.Contains(node))
         Editor.SelectNode(node);
     Editor.CopySelected(Clipboard);
+}
+// QW-24: Duplicate screen / script
+private void OnDuplicateNode(TreeNode node) => Editor.DuplicateNode(node);
+
+// QW-20: Undo to a specific depth in history
+private void UndoToStep(int steps)
+{
+    _showUndoHistory = false;
+    for (int i = 0; i < steps; i++)
+        if (!UndoRedo.Undo()) break;
 }
 private void OnPasteNode(TreeNode node) { Editor.SelectNode(node); Editor.PasteFromClipboard(Clipboard); }
 
@@ -1346,6 +1511,14 @@ private void UnsavedDialogCancel()
         _lastActivity = DateTime.UtcNow;
     }
 
+    // QW-26: keyboard cheatsheet hotkey
+    [JSInvokable]
+    public void OnKeyboardCheatsheet()
+    {
+        _showShortcutCheatsheet = !_showShortcutCheatsheet;
+        InvokeAsync(StateHasChanged);
+    }
+
     private void CheckIdleTimeout(object? state)
     {
         if (!Auth.IsAuthenticated || Auth.AutoLogOffSeconds <= 0) return;
@@ -1422,6 +1595,14 @@ private void UnsavedDialogCancel()
                 UndoRedo.Clear();
                 SetupLogDirectory();
                 _requiresLogin = AuthService.IsLoginRequired(Editor.RootModel);
+
+                // QW-16: offer recovery if a newer snapshot exists
+                var rec = NodeEditorService.FindRecoveryFile(_selectedFile);
+                if (rec != null)
+                {
+                    _recoveryFile = _selectedFile;
+                    _showRecoveryPrompt = true;
+                }
             }
         }
         finally
@@ -1468,6 +1649,26 @@ private void UnsavedDialogCancel()
     private void NewFile()
     {
         _showNewProjectWizard = true;
+    }
+
+    // QW-16: crash recovery actions
+    private void AcceptRecovery()
+    {
+        _showRecoveryPrompt = false;
+        if (string.IsNullOrEmpty(_recoveryFile)) return;
+        var (success, msg) = Editor.RestoreFromRecovery(_recoveryFile);
+        ShowToast(success, msg);
+    }
+
+    private void DismissRecovery()
+    {
+        _showRecoveryPrompt = false;
+        // Delete the stale recovery file
+        if (!string.IsNullOrEmpty(_recoveryFile))
+        {
+            var rec = _recoveryFile + ".recovery";
+            if (File.Exists(rec)) try { File.Delete(rec); } catch { }
+        }
     }
 
     private void OnNewProjectCreated(NodeModel? model)
@@ -2152,7 +2353,10 @@ private void UnsavedDialogCancel()
             if (dir != null)
             {
                 var configName = Path.GetFileNameWithoutExtension(Editor.CurrentFilePath);
-                _serverLogService.SetLogDirectory(Path.Combine(dir, "Logs"), $"log-{configName}-*.txt");
+                var logDir = Path.Combine(dir, "Logs");
+                var logPattern = $"log-{configName}-*.txt";
+                _serverLogService.SetLogDirectory(logDir, logPattern);
+                ProtocolTraffic.Start(logDir, logPattern);
             }
         }
     }

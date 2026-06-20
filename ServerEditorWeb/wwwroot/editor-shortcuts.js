@@ -92,6 +92,12 @@ window.editorShortcuts = {
             ref.invokeMethodAsync('OnKeyboardEscape');
         }
 
+        // ? — keyboard shortcut cheatsheet (QW-26)
+        if (e.key === '?' && !isEditable) {
+            e.preventDefault();
+            ref.invokeMethodAsync('OnKeyboardCheatsheet');
+        }
+
         // Delete key — delete selected symbol or tree node
         if (e.key === 'Delete' && !isEditable) {
             e.preventDefault();

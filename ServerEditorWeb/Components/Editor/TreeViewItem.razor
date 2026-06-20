@@ -29,16 +29,18 @@
         else if (Node is VariableNode varNode && GetLiveValue != null)
         {
             var liveVal = GetLiveValue(varNode.GetFullPath());
-            <span class="tree-name">@Node.Name</span>
+            var varTooltip = BuildVarTooltip(varNode);
+            <span class="tree-name" title="@varTooltip">@Node.Name</span>
             <span class="tree-type">(@Node.TypeName)</span>
             @if (liveVal != null)
             {
                 <span class="tree-live-value" title="Live value">@liveVal</span>
             }
         }
-        else
+        else if (Node is VariableNode varNode2)
         {
-            <span class="tree-name">@Node.Name</span>
+            var varTooltip2 = BuildVarTooltip(varNode2);
+            <span class="tree-name" title="@varTooltip2">@Node.Name</span>
             <span class="tree-type">(@Node.TypeName)</span>
         }
     </div>
@@ -64,6 +66,7 @@
             OnRename="OnRename"
             OnDelete="OnDelete"
             OnCopy="OnCopy"
+            OnDuplicate="OnDuplicate"
             OnPaste="OnPaste"
             OnSetActiveProject="OnSetActiveProject"
             OnCloseProject="OnCloseProject"
@@ -86,7 +89,7 @@
                         OnAddFolder="OnAddFolder" OnAddVariable="OnAddVariable" OnAddScript="OnAddScript"
                         OnAddPlcProgram="OnAddPlcProgram" OnAddRecipe="OnAddRecipe" OnAddScheduler="OnAddScheduler" OnAddReport="OnAddReport"
                         OnAddCalculated="OnAddCalculated" OnAddAsset="OnAddAsset" OnAddBatch="OnAddBatch" OnAddEvent="OnAddEvent" OnAddAliasMap="OnAddAliasMap" OnAddAutomationRule="OnAddAutomationRule" OnAddScreen="OnAddScreen" OnAddUserGroup="OnAddUserGroup" OnAddUser="OnAddUser"
-                        OnCopy="OnCopy" OnPaste="OnPaste"
+                        OnCopy="OnCopy" OnDuplicate="OnDuplicate" OnPaste="OnPaste"
                         OnSetActiveProject="OnSetActiveProject" OnCloseProject="OnCloseProject"
                         OnFindReferences="OnFindReferences"
                         OnAddToWatch="OnAddToWatch"
@@ -127,6 +130,7 @@
     [Parameter] public EventCallback<TreeNode> OnRename { get; set; }
     [Parameter] public EventCallback<TreeNode> OnDelete { get; set; }
     [Parameter] public EventCallback<TreeNode> OnCopy { get; set; }
+    [Parameter] public EventCallback<TreeNode> OnDuplicate { get; set; }
     [Parameter] public EventCallback<TreeNode> OnPaste { get; set; }
     [Parameter] public EventCallback<TreeNode> OnSetActiveProject { get; set; }
     [Parameter] public EventCallback<TreeNode> OnCloseProject { get; set; }
@@ -187,5 +191,25 @@
                 return true;
         }
         return false;
+    }
+
+    // QW-14: Rich tooltip for variable nodes
+    private static string BuildVarTooltip(VariableNode varNode)
+    {
+        var v = varNode.Variable;
+        var sb = new System.Text.StringBuilder();
+        sb.Append(varNode.GetFullPath());
+        sb.Append("\nType: ").Append(v.Type);
+        sb.Append("  |  Access: ").Append(v.Access);
+        if (!string.IsNullOrEmpty(v.EngineeringUnit))
+            sb.Append("\nUnit: ").Append(v.EngineeringUnit);
+        if (v.Alarm != null)
+            sb.Append("\nAlarm: Hi=").Append(v.Alarm.HighLimit).Append(" Lo=").Append(v.Alarm.LowLimit);
+        if (v.DriverConfigs != null && v.DriverConfigs.Count > 0)
+        {
+            foreach (var kv in v.DriverConfigs)
+                sb.Append("\nDriver[").Append(kv.Key).Append("]: ").Append(kv.Value.ToString());
+        }
+        return sb.ToString();
     }
 }

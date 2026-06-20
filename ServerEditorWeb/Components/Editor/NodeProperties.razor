@@ -36,10 +36,71 @@ else if (Node is FolderNode folder)
                     📤 Import CSV
                     <InputFile OnChange="(e) => ImportVariablesCsv(folder, e)" accept=".csv" style="display:none;" />
                 </label>
+
+                @* QW-11: Column chooser *@
+                <button class="btn btn-sm btn-outline-secondary" @onclick="() => _showColChooser = !_showColChooser" title="Choose visible columns">⚙ Columns</button>
             </div>
+
+            @* QW-11: Column chooser popup *@
+            @if (_showColChooser)
+            {
+                <div class="col-chooser-popup">
+                    @foreach (var col in _varColumns)
+                    {
+                        <label class="col-chooser-item">
+                            <input type="checkbox" @bind="col.Visible" /> @col.Label
+                        </label>
+                    }
+                </div>
+            }
+
             @if (!string.IsNullOrEmpty(_csvMessage))
             {
                 <div class="mt-2 alert @(_csvSuccess ? "alert-success" : "alert-danger") py-1 small">@_csvMessage</div>
+            }
+
+            @* QW-12 / QW-25: Variable mini-grid with checkboxes *@
+            @if (folder.Children.OfType<VariableNode>().Any())
+            {
+                var dirVars = folder.Children.OfType<VariableNode>().ToList();
+                <div class="d-flex gap-2 mb-1 mt-2 flex-wrap align-items-center">
+                    <input type="checkbox" title="Select all" @onchange="e => ToggleSelectAll(dirVars, (bool)(e.Value ?? false))" />
+                    <span class="small text-muted">@(_selectedVarNodes.Count > 0 ? $"{_selectedVarNodes.Count} selected" : "Select")</span>
+                    @if (_selectedVarNodes.Count > 0)
+                    {
+                        @* QW-12: Multi-select delete *@
+                        <button class="btn btn-xs btn-outline-danger" @onclick="() => DeleteSelectedVars(folder)" title="Delete selected variables">🗑 Delete</button>
+                        @* QW-25: Bulk logging toggle *@
+                        <button class="btn btn-xs btn-outline-primary" @onclick="() => BulkSetLogging(true)" title="Enable data logging on selected">📈 Log On</button>
+                        <button class="btn btn-xs btn-outline-secondary" @onclick="() => BulkSetLogging(false)" title="Disable data logging on selected">📉 Log Off</button>
+                    }
+                </div>
+                <div style="max-height:220px;overflow-y:auto;font-size:11px;">
+                    <table class="table table-sm table-bordered mb-0" style="font-size:11px;">
+                        <thead class="table-dark">
+                            <tr>
+                                <th style="width:24px"></th>
+                                @foreach (var col in _varColumns.Where(c => c.Visible))
+                                {
+                                    <th>@col.Label</th>
+                                }
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var vn in dirVars)
+                            {
+                                var checked2 = _selectedVarNodes.Contains(vn);
+                                <tr class="@(checked2 ? "table-active" : "")">
+                                    <td><input type="checkbox" checked="@checked2" @onchange="e => ToggleVarSelect(vn, (bool)(e.Value ?? false))" /></td>
+                                    @foreach (var col in _varColumns.Where(c => c.Visible))
+                                    {
+                                        <td title="@col.Label">@GetVarCell(vn, col.Key)</td>
+                                    }
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
             }
         }
     </div>
@@ -130,6 +191,64 @@ else if (Node is VariableNode variable)
             <div class="form-text">Exposed as OPC UA EngineeringUnits property.</div>
         </div>
 
+        @* QW-27: Inline alarm limit quick-edit *@
+        @if (variable.Variable.Alarm is { } alm)
+        {
+            <div class="mb-3 border rounded p-2" style="background:rgba(255,193,7,0.07); font-size:12px;">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <span class="fw-bold small">🔔 Alarm Limits (quick edit)</span>
+                    <span class="badge bg-warning text-dark" style="font-size:10px;">Active</span>
+                </div>
+                @if (alm.TriggerType == SharedModels.AlarmTriggerType.Limit)
+                {
+                    <div class="row g-1">
+                        <div class="col-6">
+                            <label class="form-label mb-0" style="font-size:10px;">HH</label>
+                            <input type="number" step="any" class="form-control form-control-sm" style="font-size:11px;"
+                                   value="@alm.HighHighLimit" placeholder="—"
+                                   @onchange="e => { alm.HighHighLimit = double.TryParse(e.Value?.ToString(), out var v) ? v : null; OnChanged(); }" />
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label mb-0" style="font-size:10px;">High</label>
+                            <input type="number" step="any" class="form-control form-control-sm" style="font-size:11px;"
+                                   @bind="alm.HighLimit" @bind:after="OnChanged" />
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label mb-0" style="font-size:10px;">Low</label>
+                            <input type="number" step="any" class="form-control form-control-sm" style="font-size:11px;"
+                                   @bind="alm.LowLimit" @bind:after="OnChanged" />
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label mb-0" style="font-size:10px;">LL</label>
+                            <input type="number" step="any" class="form-control form-control-sm" style="font-size:11px;"
+                                   value="@alm.LowLowLimit" placeholder="—"
+                                   @onchange="e => { alm.LowLowLimit = double.TryParse(e.Value?.ToString(), out var v) ? v : null; OnChanged(); }" />
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <span class="small text-muted">Condition mode — edit in driver section below.</span>
+                }
+            </div>
+        }
+
+        @* QW-21: Unit quick-convert (read-only display of common conversions) *@
+        @if (!string.IsNullOrWhiteSpace(variable.Variable.EngineeringUnit) && variable.Variable.Value is not null)
+        {
+            var conversions = GetUnitConversions(variable.Variable.EngineeringUnit, variable.Variable.Value);
+            @if (conversions.Count > 0)
+            {
+                <div class="mb-3 p-2 rounded" style="background:var(--bs-light, #f8f9fa); font-size:11px;">
+                    <span class="text-muted me-2">⇌ Quick convert:</span>
+                    @foreach (var c in conversions)
+                    {
+                        <span class="badge bg-secondary me-1" title="@c.Label">@c.Display</span>
+                    }
+                </div>
+            }
+        }
+
         @* ── Scaling ── *@
         <div class="mb-3">
             <div class="form-check">
@@ -171,6 +290,24 @@ else if (Node is VariableNode variable)
         <VariableDriverEditor Variable="variable.Variable"
                               VariableNode="variable"
                               OnChanged="OnChanged" />
+
+        @* QW-23: Per-variable poll interval override *@
+        <div class="mb-3">
+            <label class="form-label small">Poll Interval Override (ms)</label>
+            <div class="input-group input-group-sm">
+                <input type="number" min="50" step="50" class="form-control form-control-sm"
+                       placeholder="Driver default"
+                       value="@(variable.Variable.PollIntervalMs?.ToString() ?? "")"
+                       @onchange="e => { variable.Variable.PollIntervalMs = int.TryParse(e.Value?.ToString(), out var v) ? v : null; OnChanged(); }" />
+                <span class="input-group-text">ms</span>
+                @if (variable.Variable.PollIntervalMs.HasValue)
+                {
+                    <button class="btn btn-outline-secondary btn-sm" title="Reset to driver default"
+                            @onclick="() => { variable.Variable.PollIntervalMs = null; OnChanged(); }">✕</button>
+                }
+            </div>
+            <div class="form-text">Override the driver's global scan rate for this variable only.</div>
+        </div>
 
         <div class="mb-3">
             <div class="d-flex align-items-center justify-content-between">
@@ -3280,6 +3417,100 @@ else if (Node is UserNode uNode)
     // CSV export / import
     private string _csvMessage = "";
     private bool _csvSuccess;
+
+    // QW-11: Column chooser
+    private bool _showColChooser;
+    private record VarColumn(string Key, string Label) { public bool Visible { get; set; } = true; }
+    private readonly List<VarColumn> _varColumns =
+    [
+        new("Name",   "Name"),
+        new("Type",   "Type"),
+        new("Access", "Access"),
+        new("EU",     "Unit"),
+        new("Log",    "Logging"),
+        new("Init",   "Init Value"),
+    ];
+
+    // QW-12 / QW-25: Multi-select
+    private readonly HashSet<VariableNode> _selectedVarNodes = new();
+
+    private void ToggleVarSelect(VariableNode vn, bool selected)
+    {
+        if (selected) _selectedVarNodes.Add(vn);
+        else _selectedVarNodes.Remove(vn);
+    }
+
+    private void ToggleSelectAll(List<VariableNode> vars, bool selected)
+    {
+        _selectedVarNodes.Clear();
+        if (selected) foreach (var v in vars) _selectedVarNodes.Add(v);
+    }
+
+    private static string GetVarCell(VariableNode vn, string key) => key switch
+    {
+        "Name"   => vn.Name,
+        "Type"   => vn.Variable.Type,
+        "Access" => vn.Variable.Access,
+        "EU"     => vn.Variable.EngineeringUnit ?? "",
+        "Log"    => vn.Variable.DataLogging?.Enabled == true ? "✓" : "",
+        "Init"   => vn.Variable.InitialValue ?? "",
+        _        => ""
+    };
+
+    // QW-21: Unit quick-convert helper
+    private record UnitConversion(string Label, string Display);
+    private static List<UnitConversion> GetUnitConversions(string unit, object? rawValue)
+    {
+        if (!double.TryParse(rawValue?.ToString(), System.Globalization.NumberStyles.Any,
+            System.Globalization.CultureInfo.InvariantCulture, out double v))
+            return [];
+        return unit.Trim() switch
+        {
+            "°C" or "degC" => [new($"{v:F2} °C → °F", $"{v * 9 / 5 + 32:F1} °F"),
+                               new($"{v:F2} °C → K",  $"{v + 273.15:F1} K")],
+            "°F" or "degF" => [new($"{v:F2} °F → °C", $"{(v - 32) * 5 / 9:F1} °C")],
+            "K"            => [new($"{v:F2} K → °C",  $"{v - 273.15:F1} °C")],
+            "bar"          => [new($"{v:F3} bar → psi", $"{v * 14.5038:F2} psi"),
+                               new($"{v:F3} bar → kPa", $"{v * 100:F1} kPa")],
+            "psi"          => [new($"{v:F2} psi → bar", $"{v / 14.5038:F3} bar"),
+                               new($"{v:F2} psi → kPa",  $"{v * 6.89476:F1} kPa")],
+            "kPa"          => [new($"{v:F1} kPa → bar", $"{v / 100:F4} bar"),
+                               new($"{v:F1} kPa → psi", $"{v / 6.89476:F2} psi")],
+            "m³/h"         => [new($"{v:F2} m³/h → GPM", $"{v * 4.40287:F1} GPM")],
+            "GPM"          => [new($"{v:F1} GPM → m³/h", $"{v / 4.40287:F2} m³/h")],
+            "m/s"          => [new($"{v:F2} m/s → km/h", $"{v * 3.6:F1} km/h"),
+                               new($"{v:F2} m/s → mph",  $"{v * 2.23694:F1} mph")],
+            "km/h"         => [new($"{v:F1} km/h → m/s", $"{v / 3.6:F2} m/s")],
+            _              => []
+        };
+    }
+
+    // QW-12: Delete selected
+    private void DeleteSelectedVars(FolderNode folder)
+    {
+        foreach (var vn in _selectedVarNodes.ToList())
+            folder.Children.Remove(vn);
+        _selectedVarNodes.Clear();
+        OnChanged();
+    }
+
+    // QW-25: Bulk logging toggle
+    private void BulkSetLogging(bool enable)
+    {
+        foreach (var vn in _selectedVarNodes)
+        {
+            if (enable)
+            {
+                vn.Variable.DataLogging ??= new SharedModels.DataLoggingConfig();
+                vn.Variable.DataLogging.Enabled = true;
+            }
+            else if (vn.Variable.DataLogging != null)
+            {
+                vn.Variable.DataLogging.Enabled = false;
+            }
+        }
+        OnChanged();
+    }
 
     private async Task ExportVariablesCsv(FolderNode folder)
     {

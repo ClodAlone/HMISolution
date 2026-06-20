@@ -62,6 +62,7 @@ builder.Services.AddSingleton<BackupService>();
 builder.Services.AddSingleton<ScriptDebugService>();
 builder.Services.AddSingleton<FindReplaceService>();
 builder.Services.AddSingleton<LiveTagService>();
+builder.Services.AddSingleton<ProtocolTrafficService>();
 
 builder.Services.AddRateLimiter(options =>
 {

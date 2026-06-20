@@ -128,9 +128,17 @@
                 <span class="ms-auto small text-muted">Symbols: @screen.Symbols.Count</span>
 
                 <span class="mx-1">|</span>
+                @* QW-8: Zoom controls *@
+                <button class="btn btn-sm btn-outline-secondary py-0 px-1" @onclick="ZoomOut" title="Zoom Out (Ctrl+-)">-</button>
+                <span class="small px-1" style="min-width:42px;text-align:center;cursor:pointer" title="Reset zoom (Ctrl+0)" @onclick="ZoomReset">@(_zoom.ToString("P0"))</span>
+                <button class="btn btn-sm btn-outline-secondary py-0 px-1" @onclick="ZoomIn" title="Zoom In (Ctrl++)">+</button>
+
+                <span class="mx-1">|</span>
                 <button class="btn btn-sm btn-outline-secondary" @onclick="() => SwitchToResponsive(screen)" title="Switch to responsive HTML layout">
                     📐 Responsive
                 </button>
+                @* QW-19: Copy screen as PNG *@
+                <button class="btn btn-sm btn-outline-secondary" @onclick="CopyAsPng" title="Copy screen as PNG to clipboard">📷 PNG</button>
             </div>
         </div>
 
@@ -159,8 +167,12 @@
         }
 
         <div class="screen-editor-body">
-            @* SVG Canvas *@
-            <div class="screen-canvas-wrap">
+            @* QW-8: Zoom/Pan viewport *@
+            <div class="screen-canvas-viewport" id="screen-canvas-viewport"
+                 @onwheel="OnCanvasWheel" @onwheel:preventDefault>
+                @* SVG Canvas *@
+                <div class="screen-canvas-wrap"
+                     style="transform: scale(@(_zoom.ToString("F3", System.Globalization.CultureInfo.InvariantCulture))) translate(@(_panX.ToString("F1",System.Globalization.CultureInfo.InvariantCulture))px, @(_panY.ToString("F1",System.Globalization.CultureInfo.InvariantCulture))px); transform-origin: top left;">
                 <svg xmlns="http://www.w3.org/2000/svg"
                      width="@screen.Width" height="@screen.Height"
                      class="screen-canvas"
@@ -1343,6 +1355,7 @@
                     }
                 </svg>
             </div>
+            </div>@* screen-canvas-viewport *@
         </div>
     }
 
@@ -1576,6 +1589,26 @@ Right-click a symbol for actions</div>
 
     // ─── Undo snapshots
     private Dictionary<ScreenSymbol, string> _operationSnapshots = new();
+
+    // ─── QW-8 Zoom / Pan ────────────────────────────────────
+    private double _zoom = 1.0;
+    private double _panX = 0;
+    private double _panY = 0;
+    private const double ZoomStep = 0.15;
+    private const double ZoomMin = 0.1;
+    private const double ZoomMax = 4.0;
+
+    private void ZoomIn()  { _zoom = Math.Min(ZoomMax, _zoom + ZoomStep); }
+    private void ZoomOut() { _zoom = Math.Max(ZoomMin, _zoom - ZoomStep); }
+    private void ZoomReset() { _zoom = 1.0; _panX = 0; _panY = 0; }
+
+    private void OnCanvasWheel(WheelEventArgs e)
+    {
+        if (!e.CtrlKey) return;
+        // Zoom toward cursor
+        var delta = e.DeltaY < 0 ? ZoomStep : -ZoomStep;
+        _zoom = Math.Clamp(_zoom + delta, ZoomMin, ZoomMax);
+    }
 
     private void CaptureSnapshots(IEnumerable<ScreenSymbol> symbols)
     {
@@ -4292,6 +4325,16 @@ Right-click a symbol for actions</div>
             try { await JS.InvokeVoidAsync("canvasDrop.dispose"); } catch { }
         }
         _dotNetRef?.Dispose();
+    }
+
+    // ─── QW-19: Copy as PNG ──────────────────────────────────
+    private async Task CopyAsPng()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("screenCapture.copyCanvasPng");
+        }
+        catch { }
     }
 
     // ─── Connect mode methods ─────────────────────
