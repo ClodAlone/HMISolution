@@ -1,0 +1,177 @@
+@using SharedModels
+@using ServerEditorWeb.Services
+@inject NodeEditorService Editor
+@inject IJSRuntime JS
+
+<div class="doc-gen-panel">
+    <div class="doc-gen-header">
+        <span class="doc-gen-title">📚 Project Documentation Generator</span>
+        <span class="doc-gen-sub">Generates a self-contained HTML report from the open project</span>
+    </div>
+
+    @if (Editor.RootModel == null)
+    {
+        <div class="doc-gen-empty">
+            <span>No project is open. Open a project first to generate documentation.</span>
+        </div>
+    }
+    else
+    {
+        <div class="doc-gen-body">
+            @* ── Options ─────────────────────────────── *@
+            <div class="doc-gen-options">
+                <div class="doc-gen-options-title">Sections to include</div>
+                <div class="doc-gen-checks">
+                    <label class="doc-check">
+                        <input type="checkbox" @bind="_options.IncludeVariables" /> Variables
+                        <span class="doc-check-count">(@CountVariables())</span>
+                    </label>
+                    <label class="doc-check">
+                        <input type="checkbox" @bind="_options.IncludeAlarms" /> Alarms
+                        <span class="doc-check-count">(@CountAlarms())</span>
+                    </label>
+                    <label class="doc-check">
+                        <input type="checkbox" @bind="_options.IncludeScreens" /> Screens
+                        <span class="doc-check-count">(@(Editor.RootModel?.Screens.Count ?? 0))</span>
+                    </label>
+                    <label class="doc-check">
+                        <input type="checkbox" @bind="_options.IncludeScripts" /> Scripts
+                        <span class="doc-check-count">(@(Editor.RootModel?.Scripts.Count ?? 0))</span>
+                    </label>
+                    <label class="doc-check">
+                        <input type="checkbox" @bind="_options.IncludePlcPrograms" /> PLC Programs
+                        <span class="doc-check-count">(@(Editor.RootModel?.PlcPrograms.Count ?? 0))</span>
+                    </label>
+                    <label class="doc-check">
+                        <input type="checkbox" @bind="_options.IncludeUsers" /> Users &amp; Groups
+                        <span class="doc-check-count">(@(Editor.RootModel?.Users.Count ?? 0))</span>
+                    </label>
+                </div>
+
+                <div class="doc-gen-actions">
+                    <button class="btn btn-primary btn-sm" @onclick="Generate" disabled="@_generating">
+                        @if (_generating)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                            <span>Generating…</span>
+                        }
+                        else
+                        {
+                            <span>📄 Generate &amp; Preview</span>
+                        }
+                    </button>
+                    @if (_savedPath != null)
+                    {
+                        <button class="btn btn-outline-secondary btn-sm" @onclick="OpenInBrowser" title="Open saved file in browser">
+                            🌐 Open in Browser
+                        </button>
+                        <span class="doc-gen-saved-path" title="@_savedPath">
+                            ✅ Saved: @System.IO.Path.GetFileName(_savedPath)
+                        </span>
+                    }
+                </div>
+
+                @if (_errorMessage != null)
+                {
+                    <div class="alert alert-danger py-1 mt-2 small">@_errorMessage</div>
+                }
+            </div>
+
+            @* ── Preview ─────────────────────────────── *@
+            @if (_previewHtml != null)
+            {
+                <div class="doc-gen-preview-wrap">
+                    <div class="doc-gen-preview-bar">
+                        <span>Preview</span>
+                        <button class="btn btn-outline-secondary btn-sm py-0 px-2" style="font-size:10px;"
+                                @onclick="() => _previewHtml = null">✕ Close Preview</button>
+                    </div>
+                    <iframe class="doc-gen-preview-frame"
+                            srcdoc="@_previewHtml"
+                            sandbox="allow-same-origin"></iframe>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private DocOptions _options = new();
+    private bool _generating;
+    private string? _previewHtml;
+    private string? _savedPath;
+    private string? _errorMessage;
+
+    private async Task Generate()
+    {
+        _errorMessage = null;
+        var model = Editor.RootModel;
+        if (model == null) return;
+
+        _generating = true;
+        StateHasChanged();
+
+        try
+        {
+            var projectName = !string.IsNullOrEmpty(Editor.CurrentFilePath)
+                ? System.IO.Path.GetFileNameWithoutExtension(Editor.CurrentFilePath)
+                : "Project";
+
+            // Run on a thread-pool thread so the UI stays responsive for large projects
+            var html = await Task.Run(() =>
+                ProjectDocumentationService.GenerateHtml(model, projectName, _options));
+
+            _previewHtml = html;
+
+            // Save alongside the project file
+            if (!string.IsNullOrEmpty(Editor.CurrentFilePath))
+            {
+                var dir = System.IO.Path.GetDirectoryName(Editor.CurrentFilePath) ?? ".";
+                var outPath = System.IO.Path.Combine(dir, $"{projectName}-documentation.html");
+                await System.IO.File.WriteAllTextAsync(outPath, html);
+                _savedPath = outPath;
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Generation failed: {ex.Message}";
+        }
+        finally
+        {
+            _generating = false;
+        }
+    }
+
+    private async Task OpenInBrowser()
+    {
+        if (_savedPath == null) return;
+        try
+        {
+            // Opens the saved HTML file in the default browser via JS
+            var uri = new Uri(_savedPath).AbsoluteUri;
+            await JS.InvokeVoidAsync("open", uri, "_blank");
+        }
+        catch { /* non-critical */ }
+    }
+
+    private int CountVariables()
+    {
+        if (Editor.RootModel == null) return 0;
+        return CountVarsInFolder(Editor.RootModel.Folder);
+    }
+
+    private static int CountVarsInFolder(Folder f)
+    {
+        var count = f.Variables.Count;
+        foreach (var sub in f.Folders) count += CountVarsInFolder(sub);
+        return count;
+    }
+
+    private int CountAlarms()
+    {
+        if (Editor.RootModel == null) return 0;
+        var list = new List<(string, Variable)>();
+        ProjectDocumentationService.CollectVariablesPublic(Editor.RootModel.Folder, "", list);
+        return list.Count(x => x.Item2.Alarm != null);
+    }
+}

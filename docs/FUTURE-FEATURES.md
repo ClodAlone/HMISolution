@@ -162,6 +162,19 @@ Reuses the existing `ReportConfig` rendering backend and `ReportEditorPanel` inf
 - Zero manual effort for the engineer
 - Consistent, professional output
 
+**Implementation status: ✅ Implemented**
+
+The feature is accessible from **File → Generate Documentation** or the **📚 Project Documentation** panel in the center dock.
+
+**Architecture:**
+- `ProjectDocumentationService` (static, no DI required) traverses the in-memory `NodeModel` and builds a
+  self-contained dark-theme HTML file with print-friendly CSS.
+- `ProjectDocumentationPanel.razor` provides section checkboxes (Variables, Alarms, Screens, Scripts,
+  PLC Programs, Users & Groups), a **Generate & Preview** button, and an inline `<iframe srcdoc>` preview.
+- The generated file is saved alongside the open project file as `<ProjectName>-documentation.html`.
+- An **Open in Browser** button opens the saved file in the default system browser.
+- Live counts (e.g. "Variables (42)") appear next to each checkbox so the engineer knows what is included.
+
 ---
 
 ### 10. Offline Simulation Mode
