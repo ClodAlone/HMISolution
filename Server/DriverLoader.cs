@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using Opc.Ua;
+using Serilog;
 
 namespace SimpleOpcFileServer
 {
@@ -97,9 +98,9 @@ namespace SimpleOpcFileServer
                         }
                         catch (ReflectionTypeLoadException ex)
                         {
-                            Utils.Trace(ex, $"Some types could not be loaded from {fileName}");
+                            Log.Error(ex, "Some types could not be loaded from {FileName}", fileName);
                             foreach (var le in ex.LoaderExceptions ?? [])
-                                Utils.Trace($"  LoaderException: {le?.Message}");
+                                Log.Debug("  LoaderException: {Message}", le?.Message);
                             types = ex.Types.Where(t => t != null).ToArray()!;
                         }
 
@@ -112,17 +113,17 @@ namespace SimpleOpcFileServer
 
                                 var driver = (IDriver)Activator.CreateInstance(type, context)!;
                                 drivers.Add(driver);
-                                Utils.Trace($"Loaded driver: {driver.Key} from {fileName}");
+                                Log.Debug("Loaded driver: {DriverKey} from {FileName}", driver.Key, fileName);
                             }
                             catch (Exception ex)
                             {
-                                Utils.Trace(ex, $"Failed to load driver type {type.FullName} from {fileName}");
+                                Log.Error(ex, "Failed to load driver type {TypeName} from {FileName}", type.FullName, fileName);
                             }
                         }
                     }
                     catch (Exception ex)
                     {
-                        Utils.Trace(ex, $"Failed to load driver assembly: {dll}");
+                        Log.Error(ex, "Failed to load driver assembly: {Dll}", dll);
                     }
                 }
             }
@@ -131,7 +132,7 @@ namespace SimpleOpcFileServer
                 AppDomain.CurrentDomain.AssemblyResolve -= resolveHandler;
             }
 
-            Utils.Trace($"Loaded {drivers.Count} driver(s): {string.Join(", ", drivers.Select(d => d.Key))}");
+            Log.Information("Loaded {Count} driver(s): {Drivers}", drivers.Count, string.Join(", ", drivers.Select(d => d.Key)));
             return drivers;
         }
     }

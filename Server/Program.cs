@@ -210,7 +210,7 @@ public class OpcUaWorker : BackgroundService
 
 public class OpcUaServerApp
 {
-    private OpcUaServer _server;
+    private OpcUaServer? _server;
     private RestApiServer? _restApiServer;
     private ServerSettings? _serverSettings;
 
@@ -221,7 +221,7 @@ public class OpcUaServerApp
 
     public void Stop()
     {
-        _server?.Stop();
+        _server?.StopAsync().GetAwaiter().GetResult();
     }
 
     public void DisposeRestApi()
@@ -271,11 +271,13 @@ public class OpcUaServerApp
             Log.Warning("Failed to load server settings from config: {Message}. Using defaults.", ex.Message);
         }
 
+        #pragma warning disable CS0618 // ApplicationInstance() — ITelemetryContext not available in this host model
         var application = new ApplicationInstance
         {
             ApplicationName = "SimpleOpcFileServer",
             ApplicationType = ApplicationType.Server
         };
+#pragma warning restore CS0618
 
         var config = new ApplicationConfiguration
         {
@@ -354,7 +356,7 @@ public class OpcUaServerApp
         config.ServerConfiguration.UserTokenPolicies.Add(new UserTokenPolicy(UserTokenType.UserName));
         
         Log.Information("Validating OPC UA configuration...");
-        await config.Validate(ApplicationType.Server);
+        await config.ValidateAsync(ApplicationType.Server);
 
         config.CertificateValidator.CertificateValidation += (s, e) =>
         {
@@ -367,7 +369,7 @@ public class OpcUaServerApp
         Log.Information("Checking application certificates...");
         try
         {
-            await application.CheckApplicationInstanceCertificates(false, 2048);
+            await application.CheckApplicationInstanceCertificatesAsync(false, 2048);
         }
         catch (Exception ex)
         {
@@ -389,12 +391,12 @@ public class OpcUaServerApp
                 Log.Warning(cleanupEx, "Failed to cleanup certificate store.");
             }
 
-            await application.CheckApplicationInstanceCertificates(false, 2048);
+            await application.CheckApplicationInstanceCertificatesAsync(false, 2048);
         }
         
         Log.Information("Starting OPC UA server...");
         _server = new OpcUaServer(configPath);
-        await application.Start(_server);
+        await application.StartAsync(_server);
 
         // The TCP transport is now open — clients can connect.
         // Complete the deferred node loading (JSON parse + address space population).

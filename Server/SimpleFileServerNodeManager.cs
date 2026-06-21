@@ -169,7 +169,7 @@ namespace SimpleOpcFileServer
                         continue;
                     }
 
-                    var variable = FindPredefinedNode(wv.NodeId, typeof(BaseDataVariableState)) as BaseDataVariableState;
+                    var variable = FindPredefinedNode<BaseDataVariableState>(wv.NodeId);
                     if (variable == null)
                     {
                         // Node doesn't belong to this manager — leave
@@ -181,10 +181,10 @@ namespace SimpleOpcFileServer
                     {
                         // Mark as processed so MasterNodeManager knows we handled it.
                         wv.Processed = true;
-                        object v = wv.Value?.Value ?? wv.Value;
-                        Utils.Trace("WRITE-OVERRIDE: nodeId={0} value={1} (type={2})",
+                        object? v = wv.Value?.Value ?? (object?)wv.Value;
+                        Log.Verbose("WRITE-OVERRIDE: nodeId={NodeId} value={Value} (type={Type})",
                             wv.NodeId, v, v?.GetType().Name ?? "null");
-                        errors[i] = serverVar.InvokeWrite(SystemContext, variable, ref v) ?? ServiceResult.Good;
+                        errors[i] = serverVar.InvokeWrite(SystemContext, variable, ref v!) ?? ServiceResult.Good;
                         continue;
                     }
 
@@ -197,7 +197,7 @@ namespace SimpleOpcFileServer
                 }
                 catch (Exception ex)
                 {
-                    Utils.Trace(ex, "Write failed for " + wv.NodeId);
+                    Log.Error(ex, "Write failed for {NodeId}", wv.NodeId);
                     wv.Processed = true;
                     errors[i] = StatusCodes.BadUnexpectedError;
                 }
@@ -209,7 +209,7 @@ namespace SimpleOpcFileServer
             // Redundancy: drivers only run on the active server
             if (_redundancy != null && !_redundancy.IsActive)
             {
-                Utils.Trace("[Redundancy] Standby mode — skipping driver initialization.");
+                Log.Information("[Redundancy] Standby mode — skipping driver initialization.");
                 _eventLogger?.LogSystem("Info", "Redundancy", "Standby mode — drivers not started");
                 return;
             }
@@ -273,7 +273,7 @@ namespace SimpleOpcFileServer
             }
             catch (Exception ex)
             {
-                Utils.Trace(ex, "Failed to setup file watcher");
+                Log.Error(ex, "Failed to setup file watcher");
             }
         }
 
@@ -306,7 +306,7 @@ namespace SimpleOpcFileServer
                     return;
                 }
 
-                IList<IReference> references = null;
+                IList<IReference>? references = null;
                 if (!externalReferences.TryGetValue(ObjectIds.ObjectsFolder, out references))
                 {
                     externalReferences[ObjectIds.ObjectsFolder] = references = new List<IReference>();
@@ -326,7 +326,7 @@ namespace SimpleOpcFileServer
                         if (nodeModel != null)
                             ResourceFileManager.LoadExternalResources(nodeModel, _configPath);
 
-                        LoadModel(nodeModel, externalReferences);
+                        if (nodeModel != null) LoadModel(nodeModel, externalReferences);
                         if (nodeModel != null) StripModelForCache(nodeModel);
                         _lastModel = nodeModel;
                     }
@@ -335,7 +335,7 @@ namespace SimpleOpcFileServer
                 }
                 catch (Exception ex)
                 {
-                    Utils.Trace(ex, "Error loading initial configuration");
+                    Log.Error(ex, "Error loading initial configuration");
                 }
             }
 
@@ -386,8 +386,7 @@ namespace SimpleOpcFileServer
                 }
                 catch (Exception ex)
                 {
-                    Utils.Trace(ex, "Error during deferred configuration parsing");
-                    Log.Error(ex, "Error during deferred configuration parsing.");
+                    Log.Error(ex, "Error during deferred configuration parsing");
                     return;
                 }
             }
@@ -411,8 +410,7 @@ namespace SimpleOpcFileServer
                 }
                 catch (Exception ex)
                 {
-                    Utils.Trace(ex, "Error during deferred node loading");
-                    Log.Error(ex, "Error during deferred node loading.");
+                    Log.Error(ex, "Error during deferred node loading");
                 }
             }
             else
@@ -427,10 +425,12 @@ namespace SimpleOpcFileServer
             // During normal (non-deferred) startup MasterNodeManager calls
             // AddReferences on every node manager after CreateAddressSpace completes.
             // Because we deferred, the dict was empty at that point — replay it now.
+#pragma warning disable CS0618 // AddReferences — AddReferencesAsync not usable in sync CompleteDeferredLoad
             foreach (var kvp in externalReferences)
             {
                 Server.NodeManager.AddReferences(kvp.Key, kvp.Value);
             }
+#pragma warning restore CS0618
 
             // Start demo license expiry check timer (fires every 30s)
             if (SharedModels.LicenseManager.DemoStartedUtc.HasValue)
@@ -453,7 +453,7 @@ namespace SimpleOpcFileServer
         {
             lock (Lock)
             {
-                Utils.Trace("Reloading configuration..."); 
+                Log.Debug("Reloading configuration...");
                 try
                 {
                     NodeModel? newModel;
@@ -471,12 +471,12 @@ namespace SimpleOpcFileServer
                         List<(Variable, string)> newVariables = new();
                         if (_lastModel != null && IsIncrementalChange(_lastModel, newModel, out newVariables)) 
                         {
-                            Utils.Trace($"Incremental update detected. Adding {newVariables.Count} new variables.");
+                            Log.Debug("Incremental update detected. Adding {Count} new variables.", newVariables.Count);
                             _eventLogger?.LogSystem("Info", "Config", $"Incremental config update — {newVariables.Count} new variable(s)");
                             foreach (var (variable, parentPath) in newVariables)
                             {
                                 var parentNodeId = new NodeId(parentPath, _namespaceIndex);
-                                var parentNode = FindPredefinedNode(parentNodeId, typeof(FolderState)) as BaseObjectState; 
+                                var parentNode = FindPredefinedNode<FolderState>(parentNodeId);
 
                                 if (parentNode != null)
                                 {
@@ -484,13 +484,13 @@ namespace SimpleOpcFileServer
                                 }
                                 else
                                 {
-                                    Utils.Trace($"Warning: Parent node {parentPath} not found for incremental update. Falling back to full matching.");
+                                    Log.Warning("Parent node {Path} not found for incremental update.", parentPath);
                                     // Could fallback to full reload, but let's continue best effort or fail.
                                 }
                             }
                             StripModelForCache(newModel);
                             _lastModel = newModel;
-                            Utils.Trace("Configuration updated incrementally.");
+                            Log.Debug("Configuration updated incrementally.");
                         }
                         else
                         {
@@ -501,7 +501,7 @@ namespace SimpleOpcFileServer
                 }
                 catch (Exception ex)
                 {
-                    Utils.Trace(ex, "Error reloading configuration");
+                    Log.Error(ex, "Error reloading configuration");
                     _eventLogger?.LogSystem("Error", "Config", $"Configuration reload failed: {ex.Message}");
                 }
             }
@@ -557,14 +557,16 @@ namespace SimpleOpcFileServer
 
             // Push external references to other node managers (e.g. ObjectsFolder)
             // so that browsing ObjectsFolder shows the new root folder.
+#pragma warning disable CS0618 // AddReferences — AddReferencesAsync not usable in sync reload
             foreach (var kvp in externalReferences)
             {
                 Server.NodeManager.AddReferences(kvp.Key, kvp.Value);
             }
+#pragma warning restore CS0618
 
             StripModelForCache(nodeModel);
             _lastModel = nodeModel;
-            Utils.Trace("Configuration reloaded fully.");
+            Log.Debug("Configuration reloaded fully.");
         }
 
         private void SessionManager_ImpersonateUser(ISession session, ImpersonateEventArgs args)
@@ -575,7 +577,7 @@ namespace SimpleOpcFileServer
 
                 if (_users.TryGetValue(username, out var userConfig))
                 {
-                    string password = null;
+                    string? password = null;
                     if (userNameToken.DecryptedPassword != null)
                     {
                          password = System.Text.Encoding.UTF8.GetString(userNameToken.DecryptedPassword);
@@ -595,7 +597,7 @@ namespace SimpleOpcFileServer
                     if (valid)
                     {
                         args.Identity = new UserIdentity(userNameToken);
-                        Utils.Trace("User {0} logged in.", username);
+                        Log.Debug("User {Username} logged in.", username);
                         _eventLogger?.LogAuth("Info", username, $"User '{username}' logged in");
                         return;
                     }
@@ -918,7 +920,7 @@ namespace SimpleOpcFileServer
                  {
                      _loading = true;
                      Log.Information("Creating OPC UA nodes...");
-                     CreateAddressSpaceParallel(nodeModel.Folder, references, holdingLock);
+                     CreateAddressSpaceParallel(nodeModel.Folder, references!, holdingLock);
                      _loading = false;
                      Log.Information("OPC UA nodes created. Total tracked variables: {Count}.", _variables.Count);
 
@@ -1399,7 +1401,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
 
             // Try to attach under an existing _System folder, otherwise create at root
             var systemFolderId = new NodeId("_System", _namespaceIndex);
-            var systemFolder = FindPredefinedNode(systemFolderId, typeof(FolderState)) as FolderState;
+            var systemFolder = FindPredefinedNode<FolderState>(systemFolderId);
             if (systemFolder != null)
             {
                 systemFolder.AddChild(folder);
@@ -1542,8 +1544,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                     }
                     catch (Exception ex)
                     {
-                        Utils.Trace(ex, $"Error creating subfolder '{subFolder.Name}' under root");
-                        Log.Error(ex, "Error creating subfolder '{SubFolder}' under root.", subFolder.Name);
+                        Log.Error(ex, "Error creating subfolder '{SubFolder}' under root", subFolder.Name);
                     }
                     if (subFolderState != null)
                         subtreeRoots.Add(subFolderState);
@@ -1591,7 +1592,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             foreach (var variable in rootFolder.Variables)
             {
                 try { CreateVariable(variable, rootFolderState, childPrefix); }
-                catch (Exception ex) { Utils.Trace(ex, $"Error creating root variable '{variable.Name}'"); }
+                catch (Exception ex) { Log.Error(ex, "Error creating root variable '{Variable}'", variable.Name); }
             }
 
             var finalCount = Volatile.Read(ref _nodeCreationCount);
@@ -1698,7 +1699,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 }
                 catch (Exception ex)
                 {
-                    Utils.Trace(ex, $"Error creating subfolder '{subFolder.Name}' under '{currentPath}'");
+                    Log.Error(ex, "Error creating subfolder '{SubFolder}' under '{Path}'", subFolder.Name, currentPath);
                 }
             }
 
@@ -1710,7 +1711,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 }
                 catch (Exception ex)
                 {
-                    Utils.Trace(ex, $"Error creating variable '{variable.Name}' under '{currentPath}'");
+                    Log.Error(ex, "Error creating variable '{Variable}' under '{Path}'", variable.Name, currentPath);
                 }
             }
 
@@ -2777,7 +2778,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             }
             catch (Exception ex)
             {
-                Utils.Trace(ex, "Error reporting alarm event for {0}", alarm.NodeId);
+                Log.Error(ex, "Error reporting alarm event for {NodeId}", alarm.NodeId);
             }
         }
 
@@ -3091,7 +3092,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                     }
                     catch (Exception ex)
                     {
-                        Utils.Trace(ex, "Error reading history for " + nodeToRead.NodeId);
+                        Log.Error(ex, "Error reading history for {NodeId}", nodeToRead.NodeId);
                         result.StatusCode = StatusCodes.BadUnexpectedError;
                     }
                 }
@@ -3157,7 +3158,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                             }
                             catch (Exception ex)
                             {
-                                Utils.Trace(ex, "Error logging variable " + state.NodeId);
+                                Log.Error(ex, "Error logging variable {NodeId}", state.NodeId);
                             }
                         }
                     };
@@ -3168,7 +3169,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             {
                 StatusCode sc = StatusCodes.Good;
                 var ts = DateTime.UtcNow;
-                return HandleWriteValue(context, node, NumericRange.Empty, null, ref value, ref sc, ref ts);
+                return HandleWriteValue(context, node, NumericRange.Empty, null!, ref value, ref sc, ref ts);
             }
 
             private ServiceResult HandleWriteValue(ISystemContext context, NodeState node, NumericRange indexRange, QualifiedName dataEncoding, ref object value, ref StatusCode statusCode, ref DateTime timestamp)
@@ -3209,7 +3210,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                         else if (DataType == DataTypeIds.DateTime && DateTime.TryParse(s, out var dt)) incoming = dt;
                     }
 
-                    Utils.Trace("WRITE-HANDLER: nodeId={0} incoming={1} (type={2}) DataType={3}",
+                    Log.Verbose("WRITE-HANDLER: nodeId={NodeId} incoming={Incoming} (type={Type}) DataType={DataType}",
                         NodeId, incoming, incoming?.GetType().Name ?? "null", DataType);
                     Value = incoming;
                     StatusCode = StatusCodes.Good;
@@ -3242,12 +3243,12 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                         foreach (var kv in dict)
                             _retentiveValues[kv.Key] = kv.Value;
                     }
-                    Utils.Trace($"Loaded {_retentiveValues.Count} retentive values from {_retentivePath}");
+                    Log.Debug("Loaded {Count} retentive values from {Path}", _retentiveValues.Count, _retentivePath);
                 }
             }
             catch (Exception ex)
             {
-                Utils.Trace(ex, "Failed to load retentive values");
+                Log.Error(ex, "Failed to load retentive values");
             }
         }
 
@@ -3268,11 +3269,11 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             }
             catch (Exception ex)
             {
-                Utils.Trace(ex, "Failed to save retentive values");
+                Log.Error(ex, "Failed to save retentive values");
             }
         }
 
-        // ─── Variable statistics tracker ─────────────────────────
+        // ─── Variable statistics tracker
         private class VariableStatisticsTracker
         {
             private readonly BaseDataVariableState<double> _min;

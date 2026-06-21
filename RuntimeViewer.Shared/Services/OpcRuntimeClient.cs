@@ -134,21 +134,21 @@ public class OpcRuntimeClient : IDisposable
                 TraceConfiguration = new TraceConfiguration()
             };
 
-            await _appConfig.Validate(ApplicationType.Client);
+            await _appConfig.ValidateAsync(ApplicationType.Client);
 
             _appConfig.CertificateValidator.CertificateValidation += (s, e) =>
             {
                 e.Accept = true;
             };
 
-            var app = new ApplicationInstance
+            var app = new ApplicationInstance(new ApplicationConfiguration())
             {
                 ApplicationName = _appConfig.ApplicationName,
                 ApplicationType = ApplicationType.Client,
                 ApplicationConfiguration = _appConfig
             };
 
-            try { await app.CheckApplicationInstanceCertificates(false, 2048); }
+            try { await app.CheckApplicationInstanceCertificatesAsync(false, 2048); }
             catch
             {
                 var storePath = Utils.ReplaceSpecialFolderNames(
@@ -156,7 +156,7 @@ public class OpcRuntimeClient : IDisposable
                 if (Directory.Exists(storePath))
                     foreach (var f in Directory.EnumerateFiles(storePath))
                         try { File.Delete(f); } catch { }
-                await app.CheckApplicationInstanceCertificates(false, 2048);
+                await app.CheckApplicationInstanceCertificatesAsync(false, 2048);
             }
 
             // Discover endpoints
@@ -241,7 +241,7 @@ public class OpcRuntimeClient : IDisposable
             };
 
             _session.AddSubscription(_subscription);
-            _subscription.Create();
+            await _subscription.CreateAsync();
 
             Log($"CONNECT: Subscription created. Id={_subscription.Id}, PublishingInterval={_subscription.CurrentPublishingInterval}ms");
 
@@ -598,8 +598,8 @@ public class OpcRuntimeClient : IDisposable
             };
 
             StatusCodeCollection? results = null;
-            DiagnosticInfoCollection? diagnosticInfos = null;
-            await Task.Run(() => _session.Write(null, nodesToWrite, out results, out diagnosticInfos));
+            var writeResp = await _session.WriteAsync(null, nodesToWrite, CancellationToken.None);
+            results = writeResp.Results;
 
             var statusCode = results != null ? results[0] : StatusCodes.Bad;
             var ok = results != null && StatusCode.IsGood(statusCode);
@@ -624,13 +624,13 @@ public class OpcRuntimeClient : IDisposable
         }
     }
 
-    public void Disconnect()
+    public async Task Disconnect()
     {
         Log("DISCONNECT: Closing session...");
         try
         {
-            _subscription?.Delete(true);
-            _session?.Close();
+            if (_subscription != null) await _subscription.DeleteAsync(true);
+            if (_session != null) await _session.CloseAsync();
         }
         catch (Exception ex)
         {
@@ -664,8 +664,7 @@ public class OpcRuntimeClient : IDisposable
                 {
                     var methodId = MethodIds.AcknowledgeableConditionType_Acknowledge;
                     var inputArgs = new object[] { eventId, new LocalizedText(comment) };
-                    var result = await Task.Run(() =>
-                        _session.Call(conditionId, methodId, inputArgs));
+                    await SessionCallAsync(conditionId, methodId, inputArgs);
                     ok++;
                 }
                 catch { fail++; }
@@ -694,8 +693,7 @@ public class OpcRuntimeClient : IDisposable
                 {
                     var methodId = MethodIds.AcknowledgeableConditionType_Confirm;
                     var inputArgs = new object[] { eventId, new LocalizedText(comment) };
-                    var result = await Task.Run(() =>
-                        _session.Call(conditionId, methodId, inputArgs));
+                    await SessionCallAsync(conditionId, methodId, inputArgs);
                     ok++;
                 }
                 catch { fail++; }
@@ -736,7 +734,7 @@ public class OpcRuntimeClient : IDisposable
                 MaxNotificationsPerPublish = 1000
             };
             _session.AddSubscription(sub);
-            sub.Create();
+            await sub.CreateAsync();
 
             var monitoredItem = new MonitoredItem(sub.DefaultItem)
             {
@@ -765,10 +763,9 @@ public class OpcRuntimeClient : IDisposable
             sub.ApplyChanges();
 
             // Request ConditionRefresh to get all active conditions
-            await Task.Run(() =>
-                _session.Call(ObjectTypeIds.ConditionType,
-                    MethodIds.ConditionType_ConditionRefresh,
-                    new object[] { sub.Id }));
+            await SessionCallAsync(ObjectTypeIds.ConditionType,
+                MethodIds.ConditionType_ConditionRefresh,
+                new object[] { sub.Id });
 
             // Wait briefly for events to arrive
             await Task.Delay(1000);
@@ -789,8 +786,8 @@ public class OpcRuntimeClient : IDisposable
             }
 
             // Clean up temporary subscription
-            sub.Delete(true);
-            _session.RemoveSubscription(sub);
+            await sub.DeleteAsync(true);
+            await _session.RemoveSubscriptionAsync(sub);
         }
         catch { }
 
@@ -843,7 +840,7 @@ public class OpcRuntimeClient : IDisposable
                 LifetimeCount = 20, MaxNotificationsPerPublish = 1000
             };
             _session.AddSubscription(sub);
-            sub.Create();
+            await sub.CreateAsync();
 
             var mi = new MonitoredItem(sub.DefaultItem)
             {
@@ -864,10 +861,9 @@ public class OpcRuntimeClient : IDisposable
             sub.AddItem(mi);
             sub.ApplyChanges();
 
-            await Task.Run(() =>
-                _session.Call(ObjectTypeIds.ConditionType,
-                    MethodIds.ConditionType_ConditionRefresh,
-                    new object[] { sub.Id }));
+            await SessionCallAsync(ObjectTypeIds.ConditionType,
+                MethodIds.ConditionType_ConditionRefresh,
+                new object[] { sub.Id });
 
             await Task.Delay(1000);
 
@@ -907,8 +903,8 @@ public class OpcRuntimeClient : IDisposable
                 });
 
             }
-            sub.Delete(true);
-            _session.RemoveSubscription(sub);
+            await sub.DeleteAsync(true);
+            await _session.RemoveSubscriptionAsync(sub);
         }
         catch { }
 
@@ -921,9 +917,8 @@ public class OpcRuntimeClient : IDisposable
         if (_session == null || !_session.Connected) return false;
         try
         {
-            await Task.Run(() =>
-                _session.Call(conditionId, MethodIds.AcknowledgeableConditionType_Acknowledge,
-                    new object[] { eventId, new LocalizedText(comment) }));
+            await SessionCallAsync(conditionId, MethodIds.AcknowledgeableConditionType_Acknowledge,
+                new object[] { eventId, new LocalizedText(comment) });
             return true;
         }
         catch { return false; }
@@ -935,9 +930,8 @@ public class OpcRuntimeClient : IDisposable
         if (_session == null || !_session.Connected) return false;
         try
         {
-            await Task.Run(() =>
-                _session.Call(conditionId, MethodIds.AcknowledgeableConditionType_Confirm,
-                    new object[] { eventId, new LocalizedText(comment) }));
+            await SessionCallAsync(conditionId, MethodIds.AcknowledgeableConditionType_Confirm,
+                new object[] { eventId, new LocalizedText(comment) });
             return true;
         }
         catch { return false; }
@@ -951,8 +945,7 @@ public class OpcRuntimeClient : IDisposable
         {
             var methodId = new NodeId("_AlarmManagement.ShelveAlarm", _session.NamespaceUris.GetIndexOrAppend("http://simpleopcfileserver.org/UA"));
             var objectId = new NodeId("_AlarmManagement", _session.NamespaceUris.GetIndexOrAppend("http://simpleopcfileserver.org/UA"));
-            var result = await Task.Run(() =>
-                _session.Call(objectId, methodId, new object[] { variablePath, durationMinutes, username }));
+            var result = await SessionCallAsync(objectId, methodId, new object[] { variablePath, durationMinutes, username });
             return result != null && result.Count > 0 && result[0] is true;
         }
         catch (Exception ex)
@@ -970,8 +963,7 @@ public class OpcRuntimeClient : IDisposable
         {
             var methodId = new NodeId("_AlarmManagement.UnshelveAlarm", _session.NamespaceUris.GetIndexOrAppend("http://simpleopcfileserver.org/UA"));
             var objectId = new NodeId("_AlarmManagement", _session.NamespaceUris.GetIndexOrAppend("http://simpleopcfileserver.org/UA"));
-            var result = await Task.Run(() =>
-                _session.Call(objectId, methodId, new object[] { variablePath, username }));
+            var result = await SessionCallAsync(objectId, methodId, new object[] { variablePath, username });
             return result != null && result.Count > 0 && result[0] is true;
         }
         catch (Exception ex)
@@ -1015,13 +1007,14 @@ public class OpcRuntimeClient : IDisposable
             ReferenceDescriptionCollection? references = null;
             byte[]? continuationPoint = null;
 
-            await Task.Run(() =>
-                _session.Browse(null, null, startNode,
-                    0u, browseDesc.BrowseDirection,
-                    browseDesc.ReferenceTypeId,
-                    browseDesc.IncludeSubtypes,
-                    browseDesc.NodeClassMask,
-                    out continuationPoint, out references));
+            var browseResp = await _session.BrowseAsync(null, null, startNode,
+                0u, browseDesc.BrowseDirection,
+                browseDesc.ReferenceTypeId,
+                browseDesc.IncludeSubtypes,
+                browseDesc.NodeClassMask,
+                CancellationToken.None);
+            continuationPoint = browseResp.Item2;
+            references = browseResp.Item3;
 
             if (references != null)
             {
@@ -1035,7 +1028,7 @@ public class OpcRuntimeClient : IDisposable
                     {
                         try
                         {
-                            var dtVal = _session.ReadValue(nodeId);
+                            var dtVal = await _session.ReadValueAsync(nodeId);
                             dataType = dtVal?.WrappedValue.TypeInfo?.BuiltInType.ToString() ?? "";
                         }
                         catch { }
@@ -1059,16 +1052,13 @@ public class OpcRuntimeClient : IDisposable
             while (continuationPoint != null && continuationPoint.Length > 0)
             {
                 var cp = continuationPoint;
-                var browseNextResult = await Task.Run(() =>
-                {
-                    _session.BrowseNext(null, false, cp, out var nc, out var nr);
-                    return (ContinuationPoint: nc, References: nr);
-                });
-                continuationPoint = browseNextResult.ContinuationPoint;
+                var browseNextResult = await _session.BrowseNextAsync(null, false, new ByteStringCollection { cp }, CancellationToken.None);
+                continuationPoint = browseNextResult.Results?.FirstOrDefault()?.ContinuationPoint;
+                var nextRefs = browseNextResult.Results?.FirstOrDefault()?.References;
 
-                if (browseNextResult.References != null)
+                if (nextRefs != null)
                 {
-                    foreach (var rd in browseNextResult.References)
+                    foreach (var rd in nextRefs)
                     {
                         var nodeId = ExpandedNodeId.ToNodeId(rd.NodeId, _session.NamespaceUris);
                         var isFolder = rd.NodeClass == NodeClass.Object;
@@ -1078,7 +1068,7 @@ public class OpcRuntimeClient : IDisposable
                         {
                             try
                             {
-                                var dtVal = _session.ReadValue(nodeId);
+                                var dtVal = await _session.ReadValueAsync(nodeId);
                                 dataType = dtVal?.WrappedValue.TypeInfo?.BuiltInType.ToString() ?? "";
                             }
                             catch { }
@@ -1144,8 +1134,7 @@ public class OpcRuntimeClient : IDisposable
         try
         {
             var nodeId = NodeId.Parse(nodeIdStr);
-            DataValue? val = null;
-            await Task.Run(() => val = _session.ReadValue(nodeId));
+            var val = await _session.ReadValueAsync(nodeId);
             if (val?.WrappedValue.Value is IFormattable fmt)
                 return fmt.ToString(null, System.Globalization.CultureInfo.InvariantCulture);
             return val?.WrappedValue.Value?.ToString();
@@ -1174,8 +1163,8 @@ public class OpcRuntimeClient : IDisposable
                 }
             };
             StatusCodeCollection? results = null;
-            DiagnosticInfoCollection? diagnosticInfos = null;
-            await Task.Run(() => _session.Write(null, nodesToWrite, out results, out diagnosticInfos));
+            var writeResponse = await _session.WriteAsync(null, nodesToWrite, CancellationToken.None);
+            results = writeResponse.Results;
             var ok = results != null && StatusCode.IsGood(results[0]);
             if (!ok) Log($"WRITE TAG FAIL: {nodeIdStr} = {value}");
             return ok;
@@ -1188,9 +1177,23 @@ public class OpcRuntimeClient : IDisposable
     }
 
 
+    /// <summary>Calls an OPC UA method and returns the output arguments.</summary>
+    private async Task<IList<object>?> SessionCallAsync(NodeId objectId, NodeId methodId, object[] inputArgs)
+    {
+        if (_session == null) return null;
+        var requests = new CallMethodRequestCollection
+        {
+            new CallMethodRequest { ObjectId = objectId, MethodId = methodId,
+                InputArguments = new VariantCollection(inputArgs.Select(a => new Variant(a))) }
+        };
+        var response = await _session.CallAsync(null, requests, CancellationToken.None);
+        var res = response.Results?.FirstOrDefault();
+        return res?.OutputArguments?.Select(v => v.Value).ToList();
+    }
+
     public void Dispose()
     {
-        Disconnect();
+        _ = Disconnect();
     }
 }
 

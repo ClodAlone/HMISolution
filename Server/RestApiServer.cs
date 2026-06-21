@@ -390,7 +390,7 @@ public sealed class RestApiServer : IDisposable
                     }
                     catch (Exception ex)
                     {
-                        return new { path = p, value = (object?)null, success = false, error = ex.Message };
+                        return new { path = p, value = (object?)null, success = false, error = (string?)ex.Message };
                     }
                 }).ToList();
 
@@ -458,7 +458,7 @@ public sealed class RestApiServer : IDisposable
                     }
                     catch (Exception ex)
                     {
-                        return new { path = w.GetValueOrDefault("path")?.ToString() ?? "unknown", success = false, error = ex.Message };
+                        return new { path = w.GetValueOrDefault("path")?.ToString() ?? "unknown", success = false, error = (string?)ex.Message };
                     }
                 }).ToList();
 
