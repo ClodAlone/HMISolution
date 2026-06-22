@@ -1,7 +1,7 @@
 Write-Host "Pushing Docker images to Docker Hub..." -ForegroundColor Cyan
 $dockerHubUser = "clodprogea"
 $imageName = "aicorehmi"
-$tags = @("latest", "1.0")
+$tags = @("latest", "1.0", "1.0.1")
 foreach ($tag in $tags) {
     $targetImage = "${dockerHubUser}/${imageName}:${tag}"
     Write-Host "Tagging and pushing: $targetImage" -ForegroundColor Yellow
