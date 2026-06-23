@@ -1,1 +1,0 @@
-IF OBJECT_ID ('dbo.DataLogger_AFTER_INSERT', 'TR') IS NOT NULL DROP TRIGGER [dbo].[DataLogger_AFTER_INSERT]

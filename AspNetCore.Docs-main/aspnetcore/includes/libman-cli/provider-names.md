@@ -1,4 +1,0 @@
-* `cdnjs`
-* `filesystem`
-* `jsdelivr`
-* `unpkg`
