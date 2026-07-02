@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Claudio Fiorani
+// All rights reserved.
+
 using Microsoft.Data.Sqlite;
 var conn = new SqliteConnection("Data Source=C:\\Work\\samples\\StressTest_1K\\Data\\history.db;Mode=ReadOnly");
 conn.Open();

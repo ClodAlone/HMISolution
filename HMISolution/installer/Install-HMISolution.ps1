@@ -1,4 +1,7 @@
 #Requires -Version 5.1
+# Copyright (c) 2026 Claudio Fiorani
+# All rights reserved.
+
 <#
 .SYNOPSIS
     HMI Solution Windows Installer.

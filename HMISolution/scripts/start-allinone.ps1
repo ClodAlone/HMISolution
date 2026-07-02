@@ -1,3 +1,6 @@
+# Copyright (c) 2026 Claudio Fiorani
+# All rights reserved.
+
 # AI Core HMI - All-in-One Deployment Script
 # Builds and starts all services with docker-compose
 
@@ -31,12 +34,12 @@ Write-Host ""
 Write-Host "? All services started successfully!" -ForegroundColor Green
 Write-Host ""
 Write-Host "?? Access Points:" -ForegroundColor Cyan
-Write-Host "  • Web Editor:      http://localhost:8080" -ForegroundColor White
-Write-Host "  • Runtime Viewer:  http://localhost:8088" -ForegroundColor White
-Write-Host "  • OPC UA Server:   opc.tcp://localhost:14840" -ForegroundColor White
-Write-Host "  • REST API:        http://localhost:14841" -ForegroundColor White
-Write-Host "  • Ollama:          http://localhost:11434" -ForegroundColor White
-Write-Host "  • PostgreSQL:      localhost:5432" -ForegroundColor White
+Write-Host "  ï¿½ Web Editor:      http://localhost:8080" -ForegroundColor White
+Write-Host "  ï¿½ Runtime Viewer:  http://localhost:8088" -ForegroundColor White
+Write-Host "  ï¿½ OPC UA Server:   opc.tcp://localhost:14840" -ForegroundColor White
+Write-Host "  ï¿½ REST API:        http://localhost:14841" -ForegroundColor White
+Write-Host "  ï¿½ Ollama:          http://localhost:11434" -ForegroundColor White
+Write-Host "  ï¿½ PostgreSQL:      localhost:5432" -ForegroundColor White
 Write-Host ""
 Write-Host "?? View logs:    docker-compose -f docker-compose.allinone.yml logs -f" -ForegroundColor Gray
 Write-Host "?? Stop all:     docker-compose -f docker-compose.allinone.yml down" -ForegroundColor Gray

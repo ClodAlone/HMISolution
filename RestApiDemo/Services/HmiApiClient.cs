@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Claudio Fiorani
+// All rights reserved.
+
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;

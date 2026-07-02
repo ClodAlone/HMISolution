@@ -1,4 +1,7 @@
-﻿using System.Text.Json.Serialization;
+﻿// Copyright (c) 2026 Claudio Fiorani
+// All rights reserved.
+
+using System.Text.Json.Serialization;
 using System.Collections.Generic;
 using System.Text.Json;
 using SharedModels;

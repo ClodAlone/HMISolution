@@ -1,4 +1,7 @@
-﻿using System.Net;
+﻿// Copyright (c) 2026 Claudio Fiorani
+// All rights reserved.
+
+using System.Net;
 using System.Text;
 
 Console.WriteLine("=== IP Speaker / Sonos Test Tool ===");

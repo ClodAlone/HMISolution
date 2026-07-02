@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Claudio Fiorani
+// All rights reserved.
+
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Opc.Ua;

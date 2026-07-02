@@ -1,3 +1,6 @@
+# Copyright (c) 2026 Claudio Fiorani
+# All rights reserved.
+
 Write-Host "Pushing Docker images to Docker Hub..." -ForegroundColor Cyan
 $dockerHubUser = "clodprogea"
 $imageName = "aicorehmi"

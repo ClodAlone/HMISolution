@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Claudio Fiorani
+// All rights reserved.
+
 namespace ServerEditorWeb.Components.Editor;
 
 public class DockPanelDragEventArgs

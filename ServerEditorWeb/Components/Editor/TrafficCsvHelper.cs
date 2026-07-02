@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Claudio Fiorani
+// All rights reserved.
+
 using ServerEditorWeb.Services;
 
 namespace ServerEditorWeb.Components.Editor;

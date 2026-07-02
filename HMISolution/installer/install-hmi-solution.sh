@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright (c) 2026 Claudio Fiorani
+# All rights reserved.
+
 # HMI Solution Linux installer.
 #
 # Installs the desktop Release builds of the HMI Solution runtime, editor

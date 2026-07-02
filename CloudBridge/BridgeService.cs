@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Claudio Fiorani
+// All rights reserved.
+
 using Microsoft.AspNetCore.SignalR.Client;
 using Opc.Ua;
 using Opc.Ua.Client;

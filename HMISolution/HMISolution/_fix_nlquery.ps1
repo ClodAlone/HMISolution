@@ -1,3 +1,6 @@
+# Copyright (c) 2026 Claudio Fiorani
+# All rights reserved.
+
 $file = "C:\Users\cfior\source\repos\ServerEditorWeb\Components\Editor\NodeProperties.razor"
 $c = [System.IO.File]::ReadAllText($file)
 

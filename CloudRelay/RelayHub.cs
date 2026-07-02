@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Claudio Fiorani
+// All rights reserved.
+
 using Microsoft.AspNetCore.SignalR;
 using SharedModels.CloudRelay;
 

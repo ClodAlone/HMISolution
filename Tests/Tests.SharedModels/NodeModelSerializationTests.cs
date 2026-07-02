@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Claudio Fiorani
+// All rights reserved.
+
 using Xunit;
 using System.Text.Json;
 using SharedModels;

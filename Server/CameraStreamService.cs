@@ -1,4 +1,7 @@
-﻿using System;
+﻿// Copyright (c) 2026 Claudio Fiorani
+// All rights reserved.
+
+using System;
 using System.Buffers;
 using System.Collections.Concurrent;
 using System.Collections.Generic;

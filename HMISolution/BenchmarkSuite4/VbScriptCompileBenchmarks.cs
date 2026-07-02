@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Claudio Fiorani
+// All rights reserved.
+
 using BenchmarkDotNet.Attributes;
 using System.Collections.Concurrent;
 using System.Reflection;

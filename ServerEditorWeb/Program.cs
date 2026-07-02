@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Claudio Fiorani
+// All rights reserved.
+
 using ServerEditorWeb.Components;
 using ServerEditorWeb.Services;
 using System.Threading.RateLimiting;

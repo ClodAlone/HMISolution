@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Claudio Fiorani
+// All rights reserved.
+
 using System.Diagnostics;
 using System.Net.Sockets;
 using System.Text;
@@ -394,7 +397,7 @@ public class DriverTestService
             return new DriverTestResult(true, $"Modbus coil write OK ? {boolVal}", boolVal.ToString());
         }
         if (!ushort.TryParse(value, out var regVal))
-            return new DriverTestResult(false, "Value must be a number (0–65535) for register");
+            return new DriverTestResult(false, "Value must be a number (0ï¿½65535) for register");
         await master.WriteSingleRegisterAsync(unitId, register, regVal);
         return new DriverTestResult(true, $"Modbus register write OK ? {regVal}", regVal.ToString());
     }
