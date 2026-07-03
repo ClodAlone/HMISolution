@@ -92,5 +92,11 @@ window.dockManager = {
     restoreTreeWidth: function (storageKey) {
         var saved = localStorage.getItem(storageKey || 'tree-panel-width');
         return saved ? parseInt(saved, 10) : 0;
+    },
+
+    /** Return the current pixel width of the center dock zone (used to size a new split pane). */
+    getCenterZoneWidth: function () {
+        var el = document.querySelector('.dock-zone-center');
+        return el ? Math.round(el.getBoundingClientRect().width) : 0;
     }
 };

@@ -131,6 +131,9 @@
                         </li>
                     }
                     <li class="dock-tab-spacer"></li>
+                    <li class="dock-tab-action" @onclick="() => SplitActiveCenter()" title="Split editor to the right (Ctrl+\\)">
+                        <span>◯</span>
+                    </li>
                     <li class="dock-tab-action" @onclick="() => MaximizeActiveCenter()" title="Maximize active panel">
                         <span>⬜</span>
                     </li>
@@ -150,6 +153,14 @@
             <div class="dock-splitter dock-splitter-v" @onmousedown="OnCenter2SplitterDown" @onmousedown:preventDefault></div>
             <div class="dock-zone dock-zone-center2" style="width: @(_center2Width)px;">
                 <ul class="dock-tabs">
+                    <li class="dock-tab-action @(_history2Idx > 0 ? "" : "dock-tab-action-disabled")"
+                        @onclick="History2Back" title="Navigate back (Alt+Shift+←)">
+                        <span>←</span>
+                    </li>
+                    <li class="dock-tab-action @(_history2Idx < _tabHistory2.Count - 1 ? "" : "dock-tab-action-disabled")"
+                        @onclick="History2Forward" title="Navigate forward (Alt+Shift+→)">
+                        <span>→</span>
+                    </li>
                     @foreach (var p in center2Panels)
                     {
                         var panelId = p.Id;
@@ -164,8 +175,12 @@
                         </li>
                     }
                     <li class="dock-tab-spacer"></li>
+                    <li class="dock-tab-action" @onclick="() => UnsplitCenter2()" title="Merge split back into center">
+                        <span>▮</span>
+                    </li>
                 </ul>
-                <div class="dock-tab-content">
+                <div class="dock-tab-content"
+                     @oncontextmenu="(e) => ShowPaneContextMenu(e, _activeCenter2Tab, center2Panels)" @oncontextmenu:preventDefault @oncontextmenu:stopPropagation>
                     @RenderPanel(activeCenter2)
                 </div>
             </div>
@@ -419,6 +434,11 @@
     private int _historyIdx = -1;
     private bool _historyNavigating;
 
+    // Tab navigation history (center2 split pane)
+    private readonly List<string> _tabHistory2 = new();
+    private int _history2Idx = -1;
+    private bool _history2Navigating;
+
     private int _rightWidth = 400;
     private int _bottomHeight = 200;
     private int _center2Width = 500;
@@ -503,7 +523,9 @@
 
         _rightWidth = settings.RightWidth;
         _bottomHeight = settings.BottomHeight;
+        _center2Width = settings.Center2Width > 0 ? settings.Center2Width : _center2Width;
         _activeCenterTab = settings.ActiveCenterTab;
+        _activeCenter2Tab = settings.ActiveCenter2Tab;
         _activeRightTab = settings.ActiveRightTab;
         _activeBottomTab = settings.ActiveBottomTab;
 
@@ -536,9 +558,11 @@
         var settings = new DockLayoutSettings
         {
             ActiveCenterTab = _activeCenterTab,
+            ActiveCenter2Tab = _activeCenter2Tab,
             ActiveRightTab = _activeRightTab,
             ActiveBottomTab = _activeBottomTab,
             RightWidth = _rightWidth,
+            Center2Width = _center2Width,
             BottomHeight = _bottomHeight
         };
 
@@ -583,7 +607,21 @@
             _activeCenterTab = panelId;
         }
         else if (zone == "right") _activeRightTab = panelId;
-        else if (zone == "center2") _activeCenter2Tab = panelId;
+        else if (zone == "center2")
+        {
+            if (!_history2Navigating && _activeCenter2Tab != panelId)
+            {
+                if (_history2Idx < _tabHistory2.Count - 1)
+                    _tabHistory2.RemoveRange(_history2Idx + 1, _tabHistory2.Count - _history2Idx - 1);
+
+                if (_tabHistory2.Count == 0 || _tabHistory2[^1] != panelId)
+                {
+                    _tabHistory2.Add(panelId);
+                    _history2Idx = _tabHistory2.Count - 1;
+                }
+            }
+            _activeCenter2Tab = panelId;
+        }
         else if (zone == "bottom") _activeBottomTab = panelId;
         SaveLayoutDebounced();
     }
@@ -611,6 +649,79 @@
         _historyNavigating = true;
         ActivateTab(target, "center");
         _historyNavigating = false;
+        StateHasChanged();
+    }
+
+    private void History2Back()
+    {
+        if (_history2Idx <= 0) return;
+        _history2Idx--;
+        var target = _tabHistory2[_history2Idx];
+        var p = Panels.FirstOrDefault(x => x.Id == target && x.Zone == "center2");
+        if (p == null) { _tabHistory2.RemoveAt(_history2Idx); return; }
+        _history2Navigating = true;
+        ActivateTab(target, "center2");
+        _history2Navigating = false;
+        StateHasChanged();
+    }
+
+    private void History2Forward()
+    {
+        if (_history2Idx >= _tabHistory2.Count - 1) return;
+        _history2Idx++;
+        var target = _tabHistory2[_history2Idx];
+        var p = Panels.FirstOrDefault(x => x.Id == target && x.Zone == "center2");
+        if (p == null) { _tabHistory2.RemoveAt(_history2Idx); return; }
+        _history2Navigating = true;
+        ActivateTab(target, "center2");
+        _history2Navigating = false;
+        StateHasChanged();
+    }
+
+    /// <summary>Move the active center panel to the split pane (center2). Ctrl+\ shortcut.</summary>
+    public async Task SplitActiveCenter()
+    {
+        if (string.IsNullOrEmpty(_activeCenterTab)) return;
+        var centerPanels = Panels.Where(p => p.Zone == "center").ToList();
+        if (centerPanels.Count <= 1) return; // don't split if only one panel left in center
+        var target = Panels.FirstOrDefault(p => p.Id == _activeCenterTab);
+        if (target == null) return;
+
+        // Size the new split pane to roughly half of the current center zone
+        // so the divider appears in the middle of the visible editor area
+        // rather than being clipped against the right zone's splitter.
+        try
+        {
+            var centerWidth = await JS.InvokeAsync<int>("dockManager.getCenterZoneWidth");
+            if (centerWidth > 400)
+            {
+                _center2Width = Math.Max(250, Math.Min(900, centerWidth / 2));
+            }
+        }
+        catch
+        {
+            // JS not ready — keep the current _center2Width.
+        }
+
+        target.Zone = "center2";
+        _activeCenter2Tab = target.Id;
+        // Promote another tab in the center to active
+        var remaining = Panels.Where(p => p.Zone == "center").ToList();
+        if (remaining.Count > 0 && !remaining.Any(p => p.Id == _activeCenterTab))
+            _activeCenterTab = remaining.First().Id;
+        NotifyLayoutChanged();
+        StateHasChanged();
+    }
+
+    /// <summary>Move all split-pane panels back into the center zone.</summary>
+    public void UnsplitCenter2()
+    {
+        var moved = Panels.Where(p => p.Zone == "center2").ToList();
+        if (moved.Count == 0) return;
+        foreach (var p in moved) p.Zone = "center";
+        _tabHistory2.Clear();
+        _history2Idx = -1;
+        NotifyLayoutChanged();
         StateHasChanged();
     }
 
@@ -683,6 +794,7 @@
         }
         // Ensure the kept panel is the active tab
         if (zone == "center") _activeCenterTab = keepId;
+        else if (zone == "center2") _activeCenter2Tab = keepId;
         else if (zone == "right") _activeRightTab = keepId;
         else if (zone == "bottom") _activeBottomTab = keepId;
         NotifyLayoutChanged();
@@ -810,7 +922,7 @@
         StateHasChanged();
     }
 
-    private void OnKeyDown(KeyboardEventArgs e)
+    private async Task OnKeyDown(KeyboardEventArgs e)
     {
         if (e.Key == "Escape")
         {
@@ -827,6 +939,14 @@
                 CloseAutoHideReveal();
             }
         }
+        else if (e.AltKey && e.ShiftKey && e.Key == "ArrowLeft")
+        {
+            History2Back();
+        }
+        else if (e.AltKey && e.ShiftKey && e.Key == "ArrowRight")
+        {
+            History2Forward();
+        }
         else if (e.AltKey && e.Key == "ArrowLeft")
         {
             HistoryBack();
@@ -834,6 +954,10 @@
         else if (e.AltKey && e.Key == "ArrowRight")
         {
             HistoryForward();
+        }
+        else if (e.CtrlKey && e.Key == "\\")
+        {
+            await SplitActiveCenter();
         }
     }
 
@@ -1073,7 +1197,9 @@
                 break;
 
             case "splitter-center2":
-                var deltaC2 = clientX - _splitterStart;
+                // Splitter sits on the LEFT edge of the center2 zone (same as splitter-right vs right zone).
+                // Dragging the splitter right must shrink center2 so the divider stays under the mouse.
+                var deltaC2 = _splitterStart - clientX;
                 _center2Width = Math.Max(200, Math.Min(900, _splitterOriginalSize + (int)deltaC2));
                 InvokeAsync(StateHasChanged);
                 break;
@@ -1102,7 +1228,7 @@
         }
 
         // Save layout after any drag/resize/splitter/undock operation
-        var shouldSave = _dragMode is "drag" or "tab-undock" or "resize" or "splitter-right" or "splitter-bottom";
+        var shouldSave = _dragMode is "drag" or "tab-undock" or "resize" or "splitter-right" or "splitter-center2" or "splitter-bottom";
 
         _dragMode = "";
         _dragPanelId = "";

@@ -228,8 +228,8 @@ This is a mandatory deliverable in regulated industries (pharmaceutical, oil & g
 
 | # | Feature | Area | Notes |
 |---|---|---|---|
-| QW-1 | **Tab history navigation (← →)** | Editor UX | Jump back to previously active dock tabs like browser history |
-| QW-2 | **Split editor panes** | Screen / Script Editors | Show two scripts or screens side-by-side in the center zone |
+| QW-1 | **Tab history navigation (← →)** | Editor UX | Jump back to previously active dock tabs like browser history — ✅ Implemented (Alt+←/→ for center, Alt+Shift+←/→ for split pane) |
+| QW-2 | **Split editor panes** | Screen / Script Editors | Show two scripts or screens side-by-side in the center zone — ✅ Implemented (Ctrl+\ to split active tab; per-pane history; drag-resize; persists across sessions) |
 | QW-3 | **Pinned / favourite variables** | Project Tree | Star variables to a quick-access list at the top of the tree — ✅ Implemented |
 | QW-4 | **Diff view for scripts in Git panel** | Git Integration | Side-by-side diff of script files within `GitPanel` — ✅ Implemented |
 | QW-5 | **Screen thumbnail strip** | Screen Editor | Horizontal scrollable miniature preview of all project screens — ✅ Implemented |

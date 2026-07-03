@@ -9,9 +9,11 @@ public class DockLayoutSettings
 {
     public Dictionary<string, PanelLayoutState> Panels { get; set; } = new();
     public string ActiveCenterTab { get; set; } = "";
+    public string ActiveCenter2Tab { get; set; } = "";
     public string ActiveRightTab { get; set; } = "";
     public string ActiveBottomTab { get; set; } = "";
     public int RightWidth { get; set; } = 400;
+    public int Center2Width { get; set; } = 500;
     public int BottomHeight { get; set; } = 200;
 }
 
