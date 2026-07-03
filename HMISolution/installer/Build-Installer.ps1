@@ -1,21 +1,26 @@
 #Requires -Version 5.1
-# Copyright (c) 2026 Claudio Fiorani
-# All rights reserved.
-
 <#
 .SYNOPSIS
     Builds HMI Solution installer packages for Windows and Linux.
 
 .DESCRIPTION
-    Publishes the three desktop Release components (RuntimeViewer.Desktop,
+    Publishes the desktop Release components (RuntimeViewer.Desktop,
     ServerEditorWeb.Desktop, Server) as self-contained binaries for the
-    selected runtime identifiers, arranges them into a payload directory
-    alongside the platform installer, and produces distributable archives:
+    selected runtime identifiers, plus:
 
-        HMISolution-Installer-Windows-<version>.zip
-        HMISolution-Installer-Linux-<version>.tar.gz
+      * the RuntimeViewer web app that RuntimeViewer.Desktop hosts,
+      * the ServerEditorWeb web app that ServerEditorWeb.Desktop hosts,
+      * the ServerEditorWeb SymbolLibrary (SVG symbols) and wwwroot,
+      * all 12 driver DLLs (Modbus, S7, MQTT, OPC UA Client, EtherNet/IP,
+        KNX, CSV, REST, TCP, SQL, SparkplugB, Simulation) plus their
+        dependencies into the Server payload's drivers/ subfolder.
 
-    Requires the .NET 10 SDK on PATH.
+    Layout produced inside each archive:
+        payload/
+            Runtime/  RuntimeViewer.Desktop + RuntimeViewer web + wwwroot
+            Editor/   ServerEditorWeb.Desktop + ServerEditorWeb web +
+                      SymbolLibrary + wwwroot
+            Server/   Server executable + drivers/ + runtimes/
 
 .PARAMETER Platforms
     Which platforms to build. Values: Windows, Linux, Both. Default: Both.
@@ -56,7 +61,6 @@ $srcRoot = Resolve-Path (Join-Path $repo '..')          # sibling projects root
 if (-not $OutputDir) { $OutputDir = Join-Path $here 'dist' }
 New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
 
-# Read version from Version.props if not provided
 if (-not $Version) {
     $vp = Join-Path $repo 'Version.props'
     if (Test-Path $vp) {
@@ -72,56 +76,139 @@ Write-Host "  Configuration  : $Configuration"
 Write-Host "  Output         : $OutputDir"
 Write-Host ""
 
-$projects = @(
-    [pscustomobject]@{ Key='Runtime'; Path = Join-Path $srcRoot 'RuntimeViewer.Desktop\RuntimeViewer.Desktop.csproj' }
-    [pscustomobject]@{ Key='Editor';  Path = Join-Path $srcRoot 'ServerEditorWeb.Desktop\ServerEditorWeb.Desktop.csproj' }
-    [pscustomobject]@{ Key='Server';  Path = Join-Path $srcRoot 'Server\Server.csproj' }
-)
+# ---------- project catalogue ----------
+$desktopShells = @{
+    Runtime = Join-Path $srcRoot 'RuntimeViewer.Desktop\RuntimeViewer.Desktop.csproj'
+    Editor  = Join-Path $srcRoot 'ServerEditorWeb.Desktop\ServerEditorWeb.Desktop.csproj'
+}
+$webApps = @{
+    Runtime = Join-Path $srcRoot 'RuntimeViewer\RuntimeViewer.csproj'
+    Editor  = Join-Path $srcRoot 'ServerEditorWeb\ServerEditorWeb.csproj'
+}
+$serverProject = Join-Path $srcRoot 'Server\Server.csproj'
 
-foreach ($p in $projects) {
-    if (-not (Test-Path $p.Path)) { throw "Project not found: $($p.Path)" }
+$driverProjects = @(
+    'Drivers.Csv','Drivers.Modbus','Drivers.S7','Drivers.Mqtt',
+    'Drivers.EtherNetIP','Drivers.Sql','Drivers.OpcUaClient',
+    'Drivers.Rest','Drivers.Tcp','Drivers.Knx','Drivers.Simulation',
+    'Drivers.SparkplugB'
+) | ForEach-Object { Join-Path $srcRoot "Drivers\$_\$_.csproj" }
+
+# Sanity: all projects exist
+foreach ($p in @($desktopShells.Values + $webApps.Values + $serverProject + $driverProjects)) {
+    if (-not (Test-Path $p)) { throw "Project not found: $p" }
 }
 
-function Publish-Project {
-    param($Project, [string]$Rid, [string]$OutDir)
+# ---------- helpers ----------
+function Publish-One {
+    param([string]$Project, [string]$Rid, [string]$OutDir, [switch]$NoSelfContained)
 
     if ($SkipPublish -and (Test-Path $OutDir) -and (Get-ChildItem $OutDir -File -ErrorAction SilentlyContinue)) {
-        Write-Host "  [skip] $($Project.Key) ($Rid) - existing output" -ForegroundColor DarkGray
+        Write-Host "  [skip] $(Split-Path $Project -Leaf) ($Rid)" -ForegroundColor DarkGray
         return
     }
-    Write-Host "  publishing $($Project.Key) -> $Rid" -ForegroundColor Green
+    Write-Host "  publishing $(Split-Path $Project -Leaf) -> $Rid" -ForegroundColor Green
     New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
-    & dotnet publish $Project.Path `
+
+    $selfArg = if ($NoSelfContained) { 'false' } else { 'true' }
+    & dotnet publish $Project `
         -c $Configuration `
         -r $Rid `
-        --self-contained true `
+        --self-contained $selfArg `
         -p:PublishSingleFile=false `
+        -p:UseAppHost=true `
         -o $OutDir `
         --nologo `
         -v minimal
-    if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed for $($Project.Key) / $Rid" }
+    if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed for $Project / $Rid" }
 }
 
-function New-Payload {
+function Copy-Tree {
+    param([string]$Src, [string]$Dst)
+    if (-not (Test-Path $Src)) { throw "Source missing: $Src" }
+    New-Item -ItemType Directory -Force -Path $Dst | Out-Null
+    Copy-Item -Path (Join-Path $Src '*') -Destination $Dst -Recurse -Force
+}
+
+function Build-Payload {
     param([string]$Rid, [string]$StageRoot)
 
     $payload = Join-Path $StageRoot 'payload'
     if (Test-Path $payload) { Remove-Item -Recurse -Force $payload }
     New-Item -ItemType Directory -Force -Path $payload | Out-Null
 
-    foreach ($p in $projects) {
-        $pubDir = Join-Path $here "publish\$Rid\$($p.Key)"
-        Publish-Project -Project $p -Rid $Rid -OutDir $pubDir
-        $dest = Join-Path $payload $p.Key
-        New-Item -ItemType Directory -Force -Path $dest | Out-Null
-        Copy-Item -Path (Join-Path $pubDir '*') -Destination $dest -Recurse -Force
+    # ----- Runtime -----
+    $runtimeDest = Join-Path $payload 'Runtime'
+    # Web viewer first (self-contained so no runtime dependency)
+    $runtimeWebOut = Join-Path $here "publish\$Rid\RuntimeViewerWeb"
+    Publish-One -Project $webApps.Runtime -Rid $Rid -OutDir $runtimeWebOut
+    Copy-Tree -Src $runtimeWebOut -Dst $runtimeDest
+    # Desktop shell overlaid on top (adds Photino + RuntimeViewer.Desktop.exe)
+    $runtimeShellOut = Join-Path $here "publish\$Rid\RuntimeViewerDesktop"
+    Publish-One -Project $desktopShells.Runtime -Rid $Rid -OutDir $runtimeShellOut
+    Copy-Item -Path (Join-Path $runtimeShellOut '*') -Destination $runtimeDest -Recurse -Force
+
+    # ----- Editor -----
+    $editorDest = Join-Path $payload 'Editor'
+    $editorWebOut = Join-Path $here "publish\$Rid\ServerEditorWeb"
+    Publish-One -Project $webApps.Editor -Rid $Rid -OutDir $editorWebOut
+    Copy-Tree -Src $editorWebOut -Dst $editorDest
+    # SymbolLibrary is included via <Content Update="SymbolLibrary\**\*" CopyToPublishDirectory="PreserveNewest"/>
+    # but double-check and copy from source if missing (older SDKs sometimes miss it)
+    $symbolDest = Join-Path $editorDest 'SymbolLibrary'
+    $symbolSrc  = Join-Path $srcRoot 'ServerEditorWeb\SymbolLibrary'
+    if ((-not (Test-Path $symbolDest) -or -not (Get-ChildItem $symbolDest -Recurse -File -EA SilentlyContinue)) `
+        -and (Test-Path $symbolSrc)) {
+        Write-Host "  copying SymbolLibrary from source" -ForegroundColor Yellow
+        Copy-Tree -Src $symbolSrc -Dst $symbolDest
     }
+    $editorShellOut = Join-Path $here "publish\$Rid\ServerEditorWebDesktop"
+    Publish-One -Project $desktopShells.Editor -Rid $Rid -OutDir $editorShellOut
+    Copy-Item -Path (Join-Path $editorShellOut '*') -Destination $editorDest -Recurse -Force
+
+    # ----- Server -----
+    $serverDest = Join-Path $payload 'Server'
+    $serverOut  = Join-Path $here "publish\$Rid\Server"
+    Publish-One -Project $serverProject -Rid $Rid -OutDir $serverOut
+    Copy-Tree -Src $serverOut -Dst $serverDest
+
+    # Publish each driver individually and copy its DLLs (+ dependencies) into Server/drivers
+    $driversDest = Join-Path $serverDest 'drivers'
+    New-Item -ItemType Directory -Force -Path $driversDest | Out-Null
+    foreach ($drv in $driverProjects) {
+        $name   = [IO.Path]::GetFileNameWithoutExtension($drv)
+        $drvOut = Join-Path $here "publish\$Rid\$name"
+        # Drivers are class libs -> publish framework-dependent to grab their transitive deps
+        Publish-One -Project $drv -Rid $Rid -OutDir $drvOut -NoSelfContained
+        # Copy only DLLs the driver actually needs, skipping those already in the Server payload
+        $serverDlls = @{}
+        Get-ChildItem $serverDest -Filter *.dll -File | ForEach-Object { $serverDlls[$_.Name] = $true }
+        Get-ChildItem $drvOut -Filter *.dll -File | Where-Object { -not $serverDlls.ContainsKey($_.Name) } |
+            Copy-Item -Destination $driversDest -Force
+        # Copy the driver's own DLL unconditionally (must live in drivers/ folder)
+        $ownDll = Join-Path $drvOut "$name.dll"
+        if (Test-Path $ownDll) { Copy-Item $ownDll -Destination $driversDest -Force }
+    }
+
+    Write-Host ""
+    Write-Host "  Payload summary for ${Rid}:" -ForegroundColor Cyan
+    foreach ($sub in 'Runtime','Editor','Server') {
+        $dir = Join-Path $payload $sub
+        if (Test-Path $dir) {
+            $c = (Get-ChildItem $dir -Recurse -File).Count
+            $sz = [math]::Round(((Get-ChildItem $dir -Recurse -File | Measure-Object Length -Sum).Sum / 1MB), 1)
+            Write-Host ("    {0,-8} {1,6} files, {2,7} MB" -f $sub, $c, $sz)
+        }
+    }
+    $drvCount = (Get-ChildItem $driversDest -Filter '*Drivers.*.dll' -File -EA SilentlyContinue).Count
+    Write-Host ("    drivers   {0} driver DLLs in Server/drivers/" -f $drvCount)
+    Write-Host ""
     return $payload
 }
 
 function Build-WindowsPackage {
-    $rid       = 'win-x64'
-    $stage     = Join-Path $here "stage\$rid"
+    $rid   = 'win-x64'
+    $stage = Join-Path $here "stage\$rid"
     if (Test-Path $stage) { Remove-Item -Recurse -Force $stage }
     New-Item -ItemType Directory -Force -Path $stage | Out-Null
 
@@ -129,14 +216,13 @@ function Build-WindowsPackage {
     if (Test-Path (Join-Path $here 'README.md')) {
         Copy-Item (Join-Path $here 'README.md') $stage
     }
-    # Convenience .cmd wrapper so end-users can double-click
     @'
 @echo off
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0Install-HMISolution.ps1" %*
 pause
 '@ | Set-Content -Path (Join-Path $stage 'Install.cmd') -Encoding ASCII
 
-    New-Payload -Rid $rid -StageRoot $stage | Out-Null
+    Build-Payload -Rid $rid -StageRoot $stage | Out-Null
 
     $zip = Join-Path $OutputDir "HMISolution-Installer-Windows-$Version.zip"
     if (Test-Path $zip) { Remove-Item -Force $zip }
@@ -156,16 +242,15 @@ function Build-LinuxPackage {
         Copy-Item (Join-Path $here 'README.md') $stage
     }
 
-    New-Payload -Rid $rid -StageRoot $stage | Out-Null
+    Build-Payload -Rid $rid -StageRoot $stage | Out-Null
 
-    # Make Linux executables + install script executable inside the archive
     $tar = Get-Command tar -ErrorAction SilentlyContinue
     if (-not $tar) { throw "tar is required to build the Linux package (available in Windows 10+)." }
 
     $archive = Join-Path $OutputDir "HMISolution-Installer-Linux-$Version.tar.gz"
     if (Test-Path $archive) { Remove-Item -Force $archive }
 
-    # Normalize the install script to LF and add executable bit inside the tar
+    # Normalise install script to LF
     $shPath = Join-Path $stage 'install-hmi-solution.sh'
     $sh = [IO.File]::ReadAllText($shPath) -replace "`r`n", "`n"
     [IO.File]::WriteAllText($shPath, $sh)
@@ -173,7 +258,6 @@ function Build-LinuxPackage {
     Write-Host "  packing $archive" -ForegroundColor Green
     Push-Location $stage
     try {
-        # Use tar's --mode to ensure executables retain +x on extraction
         & tar --format=ustar -czf $archive `
             --mode='a+rX,u+w' `
             --owner=0 --group=0 `

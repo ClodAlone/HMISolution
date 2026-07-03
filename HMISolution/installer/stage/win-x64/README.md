@@ -134,16 +134,6 @@ An `uninstall-hmi-solution.sh` is written to the install directory.
 
 - Components are published **self-contained** for `win-x64` / `linux-x64`,
   so end-users do not need a .NET runtime installed.
-- The `Runtime` payload bundles the `RuntimeViewer` web app + `wwwroot`
-  alongside the Photino desktop shell (`RuntimeViewer.Desktop.exe`).
-- The `Editor` payload bundles the `ServerEditorWeb` app + `wwwroot`
-  **and its `SymbolLibrary/`** (SVG symbol library) alongside the Photino
-  desktop shell (`ServerEditorWeb.Desktop.exe`).
-- The `Server` payload includes all **12 driver DLLs** (Modbus, S7, MQTT,
-  OPC UA Client, EtherNet/IP, KNX, CSV, REST, TCP, SQL, SparkplugB,
-  Simulation) plus each driver's transitive dependencies (NModbus,
-  S7netplus, libplctag, MQTTnet, protobuf-net, etc.) in a `drivers/`
-  subfolder. The server discovers them from that folder at startup.
 - The `Server` binary reads a `nodes.json` in its working directory (see
   the deployment guide in `HMISolution/docs/DEPLOYMENT.md`).
 - The `Editor` desktop shell launches the web editor process; both apps

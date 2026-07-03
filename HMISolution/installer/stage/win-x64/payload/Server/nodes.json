@@ -1,0 +1,1213 @@
+{
+  "Database": {
+    "Provider": "Sqlite",
+    "ConnectionString": "history.db",
+    "TableName": "variable_data"
+  },
+  "Users": [],
+  "UserGroups": [],
+  "Scripts": [
+    {
+      "Name": "New Script",
+      "Code": "var val = Read(\u0022MyVar\u0022);\nWrite(\u0022MyVar\u0022, 123);",
+      "Enabled": true,
+      "IntervalMs": 1000
+    },
+    {
+      "Name": "Simulation Watcher",
+      "Code": "OnChanged(\u0022Plant.Simulation.Sine\u0022, e =>\n{\n    var sineValue = (double)e.NewValue;\n    if (sineValue > 90)\n        Write(\u0022Plant.Simulation.Counter\u0022, Read(\u0022Plant.Simulation.Counter\u0022) ?? 0);\n});\nOnChanged(\u0022Plant.Simulation.Blink\u0022, e =>\n{\n    // Log each blink transition\n    System.Console.WriteLine($\u0022Blink changed to {e.NewValue} at {e.Timestamp:HH:mm:ss.fff}\u0022);\n});",
+      "Enabled": false,
+      "IntervalMs": 0
+    },
+    {
+      "Name": "VB.NET Sample",
+      "Code": "Dim val = Read(\u0022Plant.Temperature\u0022)\nIf val IsNot Nothing Then\n    Dim temp = CDbl(val)\n    If temp > 50 Then\n        Write(\u0022Plant.Line1.Status\u0022, \u0022Overheating\u0022)\n    Else\n        Write(\u0022Plant.Line1.Status\u0022, \u0022Running\u0022)\n    End If\nEnd If",
+      "Enabled": false,
+      "IntervalMs": 5000,
+      "Language": "VB"
+    }
+  ],
+  "Folder": {
+    "Name": "Plant",
+    "Folders": [
+      {
+        "Name": "Line1",
+        "Folders": [],
+        "Variables": [
+          {
+            "Name": "Status",
+            "Type": "String",
+            "Access": "Read",
+            "Value": "Running",
+            "MaxAge": null,
+            "Alarm": null,
+            "DataLogging": null
+          },
+          {
+            "Name": "Speed",
+            "Type": "Int32",
+            "Access": "ReadWrite",
+            "Value": 100,
+            "InitialValue": "100",
+            "Retentive": true,
+            "MaxAge": null,
+            "Alarm": {
+              "HighLimit": 120,
+              "LowLimit": 50,
+              "Message": "Speed Alarm"
+            },
+            "DataLogging": null
+          },
+          {
+            "Name": "Temperature",
+            "Type": "Int16",
+            "Access": "ReadWrite",
+            "Value": 250,
+            "MaxAge": null,
+            "Alarm": null,
+            "DataLogging": null,
+            "Modbus": {
+              "IpAddress": "192.168.10.245",
+              "Port": 502,
+              "UnitId": 1,
+              "Register": 2741,
+              "RegisterType": "HoldingRegister",
+              "PollTime": 2000
+            }
+          },
+          {
+            "Name": "TankLevel",
+            "Type": "Double",
+            "Access": "ReadWrite",
+            "Value": 50.0,
+            "MaxAge": null,
+            "Alarm": null,
+            "DataLogging": null,
+            "S7": {
+              "IpAddress": "192.168.0.1",
+              "Rack": 0,
+              "Slot": 1,
+              "Address": "DB1.DBD0"
+            }
+          },
+          {
+            "Name": "Light1",
+            "Type": "Boolean",
+            "Access": "ReadWrite",
+            "Value": false,
+            "MaxAge": null,
+            "Alarm": null,
+            "DataLogging": null,
+            "Knx": {
+              "IpAddress": "192.168.1.5",
+              "Port": 3671,
+              "GroupAddress": "1/0/1",
+              "DptType": "1.001"
+            }
+          },
+          {
+            "Name": "RobotSpeed",
+            "Type": "Double",
+            "Access": "ReadWrite",
+            "Value": 0.0,
+            "MaxAge": null,
+            "Alarm": null,
+            "DataLogging": null,
+            "Mqtt": {
+              "Broker": "localhost",
+              "Port": 1883,
+              "Topic": "robot/speed",
+              "JsonPath": "value"
+            }
+          },
+          {
+            "Name": "PumpFlow",
+            "Type": "Double",
+            "Access": "ReadWrite",
+            "Value": 0.0,
+            "MaxAge": null,
+            "Alarm": null,
+            "DataLogging": null,
+            "EtherNetIP": {
+              "IpAddress": "192.168.1.10",
+              "Path": "1,0",
+              "Tag": "FlowRate",
+              "Type": "REAL"
+            }
+          },
+          {
+            "Name": "BatchId",
+            "Type": "Int32",
+            "Access": "ReadWrite",
+            "Value": 0,
+            "MaxAge": null,
+            "Alarm": null,
+            "DataLogging": null,
+            "Sql": {
+              "ConnectionString": "Server=myServerAddress;Database=myDataBase;User Id=myUsername;Password=myPassword;",
+              "Query": "SELECT TOP 1 BatchId FROM Batches ORDER BY Timestamp DESC"
+            }
+          },
+          {
+            "Name": "Weather",
+            "Type": "Double",
+            "Access": "ReadWrite",
+            "Value": 0.0,
+            "MaxAge": null,
+            "Alarm": null,
+            "DataLogging": null,
+            "Rest": {
+              "Url": "https://api.open-meteo.com/v1/forecast?latitude=52.52\u0026longitude=13.41\u0026current=temperature_2m",
+              "JsonPath": "current.temperature_2m"
+            }
+          },
+          {
+            "Name": "Kpi",
+            "Type": "Double",
+            "Access": "ReadWrite",
+            "Value": 0.0,
+            "MaxAge": null,
+            "Alarm": null,
+            "DataLogging": null,
+            "Csv": {
+              "FilePath": "kpi.csv",
+              "RowIndex": 1,
+              "ColumnIndex": 1,
+              "Key": ""
+            }
+          },
+          {
+            "Name": "ScaleWeight",
+            "Type": "Double",
+            "Access": "ReadWrite",
+            "Value": 0.0,
+            "MaxAge": null,
+            "Alarm": null,
+            "DataLogging": null,
+            "Tcp": {
+              "IpAddress": "127.0.0.1",
+              "Port": 9000,
+              "Command": "GET WEIGHT\r\n",
+              "Regex": "([0-9.]\u002B)"
+            }
+          }
+        ]
+      },
+      {
+        "Name": "Furnace",
+        "Folders": [],
+        "Variables": [
+          {
+            "Name": "FurnaceTemperature",
+            "Type": "Double",
+            "Access": "ReadWrite",
+            "Value": 0.0,
+            "MaxAge": null,
+            "Alarm": null,
+            "DataLogging": null
+          },
+          {
+            "Name": "FurnacePressure",
+            "Type": "Double",
+            "Access": "ReadWrite",
+            "Value": 0.0,
+            "MaxAge": null,
+            "Alarm": null,
+            "DataLogging": null
+          },
+          {
+            "Name": "FurnaceHumidity",
+            "Type": "Double",
+            "Access": "ReadWrite",
+            "Value": 0.0,
+            "MaxAge": null,
+            "Alarm": null,
+            "DataLogging": null
+          }
+        ]
+      },
+      {
+        "Name": "Simulation",
+        "Folders": [],
+        "Variables": [
+          {
+            "Name": "Sine",
+            "Type": "Double",
+            "Access": "Read",
+            "Value": 0.0,
+            "InitialValue": "0",
+            "Statistics": { "Enabled": true },
+            "MaxAge": null,
+            "Alarm": null,
+            "DataLogging": {
+              "Enabled": true,
+              "Hysteresis": 5.0
+            },
+            "Simulation": {
+              "Function": "Sine",
+              "Period": 10000,
+              "Amplitude": 100,
+              "Offset": 0,
+              "Phase": 0,
+              "PollTime": 500
+            }
+          },
+          {
+            "Name": "Cosine",
+            "Type": "Double",
+            "Access": "Read",
+            "Value": 0.0,
+            "Statistics": { "Enabled": true },
+            "MaxAge": null,
+            "Alarm": null,
+            "DataLogging": null,
+            "Simulation": {
+              "Function": "Cosine",
+              "Period": 10000,
+              "Amplitude": 100,
+              "Offset": 0,
+              "Phase": 0,
+              "PollTime": 500
+            }
+          },
+          {
+            "Name": "Ramp",
+            "Type": "Double",
+            "Access": "Read",
+            "Value": 0.0,
+            "MaxAge": null,
+            "Alarm": null,
+            "DataLogging": null,
+            "Simulation": {
+              "Function": "Ramp",
+              "Amplitude": 100,
+              "Step": 1,
+              "PollTime": 500
+            }
+          },
+          {
+            "Name": "Triangle",
+            "Type": "Double",
+            "Access": "Read",
+            "Value": 0.0,
+            "MaxAge": null,
+            "Alarm": null,
+            "DataLogging": null,
+            "Simulation": {
+              "Function": "Triangle",
+              "Period": 10000,
+              "Amplitude": 100,
+              "Offset": 0,
+              "PollTime": 500
+            }
+          },
+          {
+            "Name": "Square",
+            "Type": "Double",
+            "Access": "Read",
+            "Value": 0.0,
+            "MaxAge": null,
+            "Alarm": null,
+            "DataLogging": null,
+            "Simulation": {
+              "Function": "Square",
+              "Period": 10000,
+              "Amplitude": 100,
+              "DutyCycle": 0.5,
+              "PollTime": 500
+            }
+          },
+          {
+            "Name": "Sawtooth",
+            "Type": "Double",
+            "Access": "Read",
+            "Value": 0.0,
+            "MaxAge": null,
+            "Alarm": null,
+            "DataLogging": null,
+            "Simulation": {
+              "Function": "Sawtooth",
+              "Period": 10000,
+              "Amplitude": 100,
+              "Offset": 0,
+              "PollTime": 500
+            }
+          },
+          {
+            "Name": "Random",
+            "Type": "Double",
+            "Access": "Read",
+            "Value": 0.0,
+            "MaxAge": null,
+            "Alarm": null,
+            "DataLogging": {
+              "Enabled": true,
+              "Hysteresis": 0
+            },
+            "Simulation": {
+              "Function": "Random",
+              "Min": 0,
+              "Max": 100,
+              "PollTime": 1000
+            }
+          },
+          {
+            "Name": "RandomInt",
+            "Type": "Int32",
+            "Access": "Read",
+            "Value": 0,
+            "MaxAge": null,
+            "Alarm": null,
+            "DataLogging": null,
+            "Simulation": {
+              "Function": "RandomInt",
+              "Min": 0,
+              "Max": 1000,
+              "PollTime": 1000
+            }
+          },
+          {
+            "Name": "Blink",
+            "Type": "Boolean",
+            "Access": "Read",
+            "Value": false,
+            "MaxAge": null,
+            "Alarm": null,
+            "DataLogging": null,
+            "Simulation": {
+              "Function": "Blink",
+              "Period": 2000,
+              "DutyCycle": 0.5,
+              "PollTime": 250
+            }
+          },
+          {
+            "Name": "Counter",
+            "Type": "Double",
+            "Access": "Read",
+            "Value": 0.0,
+            "MaxAge": null,
+            "Alarm": null,
+            "DataLogging": {
+              "Enabled": true,
+              "Hysteresis": 0
+            },
+            "Simulation": {
+              "Function": "Counter",
+              "Step": 1,
+              "PollTime": 1000
+            }
+          },
+          {
+            "Name": "Pulse",
+            "Type": "Double",
+            "Access": "Read",
+            "Value": 0.0,
+            "MaxAge": null,
+            "Alarm": null,
+            "DataLogging": null,
+            "Simulation": {
+              "Function": "Pulse",
+              "Period": 5000,
+              "DutyCycle": 0.2,
+              "PollTime": 250
+            }
+          }
+        ]
+      }
+    ],
+    "Variables": [
+      {
+        "Name": "Pressure",
+        "Type": "Double",
+        "Access": "ReadWrite",
+        "Value": 10.5,
+        "MaxAge": null,
+        "Alarm": {
+          "HighLimit": 80,
+          "LowLimit": 10,
+          "Message": "Pressure Alarm"
+        },
+        "DataLogging": {
+          "Enabled": true,
+          "Hysteresis": 0.5,
+          "MaxAge": "1.00:00:00"
+        }
+      },
+      {
+        "Name": "Temperature",
+        "Type": "Double",
+        "Access": "ReadWrite",
+        "Value": 25.3,
+        "MaxAge": null,
+        "Alarm": null,
+        "DataLogging": {
+          "Enabled": true,
+          "Hysteresis": 0.5,
+          "MaxAge": "0.12:00:00"
+        }
+      }
+    ]
+  },
+  "PlcPrograms": [
+    {
+      "Name": "Furnace Temperature Control",
+      "Code": "(* IEC 61131-3 Structured Text — Furnace Temperature Controller *)\n(* Reads the furnace temperature and regulates it toward a 450°C setpoint *)\n(* by adjusting pressure proportionally. Clamps output to safe range. *)\n\nVAR\n    setpoint : REAL := 450.0;\n    error : REAL := 0.0;\n    kp : REAL := 0.5;\n    output : REAL := 0.0;\nEND_VAR\n\nerror := setpoint - Plant.Furnace.FurnaceTemperature;\noutput := kp * error;\n\n(* Clamp pressure output between 0 and 100 *)\nIF output > 100.0 THEN\n    output := 100.0;\nELSIF output < 0.0 THEN\n    output := 0.0;\nEND_IF;\n\nPlant.Furnace.FurnacePressure := output;\n",
+      "Enabled": true,
+      "IntervalMs": 500
+    },
+    {
+      "Name": "Tank Level Monitor",
+      "Code": "(* IEC 61131-3 Structured Text — Tank Level Monitor *)\n(* Reads the sine simulation as a sensor input, scales it to *)\n(* a 0–100 range, and writes it to TankLevel. *)\n(* Also adjusts Line1 Speed based on the fill level. *)\n\nVAR\n    rawSensor : REAL := 0.0;\n    level : REAL := 0.0;\n    speedCmd : REAL := 0.0;\nEND_VAR\n\nrawSensor := Plant.Simulation.Sine;\n\n(* Scale from -100..100 to 0..100 *)\nlevel := (rawSensor + 100.0) / 2.0;\nlevel := LIMIT(0.0, level, 100.0);\n\nPlant.Line1.TankLevel := level;\n\n(* Reduce line speed when tank is nearly full *)\nIF level > 90.0 THEN\n    speedCmd := 20.0;\nELSIF level > 70.0 THEN\n    speedCmd := 60.0;\nELSE\n    speedCmd := 100.0;\nEND_IF;\n\nPlant.Line1.Speed := speedCmd;\n",
+      "Enabled": false,
+      "IntervalMs": 1000
+    },
+    {
+      "Name": "Plant Status Logic",
+      "Code": "(* IEC 61131-3 Structured Text — Plant Status Logic *)\n(* Combines Temperature and Pressure readings to decide plant status. *)\n(* Writes a status string and computes a simple health score. *)\n\nVAR\n    temp : REAL := 0.0;\n    press : REAL := 0.0;\n    score : REAL := 100.0;\nEND_VAR\n\ntemp := Plant.Temperature;\npress := Plant.Pressure;\n\n(* Start at 100 and subtract penalties *)\nscore := 100.0;\n\nIF temp > 80.0 THEN\n    score := score - 30.0;\nELSIF temp > 50.0 THEN\n    score := score - 10.0;\nEND_IF;\n\nIF press > 60.0 THEN\n    score := score - 40.0;\nELSIF press > 40.0 THEN\n    score := score - 15.0;\nEND_IF;\n\n(* Write health score back to Pressure as a demo *)\n(* In a real system this would go to a dedicated variable *)\nIF score < 0.0 THEN\n    score := 0.0;\nEND_IF;\n\nPlant.Furnace.FurnaceHumidity := score;\n",
+      "Enabled": false,
+      "IntervalMs": 2000,
+      "Language": "ST"
+    },
+    {
+      "Name": "IL Pressure Monitor",
+      "Code": "(* IEC 61131-3 Instruction List — Pressure Monitor *)\n(* Reads Plant.Pressure, compares against thresholds, *)\n(* and writes a clamped value to FurnacePressure. *)\n\nLD    Plant.Pressure\nST    _pressure\n\n(* If pressure > 80 cap it at 80 *)\nLD    _pressure\nGT    80.0\nJMPCN skip_cap\nLD    80.0\nST    _pressure\nskip_cap:\n\n(* If pressure < 5 set floor to 5 *)\nLD    _pressure\nLT    5.0\nJMPCN skip_floor\nLD    5.0\nST    _pressure\nskip_floor:\n\n(* Scale: multiply by 1.2 and write to furnace *)\nLD    _pressure\nMUL   1.2\nST    Plant.Furnace.FurnacePressure\n",
+      "Enabled": false,
+      "IntervalMs": 500,
+      "Language": "IL"
+    },
+    {
+      "Name": "IL Speed Ramp",
+      "Code": "(* IEC 61131-3 Instruction List — Speed Ramp *)\n(* Reads Line1.Speed, adds 1 each cycle until 120, then resets to 0 *)\n\nLD    Plant.Line1.Speed\nADD   1\nST    _speed\n\n(* Check if above max *)\nLD    _speed\nGT    120\nJMPCN no_reset\nLD    0\nST    _speed\nno_reset:\n\n(* Write back *)\nLD    _speed\nST    Plant.Line1.Speed\n",
+      "Enabled": false,
+      "IntervalMs": 1000,
+      "Language": "IL"
+    },
+    {
+      "Name": "LD Tank Fill Control",
+      "Code": "(* IEC 61131-3 Ladder Diagram — Tank Fill Control *)\n(* Uses contacts and coils to control tank filling logic *)\n(* Reads TankLevel and Blink, writes to Light1 and FurnaceHumidity *)\n\n(* Rung 1: If TankLevel < 30, turn on fill light *)\nRUNG \"Low Level Alarm\"\n  COMPARE LT Plant.Line1.TankLevel 30.0\n  COIL_S Plant.Line1.Light1\nEND_RUNG\n\n(* Rung 2: If TankLevel >= 80, turn off fill light *)\nRUNG \"High Level Stop\"\n  COMPARE GE Plant.Line1.TankLevel 80.0\n  COIL_R Plant.Line1.Light1\nEND_RUNG\n\n(* Rung 3: Copy Sine to FurnaceHumidity as a sensor value *)\nRUNG \"Sensor Copy\"\n  CONTACT NO Plant.Simulation.Blink\n  MOVE Plant.Simulation.Sine Plant.Furnace.FurnaceHumidity\nEND_RUNG\n",
+      "Enabled": false,
+      "IntervalMs": 500,
+      "Language": "LD"
+    },
+    {
+      "Name": "LD Motor Interlock",
+      "Code": "(* IEC 61131-3 Ladder Diagram — Motor Interlock *)\n(* Classic start/stop motor circuit with interlock *)\n(* Uses Speed > 0 as \"motor running\", Light1 as start permit *)\n\n(* Rung 1: Start permit — Temperature must be below 80 *)\nRUNG \"Start Permit\"\n  COMPARE LT Plant.Temperature 80.0\n  COIL Plant.Line1.Light1\nEND_RUNG\n\n(* Rung 2: If permitted AND pressure normal, set speed to 100 *)\nRUNG \"Motor Run\"\n  CONTACT NO Plant.Line1.Light1\n  COMPARE LT Plant.Pressure 70.0\n  MOVE 100 Plant.Line1.Speed\nEND_RUNG\n\n(* Rung 3: Emergency — if pressure too high, stop motor *)\nRUNG \"Emergency Stop\"\n  COMPARE GE Plant.Pressure 70.0\n  MOVE 0 Plant.Line1.Speed\nEND_RUNG\n",
+      "Enabled": false,
+      "IntervalMs": 1000,
+      "Language": "LD"
+    }
+  ],
+  "Recipes": [
+    {
+      "Name": "Furnace Setup",
+      "DbPath": "",
+      "Enabled": true,
+      "Variables": [
+        { "Index": 0, "VariablePath": "Plant.Furnace.FurnaceTemperature", "DisplayName": "Temperature" },
+        { "Index": 1, "VariablePath": "Plant.Furnace.FurnacePressure", "DisplayName": "Pressure" },
+        { "Index": 2, "VariablePath": "Plant.Furnace.FurnaceHumidity", "DisplayName": "Humidity" }
+      ]
+    },
+    {
+      "Name": "Line1 Production",
+      "DbPath": "",
+      "Enabled": true,
+      "Variables": [
+        { "Index": 0, "VariablePath": "Plant.Line1.Speed", "DisplayName": "Line Speed" },
+        { "Index": 1, "VariablePath": "Plant.Line1.Temperature", "DisplayName": "Temperature" },
+        { "Index": 2, "VariablePath": "Plant.Line1.TankLevel", "DisplayName": "Tank Level" },
+        { "Index": 3, "VariablePath": "Plant.Line1.PumpFlow", "DisplayName": "Pump Flow" },
+        { "Index": 4, "VariablePath": "Plant.Line1.RobotSpeed", "DisplayName": "Robot Speed" }
+      ]
+    }
+  ],
+  "Screens": [
+    {
+      "Name": "Button Showcase",
+      "Width": 900,
+      "Height": 500,
+      "Background": "#1e1e2e",
+      "Symbols": [
+        {
+          "Id": "btn_raised",
+          "Type": "button",
+          "X": 30,
+          "Y": 40,
+          "Width": 120,
+          "Height": 36,
+          "Label": "Raised",
+          "ButtonStyle": "raised",
+          "ButtonColor": "#3b82f6",
+          "ButtonTextColor": "#ffffff",
+          "ButtonBorderRadius": 6,
+          "Commands": [{ "Id": "c1", "Action": "WriteVariable", "Trigger": "Click", "VariablePath": "Plant.Simulation.Counter", "Value": "1" }]
+        },
+        {
+          "Id": "btn_flat",
+          "Type": "button",
+          "X": 170,
+          "Y": 40,
+          "Width": 120,
+          "Height": 36,
+          "Label": "Flat",
+          "ButtonStyle": "flat",
+          "ButtonColor": "#6366f1",
+          "ButtonTextColor": "#ffffff",
+          "ButtonBorderRadius": 6,
+          "Commands": [{ "Id": "c2", "Action": "WriteVariable", "Trigger": "Click", "VariablePath": "Plant.Simulation.Counter", "Value": "2" }]
+        },
+        {
+          "Id": "btn_outline",
+          "Type": "button",
+          "X": 310,
+          "Y": 40,
+          "Width": 120,
+          "Height": 36,
+          "Label": "Outline",
+          "ButtonStyle": "outline",
+          "ButtonColor": "#3b82f6",
+          "ButtonTextColor": "#3b82f6",
+          "ButtonBorderRadius": 6,
+          "Commands": [{ "Id": "c3", "Action": "WriteVariable", "Trigger": "Click", "VariablePath": "Plant.Simulation.Counter", "Value": "3" }]
+        },
+        {
+          "Id": "btn_pill",
+          "Type": "button",
+          "X": 450,
+          "Y": 40,
+          "Width": 140,
+          "Height": 36,
+          "Label": "Pill Button",
+          "ButtonStyle": "pill",
+          "ButtonColor": "#8b5cf6",
+          "ButtonTextColor": "#ffffff",
+          "ButtonBorderRadius": 999,
+          "Commands": [{ "Id": "c4", "Action": "WriteVariable", "Trigger": "Click", "VariablePath": "Plant.Simulation.Counter", "Value": "4" }]
+        },
+        {
+          "Id": "btn_glass",
+          "Type": "button",
+          "X": 610,
+          "Y": 40,
+          "Width": 120,
+          "Height": 36,
+          "Label": "Glass",
+          "ButtonStyle": "glass",
+          "ButtonColor": "#06b6d4",
+          "ButtonTextColor": "#ffffff",
+          "ButtonBorderRadius": 8,
+          "Commands": [{ "Id": "c5", "Action": "WriteVariable", "Trigger": "Click", "VariablePath": "Plant.Simulation.Counter", "Value": "5" }]
+        },
+        {
+          "Id": "btn_danger",
+          "Type": "button",
+          "X": 30,
+          "Y": 110,
+          "Width": 140,
+          "Height": 36,
+          "Label": "Emergency Stop",
+          "ButtonStyle": "danger",
+          "ButtonColor": "#dc2626",
+          "ButtonTextColor": "#ffffff",
+          "ButtonIcon": "\u26A0",
+          "ButtonIconPosition": "left",
+          "ButtonBorderRadius": 6,
+          "Commands": [{ "Id": "c6", "Action": "WriteVariable", "Trigger": "Click", "VariablePath": "Plant.Line1.Speed", "Value": "0" }]
+        },
+        {
+          "Id": "btn_success",
+          "Type": "button",
+          "X": 190,
+          "Y": 110,
+          "Width": 120,
+          "Height": 36,
+          "Label": "Start",
+          "ButtonStyle": "success",
+          "ButtonColor": "#16a34a",
+          "ButtonTextColor": "#ffffff",
+          "ButtonIcon": "\u25B6",
+          "ButtonIconPosition": "left",
+          "ButtonBorderRadius": 6,
+          "Commands": [{ "Id": "c7", "Action": "WriteVariable", "Trigger": "Click", "VariablePath": "Plant.Line1.Speed", "Value": "100" }]
+        },
+        {
+          "Id": "btn_warning",
+          "Type": "button",
+          "X": 330,
+          "Y": 110,
+          "Width": 120,
+          "Height": 36,
+          "Label": "Caution",
+          "ButtonStyle": "warning",
+          "ButtonColor": "#d97706",
+          "ButtonTextColor": "#ffffff",
+          "ButtonIcon": "\u26A1",
+          "ButtonIconPosition": "left",
+          "ButtonBorderRadius": 6,
+          "Commands": [{ "Id": "c8", "Action": "WriteVariable", "Trigger": "Click", "VariablePath": "Plant.Simulation.Counter", "Value": "8" }]
+        },
+        {
+          "Id": "btn_icon_play",
+          "Type": "button",
+          "X": 470,
+          "Y": 110,
+          "Width": 40,
+          "Height": 40,
+          "Label": "",
+          "ButtonStyle": "icon",
+          "ButtonColor": "#3b82f6",
+          "ButtonTextColor": "#ffffff",
+          "ButtonIcon": "\u25B6",
+          "ButtonIconPosition": "center",
+          "ButtonBorderRadius": 20,
+          "Commands": [{ "Id": "c9", "Action": "WriteVariable", "Trigger": "Click", "VariablePath": "Plant.Simulation.Counter", "Value": "9" }]
+        },
+        {
+          "Id": "btn_icon_stop",
+          "Type": "button",
+          "X": 520,
+          "Y": 110,
+          "Width": 40,
+          "Height": 40,
+          "Label": "",
+          "ButtonStyle": "icon",
+          "ButtonColor": "#dc2626",
+          "ButtonTextColor": "#ffffff",
+          "ButtonIcon": "\u25A0",
+          "ButtonIconPosition": "center",
+          "ButtonBorderRadius": 20,
+          "Commands": [{ "Id": "c10", "Action": "WriteVariable", "Trigger": "Click", "VariablePath": "Plant.Line1.Speed", "Value": "0" }]
+        },
+        {
+          "Id": "btn_icon_gear",
+          "Type": "button",
+          "X": 570,
+          "Y": 110,
+          "Width": 40,
+          "Height": 40,
+          "Label": "",
+          "ButtonStyle": "icon",
+          "ButtonColor": "#6366f1",
+          "ButtonTextColor": "#ffffff",
+          "ButtonIcon": "\u2699",
+          "ButtonIconPosition": "center",
+          "ButtonBorderRadius": 20,
+          "Commands": [{ "Id": "c11", "Action": "WriteVariable", "Trigger": "Click", "VariablePath": "Plant.Simulation.Counter", "Value": "11" }]
+        },
+        {
+          "Id": "btn_top_icon",
+          "Type": "button",
+          "X": 30,
+          "Y": 190,
+          "Width": 80,
+          "Height": 60,
+          "Label": "Power",
+          "ButtonStyle": "raised",
+          "ButtonColor": "#0ea5e9",
+          "ButtonTextColor": "#ffffff",
+          "ButtonIcon": "\u23FB",
+          "ButtonIconPosition": "top",
+          "ButtonBorderRadius": 8,
+          "Commands": [{ "Id": "c12", "Action": "ToggleVariable", "Trigger": "Click", "VariablePath": "Plant.Simulation.Blink" }]
+        },
+        {
+          "Id": "btn_right_icon",
+          "Type": "button",
+          "X": 130,
+          "Y": 190,
+          "Width": 140,
+          "Height": 36,
+          "Label": "Next Step",
+          "ButtonStyle": "raised",
+          "ButtonColor": "#10b981",
+          "ButtonTextColor": "#ffffff",
+          "ButtonIcon": "\u27A1",
+          "ButtonIconPosition": "right",
+          "ButtonBorderRadius": 6,
+          "Commands": [{ "Id": "c13", "Action": "IncrementVariable", "Trigger": "Click", "VariablePath": "Plant.Simulation.Counter", "Value": "1" }]
+        },
+        {
+          "Id": "btn_large",
+          "Type": "button",
+          "X": 300,
+          "Y": 180,
+          "Width": 200,
+          "Height": 50,
+          "Label": "RESET ALL",
+          "ButtonStyle": "danger",
+          "ButtonColor": "#dc2626",
+          "ButtonTextColor": "#ffffff",
+          "ButtonBorderRadius": 8,
+          "FontWeight": "bold",
+          "FontSize": 16,
+          "Commands": [
+            { "Id": "c14a", "Action": "WriteVariable", "Trigger": "Click", "VariablePath": "Plant.Line1.Speed", "Value": "0" },
+            { "Id": "c14b", "Action": "WriteVariable", "Trigger": "Click", "VariablePath": "Plant.Furnace.FurnaceTemperature", "Value": "0" }
+          ]
+        },
+        {
+          "Id": "lbl_title",
+          "Type": "text",
+          "X": 30,
+          "Y": 5,
+          "Width": 400,
+          "Height": 25,
+          "Label": "Command Button Styles",
+          "Fill": "#e0e0e0",
+          "FontSize": 18,
+          "FontWeight": "bold"
+        },
+        {
+          "Id": "lbl_row1",
+          "Type": "text",
+          "X": 750,
+          "Y": 45,
+          "Width": 120,
+          "Height": 20,
+          "Label": "Basic Styles",
+          "Fill": "#94a3b8",
+          "FontSize": 10
+        },
+        {
+          "Id": "lbl_row2",
+          "Type": "text",
+          "X": 750,
+          "Y": 115,
+          "Width": 120,
+          "Height": 20,
+          "Label": "Semantic + Icons",
+          "Fill": "#94a3b8",
+          "FontSize": 10
+        },
+        {
+          "Id": "lbl_row3",
+          "Type": "text",
+          "X": 750,
+          "Y": 195,
+          "Width": 120,
+          "Height": 20,
+          "Label": "Layouts + Large",
+          "Fill": "#94a3b8",
+          "FontSize": 10
+        }
+      ]
+    }
+    ,
+    {
+      "Name": "Animated Text Showcase",
+      "Width": 1024,
+      "Height": 600,
+      "BackgroundColor": "#0f172a",
+      "Symbols": [
+        {
+          "Id": "at_title",
+          "Type": "text",
+          "X": 512,
+          "Y": 25,
+          "Width": 500,
+          "Height": 30,
+          "Label": "Animated Text Widget Showcase",
+          "Fill": "#e2e8f0",
+          "FontSize": 20,
+          "FontWeight": "bold"
+        },
+        {
+          "Id": "at_lbl_scroll",
+          "Type": "text",
+          "X": 100,
+          "Y": 70,
+          "Width": 120,
+          "Height": 20,
+          "Label": "Scroll Mode",
+          "Fill": "#94a3b8",
+          "FontSize": 11
+        },
+        {
+          "Id": "at_scroll1",
+          "Type": "animtext",
+          "X": 50,
+          "Y": 90,
+          "Width": 300,
+          "Height": 40,
+          "Label": "Welcome to HMI Solution!",
+          "Fill": "#00e5ff",
+          "FontSize": 16,
+          "AnimTextMode": "scroll",
+          "AnimTextSpeed": 6,
+          "AnimTextBackground": "#1a1a2e",
+          "AnimTextBorderRadius": 8,
+          "AnimTextMessages": "Welcome to HMI Solution!\nReal-time monitoring\nIndustrial automation"
+        },
+        {
+          "Id": "at_scroll2",
+          "Type": "animtext",
+          "X": 50,
+          "Y": 140,
+          "Width": 300,
+          "Height": 36,
+          "Label": "Fast Scroll",
+          "Fill": "#fbbf24",
+          "FontSize": 14,
+          "AnimTextMode": "scroll",
+          "AnimTextSpeed": 3,
+          "AnimTextBackground": "#1c1917",
+          "AnimTextBorderRadius": 4,
+          "AnimTextShowBorder": true,
+          "Stroke": "#fbbf24",
+          "StrokeWidth": 1,
+          "AnimTextMessages": "Alarm: High Temperature\nWarning: Low Pressure\nInfo: Batch Complete"
+        },
+        {
+          "Id": "at_lbl_flash",
+          "Type": "text",
+          "X": 100,
+          "Y": 195,
+          "Width": 120,
+          "Height": 20,
+          "Label": "Flash Mode",
+          "Fill": "#94a3b8",
+          "FontSize": 11
+        },
+        {
+          "Id": "at_flash1",
+          "Type": "animtext",
+          "X": 50,
+          "Y": 215,
+          "Width": 300,
+          "Height": 40,
+          "Label": "ALERT: System Warning",
+          "Fill": "#ffffff",
+          "FontSize": 16,
+          "FontWeight": "bold",
+          "AnimTextMode": "flash",
+          "AnimTextSpeed": 1,
+          "AnimTextColor2": "#ff4444",
+          "AnimTextBackground": "#7f1d1d",
+          "AnimTextBackground2": "#450a0a",
+          "AnimTextBorderRadius": 6
+        },
+        {
+          "Id": "at_flash2",
+          "Type": "animtext",
+          "X": 50,
+          "Y": 265,
+          "Width": 300,
+          "Height": 36,
+          "Label": "Status OK",
+          "Fill": "#22c55e",
+          "FontSize": 14,
+          "AnimTextMode": "flash",
+          "AnimTextSpeed": 2,
+          "AnimTextColor2": "#3b82f6",
+          "AnimTextBackground": "#052e16",
+          "AnimTextBackground2": "#0c1d3a",
+          "AnimTextBorderRadius": 4
+        },
+        {
+          "Id": "at_lbl_pulse",
+          "Type": "text",
+          "X": 550,
+          "Y": 70,
+          "Width": 120,
+          "Height": 20,
+          "Label": "Pulse Mode",
+          "Fill": "#94a3b8",
+          "FontSize": 11
+        },
+        {
+          "Id": "at_pulse1",
+          "Type": "animtext",
+          "X": 400,
+          "Y": 90,
+          "Width": 300,
+          "Height": 40,
+          "Label": "Heartbeat Monitor",
+          "Fill": "#f43f5e",
+          "FontSize": 16,
+          "AnimTextMode": "pulse",
+          "AnimTextSpeed": 2,
+          "AnimTextBackground": "#1a1a2e",
+          "AnimTextBorderRadius": 8
+        },
+        {
+          "Id": "at_pulse2",
+          "Type": "animtext",
+          "X": 400,
+          "Y": 140,
+          "Width": 300,
+          "Height": 36,
+          "Label": "Processing...",
+          "Fill": "#a78bfa",
+          "FontSize": 14,
+          "AnimTextMode": "pulse",
+          "AnimTextSpeed": 3,
+          "AnimTextBackground": "#1e1b2e",
+          "AnimTextBorderRadius": 4,
+          "AnimTextShowBorder": true,
+          "Stroke": "#7c3aed",
+          "StrokeWidth": 1
+        },
+        {
+          "Id": "at_lbl_typewriter",
+          "Type": "text",
+          "X": 550,
+          "Y": 195,
+          "Width": 120,
+          "Height": 20,
+          "Label": "Typewriter Mode",
+          "Fill": "#94a3b8",
+          "FontSize": 11
+        },
+        {
+          "Id": "at_type1",
+          "Type": "animtext",
+          "X": 400,
+          "Y": 215,
+          "Width": 300,
+          "Height": 40,
+          "Label": "Initializing system...",
+          "Fill": "#4ade80",
+          "FontSize": 16,
+          "FontFamily": "monospace",
+          "AnimTextMode": "typewriter",
+          "AnimTextSpeed": 4,
+          "AnimTextBackground": "#0a0a0a",
+          "AnimTextBorderRadius": 4
+        },
+        {
+          "Id": "at_type2",
+          "Type": "animtext",
+          "X": 400,
+          "Y": 265,
+          "Width": 300,
+          "Height": 36,
+          "Label": "Loading data stream",
+          "Fill": "#38bdf8",
+          "FontSize": 14,
+          "FontFamily": "monospace",
+          "AnimTextMode": "typewriter",
+          "AnimTextSpeed": 3,
+          "AnimTextBackground": "#0c1d2e",
+          "AnimTextBorderRadius": 4
+        },
+        {
+          "Id": "at_lbl_fade",
+          "Type": "text",
+          "X": 280,
+          "Y": 320,
+          "Width": 120,
+          "Height": 20,
+          "Label": "Fade Mode (multi-message cycling)",
+          "Fill": "#94a3b8",
+          "FontSize": 11
+        },
+        {
+          "Id": "at_fade1",
+          "Type": "animtext",
+          "X": 50,
+          "Y": 345,
+          "Width": 450,
+          "Height": 44,
+          "Label": "Production Line A",
+          "Fill": "#f9a8d4",
+          "FontSize": 18,
+          "AnimTextMode": "fade",
+          "AnimTextSpeed": 3,
+          "AnimTextBackground": "#1a1a2e",
+          "AnimTextBorderRadius": 10,
+          "AnimTextMessages": "Production Line A: Running\nProduction Line B: Idle\nProduction Line C: Maintenance"
+        },
+        {
+          "Id": "at_fade2",
+          "Type": "animtext",
+          "X": 50,
+          "Y": 400,
+          "Width": 450,
+          "Height": 36,
+          "Label": "Temperature",
+          "Fill": "#fcd34d",
+          "FontSize": 14,
+          "AnimTextMode": "fade",
+          "AnimTextSpeed": 2,
+          "AnimTextBackground": "#1c1917",
+          "AnimTextBorderRadius": 6,
+          "AnimTextShowBorder": true,
+          "Stroke": "#fbbf24",
+          "StrokeWidth": 1,
+          "AnimTextMessages": "Temperature: 72.5 C\nPressure: 1013 hPa\nHumidity: 45%\nFlow Rate: 120 L/min"
+        },
+        {
+          "Id": "at_lbl_wide",
+          "Type": "text",
+          "X": 512,
+          "Y": 460,
+          "Width": 200,
+          "Height": 20,
+          "Label": "Full Width Banner",
+          "Fill": "#94a3b8",
+          "FontSize": 11
+        },
+        {
+          "Id": "at_banner",
+          "Type": "animtext",
+          "X": 12,
+          "Y": 480,
+          "Width": 1000,
+          "Height": 50,
+          "Label": "HMI Solution - Industrial Automation Dashboard",
+          "Fill": "#00e5ff",
+          "FontSize": 20,
+          "FontWeight": "bold",
+          "AnimTextMode": "scroll",
+          "AnimTextSpeed": 12,
+          "AnimTextBackground": "linear-gradient(90deg, #0f172a, #1e293b, #0f172a)",
+          "AnimTextBorderRadius": 12,
+          "AnimTextMessages": "HMI Solution - Industrial Automation Dashboard\nReal-time Monitoring & Control\nSCADA Integration Ready\nMulti-language Localization Support"
+        },
+        {
+          "Id": "at_lbl_localized",
+          "Type": "text",
+          "X": 800,
+          "Y": 320,
+          "Width": 120,
+          "Height": 20,
+          "Label": "With @StringId",
+          "Fill": "#94a3b8",
+          "FontSize": 11
+        },
+        {
+          "Id": "at_localized",
+          "Type": "animtext",
+          "X": 550,
+          "Y": 345,
+          "Width": 400,
+          "Height": 40,
+          "Label": "Localized Text Demo",
+          "Fill": "#c084fc",
+          "FontSize": 16,
+          "AnimTextMode": "scroll",
+          "AnimTextSpeed": 8,
+          "AnimTextBackground": "#1e1b2e",
+          "AnimTextBorderRadius": 8,
+          "AnimTextMessages": "Use @StringId for localization\nSupports multi-language\nResolves at runtime"
+        }
+      ]
+    }
+    ,
+    {
+      "Name": "Statistics Demo",
+      "Width": 800,
+      "Height": 400,
+      "BackgroundColor": "#0f172a",
+      "Symbols": [
+        {
+          "Id": "stats_title",
+          "Type": "text",
+          "X": 400,
+          "Y": 25,
+          "Width": 500,
+          "Height": 30,
+          "Label": "Variable Statistics Demo",
+          "Fill": "#e2e8f0",
+          "FontSize": 20,
+          "FontWeight": "bold"
+        },
+        {
+          "Id": "stats_lbl_sine",
+          "Type": "text",
+          "X": 200,
+          "Y": 65,
+          "Width": 200,
+          "Height": 20,
+          "Label": "Sine (with Statistics)",
+          "Fill": "#94a3b8",
+          "FontSize": 12
+        },
+        {
+          "Id": "stats_eb_sine",
+          "Type": "editbox",
+          "X": 50,
+          "Y": 85,
+          "Width": 300,
+          "Height": 60,
+          "VariablePath": "Plant.Simulation.Sine",
+          "EditBoxFormat": "F2",
+          "EditBoxStep": 1,
+          "EditBoxShowStatistics": true,
+          "Fill": "#1e293b"
+        },
+        {
+          "Id": "stats_lbl_cosine",
+          "Type": "text",
+          "X": 600,
+          "Y": 65,
+          "Width": 200,
+          "Height": 20,
+          "Label": "Cosine (with Statistics)",
+          "Fill": "#94a3b8",
+          "FontSize": 12
+        },
+        {
+          "Id": "stats_eb_cosine",
+          "Type": "editbox",
+          "X": 450,
+          "Y": 85,
+          "Width": 300,
+          "Height": 60,
+          "VariablePath": "Plant.Simulation.Cosine",
+          "EditBoxFormat": "F2",
+          "EditBoxStep": 1,
+          "EditBoxShowStatistics": true,
+          "Fill": "#1e293b"
+        },
+        {
+          "Id": "stats_lbl_speed",
+          "Type": "text",
+          "X": 200,
+          "Y": 175,
+          "Width": 250,
+          "Height": 20,
+          "Label": "Speed (Retentive, Initial=100)",
+          "Fill": "#94a3b8",
+          "FontSize": 12
+        },
+        {
+          "Id": "stats_eb_speed",
+          "Type": "editbox",
+          "X": 50,
+          "Y": 195,
+          "Width": 300,
+          "Height": 40,
+          "VariablePath": "Plant.Line1.Speed",
+          "EditBoxFormat": "F0",
+          "EditBoxStep": 5,
+          "Fill": "#1e293b"
+        },
+        {
+          "Id": "stats_lbl_gauge",
+          "Type": "text",
+          "X": 400,
+          "Y": 280,
+          "Width": 300,
+          "Height": 20,
+          "Label": "Sine gauge with live statistics",
+          "Fill": "#94a3b8",
+          "FontSize": 11
+        },
+        {
+          "Id": "stats_gauge",
+          "Type": "gauge",
+          "X": 350,
+          "Y": 300,
+          "Width": 100,
+          "Height": 80,
+          "VariablePath": "Plant.Simulation.Sine",
+          "MinValue": -100,
+          "MaxValue": 100,
+          "Fill": "#3b82f6"
+        }
+      ]
+    }
+  ]
+}
