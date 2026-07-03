@@ -178,16 +178,45 @@ else
                 @L["menu.view"]
                 @if (_openMenu == "view")
                 {
-                    <div class="menubar-dropdown">
-                        <div class="menu-section-label">@L["menu.view.panels"]</div>
-                        @foreach (var p in _panels)
-                        {
-                            var panel = p;
-                            <div class="menu-item" @onclick="() => TogglePanelMenu(panel)" @onclick:stopPropagation>
-                                <span class="menu-check">@(panel.Zone != "hidden" ? "✓" : "")</span>
-                                <span class="menu-label">@panel.Icon @panel.Title</span>
-                            </div>
-                        }
+                    <div class="menubar-dropdown view-menu-dropdown" @onclick:stopPropagation>
+                        <div class="view-menu-header">
+                            <div class="menu-section-label" style="padding:0;">@L["menu.view.panels"]</div>
+                            <input type="search"
+                                   class="view-menu-filter"
+                                   placeholder="🔍 Filter panels…"
+                                   @bind="_viewMenuFilter" @bind:event="oninput"
+                                   @onclick:stopPropagation />
+                        </div>
+                        <div class="view-menu-body">
+                            @{
+                                var visiblePanels = string.IsNullOrWhiteSpace(_viewMenuFilter)
+                                    ? _panels
+                                    : _panels.Where(x => x.Title.Contains(_viewMenuFilter, StringComparison.OrdinalIgnoreCase)).ToList();
+                                var zoneOrder = new[] { "center", "right", "bottom", "hidden", "autohide-right", "autohide-bottom", "center2" };
+                                var groups = visiblePanels
+                                    .GroupBy(p => p.Zone ?? "center")
+                                    .OrderBy(g => Array.IndexOf(zoneOrder, g.Key) is var i && i < 0 ? int.MaxValue : i);
+                            }
+                            @foreach (var group in groups)
+                            {
+                                <div class="view-menu-column">
+                                    <div class="menu-section-label view-menu-zone-label">@ZoneLabel(group.Key)</div>
+                                    @foreach (var p in group)
+                                    {
+                                        var panel = p;
+                                        var isOpen = panel.Zone != "hidden";
+                                        <div class="menu-item" @onclick="() => TogglePanelMenu(panel)" @onclick:stopPropagation>
+                                            <span class="menu-check">@(isOpen ? "✓" : "")</span>
+                                            <span class="menu-label">@panel.Icon @panel.Title</span>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                            @if (visiblePanels.Count == 0)
+                            {
+                                <div class="view-menu-empty text-muted small">No panels match “@_viewMenuFilter”.</div>
+                            }
+                        </div>
                         <div class="menu-separator"></div>
                         <div class="menu-item" @onclick="ToggleMaximize" @onclick:stopPropagation>
                             <span class="menu-check">@(_dockContainer?.IsMaximized == true ? "✓" : "")</span>
@@ -642,6 +671,10 @@ else
                 else if (context.Id == "alarmanalytics")
                 {
                     <AlarmAnalyticsDashboardPanel />
+                }
+                else if (context.Id == "alarmrationalization")
+                {
+                    <AlarmRationalizationPanel />
                 }
                 else if (context.Id == "findreplace")
                 {
@@ -1231,6 +1264,7 @@ else
 
     // Menu state
     private string? _openMenu;
+    private string _viewMenuFilter = "";
     private bool _requiresLogin;
 
     // Project loading overlay state
@@ -1295,6 +1329,7 @@ else
         new() { Id = "eventsdatalogging", Title = "Events & Logging", Icon = "📊", Zone = "bottom" },
         new() { Id = "help", Title = "Help", Icon = "❓", Zone = "right" },
         new() { Id = "alarmanalytics", Title = "Alarm Analytics", Icon = "📊", Zone = "bottom" },
+        new() { Id = "alarmrationalization", Title = "Alarm Rationalization", Icon = "📋", Zone = "center" },
         new() { Id = "findreplace", Title = "Find & Replace", Icon = "🔍", Zone = "bottom" },
         new() { Id = "depgraph", Title = "Dependency Graph", Icon = "🕸️", Zone = "bottom" },
         new() { Id = "navmap", Title = "Screen Nav Map", Icon = "🗺️", Zone = "bottom" },
@@ -1607,6 +1642,14 @@ private void UnsavedDialogCancel()
 
     protected override void OnInitialized()
     {
+        // Remember each panel's declared home zone before any layout restore can mutate it,
+        // so the View menu can return a hidden panel to its natural place.
+        foreach (var p in _panels)
+        {
+            if (string.IsNullOrEmpty(p.DefaultZone) || p.DefaultZone == "hidden")
+                p.DefaultZone = string.IsNullOrEmpty(p.Zone) ? "center" : p.Zone;
+        }
+
         Editor.StateChanged += OnEditorStateChanged;
         Editor.ScreenSelectionChanged += OnScreenSelectionChanged;
         Editor.ReportSectionSelectionChanged += OnReportSectionSelectionChanged;
@@ -2193,11 +2236,33 @@ private void UnsavedDialogCancel()
     private void TogglePanelMenu(DockPanelState panel)
     {
         CloseMenus();
+        _viewMenuFilter = "";
         if (panel.Zone == "hidden")
-            _dockContainer?.ShowPanel(panel.Id, "center");
+        {
+            // Restore to its declared home zone rather than always dumping into "center".
+            var zone = string.IsNullOrEmpty(panel.DefaultZone) ? "center" : panel.DefaultZone;
+            _dockContainer?.ShowPanel(panel.Id, zone);
+            _dockContainer?.ActivatePanel(panel.Id);
+        }
         else
-            panel.Zone = "hidden";
+        {
+            // Panel is already open somewhere — bring it to the front so the user can see it.
+            _dockContainer?.ActivatePanel(panel.Id);
+        }
     }
+
+    private static string ZoneLabel(string zone) => zone switch
+    {
+        "center"           => "Center (Editors)",
+        "center2"          => "Center Split",
+        "right"            => "Right Dock",
+        "bottom"           => "Bottom Dock",
+        "autohide-right"   => "Auto-Hide Right",
+        "autohide-bottom"  => "Auto-Hide Bottom",
+        "floating"         => "Floating",
+        "hidden"           => "Hidden",
+        _                  => zone
+    };
 
     private async void ToggleMaximize()
     {

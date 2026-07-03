@@ -1068,11 +1068,60 @@
                                             @RenderSvgText(sym.Width / 2, sym.Height * 0.9, "middle", null, "#475569", 8, "PDF Viewer")
                                             break;
                                         case "alarmanalytics":
-                                            <rect width="@sym.Width" height="@sym.Height"
-                                                  fill="#0f172a" stroke="@sym.Stroke" stroke-width="@sym.StrokeWidth" rx="4" />
-                                            @RenderSvgText(sym.Width / 2, 16, "middle", "middle", "#e2e8f0", ScaledFontSize(11, sym), "📊 Alarm Analytics")
-                                            <line x1="4" y1="26" x2="@(sym.Width - 4)" y2="26" stroke="#334155" stroke-width="1" />
-                                            @RenderSvgText(sym.Width / 2, 40, "middle", "middle", "#64748b", ScaledFontSize(9, sym), "(top-10, MTTA, flood detection at runtime)")
+                                            {
+                                                var aaBg = string.IsNullOrWhiteSpace(sym.AlarmAnalyticsBackground) ? "#0f172a" : sym.AlarmAnalyticsBackground;
+                                                var aaFg = string.IsNullOrWhiteSpace(sym.AlarmAnalyticsForeground) ? "#e2e8f0" : sym.AlarmAnalyticsForeground;
+                                                var aaTitle = string.IsNullOrWhiteSpace(sym.AlarmAnalyticsTitle) ? "📊 Alarm Analytics" : sym.AlarmAnalyticsTitle;
+                                                var aaTopN = Math.Clamp(sym.AlarmAnalyticsTopCount <= 0 ? 10 : sym.AlarmAnalyticsTopCount, 1, 20);
+                                                <rect width="@sym.Width" height="@sym.Height"
+                                                      fill="@aaBg" stroke="@sym.Stroke" stroke-width="@sym.StrokeWidth" rx="4" />
+                                                @if (sym.AlarmAnalyticsShowHeader)
+                                                {
+                                                    <rect x="0" y="0" width="@sym.Width" height="22" fill="#1e293b" rx="4" />
+                                                    <rect x="0" y="18" width="@sym.Width" height="4" fill="#1e293b" />
+                                                    @RenderSvgText(8, 15, "start", null, aaFg, ScaledFontSize(11, sym), aaTitle)
+                                                    @RenderSvgText(sym.Width - 8, 15, "end", null, "#64748b", ScaledFontSize(9, sym), "🔄")
+                                                }
+                                                double yCursor = sym.AlarmAnalyticsShowHeader ? 30 : 6;
+                                                if (sym.AlarmAnalyticsShowKpis && sym.Width > 60 && sym.Height > yCursor + 30)
+                                                {
+                                                    double kpiTop = yCursor;
+                                                    double kpiH = 26;
+                                                    double gap = 4;
+                                                    double kpiCount = 4;
+                                                    double kpiW = (sym.Width - 12 - (gap * (kpiCount - 1))) / kpiCount;
+                                                    string[] kpiValues = { "12", "8", "45s", "3/5" };
+                                                    string[] kpiLabels = { "ACT", "ACK", "MTTA", "FLOOD" };
+                                                    for (int k = 0; k < kpiCount; k++)
+                                                    {
+                                                        double x = 6 + k * (kpiW + gap);
+                                                        <rect x="@F(x)" y="@F(kpiTop)" width="@F(kpiW)" height="@F(kpiH)" rx="3" fill="#1e293b" stroke="#334155" stroke-width="1" />
+                                                        @RenderSvgText(x + kpiW / 2, kpiTop + kpiH * 0.55, "middle", "middle", aaFg, ScaledFontSize(10, sym), kpiValues[k])
+                                                        @RenderSvgText(x + kpiW / 2, kpiTop + kpiH - 3, "middle", null, "#64748b", ScaledFontSize(7, sym), kpiLabels[k])
+                                                    }
+                                                    yCursor = kpiTop + kpiH + 6;
+                                                }
+                                                if (sym.AlarmAnalyticsShowTopTable && sym.Width > 80 && sym.Height > yCursor + 20)
+                                                {
+                                                    @RenderSvgText(6, yCursor + 8, "start", null, aaFg, ScaledFontSize(9, sym), $"🔝 Top-{aaTopN} Most Frequent")
+                                                    yCursor += 14;
+                                                    double rowH = 8;
+                                                    int maxRows = (int)Math.Max(1, Math.Min(aaTopN, (sym.Height - yCursor - 4) / (rowH + 2)));
+                                                    for (int aaRow = 0; aaRow < maxRows; aaRow++)
+                                                    {
+                                                        double rowY = yCursor + aaRow * (rowH + 2);
+                                                        double barPct = 1.0 - (double)aaRow / Math.Max(1, maxRows);
+                                                        double barMax = sym.Width - 22;
+                                                        <rect x="6" y="@F(rowY)" width="@F(barMax)" height="@F(rowH)" rx="1" fill="#1e293b" />
+                                                        <rect x="6" y="@F(rowY)" width="@F(barMax * barPct)" height="@F(rowH)" rx="1"
+                                                              fill="@(aaRow == 0 ? "#dc3545" : aaRow == 1 ? "#e35d6a" : aaRow == 2 ? "#fd7e14" : "#64748b")" />
+                                                    }
+                                                }
+                                                if (sym.Width <= 80 || sym.Height <= 40)
+                                                {
+                                                    @RenderSvgText(sym.Width / 2, sym.Height / 2, "middle", "middle", "#64748b", ScaledFontSize(8, sym), "📊 Alarm Analytics")
+                                                }
+                                            }
                                             break;
                                         case "radiogroup":
                                             var rgBg = sym.DropdownBackground ?? "#1e293b";
@@ -2262,6 +2311,15 @@ Right-click a symbol for actions</div>
             sym.Stroke = "#334155";
             sym.StrokeWidth = 1;
             sym.Label = "Alarm Analytics";
+            sym.AlarmAnalyticsBackground = "#0f172a";
+            sym.AlarmAnalyticsForeground = "#e2e8f0";
+            sym.AlarmAnalyticsRefreshSeconds = 5;
+            sym.AlarmAnalyticsShowHeader = true;
+            sym.AlarmAnalyticsShowKpis = true;
+            sym.AlarmAnalyticsShowTopTable = true;
+            sym.AlarmAnalyticsShowFloodBanner = true;
+            sym.AlarmAnalyticsTopCount = 10;
+            sym.AlarmAnalyticsTitle = "";
         }
         if (type == "nlquery")
         {

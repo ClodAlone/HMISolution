@@ -246,6 +246,85 @@ namespace SharedModels
         /// Optional per-alarm volume override (0-100). When greater than 0, overrides global/severity volume.
         /// </summary>
         public int VolumeOverride { get; set; }
+
+        /// <summary>
+        /// Optional ISA-18.2 rationalization record for this alarm.
+        /// Captures cause, consequence, safeguards, priority (P1-P4), suppression/shelving rules,
+        /// and required operator response time. Required for regulated industries
+        /// (pharmaceutical, oil &amp; gas, nuclear) and pairs with <see cref="ComplianceConfig"/>.
+        /// </summary>
+        public AlarmRationalization? Rationalization { get; set; }
+    }
+
+    /// <summary>
+    /// ISA-18.2 / EEMUA-191 alarm priority classification.
+    /// P1 is the highest urgency (immediate operator action required),
+    /// P4 is the lowest (informational).
+    /// </summary>
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public enum AlarmPriority
+    {
+        /// <summary>Not yet classified.</summary>
+        Unclassified = 0,
+        /// <summary>P1 - Emergency / immediate action required.</summary>
+        P1 = 1,
+        /// <summary>P2 - High priority / prompt action required.</summary>
+        P2 = 2,
+        /// <summary>P3 - Medium priority / action required before shift end.</summary>
+        P3 = 3,
+        /// <summary>P4 - Low priority / informational / journal only.</summary>
+        P4 = 4
+    }
+
+    /// <summary>
+    /// ISA-18.2 alarm rationalization record. One per alarm.
+    /// Documents the engineering justification for the alarm, its priority classification,
+    /// and the operational rules for suppression/shelving. This is a mandatory
+    /// deliverable in regulated industries (FDA 21 CFR Part 11, ISPE GAMP 5, etc.).
+    /// </summary>
+    public class AlarmRationalization
+    {
+        /// <summary>Root cause / process condition that triggers the alarm.</summary>
+        public string Cause { get; set; } = "";
+
+        /// <summary>Consequence to safety, environment, quality, or production if the alarm is ignored.</summary>
+        public string Consequence { get; set; } = "";
+
+        /// <summary>Independent protection layers or safeguards already in place (SIS, PSV, interlocks, etc.).</summary>
+        public string Safeguards { get; set; } = "";
+
+        /// <summary>Corrective action the operator is expected to take when the alarm activates.</summary>
+        public string CorrectiveAction { get; set; } = "";
+
+        /// <summary>ISA-18.2 priority classification (P1-P4).</summary>
+        public AlarmPriority Priority { get; set; } = AlarmPriority.Unclassified;
+
+        /// <summary>
+        /// Optional expression or free-text description of when the alarm should be automatically
+        /// suppressed (e.g. "Unit stopped", "Mode == Maintenance").
+        /// </summary>
+        public string SuppressionCondition { get; set; } = "";
+
+        /// <summary>
+        /// Maximum allowed shelving duration in minutes.
+        /// 0 = shelving not allowed for this alarm.
+        /// </summary>
+        public int MaxShelvingMinutes { get; set; }
+
+        /// <summary>
+        /// Required operator response time in seconds.
+        /// Used to validate priority classification against ISA-18.2 guidance.
+        /// </summary>
+        public int ResponseTimeSeconds { get; set; }
+
+        /// <summary>Free-text notes / rationalization review comments.</summary>
+        public string Notes { get; set; } = "";
+
+        /// <summary>Name of the engineer who classified this alarm (audit trail).</summary>
+        public string ClassifiedBy { get; set; } = "";
+
+        /// <summary>UTC timestamp of the last classification change (audit trail).</summary>
+        public DateTime? ClassifiedAtUtc { get; set; }
     }
 
     public class DataLoggingConfig
@@ -1859,6 +1938,26 @@ namespace SharedModels
         public string KpiUptimePath { get; set; } = "";
         public string KpiThroughputPath { get; set; } = "";
         public string KpiThroughputTargetPath { get; set; } = "";
+
+        // --- Alarm Analytics widget properties (Type == "alarmanalytics") ---
+        /// <summary>Background color of the alarm-analytics dashboard widget. Default #0f172a (slate-900).</summary>
+        public string AlarmAnalyticsBackground { get; set; } = "#0f172a";
+        /// <summary>Foreground/text color of the alarm-analytics dashboard widget. Default #e2e8f0 (slate-200).</summary>
+        public string AlarmAnalyticsForeground { get; set; } = "#e2e8f0";
+        /// <summary>Refresh interval in seconds (1-3600). Default 5. Set to 0 to disable auto-refresh.</summary>
+        public int AlarmAnalyticsRefreshSeconds { get; set; } = 5;
+        /// <summary>Show the header row (title + window + refresh button). Default true.</summary>
+        public bool AlarmAnalyticsShowHeader { get; set; } = true;
+        /// <summary>Show the KPI cards (Activations / Acks / MTTA / Flood). Default true.</summary>
+        public bool AlarmAnalyticsShowKpis { get; set; } = true;
+        /// <summary>Show the top-alarms table. Default true.</summary>
+        public bool AlarmAnalyticsShowTopTable { get; set; } = true;
+        /// <summary>Show the flood-detection banner when a flood is active. Default true.</summary>
+        public bool AlarmAnalyticsShowFloodBanner { get; set; } = true;
+        /// <summary>Maximum rows shown in the top-alarms table (1-20). Default 10.</summary>
+        public int AlarmAnalyticsTopCount { get; set; } = 10;
+        /// <summary>Optional custom title override for the widget header. Empty = "Alarm Analytics".</summary>
+        public string AlarmAnalyticsTitle { get; set; } = "";
 
         // ——— Radio Group properties (Type == "radiogroup") ———————
         /// <summary>Layout direction: "horizontal" or "vertical". Default horizontal.</summary>

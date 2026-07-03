@@ -207,20 +207,61 @@ provides a natural anchor point; shortcut bindings could be persisted alongside 
 ---
 
 ### 12. Alarm Rationalization Worksheet (ISA-18.2)
-**Area:** Alarm Management
+**Area:** Alarm Management — ✅ Implemented
 
-The `AlarmAnalyticsDashboardPanel` provides statistics, but there is no structured **ISA-18.2
-rationalization table** — a spreadsheet-style editor where each alarm is assigned:
-- Consequence, cause, and safeguards
-- Priority classification (P1–P4)
-- Suppression conditions and shelving rules
-- Required response time
+The `AlarmAnalyticsDashboardPanel` provides statistics, and the new **`AlarmRationalizationPanel`**
+adds a structured **ISA-18.2 rationalization table** — a spreadsheet-style editor where each alarm
+defined on a variable is assigned:
+- Consequence, cause, safeguards, and corrective action
+- Priority classification (P1–P4, color-coded, defaults to *Unclassified*)
+- Suppression condition and maximum shelving duration (minutes)
+- Required operator response time (seconds)
+- Free-text notes and an audit trail (`ClassifiedBy`, `ClassifiedAtUtc`)
 
 This is a mandatory deliverable in regulated industries (pharmaceutical, oil & gas, nuclear).
+
+**How it works:**
+- Model: `AlarmRationalization` and `AlarmPriority` in `SharedModels/NodeModels.cs`; a
+  nullable `Rationalization` property was added to `AlarmConfig` so classification data
+  is persisted alongside every alarm inside the project JSON.
+- UI: open **View → Alarm Rationalization** (📋) to see every alarmable variable in one
+  worksheet. Unclassified rows are highlighted, and the toolbar offers a search box, a
+  P1–P4 priority filter, and one-click **Export CSV** for audits.
+- Persistence: edits mark the project dirty via `NodeEditorService.HasUnsavedChanges`,
+  so a normal project **Save** writes the rationalization data to disk.
 
 **Benefits:**
 - Opens the product to regulated/compliance-driven market segments
 - Pairs naturally with the existing `ComplianceConfig` and FDA 21 CFR Part 11 support
+
+---
+
+### 13. Alarm Analytics Screen Widget
+**Area:** Screen Editor / Runtime Viewer — ✅ Implemented
+
+Previously the alarm analytics dashboard was only reachable from the docked
+`AlarmAnalyticsDashboardPanel` in the editor. It is now also available as a
+first-class **screen widget** (`alarmanalytics`), so end users can pin the
+information onto any operator screen next to the process they are supervising.
+
+**How it works:**
+- Drag **📊 Alarm Analytics** from the **Data Widgets** group in the Screen Toolbox.
+- The runtime component `RuntimeViewer.Shared/Components/Viewer/AlarmAnalyticsDashboardWidget.razor`
+  polls the server `_Diagnostics.Json` variable over OPC UA (same source as the docked panel).
+- Per-instance configuration is stored on `Symbol` in `SharedModels/NodeModels.cs`
+  as `AlarmAnalytics*` properties and exposed in the properties panel:
+  - Custom title, background and text color
+  - Refresh interval (0 disables auto-refresh, manual button only)
+  - Top-N count (1–20)
+  - Independent visibility switches for header, KPI cards, top-alarms table
+    and flood-detection banner
+- The screen editor SVG preview mirrors the live layout (header + 4 KPI mocks +
+  top-N bar rows) so designers can see roughly what operators will see.
+
+**Benefits:**
+- Puts alarm KPIs (activations, MTTA, floods) on the same screen as the plant view
+- Multiple instances can be tuned differently (e.g. compact banner-only widget vs. full dashboard)
+- Zero extra server work — reuses the diagnostics feed already produced by the runtime
 
 ---
 
@@ -275,7 +316,8 @@ This is a mandatory deliverable in regulated industries (pharmaceutical, oil & g
 | 5 | No-Code Rule Builder | ★★★★ | High | 🔵 Long Term |
 | 6 | Script Unit Test Framework | ★★★ | Medium | 🟡 High Value |
 | 7 | Protocol Traffic Monitor | ★★★ | Medium | 🟡 High Value |
-| 12 | Alarm Rationalization (ISA-18.2) | ★★★ | High | 🔵 Long Term |
+| 12 | Alarm Rationalization (ISA-18.2) | ★★★ | High | ✅ Implemented |
+| 13 | Alarm Analytics Screen Widget | ★★★ | Low | ✅ Implemented |
 | 11 | Keyboard Shortcut Customizer | ★★★ | Low | 🟢 Quick Win |
 | QW-10 | Variable rename with propagation | ★★★★★ | Low | 🟢 Quick Win |
 | QW-16 | Auto-save / crash recovery | ★★★★ | Low | 🟢 Quick Win |

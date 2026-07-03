@@ -1,0 +1,422 @@
+@* Copyright (c) 2026 Claudio Fiorani - All rights reserved. *@
+
+@using SharedModels
+@using ServerEditorWeb.Services
+@using Microsoft.JSInterop
+
+@inject NodeEditorService Editor
+@inject IJSRuntime JS
+
+<div class="alarm-rat-panel">
+
+    <div class="alarm-rat-toolbar">
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <strong class="small">📋 Alarm Rationalization <span class="text-muted">(ISA-18.2)</span></strong>
+            <span class="badge bg-secondary">@(_alarms?.Count ?? 0) alarms</span>
+            @if (_alarms != null && _alarms.Count > 0)
+            {
+                <span class="badge bg-warning text-dark" title="Alarms without a completed rationalization">
+                    @_alarms.Count(a => !IsRationalized(a.Variable)) unclassified
+                </span>
+            }
+
+            <div class="ms-auto d-flex align-items-center gap-2">
+                <input type="search"
+                       class="form-control form-control-sm"
+                       style="width:180px; font-size:11px;"
+                       placeholder="🔍 Filter by name / path…"
+                       @bind="_search" @bind:event="oninput" />
+
+                <select class="form-select form-select-sm" style="width:130px; font-size:11px;"
+                        @bind="_priorityFilter">
+                    <option value="">All priorities</option>
+                    <option value="Unclassified">Unclassified</option>
+                    <option value="P1">P1 (Emergency)</option>
+                    <option value="P2">P2 (High)</option>
+                    <option value="P3">P3 (Medium)</option>
+                    <option value="P4">P4 (Low)</option>
+                </select>
+
+                <button class="btn btn-sm btn-outline-secondary"
+                        @onclick="ExportCsv"
+                        disabled="@(_alarms == null || _alarms.Count == 0)"
+                        title="Export the current worksheet as CSV">
+                    ⬇ Export CSV
+                </button>
+                <button class="btn btn-sm btn-outline-secondary" @onclick="Refresh" title="Reload from the project">
+                    ↻ Refresh
+                </button>
+            </div>
+        </div>
+    </div>
+
+    @if (Editor.RootModel == null)
+    {
+        <div class="alarm-rat-empty">
+            <div style="font-size:2.5rem; opacity:.2;">📋</div>
+            <div class="mt-2 text-muted small">Open a project to rationalize its alarms.</div>
+        </div>
+    }
+    else if (_alarms == null || _alarms.Count == 0)
+    {
+        <div class="alarm-rat-empty">
+            <div style="font-size:2.5rem; opacity:.2;">🔕</div>
+            <div class="mt-2 text-muted small">
+                No alarmable variables in this project.<br />
+                Configure an alarm on a variable to start the ISA-18.2 rationalization worksheet.
+            </div>
+        </div>
+    }
+    else
+    {
+        var filtered = FilteredAlarms();
+        <div class="alarm-rat-table-wrap">
+            <table class="alarm-rat-table">
+                <thead>
+                    <tr>
+                        <th class="col-path">Variable Path</th>
+                        <th class="col-msg">Alarm Message</th>
+                        <th class="col-cause">Cause</th>
+                        <th class="col-cons">Consequence</th>
+                        <th class="col-safe">Safeguards</th>
+                        <th class="col-action">Corrective Action</th>
+                        <th class="col-prio">Priority</th>
+                        <th class="col-rt" title="Required operator response time (seconds)">Resp&nbsp;(s)</th>
+                        <th class="col-shelf" title="Maximum allowed shelving duration (minutes). 0 disables shelving.">Shelf&nbsp;(min)</th>
+                        <th class="col-supp">Suppression Condition</th>
+                        <th class="col-notes">Notes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in filtered)
+                    {
+                        var v = row.Variable;
+                        var r = EnsureRationalization(v);
+                        <tr class="@(IsRationalized(v) ? "" : "row-unclassified")">
+                            <td class="col-path">
+                                <div class="path" title="@row.Path">@row.Path</div>
+                                <div class="alarm-type text-muted">@(v.Alarm!.TriggerType) · sev @(v.Alarm.ConditionSeverity)</div>
+                            </td>
+                            <td class="col-msg">
+                                <div class="ellipsis" title="@(v.Alarm.Message)">@(string.IsNullOrEmpty(v.Alarm.Message) ? "—" : v.Alarm.Message)</div>
+                            </td>
+                            <td class="col-cause">
+                                <textarea class="cell-text" rows="2"
+                                          @bind="r.Cause" @bind:event="oninput"
+                                          @onchange="() => OnChanged(v)"
+                                          placeholder="Root cause…"></textarea>
+                            </td>
+                            <td class="col-cons">
+                                <textarea class="cell-text" rows="2"
+                                          @bind="r.Consequence" @bind:event="oninput"
+                                          @onchange="() => OnChanged(v)"
+                                          placeholder="Impact if ignored…"></textarea>
+                            </td>
+                            <td class="col-safe">
+                                <textarea class="cell-text" rows="2"
+                                          @bind="r.Safeguards" @bind:event="oninput"
+                                          @onchange="() => OnChanged(v)"
+                                          placeholder="SIS, PSV, interlocks…"></textarea>
+                            </td>
+                            <td class="col-action">
+                                <textarea class="cell-text" rows="2"
+                                          @bind="r.CorrectiveAction" @bind:event="oninput"
+                                          @onchange="() => OnChanged(v)"
+                                          placeholder="Operator action…"></textarea>
+                            </td>
+                            <td class="col-prio">
+                                <select class="cell-select @PriorityCssClass(r.Priority)"
+                                        @bind="r.Priority" @bind:after="() => OnChanged(v)">
+                                    <option value="Unclassified">—</option>
+                                    <option value="P1">P1</option>
+                                    <option value="P2">P2</option>
+                                    <option value="P3">P3</option>
+                                    <option value="P4">P4</option>
+                                </select>
+                            </td>
+                            <td class="col-rt">
+                                <input type="number" min="0" step="1" class="cell-num"
+                                       @bind="r.ResponseTimeSeconds"
+                                       @bind:after="() => OnChanged(v)" />
+                            </td>
+                            <td class="col-shelf">
+                                <input type="number" min="0" step="5" class="cell-num"
+                                       @bind="r.MaxShelvingMinutes"
+                                       @bind:after="() => OnChanged(v)" />
+                            </td>
+                            <td class="col-supp">
+                                <input type="text" class="cell-text-single"
+                                       @bind="r.SuppressionCondition" @bind:event="oninput"
+                                       @onchange="() => OnChanged(v)"
+                                       placeholder="e.g. Unit stopped" />
+                            </td>
+                            <td class="col-notes">
+                                <textarea class="cell-text" rows="2"
+                                          @bind="r.Notes" @bind:event="oninput"
+                                          @onchange="() => OnChanged(v)"
+                                          placeholder="Notes / review comments…"></textarea>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <div class="alarm-rat-footer">
+            <span class="text-muted small">
+                Showing @filtered.Count of @_alarms.Count alarm(s).
+                Rationalized data is stored in the project file and pairs with the existing
+                <code>ComplianceConfig</code> / FDA 21 CFR Part 11 support.
+            </span>
+        </div>
+    }
+</div>
+
+<style>
+    .alarm-rat-panel {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        min-height: 0;
+        font-size: 12px;
+    }
+
+    .alarm-rat-toolbar {
+        padding: 6px 10px;
+        border-bottom: 1px solid var(--border-color, #dee2e6);
+        background: var(--bg-secondary, #f8f9fa);
+        flex: 0 0 auto;
+    }
+
+    .alarm-rat-empty {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        text-align: center;
+    }
+
+    .alarm-rat-table-wrap {
+        flex: 1;
+        min-height: 0;
+        overflow: auto;
+    }
+
+    .alarm-rat-table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        table-layout: fixed;
+    }
+
+    .alarm-rat-table thead th {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        background: var(--bg-secondary, #f1f3f5);
+        border-bottom: 1px solid var(--border-color, #dee2e6);
+        padding: 6px 6px;
+        font-weight: 600;
+        text-align: left;
+        white-space: nowrap;
+    }
+
+    .alarm-rat-table tbody td {
+        border-bottom: 1px solid var(--border-color, #eee);
+        padding: 4px 4px;
+        vertical-align: top;
+    }
+
+    .alarm-rat-table tbody tr:hover td {
+        background: var(--hover-bg, rgba(0, 123, 255, 0.05));
+    }
+
+    .alarm-rat-table .row-unclassified td {
+        background: rgba(255, 193, 7, 0.06);
+    }
+
+    .col-path { width: 180px; }
+    .col-msg  { width: 160px; }
+    .col-cause, .col-cons, .col-safe, .col-action, .col-notes { width: 180px; }
+    .col-prio  { width: 90px; }
+    .col-rt    { width: 70px; }
+    .col-shelf { width: 80px; }
+    .col-supp  { width: 160px; }
+
+    .path {
+        font-family: var(--font-mono, Consolas, monospace);
+        font-size: 11px;
+        word-break: break-all;
+    }
+    .alarm-type { font-size: 10px; }
+
+    .ellipsis {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .cell-text, .cell-text-single, .cell-num, .cell-select {
+        width: 100%;
+        font-size: 11px;
+        padding: 3px 5px;
+        border: 1px solid var(--border-color, #ced4da);
+        background: var(--bg-primary, #fff);
+        color: var(--text-primary, inherit);
+        border-radius: 3px;
+        box-sizing: border-box;
+        font-family: inherit;
+    }
+
+    .cell-text { resize: vertical; min-height: 32px; }
+    .cell-text-single, .cell-num, .cell-select { height: 28px; }
+
+    .cell-select.prio-p1 { background: #dc3545; color: #fff; font-weight: 600; }
+    .cell-select.prio-p2 { background: #fd7e14; color: #fff; font-weight: 600; }
+    .cell-select.prio-p3 { background: #ffc107; color: #212529; font-weight: 600; }
+    .cell-select.prio-p4 { background: #6c757d; color: #fff; }
+    .cell-select.prio-unclassified { background: #fff3cd; color: #664d03; font-style: italic; }
+
+    .alarm-rat-footer {
+        padding: 4px 10px;
+        border-top: 1px solid var(--border-color, #dee2e6);
+        background: var(--bg-secondary, #f8f9fa);
+        flex: 0 0 auto;
+    }
+</style>
+
+@code {
+    private record AlarmRow(string Path, Variable Variable);
+
+    private List<AlarmRow>? _alarms;
+    private string _search = "";
+    private string _priorityFilter = "";
+
+    protected override void OnInitialized()
+    {
+        Refresh();
+    }
+
+    private void Refresh()
+    {
+        _alarms = new();
+        var model = Editor.RootModel;
+        if (model?.Folder == null) return;
+        CollectAlarms(model.Folder, "", _alarms);
+    }
+
+    private static void CollectAlarms(Folder folder, string prefix, List<AlarmRow> sink)
+    {
+        var basePath = string.IsNullOrEmpty(prefix)
+            ? folder.Name
+            : (string.IsNullOrEmpty(folder.Name) ? prefix : $"{prefix}/{folder.Name}");
+
+        foreach (var v in folder.Variables)
+        {
+            if (v.Alarm != null)
+            {
+                var p = string.IsNullOrEmpty(basePath) ? v.Name : $"{basePath}/{v.Name}";
+                sink.Add(new AlarmRow(p, v));
+            }
+        }
+
+        foreach (var child in folder.Folders)
+        {
+            CollectAlarms(child, basePath, sink);
+        }
+    }
+
+    private List<AlarmRow> FilteredAlarms()
+    {
+        if (_alarms == null) return new();
+        IEnumerable<AlarmRow> q = _alarms;
+
+        if (!string.IsNullOrWhiteSpace(_search))
+        {
+            var s = _search.Trim();
+            q = q.Where(a =>
+                a.Path.Contains(s, StringComparison.OrdinalIgnoreCase) ||
+                (a.Variable.Alarm?.Message?.Contains(s, StringComparison.OrdinalIgnoreCase) ?? false));
+        }
+
+        if (!string.IsNullOrEmpty(_priorityFilter))
+        {
+            if (Enum.TryParse<AlarmPriority>(_priorityFilter, out var wanted))
+            {
+                q = q.Where(a => (a.Variable.Alarm?.Rationalization?.Priority ?? AlarmPriority.Unclassified) == wanted);
+            }
+        }
+
+        return q.ToList();
+    }
+
+    private static AlarmRationalization EnsureRationalization(Variable v)
+    {
+        v.Alarm!.Rationalization ??= new AlarmRationalization();
+        return v.Alarm.Rationalization;
+    }
+
+    private static bool IsRationalized(Variable v)
+    {
+        var r = v.Alarm?.Rationalization;
+        return r != null
+               && r.Priority != AlarmPriority.Unclassified
+               && (!string.IsNullOrWhiteSpace(r.Cause) || !string.IsNullOrWhiteSpace(r.Consequence));
+    }
+
+    private static string PriorityCssClass(AlarmPriority p) => p switch
+    {
+        AlarmPriority.P1 => "prio-p1",
+        AlarmPriority.P2 => "prio-p2",
+        AlarmPriority.P3 => "prio-p3",
+        AlarmPriority.P4 => "prio-p4",
+        _ => "prio-unclassified"
+    };
+
+    private void OnChanged(Variable v)
+    {
+        var r = EnsureRationalization(v);
+        r.ClassifiedAtUtc = DateTime.UtcNow;
+        Editor.HasUnsavedChanges = true;
+    }
+
+    private async Task ExportCsv()
+    {
+        if (_alarms == null || _alarms.Count == 0) return;
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("Path,AlarmMessage,Priority,ResponseTimeSeconds,MaxShelvingMinutes,Cause,Consequence,Safeguards,CorrectiveAction,SuppressionCondition,Notes,ClassifiedBy,ClassifiedAtUtc");
+        foreach (var row in _alarms)
+        {
+            var v = row.Variable;
+            var r = v.Alarm?.Rationalization;
+            sb.Append(CsvEscape(row.Path)).Append(',');
+            sb.Append(CsvEscape(v.Alarm?.Message ?? "")).Append(',');
+            sb.Append(r?.Priority.ToString() ?? "Unclassified").Append(',');
+            sb.Append(r?.ResponseTimeSeconds ?? 0).Append(',');
+            sb.Append(r?.MaxShelvingMinutes ?? 0).Append(',');
+            sb.Append(CsvEscape(r?.Cause ?? "")).Append(',');
+            sb.Append(CsvEscape(r?.Consequence ?? "")).Append(',');
+            sb.Append(CsvEscape(r?.Safeguards ?? "")).Append(',');
+            sb.Append(CsvEscape(r?.CorrectiveAction ?? "")).Append(',');
+            sb.Append(CsvEscape(r?.SuppressionCondition ?? "")).Append(',');
+            sb.Append(CsvEscape(r?.Notes ?? "")).Append(',');
+            sb.Append(CsvEscape(r?.ClassifiedBy ?? "")).Append(',');
+            sb.Append(r?.ClassifiedAtUtc?.ToString("u") ?? "");
+            sb.AppendLine();
+        }
+        await JS.InvokeVoidAsync("dockManager.downloadText",
+            "alarm-rationalization.csv", "text/csv", sb.ToString());
+    }
+
+    private static string CsvEscape(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return "";
+        if (s.Contains(',') || s.Contains('"') || s.Contains('\n') || s.Contains('\r'))
+        {
+            return "\"" + s.Replace("\"", "\"\"") + "\"";
+        }
+        return s;
+    }
+}

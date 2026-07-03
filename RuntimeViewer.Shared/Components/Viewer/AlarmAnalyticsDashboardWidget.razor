@@ -4,16 +4,19 @@
 @using RuntimeViewer.Shared.Services
 @implements IDisposable
 
-<div class="alarm-analytics-widget" style="width: 100%; height: 100%; display: flex; flex-direction: column; font-family: var(--widget-font-family, sans-serif); font-size: var(--widget-font-size, 11px); font-weight: var(--widget-font-weight, normal); font-style: var(--widget-font-style, normal); background: var(--analytics-bg, #0f172a); color: var(--analytics-text, #e2e8f0); border: 1px solid var(--analytics-border, #334155); border-radius: 4px; overflow: hidden;">
-    @* Header *@
-    <div style="display: flex; align-items: center; padding: 4px 8px; background: #1e293b; border-bottom: 1px solid #334155; flex-shrink: 0; gap: 6px;">
-        <span style="font-weight: bold; font-size: 12px;">📊 Alarm Analytics</span>
-        @if (_snapshot != null)
-        {
-            <span style="font-size: 9px; color: #64748b; margin-left: auto;">Window: @(_snapshot.WindowMinutes) min</span>
-        }
-        <button class="analytics-btn" @onclick="Refresh" disabled="@_loading" title="Refresh">🔄</button>
-    </div>
+<div class="alarm-analytics-widget" style="width: 100%; height: 100%; display: flex; flex-direction: column; font-family: var(--widget-font-family, sans-serif); font-size: var(--widget-font-size, 11px); font-weight: var(--widget-font-weight, normal); font-style: var(--widget-font-style, normal); background: @Background; color: @Foreground; border: 1px solid var(--analytics-border, #334155); border-radius: 4px; overflow: hidden;">
+    @if (ShowHeader)
+    {
+        @* Header *@
+        <div style="display: flex; align-items: center; padding: 4px 8px; background: #1e293b; border-bottom: 1px solid #334155; flex-shrink: 0; gap: 6px;">
+            <span style="font-weight: bold; font-size: 12px;">@(string.IsNullOrWhiteSpace(Title) ? "📊 Alarm Analytics" : Title)</span>
+            @if (_snapshot != null)
+            {
+                <span style="font-size: 9px; color: #64748b; margin-left: auto;">Window: @(_snapshot.WindowMinutes) min</span>
+            }
+            <button class="analytics-btn" @onclick="Refresh" disabled="@_loading" title="Refresh">🔄</button>
+        </div>
+    }
 
     @* Content *@
     <div style="flex: 1; overflow-y: auto; padding: 6px 8px;">
@@ -40,7 +43,7 @@
         else
         {
             @* Flood detection banner *@
-            @if (_snapshot.IsFloodDetected)
+            @if (ShowFloodBanner && _snapshot.IsFloodDetected)
             {
                 <div style="background: rgba(220,53,69,0.2); border: 1px solid #dc3545; border-radius: 4px; padding: 4px 8px; margin-bottom: 6px; display: flex; align-items: center; gap: 6px; font-size: 11px;">
                     <span style="font-size: 16px;">🚨</span>
@@ -52,6 +55,8 @@
             }
 
             @* KPI cards *@
+            @if (ShowKpis)
+            {
             <div style="display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap;">
                 <div class="analytics-kpi">
                     <div class="analytics-kpi-value">@_snapshot.TotalActivations</div>
@@ -70,9 +75,12 @@
                     <div class="analytics-kpi-label">Flood</div>
                 </div>
             </div>
+            }
 
-            @* Top-10 table *@
-            <div style="font-weight: bold; font-size: 11px; margin-bottom: 4px;">🔝 Top-10 Most Frequent</div>
+            @* Top-N table *@
+            @if (ShowTopTable)
+            {
+            <div style="font-weight: bold; font-size: 11px; margin-bottom: 4px;">🔝 Top-@Math.Clamp(TopCount, 1, 20) Most Frequent</div>
             @if (_snapshot.TopAlarms.Count == 0)
             {
                 <div style="text-align: center; padding: 8px; color: #64748b; font-size: 10px;">No alarm activations in window.</div>
@@ -91,8 +99,8 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @{ int rank = 0; int maxCount = _snapshot.TopAlarms.Max(a => a.ActivationCount); }
-                        @foreach (var alarm in _snapshot.TopAlarms)
+                        @{ int rank = 0; var topRows = _snapshot.TopAlarms.Take(Math.Clamp(TopCount, 1, 20)).ToList(); int maxCount = topRows.Count > 0 ? topRows.Max(a => a.ActivationCount) : 0; }
+                        @foreach (var alarm in topRows)
                         {
                             rank++;
                             double pct = maxCount > 0 ? (double)alarm.ActivationCount / maxCount * 100 : 0;
@@ -111,6 +119,7 @@
                         }
                     </tbody>
                 </table>
+            }
             }
         }
     </div>
@@ -152,10 +161,22 @@
 @code {
     [Inject] private OpcRuntimeClient Opc { get; set; } = default!;
 
+    // ─── Per-instance configuration (bound to Symbol.AlarmAnalytics* properties) ───
+    [Parameter] public string Background { get; set; } = "#0f172a";
+    [Parameter] public string Foreground { get; set; } = "#e2e8f0";
+    [Parameter] public int RefreshSeconds { get; set; } = 5;
+    [Parameter] public bool ShowHeader { get; set; } = true;
+    [Parameter] public bool ShowKpis { get; set; } = true;
+    [Parameter] public bool ShowTopTable { get; set; } = true;
+    [Parameter] public bool ShowFloodBanner { get; set; } = true;
+    [Parameter] public int TopCount { get; set; } = 10;
+    [Parameter] public string Title { get; set; } = "";
+
     private AlarmAnalyticsSnapshot? _snapshot;
     private bool _loading;
     private string? _error;
     private System.Threading.Timer? _refreshTimer;
+    private int _currentRefreshSeconds = -1;
 
     private static readonly System.Text.Json.JsonSerializerOptions _jsonOptions = new()
     {
@@ -166,6 +187,25 @@
     protected override async Task OnInitializedAsync()
     {
         await Refresh();
+        RestartTimer();
+    }
+
+    protected override void OnParametersSet()
+    {
+        // Refresh interval can be edited live in the screen editor — restart the timer if it changed.
+        if (RefreshSeconds != _currentRefreshSeconds)
+        {
+            RestartTimer();
+        }
+    }
+
+    private void RestartTimer()
+    {
+        _refreshTimer?.Dispose();
+        _refreshTimer = null;
+        _currentRefreshSeconds = RefreshSeconds;
+        if (RefreshSeconds <= 0) return; // auto-refresh disabled
+        var period = Math.Clamp(RefreshSeconds, 1, 3600) * 1000;
         _refreshTimer = new System.Threading.Timer(async _ =>
         {
             await InvokeAsync(async () =>
@@ -173,7 +213,7 @@
                 await Refresh();
                 StateHasChanged();
             });
-        }, null, 5000, 5000);
+        }, null, period, period);
     }
 
     private async Task Refresh()

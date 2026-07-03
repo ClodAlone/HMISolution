@@ -37,6 +37,12 @@ public class DockPanelState
     public string Title { get; set; } = "";
     public string Icon { get; set; } = "📄";
     public string Zone { get; set; } = "center"; // "center", "right", "bottom", "floating", "hidden", "autohide-right", "autohide-bottom"
+    /// <summary>
+    /// The initial zone declared in the panel catalog. Used when re-showing a hidden
+    /// panel from the View menu so it returns to its natural home instead of being
+    /// dumped into the center zone.
+    /// </summary>
+    public string DefaultZone { get; set; } = "center";
     public bool IsFloating => Zone == "floating";
     public bool IsVisible => Zone != "hidden";
     public double FloatX { get; set; } = 150;
