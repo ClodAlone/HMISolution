@@ -2219,13 +2219,25 @@ public class NodeEditorService
     }
 
     public (bool success, string message) ApplyJsonToTree()
+        => ApplyJsonToTree(JsonEditorText);
+
+    /// <summary>
+    /// Deserializes <paramref name="explicitJson"/> into the active project model, bypassing
+    /// any bind timing races with <see cref="JsonEditorText"/>. Also refreshes JsonEditorText
+    /// to match the applied model so the editor stays in sync.
+    /// </summary>
+    public (bool success, string message) ApplyJsonToTree(string explicitJson)
     {
         try
         {
-            var newModel = JsonSerializer.Deserialize<NodeModel>(JsonEditorText);
+            var newModel = JsonSerializer.Deserialize<NodeModel>(
+                explicitJson,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
             if (newModel != null)
             {
                 if (ActiveProject != null) ActiveProject.Model = newModel;
+                // Keep the editor text in sync with the applied model so the two never drift.
+                JsonEditorText = explicitJson;
                 ReloadViewModels();
                 HasUnsavedChanges = true;
                 NotifyStateChanged();

@@ -2544,11 +2544,20 @@ private void UnsavedDialogCancel()
 
     private void OnAiJsonResult(string newJson)
     {
+        if (GuardLocked()) return;
         var oldJson = Editor.JsonEditorText;
-        Editor.JsonEditorText = newJson;
         _appLogService.AddLog("INF", "AI response applied.");
         _appLogService.AddLog("DBG", $"JSON Length change: {newJson.Length - oldJson.Length}");
         Editor.DiffText = newJson;
+
+        // Apply directly from the AI result string — avoids any bind-timing race
+        // where Editor.JsonEditorText might still hold the pre-stream value.
+        var (success, msg) = Editor.ApplyJsonToTree(newJson);
+        _jsonEditor?.ShowMessage(success, success ? "AI changes applied to the project tree." : msg);
+        if (!success)
+            _appLogService.AddLog("WRN", $"Auto-apply after AI edit failed: {msg}");
+        else
+            _appLogService.AddLog("INF", $"Auto-apply after AI edit: {msg}");
     }
 
     private void SetupLogDirectory()

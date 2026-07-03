@@ -4,6 +4,7 @@
 @using SharedModels
 @using System.Text.Json
 @using System.Text.Json.Serialization
+@inject IJSRuntime JS
 
 <div class="modal-backdrop show" @onclick="OnClose"></div>
 <div class="modal show d-block" tabindex="-1">
@@ -87,16 +88,42 @@
                 }
                 else if (_step == WizardStep.Generating)
                 {
-                    <div class="text-center py-4">
-                        <div class="spinner-border text-primary mb-3" role="status"></div>
-                        <p class="mb-1">Generating your project...</p>
-                        <p class="text-muted small">@_generationStatus</p>
+                    <div class="py-2">
+                        <div class="text-center mb-2">
+                            <div class="spinner-border text-primary" role="status"></div>
+                            <p class="mb-1 mt-2">Generating your project...</p>
+                            <p class="text-muted small mb-2">@_generationStatus</p>
+                        </div>
+
+                        <div class="p-2 border rounded" style="background:#0f1420; color:#d4d4d4;">
+                            <div class="d-flex flex-wrap gap-3 mb-1" style="font-size:11px;">
+                                <span><strong>Chars:</strong> @_streamCharCount</span>
+                                <span><strong>Elapsed:</strong> @_streamElapsed.TotalSeconds.ToString("F1")s</span>
+                                <span class="text-success"><strong>+@_diffStats.Added</strong> lines</span>
+                                <span class="text-danger"><strong>-@_diffStats.Removed</strong> lines</span>
+                                <span class="text-muted">@_diffStats.Unchanged unchanged</span>
+                            </div>
+                            <pre class="mb-0" style="max-height:220px; overflow:auto; font-size:10px; font-family:monospace; white-space:pre-wrap; word-break:break-all;">@_streamTail</pre>
+                        </div>
+
+                        <div class="text-end mt-2">
+                            <button class="btn btn-sm btn-outline-secondary me-2" @onclick="CopyStatusPanel">
+                                @if (_copied) { <span>&#x2714; Copied</span> } else { <span>&#x1F4CB; Copy status</span> }
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger" @onclick="CancelGeneration">Cancel</button>
+                        </div>
                     </div>
                 }
                 else if (_step == WizardStep.Error)
                 {
-                    <div class="alert alert-danger small mb-0">
-                        <strong>Error:</strong> @_errorMessage
+                    <div class="alert alert-danger small mb-0 d-flex align-items-start gap-2">
+                        <div class="flex-grow-1" style="white-space:pre-wrap; word-break:break-word;">
+                            <strong>Error:</strong> @_errorMessage
+                        </div>
+                        <button class="btn btn-sm btn-outline-danger py-0 px-1" style="font-size:10px;"
+                                title="Copy error text" @onclick="CopyError">
+                            @if (_copied) { <span>&#x2714; Copied</span> } else { <span>&#x1F4CB; Copy</span> }
+                        </button>
                     </div>
                 }
             </div>
@@ -141,6 +168,14 @@
     private string _aiPrompt = "";
     private string _generationStatus = "";
     private string _errorMessage = "";
+
+    private CancellationTokenSource? _generationCts;
+    private int _streamCharCount;
+    private string _streamTail = "";
+    private TimeSpan _streamElapsed;
+    private SimpleJsonDiff.Stats _diffStats;
+    private DateTime _lastUiUpdateUtc;
+    private bool _copied;
 
     private bool CanCreate => _method switch
     {
@@ -237,7 +272,34 @@
             _generationStatus = "AI is generating your project...";
             StateHasChanged();
 
-            var (newJson, comments) = await Ai.AskAsync(_aiEngine, prompt, baseJson);
+            _streamCharCount = 0;
+            _streamTail = "";
+            _streamElapsed = TimeSpan.Zero;
+            _diffStats = default;
+            _lastUiUpdateUtc = DateTime.MinValue;
+            _generationCts?.Cancel();
+            _generationCts = new CancellationTokenSource();
+            var startedAt = DateTime.UtcNow;
+
+            var (newJson, comments) = await Ai.AskStreamingAsync(
+                _aiEngine, prompt, baseJson, null, null,
+                async accumulated =>
+                {
+                    _streamCharCount = accumulated.Length;
+                    _streamElapsed = DateTime.UtcNow - startedAt;
+                    _streamTail = accumulated.Length > 2500
+                        ? "... " + accumulated[^2500..]
+                        : accumulated;
+
+                    if ((DateTime.UtcNow - _lastUiUpdateUtc).TotalMilliseconds < 250) return;
+                    _lastUiUpdateUtc = DateTime.UtcNow;
+
+                    var pending = accumulated.Split(["///COMMENTS///"], 2, StringSplitOptions.None)[0]
+                        .Replace("```json", "").Replace("```", "");
+                    _diffStats = SimpleJsonDiff.Compare(baseJson, pending);
+                    await InvokeAsync(StateHasChanged);
+                },
+                _generationCts.Token);
 
             if (string.IsNullOrWhiteSpace(newJson))
             {
@@ -267,10 +329,58 @@
 
             await OnCreated.InvokeAsync(generatedModel);
         }
+        catch (OperationCanceledException)
+        {
+            _step = WizardStep.ChooseMethod;
+        }
         catch (Exception ex)
         {
             _step = WizardStep.Error;
             _errorMessage = ex.Message;
+        }
+        finally
+        {
+            _generationCts?.Dispose();
+            _generationCts = null;
+        }
+    }
+
+    private void CancelGeneration()
+    {
+        _generationCts?.Cancel();
+    }
+
+    private Task CopyError() => CopyToClipboard(_errorMessage);
+
+    private Task CopyStatusPanel()
+    {
+        var summary =
+            $"Engine: {_aiEngine}\n" +
+            $"Chars: {_streamCharCount}\n" +
+            $"Elapsed: {_streamElapsed.TotalSeconds:F1}s\n" +
+            $"Diff: +{_diffStats.Added} / -{_diffStats.Removed} (unchanged: {_diffStats.Unchanged})\n" +
+            $"Status: {_generationStatus}\n" +
+            (string.IsNullOrEmpty(_errorMessage) ? "" : $"Error: {_errorMessage}\n") +
+            "\n--- Prompt ---\n" + _aiPrompt +
+            "\n\n--- Stream content ---\n" + _streamTail;
+        return CopyToClipboard(summary);
+    }
+
+    private async Task CopyToClipboard(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return;
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", text);
+            _copied = true;
+            StateHasChanged();
+            await Task.Delay(1500);
+            _copied = false;
+            StateHasChanged();
+        }
+        catch
+        {
+            // ignore clipboard failures (non-secure context, etc.)
         }
     }
 

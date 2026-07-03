@@ -1,20 +1,23 @@
 @* Copyright (c) 2026 Claudio Fiorani - All rights reserved. *@
 
 @using ServerEditorWeb.Services
+@inject IJSRuntime JS
 
-<div class="json-editor-panel">
-    <div class="d-flex gap-2 mb-2">
+<div class="json-editor-panel d-flex flex-column">
+    <div class="d-flex gap-2 mb-2" style="order:2;">
         <button class="btn btn-sm btn-outline-secondary" @onclick="Refresh">&#x27F3; Refresh from Tree</button>
         <button class="btn btn-sm btn-outline-primary" @onclick="Apply">&#x2714; Apply to Tree</button>
     </div>
-    <CodeEditor @bind-Value="JsonText" @bind-Value:after="OnJsonChanged" Language="json" Height="@(_aiExpanded ? "calc(100vh - 520px)" : "calc(100vh - 260px)")" />
+    <div style="order:3;">
+        <CodeEditor @bind-Value="JsonText" @bind-Value:after="OnJsonChanged" Language="json" Height="@(_aiExpanded ? "calc(100vh - 520px)" : "calc(100vh - 260px)")" />
+    </div>
     @if (!string.IsNullOrEmpty(_message))
     {
-        <div class="mt-2 alert @(_success ? "alert-success" : "alert-danger")">@_message</div>
+        <div class="mt-2 alert @(_success ? "alert-success" : "alert-danger")" style="order:4;">@_message</div>
     }
 
-    @* -- AI Assistant (inline below editor) -- *@
-    <div class="mt-2 border-top pt-2">
+    @* -- AI Assistant (pinned to top of panel) -- *@
+    <div class="mb-2 border-bottom pb-2" style="order:1;">
         <div class="d-flex align-items-center gap-2" @onclick="() => _aiExpanded = !_aiExpanded" style="cursor:pointer;">
             <span style="font-size: 12px;">@(_aiExpanded ? "▼" : "▶")</span>
             <strong style="font-size: 13px;">&#x1F916; AI Assistant</strong>
@@ -23,40 +26,92 @@
         @if (_aiExpanded)
         {
             <div class="mt-2">
-                <div class="row g-2 mb-2">
-                    <div class="col-auto">
-                        <select class="form-select form-select-sm" style="width:120px;" @bind="_selectedEngine">
-                            @foreach (var engine in AiService.AvailableEngines)
+                <div class="d-flex gap-2 align-items-center flex-wrap mb-2">
+                    <select class="form-select form-select-sm" style="width:120px;" @bind="_selectedEngine">
+                        @foreach (var engine in AiService.AvailableEngines)
+                        {
+                            <option value="@engine">@engine</option>
+                        }
+                    </select>
+                    @if (_selectedEngine == "OpenAI")
+                    {
+                        <select class="form-select form-select-sm" style="width:150px;"
+                                value="@AiService.OpenAiModel"
+                                @onchange="OnOpenAiModelChanged"
+                                title="OpenAI model (lower TPM models like gpt-4o have small rate limits)">
+                            @foreach (var m in AiService.OpenAiModels)
                             {
-                                <option value="@engine">@engine</option>
+                                <option value="@m">@m</option>
                             }
                         </select>
-                    </div>
-                    <div class="col">
-                        <div class="d-flex gap-1 align-items-start">
-                            <select class="form-select form-select-sm" @bind="_selectedSamplePath">
-                                <option value="">-- No reference file --</option>
-                                @foreach (var group in _sampleFiles.GroupBy(f => f.Group))
+                    }
+                    else if (_selectedEngine == "Claude")
+                    {
+                        <select class="form-select form-select-sm" style="width:200px;"
+                                value="@AiService.ClaudeModel"
+                                @onchange="OnClaudeModelChanged"
+                                title="Anthropic Claude model. Older dated snapshots may be retired; prefer '-latest' aliases.">
+                            @foreach (var m in AiService.ClaudeModels)
+                            {
+                                <option value="@m">@m</option>
+                            }
+                        </select>
+                    }
+                </div>
+
+                <div class="d-flex gap-1 align-items-center mb-2">
+                    <label class="small text-muted text-nowrap mb-0" style="min-width:90px;">Edit scope:</label>
+                    <select class="form-select form-select-sm flex-grow-1"
+                            @bind="_scopePath"
+                            title="Restrict the edit to a folder subtree or a top-level section (Screens, Scripts, etc.). Only that slice is sent to the AI; the rest is preserved locally.">
+                        <option value="">-- Whole project (sends full JSON) --</option>
+                        @foreach (var s in _folderScopes)
+                        {
+                            <option value="@s.Key">@s.Label</option>
+                        }
+                    </select>
+                    <button class="btn btn-sm btn-outline-secondary" title="Refresh scope list from the current JSON" @onclick="RefreshFolderScopes">&#x27F3;</button>
+                    @if (_scopePath.StartsWith("folder:"))
+                    {
+                        <label class="d-flex align-items-center gap-1 m-0 small text-nowrap"
+                               title="Ask the AI to return only NEW items (fast). Turn off if you also need to modify or delete existing items in the subtree.">
+                            <input type="checkbox" class="form-check-input m-0" @bind="_additionsOnly" />
+                            Additions only (fast)
+                        </label>
+                    }
+                </div>
+
+                <div class="d-flex gap-1 align-items-center mb-2">
+                    <label class="small text-muted text-nowrap mb-0" style="min-width:90px;">Reference file:</label>
+                    <select class="form-select form-select-sm flex-grow-1"
+                            value="@_selectedSamplePath"
+                            @onchange="OnSampleChanged">
+                        <option value="">-- No reference file --</option>
+                        @foreach (var group in _sampleFiles.GroupBy(f => f.Group))
+                        {
+                            <optgroup label="@group.Key">
+                                @foreach (var (name, path, _) in group)
                                 {
-                                    <optgroup label="@group.Key">
-                                        @foreach (var (name, path, _) in group)
-                                        {
-                                            <option value="@path">@name</option>
-                                        }
-                                    </optgroup>
+                                    <option value="@path">@name</option>
                                 }
-                                @if (!string.IsNullOrEmpty(_customFilePath))
-                                {
-                                    <optgroup label="Custom File">
-                                        <option value="@_customFilePath">@System.IO.Path.GetFileName(System.IO.Path.GetDirectoryName(_customFilePath))/@System.IO.Path.GetFileName(_customFilePath)</option>
-                                    </optgroup>
-                                }
-                            </select>
-                            <button class="btn btn-sm btn-outline-secondary" title="Browse for a custom file" @onclick="BrowseCustomFile">
-                                &#x1F4C1;
-                            </button>
-                        </div>
-                    </div>
+                            </optgroup>
+                        }
+                        @if (!string.IsNullOrEmpty(_customFilePath))
+                        {
+                            <optgroup label="Custom File">
+                                <option value="@_customFilePath">@System.IO.Path.GetFileName(System.IO.Path.GetDirectoryName(_customFilePath))/@System.IO.Path.GetFileName(_customFilePath)</option>
+                            </optgroup>
+                        }
+                    </select>
+                    <button class="btn btn-sm btn-outline-secondary" title="Browse for a custom file" @onclick="BrowseCustomFile">
+                        &#x1F4C1;
+                    </button>
+                    @if (!string.IsNullOrEmpty(_selectedSamplePath))
+                    {
+                        <span class="badge bg-success text-nowrap" style="font-size: 10px;">&#x2713; loaded</span>
+                        <button class="btn btn-link btn-sm p-0 text-nowrap" style="font-size: 10px;" @onclick="PreviewReference">Preview</button>
+                        <button class="btn btn-link btn-sm p-0 text-danger text-nowrap" style="font-size: 10px;" @onclick="ClearReference">Clear</button>
+                    }
                 </div>
 
                 @if (_selectedEngine == "Ollama")
@@ -96,15 +151,6 @@
                     </div>
                 }
 
-                @if (!string.IsNullOrEmpty(_selectedSamplePath))
-                {
-                    <div class="mb-2 d-flex align-items-center gap-1">
-                        <span class="badge bg-success" style="font-size: 10px;">&#x2713; Reference loaded</span>
-                        <button class="btn btn-link btn-sm p-0" style="font-size: 10px;" @onclick="PreviewReference">Preview</button>
-                        <button class="btn btn-link btn-sm p-0 text-danger" style="font-size: 10px;" @onclick="ClearReference">Clear</button>
-                    </div>
-                }
-
                 @if (_showPreview && !string.IsNullOrEmpty(_referencePreview))
                 {
                     <div class="mb-2 p-2 border rounded" style="max-height: 150px; overflow-y: auto; font-size: 10px; font-family: monospace; background: #1e1e1e; color: #d4d4d4;">
@@ -124,30 +170,138 @@
                     </div>
                 }
 
-                <div class="d-flex gap-2">
+                <div class="d-flex gap-2 align-items-center flex-wrap mb-2" style="font-size:11px;">
+                    <label class="d-flex align-items-center gap-1 m-0">
+                        <input type="checkbox" class="form-check-input m-0" checked="@AiService.CompactJsonBeforeSend"
+                               @onchange="OnCompactChanged" />
+                        Compact JSON (saves ~30%)
+                    </label>
+                    <label class="d-flex align-items-center gap-1 m-0">
+                        Max ref chars:
+                        <input type="number" class="form-control form-control-sm" style="width:90px;" step="10000" min="1000"
+                               value="@AiService.MaxReferenceChars"
+                               @onchange="OnMaxRefChanged" />
+                    </label>
+                    <label class="d-flex align-items-center gap-1 m-0"
+                           title="Split large reference files into multiple sequential AI calls. Only takes effect when a reference file is selected and its size exceeds the chunk size.">
+                        <input type="checkbox" class="form-check-input m-0" checked="@_chunkedMode"
+                               @onchange="OnChunkedChanged" />
+                        Chunked import
+                    </label>
+                    @if (_chunkedMode)
+                    {
+                        <label class="d-flex align-items-center gap-1 m-0">
+                            Chunk chars:
+                            <input type="number" class="form-control form-control-sm" style="width:90px;" step="5000" min="2000"
+                                   @bind="_chunkChars" @bind:event="onchange" />
+                        </label>
+                        @if (!string.IsNullOrEmpty(_selectedSamplePath))
+                        {
+                            <span class="text-muted">→ @_estimatedChunks chunk(s)</span>
+                        }
+                        else
+                        {
+                            <span class="text-warning">(select a reference file to activate)</span>
+                        }
+                    }
+                </div>
+
+                <div class="d-flex gap-2 align-items-center">
                     <input type="text" class="form-control form-control-sm flex-grow-1" @bind="_prompt"
                            @bind:event="oninput"
                            @onkeydown="OnPromptKeyDown"
                            placeholder="@(_selectedSamplePath != "" ? "e.g. Import all variables from the reference..." : "Describe what you want the AI to do...")" />
+                    @{
+                        int jsonCharsEstimate;
+                        if (!string.IsNullOrEmpty(_scopePath))
+                        {
+                            var scope = _folderScopes.FirstOrDefault(s => s.Key == _scopePath);
+                            jsonCharsEstimate = scope.ApproxChars + _folderScopes.Count * 40; // subtree + outline overhead
+                        }
+                        else
+                        {
+                            jsonCharsEstimate = AiService.CompactJsonBeforeSend ? (int)(JsonText.Length * 0.65) : JsonText.Length;
+                        }
+                        var refCharsEstimate = _chunkedMode
+                            ? Math.Min(_referenceCharCount, _chunkChars)
+                            : Math.Min(_referenceCharCount, AiService.MaxReferenceChars);
+                        var estTokens = (jsonCharsEstimate + refCharsEstimate + _prompt.Length) / 4;
+                        var (tokLimit, tokEngineHint) = _selectedEngine switch
+                        {
+                            "OpenAI" when AiService.OpenAiModel.Contains("mini") => (200_000, "gpt-4o-mini TPM 200 K"),
+                            "OpenAI" => (30_000, "gpt-4o TPM 30 K"),
+                            "Claude" => (200_000, "Claude context 200 K"),
+                            "Gemini" => (1_000_000, "Gemini context 1 M"),
+                            _ => (128_000, "local model")
+                        };
+                        var overLimit = estTokens > tokLimit;
+                        var tokenClass = overLimit ? "text-danger fw-bold" : (estTokens > tokLimit * 0.8 ? "text-warning" : "text-muted");
+                        var suffix = !string.IsNullOrEmpty(_scopePath) ? "/scoped" : (_chunkedMode ? "/chunk" : "");
+                    }
+                    <span class="small @tokenClass text-nowrap"
+                          title="Estimated input tokens (chars/4) for this @(!string.IsNullOrEmpty(_scopePath) ? "scoped edit" : (_chunkedMode ? "chunk" : "request")). Limit: @tokLimit.ToString("N0") (@tokEngineHint).">
+                        ~@estTokens.ToString("N0") / @tokLimit.ToString("N0") tok@suffix
+                    </span>
                     <button class="btn btn-sm btn-primary" @onclick="Ask"
-                            disabled="@(_isProcessing || string.IsNullOrWhiteSpace(_prompt))">
+                            disabled="@(_isProcessing || string.IsNullOrWhiteSpace(_prompt) || overLimit)"
+                            title="@(overLimit ? "Estimated tokens exceed the selected model's limit — shrink reference or split the request." : "")">
                         @if (_isProcessing)
                         {
                             <span class="spinner-border spinner-border-sm me-1"></span>
                         }
                         Ask AI
                     </button>
+                    @if (_isProcessing)
+                    {
+                        <button class="btn btn-sm btn-outline-danger" @onclick="CancelStreaming" title="Stop generation">&#x25A0;</button>
+                    }
                 </div>
+
+                @if (_isProcessing || _streamCharCount > 0)
+                {
+                    <div class="mt-2 p-2 border rounded position-relative" style="background:#0f1420; color:#d4d4d4;">
+                        <button class="btn btn-sm btn-outline-light position-absolute" style="top:4px; right:4px; padding:2px 6px; font-size:10px;"
+                                title="Copy status + stream content" @onclick="CopyStatusPanel">
+                            @if (_copyStatusMsg == "copied") { <span>&#x2714; Copied</span> } else { <span>&#x1F4CB; Copy</span> }
+                        </button>
+                        <div class="d-flex flex-wrap gap-3 mb-1" style="font-size:11px; padding-right:70px;">
+                            <span>
+                                <strong>Streaming:</strong>
+                                @if (_isProcessing) { <span class="text-info">live</span> } else { <span class="text-success">done</span> }
+                            </span>
+                            @if (_totalChunks > 1)
+                            {
+                                <span class="text-warning"><strong>Chunk:</strong> @_currentChunk / @_totalChunks</span>
+                            }
+                            <span><strong>Chars:</strong> @_streamCharCount</span>
+                            <span><strong>Elapsed:</strong> @_streamElapsed.TotalSeconds.ToString("F1")s</span>
+                            <span class="text-success"><strong>+@_diffStats.Added</strong> lines</span>
+                            <span class="text-danger"><strong>-@_diffStats.Removed</strong> lines</span>
+                            <span class="text-muted">@_diffStats.Unchanged unchanged</span>
+                        </div>
+                        <pre class="mb-0" style="max-height:180px; overflow:auto; font-size:10px; font-family:monospace; white-space:pre-wrap; word-break:break-all;">@_streamTail</pre>
+                    </div>
+                }
 
                 @if (!string.IsNullOrEmpty(_aiComments))
                 {
-                    <div class="mt-2 alert alert-info py-1 small">
-                        <strong>AI:</strong> @_aiComments
+                    <div class="mt-2 alert alert-info py-1 small d-flex align-items-start gap-2">
+                        <div class="flex-grow-1"><strong>AI:</strong> @_aiComments</div>
+                        <button class="btn btn-sm btn-outline-secondary py-0 px-1" style="font-size:10px;"
+                                title="Copy AI comments" @onclick="() => CopyText(_aiComments, nameof(_aiComments))">
+                            @if (_copyStatusMsg == nameof(_aiComments)) { <span>&#x2714;</span> } else { <span>&#x1F4CB;</span> }
+                        </button>
                     </div>
                 }
                 @if (!string.IsNullOrEmpty(_aiError))
                 {
-                    <div class="mt-2 alert alert-danger py-1 small">@_aiError</div>
+                    <div class="mt-2 alert alert-danger py-1 small d-flex align-items-start gap-2">
+                        <div class="flex-grow-1" style="white-space:pre-wrap; word-break:break-word;">@_aiError</div>
+                        <button class="btn btn-sm btn-outline-danger py-0 px-1" style="font-size:10px;"
+                                title="Copy error text" @onclick="() => CopyText(_aiError, nameof(_aiError))">
+                            @if (_copyStatusMsg == nameof(_aiError)) { <span>&#x2714; Copied</span> } else { <span>&#x1F4CB; Copy</span> }
+                        </button>
+                    </div>
                 }
             </div>
         }
@@ -186,6 +340,24 @@
     private string _ollamaUrl = "";
     private string[] _ollamaModels = [];
     private string _trainFolder = Path.Combine("C:", "Work", "samples");
+
+    // Live streaming state
+    private CancellationTokenSource? _streamCts;
+    private int _streamCharCount;
+    private string _streamTail = "";
+    private TimeSpan _streamElapsed;
+    private SimpleJsonDiff.Stats _diffStats;
+    private DateTime _lastUiUpdateUtc;
+    private string? _copyStatusMsg;
+    private int _referenceCharCount;
+    private bool _chunkedMode;
+    private int _chunkChars = 20_000;
+    private int _currentChunk;
+    private int _totalChunks;
+    private int _estimatedChunks => _referenceCharCount == 0 || _chunkChars <= 0 ? 0 : (int)Math.Ceiling(_referenceCharCount / (double)_chunkChars);
+    private string _scopePath = "";
+    private List<AiService.ScopeEntry> _folderScopes = new();
+    private bool _additionsOnly = true;
 
     private static readonly string DefaultSamplesPath = Path.Combine("C:", "Work", "samples");
 
@@ -236,6 +408,7 @@
     {
         _selectedSamplePath = "";
         _referencePreview = "";
+        _referenceCharCount = 0;
         _showPreview = false;
     }
 
@@ -251,6 +424,7 @@
         {
             _customFilePath = _browseInput;
             _selectedSamplePath = _browseInput;
+            _referenceCharCount = AiService.ReadReferenceFile(_browseInput)?.Length ?? 0;
             _showBrowse = false;
         }
         else
@@ -289,6 +463,17 @@
         _isProcessing = true;
         _aiComments = "";
         _aiError = "";
+        _streamCharCount = 0;
+        _streamTail = "";
+        _diffStats = default;
+        _streamElapsed = TimeSpan.Zero;
+        _lastUiUpdateUtc = DateTime.MinValue;
+        _currentChunk = 0;
+        _totalChunks = 0;
+        _streamCts?.Cancel();
+        _streamCts = new CancellationTokenSource();
+        var startedAt = DateTime.UtcNow;
+        var originalJson = JsonText;
 
         try
         {
@@ -307,16 +492,125 @@
                 AiService.OllamaBaseUrl = _ollamaUrl;
             }
 
-            var (newJson, comments) = await AiService.AskAsync(_selectedEngine, _prompt, JsonText, referenceJson, referenceFileName);
+            Func<string, Task> onDelta = async accumulated =>
+            {
+                _streamCharCount = accumulated.Length;
+                _streamElapsed = DateTime.UtcNow - startedAt;
+                _streamTail = accumulated.Length > 2000
+                    ? "... " + accumulated[^2000..]
+                    : accumulated;
+
+                if ((DateTime.UtcNow - _lastUiUpdateUtc).TotalMilliseconds < 250) return;
+                _lastUiUpdateUtc = DateTime.UtcNow;
+
+                // Live JSON preview into the CodeEditor so the user watches the AI edit in real time.
+                var isAdditionsMode =
+                    (_scopePath.StartsWith("folder:") && _additionsOnly) ||
+                    (_chunkedMode && !string.IsNullOrEmpty(_selectedSamplePath) && _referenceCharCount > _chunkChars);
+
+                if (isAdditionsMode)
+                {
+                    var preview = AiService.BuildLiveAdditionsPreview(originalJson, accumulated);
+                    if (!string.IsNullOrEmpty(preview) && preview != JsonText)
+                    {
+                        JsonText = preview;
+                        await JsonTextChanged.InvokeAsync(preview);
+                    }
+                    _diffStats = SimpleJsonDiff.Compare(originalJson, preview);
+                }
+                else if (string.IsNullOrEmpty(_scopePath))
+                {
+                    // Whole-project mode: the stream itself is the new JSON — push it as it types.
+                    var pending = accumulated.Split(["///COMMENTS///"], 2, StringSplitOptions.None)[0]
+                        .Replace("```json", "").Replace("```", "").Trim();
+                    if (pending.Length > 20 && pending.StartsWith('{') && pending != JsonText)
+                    {
+                        JsonText = pending;
+                        await JsonTextChanged.InvokeAsync(pending);
+                    }
+                    _diffStats = SimpleJsonDiff.Compare(originalJson, pending);
+                }
+                else
+                {
+                    // Scoped-echo mode: partial subtree JSON — only compute diff, don't overwrite editor mid-stream.
+                    var pending = accumulated.Split(["///COMMENTS///"], 2, StringSplitOptions.None)[0]
+                        .Replace("```json", "").Replace("```", "");
+                    _diffStats = SimpleJsonDiff.Compare(originalJson, pending);
+                }
+
+                await InvokeAsync(StateHasChanged);
+            };
+
+            string newJson;
+            string comments;
+
+            if (_chunkedMode && !string.IsNullOrEmpty(referenceJson) && referenceJson.Length > _chunkChars)
+            {
+                (newJson, comments) = await AiService.AskInChunksAsync(
+                    _selectedEngine, _prompt, JsonText, referenceJson, referenceFileName,
+                    _chunkChars,
+                    async (currentChunk, totalChunks, _) =>
+                    {
+                        _currentChunk = currentChunk;
+                        _totalChunks = totalChunks;
+                        await InvokeAsync(StateHasChanged);
+                    },
+                    onDelta,
+                    _streamCts.Token);
+            }
+            else if (!string.IsNullOrEmpty(_scopePath))
+            {
+                if (_scopePath.StartsWith("folder:") && _additionsOnly)
+                {
+                    var scopePath = _scopePath["folder:".Length..];
+                    (newJson, comments) = await AiService.AskFolderAdditionsAsync(
+                        _selectedEngine, _prompt, JsonText, scopePath,
+                        onDelta, _streamCts.Token);
+                }
+                else
+                {
+                    (newJson, comments) = await AiService.AskScopedAsync(
+                        _selectedEngine, _prompt, JsonText, _scopePath,
+                        onDelta, _streamCts.Token);
+                }
+            }
+            else
+            {
+                (newJson, comments) = await AiService.AskStreamingAsync(
+                    _selectedEngine, _prompt, JsonText, referenceJson, referenceFileName,
+                    onDelta,
+                    _streamCts.Token);
+            }
+
             if (!string.IsNullOrEmpty(newJson))
             {
                 _aiComments = comments;
+                _diffStats = SimpleJsonDiff.Compare(originalJson, newJson);
+
+                // Propagate the final merged JSON: bind push → parent updates
+                // Editor.JsonEditorText → OnAiJsonResult callback runs → tree is auto-applied.
+                // Setting JsonText directly is intentional so the CodeEditor sees the
+                // change on its next OnParametersSetAsync pass (Value != _lastValue).
+                JsonText = newJson;
+                await JsonTextChanged.InvokeAsync(newJson);
+                await InvokeAsync(StateHasChanged);
                 await OnAiJsonResult.InvokeAsync(newJson);
             }
-            else if (!string.IsNullOrEmpty(comments))
+            else
             {
-                _aiError = comments;
+                // AI produced no usable merged JSON — restore the editor to the pre-stream state
+                // so a stale streaming preview doesn't linger and confuse the user.
+                if (JsonText != originalJson)
+                {
+                    JsonText = originalJson;
+                    await JsonTextChanged.InvokeAsync(originalJson);
+                }
+                _aiError = string.IsNullOrEmpty(comments) ? "AI returned no changes." : comments;
             }
+        }
+        catch (OperationCanceledException)
+        {
+            _aiError = "Generation cancelled.";
         }
         catch (Exception ex)
         {
@@ -324,7 +618,97 @@
         }
         finally
         {
+            _streamElapsed = DateTime.UtcNow - startedAt;
             _isProcessing = false;
+            _streamCts?.Dispose();
+            _streamCts = null;
         }
+    }
+
+    private void CancelStreaming()
+    {
+        _streamCts?.Cancel();
+    }
+
+    private void OnOpenAiModelChanged(ChangeEventArgs e)
+    {
+        AiService.OpenAiModel = e.Value?.ToString() ?? "gpt-4o-mini";
+    }
+
+    private void OnClaudeModelChanged(ChangeEventArgs e)
+    {
+        AiService.ClaudeModel = e.Value?.ToString() ?? "claude-sonnet-4-5";
+    }
+
+    private void OnSampleChanged(ChangeEventArgs e)
+    {
+        _selectedSamplePath = e.Value?.ToString() ?? "";
+        _referenceCharCount = string.IsNullOrEmpty(_selectedSamplePath)
+            ? 0
+            : (AiService.ReadReferenceFile(_selectedSamplePath)?.Length ?? 0);
+        _showPreview = false;
+    }
+
+    private void OnCompactChanged(ChangeEventArgs e)
+    {
+        AiService.CompactJsonBeforeSend = e.Value is bool b && b;
+    }
+
+    private void OnMaxRefChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var v) && v >= 1000)
+            AiService.MaxReferenceChars = v;
+    }
+
+    private void OnChunkedChanged(ChangeEventArgs e)
+    {
+        _chunkedMode = e.Value is bool b && b;
+    }
+
+    private void RefreshFolderScopes()
+    {
+        _folderScopes = AiService.EnumerateScopes(JsonText);
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (_folderScopes.Count == 0 && !string.IsNullOrEmpty(JsonText))
+            RefreshFolderScopes();
+    }
+
+    private async Task CopyText(string? text, string key)
+    {
+        if (string.IsNullOrEmpty(text)) return;
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", text);
+            _copyStatusMsg = key;
+            StateHasChanged();
+            await Task.Delay(1500);
+            if (_copyStatusMsg == key)
+            {
+                _copyStatusMsg = null;
+                StateHasChanged();
+            }
+        }
+        catch
+        {
+            // Clipboard may be blocked (e.g. non-secure context); fall back silently.
+        }
+    }
+
+    private Task CopyStatusPanel()
+    {
+        var summary =
+            $"Engine: {_selectedEngine}\n" +
+            $"Streaming: {(_isProcessing ? "live" : "done")}\n" +
+            $"Chars: {_streamCharCount}\n" +
+            $"Elapsed: {_streamElapsed.TotalSeconds:F1}s\n" +
+            $"Diff: +{_diffStats.Added} / -{_diffStats.Removed} (unchanged: {_diffStats.Unchanged})\n" +
+            (string.IsNullOrEmpty(_aiComments) ? "" : $"Comments: {_aiComments}\n") +
+            (string.IsNullOrEmpty(_aiError) ? "" : $"Error: {_aiError}\n") +
+            "\n--- Stream content ---\n" +
+            _streamTail;
+        return CopyText(summary, "copied");
     }
 }
