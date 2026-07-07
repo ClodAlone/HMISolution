@@ -51,19 +51,18 @@ namespace SharedModels
 
         /// <summary>
         /// Install global unhandled exception handlers and configure the crash reports directory.
+        /// If the requested directory can't be created (e.g. read-only Program Files install),
+        /// falls back to a per-user location under LocalApplicationData. Never throws.
         /// </summary>
-        /// <param name="crashDirectory">Directory to write crash report JSON files.</param>
+        /// <param name="crashDirectory">Preferred directory to write crash report JSON files.</param>
         /// <param name="processName">Friendly process name (e.g. "Server", "Editor", "RuntimeViewer").</param>
         public static void Install(string crashDirectory, string processName)
         {
             if (_installed) return;
             _installed = true;
 
-            _crashDir = crashDirectory;
             _processName = processName;
-
-            if (!Directory.Exists(_crashDir))
-                Directory.CreateDirectory(_crashDir);
+            _crashDir = ResolveWritableCrashDir(crashDirectory, processName);
 
             AppDomain.CurrentDomain.UnhandledException += (_, e) =>
             {
@@ -76,6 +75,53 @@ namespace SharedModels
                 WriteCrashReport(e.Exception, "TaskScheduler");
                 // Don't observe — let it propagate normally
             };
+        }
+
+        private static string ResolveWritableCrashDir(string requested, string processName)
+        {
+            // 1. Try the requested directory
+            if (TryEnsureWritable(requested)) return requested;
+
+            // 2. Fallback: %LOCALAPPDATA%\HMI Solution\<processName>\crash_reports
+            try
+            {
+                var appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+                if (!string.IsNullOrEmpty(appData))
+                {
+                    var fb = Path.Combine(appData, "HMI Solution", processName, "crash_reports");
+                    if (TryEnsureWritable(fb))
+                    {
+                        Debug.WriteLine($"CrashReporter: '{requested}' not writable, using '{fb}'");
+                        return fb;
+                    }
+                }
+            }
+            catch { }
+
+            // 3. Fallback: system temp
+            try
+            {
+                var tmp = Path.Combine(Path.GetTempPath(), "HMI Solution", processName, "crash_reports");
+                if (TryEnsureWritable(tmp)) return tmp;
+            }
+            catch { }
+
+            // 4. Give up: return empty; WriteCrashReport will skip file output
+            return "";
+        }
+
+        private static bool TryEnsureWritable(string dir)
+        {
+            if (string.IsNullOrWhiteSpace(dir)) return false;
+            try
+            {
+                if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
+                var probe = Path.Combine(dir, ".write_test_" + Guid.NewGuid().ToString("N")[..8]);
+                File.WriteAllText(probe, "");
+                File.Delete(probe);
+                return true;
+            }
+            catch { return false; }
         }
 
         /// <summary>

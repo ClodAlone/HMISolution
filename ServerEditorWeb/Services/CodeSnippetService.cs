@@ -14,22 +14,66 @@ namespace ServerEditorWeb.Services;
 public class CodeSnippetService
 {
     private readonly string _snippetsDir;
+    private readonly bool _canPersist;
     private readonly ConcurrentDictionary<string, CodeSnippet> _snippets = new();
     private readonly ILogger<CodeSnippetService> _logger;
 
     private const string BuiltInSnippetsFile = "builtin-snippets.json";
     private const string UserSnippetsFile = "user-snippets.json";
-    private const string SnippetsFolder = "data/snippets";
+    private const string SnippetsFolder = "snippets";
 
     public CodeSnippetService(ILogger<CodeSnippetService> logger)
     {
         _logger = logger;
-        _snippetsDir = Path.Combine(AppContext.BaseDirectory, SnippetsFolder);
-        Directory.CreateDirectory(_snippetsDir);
+        (_snippetsDir, _canPersist) = ResolveSnippetsDir();
 
         // Load built-in and user snippets
         LoadBuiltInSnippets();
         LoadUserSnippets();
+    }
+
+    /// <summary>
+    /// Picks a writable directory for user snippets. Tries, in order:
+    ///   1. &lt;AppContext.BaseDirectory&gt;/data/snippets   (dev / user install)
+    ///   2. %LOCALAPPDATA%/HMI Solution/snippets           (Program Files install)
+    ///   3. %TEMP%/HMI Solution/snippets                    (last resort)
+    /// Never throws; if nothing is writable returns (baseDir, false) and
+    /// user snippets simply won't persist.
+    /// </summary>
+    private (string dir, bool writable) ResolveSnippetsDir()
+    {
+        var candidates = new[]
+        {
+            Path.Combine(AppContext.BaseDirectory, "data", SnippetsFolder),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                         "HMI Solution", SnippetsFolder),
+            Path.Combine(Path.GetTempPath(), "HMI Solution", SnippetsFolder)
+        };
+
+        foreach (var dir in candidates)
+        {
+            if (TryEnsureWritable(dir)) return (dir, true);
+        }
+
+        _logger.LogWarning("No writable snippets directory found; user snippets will not persist.");
+        return (candidates[0], false);
+    }
+
+    private static bool TryEnsureWritable(string dir)
+    {
+        if (string.IsNullOrWhiteSpace(dir)) return false;
+        try
+        {
+            if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
+            var probe = Path.Combine(dir, ".write_test_" + Guid.NewGuid().ToString("N")[..8]);
+            File.WriteAllText(probe, "");
+            File.Delete(probe);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     /// <summary>
@@ -221,6 +265,7 @@ public class CodeSnippetService
     /// </summary>
     private async Task SaveUserSnippetsAsync()
     {
+        if (!_canPersist) return;
         try
         {
             var userSnippets = _snippets.Values
@@ -303,7 +348,7 @@ public class CodeSnippetService
                 Description = "Exception handling",
                 Language = "CSharp",
                 Category = "Error Handling",
-                Code = "try\n{\n    // code here\n}\ncatch (Exception ex)\n{\n    // handle exception\n    Console.WriteLine(ex.Message);\n}",
+                Code = "try\n{\n    // code here\n}\ncatch (Exception ex)\n{\n    // handle exception\n    Log($\"Error: {ex.Message}\");\n}",
                 IsBuiltIn = true,
                 Tags = new() { "exception", "error", "handling" }
             },
@@ -324,24 +369,146 @@ public class CodeSnippetService
             {
                 Id = "cs-read-variable",
                 Name = "Read OPC Variable",
-                Description = "Read from OPC address space",
+                Description = "Read a value from an OPC UA variable by name",
                 Language = "CSharp",
                 Category = "IO",
-                Code = "var value = Variables[\"path/to/variable\"].Value;\nConsole.WriteLine($\"Read: {value}\");",
+                Code = "var value = Read(\"VariableName\");\nLog($\"Read: {value}\");",
                 IsBuiltIn = true,
-                Tags = new() { "opc", "read", "variable" }
+                Tags = new() { "opc", "read", "variable" },
+                ExampleUsage = "var temp = Read(\"Boiler.Temperature\");"
+            },
+
+            new CodeSnippet
+            {
+                Id = "cs-read-typed",
+                Name = "Read Typed Variable",
+                Description = "Read a variable with automatic type conversion",
+                Language = "CSharp",
+                Category = "IO",
+                Code = "double temp    = ReadDouble(\"Boiler.Temperature\");\nint    counter = ReadInt(\"Line1.Counter\");\nbool   running = ReadBool(\"Line1.Running\");\nstring status  = ReadString(\"Line1.Status\");",
+                IsBuiltIn = true,
+                Tags = new() { "opc", "read", "typed" }
             },
 
             new CodeSnippet
             {
                 Id = "cs-write-variable",
                 Name = "Write OPC Variable",
-                Description = "Write to OPC address space",
+                Description = "Write a value to an OPC UA variable by name",
                 Language = "CSharp",
                 Category = "IO",
-                Code = "Variables[\"path/to/variable\"].Value = newValue;\nConsole.WriteLine(\"Written successfully\");",
+                Code = "Write(\"VariableName\", newValue);\nLog(\"Written successfully\");",
                 IsBuiltIn = true,
-                Tags = new() { "opc", "write", "variable" }
+                Tags = new() { "opc", "write", "variable" },
+                ExampleUsage = "Write(\"Line1.Setpoint\", 42.0);"
+            },
+
+            new CodeSnippet
+            {
+                Id = "cs-read-multiple",
+                Name = "Read Multiple Variables",
+                Description = "Batch-read several variables at once",
+                Language = "CSharp",
+                Category = "IO",
+                Code = "var values = ReadMultiple(\"Line1.Temp\", \"Line1.Pressure\", \"Line1.Flow\");\nforeach (var kvp in values)\n    Log($\"{kvp.Key} = {kvp.Value}\");",
+                IsBuiltIn = true,
+                Tags = new() { "opc", "read", "batch" }
+            },
+
+            new CodeSnippet
+            {
+                Id = "cs-write-multiple",
+                Name = "Write Multiple Variables",
+                Description = "Batch-write several variables at once",
+                Language = "CSharp",
+                Category = "IO",
+                Code = "WriteMultiple(new Dictionary<string, object>\n{\n    [\"Line1.Setpoint\"] = 42.0,\n    [\"Line1.Enable\"]   = true,\n    [\"Line1.Mode\"]     = \"Auto\"\n});",
+                IsBuiltIn = true,
+                Tags = new() { "opc", "write", "batch" }
+            },
+
+            new CodeSnippet
+            {
+                Id = "cs-on-changed",
+                Name = "Subscribe to Variable Change",
+                Description = "React to a variable value change",
+                Language = "CSharp",
+                Category = "IO",
+                Code = "OnChanged(\"Line1.Alarm\", e =>\n{\n    Log($\"{e.VariableName} changed: {e.OldValue} -> {e.NewValue}\");\n});",
+                IsBuiltIn = true,
+                Tags = new() { "opc", "subscribe", "event" }
+            },
+
+            new CodeSnippet
+            {
+                Id = "cs-quality",
+                Name = "Get / Set Variable Quality",
+                Description = "Inspect or override OPC UA data quality",
+                Language = "CSharp",
+                Category = "IO",
+                Code = "bool good = GetQuality(\"Sensor.Value\");\nif (!good)\n{\n    Log(\"Sensor quality is bad — forcing good after recovery\");\n    SetQuality(\"Sensor.Value\", true);\n}",
+                IsBuiltIn = true,
+                Tags = new() { "opc", "quality", "diagnostics" }
+            },
+
+            new CodeSnippet
+            {
+                Id = "cs-timestamp",
+                Name = "Get Variable Timestamp",
+                Description = "Get source timestamp of a variable",
+                Language = "CSharp",
+                Category = "IO",
+                Code = "var ts = GetTimestamp(\"Sensor.Value\");\nif (ts.HasValue)\n    Log($\"Last update: {ts.Value:O}\");",
+                IsBuiltIn = true,
+                Tags = new() { "opc", "timestamp" }
+            },
+
+            new CodeSnippet
+            {
+                Id = "cs-log",
+                Name = "Log Message",
+                Description = "Append a line to the script log",
+                Language = "CSharp",
+                Category = "Debugging",
+                Code = "Log($\"Value = {value}, time = {DateTime.Now:HH:mm:ss}\");",
+                IsBuiltIn = true,
+                Tags = new() { "log", "debug" }
+            },
+
+            new CodeSnippet
+            {
+                Id = "cs-log-event",
+                Name = "Log Event",
+                Description = "Write a structured entry to the event journal",
+                Language = "CSharp",
+                Category = "Debugging",
+                Code = "// category: Alarm | Auth | Driver | System\nLogEvent(\"Alarm\", \"High\", \"Boiler\", \"Temperature above 90°C\", details: null);",
+                IsBuiltIn = true,
+                Tags = new() { "event", "journal", "audit" }
+            },
+
+            new CodeSnippet
+            {
+                Id = "cs-delay",
+                Name = "Cancellation-Aware Delay",
+                Description = "Await a delay that respects script cancellation",
+                Language = "CSharp",
+                Category = "Async",
+                Code = "await Delay(500); // milliseconds",
+                IsBuiltIn = true,
+                Tags = new() { "delay", "await", "sleep" }
+            },
+
+            new CodeSnippet
+            {
+                Id = "cs-notification",
+                Name = "Send Notification",
+                Description = "Broadcast a notification to all enabled channels",
+                Language = "CSharp",
+                Category = "Notifications",
+                Code = "SendNotification(\n    title:    \"Line 1 Alarm\",\n    message:  \"Temperature exceeded limit\",\n    severity: 800);",
+                IsBuiltIn = true,
+                Tags = new() { "notification", "alarm" }
             },
 
             new CodeSnippet
@@ -372,12 +539,12 @@ public class CodeSnippetService
             {
                 Id = "cs-debug-log",
                 Name = "Debug Log",
-                Description = "Output debug information",
+                Description = "Output debug information via the script log",
                 Language = "CSharp",
                 Category = "Debugging",
-                Code = "Console.WriteLine($\"Debug: {variable}\");\nSystem.Diagnostics.Debug.WriteLine($\"Info: {data}\");",
+                Code = "Log($\"Debug: variable = {variable}\");\nLog($\"Info:  data     = {data}\");",
                 IsBuiltIn = true,
-                Tags = new() { "debug", "log", "console" }
+                Tags = new() { "debug", "log" }
             },
 
             new CodeSnippet
@@ -387,7 +554,7 @@ public class CodeSnippetService
                 Description = "Format strings with interpolation",
                 Language = "CSharp",
                 Category = "Strings",
-                Code = "string message = $\"Value: {value}, Time: {DateTime.Now:HH:mm:ss}\";\nConsole.WriteLine(message);",
+                Code = "string message = $\"Value: {value}, Time: {DateTime.Now:HH:mm:ss}\";\nLog(message);",
                 IsBuiltIn = true,
                 Tags = new() { "string", "format", "interpolation" }
             },
@@ -399,9 +566,83 @@ public class CodeSnippetService
                 Description = "Query collections with LINQ",
                 Language = "CSharp",
                 Category = "Collections",
-                Code = "var result = from item in collection\n            where item.Value > 10\n            select item.Name;\nforeach (var name in result) { Console.WriteLine(name); }",
+                Code = "var result = from item in collection\n             where item.Value > 10\n             select item.Name;\nforeach (var name in result) { Log(name); }",
                 IsBuiltIn = true,
                 Tags = new() { "linq", "query", "collection" }
+            },
+
+            // ===== VB.NET SNIPPETS =====
+
+            new CodeSnippet
+            {
+                Id = "vb-read-variable",
+                Name = "Read OPC Variable",
+                Description = "Read a value from an OPC UA variable",
+                Language = "VbNet",
+                Category = "IO",
+                Code = "Dim value = Read(\"VariableName\")\nLog($\"Read: {value}\")",
+                IsBuiltIn = true,
+                Tags = new() { "opc", "read", "variable" }
+            },
+
+            new CodeSnippet
+            {
+                Id = "vb-write-variable",
+                Name = "Write OPC Variable",
+                Description = "Write a value to an OPC UA variable",
+                Language = "VbNet",
+                Category = "IO",
+                Code = "Write(\"VariableName\", newValue)\nLog(\"Written successfully\")",
+                IsBuiltIn = true,
+                Tags = new() { "opc", "write", "variable" }
+            },
+
+            new CodeSnippet
+            {
+                Id = "vb-on-changed",
+                Name = "Subscribe to Variable Change",
+                Description = "React to a variable value change",
+                Language = "VbNet",
+                Category = "IO",
+                Code = "OnChanged(\"Line1.Alarm\", Sub(e)\n    Log($\"{e.VariableName} changed: {e.OldValue} -> {e.NewValue}\")\nEnd Sub)",
+                IsBuiltIn = true,
+                Tags = new() { "opc", "subscribe", "event" }
+            },
+
+            new CodeSnippet
+            {
+                Id = "vb-if-then",
+                Name = "If-Then-Else",
+                Description = "Conditional branching in VB.NET",
+                Language = "VbNet",
+                Category = "Conditionals",
+                Code = "If condition Then\n    ' code here\nElse\n    ' alternative code\nEnd If",
+                IsBuiltIn = true,
+                Tags = new() { "conditional", "branch" }
+            },
+
+            new CodeSnippet
+            {
+                Id = "vb-for-loop",
+                Name = "For Loop",
+                Description = "Standard for loop iteration",
+                Language = "VbNet",
+                Category = "Loops",
+                Code = "For i As Integer = 0 To 9\n    ' code here\nNext",
+                IsBuiltIn = true,
+                Tags = new() { "loop", "iteration" }
+            },
+
+            new CodeSnippet
+            {
+                Id = "vb-try-catch",
+                Name = "Try-Catch Block",
+                Description = "Exception handling in VB.NET",
+                Language = "VbNet",
+                Category = "Error Handling",
+                Code = "Try\n    ' code here\nCatch ex As Exception\n    Log($\"Error: {ex.Message}\")\nEnd Try",
+                IsBuiltIn = true,
+                Tags = new() { "exception", "error" }
             },
 
             // ===== PLC ST (STRUCTURED TEXT) SNIPPETS =====

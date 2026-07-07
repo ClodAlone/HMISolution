@@ -463,6 +463,23 @@ public class ServerProcessService : IDisposable
         string adjacent = Path.Combine(editorDir, exeName);
         if (File.Exists(adjacent)) return adjacent;
 
+        // 1b. Installer layout: sibling folder next to the editor
+        //     e.g. C:\Program Files\HMI Solution\Editor\ + ..\Server\Server.exe
+        var editorParent = Directory.GetParent(editorDir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        if (editorParent != null)
+        {
+            var siblingInstall = Path.Combine(editorParent.FullName, "Server", exeName);
+            if (File.Exists(siblingInstall)) return siblingInstall;
+        }
+
+        // 1c. HMI_ROOT environment override
+        var hmiRoot = Environment.GetEnvironmentVariable("HMI_ROOT");
+        if (!string.IsNullOrWhiteSpace(hmiRoot))
+        {
+            var envPath = Path.Combine(hmiRoot, "Server", exeName);
+            if (File.Exists(envPath)) return envPath;
+        }
+
         // 2. Relative to editor project structure (development)
         var dir = new DirectoryInfo(editorDir);
         for (int i = 0; i < 6; i++)
@@ -493,10 +510,29 @@ public class ServerProcessService : IDisposable
             if (File.Exists(p)) return p;
         }
 
-        // 4. Linux: check common install paths
-        if (IsLinux)
+        // 4. Well-known install paths
+        if (IsWindows)
         {
-            string[] linuxPaths = ["/usr/local/bin/Server", "/opt/simpleopcfileserver/Server", "/opt/hmi/server/Server"];
+            string[] winPaths =
+            [
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),      "HMI Solution", "Server", exeName),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),   "HMI Solution", "Server", exeName)
+            ];
+            foreach (var p in winPaths)
+            {
+                if (File.Exists(p)) return p;
+            }
+        }
+        else if (IsLinux)
+        {
+            string[] linuxPaths =
+            [
+                "/usr/local/bin/Server",
+                "/opt/simpleopcfileserver/Server",
+                "/opt/hmi/server/Server",
+                "/opt/hmi-solution/Server/Server",
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "hmi-solution", "Server", "Server")
+            ];
             foreach (var p in linuxPaths)
             {
                 if (File.Exists(p)) return p;

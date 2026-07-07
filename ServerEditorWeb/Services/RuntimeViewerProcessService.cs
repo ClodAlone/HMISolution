@@ -441,6 +441,22 @@ public class RuntimeViewerProcessService : IDisposable
         string adjacent = Path.Combine(editorDir, exeName);
         if (File.Exists(adjacent)) return adjacent;
 
+        // 1b. Installer layout: sibling "Runtime" folder next to the editor
+        var editorParent = Directory.GetParent(editorDir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        if (editorParent != null)
+        {
+            var sibling = Path.Combine(editorParent.FullName, "Runtime", exeName);
+            if (File.Exists(sibling)) return sibling;
+        }
+
+        // 1c. HMI_ROOT environment override
+        var hmiRoot = Environment.GetEnvironmentVariable("HMI_ROOT");
+        if (!string.IsNullOrWhiteSpace(hmiRoot))
+        {
+            var envPath = Path.Combine(hmiRoot, "Runtime", exeName);
+            if (File.Exists(envPath)) return envPath;
+        }
+
         // 2. Relative to editor project structure (development)
         var dir = new DirectoryInfo(editorDir);
         for (int i = 0; i < 6; i++)
@@ -471,10 +487,29 @@ public class RuntimeViewerProcessService : IDisposable
             if (File.Exists(p)) return p;
         }
 
-        // 4. Linux: check common install paths
-        if (IsLinux)
+        // 4. Well-known install paths
+        if (IsWindows)
         {
-            string[] linuxPaths = ["/usr/local/bin/RuntimeViewer", "/opt/simpleopcruntimeviewer/RuntimeViewer", "/opt/hmi/viewer/RuntimeViewer"];
+            string[] winPaths =
+            [
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),    "HMI Solution", "Runtime", exeName),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "HMI Solution", "Runtime", exeName)
+            ];
+            foreach (var p in winPaths)
+            {
+                if (File.Exists(p)) return p;
+            }
+        }
+        else if (IsLinux)
+        {
+            string[] linuxPaths =
+            [
+                "/usr/local/bin/RuntimeViewer",
+                "/opt/simpleopcruntimeviewer/RuntimeViewer",
+                "/opt/hmi/viewer/RuntimeViewer",
+                "/opt/hmi-solution/Runtime/RuntimeViewer",
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "hmi-solution", "Runtime", "RuntimeViewer")
+            ];
             foreach (var p in linuxPaths)
             {
                 if (File.Exists(p)) return p;
@@ -496,6 +531,22 @@ public class RuntimeViewerProcessService : IDisposable
         // 1. Adjacent to editor
         string adjacent = Path.Combine(editorDir, exeName);
         if (File.Exists(adjacent)) return adjacent;
+
+        // 1b. Installer layout: sibling "Runtime" folder next to the editor
+        var editorParent = Directory.GetParent(editorDir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        if (editorParent != null)
+        {
+            var sibling = Path.Combine(editorParent.FullName, "Runtime", exeName);
+            if (File.Exists(sibling)) return sibling;
+        }
+
+        // 1c. HMI_ROOT environment override
+        var hmiRoot = Environment.GetEnvironmentVariable("HMI_ROOT");
+        if (!string.IsNullOrWhiteSpace(hmiRoot))
+        {
+            var envPath = Path.Combine(hmiRoot, "Runtime", exeName);
+            if (File.Exists(envPath)) return envPath;
+        }
 
         // 2. Relative to editor project structure (development)
         var dir = new DirectoryInfo(editorDir);
@@ -527,13 +578,27 @@ public class RuntimeViewerProcessService : IDisposable
             if (File.Exists(p)) return p;
         }
 
-        // 4. Linux: check common install paths
-        if (IsLinux)
+        // 4. Well-known install paths
+        if (IsWindows)
+        {
+            string[] winPaths =
+            [
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),    "HMI Solution", "Runtime", exeName),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "HMI Solution", "Runtime", exeName)
+            ];
+            foreach (var p in winPaths)
+            {
+                if (File.Exists(p)) return p;
+            }
+        }
+        else if (IsLinux)
         {
             string[] linuxPaths =
             [
                 "/usr/local/bin/RuntimeViewer.Desktop",
-                "/opt/simpleopcruntimeviewer/RuntimeViewer.Desktop"
+                "/opt/simpleopcruntimeviewer/RuntimeViewer.Desktop",
+                "/opt/hmi-solution/Runtime/RuntimeViewer.Desktop",
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "hmi-solution", "Runtime", "RuntimeViewer.Desktop")
             ];
             foreach (var p in linuxPaths)
             {
