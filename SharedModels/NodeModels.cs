@@ -2894,7 +2894,7 @@ namespace SharedModels
         public string Id { get; set; } = "";
 
         /// <summary>
-        /// Section type: "Header", "Text", "Chart", "Table", "Value", "PageBreak".
+        /// Section type: "Header", "Text", "Chart", "Table", "Value", "PageBreak", "AiSummary".
         /// </summary>
         public string Type { get; set; } = "Text";
 
@@ -2954,6 +2954,29 @@ namespace SharedModels
 
         /// <summary>Engineering unit (e.g. "Ã‚Â°C", "bar"). Default "".</summary>
         public string ValueUnit { get; set; } = "";
+
+        // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ AI summary properties (Type == "AiSummary") Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+
+        /// <summary>
+        /// Variable paths whose historical statistics (min/max/avg/last) are given to the AI as context.
+        /// Empty = no variable statistics are included (events only).
+        /// </summary>
+        public List<string> AiSummaryVariablePaths { get; set; } = new();
+
+        /// <summary>Time range in minutes for AI summary data/events. Default 1440 (24h).</summary>
+        public int AiSummaryTimeRangeMinutes { get; set; } = 1440;
+
+        /// <summary>Whether to include alarm/event log entries from the time range in the AI context. Default true.</summary>
+        public bool AiSummaryIncludeEvents { get; set; } = true;
+
+        /// <summary>
+        /// Optional comma-separated event categories to include (e.g. "Alarm,System").
+        /// Empty = include all categories.
+        /// </summary>
+        public string AiSummaryEventCategories { get; set; } = "";
+
+        /// <summary>Optional extra instructions appended to the AI prompt (e.g. tone, focus areas).</summary>
+        public string AiSummaryInstructions { get; set; } = "";
     }
 
     /// <summary>

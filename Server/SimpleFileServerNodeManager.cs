@@ -1005,7 +1005,7 @@ namespace SimpleOpcFileServer
 if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
 {
     _reportManager = new ReportManager(this);
-    _reportManager.Initialize(nodeModel.Reports);
+    _reportManager.Initialize(nodeModel.Reports, nodeModel.Server?.NaturalLanguageQuery);
                               }
 
 

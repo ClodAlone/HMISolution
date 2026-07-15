@@ -12,7 +12,17 @@
                                     "Enabled":  true,
                                     "DbPath":  "events.db",
                                     "MaxAgeDays":  90
-                                }
+                                },
+                   "NaturalLanguageQuery":  {
+                                                "Enabled":  true,
+                                                "Engine":  "Ollama",
+                                                "Model":  "mistral",
+                                                "OllamaBaseUrl":  "http://127.0.0.1:11434",
+                                                "MaxDataPoints":  500,
+                                                "DefaultTimeRangeMinutes":  1440,
+                                                "Placeholder":  "Ask about plant operations...",
+                                                "ApiKey":  null
+                                            }
                },
     "Database":  null,
     "Users":  [
@@ -599,6 +609,68 @@
                            "CustomHolidays":  [
 
                                               ]
+                       },
+                       {
+                           "Name":  "DailyAiSummarySchedule",
+                           "Enabled":  true,
+                           "SlotMinutes":  60,
+                           "ActivateCommands":  [
+                                                    {
+                                                        "Id":  "cmd_genrpt3",
+                                                        "Action":  "GenerateReport",
+                                                        "Trigger":  "Click",
+                                                        "TargetReport":  "DailyAiSummary"
+                                                    }
+                                                ],
+                           "DeactivateCommands":  [
+
+                                                  ],
+                           "WeeklySlots":  [
+                                               {
+                                                   "DayOfWeek":  0,
+                                                   "StartMinute":  360,
+                                                   "EndMinute":  420
+                                               },
+                                               {
+                                                   "DayOfWeek":  1,
+                                                   "StartMinute":  360,
+                                                   "EndMinute":  420
+                                               },
+                                               {
+                                                   "DayOfWeek":  2,
+                                                   "StartMinute":  360,
+                                                   "EndMinute":  420
+                                               },
+                                               {
+                                                   "DayOfWeek":  3,
+                                                   "StartMinute":  360,
+                                                   "EndMinute":  420
+                                               },
+                                               {
+                                                   "DayOfWeek":  4,
+                                                   "StartMinute":  360,
+                                                   "EndMinute":  420
+                                               },
+                                               {
+                                                   "DayOfWeek":  5,
+                                                   "StartMinute":  360,
+                                                   "EndMinute":  420
+                                               },
+                                               {
+                                                   "DayOfWeek":  6,
+                                                   "StartMinute":  360,
+                                                   "EndMinute":  420
+                                               }
+                                           ],
+                           "WeekendMode":  "Same",
+                           "WeekendSlots":  [
+
+                                            ],
+                           "HolidayMode":  "Same",
+                           "HolidayLocale":  "",
+                           "CustomHolidays":  [
+
+                                              ]
                        }
                    ],
     "Reports":  [
@@ -1019,10 +1091,60 @@
                                          "SmtpFromAddress":  "",
                                          "DiskPath":  "Reports/Shifts",
                                          "FileNamePattern":  "ShiftHandover_{DateTime}"
-                                     },
-                        "Group":  ""
-                    }
-                ],
+                                                           },
+                                             "Group":  ""
+                                         },
+                                         {
+                                             "Name":  "DailyAiSummary",
+                                             "Enabled":  true,
+                                             "Format":  "HTML",
+                                             "Title":  "Daily AI Operations Summary",
+                                             "Description":  "AI-generated plain-language overview of the last 24 hours: process trends, alarms, and anything needing attention.",
+                                             "PageSize":  "A4",
+                                             "Orientation":  "Portrait",
+                                             "Sections":  [
+                                                              {
+                                                                  "Id":  "ai_hdr",
+                                                                  "Type":  "Header",
+                                                                  "Title":  "Water Treatment Plant — Daily AI Summary"
+                                                              },
+                                                              {
+                                                                  "Id":  "ai_summary",
+                                                                  "Type":  "AiSummary",
+                                                                  "Title":  "Overnight / Last 24h Overview",
+                                                                  "AiSummaryVariablePaths":  [
+                                                                                                 "Intake.FlowRate_m3h",
+                                                                                                 "Intake.Turbidity_NTU",
+                                                                                                 "Treatment.pH",
+                                                                                                 "Treatment.Chlorine_ppm",
+                                                                                                 "Treatment.DissolvedOxygen_mgL",
+                                                                                                 "Storage.Tank1_Level_pct",
+                                                                                                 "Storage.Tank2_Level_pct",
+                                                                                                 "Distribution.OutflowRate_m3h",
+                                                                                                 "Energy.TotalPower_kW"
+                                                                                             ],
+                                                                  "AiSummaryTimeRangeMinutes":  1440,
+                                                                  "AiSummaryIncludeEvents":  true,
+                                                                  "AiSummaryEventCategories":  "Alarm,System",
+                                                                  "AiSummaryInstructions":  "Focus on water quality compliance (pH 6.5-8.5, chlorine 0.5-2.0 ppm) and flag any tank levels below 15% or above 90%."
+                                                              }
+                                                          ],
+                                             "Delivery":  {
+                                                              "Method":  "Both",
+                                                              "EmailRecipients":  "plant.manager@example.com",
+                                                              "EmailSubject":  "Daily AI Summary — {ReportName} — {Date}",
+                                                              "SmtpServer":  "smtp.example.com",
+                                                              "SmtpPort":  587,
+                                                              "SmtpUser":  "reports@example.com",
+                                                              "SmtpPassword":  "",
+                                                              "SmtpUseSsl":  true,
+                                                              "SmtpFromAddress":  "reports@example.com",
+                                                              "DiskPath":  "Reports/AiSummaries",
+                                                              "FileNamePattern":  "DailyAiSummary_{Date}"
+                                                          },
+                                             "Group":  ""
+                                         }
+                                     ],
     "Scripts":  [
                     {
                         "Name":  "SimulateProcess",
@@ -1514,6 +1636,31 @@
                                                          ]
                                         },
                                         {
+                                            "Id":  "rpt_gen_ai",
+                                            "Type":  "button",
+                                            "X":  0,
+                                            "Y":  50,
+                                            "Width":  200,
+                                            "Height":  40,
+                                            "Label":  "🤖 Generate AI Summary",
+                                            "ButtonStyle":  "raised",
+                                            "ButtonColor":  "#a855f7",
+                                            "ButtonTextColor":  "#ffffff",
+                                            "ButtonBorderRadius":  8,
+                                            "ColSpan":  4,
+                                            "RowSpan":  1,
+                                            "RowHeight":  50,
+                                            "Order":  5,
+                                            "Commands":  [
+                                                             {
+                                                                 "Id":  "gen_ai1",
+                                                                 "Action":  "GenerateReport",
+                                                                 "Trigger":  "Click",
+                                                                 "TargetReport":  "DailyAiSummary"
+                                                             }
+                                                         ]
+                                        },
+                                        {
                                             "Id":  "rpt_viewer_daily",
                                             "Type":  "reportviewer",
                                             "X":  0,
@@ -1525,7 +1672,7 @@
                                             "ColSpan":  12,
                                             "RowSpan":  1,
                                             "RowHeight":  500,
-                                            "Order":  5
+                                            "Order":  6
                                         },
                                         {
                                             "Id":  "rpt_viewer_quality",
@@ -1539,7 +1686,7 @@
                                             "ColSpan":  12,
                                             "RowSpan":  1,
                                             "RowHeight":  500,
-                                            "Order":  6
+                                            "Order":  7
                                         },
                                         {
                                             "Id":  "rpt_viewer_shift",
@@ -1553,7 +1700,21 @@
                                             "ColSpan":  12,
                                             "RowSpan":  1,
                                             "RowHeight":  400,
-                                            "Order":  7
+                                            "Order":  8
+                                        },
+                                        {
+                                            "Id":  "rpt_viewer_ai",
+                                            "Type":  "reportviewer",
+                                            "X":  0,
+                                            "Y":  1530,
+                                            "Width":  600,
+                                            "Height":  400,
+                                            "Label":  "Daily AI Summary",
+                                            "ReportName":  "DailyAiSummary",
+                                            "ColSpan":  12,
+                                            "RowSpan":  1,
+                                            "RowHeight":  400,
+                                            "Order":  9
                                         }
                                     ]
                     },

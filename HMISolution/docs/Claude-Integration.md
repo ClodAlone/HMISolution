@@ -72,6 +72,35 @@ Operators can ask questions like:
 
 Claude processes historical data context and generates concise answers displayed in the runtime's chat widget.
 
+### AI Daily Summary Reports
+Add a report section with `"Type": "AiSummary"` to any `ReportConfig` (see `Reports` in nodes.json) to get an
+AI-generated operations summary — alarms/events, variable trends, and anything needing attention — as part of a
+scheduled report. It reuses the same `Settings.NaturalLanguageQuery` engine/model/API key configuration described
+above, so no separate setup is required.
+
+```json
+{
+  "Name": "DailyOverview",
+  "Enabled": true,
+  "Title": "Daily Operations Summary",
+  "Sections": [
+    {
+      "Id": "ai1",
+      "Type": "AiSummary",
+      "Title": "AI Summary",
+      "AiSummaryVariablePaths": ["Line1.Temperature", "Tank2.Level"],
+      "AiSummaryTimeRangeMinutes": 1440,
+      "AiSummaryIncludeEvents": true
+    }
+  ],
+  "Delivery": { "Method": "Email", "EmailRecipients": "ops@example.com" }
+}
+```
+
+Trigger it daily by adding a `SchedulerConfig` with a time slot covering the desired run time and a
+`GenerateReport` command targeting `DailyOverview` (Schedulers already support daily/weekly time slots,
+weekends, and holidays).
+
 ## Comparison
 
 | Feature | Claude 3.5 Sonnet | GPT-4o | Gemini Pro | Ollama (Mistral) |
@@ -125,6 +154,8 @@ Claude processes historical data context and generates concise answers displayed
 ## Code References
 
 - **Editor AI Service:** `ServerEditorWeb/Services/AiService.cs` → `CallClaudeAsync()`
-- **Runtime NL Query:** `RuntimeViewer.Shared/Services/NaturalLanguageQueryService.cs` → `CallClaudeAsync()`
-- **Configuration Model:** `SharedModels/NodeModels.cs` → `NaturalLanguageQueryConfig`
+- **Runtime NL Query:** `RuntimeViewer.Shared/Services/NaturalLanguageQueryService.cs`
+- **AI Engine Client (shared):** `SharedModels/AiEngineClient.cs` → `AskAsync()` (OpenAI/Gemini/Claude/Ollama dispatch, used by both NL queries and AI report sections)
+- **AI Daily Summary Reports:** `Server/ReportManager.cs` → `RenderAiSummarySection()`
+- **Configuration Model:** `SharedModels/NodeModels.cs` → `NaturalLanguageQueryConfig`, `ReportSection` (`AiSummary*` properties)
 - **Available Engines:** `AiService.AvailableEngines = ["OpenAI", "Gemini", "Claude", "Ollama"]`

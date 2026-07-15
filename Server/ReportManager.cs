@@ -26,14 +26,16 @@ namespace SimpleOpcFileServer
         private readonly SimpleFileServerNodeManager _nodeManager;
         private readonly List<ReportConfig> _reports = new();
         private readonly CancellationTokenSource _cts = new();
+        private NaturalLanguageQueryConfig? _aiConfig;
 
         public ReportManager(SimpleFileServerNodeManager nodeManager)
         {
             _nodeManager = nodeManager;
         }
 
-        public void Initialize(List<ReportConfig> reports)
+        public void Initialize(List<ReportConfig> reports, NaturalLanguageQueryConfig? aiConfig = null)
         {
+            _aiConfig = aiConfig;
             foreach (var config in reports)
             {
                 DiagnosticsCollector.Instance.Register("Report", config.Name, config.Enabled);
@@ -140,6 +142,10 @@ namespace SimpleOpcFileServer
 
                     case "PageBreak":
                         sb.AppendLine("<div class=\"page-break\"></div>");
+                        break;
+
+                    case "AiSummary":
+                        await RenderAiSummarySection(sb, section);
                         break;
                 }
             }
@@ -430,6 +436,119 @@ namespace SimpleOpcFileServer
             }
         }
 
+        private async Task RenderAiSummarySection(StringBuilder sb, ReportSection section)
+        {
+            if (!string.IsNullOrEmpty(section.Title))
+                sb.AppendLine($"<h3>{Escape(section.Title)}</h3>");
+
+            var cfg = _aiConfig;
+            if (cfg == null || !cfg.Enabled)
+            {
+                sb.AppendLine("<div class=\"ai-summary\"><p>AI summary is not configured. Enable Settings.NaturalLanguageQuery in nodes.json to use this section.</p></div>");
+                return;
+            }
+
+            var end = DateTime.UtcNow;
+            var minutes = section.AiSummaryTimeRangeMinutes > 0 ? section.AiSummaryTimeRangeMinutes : 1440;
+            var start = end.AddMinutes(-minutes);
+
+            var context = new StringBuilder();
+            context.AppendLine($"Time range: {start:yyyy-MM-dd HH:mm} UTC to {end:yyyy-MM-dd HH:mm} UTC");
+            context.AppendLine();
+
+            // Variable statistics
+            if (section.AiSummaryVariablePaths.Count > 0)
+            {
+                context.AppendLine("=== VARIABLE STATISTICS ===");
+                foreach (var path in section.AiSummaryVariablePaths)
+                {
+                    var points = await ReadHistoricalDataAsync(path, start, end, section.ChartMaxPoints > 0 ? section.ChartMaxPoints : 500);
+                    if (points.Count == 0)
+                    {
+                        context.AppendLine($"{path}: no data in range.");
+                        continue;
+                    }
+
+                    var values = points.Select(p => p.Value).ToList();
+                    context.AppendLine(
+                        $"{path}: min={values.Min():G6} max={values.Max():G6} avg={values.Average():G6} " +
+                        $"first={values.First():G6} last={values.Last():G6} ({points.Count} points)");
+                }
+                context.AppendLine();
+            }
+
+            // Events / alarms
+            if (section.AiSummaryIncludeEvents)
+            {
+                var eventLogger = _nodeManager.EventLogger;
+                var categories = section.AiSummaryEventCategories
+                    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+                var events = eventLogger != null
+                    ? (categories.Length > 0
+                        ? categories.SelectMany(cat => eventLogger.QueryEvents(category: cat, startTime: start, endTime: end, limit: 200)).ToList()
+                        : eventLogger.QueryEvents(startTime: start, endTime: end, limit: 200))
+                    : new List<Dictionary<string, object>>();
+
+                context.AppendLine($"=== EVENTS ({events.Count} in range) ===");
+                if (events.Count == 0)
+                {
+                    context.AppendLine("No events recorded in this period.");
+                }
+                else
+                {
+                    foreach (var group in events.GroupBy(e => e["category"].ToString()))
+                        context.AppendLine($"{group.Key}: {group.Count()}");
+                    context.AppendLine();
+                    foreach (var e in events.Take(50))
+                        context.AppendLine($"{e["time"]} [{e["category"]}/{e["severity"]}] {e["source"]}: {e["message"]}");
+                }
+                context.AppendLine();
+            }
+
+            var extraInstructions = string.IsNullOrWhiteSpace(section.AiSummaryInstructions)
+                ? ""
+                : $"\n{section.AiSummaryInstructions}\n";
+
+            var prompt = $"""
+                You are an industrial process analyst assistant for an HMI/SCADA system.
+                Write a concise operations summary for a plant operator/manager based ONLY on the data below.
+                Call out anomalies, alarms, trends, and anything requiring attention. Use short paragraphs or a
+                bulleted list. Keep it brief and factual — do not invent data that isn't provided.
+                {extraInstructions}
+                === DATA ===
+                {context}
+                === END DATA ===
+
+                Summary:
+                """;
+
+            string answer;
+            try
+            {
+                answer = await AiEngineClient.AskAsync(prompt, cfg, _cts.Token);
+            }
+            catch (Exception ex)
+            {
+                answer = $"AI summary generation failed: {ex.Message}";
+                Log.Error(ex, "AI summary generation failed for report section '{Id}'.", section.Id);
+            }
+
+            sb.AppendLine("<div class=\"ai-summary\">");
+            sb.AppendLine(FormatAiTextAsHtml(answer));
+            sb.AppendLine("</div>");
+        }
+
+        private static string FormatAiTextAsHtml(string text)
+        {
+            var escaped = Escape(text);
+            var paragraphs = escaped.Split(["\r\n\r\n", "\n\n"], StringSplitOptions.RemoveEmptyEntries);
+            var sb = new StringBuilder();
+            foreach (var p in paragraphs)
+                sb.AppendLine($"<p>{p.Replace("\n", "<br/>")}</p>");
+            return sb.ToString();
+        }
+
         private async Task<List<(DateTime Timestamp, double Value)>> ReadHistoricalDataAsync(
             string variablePath, DateTime startTime, DateTime endTime, int maxPoints)
         {
@@ -496,6 +615,9 @@ namespace SimpleOpcFileServer
             .value-section { margin: 8px 0; padding: 8px 12px; background: #1e293b; border-radius: 4px; border-left: 3px solid #38bdf8; font-size: 13px; }
             .value-label { color: #94a3b8; }
             .value-data { color: #f1f5f9; font-weight: 600; font-size: 16px; }
+            .ai-summary { margin: 8px 0 16px; padding: 12px 16px; background: #1e293b; border-radius: 4px; border-left: 3px solid #a855f7; font-size: 13px; line-height: 1.6; color: #e2e8f0; }
+            .ai-summary p { margin: 0 0 8px; }
+            .ai-summary p:last-child { margin-bottom: 0; }
             .report-footer { margin-top: 24px; padding-top: 12px; border-top: 1px solid #334155; font-size: 10px; color: #475569; text-align: center; }
             .page-break { page-break-after: always; margin: 20px 0; border-top: 2px dashed #334155; }
             @media print { body { background: white; color: black; } .data-table th { background: #f0f0f0; color: #333; } }
