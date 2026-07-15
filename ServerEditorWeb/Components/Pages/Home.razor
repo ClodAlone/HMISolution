@@ -122,9 +122,22 @@ else
                         <div class="menu-item" @onclick="SaveAsMenu" @onclick:stopPropagation>
                             <span class="menu-icon">💾</span><span class="menu-label">@L["menu.file.saveAs"]</span><span class="menu-shortcut">Ctrl+Shift+S</span>
                         </div>
+                        <div class="menu-separator"></div>
+                        <div class="menu-item" @onclick="ImportMoviconProjectMenu" @onclick:stopPropagation>
+                            <span class="menu-icon">📥</span><span class="menu-label">Import Movicon 11 Project...</span>
+                        </div>
+                        <div class="menu-item" @onclick="ImportIgnitionTagsMenu" @onclick:stopPropagation>
+                            <span class="menu-icon">📥</span><span class="menu-label">Import Ignition Tags (JSON)...</span>
+                        </div>
+                        <div class="menu-item" @onclick="ImportIgnitionViewMenu" @onclick:stopPropagation>
+                            <span class="menu-icon">📥</span><span class="menu-label">Import Ignition Perspective View (JSON)...</span>
+                        </div>
                     </div>
                 }
             </div>
+            <InputFile id="moviconImportFileInput" OnChange="OnMoviconProjectFileSelected" accept=".xml" style="display: none;" />
+            <InputFile id="ignitionTagsImportFileInput" OnChange="OnIgnitionTagsFileSelected" accept=".json" style="display: none;" />
+            <InputFile id="ignitionViewImportFileInput" OnChange="OnIgnitionViewFileSelected" accept=".json" style="display: none;" />
 
             @* Edit menu *@
             <div class="menubar-item @(_openMenu == "edit" ? "open" : "")" @onclick='() => ToggleMenu("edit")' @onmouseenter='() => HoverMenu("edit")'>
@@ -2017,6 +2030,121 @@ private void UnsavedDialogCancel()
     private void LoadFileMenu() { CloseMenus(); OpenFileBrowser(); }
     private void SaveMenu() { CloseMenus(); Save(); }
     private void SaveAsMenu() { CloseMenus(); _saveAsPath = Editor.CurrentFilePath ?? ""; _showSaveAsDialog = true; }
+
+    private async Task ImportMoviconProjectMenu()
+    {
+        CloseMenus();
+        await JS.InvokeVoidAsync("eval", "document.getElementById('moviconImportFileInput').click()");
+    }
+
+    private async Task OnMoviconProjectFileSelected(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            using var stream = e.File.OpenReadStream(maxAllowedSize: 32 * 1024 * 1024);
+            using var reader = new StreamReader(stream);
+            var xml = await reader.ReadToEndAsync();
+
+            var result = SharedModels.Import.MoviconProjectImporter.ImportFromXml(xml);
+            if (string.IsNullOrWhiteSpace(result.Project.Folder.Name) || result.Project.Folder.Name == "Root")
+                result.Project.Folder.Name = Path.GetFileNameWithoutExtension(e.File.Name);
+
+            Editor.NewFileFromModel(result.Project);
+
+            var summary = $"Imported {result.TagCount} tag(s), {result.ScreenCount} screen(s), " +
+                          $"{result.SymbolCount} symbol(s), {result.AlarmCount} alarm(s).";
+            if (result.Warnings.Count > 0)
+                summary += $" {result.Warnings.Count} warning(s) — see console for details.";
+            foreach (var w in result.Warnings)
+                Console.WriteLine($"[Movicon Import] {w}");
+
+            ShowToast(!result.IsEmpty, summary);
+        }
+        catch (Exception ex)
+        {
+            ShowToast(false, $"Movicon import failed: {ex.Message}");
+        }
+    }
+
+    private async Task ImportIgnitionTagsMenu()
+    {
+        CloseMenus();
+        await JS.InvokeVoidAsync("eval", "document.getElementById('ignitionTagsImportFileInput').click()");
+    }
+
+    private async Task OnIgnitionTagsFileSelected(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            using var stream = e.File.OpenReadStream(maxAllowedSize: 32 * 1024 * 1024);
+            using var reader = new StreamReader(stream);
+            var json = await reader.ReadToEndAsync();
+
+            var result = SharedModels.Import.IgnitionProjectImporter.ImportTags(json);
+
+            if (Editor.RootModel == null)
+                NewFile();
+            SharedModels.Import.IgnitionProjectImporter.MergeInto(result.Root, Editor.RootModel!.Folder);
+            Editor.ApplyJsonToTree(System.Text.Json.JsonSerializer.Serialize(Editor.RootModel));
+
+            var summary = $"Imported {result.TagCount} tag(s) into {result.FolderCount} folder(s), {result.AlarmCount} alarm(s).";
+            if (result.Warnings.Count > 0)
+                summary += $" {result.Warnings.Count} warning(s) — see console for details.";
+            foreach (var w in result.Warnings)
+                Console.WriteLine($"[Ignition Tag Import] {w}");
+
+            ShowToast(result.TagCount > 0, summary);
+        }
+        catch (Exception ex)
+        {
+            ShowToast(false, $"Ignition tag import failed: {ex.Message}");
+        }
+    }
+
+    private async Task ImportIgnitionViewMenu()
+    {
+        CloseMenus();
+        await JS.InvokeVoidAsync("eval", "document.getElementById('ignitionViewImportFileInput').click()");
+    }
+
+    private int _ignitionViewImportCounter;
+
+    private async Task OnIgnitionViewFileSelected(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            using var stream = e.File.OpenReadStream(maxAllowedSize: 32 * 1024 * 1024);
+            using var reader = new StreamReader(stream);
+            var json = await reader.ReadToEndAsync();
+
+            // Perspective exports the view definition as "view.json"; the meaningful name is the
+            // containing folder, which isn't available from a browser file picker, so fall back to
+            // an incrementing placeholder when the file is literally named "view.json".
+            var baseName = Path.GetFileNameWithoutExtension(e.File.Name);
+            var viewName = string.Equals(baseName, "view", StringComparison.OrdinalIgnoreCase)
+                ? $"ImportedView{++_ignitionViewImportCounter}"
+                : baseName;
+
+            var result = SharedModels.Import.IgnitionProjectImporter.ImportView(json, viewName);
+
+            if (Editor.RootModel == null)
+                NewFile();
+            Editor.RootModel!.Screens.Add(result.Screen);
+            Editor.ApplyJsonToTree(System.Text.Json.JsonSerializer.Serialize(Editor.RootModel));
+
+            var summary = $"Imported view '{result.Screen.Name}' with {result.SymbolCount} symbol(s).";
+            if (result.Warnings.Count > 0)
+                summary += $" {result.Warnings.Count} warning(s) — see console for details.";
+            foreach (var w in result.Warnings)
+                Console.WriteLine($"[Ignition View Import] {w}");
+
+            ShowToast(result.SymbolCount > 0 || result.Screen.Symbols.Count > 0, summary);
+        }
+        catch (Exception ex)
+        {
+            ShowToast(false, $"Ignition view import failed: {ex.Message}");
+        }
+    }
     private void AddFolderMenu() { CloseMenus(); AddFolder(); }
     private void AddVariableMenu() { CloseMenus(); AddVariable(); }
     private void AddScriptMenu() { CloseMenus(); AddScript(); }
