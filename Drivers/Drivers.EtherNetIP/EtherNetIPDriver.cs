@@ -50,7 +50,9 @@ namespace SimpleOpcFileServer
                     device = new EtherNetIPDevice(key, _context, RaiseError, RaiseCycle);
                     _devices[key] = device;
                 }
-                device.AddItem(new EipItem { Variable = variable, Config = eipConfig });
+                var item = new EipItem { Variable = variable, Config = eipConfig };
+                device.AddItem(item);
+                variable.OnSimpleWriteValue = (ISystemContext ctx, NodeState node, ref object value) => device.Write(item, value);
             }
         }
 
@@ -179,6 +181,50 @@ namespace SimpleOpcFileServer
                 {
                     var n = variable.FindChild(_context, new QualifiedName("LastError", variable.BrowseName.NamespaceIndex));
                     if (n is BaseVariableState v) { v.Value = message; v.Timestamp = DateTime.UtcNow; v.ClearChangeMasks(_context, false); }
+                }
+            }
+
+            public ServiceResult Write(EipItem item, object value)
+            {
+                try
+                {
+                    item.LibTag ??= new Tag
+                    {
+                        Gateway = _ip,
+                        Path = item.Config.Path,
+                        Name = item.Config.Tag,
+                        PlcType = PlcType.ControlLogix,
+                        Protocol = Protocol.ab_eip,
+                        ElementSize = item.Config.Type switch
+                        {
+                            "BOOL" or "SINT" => 1,
+                            "INT" => 2,
+                            _ => 4
+                        },
+                        ElementCount = 1,
+                        Timeout = TimeSpan.FromSeconds(2)
+                    };
+
+                    switch (item.Config.Type)
+                    {
+                        case "BOOL": item.LibTag.SetUInt8(0, Convert.ToByte(Convert.ToBoolean(value))); break;
+                        case "SINT": item.LibTag.SetInt8(0, Convert.ToSByte(value)); break;
+                        case "INT": item.LibTag.SetInt16(0, Convert.ToInt16(value)); break;
+                        case "DINT": item.LibTag.SetInt32(0, Convert.ToInt32(value)); break;
+                        case "REAL": item.LibTag.SetFloat32(0, Convert.ToSingle(value)); break;
+                        default: return ServiceResult.Create(StatusCodes.BadNotWritable, $"Unsupported EtherNet/IP type: {item.Config.Type}");
+                    }
+
+                    item.LibTag.Write();
+                    item.Variable.Value = value; item.Variable.StatusCode = StatusCodes.Good;
+                    item.Variable.Timestamp = DateTime.UtcNow; item.Variable.ClearChangeMasks(_context, false);
+                    return ServiceResult.Good;
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "EtherNet/IP write error for {Ip}: {Message}", _ip, ex.Message);
+                    _onError?.Invoke(_ip, $"Write error: {ex.Message}");
+                    return ServiceResult.Create(ex, StatusCodes.BadUnexpectedError, ex.Message);
                 }
             }
 

@@ -49,7 +49,9 @@ namespace SimpleOpcFileServer
                     device = new SqlDevice(key, _context, RaiseError, RaiseCycle);
                     _devices[key] = device;
                 }
-                device.AddItem(new SqlItem { Variable = variable, Config = sqlConfig });
+                var item = new SqlItem { Variable = variable, Config = sqlConfig };
+                device.AddItem(item);
+                variable.OnSimpleWriteValue = (ISystemContext ctx, NodeState node, ref object value) => device.Write(item, value);
             }
         }
 
@@ -177,6 +179,42 @@ namespace SimpleOpcFileServer
                 {
                     var n = variable.FindChild(_context, new QualifiedName("LastError", variable.BrowseName.NamespaceIndex));
                     if (n is BaseVariableState v) { v.Value = message; v.Timestamp = DateTime.UtcNow; v.ClearChangeMasks(_context, false); }
+                }
+            }
+
+            public ServiceResult Write(SqlItem item, object value)
+            {
+                try
+                {
+                    if (string.IsNullOrWhiteSpace(item.Config.Query))
+                        return ServiceResult.Create(StatusCodes.BadConfigurationError, "SQL query missing");
+
+                    var query = item.Config.Query;
+                    var valueText = Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty;
+                    if (query.Contains("{value}", StringComparison.OrdinalIgnoreCase))
+                        query = query.Replace("{value}", valueText, StringComparison.OrdinalIgnoreCase);
+
+                    var normalized = query.Trim();
+                    if (!normalized.StartsWith("INSERT", StringComparison.OrdinalIgnoreCase)
+                        && !normalized.StartsWith("UPDATE", StringComparison.OrdinalIgnoreCase)
+                        && !normalized.StartsWith("DELETE", StringComparison.OrdinalIgnoreCase)
+                        && !normalized.StartsWith("MERGE", StringComparison.OrdinalIgnoreCase)
+                        && !normalized.StartsWith("EXEC", StringComparison.OrdinalIgnoreCase))
+                        return ServiceResult.Create(StatusCodes.BadNotWritable, "SQL query is not a write statement");
+
+                    using var conn = new SqlConnection(_connectionString);
+                    conn.Open();
+                    using var cmd = new SqlCommand(query, conn);
+                    cmd.ExecuteNonQuery();
+                    item.Variable.Value = value; item.Variable.StatusCode = StatusCodes.Good;
+                    item.Variable.Timestamp = DateTime.UtcNow; item.Variable.ClearChangeMasks(_context, false);
+                    return ServiceResult.Good;
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "SQL write error: {Message}", ex.Message);
+                    _onError?.Invoke(_connectionString, $"Write error: {ex.Message}");
+                    return ServiceResult.Create(ex, StatusCodes.BadUnexpectedError, ex.Message);
                 }
             }
 

@@ -52,7 +52,9 @@ namespace SimpleOpcFileServer
                     device = new TcpDevice(key, tcpConfig.IpAddress, tcpConfig.Port, _context, RaiseError, RaiseCycle);
                     _devices[key] = device;
                 }
-                device.AddItem(new TcpItem { Variable = variable, Config = tcpConfig });
+                var item = new TcpItem { Variable = variable, Config = tcpConfig };
+                device.AddItem(item);
+                variable.OnSimpleWriteValue = (ISystemContext ctx, NodeState node, ref object value) => device.Write(item, value);
             }
         }
 
@@ -190,6 +192,38 @@ namespace SimpleOpcFileServer
                 {
                     var n = variable.FindChild(_context, new QualifiedName("LastError", variable.BrowseName.NamespaceIndex));
                     if (n is BaseVariableState v) { v.Value = message; v.Timestamp = DateTime.UtcNow; v.ClearChangeMasks(_context, false); }
+                }
+            }
+
+            public ServiceResult Write(TcpItem item, object value)
+            {
+                try
+                {
+                    var payload = item.Config.Command.Replace("\\r", "\r").Replace("\\n", "\n");
+                    var valueText = value?.ToString() ?? string.Empty;
+                    if (payload.Contains("{value}", StringComparison.OrdinalIgnoreCase))
+                        payload = payload.Replace("{value}", valueText, StringComparison.OrdinalIgnoreCase);
+                    else if (!string.IsNullOrWhiteSpace(payload))
+                        payload += valueText;
+                    else
+                        payload = valueText;
+
+                    using var client = new TcpClient();
+                    if (!client.ConnectAsync(_ip, _port).Wait(1000))
+                        return ServiceResult.Create(StatusCodes.BadNotConnected, "TCP connection timeout");
+
+                    using var stream = client.GetStream();
+                    var bytes = Encoding.ASCII.GetBytes(payload);
+                    stream.Write(bytes, 0, bytes.Length);
+                    item.Variable.Value = value; item.Variable.StatusCode = StatusCodes.Good;
+                    item.Variable.Timestamp = DateTime.UtcNow; item.Variable.ClearChangeMasks(_context, false);
+                    return ServiceResult.Good;
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "TCP write error for {Key}: {Message}", _key, ex.Message);
+                    _onError?.Invoke(_key, $"Write error: {ex.Message}");
+                    return ServiceResult.Create(ex, StatusCodes.BadUnexpectedError, ex.Message);
                 }
             }
 

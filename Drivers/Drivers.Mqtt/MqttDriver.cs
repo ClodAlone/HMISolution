@@ -44,6 +44,91 @@ namespace SimpleOpcFileServer
 
             lock (_lock) { _items.Add(new MqttItem { Variable = variable, Config = mqttConfig }); }
             Task.Run(() => InitializeClient(mqttConfig));
+
+            // Publish to MQTT when an OPC UA client writes this variable.
+            variable.OnSimpleWriteValue = (ISystemContext ctx, NodeState node, ref object value) =>
+            {
+                try
+                {
+                    var key = $"{mqttConfig.Broker}:{mqttConfig.Port}";
+                    IMqttClient client;
+                    lock (_lock)
+                    {
+                        if (!_clients.TryGetValue(key, out client) || client == null || !client.IsConnected)
+                        {
+                            // Try to (re)initialize the client in background and report not connected now.
+                            Task.Run(() => InitializeClient(mqttConfig));
+                            return ServiceResult.Create(StatusCodes.BadNotConnected, "MQTT client not connected");
+                        }
+                    }
+
+                    string payload;
+                    if (!string.IsNullOrEmpty(mqttConfig.JsonPath))
+                    {
+                        // Build a nested JSON object for the JsonPath (e.g. "a.b.c")
+                        try
+                        {
+                            var parts = mqttConfig.JsonPath.Split('.');
+                            var root = new Dictionary<string, object?>();
+                            IDictionary<string, object?> current = root;
+                            for (int i = 0; i < parts.Length; i++)
+                            {
+                                var part = parts[i];
+                                if (i == parts.Length - 1)
+                                {
+                                    current[part] = value;
+                                }
+                                else
+                                {
+                                    var next = new Dictionary<string, object?>();
+                                    current[part] = next;
+                                    current = next;
+                                }
+                            }
+                            payload = JsonSerializer.Serialize(root);
+                        }
+                        catch { payload = value?.ToString() ?? string.Empty; }
+                    }
+                    else
+                    {
+                        payload = value switch
+                        {
+                            double d => d.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                            float f => f.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                            int i => i.ToString(),
+                            long l => l.ToString(),
+                            bool b => b ? "true" : "false",
+                            _ => value?.ToString() ?? string.Empty
+                        };
+                    }
+
+                    var message = new MqttApplicationMessageBuilder()
+                        .WithTopic(mqttConfig.Topic)
+                        .WithPayload(payload)
+                        .Build();
+
+                    // Publish asynchronously so the write operation is not blocked.
+                    Task.Run(async () =>
+                    {
+                        try
+                        {
+                            await client.PublishAsync(message, CancellationToken.None);
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.Error(ex, "MQTT publish error for {Key}: {Message}", key, ex.Message);
+                            OnError?.Invoke(key, $"Publish error: {ex.Message}");
+                        }
+                    });
+
+                    return ServiceResult.Good;
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "OnWrite publish error: {Message}", ex.Message);
+                    return ServiceResult.Create(ex, StatusCodes.BadUnexpectedError, ex.Message);
+                }
+            };
         }
 
         private async Task InitializeClient(MqttConfig config)

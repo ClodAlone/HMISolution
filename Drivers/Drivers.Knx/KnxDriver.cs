@@ -43,7 +43,16 @@ namespace SimpleOpcFileServer
 
             lock (_lock)
             {
-                _items.Add(new KnxItem { Variable = variable, Config = knxConfig });
+                var item = new KnxItem { Variable = variable, Config = knxConfig };
+                _items.Add(item);
+                variable.OnSimpleWriteValue = (ISystemContext ctx, NodeState node, ref object value) =>
+                {
+                    if (!_clients.TryGetValue($"{knxConfig.IpAddress}:{knxConfig.Port}", out var client))
+                        return ServiceResult.Create(StatusCodes.BadNotConnected, "KNX client not initialized");
+
+                    client.Write(knxConfig.GroupAddress, value);
+                    return ServiceResult.Good;
+                };
                 InitializeClient(knxConfig);
             }
         }
@@ -143,6 +152,14 @@ namespace SimpleOpcFileServer
                 };
                 await _udpClient.SendAsync(connectRequest.ToArray(), connectRequest.Count, _remoteEndpoint);
                 _receiveTask = ReceiveLoop(_cts.Token);
+            }
+
+            public void Write(string groupAddress, object value)
+            {
+                if (string.IsNullOrWhiteSpace(groupAddress)) return;
+                var payload = value?.ToString() ?? string.Empty;
+                var bytes = Encoding.ASCII.GetBytes(payload);
+                _udpClient.Send(bytes, bytes.Length, _remoteEndpoint);
             }
 
             private async Task ReceiveLoop(CancellationToken token)

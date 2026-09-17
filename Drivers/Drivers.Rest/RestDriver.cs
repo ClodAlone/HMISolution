@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
+using System.Text;
 using System.Text.Json;
 using System.Threading;
 using Opc.Ua;
@@ -48,7 +49,9 @@ namespace SimpleOpcFileServer
                     device = new RestDevice(key, _context, RaiseError, RaiseCycle);
                     _devices[key] = device;
                 }
-                device.AddItem(new RestItem { Variable = variable, Config = restConfig });
+                var item = new RestItem { Variable = variable, Config = restConfig };
+                device.AddItem(item);
+                variable.OnSimpleWriteValue = (ISystemContext ctx, NodeState node, ref object value) => device.Write(item, value);
             }
         }
 
@@ -179,6 +182,30 @@ namespace SimpleOpcFileServer
                 {
                     var n = variable.FindChild(_context, new QualifiedName("LastError", variable.BrowseName.NamespaceIndex));
                     if (n is BaseVariableState v) { v.Value = message; v.Timestamp = DateTime.UtcNow; v.ClearChangeMasks(_context, false); }
+                }
+            }
+
+            public ServiceResult Write(RestItem item, object value)
+            {
+                try
+                {
+                    using var request = new HttpRequestMessage(HttpMethod.Put, _url)
+                    {
+                        Content = new StringContent(value?.ToString() ?? string.Empty, Encoding.UTF8, "application/json")
+                    };
+                    using var response = _client.Send(request);
+                    if (!response.IsSuccessStatusCode)
+                        return ServiceResult.Create(StatusCodes.BadUnexpectedError, $"HTTP {(int)response.StatusCode} {response.ReasonPhrase}");
+
+                    item.Variable.Value = value; item.Variable.StatusCode = StatusCodes.Good;
+                    item.Variable.Timestamp = DateTime.UtcNow; item.Variable.ClearChangeMasks(_context, false);
+                    return ServiceResult.Good;
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "REST write error for {Url}: {Message}", _url, ex.Message);
+                    _onError?.Invoke(_url, $"Write error: {ex.Message}");
+                    return ServiceResult.Create(ex, StatusCodes.BadUnexpectedError, ex.Message);
                 }
             }
 

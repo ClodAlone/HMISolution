@@ -50,7 +50,9 @@ namespace SimpleOpcFileServer
                     device = new S7Device(key, s7Config.IpAddress, (short)s7Config.Rack, (short)s7Config.Slot, _context, RaiseError, RaiseCycle);
                     _devices[key] = device;
                 }
-                device.AddItem(new S7Item { Variable = variable, Config = s7Config });
+                var item = new S7Item { Variable = variable, Config = s7Config };
+                device.AddItem(item);
+                variable.OnSimpleWriteValue = (ISystemContext ctx, NodeState node, ref object value) => device.Write(item, value);
             }
         }
 
@@ -205,6 +207,40 @@ namespace SimpleOpcFileServer
                 {
                     var n = variable.FindChild(_context, new QualifiedName("LastError", variable.BrowseName.NamespaceIndex));
                     if (n is BaseVariableState v) { v.Value = message; v.Timestamp = DateTime.UtcNow; v.ClearChangeMasks(_context, false); }
+                }
+            }
+
+            public ServiceResult Write(S7Item item, object value)
+            {
+                try
+                {
+                    lock (_deviceLock)
+                    {
+                        if (_plc == null) _plc = new Plc(CpuType.S71200, _ip, _rack, _slot);
+                        if (!_plc.IsConnected)
+                        {
+                            try { _plc.Open(); }
+                            catch (Exception ex)
+                            {
+                                Log.Error(ex, "S7 write connection error for {Key}: {Message}", _key, ex.Message);
+                                _onError?.Invoke(_key, $"Write connection error: {ex.Message}");
+                                UpdateError(item.Variable, ex.Message);
+                                return ServiceResult.Create(ex, StatusCodes.BadNotConnected, ex.Message);
+                            }
+                        }
+
+                        _plc.Write(item.Config.Address, value);
+                        item.Variable.Value = value; item.Variable.StatusCode = StatusCodes.Good;
+                        item.Variable.Timestamp = DateTime.UtcNow; item.Variable.ClearChangeMasks(_context, false);
+                        return ServiceResult.Good;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "S7 write error for {Key}: {Message}", _key, ex.Message);
+                    _onError?.Invoke(_key, $"Write error ({item.Variable.DisplayName}): {ex.Message}");
+                    UpdateError(item.Variable, ex.Message);
+                    return ServiceResult.Create(ex, StatusCodes.BadUnexpectedError, ex.Message);
                 }
             }
 

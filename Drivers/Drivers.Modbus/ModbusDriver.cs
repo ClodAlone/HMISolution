@@ -55,7 +55,24 @@ namespace SimpleOpcFileServer
                     device = new ModbusDevice(key, _context, RaiseError, RaiseCycle);
                     _devices[key] = device;
                 }
-                device.AddItem(new ModbusItem { Variable = variable, Config = modbusConfig });
+                var item = new ModbusItem { Variable = variable, Config = modbusConfig };
+                device.AddItem(item);
+
+                // Attach write handler to allow OPC UA client writes to be sent to Modbus device.
+                variable.OnSimpleWriteValue = (ISystemContext ctx, NodeState node, ref object value) =>
+                {
+                    try
+                    {
+                        // Delegate to the device write method.
+                        var res = device.Write(item, value);
+                        return res;
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex, "Modbus write handler error for {Key}: {Message}", key, ex.Message);
+                        return ServiceResult.Create(ex, StatusCodes.BadUnexpectedError, ex.Message);
+                    }
+                };
             }
         }
 
@@ -307,6 +324,140 @@ namespace SimpleOpcFileServer
                 _disposed = true;
                 _timer?.Dispose();
                 DisposeClient();
+            }
+
+            /// <summary>
+            /// Write a value for the given item to the remote Modbus device.
+            /// Returns a ServiceResult indicating success or failure.
+            /// </summary>
+            public ServiceResult Write(ModbusItem item, object value)
+            {
+                if (_disposed) return ServiceResult.Create(StatusCodes.BadNotConnected, "Device disposed");
+
+                ushort start = item.Config.Register;
+                byte unitId = item.Config.UnitId;
+
+                lock (_deviceLock)
+                {
+                    // Ensure connection; attempt to connect if missing (same as Poll)
+                    if ((_client == null || !_client.Connected) && !_disposed)
+                    {
+                        var split = _key.Split(':');
+                        var newClient = new TcpClient();
+                        try
+                        {
+                            newClient.Connect(split[0], int.Parse(split[1]));
+                            var factory = new ModbusFactory();
+                            var newMaster = factory.CreateMaster(newClient);
+                            if (_disposed) { newClient.Close(); return ServiceResult.Create(StatusCodes.BadNotConnected, "Not connected"); }
+                            DisposeClient();
+                            _client = newClient;
+                            _master = newMaster;
+                        }
+                        catch (Exception ex)
+                        {
+                            try { newClient.Close(); } catch { }
+                            Log.Error(ex, "Modbus connection error for write {Key}: {Message}", _key, ex.Message);
+                            _onError?.Invoke(_key, $"Connection error: {ex.Message}");
+                            UpdateError(item.Variable, ex.Message);
+                            return ServiceResult.Create(ex, StatusCodes.BadNotConnected, ex.Message);
+                        }
+                    }
+                }
+
+                // At this point try to write using current master
+                IModbusMaster? master;
+                lock (_deviceLock) { master = _master; }
+                if (master == null) return ServiceResult.Create(StatusCodes.BadNotConnected, "Not connected to Modbus master");
+
+                try
+                {
+                    // Disallow writes to InputRegister / DiscreteInput (read-only)
+                    if (string.Equals(item.Config.RegisterType, "DiscreteInput", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(item.Config.RegisterType, "InputRegister", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return ServiceResult.Create(StatusCodes.BadNotWritable, "Target register is read-only");
+                    }
+
+                    if (string.Equals(item.Config.RegisterType, "Coil", StringComparison.OrdinalIgnoreCase))
+                    {
+                        bool b = Convert.ToBoolean(value);
+                        master.WriteSingleCoil(unitId, start, b);
+                    }
+                    else
+                    {
+                        // Holding registers (or unspecified) — write as registers based on variable datatype
+                        ushort count = 1;
+                        byte[] buffer;
+
+                        if (item.Variable.DataType == DataTypeIds.Double)
+                        {
+                            count = 4;
+                            var d = Convert.ToDouble(value);
+                            buffer = BitConverter.GetBytes(d);
+                        }
+                        else if (item.Variable.DataType == DataTypeIds.Float)
+                        {
+                            count = 2;
+                            var f = Convert.ToSingle(value);
+                            buffer = BitConverter.GetBytes(f);
+                        }
+                        else if (item.Variable.DataType == DataTypeIds.Int32 || item.Variable.DataType == DataTypeIds.UInt32)
+                        {
+                            count = 2;
+                            var i = Convert.ToInt32(value);
+                            buffer = BitConverter.GetBytes(i);
+                        }
+                        else if (item.Variable.DataType == DataTypeIds.Int16 || item.Variable.DataType == DataTypeIds.UInt16)
+                        {
+                            count = 1;
+                            var s = Convert.ToInt16(value);
+                            buffer = BitConverter.GetBytes(s);
+                        }
+                        else // default to 1 register with string/other behavior: attempt convert to ushort or 0
+                        {
+                            count = 1;
+                            ushort v = 0;
+                            try { v = Convert.ToUInt16(value); } catch { v = 0; }
+                            buffer = BitConverter.GetBytes(v);
+                        }
+
+                        // Modbus expects big-endian register byte order; read path reversed on little-endian, so mirror that here.
+                        if (BitConverter.IsLittleEndian) Array.Reverse(buffer);
+
+                        // Create ushort array (two bytes per register)
+                        var ushorts = new ushort[count];
+                        for (int i = 0; i < count; i++)
+                        {
+                            int idx = i * 2;
+                            ushort u = (ushort)((buffer[idx] << 8) | buffer[idx + 1]);
+                            ushorts[i] = u;
+                        }
+
+                        if (count == 1)
+                            master.WriteSingleRegister(unitId, start, ushorts[0]);
+                        else
+                            master.WriteMultipleRegisters(unitId, start, ushorts);
+                    }
+
+                    // On success, update variable in address space to reflect new value
+                    item.Variable.Value = value; item.Variable.StatusCode = StatusCodes.Good;
+                    item.Variable.Timestamp = DateTime.UtcNow; item.Variable.ClearChangeMasks(_context, false);
+
+                    return ServiceResult.Good;
+                }
+                catch (Exception ex)
+                {
+                    if (ex.Message != _lastLoggedError)
+                    {
+                        Log.Error(ex, "Modbus write error for {Key}: {Message}", _key, ex.Message);
+                        _lastLoggedError = ex.Message;
+                    }
+                    else Log.Debug("Modbus write error (repeated) for {Key}: {Message}", _key, ex.Message);
+                    _onError?.Invoke(_key, $"Write error ({item.Variable.DisplayName}): {ex.Message}");
+                    UpdateError(item.Variable, ex.Message);
+                    return ServiceResult.Create(ex, StatusCodes.BadUnexpectedError, ex.Message);
+                }
             }
         }
 

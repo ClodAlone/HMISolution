@@ -53,7 +53,9 @@ namespace SimpleOpcFileServer
                     device = new CsvDevice(key, _context, RaiseError, RaiseCycle);
                     _devices[key] = device;
                 }
-                device.AddItem(new CsvItem { Variable = variable, Config = csvConfig });
+                var item = new CsvItem { Variable = variable, Config = csvConfig };
+                device.AddItem(item);
+                variable.OnSimpleWriteValue = (ISystemContext ctx, NodeState node, ref object value) => device.Write(item, value);
             }
         }
 
@@ -208,6 +210,69 @@ namespace SimpleOpcFileServer
                         lastErrorVar.Timestamp = DateTime.UtcNow;
                         lastErrorVar.ClearChangeMasks(_context, false);
                     }
+                }
+            }
+
+            public ServiceResult Write(CsvItem item, object value)
+            {
+                try
+                {
+                    lock (_deviceLock)
+                    {
+                        if (!File.Exists(_filePath))
+                            return ServiceResult.Create(StatusCodes.BadNotFound, "CSV file not found");
+
+                        var lines = File.ReadAllLines(_filePath).ToList();
+                        var targetValue = value?.ToString() ?? string.Empty;
+
+                        if (!string.IsNullOrEmpty(item.Config.Key))
+                        {
+                            var updated = false;
+                            for (int row = 0; row < lines.Count; row++)
+                            {
+                                var rowCells = lines[row].Split(new[] { ',', ';' }, StringSplitOptions.None);
+                                if (rowCells.Length == 0 || rowCells[0] != item.Config.Key) continue;
+                                if (rowCells.Length <= item.Config.ColumnIndex)
+                                {
+                                    Array.Resize(ref rowCells, item.Config.ColumnIndex + 1);
+                                }
+                                rowCells[item.Config.ColumnIndex] = targetValue;
+                                lines[row] = string.Join(",", rowCells);
+                                updated = true;
+                                break;
+                            }
+
+                            if (!updated)
+                            {
+                                var newRow = new string[Math.Max(1, item.Config.ColumnIndex + 1)];
+                                newRow[0] = item.Config.Key;
+                                newRow[item.Config.ColumnIndex] = targetValue;
+                                lines.Add(string.Join(",", newRow));
+                            }
+                        }
+                        else
+                        {
+                            var rowIndex = item.Config.RowIndex;
+                            if (rowIndex < 0) rowIndex = 0;
+                            while (lines.Count <= rowIndex) lines.Add(string.Empty);
+                            var rowCells = lines[rowIndex].Split(new[] { ',', ';' }, StringSplitOptions.None);
+                            if (rowCells.Length <= item.Config.ColumnIndex)
+                                Array.Resize(ref rowCells, item.Config.ColumnIndex + 1);
+                            rowCells[item.Config.ColumnIndex] = targetValue;
+                            lines[rowIndex] = string.Join(",", rowCells);
+                        }
+
+                        File.WriteAllLines(_filePath, lines);
+                        item.Variable.Value = value; item.Variable.StatusCode = StatusCodes.Good;
+                        item.Variable.Timestamp = DateTime.UtcNow; item.Variable.ClearChangeMasks(_context, false);
+                        return ServiceResult.Good;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "CSV write error for {File}: {Message}", _filePath, ex.Message);
+                    _onError?.Invoke(_filePath, $"Write error: {ex.Message}");
+                    return ServiceResult.Create(ex, StatusCodes.BadUnexpectedError, ex.Message);
                 }
             }
 

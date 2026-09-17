@@ -46,7 +46,9 @@ namespace SimpleOpcFileServer
                     device = new OpcUaDevice(opcConfig.EndpointUrl, _context, RaiseError, RaiseCycle);
                     _devices[opcConfig.EndpointUrl] = device;
                 }
-                device.AddItem(new OpcUaItem { Variable = variable, Config = opcConfig });
+                var item = new OpcUaItem { Variable = variable, Config = opcConfig };
+                device.AddItem(item);
+                variable.OnSimpleWriteValue = (ISystemContext ctx, NodeState node, ref object value) => device.Write(item, value);
             }
         }
 
@@ -210,6 +212,44 @@ namespace SimpleOpcFileServer
                 try { _session?.Close(); } catch { }
                 try { _session?.Dispose(); } catch { }
                 _session = null;
+            }
+
+            public ServiceResult Write(OpcUaItem item, object value)
+            {
+                try
+                {
+                    EnsureConnected();
+                    if (_session == null || !_session.Connected)
+                        return ServiceResult.Create(StatusCodes.BadNotConnected, "OPC UA session not connected");
+
+                    var nodeId = NodeId.Parse(item.Config.NodeId);
+                    var writeValue = new WriteValue
+                    {
+                        NodeId = nodeId,
+                        AttributeId = Attributes.Value,
+                        Value = new DataValue(new Variant(value))
+                    };
+
+                    var collection = new WriteValueCollection { writeValue };
+                    StatusCodeCollection results;
+                    DiagnosticInfoCollection diagnostics;
+                    var status = _session.Write(null, collection, out results, out diagnostics);
+                    if (status.IsBad || results.Count == 0 || StatusCode.IsBad(results[0]))
+                    {
+                        var detail = results.Count > 0 ? results[0].ToString() : status.ToString();
+                        return ServiceResult.Create(status, detail);
+                    }
+
+                    item.Variable.Value = value; item.Variable.StatusCode = StatusCodes.Good;
+                    item.Variable.Timestamp = DateTime.UtcNow; item.Variable.ClearChangeMasks(_context, false);
+                    return ServiceResult.Good;
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "OPC UA write error for {Endpoint}: {Message}", _endpointUrl, ex.Message);
+                    _onError?.Invoke(_endpointUrl, $"Write error: {ex.Message}");
+                    return ServiceResult.Create(ex, StatusCodes.BadUnexpectedError, ex.Message);
+                }
             }
 
             private void Update(BaseDataVariableState variable, object? value, StatusCode statusCode)
