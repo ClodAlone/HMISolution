@@ -26,6 +26,7 @@ public class EditorLocalizationService
         ("de", "Deutsch", "🇩🇪"),
         ("it", "Italiano", "🇮🇹"),
         ("fr", "Français", "🇫🇷"),
+        ("es", "Español", "🇪🇸"),
         ("ja", "日本語", "🇯🇵"),
         ("zh", "中文", "🇨🇳"),
     ];
@@ -37,7 +38,10 @@ public class EditorLocalizationService
 
     public void SetLocale(string locale)
     {
-        if (Locale == locale) return;
+        if (string.IsNullOrWhiteSpace(locale)) return;
+        if (!SupportedLocales.Any(l => l.Code.Equals(locale, StringComparison.OrdinalIgnoreCase))) return;
+        if (Locale.Equals(locale, StringComparison.OrdinalIgnoreCase)) return;
+
         Locale = locale;
         Save();
         LocaleChanged?.Invoke();
@@ -933,6 +937,135 @@ public class EditorLocalizationService
             ["prop.allowRuntimeEditHint"] = "Les utilisateurs runtime peuvent modifier le programme.",
             ["help.toc"] = "Table des matières",
             ["help.home"] = "Accueil",
+        },
+
+        ["es"] = new()
+        {
+            ["menu.file"] = "Archivo",
+            ["menu.edit"] = "Editar",
+            ["menu.view"] = "Ver",
+            ["menu.settings"] = "Configuración",
+            ["menu.help"] = "Ayuda",
+
+            ["menu.file.new"] = "Nuevo",
+            ["menu.file.open"] = "Abrir",
+            ["menu.file.browseServer"] = "Explorar servidor…",
+            ["menu.file.recent"] = "Recientes",
+            ["menu.file.save"] = "Guardar",
+            ["menu.file.saveAs"] = "Guardar como…",
+
+            ["menu.edit.addFolder"] = "Agregar carpeta",
+            ["menu.edit.addVariable"] = "Agregar variable",
+            ["menu.edit.addScript"] = "Agregar script",
+            ["menu.edit.addScreen"] = "Agregar pantalla",
+            ["menu.edit.copy"] = "Copiar",
+            ["menu.edit.paste"] = "Pegar",
+            ["menu.edit.delete"] = "Eliminar",
+
+            ["menu.view.panels"] = "Paneles",
+            ["menu.view.maximize"] = "Maximizar panel activo",
+
+            ["menu.settings.theme"] = "Tema",
+            ["menu.settings.light"] = "Claro",
+            ["menu.settings.dark"] = "Oscuro",
+            ["menu.settings.language"] = "Idioma",
+            ["menu.settings.protection"] = "Protección del proyecto",
+            ["menu.settings.unlock"] = "Desbloquear proyecto…",
+            ["menu.settings.lock"] = "Bloquear proyecto",
+            ["menu.settings.changePw"] = "Cambiar contraseña…",
+            ["menu.settings.removePw"] = "Eliminar contraseña…",
+            ["menu.settings.setPw"] = "Establecer contraseña…",
+
+            ["menu.help.help"] = "Ayuda",
+            ["menu.help.validate"] = "Validar proyecto",
+            ["menu.help.about"] = "Acerca de",
+
+            ["toolbar.new"] = "Nuevo",
+            ["toolbar.save"] = "Guardar",
+            ["toolbar.saveAs"] = "Guardar como…",
+            ["toolbar.undo"] = "Deshacer",
+            ["toolbar.redo"] = "Rehacer",
+            ["toolbar.copy"] = "Copiar",
+            ["toolbar.paste"] = "Pegar",
+            ["toolbar.delete"] = "Eliminar",
+            ["toolbar.addFolder"] = "Agregar carpeta",
+            ["toolbar.addVariable"] = "Agregar variable",
+            ["toolbar.addScript"] = "Agregar script",
+            ["toolbar.addPlc"] = "Agregar programa PLC",
+            ["toolbar.addRecipe"] = "Agregar receta",
+            ["toolbar.addScheduler"] = "Agregar programador",
+            ["toolbar.addReport"] = "Agregar informe",
+            ["toolbar.addScreen"] = "Agregar pantalla",
+            ["toolbar.restore"] = "Restaurar diseño",
+            ["toolbar.maximize"] = "Maximizar panel activo",
+            ["toolbar.toggleTheme"] = "Cambiar tema",
+            ["toolbar.logout"] = "Cerrar sesión",
+
+            ["status.unsaved"] = "Sin guardar",
+            ["status.locked"] = "Bloqueado",
+            ["status.unlocked"] = "Desbloqueado",
+
+            ["dialog.saveAs.title"] = "Guardar como",
+            ["dialog.saveAs.filePath"] = "Ruta del archivo:",
+            ["dialog.saveAs.current"] = "Actual:",
+            ["dialog.saveAs.cancel"] = "Cancelar",
+            ["dialog.saveAs.save"] = "Guardar",
+
+            ["dialog.unsaved.title"] = "Cambios sin guardar",
+            ["dialog.unsaved.message"] = "El proyecto {0} tiene cambios sin guardar. ¿Desea guardarlos antes de cerrar?",
+            ["dialog.unsaved.cancel"] = "Cancelar",
+            ["dialog.unsaved.discard"] = "Descartar",
+            ["dialog.unsaved.save"] = "Guardar",
+
+            ["dialog.open.title"] = "Abrir archivo del proyecto",
+            ["dialog.open.empty"] = "Seleccione una unidad o introduzca una ruta",
+            ["dialog.open.emptyFolder"] = "Carpeta vacía o acceso denegado",
+            ["dialog.open.cancel"] = "Cancelar",
+            ["dialog.open.open"] = "Abrir",
+
+            ["dialog.unlock.title"] = "Desbloquear proyecto",
+            ["dialog.unlock.message"] = "Este proyecto está protegido con contraseña. Introduzca la contraseña para desbloquearlo y editarlo.",
+            ["dialog.unlock.password"] = "Contraseña",
+            ["dialog.unlock.cancel"] = "Cancelar",
+            ["dialog.unlock.unlock"] = "Desbloquear",
+
+            ["dialog.setPw.title.change"] = "Cambiar contraseña del proyecto",
+            ["dialog.setPw.title.set"] = "Establecer contraseña del proyecto",
+            ["dialog.setPw.msgChange"] = "Cambie o elimine la contraseña de protección del proyecto.",
+            ["dialog.setPw.msgSet"] = "Establezca una contraseña para proteger este proyecto. Cuando esté bloqueado, no se podrá editar sin la contraseña correcta.",
+            ["dialog.setPw.currentPw"] = "Contraseña actual",
+            ["dialog.setPw.newPw"] = "Nueva contraseña",
+            ["dialog.setPw.confirmPw"] = "Confirmar contraseña",
+            ["dialog.setPw.cancel"] = "Cancelar",
+            ["dialog.setPw.change"] = "Cambiar contraseña",
+            ["dialog.setPw.set"] = "Establecer contraseña",
+
+            ["dialog.changePw.title"] = "Cambiar contraseña",
+            ["dialog.changePw.message"] = "Debe cambiar su contraseña antes de continuar.",
+            ["dialog.changePw.currentPw"] = "Contraseña actual",
+            ["dialog.changePw.newPw"] = "Nueva contraseña",
+            ["dialog.changePw.confirmPw"] = "Confirmar nueva contraseña",
+            ["dialog.changePw.submit"] = "Cambiar contraseña",
+
+            ["general.serverEditor"] = "Editor del servidor",
+            ["general.projectLocked"] = "El proyecto está bloqueado. Desbloquéelo antes de hacer cambios.",
+            ["general.projectUnlocked"] = "Proyecto desbloqueado.",
+            ["general.projectLocked2"] = "Proyecto bloqueado.",
+            ["prop.name"] = "Nombre",
+            ["prop.type"] = "Tipo",
+            ["prop.access"] = "Acceso",
+            ["prop.initialValue"] = "Valor inicial",
+            ["prop.retentive"] = "Retentivo",
+            ["prop.enabled"] = "Habilitado",
+            ["prop.language"] = "Idioma",
+            ["prop.title"] = "Título",
+            ["prop.description"] = "Descripción",
+            ["prop.none"] = "(ninguno)",
+            ["section.folder"] = "Propiedades de la carpeta",
+            ["section.variable"] = "Propiedades de la variable",
+            ["section.script"] = "Propiedades del script",
+            ["help.toc"] = "Índice",
+            ["help.home"] = "Inicio",
         },
 
         ["ja"] = new()
