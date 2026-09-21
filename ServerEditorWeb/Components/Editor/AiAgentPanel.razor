@@ -1,0 +1,357 @@
+@* Copyright (c) 2026 Claudio Fiorani - All rights reserved. *@
+
+@using SharedModels
+@using ServerEditorWeb.Services
+@using ServerEditorWeb.Models
+
+@inject NodeEditorService Editor
+
+<div class="ar-panel">
+
+    @* Left sidebar: agent list *@
+    <div class="ar-sidebar">
+        <div class="ar-sidebar-toolbar">
+            <strong class="small">🤖 AI Agents</strong>
+            <button class="btn btn-sm btn-outline-primary" @onclick="AddAgent" title="Add new AI agent">➕</button>
+        </div>
+
+        @if (!_agents.Any())
+        {
+            <div class="ar-list-empty small text-muted">No AI agents yet. Click ➕ to create one.</div>
+        }
+        else
+        {
+            <div class="ar-list">
+                @foreach (var agent in _agents)
+                {
+                    var a = agent;
+                    <div class="ar-list-item @(a == _selected ? "active" : "")"
+                         @onclick="() => SelectAgent(a)">
+                        <span class="ar-list-icon">@(a.Enabled ? "🟢" : "⚫")</span>
+                        <span class="ar-list-name">@a.Name</span>
+                        @if (a.DryRun)
+                        {
+                            <span class="ar-list-group" title="Dry-run: actions are logged only">DRY-RUN</span>
+                        }
+                        <button class="ar-list-delete btn btn-link p-0 ms-auto"
+                                @onclick="() => DeleteAgent(a)" @onclick:stopPropagation title="Delete agent">🗑</button>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+
+    @* Right: agent editor *@
+    <div class="ar-editor">
+        @if (_selected == null)
+        {
+            <div class="ar-editor-empty">
+                <div style="font-size:2.5rem;opacity:.2;">🤖</div>
+                <div class="mt-2 text-muted small">Select an AI agent to edit, or click ➕ to create one.</div>
+            </div>
+        }
+        else
+        {
+            <div class="ar-editor-scroll">
+
+                @* ── Header ── *@
+                <div class="ar-section ar-header-section">
+                    <div class="row g-2 align-items-center mb-2">
+                        <div class="col-auto">
+                            <div class="form-check form-switch mb-0">
+                                <input class="form-check-input" type="checkbox"
+                                       @bind="_selected.Enabled"
+                                       @bind:after="NotifyChanged"
+                                       id="aa-enabled" />
+                                <label class="form-check-label small" for="aa-enabled">Enabled</label>
+                            </div>
+                        </div>
+                        <div class="col">
+                            <input type="text" class="form-control form-control-sm"
+                                   placeholder="Agent name"
+                                   @bind="_selected.Name"
+                                   @bind:after="NotifyChanged" />
+                        </div>
+                        <div class="col-auto">
+                            <div class="form-check form-switch mb-0">
+                                <input class="form-check-input" type="checkbox"
+                                       @bind="_selected.DryRun"
+                                       @bind:after="NotifyChanged"
+                                       id="aa-dryrun" />
+                                <label class="form-check-label small" for="aa-dryrun" title="When on, actions are logged only — never applied">Dry Run</label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row g-2">
+                        <div class="col">
+                            <input type="text" class="form-control form-control-sm"
+                                   placeholder="Description (optional)"
+                                   @bind="_selected.Description"
+                                   @bind:after="NotifyChanged" />
+                        </div>
+                    </div>
+                </div>
+
+                @* ── Engine ── *@
+                <div class="ar-section">
+                    <div class="ar-section-header">
+                        <span class="ar-section-title">🔌 AI Engine</span>
+                    </div>
+                    <div class="ar-card">
+                        <div class="ar-row">
+                            <label class="form-label small mb-0">Provider</label>
+                            <select class="form-select form-select-sm" style="width:140px;"
+                                    @bind="_selected.Engine" @bind:after="NotifyChanged">
+                                <option value="OpenAI">OpenAI</option>
+                                <option value="Claude">Claude</option>
+                                <option value="Gemini">Gemini</option>
+                                <option value="Ollama">Ollama (local)</option>
+                            </select>
+                            <label class="form-label small mb-0">Model</label>
+                            <input type="text" class="form-control form-control-sm" style="max-width:220px;"
+                                   placeholder="(provider default)"
+                                   @bind="_selected.Model" @bind:after="NotifyChanged" />
+                        </div>
+                        <div class="small text-muted mt-2">
+                            API keys are read from environment variables: <code>OPENAI_API_KEY</code>,
+                            <code>ANTHROPIC_API_KEY</code>, <code>GEMINI_API_KEY</code>, or <code>OLLAMA_HOST</code> for local Ollama.
+                        </div>
+                    </div>
+                </div>
+
+                @* ── Instructions ── *@
+                <div class="ar-section">
+                    <div class="ar-section-header">
+                        <span class="ar-section-title">📜 Instructions</span>
+                    </div>
+                    <div class="ar-card">
+                        <textarea class="form-control form-control-sm" rows="5"
+                                  placeholder="Describe in plain English what the agent should do, e.g. 'If Reactor.Temperature exceeds 180, reduce Reactor.HeaterSetpoint by 10 and log a warning.'"
+                                  @bind="_selected.Instructions" @bind:after="NotifyChanged"></textarea>
+                    </div>
+                </div>
+
+                @* ── Readable variables ── *@
+                <div class="ar-section">
+                    <div class="ar-section-header">
+                        <span class="ar-section-title">👁 Readable Variables</span>
+                        <span class="small text-muted ms-2">(context sent to the LLM each cycle)</span>
+                        <button class="btn btn-sm btn-outline-primary ms-auto" @onclick="() => AddPath(_selected.ReadableVariables)">➕ Variable</button>
+                    </div>
+                    @RenderPathList(_selected.ReadableVariables)
+                </div>
+
+                @* ── Writable variables ── *@
+                <div class="ar-section">
+                    <div class="ar-section-header">
+                        <span class="ar-section-title">✍️ Writable Variables</span>
+                        <span class="small text-muted ms-2">(allow-list — writes elsewhere are rejected)</span>
+                        <button class="btn btn-sm btn-outline-success ms-auto" @onclick="() => AddPath(_selected.WritableVariables)">➕ Variable</button>
+                    </div>
+                    @RenderPathList(_selected.WritableVariables)
+                </div>
+
+                @* ── Allowed scripts ── *@
+                <div class="ar-section">
+                    <div class="ar-section-header">
+                        <span class="ar-section-title">📝 Allowed Scripts</span>
+                        <span class="small text-muted ms-2">(scripts the agent may trigger)</span>
+                        <button class="btn btn-sm btn-outline-success ms-auto" @onclick="AddScript">➕ Script</button>
+                    </div>
+                    @if (!_selected.AllowedScripts.Any())
+                    {
+                        <div class="ar-empty-hint small text-muted">No scripts allowed — ExecuteScript actions will always be rejected.</div>
+                    }
+                    else
+                    {
+                        @for (int i = 0; i < _selected.AllowedScripts.Count; i++)
+                        {
+                            var idx = i;
+                            <div class="ar-card">
+                                <div class="ar-row">
+                                    <input type="text" class="form-control form-control-sm"
+                                           placeholder="Script name"
+                                           value="@_selected.AllowedScripts[idx]"
+                                           @onchange="e => { _selected.AllowedScripts[idx] = e.Value?.ToString() ?? string.Empty; NotifyChanged(); }" />
+                                    <button class="btn btn-link p-0 ms-auto" @onclick="() => RemoveScript(idx)">🗑</button>
+                                </div>
+                            </div>
+                        }
+                    }
+                </div>
+
+                @* ── Timing & limits ── *@
+                <div class="ar-section">
+                    <div class="ar-section-header">
+                        <span class="ar-section-title">⏱ Timing &amp; Limits</span>
+                    </div>
+                    <div class="ar-card">
+                        <div class="ar-row">
+                            <label class="form-label small mb-0">Poll every</label>
+                            <input type="number" class="form-control form-control-sm" style="width:90px;" min="5"
+                                   @bind="_selected.PollingIntervalSeconds" @bind:after="NotifyChanged" />
+                            <span class="small text-muted">sec (min 5)</span>
+
+                            <label class="form-label small mb-0 ms-3">Cooldown</label>
+                            <input type="number" class="form-control form-control-sm" style="width:90px;" min="0"
+                                   @bind="_selected.CooldownSeconds" @bind:after="NotifyChanged" />
+                            <span class="small text-muted">sec between applied action batches</span>
+                        </div>
+                        <div class="ar-row mt-2">
+                            <label class="form-label small mb-0">Max actions / cycle</label>
+                            <input type="number" class="form-control form-control-sm" style="width:90px;" min="1"
+                                   @bind="_selected.MaxActionsPerCycle" @bind:after="NotifyChanged" />
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        }
+    </div>
+</div>
+
+<style>
+    .ar-panel { display: flex; height: 100%; overflow: hidden; }
+    .ar-sidebar { width: 240px; flex-shrink: 0; border-right: 1px solid var(--bs-border-color, #333); display: flex; flex-direction: column; overflow: hidden; }
+    .ar-sidebar-toolbar { display: flex; align-items: center; justify-content: space-between; padding: 6px 8px; border-bottom: 1px solid var(--bs-border-color, #333); flex-shrink: 0; }
+    .ar-list { flex: 1; overflow-y: auto; }
+    .ar-list-empty { padding: 12px; text-align: center; }
+    .ar-list-item { display: flex; align-items: center; gap: 5px; padding: 6px 8px; cursor: pointer; border-bottom: 1px solid var(--bs-border-color-translucent, #2a2a2a); font-size: 12px; }
+    .ar-list-item:hover { background: var(--bs-primary-bg-subtle, #0d6efd1a); }
+    .ar-list-item.active { background: var(--bs-primary-bg-subtle, #0d6efd2a); border-left: 3px solid #0d6efd; padding-left: 5px; }
+    .ar-list-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ar-list-group { font-size: 9px; color: #f59e0b; background: #7c2d1220; border: 1px solid #f59e0b55; border-radius: 3px; padding: 1px 3px; }
+    .ar-list-delete { opacity: 0; color: #dc3545; font-size: 11px; }
+    .ar-list-item:hover .ar-list-delete { opacity: 1; }
+    .ar-editor { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    .ar-editor-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 24px; }
+    .ar-editor-scroll { flex: 1; overflow-y: auto; padding: 10px; }
+    .ar-section { margin-bottom: 12px; border: 1px solid var(--bs-border-color, #333); border-radius: 6px; overflow: hidden; }
+    .ar-header-section { padding: 8px 10px; background: var(--bs-secondary-bg, #252525); }
+    .ar-section-header { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--bs-secondary-bg, #252525); border-bottom: 1px solid var(--bs-border-color, #333); flex-wrap: wrap; }
+    .ar-section-title { font-size: 12px; font-weight: 600; }
+    .ar-card { padding: 8px 10px; border-bottom: 1px solid var(--bs-border-color-translucent, #2a2a2a); }
+    .ar-card:last-child { border-bottom: none; }
+    .ar-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .ar-empty-hint { padding: 8px 10px; }
+</style>
+
+@code {
+    private List<AiAgentConfig> _agents = new();
+    private AiAgentConfig? _selected;
+
+    protected override void OnInitialized()
+    {
+        Editor.StateChanged += OnEditorChanged;
+        LoadAgents();
+    }
+
+    protected override void OnParametersSet() => LoadAgents();
+
+    private void LoadAgents()
+    {
+        _agents = Editor.RootModel?.AiAgents ?? new();
+        if (_selected != null && !_agents.Contains(_selected))
+            _selected = null;
+    }
+
+    private void OnEditorChanged()
+    {
+        LoadAgents();
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void SelectAgent(AiAgentConfig agent) => _selected = agent;
+
+    private void AddAgent()
+    {
+        if (Editor.RootModel == null) return;
+        var agent = new AiAgentConfig { Name = $"AI Agent {_agents.Count + 1}" };
+        _agents.Add(agent);
+        _selected = agent;
+        Editor.HasUnsavedChanges = true;
+    }
+
+    private void DeleteAgent(AiAgentConfig agent)
+    {
+        if (Editor.RootModel == null) return;
+        _agents.Remove(agent);
+        if (_selected == agent) _selected = _agents.FirstOrDefault();
+        Editor.HasUnsavedChanges = true;
+    }
+
+    private void AddPath(List<string> list)
+    {
+        list.Add("");
+        NotifyChanged();
+    }
+
+    private void RemovePath(List<string> list, int index)
+    {
+        if (index >= 0 && index < list.Count)
+        {
+            list.RemoveAt(index);
+            NotifyChanged();
+        }
+    }
+
+    private void AddScript()
+    {
+        _selected?.AllowedScripts.Add("");
+        NotifyChanged();
+    }
+
+    private void RemoveScript(int index)
+    {
+        if (_selected == null) return;
+        if (index >= 0 && index < _selected.AllowedScripts.Count)
+        {
+            _selected.AllowedScripts.RemoveAt(index);
+            NotifyChanged();
+        }
+    }
+
+    private void NotifyChanged()
+    {
+        Editor.HasUnsavedChanges = true;
+        StateHasChanged();
+    }
+
+    private RenderFragment RenderPathList(List<string> paths) => builder =>
+    {
+        if (!paths.Any())
+        {
+            builder.OpenElement(0, "div");
+            builder.AddAttribute(1, "class", "ar-empty-hint small text-muted");
+            builder.AddContent(2, "No variables added yet.");
+            builder.CloseElement();
+            return;
+        }
+
+        int seq = 0;
+        for (int i = 0; i < paths.Count; i++)
+        {
+            var idx = i;
+            builder.OpenElement(seq++, "div");
+            builder.AddAttribute(seq++, "class", "ar-card");
+
+            builder.OpenElement(seq++, "div");
+            builder.AddAttribute(seq++, "class", "ar-row");
+
+            builder.OpenComponent<VariablePathPicker>(seq++);
+            builder.AddComponentParameter(seq++, "Value", paths[idx]);
+            builder.AddComponentParameter(seq++, "ValueChanged", Microsoft.AspNetCore.Components.EventCallback.Factory.Create<string?>(this, v => { paths[idx] = v ?? ""; NotifyChanged(); }));
+            builder.AddComponentParameter(seq++, "Placeholder", "Variable path...");
+            builder.CloseComponent();
+
+            builder.OpenElement(seq++, "button");
+            builder.AddAttribute(seq++, "class", "btn btn-link p-0 ms-auto");
+            builder.AddAttribute(seq++, "onclick", Microsoft.AspNetCore.Components.EventCallback.Factory.Create(this, () => RemovePath(paths, idx)));
+            builder.AddContent(seq++, "🗑");
+            builder.CloseElement();
+
+            builder.CloseElement();
+            builder.CloseElement();
+        }
+    };
+}

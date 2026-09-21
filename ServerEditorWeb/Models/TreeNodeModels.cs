@@ -544,6 +544,22 @@ public class AutomationRuleNode : TreeNode
     public void SyncName() => Rule.Name = Name;
 }
 
+public class AiAgentGroupNode : TreeNode
+{
+    public override string TypeName => "AiAgentGroup";
+    public override string Icon => "🤖";
+    public AiAgentGroupNode() { Name = "AI Agents"; }
+}
+
+public class AiAgentNode : TreeNode
+{
+    public override string TypeName => "AiAgent";
+    public override string Icon => "🤖";
+    public AiAgentConfig Agent { get; }
+    public AiAgentNode(AiAgentConfig agent) { Agent = agent; Name = agent.Name; }
+    public void SyncName() => Agent.Name = Name;
+}
+
 public class PinnedGroupNode : TreeNode
 {
     public override string TypeName => "PinnedGroup";
