@@ -31,6 +31,7 @@ builder.Services.AddScoped<LocalizationService>();
 builder.Services.AddSingleton<HdaReaderService>();
 builder.Services.AddSingleton<EventLogReaderService>();
 builder.Services.AddSingleton<NaturalLanguageQueryService>();
+builder.Services.AddScoped<PlantOverviewService>();
 builder.Services.AddSingleton<DataExportService>();
 builder.Services.AddScoped<PushNotificationInterop>();
 builder.Services.AddScoped<MultiSiteAggregator>();

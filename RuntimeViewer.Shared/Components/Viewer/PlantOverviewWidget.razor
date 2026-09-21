@@ -1,0 +1,118 @@
+@* Copyright (c) 2026 Claudio Fiorani - All rights reserved. *@
+
+@using SharedModels
+@using RuntimeViewer.Shared.Services
+@implements IDisposable
+
+<div class="plantoverview-widget" style="width: 100%; height: 100%; display: flex; flex-direction: column; font-family: var(--widget-font-family, sans-serif); font-size: var(--widget-font-size, 12px); background: var(--po-bg, #111827); color: var(--po-text, #e0e0e0); border: 1px solid var(--po-border, #333); border-radius: 4px; overflow: hidden;">
+
+    @* Header / toolbar *@
+    <div style="padding: 6px 10px; background: #1f2937; border-bottom: 1px solid #333; display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
+        <span style="font-size: 14px;">🏭</span>
+        <span style="font-weight: bold; font-size: 12px;">Plant Status Overview</span>
+        <span style="flex: 1;"></span>
+
+        @if (_result != null)
+        {
+            <span class="@StatusBadgeClass" style="font-size: 10px; padding: 2px 8px; border-radius: 10px; font-weight: bold;">
+                @StatusBadgeText
+            </span>
+        }
+
+        <button style="background: #2563eb; color: white; border: none; border-radius: 4px; padding: 4px 10px; cursor: pointer; font-size: 11px; font-weight: bold; opacity: @(_loading ? "0.6" : "1");"
+                @onclick="RefreshAsync" disabled="@_loading">
+            @(_loading ? "⏳ Analyzing..." : "🔄 Generate")
+        </button>
+    </div>
+
+    @* Body *@
+    <div style="flex: 1; overflow-y: auto; padding: 10px;">
+        @if (_result == null && !_loading)
+        {
+            <div style="text-align: center; padding: 24px; color: #666;">
+                <div style="font-size: 24px; margin-bottom: 8px;">🏭</div>
+                <div>Click <strong>Generate</strong> for an AI-powered overview of plant health, active alarms, and trends.</div>
+            </div>
+        }
+        else if (_loading && _result == null)
+        {
+            <div style="text-align: center; padding: 24px; color: #888;">⏳ Gathering realtime data and alarms…</div>
+        }
+        else if (_result != null)
+        {
+            <div style="white-space: pre-wrap; font-size: 12px; line-height: 1.6;">@_result.Narrative</div>
+
+            <div style="display: flex; gap: 14px; flex-wrap: wrap; margin-top: 12px; padding-top: 8px; border-top: 1px solid #2a2a2a; font-size: 10px; color: #888;">
+                <span>🚨 Active alarms: @_result.ActiveAlarmCount</span>
+                <span>⚠️ Unacked: @_result.UnackedAlarmCount</span>
+                <span>📓 Events: @_result.EventCount</span>
+                <span>📊 Variables: @_result.VariablesUsed.Count</span>
+                <span>🕒 @_result.GeneratedAt.ToString("HH:mm:ss")</span>
+                <span>⏱ @(_result.DurationMs)ms</span>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Inject] private PlantOverviewService Overview { get; set; } = default!;
+
+    /// <summary>Variable path prefix filter. Empty = all data-logged variables.</summary>
+    [Parameter] public string VariableFilter { get; set; } = "";
+
+    /// <summary>Time range in minutes of historical data/events to analyze.</summary>
+    [Parameter] public int TimeRangeMinutes { get; set; } = 60;
+
+    /// <summary>Comma-separated event categories to include.</summary>
+    [Parameter] public string EventCategories { get; set; } = "Alarm,System";
+
+    /// <summary>When greater than 0, auto-regenerates every N seconds.</summary>
+    [Parameter] public int AutoRefreshSeconds { get; set; }
+
+    /// <summary>Extra free-text instructions appended to the AI prompt.</summary>
+    [Parameter] public string Instructions { get; set; } = "";
+
+    private PlantOverviewResult? _result;
+    private bool _loading;
+    private Timer? _timer;
+
+    protected override void OnInitialized()
+    {
+        if (AutoRefreshSeconds > 0)
+        {
+            _timer = new Timer(async _ => await InvokeAsync(RefreshAsync),
+                null, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(AutoRefreshSeconds));
+        }
+    }
+
+    private async Task RefreshAsync()
+    {
+        if (_loading) return;
+        _loading = true;
+        StateHasChanged();
+
+        _result = await Overview.GenerateAsync(VariableFilter, TimeRangeMinutes, EventCategories, Instructions);
+
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private string StatusBadgeClass => _result!.ActiveAlarmCount == 0
+        ? "po-badge-ok"
+        : (_result!.UnackedAlarmCount > 0 ? "po-badge-critical" : "po-badge-warn");
+
+    private string StatusBadgeText => _result!.ActiveAlarmCount == 0
+        ? "✅ Normal"
+        : (_result!.UnackedAlarmCount > 0 ? "🔴 Attention Needed" : "🟡 Alarms Active");
+
+    public void Dispose()
+    {
+        _timer?.Dispose();
+    }
+}
+
+<style>
+    .po-badge-ok { background: #14532d; color: #86efac; }
+    .po-badge-warn { background: #713f12; color: #fde047; }
+    .po-badge-critical { background: #7f1d1d; color: #fca5a5; }
+</style>

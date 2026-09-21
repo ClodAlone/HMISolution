@@ -39,6 +39,7 @@ namespace SimpleOpcFileServer
         private BatchSequenceManager? _batchManager;
         private EventManager? _eventManager;
         private AutomationRuleManager? _automationRuleManager;
+        private AiAgentManager? _aiAgentManager;
 
         // Cached configs for deferred start on redundancy failover
         private List<ScriptConfig>? _cachedScripts;
@@ -517,8 +518,9 @@ namespace SimpleOpcFileServer
             if (_plcManager != null) { _plcManager.Dispose(); _plcManager = null; }
             if (_recipeManager != null) { _recipeManager.Dispose(); _recipeManager = null; }
             if (_automationRuleManager != null) { _automationRuleManager.Dispose(); _automationRuleManager = null; }
+            if (_aiAgentManager != null) { _aiAgentManager.Dispose(); _aiAgentManager = null; }
 
-            if (_assetManager != null) { _assetManager.Dispose(); _assetManager = null; }
+            if (_assetManager != null)
             _variables.Clear();
             if (_batchManager != null) { _batchManager.Dispose(); _batchManager = null; }
             _users.Clear();
@@ -999,6 +1001,13 @@ namespace SimpleOpcFileServer
                               {
                                   _automationRuleManager = new AutomationRuleManager(this);
                                   _automationRuleManager.Initialize(nodeModel.AutomationRules);
+                              }
+
+                              // AI Agents
+                              if (nodeModel.AiAgents != null && nodeModel.AiAgents.Count > 0)
+                              {
+                                  _aiAgentManager = new AiAgentManager(this);
+                                  _aiAgentManager.Initialize(nodeModel.AiAgents);
                               }
 
 // Reports
@@ -2915,6 +2924,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 _recipeManager?.Dispose();
                 _schedulerManager?.Dispose();
                 _automationRuleManager?.Dispose();
+                _aiAgentManager?.Dispose();
                 _reportManager?.Dispose();
                 _assetManager?.Dispose();
                 _notificationService?.Dispose();

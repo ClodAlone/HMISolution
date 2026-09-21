@@ -40,6 +40,7 @@ namespace SharedModels
         public List<VariableAliasMap> AliasMaps { get; set; } = new();
         public List<UserSymbolGroup> UserSymbolGroups { get; set; } = new();
         public List<AutomationRule> AutomationRules { get; set; } = new();
+        public List<AiAgentConfig> AiAgents { get; set; } = new();
 
         /// <summary>Variable paths pinned/starred to the quick-access group at the top of the project tree.</summary>
         public List<string> PinnedVariables { get; set; } = new();
@@ -1236,7 +1237,7 @@ namespace SharedModels
     public class ScreenSymbol
     {
         public string Id { get; set; } = "";
-        public string Type { get; set; } = "rect"; // rect, circle, ellipse, text, line, gauge, indicator, svg, alarmlist, hdachart, hdagrid, eventlog, editbox, ipcamera, recipe, weeklyplanner, screenembed, reportviewer, imagemap, trend, progressbar, numericdisplay, ledarray, pipe, tank, dropdown, datatable, sparkline, motorcontrol, valve, alarmbanner, colorzone, conveyor, piechart, barchart, navbutton, heatexchanger, popup, setpointramp, flowmeter, xyplot, pdfviewer, switch, rotaryswitch, knob, hslider, vslider, button, animtext, mimicpump, mimicvalve, mimictank, mimicsensor, mimiccontroller, mimicmixer, mimicheater, mimicfilter, mimiccompressor, mimicreactor, geomap
+        public string Type { get; set; } = "rect"; // rect, circle, ellipse, text, line, gauge, indicator, svg, alarmlist, hdachart, hdagrid, eventlog, editbox, ipcamera, recipe, weeklyplanner, screenembed, reportviewer, imagemap, trend, progressbar, numericdisplay, ledarray, pipe, tank, dropdown, datatable, sparkline, motorcontrol, valve, alarmbanner, colorzone, conveyor, piechart, barchart, navbutton, heatexchanger, popup, setpointramp, flowmeter, xyplot, pdfviewer, switch, rotaryswitch, knob, hslider, vslider, button, animtext, mimicpump, mimicvalve, mimictank, mimicsensor, mimiccontroller, mimicmixer, mimicheater, mimicfilter, mimiccompressor, mimicreactor, geomap, nlquery, plantoverview
         public double X { get; set; }
         public double Y { get; set; }
         public double Width { get; set; } = 80;
@@ -1326,6 +1327,30 @@ namespace SharedModels
 
         /// <summary>When true, the EditBox widget shows a statistics bar (Min/Max/Avg) read from the variable's .Statistics.* OPC sub-variables.</summary>
         public bool EditBoxShowStatistics { get; set; }
+
+        // ─── Plant Status Overview widget properties (Type == "plantoverview") ─────────
+
+        /// <summary>
+        /// Variable path prefix filter (e.g. "Reactor"). When set, only data-logged variables
+        /// whose path starts with this prefix are included in the AI overview. Empty = all
+        /// data-logged variables in the project.
+        /// </summary>
+        public string PlantOverviewVariableFilter { get; set; } = "";
+
+        /// <summary>Time range in minutes of historical data/events considered for the overview. Default 60.</summary>
+        public int PlantOverviewTimeRangeMinutes { get; set; } = 60;
+
+        /// <summary>Comma-separated event categories to include (e.g. "Alarm,System"). Empty = all categories.</summary>
+        public string PlantOverviewEventCategories { get; set; } = "Alarm,System";
+
+        /// <summary>
+        /// When greater than 0, the widget automatically regenerates the AI overview every N seconds.
+        /// 0 = manual refresh only (operator clicks "Generate").
+        /// </summary>
+        public int PlantOverviewAutoRefreshSeconds { get; set; }
+
+        /// <summary>Optional extra instructions appended to the AI prompt (e.g. focus areas, tone).</summary>
+        public string PlantOverviewInstructions { get; set; } = "";
 
         // Animation bindings â€” evaluated at runtime
         public string? FillBinding { get; set; }       // e.g., "value > 50 ? '#ff0000' : '#00ff00'"
@@ -3718,6 +3743,79 @@ namespace SharedModels
 
         /// <summary>Event log category (LogEvent).</summary>
         public string EventCategory { get; set; } = "Rule";
+    }
+
+    // ─── AI Agent (LLM-driven rule execution) ───────────────────────────────────
+
+    /// <summary>
+    /// Configuration for an LLM-driven AI Agent that periodically reasons over a
+    /// scoped set of variables/alarms using a natural-language instruction ("rules")
+    /// and decides which actions to execute (write variable, run script, notify, log).
+    /// Unlike <see cref="AutomationRule"/>, conditions are not fixed comparisons but
+    /// free-form guidance interpreted by the model; the action vocabulary and the set
+    /// of writable variables are restricted for safety.
+    /// </summary>
+    public class AiAgentConfig
+    {
+        public string Id { get; set; } = Guid.NewGuid().ToString("N")[..8];
+        public string Name { get; set; } = "New AI Agent";
+        public bool Enabled { get; set; } = true;
+        public string Description { get; set; } = "";
+
+        /// <summary>AI engine: "OpenAI", "Claude", "Gemini", or "Ollama".</summary>
+        public string Engine { get; set; } = "OpenAI";
+
+        /// <summary>Model name override (e.g. "gpt-4o-mini", "claude-sonnet-4-5"). Empty = provider default.</summary>
+        public string Model { get; set; } = "";
+
+        /// <summary>
+        /// Natural-language instructions describing what the agent should do,
+        /// e.g. "If tank temperature exceeds safe limits for the current product recipe,
+        /// reduce heater setpoint and notify the shift supervisor."
+        /// </summary>
+        public string Instructions { get; set; } = "";
+
+        /// <summary>Variable paths the agent is allowed to read (context sent to the LLM each cycle).</summary>
+        public List<string> ReadableVariables { get; set; } = new();
+
+        /// <summary>
+        /// Variable paths the agent is allowed to write. Any WriteVariable action targeting a
+        /// path outside this allow-list is rejected and logged as a security event.
+        /// </summary>
+        public List<string> WritableVariables { get; set; } = new();
+
+        /// <summary>Script names the agent is allowed to trigger via ExecuteScript actions.</summary>
+        public List<string> AllowedScripts { get; set; } = new();
+
+        /// <summary>Seconds between evaluation cycles (LLM calls). Minimum enforced at 5s.</summary>
+        public int PollingIntervalSeconds { get; set; } = 60;
+
+        /// <summary>Minimum seconds between two action batches, regardless of polling interval.</summary>
+        public int CooldownSeconds { get; set; } = 30;
+
+        /// <summary>
+        /// When true, the agent only logs the actions it *would* take (audit/event log)
+        /// without actually writing variables, running scripts, or sending notifications.
+        /// Recommended when first enabling an agent.
+        /// </summary>
+        public bool DryRun { get; set; } = true;
+
+        /// <summary>Maximum number of actions the agent may return/execute per cycle.</summary>
+        public int MaxActionsPerCycle { get; set; } = 5;
+    }
+
+    /// <summary>A single action requested by the AI Agent for a given cycle (mirrors AutomationAction's vocabulary).</summary>
+    public class AiAgentAction
+    {
+        /// <summary>WriteVariable | SendNotification | ExecuteScript | LogEvent.</summary>
+        public string Type { get; set; } = "LogEvent";
+        public string VariablePath { get; set; } = "";
+        public string Value { get; set; } = "";
+        public string Message { get; set; } = "";
+        public string ScriptName { get; set; } = "";
+
+        /// <summary>Model's stated rationale for this action; always logged for auditability.</summary>
+        public string Reasoning { get; set; } = "";
     }
 
 }
