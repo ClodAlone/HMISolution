@@ -158,9 +158,98 @@ namespace SimpleOpcFileServer
             public void Write(string groupAddress, object value)
             {
                 if (string.IsNullOrWhiteSpace(groupAddress)) return;
-                var payload = value?.ToString() ?? string.Empty;
-                var bytes = Encoding.ASCII.GetBytes(payload);
-                _udpClient.Send(bytes, bytes.Length, _remoteEndpoint);
+
+                var packet = BuildGroupWritePacket(groupAddress, value);
+                if (packet == null || packet.Length == 0) return;
+
+                _udpClient.Send(packet, packet.Length, _remoteEndpoint);
+            }
+
+            private byte[]? BuildGroupWritePacket(string groupAddress, object value)
+            {
+                var address = ParseGroupAddress(groupAddress);
+                if (address == null) return null;
+
+                var payload = EncodeKnxPayload(value);
+                if (payload == null || payload.Length == 0) return null;
+
+                var packet = new byte[2 + payload.Length];
+                packet[0] = (byte)((address.Value >> 8) & 0xFF);
+                packet[1] = (byte)(address.Value & 0xFF);
+                Buffer.BlockCopy(payload, 0, packet, 2, payload.Length);
+                return packet;
+            }
+
+            private ushort? ParseGroupAddress(string groupAddress)
+            {
+                var cleaned = groupAddress.Trim();
+                var parts = cleaned.Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                if (parts.Length != 3) return null;
+
+                if (!ushort.TryParse(parts[0], out var main)
+                    || !byte.TryParse(parts[1], out var middle)
+                    || !byte.TryParse(parts[2], out var sub))
+                {
+                    return null;
+                }
+
+                if (main > 31 || middle > 7 || sub > 255) return null;
+                var addr = ((main & 0x1F) << 11) | ((middle & 0x07) << 8) | (sub & 0xFF);
+                return (ushort)addr;
+            }
+
+            private byte[]? EncodeKnxPayload(object value)
+            {
+                if (value == null) return null;
+
+                if (value is bool b)
+                {
+                    return new[] { (byte)(b ? 0x01 : 0x00) };
+                }
+
+                if (value is byte by)
+                {
+                    return new[] { by };
+                }
+
+                if (value is short s)
+                {
+                    return BitConverter.GetBytes((short)s);
+                }
+
+                if (value is ushort us)
+                {
+                    return BitConverter.GetBytes(us);
+                }
+
+                if (value is int i)
+                {
+                    return BitConverter.GetBytes(i);
+                }
+
+                if (value is uint ui)
+                {
+                    return BitConverter.GetBytes(ui);
+                }
+
+                if (value is float f)
+                {
+                    return BitConverter.GetBytes(f);
+                }
+
+                if (value is double d)
+                {
+                    return BitConverter.GetBytes(d);
+                }
+
+                if (value is decimal dec)
+                {
+                    return BitConverter.GetBytes((double)dec);
+                }
+
+                var text = value.ToString();
+                if (string.IsNullOrEmpty(text)) return null;
+                return Encoding.UTF8.GetBytes(text);
             }
 
             private async Task ReceiveLoop(CancellationToken token)

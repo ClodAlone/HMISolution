@@ -292,10 +292,67 @@ public class CameraStreamService : IDisposable
             {
                 try
                 {
-                    using var response = await _httpClient.GetAsync(_cleanUrl, HttpCompletionOption.ResponseHeadersRead, ct);
-                    response.EnsureSuccessStatusCode();
-                    var stream = await response.Content.ReadAsStreamAsync(ct);
-                    await ReadMjpegFramesAsync(stream, ct);
+                    // Try the configured URL, and fall back to common loopback variants if configured as localhost.
+                    var tryUrls = new List<string> { _cleanUrl };
+                    try
+                    {
+                        var parsed = new Uri(_cleanUrl);
+                        if (parsed.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase))
+                        {
+                            tryUrls.Add(_cleanUrl.Replace("localhost", "127.0.0.1"));
+                            tryUrls.Add(_cleanUrl.Replace("localhost", "::1"));
+                        }
+                    }
+                    catch { /* ignore parsing errors */ }
+
+                    HttpResponseMessage? response = null;
+                    foreach (var url in tryUrls)
+                    {
+                        try
+                        {
+                            response = await _httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+                            response.EnsureSuccessStatusCode();
+                            break; // success
+                        }
+                        catch (Exception ex) when (!ct.IsCancellationRequested)
+                        {
+                            _logger.LogDebug(ex, "MJPEG attempt failed for {Id} -> {Url}", _config.CameraId, url);
+                            response?.Dispose();
+                            response = null;
+                            // try next URL variant
+                        }
+                    }
+
+                    if (response == null)
+{
+    // Fall back to HTTP snapshot polling for a short period before retrying MJPEG.
+    _logger.LogInformation("MJPEG connect failed for {Id}; falling back to HTTP snapshot for 30s", _config.CameraId);
+    var sw = Stopwatch.StartNew();
+    while (sw.Elapsed < TimeSpan.FromSeconds(30) && !ct.IsCancellationRequested)
+    {
+        try
+        {
+            var bytes = await _httpClient.GetByteArrayAsync(_cleanUrl, ct).ConfigureAwait(false);
+            await ProcessFrameAsync(bytes).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            _logger.LogDebug(ex, "Snapshot fallback error for {Id}", _config.CameraId);
+        }
+
+        try { await Task.Delay(FrameDelay, ct).ConfigureAwait(false); }
+        catch (OperationCanceledException) { break; }
+    }
+
+    // After snapshot fallback, continue outer loop to re-attempt MJPEG.
+    continue;
+}
+
+using (response)
+{
+    var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+    await ReadMjpegFramesAsync(stream, ct).ConfigureAwait(false);
+}
                 }
                 catch (Exception ex) when (!ct.IsCancellationRequested)
                 {
@@ -337,31 +394,57 @@ public class CameraStreamService : IDisposable
             var buffer = new byte[1024 * 1024]; // 1MB
             using var ms = new MemoryStream();
             bool inFrame = false;
+            byte? prev = null;
 
             while (!ct.IsCancellationRequested)
             {
                 var bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length, ct);
                 if (bytesRead == 0) break;
 
-                for (int i = 0; i < bytesRead - 1; i++)
+                for (int i = 0; i < bytesRead; i++)
                 {
-                    if (!inFrame && buffer[i] == 0xFF && buffer[i + 1] == 0xD8)
-                    {
-                        ms.SetLength(0);
-                        inFrame = true;
-                    }
+                    var cur = buffer[i];
 
-                    if (inFrame)
+                    if (!inFrame)
                     {
-                        ms.WriteByte(buffer[i]);
-
-                        if (buffer[i] == 0xFF && buffer[i + 1] == 0xD9)
+                        // look for SOI marker 0xFF 0xD8
+                        if (prev == 0xFF && cur == 0xD8)
                         {
-                            ms.WriteByte(buffer[i + 1]);
-                            i++;
-                            inFrame = false;
-                            await ProcessFrameAsync(ms.ToArray());
+                            inFrame = true;
+                            ms.SetLength(0);
+                            // write the start marker
+                            ms.WriteByte(0xFF);
+                            ms.WriteByte(0xD8);
+                            prev = null;
+                            continue;
                         }
+
+                        prev = cur;
+                        continue;
+                    }
+                    else
+                    {
+                        // inside a frame: write current byte
+                        ms.WriteByte(cur);
+
+                        // check for EOI marker 0xFF 0xD9
+                        if (prev == 0xFF && cur == 0xD9)
+                        {
+                            inFrame = false;
+                            prev = null;
+                            try
+                            {
+                                await ProcessFrameAsync(ms.ToArray());
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.LogDebug(ex, "Error processing frame for {Id}", _config.CameraId);
+                            }
+                            ms.SetLength(0);
+                            continue;
+                        }
+
+                        prev = cur;
                     }
                 }
             }

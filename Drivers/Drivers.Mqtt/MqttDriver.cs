@@ -107,21 +107,17 @@ namespace SimpleOpcFileServer
                         .WithPayload(payload)
                         .Build();
 
-                    // Publish asynchronously so the write operation is not blocked.
-                    Task.Run(async () =>
+                    try
                     {
-                        try
-                        {
-                            await client.PublishAsync(message, CancellationToken.None);
-                        }
-                        catch (Exception ex)
-                        {
-                            Log.Error(ex, "MQTT publish error for {Key}: {Message}", key, ex.Message);
-                            OnError?.Invoke(key, $"Publish error: {ex.Message}");
-                        }
-                    });
-
-                    return ServiceResult.Good;
+                        client.PublishAsync(message, CancellationToken.None).GetAwaiter().GetResult();
+                        return ServiceResult.Good;
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex, "MQTT publish error for {Key}: {Message}", key, ex.Message);
+                        OnError?.Invoke(key, $"Publish error: {ex.Message}");
+                        return ServiceResult.Create(ex, StatusCodes.BadUnexpectedError, ex.Message);
+                    }
                 }
                 catch (Exception ex)
                 {
