@@ -117,6 +117,10 @@ else
     {
         @* -- Full top bar (normal mode, or kiosk with ShowNavigationBar) -- *@
         <div class="rv-topbar">
+            @if (History.CanGoBack)
+            {
+                <button class="rv-btn" style="background:#374151;" @onclick="DoGoBack" title="Go back to the previous screen">&#8592; Back</button>
+            }
             <span class="rv-title">Runtime Viewer</span>
 
             @if (NavigableScreens.Count > 1 && NavStyle != "bottom" && NavStyle != "hamburger")
@@ -534,6 +538,7 @@ else
     [Inject] private RuntimeAuthService Auth { get; set; } = default!;
     [Inject] private LocalizationService Localization { get; set; } = default!;
     [Inject] private PushNotificationInterop PushInterop { get; set; } = default!;
+    [Inject] private ScreenHistoryService History { get; set; } = default!;
 
     [Inject] private MultiSiteAggregator MultiSite { get; set; } = default!;
     private ScreenConfig? _currentScreen;
@@ -615,6 +620,7 @@ else
         Commands.RequestLogin += OnCommandLogin;
         Commands.RequestLogout += OnCommandLogout;
         Commands.ChangeLanguage += OnChangeLanguage;
+        Commands.GoBack += DoGoBack;
         var msCfg = Project.Settings.MultiSiteDashboard;
         _multiSiteEnabled = msCfg is { Enabled: true, Sites.Count: > 0 };
 
@@ -800,6 +806,10 @@ else
             _currentScreen = NavigableScreens.FirstOrDefault();
         }
 
+        // Record this route in navigation history so a GoBackScreen command can return here
+        if (_currentScreen != null)
+            History.Push($"/screen/{_currentScreen.Name}");
+
         // Record navigation for predictive pre-connection learning
         if (_currentScreen != null && Project.Settings.EnablePredictivePreconnect)
             NavPredictor.RecordNavigation(_currentScreen.Name);
@@ -859,6 +869,24 @@ else
 
             _currentAliasMap = ResolveAliasMap(aliasMapName) ?? fallbackAliases;
             Nav.NavigateTo($"/screen/{Uri.EscapeDataString(name)}");
+            StateHasChanged();
+        });
+    }
+
+    /// <summary>
+    /// Handles a GoBackScreen command by popping the navigation history and returning to
+    /// whatever route (screen or /ar) preceded the current one. Falls back to the startup
+    /// screen if there is nowhere to go back to.
+    /// </summary>
+    private void DoGoBack()
+    {
+        InvokeAsync(() =>
+        {
+            var previous = History.PopToPrevious();
+            if (!string.IsNullOrEmpty(previous))
+                Nav.NavigateTo(previous);
+            else if (Project.StartupScreen != null)
+                Nav.NavigateTo($"/screen/{Uri.EscapeDataString(Project.StartupScreen.Name)}");
             StateHasChanged();
         });
     }
@@ -1305,6 +1333,7 @@ else
         Commands.RequestLogin -= OnCommandLogin;
         Commands.RequestLogout -= OnCommandLogout;
         Commands.ChangeLanguage -= OnChangeLanguage;
+        Commands.GoBack -= DoGoBack;
         Opc.StateChanged -= OnDiagStateChanged;
         _idleTimer?.Dispose();
         MultiSite?.Dispose();

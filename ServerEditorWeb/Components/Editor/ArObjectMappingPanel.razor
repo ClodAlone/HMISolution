@@ -1,0 +1,405 @@
+@* Copyright (c) 2026 Claudio Fiorani - All rights reserved. *@
+
+@using SharedModels
+@using ServerEditorWeb.Services
+@using ServerEditorWeb.Models
+
+@inject NodeEditorService Editor
+@inject ArTrainingService Training
+
+<div class="arm-panel">
+
+    @* Left sidebar: object mapping list *@
+    <div class="arm-sidebar">
+        <div class="arm-sidebar-toolbar">
+            <strong class="small">🔍 AR Object Mappings</strong>
+            <button class="btn btn-sm btn-outline-primary" @onclick="AddMapping" title="Add new mapping">➕</button>
+        </div>
+
+        @if (!_mappings.Any())
+        {
+            <div class="arm-list-empty small text-muted">No mappings yet. Click ➕ to associate a screen with a recognized object class.</div>
+        }
+        else
+        {
+            <div class="arm-list">
+                @foreach (var mapping in _mappings)
+                {
+                    var m = mapping;
+                    <div class="arm-list-item @(m == _selected ? "active" : "")"
+                         @onclick="() => SelectMapping(m)">
+                        <span class="arm-list-icon">@(m.Enabled ? "🟢" : "⚫")</span>
+                        <span class="arm-list-name">@(string.IsNullOrEmpty(m.Name) ? "(unnamed)" : m.Name)</span>
+                        @if (!string.IsNullOrEmpty(m.ObjectClass))
+                        {
+                            <span class="arm-list-class">@m.ObjectClass</span>
+                        }
+                        <button class="arm-list-delete btn btn-link p-0 ms-auto"
+                                @onclick="() => DeleteMapping(m)" @onclick:stopPropagation title="Delete mapping">🗑</button>
+                    </div>
+                }
+            </div>
+        }
+
+        <div class="arm-sidebar-footer">
+            <button class="btn btn-sm btn-outline-secondary w-100" @onclick="() => _showTraining = !_showTraining">
+                🧠 Custom Model Training
+            </button>
+        </div>
+    </div>
+
+    @* Right: mapping editor or training panel *@
+    <div class="arm-editor">
+        @if (_showTraining)
+        {
+            @RenderTrainingPanel()
+        }
+        else if (_selected == null)
+        {
+            <div class="arm-editor-empty">
+                <div style="font-size:2.5rem;opacity:.2;">🔍</div>
+                <div class="mt-2 text-muted small">Select a mapping to edit, or click ➕ to create one.</div>
+            </div>
+        }
+        else
+        {
+            <div class="arm-editor-scroll">
+
+                @* ── Header ── *@
+                <div class="arm-section arm-header-section">
+                    <div class="row g-2 align-items-center mb-2">
+                        <div class="col-auto">
+                            <div class="form-check form-switch mb-0">
+                                <input class="form-check-input" type="checkbox"
+                                       @bind="_selected.Enabled"
+                                       @bind:after="NotifyChanged"
+                                       id="arm-enabled" />
+                                <label class="form-check-label small" for="arm-enabled">Enabled</label>
+                            </div>
+                        </div>
+                        <div class="col">
+                            <input type="text" class="form-control form-control-sm"
+                                   placeholder="Mapping name"
+                                   @bind="_selected.Name"
+                                   @bind:after="NotifyChanged" />
+                        </div>
+                        <div class="col-auto">
+                            <input type="number" step="0.05" min="0" max="1" class="form-control form-control-sm" style="width:90px;"
+                                   placeholder="Min conf."
+                                   title="Minimum confidence (0-1). Leave 0 to use the global AR MinConfidence."
+                                   @bind="_selected.MinConfidence"
+                                   @bind:after="NotifyChanged" />
+                        </div>
+                    </div>
+                </div>
+
+                @* ── Recognition ── *@
+                <div class="arm-section">
+                    <div class="arm-section-header">
+                        <span class="arm-section-title">🎯 Recognition</span>
+                    </div>
+                    <div class="arm-body">
+                        <label class="form-label small mb-1">Object class</label>
+                        <div class="d-flex gap-2 mb-2">
+                            <input type="text" class="form-control form-control-sm"
+                                   placeholder="e.g. motor, valve, or a custom-trained class"
+                                   list="arm-known-classes"
+                                   @bind="_selected.ObjectClass"
+                                   @bind:after="NotifyChanged" />
+                        </div>
+                        <datalist id="arm-known-classes">
+                            @foreach (var c in Training.KnownClasses)
+                            {
+                                <option value="@c" />
+                            }
+                        </datalist>
+                        <div class="form-text small">
+                            The label the object-recognition server returns for a detected object (built-in YOLO class,
+                            or one of your custom-trained classes below).
+                        </div>
+                    </div>
+                </div>
+
+                @* ── Rendering ── *@
+                <div class="arm-section">
+                    <div class="arm-section-header">
+                        <span class="arm-section-title">🖼️ Screen to render</span>
+                    </div>
+                    <div class="arm-body">
+                        <label class="form-label small mb-1">Screen</label>
+                        <select class="form-select form-select-sm mb-2" @bind="_selected.ScreenName" @bind:after="NotifyChanged">
+                            <option value="">(none)</option>
+                            @foreach (var s in Editor.RootModel?.Screens ?? new())
+                            {
+                                <option value="@s.Name">@(string.IsNullOrEmpty(s.Group) ? s.Name : $"{s.Group}/{s.Name}")</option>
+                            }
+                        </select>
+
+                        <label class="form-label small mb-1">Alias map (optional)</label>
+                        <select class="form-select form-select-sm" @bind="_selected.AliasMapName" @bind:after="NotifyChanged">
+                            <option value="">(none)</option>
+                            @foreach (var am in Editor.RootModel?.AliasMaps ?? new())
+                            {
+                                <option value="@am.Name">@am.Name</option>
+                            }
+                        </select>
+                        <div class="form-text small">Used when no per-instance parameter file below applies.</div>
+                    </div>
+                </div>
+
+                @* ── Parameters ── *@
+                <div class="arm-section">
+                    <div class="arm-section-header">
+                        <span class="arm-section-title">📄 Parameters</span>
+                    </div>
+                    <div class="arm-body">
+                        <label class="form-label small mb-1">Default parameter file (project-relative path)</label>
+                        <input type="text" class="form-control form-control-sm mb-2"
+                               placeholder="params/motor-default.json"
+                               @bind="_selected.ParameterFilePath"
+                               @bind:after="NotifyChanged" />
+
+                        <div class="d-flex align-items-center justify-content-between mb-1">
+                            <label class="form-label small mb-0">Per-instance parameter files</label>
+                            <button class="btn btn-sm btn-outline-primary" @onclick="AddInstanceFile">➕ Instance</button>
+                        </div>
+                        @if (!_selected.InstanceParameterFiles.Any())
+                        {
+                            <div class="arm-empty-hint small text-muted">
+                                No per-instance files. Add one per QR/marker instance key decoded by the OR server
+                                (e.g. two motors of the same class get separate entries here).
+                            </div>
+                        }
+                        else
+                        {
+                            @foreach (var kvp in _selected.InstanceParameterFiles.ToList())
+                            {
+                                var key = kvp.Key;
+                                <div class="arm-row mb-1">
+                                    <input type="text" class="form-control form-control-sm" style="max-width:140px;"
+                                           placeholder="Instance key"
+                                           value="@key"
+                                           @onchange="e => RenameInstanceKey(key, e.Value?.ToString() ?? key)" />
+                                    <input type="text" class="form-control form-control-sm"
+                                           placeholder="params/motor1.json"
+                                           value="@_selected.InstanceParameterFiles[key]"
+                                           @onchange="e => SetInstanceFilePath(key, e.Value?.ToString())" />
+                                    <button class="btn btn-link p-0" @onclick="() => RemoveInstanceFile(key)">🗑</button>
+                                </div>
+                            }
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+<style>
+    .arm-panel { display: flex; height: 100%; overflow: hidden; }
+
+    .arm-sidebar { width: 240px; flex-shrink: 0; border-right: 1px solid var(--bs-border-color, #333); display: flex; flex-direction: column; overflow: hidden; }
+    .arm-sidebar-toolbar { display: flex; align-items: center; justify-content: space-between; padding: 6px 8px; border-bottom: 1px solid var(--bs-border-color, #333); flex-shrink: 0; }
+    .arm-sidebar-footer { padding: 8px; border-top: 1px solid var(--bs-border-color, #333); flex-shrink: 0; }
+    .arm-list { flex: 1; overflow-y: auto; }
+    .arm-list-empty { padding: 12px; text-align: center; }
+    .arm-list-item { display: flex; align-items: center; gap: 5px; padding: 6px 8px; cursor: pointer; border-bottom: 1px solid var(--bs-border-color-translucent, #2a2a2a); font-size: 12px; }
+    .arm-list-item:hover { background: var(--bs-primary-bg-subtle, #0d6efd1a); }
+    .arm-list-item.active { background: var(--bs-primary-bg-subtle, #0d6efd2a); border-left: 3px solid #0d6efd; padding-left: 5px; }
+    .arm-list-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .arm-list-class { font-size: 9px; color: var(--bs-secondary); background: var(--bs-secondary-bg); border-radius: 3px; padding: 1px 3px; }
+    .arm-list-delete { opacity: 0; color: #dc3545; font-size: 11px; }
+    .arm-list-item:hover .arm-list-delete { opacity: 1; }
+
+    .arm-editor { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    .arm-editor-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 24px; }
+    .arm-editor-scroll { flex: 1; overflow-y: auto; padding: 10px; }
+
+    .arm-section { margin-bottom: 12px; border: 1px solid var(--bs-border-color, #333); border-radius: 6px; overflow: hidden; }
+    .arm-header-section { padding: 8px 10px; background: var(--bs-secondary-bg, #252525); }
+    .arm-section-header { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--bs-secondary-bg, #252525); border-bottom: 1px solid var(--bs-border-color, #333); flex-wrap: wrap; }
+    .arm-section-title { font-size: 12px; font-weight: 600; }
+    .arm-body { padding: 8px 10px; }
+    .arm-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .arm-empty-hint { padding: 4px 0; }
+
+    .arm-train-section { padding: 10px; }
+    .arm-train-log { background: #111; color: #0f0; font-family: monospace; font-size: 11px; padding: 8px; border-radius: 6px; max-height: 260px; overflow-y: auto; white-space: pre-wrap; }
+    .arm-train-progress { height: 6px; border-radius: 3px; background: var(--bs-secondary-bg, #252525); overflow: hidden; margin: 8px 0; }
+    .arm-train-progress-bar { height: 100%; background: #0d6efd; transition: width 0.3s ease; }
+</style>
+
+@code {
+    private List<ArObjectMapping> _mappings = new();
+    private ArObjectMapping? _selected;
+    private bool _showTraining;
+
+    // ── Training form state ──
+    private string _newClassName = "";
+    private string _datasetFolder = "";
+
+    protected override void OnInitialized()
+    {
+        Editor.StateChanged += OnEditorChanged;
+        Training.StateChanged += OnTrainingChanged;
+        LoadMappings();
+    }
+
+    protected override void OnParametersSet() => LoadMappings();
+
+    private void LoadMappings()
+    {
+        _mappings = Editor.RootModel?.ArObjectMappings ?? new();
+        if (_selected != null && !_mappings.Contains(_selected))
+            _selected = null;
+    }
+
+    private void OnEditorChanged()
+    {
+        LoadMappings();
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void OnTrainingChanged() => InvokeAsync(StateHasChanged);
+
+    private void SelectMapping(ArObjectMapping m)
+    {
+        _selected = m;
+        _showTraining = false;
+    }
+
+    private void AddMapping()
+    {
+        if (Editor.RootModel == null) return;
+        var mapping = new ArObjectMapping { Name = $"Mapping {_mappings.Count + 1}" };
+        _mappings.Add(mapping);
+        _selected = mapping;
+        _showTraining = false;
+        Editor.HasUnsavedChanges = true;
+    }
+
+    private void DeleteMapping(ArObjectMapping m)
+    {
+        if (Editor.RootModel == null) return;
+        _mappings.Remove(m);
+        if (_selected == m) _selected = _mappings.FirstOrDefault();
+        Editor.HasUnsavedChanges = true;
+    }
+
+    private void AddInstanceFile()
+    {
+        if (_selected == null) return;
+        var key = $"instance{_selected.InstanceParameterFiles.Count + 1}";
+        while (_selected.InstanceParameterFiles.ContainsKey(key))
+            key += "_";
+        _selected.InstanceParameterFiles[key] = "";
+        NotifyChanged();
+    }
+
+    private void RemoveInstanceFile(string key)
+    {
+        _selected?.InstanceParameterFiles.Remove(key);
+        NotifyChanged();
+    }
+
+    private void SetInstanceFilePath(string key, string? value)
+    {
+        if (_selected == null) return;
+        _selected.InstanceParameterFiles[key] = value ?? "";
+        NotifyChanged();
+    }
+
+    private void RenameInstanceKey(string oldKey, string newKey)
+    {
+        if (_selected == null || oldKey == newKey || string.IsNullOrWhiteSpace(newKey)) return;
+        if (_selected.InstanceParameterFiles.ContainsKey(newKey)) return; // avoid collision
+        var value = _selected.InstanceParameterFiles[oldKey];
+        _selected.InstanceParameterFiles.Remove(oldKey);
+        _selected.InstanceParameterFiles[newKey] = value;
+        NotifyChanged();
+    }
+
+    private void NotifyChanged()
+    {
+        Editor.HasUnsavedChanges = true;
+        StateHasChanged();
+    }
+
+    // ── Custom model training UI ──
+    // Delegates the actual work (dataset packaging + launching the training process) to
+    // ArTrainingService, which owns the external process lifecycle so this panel stays
+    // purely presentational and survives page navigation without losing training progress.
+    private RenderFragment RenderTrainingPanel() => @<div class="arm-train-section">
+        <h6 class="mb-3">🧠 Custom Object Detection Training</h6>
+        <p class="text-muted small">
+            Train a custom YOLO model to recognize objects specific to your plant (e.g. a particular
+            machine model) that the stock model doesn't know. Requires a folder of labeled images
+            (YOLO format: one <code>.txt</code> per image with class-id and normalized box coordinates)
+            and Python + Ultralytics installed on this machine.
+        </p>
+
+        <div class="mb-2">
+            <label class="form-label small mb-1">Dataset folder (contains <code>images/</code> and <code>labels/</code>, plus <code>classes.txt</code>)</label>
+            <input type="text" class="form-control form-control-sm" placeholder="C:\Data\ar-training\motors" @bind="_datasetFolder" />
+            <div class="form-text small">Type the full path to a folder on this machine (server-side Blazor has no native folder-browse dialog).</div>
+        </div>
+
+        <div class="mb-2">
+            <label class="form-label small mb-1">New class name to add (optional, for reference only)</label>
+            <input type="text" class="form-control form-control-sm" placeholder="e.g. gearbox-model-x" @bind="_newClassName" />
+        </div>
+
+        <div class="d-flex gap-2 mb-2">
+            <button class="btn btn-sm btn-primary" disabled="@(Training.IsRunning || string.IsNullOrWhiteSpace(_datasetFolder))" @onclick="StartTraining">
+                ▶ Start Training
+            </button>
+            <button class="btn btn-sm btn-outline-danger" disabled="@(!Training.IsRunning)" @onclick="Training.Cancel">
+                ⏹ Cancel
+            </button>
+            @if (!string.IsNullOrEmpty(Training.LastModelPath))
+            {
+                <button class="btn btn-sm btn-outline-success" @onclick="UseTrainedModel">
+                    ✅ Use trained model
+                </button>
+            }
+        </div>
+
+        @if (Training.IsRunning || Training.Progress > 0)
+        {
+            <div class="arm-train-progress">
+                <div class="arm-train-progress-bar" style="width:@(Training.Progress)%;"></div>
+            </div>
+            <div class="small text-muted mb-2">@Training.StatusText</div>
+        }
+
+        @if (Training.KnownClasses.Any())
+        {
+            <div class="mb-2">
+                <label class="form-label small mb-1">Trained classes available</label>
+                <div>
+                    @foreach (var c in Training.KnownClasses)
+                    {
+                        <span class="badge bg-secondary me-1">@c</span>
+                    }
+                </div>
+            </div>
+        }
+
+        <label class="form-label small mb-1">Training log</label>
+        <div class="arm-train-log">@Training.LogText</div>
+    </div>;
+
+    private async Task StartTraining()
+    {
+        await Training.StartAsync(_datasetFolder, _newClassName);
+    }
+
+    private void UseTrainedModel()
+    {
+        if (_selected != null && !string.IsNullOrWhiteSpace(_newClassName))
+        {
+            _selected.ObjectClass = _newClassName;
+            NotifyChanged();
+        }
+    }
+}

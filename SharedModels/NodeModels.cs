@@ -42,6 +42,13 @@ namespace SharedModels
         public List<AutomationRule> AutomationRules { get; set; } = new();
         public List<AiAgentConfig> AiAgents { get; set; } = new();
 
+        /// <summary>
+        /// Augmented Reality object-to-screen mappings. Each entry associates a recognized
+        /// object class (from the local object-recognition server) with a screen/alias map
+        /// and optional parameter file for variable substitution.
+        /// </summary>
+        public List<ArObjectMapping> ArObjectMappings { get; set; } = new();
+
         /// <summary>Variable paths pinned/starred to the quick-access group at the top of the project tree.</summary>
         public List<string> PinnedVariables { get; set; } = new();
 
@@ -661,6 +668,151 @@ namespace SharedModels
         /// Default: false.
         /// </summary>
         public bool EnableScreenPreloading { get; set; }
+
+        /// <summary>
+        /// Augmented Reality runtime mode configuration. When enabled, the RuntimeViewer
+        /// offers an "--ar" startup mode that opens the device camera, streams frames to the
+        /// local object-recognition (OR) server for low-latency detection, and overlays
+        /// mapped screens beside recognized objects in the live camera view.
+        /// </summary>
+        public AugmentedRealityConfig? AugmentedReality { get; set; }
+    }
+
+    /// <summary>
+    /// Configuration for the Augmented Reality runtime mode. Governs how the RuntimeViewer
+    /// connects to the local object-recognition (OR) server and how detections are rendered.
+    /// </summary>
+    public class AugmentedRealityConfig
+    {
+        /// <summary>Whether AR mode is available/enabled for this project.</summary>
+        public bool Enabled { get; set; }
+
+        /// <summary>
+        /// Base URL of the local object-recognition server that processes camera frames.
+        /// Must run on the same machine/LAN as the AR client to keep latency low
+        /// (e.g. "http://127.0.0.1:8098"). Defaults to the bundled local OR server.
+        /// Note: port 8090 is excluded from Windows' dynamic port range on many machines
+        /// (reserved by Hyper-V/WSL NAT), so 8098 is used as a safer default.
+        /// </summary>
+        public string OrServerUrl { get; set; } = "http://127.0.0.1:8098";
+
+        /// <summary>
+        /// When true (default) and <see cref="OrServerUrl"/> points at localhost/127.0.0.1, the
+        /// RuntimeViewer automatically launches the bundled ArObjectServer.exe process alongside
+        /// itself on startup (and stops it on shutdown), so the operator doesn't need to start
+        /// the local object-recognition server manually. Set to false to manage it yourself
+        /// (e.g. running it on a separate machine on the LAN, or as its own service).
+        /// </summary>
+        public bool AutoStartOrServer { get; set; } = true;
+
+        /// <summary>
+        /// Optional path to the YOLO ONNX model file passed to the auto-started OR server.
+        /// Empty = the OR server's own default ("yolov8n.onnx" beside its executable).
+        /// </summary>
+        public string OrModelPath { get; set; } = "";
+
+        /// <summary>Pass --cuda to the auto-started OR server to use GPU acceleration (requires CUDA-capable hardware/drivers). Default false.</summary>
+        public bool OrServerUseCuda { get; set; }
+
+        /// <summary>
+        /// Target frames per second sent from the AR client to the OR server for detection.
+        /// Higher values reduce latency/jitter but increase CPU/GPU load. Default 10.
+        /// </summary>
+        public int TargetFps { get; set; } = 10;
+
+        /// <summary>Minimum confidence (0.0-1.0) required to render an AR overlay for a detection. Default 0.5.</summary>
+        public double MinConfidence { get; set; } = 0.5;
+
+        /// <summary>Draw a bounding box around each recognized object. Default true.</summary>
+        public bool DrawBoundingBox { get; set; } = true;
+
+        /// <summary>Bounding box stroke color (CSS color). Default lime green.</summary>
+        public string BoundingBoxColor { get; set; } = "#39FF14";
+
+        /// <summary>
+        /// Opacity (0.0 = fully transparent, 1.0 = opaque) of the overlaid screen background
+        /// so the operator can still see the recognized object and surrounding scene through it.
+        /// Default 0.85.
+        /// </summary>
+        public double ScreenOverlayOpacity { get; set; } = 0.85;
+
+        /// <summary>
+        /// Placement of the overlaid screen relative to the recognized object's bounding box:
+        /// "right", "left", "above", "below", or "auto" (chooses the side with more free space).
+        /// Default "auto".
+        /// </summary>
+        [AllowedStringValues("auto", "right", "left", "above", "below")]
+        public string OverlayPlacement { get; set; } = "auto";
+
+        /// <summary>
+        /// Seconds a previously recognized object may go undetected before its overlay is removed
+        /// (avoids flicker from momentary detection dropouts). Default 1.5.
+        /// </summary>
+        public double DetectionHoldSeconds { get; set; } = 1.5;
+
+        /// <summary>Preferred camera facing for mobile devices: "environment" (rear) or "user" (front). Default "environment".</summary>
+        [AllowedStringValues("environment", "user")]
+        public string CameraFacing { get; set; } = "environment";
+    }
+
+    /// <summary>
+    /// Associates a recognized object-detection class (e.g. YOLO label or custom OR model class)
+    /// with a screen to render beside the object at runtime, an optional alias map for variable
+    /// binding, and an optional external parameter file that supplies concrete instance values
+    /// (e.g. mapping the screen's alias placeholders to the specific machine/asset instance
+    /// recognized on camera, such as "Motor1" vs "Motor2" of the same visual class).
+    /// </summary>
+    public class ArObjectMapping
+    {
+        /// <summary>Unique identifier for this mapping.</summary>
+        public string Id { get; set; } = Guid.NewGuid().ToString("N")[..8];
+
+        /// <summary>Display name for this mapping (shown in the editor).</summary>
+        public string Name { get; set; } = "";
+
+        /// <summary>
+        /// The object-recognition class name this mapping applies to (e.g. "motor", "valve",
+        /// or a custom-trained class from the local OR server). Must match the label returned
+        /// by the OR server's detection API.
+        /// </summary>
+        public string ObjectClass { get; set; } = "";
+
+        /// <summary>Name of the screen (ScreenConfig.Name) to render beside the recognized object.</summary>
+        public string ScreenName { get; set; } = "";
+
+        /// <summary>
+        /// Optional name of a VariableAliasMap to apply when rendering the screen for this
+        /// object class. Used when a single screen template (e.g. "MotorDetail") is reused
+        /// for many physical instances recognized by the same visual class.
+        /// </summary>
+        public string AliasMapName { get; set; } = "";
+
+        /// <summary>
+        /// Optional path (relative to the project directory) to a JSON parameter file that maps
+        /// alias placeholder names to real OPC variable paths for a *specific* recognized instance.
+        /// Enables per-instance binding without duplicating screens: e.g. "params/motor1.json"
+        /// might map {Motor} -> "Plant.Line1.Motor1", while "params/motor2.json" maps
+        /// {Motor} -> "Plant.Line1.Motor2". Precedence over AliasMapName when both resolve
+        /// (see ArDetectionInstance.InstanceKey to pick the right file at runtime).
+        /// Format: {"Mappings": {"Motor": "Plant.Line1.Motor1"}} — same shape as VariableAliasMap.
+        /// </summary>
+        public string ParameterFilePath { get; set; } = "";
+
+        /// <summary>
+        /// Optional mapping from an "instance key" (a secondary signal used to distinguish multiple
+        /// physical objects sharing the same visual class, e.g. a QR code, AprilTag ID, or
+        /// OR-server-provided instance/tracking ID) to a parameter file path. When the OR server
+        /// reports an instance key alongside the object class, the matching parameter file is
+        /// loaded instead of the single <see cref="ParameterFilePath"/>. Keys are instance IDs,
+        /// values are project-relative paths to parameter JSON files.
+        /// </summary>
+        public Dictionary<string, string> InstanceParameterFiles { get; set; } = new();
+
+        /// <summary>Minimum confidence (0.0-1.0) required for this mapping to trigger. Overrides AugmentedRealityConfig.MinConfidence when set (&gt; 0).</summary>
+        public double MinConfidence { get; set; }
+
+        /// <summary>When true, this mapping is active at runtime. Default true.</summary>
+        public bool Enabled { get; set; } = true;
     }
 
     /// <summary>
@@ -2214,7 +2366,8 @@ namespace SharedModels
         /// Login, Logout,
         /// AcknowledgeAllAlarms, ResetAllAlarms,
         /// ChangeLanguage,
-        /// GenerateReport
+        /// GenerateReport,
+        /// GoBackScreen (returns to the previous screen/route in navigation history, e.g. back to AR mode)
         /// </summary>
         public string Action { get; set; } = "NavigateScreen";
 

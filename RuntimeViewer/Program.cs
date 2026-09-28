@@ -37,6 +37,10 @@ builder.Services.AddScoped<PushNotificationInterop>();
 builder.Services.AddScoped<MultiSiteAggregator>();
 builder.Services.AddSingleton<NavigationPredictorService>();
 builder.Services.AddScoped<ScreenPreloadService>();
+builder.Services.AddScoped<ScreenHistoryService>();
+builder.Services.AddHttpClient<RuntimeViewer.Shared.Services.ArDetectionClient>();
+builder.Services.AddScoped<RuntimeViewer.Shared.Services.ArParameterFileService>();
+builder.Services.AddHostedService<RuntimeViewer.ArObjectServerLauncher>();
 
 // ─── External Authentication (OAuth) ───
 // Schemes are registered unconditionally; actual client IDs/secrets are read
@@ -68,6 +72,7 @@ var app = builder.Build();
 
 // Parse CLI arguments
 var isKiosk = args.Any(a => a.Equals("--kiosk", StringComparison.OrdinalIgnoreCase));
+var isAr = args.Any(a => a.Equals("--ar", StringComparison.OrdinalIgnoreCase));
 var configPath = args.FirstOrDefault(a => !a.StartsWith("-")) ?? "nodes.json";
 if (!Path.IsPathRooted(configPath))
 {
@@ -76,6 +81,7 @@ if (!Path.IsPathRooted(configPath))
 
 var project = app.Services.GetRequiredService<ProjectService>();
 project.IsKiosk = isKiosk;
+project.IsAr = isAr;
 var (success, message) = project.Load(configPath);
 if (success)
 {
@@ -148,6 +154,22 @@ app.MapGet("/auth/logout", async (HttpContext ctx) =>
     await ctx.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
     ctx.Response.Redirect("/");
 });
+
+// When started with --ar, land directly on the Augmented Reality viewer instead of the
+// normal screen navigation home page. Implemented as middleware (not app.MapGet("/", ...))
+// to avoid an AmbiguousMatchException with the Razor "/" page also mapped to that route.
+if (isAr)
+{
+    app.Use(async (context, next) =>
+    {
+        if (context.Request.Path == "/" && HttpMethods.IsGet(context.Request.Method))
+        {
+            context.Response.Redirect("/ar");
+            return;
+        }
+        await next();
+    });
+}
 
 app.MapStaticAssets();
 app.MapRazorComponents<App>()

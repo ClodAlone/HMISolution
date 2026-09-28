@@ -57,7 +57,7 @@ public class RuntimeViewerProcessService : IDisposable
 
     // ─── Process ─────────────────────────────────────────────
 
-    public (bool success, string message) StartViewer(string nodesPath, int port, bool kiosk, string mode = "web")
+    public (bool success, string message) StartViewer(string nodesPath, int port, bool kiosk, string mode = "web", bool ar = false)
     {
         if (IsViewerRunning)
             return (false, "RuntimeViewer is already running.");
@@ -104,6 +104,8 @@ public class RuntimeViewerProcessService : IDisposable
                 : $"\"{fullNodesPath}\"";
             if (kiosk)
                 args += " --kiosk";
+            if (ar)
+                args += " --ar";
 
             ClearOutput();
 
@@ -284,14 +286,14 @@ public class RuntimeViewerProcessService : IDisposable
         }
     }
 
-    public async Task<string> InstallServiceAsync(string nodesPath, int port, bool kiosk)
+    public async Task<string> InstallServiceAsync(string nodesPath, int port, bool kiosk, bool ar = false)
     {
         if (!IsWindows) return "Windows services are not available on this platform.";
         string? viewerExe = FindViewerExecutable(nodesPath);
         if (viewerExe == null) return "RuntimeViewer executable not found.";
 
         string configPath = Path.GetFullPath(nodesPath);
-        var extraArgs = kiosk ? " --kiosk" : "";
+        var extraArgs = (kiosk ? " --kiosk" : "") + (ar ? " --ar" : "");
         string binPath = $"\\\"{viewerExe}\\\" \\\"{configPath}\\\"{extraArgs}";
         string displayName = $"Simple OPC RuntimeViewer - {Path.GetFileNameWithoutExtension(nodesPath)}";
 
@@ -347,12 +349,12 @@ public class RuntimeViewerProcessService : IDisposable
         return output.Trim();
     }
 
-    public string GenerateSystemdUnitFile(string nodesPath, int port, bool kiosk)
+    public string GenerateSystemdUnitFile(string nodesPath, int port, bool kiosk, bool ar = false)
     {
         var viewerExe = FindViewerExecutable(nodesPath);
         var fullNodesPath = Path.GetFullPath(nodesPath);
         var workingDir = Path.GetDirectoryName(fullNodesPath) ?? "/opt/simpleopcruntimeviewer";
-        var kioskArg = kiosk ? " --kiosk" : "";
+        var kioskArg = (kiosk ? " --kiosk" : "") + (ar ? " --ar" : "");
 
         return $"""
             [Unit]
@@ -373,13 +375,13 @@ public class RuntimeViewerProcessService : IDisposable
             """;
     }
 
-    public async Task<string> InstallSystemdServiceAsync(string nodesPath, int port, bool kiosk)
+    public async Task<string> InstallSystemdServiceAsync(string nodesPath, int port, bool kiosk, bool ar = false)
     {
         if (!IsLinux) return "systemd is not available on this platform.";
 
         try
         {
-            var unitContent = GenerateSystemdUnitFile(nodesPath, port, kiosk);
+            var unitContent = GenerateSystemdUnitFile(nodesPath, port, kiosk, ar);
             var unitPath = $"/etc/systemd/system/{SystemdServiceName}.service";
             await File.WriteAllTextAsync(unitPath, unitContent);
             await RunCommandAsync("systemctl", "daemon-reload");

@@ -25,6 +25,7 @@ static class Program
 
         // Parse CLI arguments
         var isKiosk = args.Any(a => a.Equals("--kiosk", StringComparison.OrdinalIgnoreCase));
+        var isAr = args.Any(a => a.Equals("--ar", StringComparison.OrdinalIgnoreCase));
         var configPath = args.FirstOrDefault(a => !a.StartsWith("-")) ?? "nodes.json";
         if (!Path.IsPathRooted(configPath))
             configPath = Path.GetFullPath(configPath);
@@ -47,7 +48,7 @@ static class Program
         // Start the RuntimeViewer web process
         var webProcess = new Process();
         webProcess.StartInfo.FileName = viewerExe;
-        webProcess.StartInfo.Arguments = $"\"{configPath}\"" + (isKiosk ? " --kiosk" : "");
+        webProcess.StartInfo.Arguments = $"\"{configPath}\"" + (isKiosk ? " --kiosk" : "") + (isAr ? " --ar" : "");
         webProcess.StartInfo.WorkingDirectory = Path.GetDirectoryName(viewerExe)!;
         webProcess.StartInfo.UseShellExecute = false;
         webProcess.StartInfo.CreateNoWindow = true;
@@ -72,6 +73,17 @@ static class Program
                 .SetDevToolsEnabled(true)
 #endif
                 .Load(new Uri(url));
+
+            // AR mode needs camera access (getUserMedia) inside the embedded WebView2. Without
+            // these two flags the permission prompt is silently suppressed and the JS promise
+            // never resolves or rejects — ArViewer.razor's "Starting camera…" screen hangs
+            // forever with fps stuck at 0.0 and DetectAsync never called, with no visible error.
+            if (isAr)
+            {
+                _window.GrantBrowserPermissions = true;
+                _window.MediaStreamEnabled = true;
+                _window.MediaAutoplayEnabled = true;
+            }
 
             if (_requirePasswordToClose)
             {

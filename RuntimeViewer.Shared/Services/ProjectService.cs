@@ -23,6 +23,11 @@ public class ProjectService
     /// <summary>When true, the viewer runs in kiosk mode (no chrome, auto-scale).</summary>
     public bool IsKiosk { get; set; }
 
+    /// <summary>When true, the viewer starts directly into Augmented Reality mode (camera + object recognition overlay).</summary>
+    public bool IsAr { get; set; }
+
+    public List<ArObjectMapping> ArObjectMappings => _model?.ArObjectMappings ?? [];
+
     public ScreenConfig? StartupScreen =>
         !string.IsNullOrEmpty(Settings.StartupScreen)
             ? Screens.FirstOrDefault(s => s.Name.Equals(Settings.StartupScreen, StringComparison.OrdinalIgnoreCase))

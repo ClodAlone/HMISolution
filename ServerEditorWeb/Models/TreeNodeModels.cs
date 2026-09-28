@@ -560,6 +560,13 @@ public class AiAgentNode : TreeNode
     public void SyncName() => Agent.Name = Name;
 }
 
+public class ArObjectMappingGroupNode : TreeNode
+{
+    public override string TypeName => "ArObjectMappingGroup";
+    public override string Icon => "🔍";
+    public ArObjectMappingGroupNode() { Name = "AR Object Mapping"; }
+}
+
 public class PinnedGroupNode : TreeNode
 {
     public override string TypeName => "PinnedGroup";

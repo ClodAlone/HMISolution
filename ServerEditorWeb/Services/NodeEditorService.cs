@@ -574,6 +574,10 @@ public class NodeEditorService
         var serverSettingsNode = new ServerSettingsNode(proj.Model.Server) { Parent = proj };
         proj.Children.Add(serverSettingsNode);
 
+        // AR Object Mapping node (opens the ArObjectMappingPanel editor)
+        var arObjectMappingNode = new ArObjectMappingGroupNode() { Parent = proj };
+        proj.Children.Add(arObjectMappingNode);
+
         var variableGroup = new VariableGroupNode() { Parent = proj };
         if (proj.Model.Folder != null)
         {

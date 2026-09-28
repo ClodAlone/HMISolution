@@ -306,6 +306,10 @@
             <input type="checkbox" class="form-check-input" id="rvKiosk" @bind="_rvKiosk" />
             <label class="form-check-label small" for="rvKiosk">Kiosk</label>
         </div>
+        <div class="form-check align-self-end mb-1">
+            <input type="checkbox" class="form-check-input" id="rvAr" @bind="_rvAr" title="Start in Augmented Reality mode (opens /ar using the device camera + local object-recognition server)" />
+            <label class="form-check-label small" for="rvAr">🔍 AR</label>
+        </div>
         <div class="align-self-end">
             <button class="btn btn-sm btn-success" @onclick="StartViewer" disabled="@(ViewerProcess.IsViewerRunning || string.IsNullOrEmpty(NodesPath))">▶ Start</button>
         </div>
@@ -730,8 +734,10 @@
     // RuntimeViewer settings
     private int _rvPort = 8081;
     private bool _rvKiosk;
+    private bool _rvAr;
     private bool _openingViewer;
     private string _rvMode = "web"; // "web" or "desktop"
+    private string? _rvArDefaultAppliedFor;
 
     // RuntimeViewer Windows service state
     private bool _isRvWinServiceInstalled;
@@ -910,6 +916,18 @@
         _statusTimer = new Timer(_ => InvokeAsync(async () => { await RefreshStatusAsync(); StateHasChanged(); }), null, TimeSpan.Zero, TimeSpan.FromSeconds(5));
         _perfTimer = new Timer(_ => InvokeAsync(() => { SamplePerformance(); BuildSubsystems(); StateHasChanged(); return Task.CompletedTask; }), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2));
         _diagTimer2 = new Timer(_ => InvokeAsync(async () => { await PollDiagInBackground(); }), null, TimeSpan.FromSeconds(3), TimeSpan.FromSeconds(3));
+    }
+
+    protected override void OnParametersSet()
+    {
+        // Default the "AR" launch checkbox to the project's Server.AugmentedReality.Enabled
+        // setting the first time each project is opened, so a project that ships with AR
+        // enabled (e.g. the ArMotorInspection sample) shows the checkbox pre-checked.
+        if (!string.IsNullOrEmpty(NodesPath) && _rvArDefaultAppliedFor != NodesPath)
+        {
+            _rvArDefaultAppliedFor = NodesPath;
+            _rvAr = Editor.RootModel?.Server?.AugmentedReality?.Enabled ?? false;
+        }
     }
 
     private void OnServerStateChanged()
@@ -1107,7 +1125,7 @@
             _rvMessage = "No project is open. Please open a project first.";
             return;
         }
-        var (success, msg) = ViewerProcess.StartViewer(NodesPath, _rvPort, _rvKiosk, _rvMode);
+        var (success, msg) = ViewerProcess.StartViewer(NodesPath, _rvPort, _rvKiosk, _rvMode, _rvAr);
         _rvMessageSuccess = success;
         _rvMessage = msg;
     }
@@ -1137,7 +1155,7 @@
 
     private async Task InstallRvWinService()
     {
-        var msg = await ViewerProcess.InstallServiceAsync(NodesPath, _rvPort, _rvKiosk);
+        var msg = await ViewerProcess.InstallServiceAsync(NodesPath, _rvPort, _rvKiosk, _rvAr);
         _rvMessageSuccess = !msg.StartsWith("Error");
         _rvMessage = msg;
         await RefreshStatusAsync();
@@ -1173,7 +1191,7 @@
 
     private async Task InstallRvLinuxService()
     {
-        var msg = await ViewerProcess.InstallSystemdServiceAsync(NodesPath, _rvPort, _rvKiosk);
+        var msg = await ViewerProcess.InstallSystemdServiceAsync(NodesPath, _rvPort, _rvKiosk, _rvAr);
         _rvMessageSuccess = !msg.StartsWith("Error");
         _rvMessage = msg;
         await RefreshStatusAsync();
@@ -1210,7 +1228,7 @@
         _showRvUnitPreview = !_showRvUnitPreview;
         if (_showRvUnitPreview && !string.IsNullOrEmpty(NodesPath))
         {
-            _rvUnitFileContent = ViewerProcess.GenerateSystemdUnitFile(NodesPath, _rvPort, _rvKiosk);
+            _rvUnitFileContent = ViewerProcess.GenerateSystemdUnitFile(NodesPath, _rvPort, _rvKiosk, _rvAr);
         }
     }
 

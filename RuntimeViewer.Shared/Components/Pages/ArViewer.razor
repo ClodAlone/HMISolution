@@ -1,0 +1,519 @@
+@* Copyright (c) 2026 Claudio Fiorani - All rights reserved. *@
+
+@page "/ar"
+@using SharedModels
+@using RuntimeViewer.Shared.Services
+@using RuntimeViewer.Shared.Components.Viewer
+@using Microsoft.JSInterop
+@using Microsoft.Extensions.Logging
+@implements IAsyncDisposable
+
+<PageTitle>Augmented Reality — Runtime Viewer</PageTitle>
+
+<div class="ar-root">
+    <video id="ar-video" class="ar-video" autoplay playsinline muted></video>
+
+    @if (!_cameraStarted)
+    {
+        <div class="ar-status-overlay">
+            @if (!string.IsNullOrEmpty(_statusMessage))
+            {
+                <div class="ar-status-card">@_statusMessage</div>
+            }
+            else
+            {
+                <div class="ar-status-card">Starting camera…</div>
+            }
+        </div>
+    }
+    else if (_orServerStatus == OrServerStatus.Unreachable)
+    {
+        <div class="ar-status-badge ar-status-warn">⚠ Local object-recognition server unreachable (@Config.OrServerUrl)</div>
+    }
+    else if (_orServerStatus == OrServerStatus.NoModel)
+    {
+        <div class="ar-status-badge ar-status-warn">⚠ Object-recognition server running, but no detection model is loaded. Place a YOLO ONNX model (e.g. yolov8n.onnx) beside ArObjectServer.exe.</div>
+    }
+
+    @if (_frozen)
+    {
+        <div class="ar-frozen-badge">❄ Frame frozen — detections paused</div>
+    }
+
+    <svg class="ar-boxes" viewBox="0 0 @_frameWidth @_frameHeight" preserveAspectRatio="xMidYMid slice">
+        @foreach (var det in _activeDetections.Values)
+        {
+            if (Config.DrawBoundingBox)
+            {
+                <rect x="@det.X" y="@det.Y" width="@det.W" height="@det.H"
+                      fill="none" stroke="@Config.BoundingBoxColor" stroke-width="3" rx="4" />
+                <rect x="@det.X" y="@Math.Max(0, det.Y - 22)" width="@(det.Label.Length * 9 + 12)" height="20" fill="@Config.BoundingBoxColor" opacity="0.85" />
+                @((MarkupString)$"<text x=\"{(det.X + 6).ToString(System.Globalization.CultureInfo.InvariantCulture)}\" y=\"{Math.Max(15, det.Y - 7).ToString(System.Globalization.CultureInfo.InvariantCulture)}\" fill=\"#000\" font-size=\"14\" font-family=\"monospace\">{System.Net.WebUtility.HtmlEncode(det.Label)} ({(det.Confidence * 100):F0}%)</text>")
+            }
+        }
+    </svg>
+
+    @foreach (var overlay in _screenOverlays)
+    {
+        <div class="ar-screen-overlay" style="left:@(overlay.Left)px; top:@(overlay.Top)px; width:@(overlay.Width)px; opacity:@Config.ScreenOverlayOpacity.ToString(System.Globalization.CultureInfo.InvariantCulture);">
+            <div class="ar-screen-overlay-header">@overlay.Mapping.Name <span class="ar-screen-overlay-close" @onclick="() => DismissOverlay(overlay.Mapping.Id)">✕</span></div>
+            <ScreenRenderer Screen="overlay.Screen" VariableAliases="overlay.Aliases" />
+        </div>
+    }
+
+    <div class="ar-toolbar">
+        <a href="/" class="ar-exit-btn">← Exit AR</a>
+        <button class="ar-freeze-btn @(_frozen ? "ar-freeze-active" : "")" @onclick="ToggleFreeze" title="@(_frozen ? "Resume live camera" : "Freeze frame to stabilize view")">
+            @(_frozen ? "▶ Resume" : "❄ Freeze")
+        </button>
+        <span class="ar-fps-badge">@_measuredFps.ToString("F1") fps</span>
+    </div>
+</div>
+
+<style>
+    .ar-root { position: fixed; inset: 0; background: #000; overflow: hidden; }
+    .ar-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+    .ar-boxes { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+    .ar-status-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.6); z-index: 20; }
+    .ar-status-card { background: #222; color: #fff; padding: 16px 24px; border-radius: 8px; font-family: sans-serif; }
+    .ar-status-badge { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); background: #b58900; color: #000; padding: 4px 10px; border-radius: 6px; font-family: sans-serif; font-size: 13px; z-index: 20; }
+    .ar-status-warn { background: #d33; color: #fff; }
+    .ar-toolbar { position: absolute; top: 8px; right: 8px; display: flex; gap: 8px; align-items: center; z-index: 30; }
+    .ar-exit-btn { background: rgba(0,0,0,0.6); color: #fff; padding: 6px 12px; border-radius: 6px; text-decoration: none; font-family: sans-serif; font-size: 13px; }
+    .ar-fps-badge { background: rgba(0,0,0,0.6); color: #0f0; padding: 6px 10px; border-radius: 6px; font-family: monospace; font-size: 12px; }
+    .ar-freeze-btn { background: rgba(0,0,0,0.6); color: #fff; border: 1px solid rgba(255,255,255,0.3); padding: 6px 12px; border-radius: 6px; font-family: sans-serif; font-size: 13px; cursor: pointer; }
+    .ar-freeze-btn.ar-freeze-active { background: #0af; border-color: #0af; color: #001; font-weight: 600; }
+    .ar-frozen-badge { position: absolute; top: 8px; left: 8px; background: #0af; color: #001; padding: 4px 10px; border-radius: 6px; font-family: sans-serif; font-size: 13px; font-weight: 600; z-index: 20; }
+    .ar-screen-overlay { position: absolute; background: #1a1a1a; border: 1px solid rgba(255,255,255,0.3); border-radius: 8px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.5); z-index: 10; }
+    .ar-screen-overlay-header { display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.7); color: #fff; font-family: sans-serif; font-size: 12px; padding: 4px 8px; }
+    .ar-screen-overlay-close { cursor: pointer; padding: 0 4px; }
+</style>
+
+@code {
+    [Inject] private ProjectService Project { get; set; } = default!;
+    [Inject] private IJSRuntime JS { get; set; } = default!;
+    [Inject] private ArDetectionClient DetectionClient { get; set; } = default!;
+    [Inject] private ArParameterFileService ParamService { get; set; } = default!;
+    [Inject] private ScreenHistoryService History { get; set; } = default!;
+    [Inject] private CommandService Commands { get; set; } = default!;
+    [Inject] private ILogger<ArViewer> Logger { get; set; } = default!;
+
+    private IJSObjectReference? _jsModule;
+    private CancellationTokenSource? _loopCts;
+    private bool _cameraStarted;
+    private OrServerStatus _orServerStatus = OrServerStatus.Unreachable;
+    private string? _statusMessage;
+    private double _frameWidth = 1280;
+    private double _frameHeight = 720;
+    private double _measuredFps;
+    private bool _frozen;
+
+    private AugmentedRealityConfig Config => Project.Settings.AugmentedReality ?? new AugmentedRealityConfig();
+
+    // Tracked detections keyed by "label|instanceKey" so overlays persist briefly across
+    // momentary detection dropouts (DetectionHoldSeconds) instead of flickering.
+    private readonly Dictionary<string, TrackedDetection> _activeDetections = new();
+    private List<ScreenOverlayInfo> _screenOverlays = new();
+
+    protected override void OnInitialized()
+    {
+        // A GoBackScreen command fired from within an AR-overlaid screen should dismiss the
+        // overlay rather than navigate away (overlays never leave the /ar route).
+        Commands.GoBack += DoGoBackFromOverlay;
+    }
+
+    private void DoGoBackFromOverlay()
+    {
+        InvokeAsync(() =>
+        {
+            if (_screenOverlays.Count == 0) return;
+            DismissOverlay(_screenOverlays[^1].Mapping.Id);
+            StateHasChanged();
+        });
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        // Record entering AR mode so a GoBackScreen command fired from a screen the user
+        // navigates to (e.g. via a NavigateScreen button on an AR-overlaid screen) can return
+        // here instead of only ever falling back to the startup screen.
+        History.Push("/ar");
+
+        if (Config.OrServerUrl is null || !Config.Enabled)
+        {
+            _statusMessage = "Augmented Reality mode is not enabled for this project.";
+            Logger.LogWarning("AR: bailing out early — AR not enabled or OrServerUrl is null (Enabled={Enabled}, OrServerUrl={Url}).", Config.Enabled, Config.OrServerUrl);
+            StateHasChanged();
+            return;
+        }
+
+        try
+        {
+            _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "./_content/RuntimeViewer.Shared/ar-camera.js");
+        }
+        catch (Exception ex)
+        {
+            // Can fail if the hosting shell (e.g. an embedded WebView with a restrictive CSP or
+            // a stale service-worker cache) blocks the module import — surface it instead of
+            // silently stalling with fps stuck at 0 and DetectAsync never called.
+            _statusMessage = $"Failed to load AR camera script: {ex.Message}";
+            Logger.LogError(ex, "AR: failed to import ar-camera.js module.");
+            StateHasChanged();
+            return;
+        }
+
+        try
+        {
+            // getUserMedia() can hang indefinitely (never resolve, never reject) rather than
+            // throw when the hosting shell has no camera-permission UI wired up at all — most
+            // notably RuntimeViewer.Desktop's embedded WebView2, which needs an explicit
+            // CoreWebView2 permission handler or it silently ignores the prompt forever. Guard
+            // with a timeout so that case surfaces as an actionable message instead of a
+            // perpetually-stuck "Starting camera…" screen with fps 0.0.
+            using var cameraTimeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(12));
+            var startCameraTask = _jsModule.InvokeAsync<CameraSize>("startCamera", "ar-video", Config.CameraFacing).AsTask();
+            var timeoutTask = Task.Delay(Timeout.Infinite, cameraTimeoutCts.Token);
+            var completed = await Task.WhenAny(startCameraTask, timeoutTask);
+
+            if (completed != startCameraTask)
+            {
+                _statusMessage = "Camera did not respond within 12s. If running in RuntimeViewer.Desktop, the embedded browser " +
+                    "may be blocking the camera permission prompt silently — try Web mode (open the URL in a normal browser) " +
+                    "or grant camera access to the app in Windows Settings > Privacy > Camera.";
+                Logger.LogWarning("AR: startCamera timed out after 12s.");
+                StateHasChanged();
+                return;
+            }
+
+            var size = await startCameraTask;
+            _frameWidth = size.Width > 0 ? size.Width : 1280;
+            _frameHeight = size.Height > 0 ? size.Height : 720;
+            _cameraStarted = true;
+        }
+        catch (Exception ex)
+        {
+            _statusMessage = $"Camera access failed: {ex.Message}";
+            Logger.LogError(ex, "AR: startCamera threw an exception.");
+            StateHasChanged();
+            return;
+        }
+
+        _orServerStatus = await DetectionClient.GetServerStatusAsync(Config.OrServerUrl);
+        StateHasChanged();
+
+        Logger.LogInformation("AR: camera started ({Width}x{Height}), OR server status={Status}, url={Url}, targetFps={Fps}. Starting detection loop.",
+            _frameWidth, _frameHeight, _orServerStatus, Config.OrServerUrl, Config.TargetFps);
+
+        _loopCts = new CancellationTokenSource();
+        _ = RunDetectionLoopAsync(_loopCts.Token);
+    }
+
+    private async Task RunDetectionLoopAsync(CancellationToken ct)
+    {
+        Logger.LogInformation("AR: detection loop entered.");
+        var frameInterval = TimeSpan.FromMilliseconds(1000.0 / Math.Max(1, Config.TargetFps));
+        var fpsWindow = new Queue<DateTime>();
+        int frameCounter = 0;
+
+        while (!ct.IsCancellationRequested)
+        {
+            var loopStart = DateTime.UtcNow;
+
+            if (!_frozen)
+            {
+                try
+                {
+                    // captureFrameJpeg returns a JS Blob streamed via IJSStreamReference rather than
+                    // a plain byte[]. A raw byte[] gets base64-encoded through the Blazor Server
+                    // SignalR circuit's JS-interop channel, which has a small default message-size
+                    // limit (~32KB) — a 1280x720 JPEG easily exceeds that, so the call would hang
+                    // indefinitely with no exception. Streaming has no such limit. Guard with a
+                    // short per-frame timeout too, in case the underlying <video>/<canvas> state is
+                    // stuck (e.g. video paused/detached, or the JS module reference is stale after a
+                    // circuit reconnect) — otherwise a stuck call would silently freeze the loop.
+                    using var frameTimeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                    frameTimeoutCts.CancelAfter(TimeSpan.FromSeconds(3));
+                    byte[]? frameBytes = null;
+                    try
+                    {
+                        await using var jsStream = await _jsModule!.InvokeAsync<IJSStreamReference?>("captureFrameJpeg", frameTimeoutCts.Token, 0.7);
+                        if (jsStream != null)
+                        {
+                            await using var dotNetStream = await jsStream.OpenReadStreamAsync(10 * 1024 * 1024, frameTimeoutCts.Token);
+                            using var ms = new MemoryStream();
+                            await dotNetStream.CopyToAsync(ms, frameTimeoutCts.Token);
+                            frameBytes = ms.ToArray();
+                        }
+                    }
+                    catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                    {
+                        Logger.LogWarning("AR: frame #{Frame} captureFrameJpeg timed out after 3s (JS interop stuck?).", frameCounter);
+                        frameBytes = null;
+                    }
+                    if (frameBytes is { Length: > 0 })
+                    {
+                        var result = await DetectionClient.DetectAsync(Config.OrServerUrl, frameBytes, Config.MinConfidence, ct);
+                        if (result != null)
+                        {
+                            _orServerStatus = OrServerStatus.Ready;
+                            _frameWidth = result.Width > 0 ? result.Width : _frameWidth;
+                            _frameHeight = result.Height > 0 ? result.Height : _frameHeight;
+                            ApplyDetections(result.Detections);
+                            if (frameCounter % 20 == 0)
+                                Logger.LogInformation("AR: frame #{Frame} -> {Count} detection(s).", frameCounter, result.Detections.Count);
+                        }
+                        else
+                        {
+                            // DetectAsync returns null both when the server is unreachable and when
+                            // it has no model loaded (503). Re-check /health to tell them apart for
+                            // an accurate status message instead of assuming unreachable.
+                            _orServerStatus = await DetectionClient.GetServerStatusAsync(Config.OrServerUrl, ct);
+                            Logger.LogWarning("AR: frame #{Frame} detection returned null. OR server status={Status}.", frameCounter, _orServerStatus);
+                        }
+                    }
+                    else
+                    {
+                        Logger.LogWarning("AR: frame #{Frame} capture returned no bytes (camera not ready / video paused?).", frameCounter);
+                    }
+                }
+                catch (OperationCanceledException) { break; }
+                catch (Exception ex)
+                {
+                    // Log instead of silently swallowing — a bug here previously hid all
+                    // non-transient errors (JS interop failures, serialization errors, etc.)
+                    // making it look like the loop wasn't running at all.
+                    Logger.LogWarning(ex, "AR: frame #{Frame} processing failed.", frameCounter);
+                }
+
+                PruneStaleDetections();
+                RebuildOverlays();
+                frameCounter++;
+            }
+
+            fpsWindow.Enqueue(DateTime.UtcNow);
+            while (fpsWindow.Count > 0 && (DateTime.UtcNow - fpsWindow.Peek()).TotalSeconds > 2)
+                fpsWindow.Dequeue();
+            _measuredFps = fpsWindow.Count / 2.0;
+
+            await InvokeAsync(StateHasChanged);
+
+            var elapsed = DateTime.UtcNow - loopStart;
+            var remaining = frameInterval - elapsed;
+            if (remaining > TimeSpan.Zero)
+            {
+                try { await Task.Delay(remaining, ct); }
+                catch (OperationCanceledException) { break; }
+            }
+        }
+        Logger.LogInformation("AR: detection loop exited.");
+    }
+
+    private void ApplyDetections(List<ArDetectionResult> detections)
+    {
+        // Match each incoming detection to the nearest existing track of the same object class
+        // (by bounding-box center distance) so that multiple simultaneous instances of the same
+        // visual class (e.g. two motors) get separate, stable tracks instead of colliding into
+        // a single dictionary entry. Falls back to creating a new track when no close match exists.
+        var unmatchedTrackIds = new HashSet<string>(_activeDetections.Keys);
+
+        foreach (var det in detections)
+        {
+            if (det.Confidence < Config.MinConfidence) continue;
+
+            var mapping = Project.ArObjectMappings.FirstOrDefault(m =>
+                m.Enabled && m.ObjectClass.Equals(det.Label, StringComparison.OrdinalIgnoreCase) &&
+                det.Confidence >= (m.MinConfidence > 0 ? m.MinConfidence : Config.MinConfidence));
+            if (mapping == null) continue;
+
+            var (cx, cy) = (det.X + det.Width / 2, det.Y + det.Height / 2);
+            var diag = Math.Sqrt(det.Width * det.Width + det.Height * det.Height);
+            var maxJumpDistance = Math.Max(diag, 40); // allow a bit of motion between frames
+
+            string? matchedTrackId = null;
+            double bestDistance = double.MaxValue;
+
+            // Prefer matching by explicit instance key when the OR server decoded a marker —
+            // this is authoritative regardless of position (handles fast motion/occlusion).
+            if (!string.IsNullOrEmpty(det.InstanceKey))
+            {
+                var byKey = _activeDetections.FirstOrDefault(kv =>
+                    kv.Value.Label.Equals(det.Label, StringComparison.OrdinalIgnoreCase) &&
+                    kv.Value.InstanceKey == det.InstanceKey);
+                if (byKey.Key != null) matchedTrackId = byKey.Key;
+            }
+
+            // Otherwise fall back to nearest-centroid tracking among same-class, still-unmatched tracks.
+            if (matchedTrackId == null)
+            {
+                foreach (var kv in _activeDetections)
+                {
+                    if (!unmatchedTrackIds.Contains(kv.Key)) continue; // already claimed by another detection this frame
+                    if (!kv.Value.Label.Equals(det.Label, StringComparison.OrdinalIgnoreCase)) continue;
+
+                    var trackCx = kv.Value.X + kv.Value.W / 2;
+                    var trackCy = kv.Value.Y + kv.Value.H / 2;
+                    var distance = Math.Sqrt(Math.Pow(cx - trackCx, 2) + Math.Pow(cy - trackCy, 2));
+                    if (distance < maxJumpDistance && distance < bestDistance)
+                    {
+                        bestDistance = distance;
+                        matchedTrackId = kv.Key;
+                    }
+                }
+            }
+
+            var trackId = matchedTrackId ?? Guid.NewGuid().ToString("N")[..8];
+            unmatchedTrackIds.Remove(trackId);
+
+            _activeDetections[trackId] = new TrackedDetection
+            {
+                Label = det.Label,
+                Confidence = det.Confidence,
+                X = det.X, Y = det.Y, W = det.Width, H = det.Height,
+                InstanceKey = det.InstanceKey,
+                Mapping = mapping,
+                LastSeenUtc = DateTime.UtcNow
+            };
+        }
+    }
+
+    private void PruneStaleDetections()
+    {
+        var cutoff = DateTime.UtcNow.AddSeconds(-Config.DetectionHoldSeconds);
+        var stale = _activeDetections.Where(kv => kv.Value.LastSeenUtc < cutoff).Select(kv => kv.Key).ToList();
+        foreach (var key in stale) _activeDetections.Remove(key);
+    }
+
+    private void RebuildOverlays()
+    {
+        var overlays = new List<ScreenOverlayInfo>();
+        foreach (var det in _activeDetections.Values)
+        {
+            var screen = Project.Screens.FirstOrDefault(s =>
+                s.Name.Equals(det.Mapping.ScreenName, StringComparison.OrdinalIgnoreCase));
+            if (screen == null) continue;
+
+            var aliases = ParamService.Resolve(det.Mapping, Project, det.InstanceKey);
+            var (left, top, width) = ComputeOverlayPlacement(det, screen);
+
+            overlays.Add(new ScreenOverlayInfo
+            {
+                Mapping = det.Mapping,
+                Screen = screen,
+                Aliases = aliases,
+                Left = left,
+                Top = top,
+                Width = width
+            });
+        }
+        _screenOverlays = overlays;
+    }
+
+    /// <summary>
+    /// Computes where to place the overlaid screen relative to the recognized object's
+    /// bounding box, in the same coordinate space as the SVG viewBox (frame pixels), which the
+    /// browser scales to the actual viewport via CSS. Placement respects
+    /// AugmentedRealityConfig.OverlayPlacement ("auto" picks the side with more free space).
+    /// </summary>
+    private (double Left, double Top, double Width) ComputeOverlayPlacement(TrackedDetection det, ScreenConfig screen)
+    {
+        const double overlayWidth = 280;
+        var placement = Config.OverlayPlacement;
+
+        if (placement == "auto")
+        {
+            var spaceRight = _frameWidth - (det.X + det.W);
+            var spaceLeft = det.X;
+            placement = spaceRight >= spaceLeft ? "right" : "left";
+        }
+
+        double left, top;
+        switch (placement)
+        {
+            case "left":
+                left = Math.Max(0, det.X - overlayWidth - 12);
+                top = det.Y;
+                break;
+            case "above":
+                left = det.X;
+                top = Math.Max(0, det.Y - 220);
+                break;
+            case "below":
+                left = det.X;
+                top = det.Y + det.H + 12;
+                break;
+            default: // right
+                left = det.X + det.W + 12;
+                top = det.Y;
+                break;
+        }
+
+        return (left, top, overlayWidth);
+    }
+
+    private void DismissOverlay(string mappingId)
+    {
+        var key = _activeDetections.FirstOrDefault(kv => kv.Value.Mapping.Id == mappingId).Key;
+        if (key != null) _activeDetections.Remove(key);
+        RebuildOverlays();
+    }
+
+    /// <summary>
+    /// Toggles the "freeze" mode: pauses the live camera feed and stops sending new frames to
+    /// the OR server, keeping the current bounding boxes/overlays exactly as they were. Lets a
+    /// user stabilize the view (e.g. while their hand/device shakes) without losing the
+    /// recognized object and its overlaid screen. Resuming restarts capture immediately.
+    /// </summary>
+    private async Task ToggleFreeze()
+    {
+        _frozen = !_frozen;
+        if (_jsModule != null)
+        {
+            try { await _jsModule.InvokeVoidAsync(_frozen ? "pauseVideo" : "resumeVideo"); }
+            catch { /* ignore if camera not started */ }
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        Commands.GoBack -= DoGoBackFromOverlay;
+        _loopCts?.Cancel();
+        _loopCts?.Dispose();
+
+        if (_jsModule != null)
+        {
+            try { await _jsModule.InvokeVoidAsync("stopCamera"); } catch { }
+            try { await _jsModule.DisposeAsync(); } catch { }
+        }
+    }
+
+    private class CameraSize
+    {
+        public int Width { get; set; }
+        public int Height { get; set; }
+    }
+
+    private class TrackedDetection
+    {
+        public string Label { get; set; } = "";
+        public double Confidence { get; set; }
+        public double X { get; set; }
+        public double Y { get; set; }
+        public double W { get; set; }
+        public double H { get; set; }
+        public string? InstanceKey { get; set; }
+        public ArObjectMapping Mapping { get; set; } = default!;
+        public DateTime LastSeenUtc { get; set; }
+    }
+
+    private class ScreenOverlayInfo
+    {
+        public ArObjectMapping Mapping { get; set; } = default!;
+        public ScreenConfig Screen { get; set; } = default!;
+        public Dictionary<string, string>? Aliases { get; set; }
+        public double Left { get; set; }
+        public double Top { get; set; }
+        public double Width { get; set; }
+    }
+}

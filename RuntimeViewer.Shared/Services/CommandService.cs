@@ -35,6 +35,9 @@ public class CommandService
     /// <summary>Raised when a GenerateReport command fires with the report name.</summary>
     public event Action<string>? GenerateReport;
 
+    /// <summary>Raised when a GoBackScreen command fires, requesting a return to the previous screen/route in history.</summary>
+    public event Action? GoBack;
+
     public CommandService(OpcRuntimeClient opc, IJSRuntime js)
     {
         _opc = opc;
@@ -137,6 +140,10 @@ public class CommandService
             case "GenerateReport":
                 if (!string.IsNullOrEmpty(cmd.TargetReport))
                     GenerateReport?.Invoke(cmd.TargetReport);
+                break;
+
+            case "GoBackScreen":
+                GoBack?.Invoke();
                 break;
         }
     }
