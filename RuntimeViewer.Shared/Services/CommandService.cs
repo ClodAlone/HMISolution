@@ -1,6 +1,8 @@
 // Copyright (c) 2026 Claudio Fiorani
 // All rights reserved.
 
+using System.Diagnostics;
+using System.Text.Json;
 using SharedModels;
 using Microsoft.JSInterop;
 
@@ -114,6 +116,11 @@ public class CommandService
                     await ExecuteScriptAsync(cmd.Script);
                 break;
 
+            case "ExecutePowerShell":
+                if (!string.IsNullOrEmpty(cmd.Script) || !string.IsNullOrEmpty(cmd.Value))
+                    await ExecutePowerShellAsync(string.IsNullOrEmpty(cmd.Script) ? cmd.Value : cmd.Script);
+                break;
+
             case "Login":
                 RequestLogin?.Invoke();
                 break;
@@ -196,6 +203,30 @@ public class CommandService
         catch (Exception ex)
         {
             Console.WriteLine($"JavaScript execution error: {ex.Message}");
+        }
+    }
+
+    private async Task ExecutePowerShellAsync(string command)
+    {
+        try
+        {
+            var commandText = command?.Trim();
+            if (string.IsNullOrEmpty(commandText)) return;
+
+            var payload = JsonSerializer.Serialize(new { action = "ExecutePowerShell", script = commandText });
+            await _js.InvokeVoidAsync("fetch", "/api/runtime/command", new
+            {
+                method = "POST",
+                headers = new Dictionary<string, string>
+                {
+                    ["Content-Type"] = "application/json"
+                },
+                body = payload
+            });
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"PowerShell execution error: {ex.Message}");
         }
     }
 
@@ -326,5 +357,8 @@ public class CommandService
 
     private static string EscapeJs(string s) =>
         s.Replace("\\", "\\\\").Replace("'", "\\'").Replace("\n", "\\n").Replace("\r", "");
+
+    private static string EscapePowerShell(string s) =>
+        s.Replace("\"", "\\\"");
 }
 

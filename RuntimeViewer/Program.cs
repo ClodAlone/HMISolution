@@ -5,6 +5,7 @@ using RuntimeViewer.Components;
 using RuntimeViewer.Shared.Services;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using System.Diagnostics;
 using System.Security.Claims;
 
 // Install crash reporter before anything else
@@ -176,6 +177,50 @@ app.MapRazorComponents<App>()
     .AddAdditionalAssemblies(typeof(RuntimeViewer.Shared.Components.Routes).Assembly)
     .AddInteractiveServerRenderMode();
 
+// ─── Runtime command endpoint (browser triggers it, host process executes it) ───
+app.MapPost("/api/runtime/command", async (RuntimeCommandRequest req) =>
+{
+    if (req is null || string.IsNullOrWhiteSpace(req.Action))
+        return Results.BadRequest(new { error = "Action required" });
+
+    if (req.Action.Equals("ExecutePowerShell", StringComparison.OrdinalIgnoreCase))
+    {
+        var script = req.Script ?? req.Value ?? "";
+        if (string.IsNullOrWhiteSpace(script))
+            return Results.BadRequest(new { error = "Script required" });
+
+        try
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName = OperatingSystem.IsWindows() ? "powershell.exe" : "pwsh",
+                Arguments = $"-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"{RuntimeCommandHelpers.EscapePowerShell(script)}\"",
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                WorkingDirectory = AppContext.BaseDirectory
+            };
+
+            using var proc = Process.Start(psi);
+            if (proc == null)
+                return Results.Json(new { ok = false, error = "PowerShell command could not be started." });
+
+            var stdout = await proc.StandardOutput.ReadToEndAsync();
+            var stderr = await proc.StandardError.ReadToEndAsync();
+            await proc.WaitForExitAsync();
+
+            return Results.Json(new { ok = proc.ExitCode == 0, exitCode = proc.ExitCode, stdout, stderr });
+        }
+        catch (Exception ex)
+        {
+            return Results.Json(new { ok = false, error = ex.Message });
+        }
+    }
+
+    return Results.Json(new { ok = false, error = $"Unsupported action: {req.Action}" });
+});
+
 // ─── Web Push subscription API endpoints ───
 var webPushConfig = project.Settings.AlarmNotification?.WebPush;
 if (webPushConfig is { Enabled: true } &&
@@ -210,6 +255,18 @@ if (webPushConfig is { Enabled: true } &&
 }
 
 app.Run();
+
+sealed class RuntimeCommandRequest
+{
+    public string Action { get; set; } = "";
+    public string? Script { get; set; }
+    public string? Value { get; set; }
+}
+
+static class RuntimeCommandHelpers
+{
+    public static string EscapePowerShell(string s) => s.Replace("\"", "\\\"");
+}
 
 /// <summary>
 /// Post-configures OAuth remote authentication options by reading the ClientId/Secret

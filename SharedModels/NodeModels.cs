@@ -2362,7 +2362,7 @@ namespace SharedModels
         /// NavigateScreen, OpenScreenPopup, OpenScreenModal,
         /// SetVariable, ResetVariable, ToggleVariable, IncrementVariable, DecrementVariable,
         /// WriteVariable,
-        /// ExecuteJavaScript, ExecuteScript,
+        /// ExecuteJavaScript, ExecuteScript, ExecutePowerShell,
         /// Login, Logout,
         /// AcknowledgeAllAlarms, ResetAllAlarms,
         /// ChangeLanguage,
@@ -2388,7 +2388,7 @@ namespace SharedModels
         /// <summary>Value to write on release (WhilePressed trigger). If empty, ResetVariable is used.</summary>
         public string ReleaseValue { get; set; } = "";
 
-        /// <summary>JavaScript or C# script body (for ExecuteJavaScript/ExecuteScript).</summary>
+        /// <summary>JavaScript, C# script body, or PowerShell command (for ExecuteJavaScript/ExecuteScript/ExecutePowerShell).</summary>
         public string Script { get; set; } = "";
 
         /// <summary>Target report name (for GenerateReport).</summary>
