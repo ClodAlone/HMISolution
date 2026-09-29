@@ -3223,6 +3223,20 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                         else if (DataType == DataTypeIds.DateTime && DateTime.TryParse(s, out var dt)) incoming = dt;
                     }
 
+                    // Respect driver write hooks assigned via OnSimpleWriteValue. This is the call path
+                    // used by protocol drivers (MQTT/Modbus/etc.) when OPC UA clients write the variable.
+                    if (OnSimpleWriteValue != null)
+                    {
+                        var simpleWriteValue = incoming;
+                        var simpleResult = OnSimpleWriteValue(context, node, ref simpleWriteValue);
+                        if (simpleResult != null && !StatusCode.IsGood(simpleResult.StatusCode))
+                        {
+                            statusCode = simpleResult.StatusCode;
+                            return simpleResult;
+                        }
+                        incoming = simpleWriteValue;
+                    }
+
                     Log.Verbose("WRITE-HANDLER: nodeId={NodeId} incoming={Incoming} (type={Type}) DataType={DataType}",
                         NodeId, incoming, incoming?.GetType().Name ?? "null", DataType);
                     Value = incoming;
