@@ -233,11 +233,12 @@ namespace SimpleOpcFileServer
                     var collection = new WriteValueCollection { writeValue };
                     StatusCodeCollection results;
                     DiagnosticInfoCollection diagnostics;
-                    var status = _session.Write(null, collection, out results, out diagnostics);
-                    if (status.IsBad || results.Count == 0 || StatusCode.IsBad(results[0]))
+                    var response = _session.Write(null, collection, out results, out diagnostics);
+                    var writeStatus = response?.ServiceResult ?? StatusCodes.Good;
+                    if (StatusCode.IsBad(writeStatus) || results == null || results.Count == 0 || StatusCode.IsBad(results[0]))
                     {
-                        var detail = results.Count > 0 ? results[0].ToString() : status.ToString();
-                        return ServiceResult.Create(status, detail);
+                        var detail = results != null && results.Count > 0 ? results[0].ToString() : writeStatus.ToString();
+                        return ServiceResult.Create(writeStatus, detail);
                     }
 
                     item.Variable.Value = value; item.Variable.StatusCode = StatusCodes.Good;

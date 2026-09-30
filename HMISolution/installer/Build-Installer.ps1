@@ -258,10 +258,7 @@ function Build-LinuxPackage {
     Write-Host "  packing $archive" -ForegroundColor Green
     Push-Location $stage
     try {
-        & tar --format=ustar -czf $archive `
-            --mode='a+rX,u+w' `
-            --owner=0 --group=0 `
-            .
+        & tar -czf $archive --owner=0 --group=0 .
         if ($LASTEXITCODE -ne 0) { throw "tar failed with exit code $LASTEXITCODE" }
     }
     finally { Pop-Location }
