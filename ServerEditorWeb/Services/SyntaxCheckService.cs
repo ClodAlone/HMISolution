@@ -5,6 +5,8 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Scripting;
 using Microsoft.CodeAnalysis.Scripting;
 using Microsoft.CodeAnalysis.VisualBasic;
+using IronPython.Hosting;
+using Microsoft.Scripting;
 
 namespace ServerEditorWeb.Services;
 
@@ -42,6 +44,12 @@ public class SyntaxCheckService
                 || language.Equals("VisualBasic", StringComparison.OrdinalIgnoreCase))
             {
                 return CheckVbSyntax(code);
+            }
+
+            if (language.Equals("Python", StringComparison.OrdinalIgnoreCase)
+                || language.Equals("Py", StringComparison.OrdinalIgnoreCase))
+            {
+                return CheckPythonSyntax(code);
             }
 
             return CheckCSharpSyntax(code, extraReferences);
@@ -163,6 +171,22 @@ End Module";
         }
 
         return (true, "No syntax errors.");
+    }
+
+    private (bool success, string message) CheckPythonSyntax(string code)
+    {
+        try
+        {
+            var engine = Python.CreateEngine();
+            var source = engine.CreateScriptSourceFromString(code, Microsoft.Scripting.SourceCodeKind.Statements);
+            // Compiling parses the code without executing it, surfacing syntax errors.
+            source.Compile();
+            return (true, "No syntax errors.");
+        }
+        catch (SyntaxErrorException ex)
+        {
+            return (false, $"Line {ex.Line}: {ex.Message}");
+        }
     }
 
     private static List<MetadataReference> GetVbCompilationReferences()

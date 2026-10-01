@@ -11,8 +11,41 @@ public class SyntaxCheckServiceTests
     private static SyntaxCheckService CreateService() => new();
 
     // ══════════════════════════════════════════════════════════════
-    //  ST (Structured Text) Syntax Checking
+    //  Python Syntax Checking
     // ══════════════════════════════════════════════════════════════
+
+    [Fact]
+    public void CheckSyntax_ValidPython_Assignment()
+    {
+        var svc = CreateService();
+        var (ok, msg) = svc.CheckSyntax("x = Read(\"Folder.Variable\")\nWrite(\"Folder.Other\", x + 1)", "Python");
+        Assert.True(ok);
+        Assert.Contains("No syntax errors", msg);
+    }
+
+    [Fact]
+    public void CheckSyntax_ValidPython_IfStatement()
+    {
+        var svc = CreateService();
+        var code = """
+            temp = ReadDouble("Sensors.Temp")
+            if temp > 100:
+                Write("Alarm", True)
+            else:
+                Write("Alarm", False)
+            """;
+        var (ok, _) = svc.CheckSyntax(code, "Python");
+        Assert.True(ok);
+    }
+
+    [Fact]
+    public void CheckSyntax_InvalidPython_SyntaxError()
+    {
+        var svc = CreateService();
+        var (ok, msg) = svc.CheckSyntax("if temp > 100\n    Write(\"Alarm\", True)", "Python");
+        Assert.False(ok);
+    }
+
 
     [Fact]
     public void CheckPlcSyntax_ValidSt_Assignment()

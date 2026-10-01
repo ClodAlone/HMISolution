@@ -4,6 +4,7 @@ window.codeEditor = {
 
         var mode = language === 'csharp' ? 'text/x-csharp'
                  : language === 'vb' ? 'text/x-vb'
+                 : language === 'python' ? 'python'
                  : { name: 'javascript', json: true };
 
         // Kind-to-CSS-class mapping for IntelliSense icons

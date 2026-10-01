@@ -251,6 +251,85 @@ public sealed class ScriptDebugger
         return false;
     }
 
+    /// <summary>
+    /// Instruments Python script source by injecting __DebugCheckpoint(line) calls before each
+    /// executable statement, preserving indentation (Python is indentation-sensitive, so the
+    /// checkpoint call is appended on the same physical line via ';' rather than on its own line).
+    /// Block headers (if/elif/else/for/while/try/except/finally/def/class/with ending in ':'),
+    /// comments, blank lines, continuation lines, and lines inside open brackets or triple-quoted
+    /// strings are left untouched.
+    /// </summary>
+    public static string InstrumentPythonSource(string code)
+    {
+        var lines = code.Replace("\r\n", "\n").Split('\n');
+        var sb = new StringBuilder();
+        int bracketDepth = 0;
+        bool inTripleString = false;
+        string? tripleQuote = null;
+        bool prevContinuation = false;
+
+        for (int i = 0; i < lines.Length; i++)
+        {
+            var line = lines[i];
+            var trimmed = line.Trim();
+
+            bool wasInTripleString = inTripleString;
+            bool wasContinuation = prevContinuation || bracketDepth > 0;
+
+            // Track triple-quoted strings (best-effort, ignores escaping edge cases)
+            if (inTripleString)
+            {
+                if (tripleQuote != null && line.Contains(tripleQuote))
+                    inTripleString = false;
+                sb.Append(line).Append('\n');
+                continue;
+            }
+
+            bool isCodeLine = !string.IsNullOrWhiteSpace(trimmed)
+                && !trimmed.StartsWith("#")
+                && !wasContinuation;
+
+            // Detect start of a triple-quoted string on this line (for docstrings/multi-line strings)
+            foreach (var q in new[] { "\"\"\"", "'''" })
+            {
+                int firstIdx = line.IndexOf(q, StringComparison.Ordinal);
+                if (firstIdx >= 0)
+                {
+                    int secondIdx = line.IndexOf(q, firstIdx + 3, StringComparison.Ordinal);
+                    if (secondIdx < 0)
+                    {
+                        inTripleString = true;
+                        tripleQuote = q;
+                    }
+                    break;
+                }
+            }
+
+            // Block headers (end with ':') must not be prefixed — they open a new indented suite
+            bool isBlockHeader = trimmed.EndsWith(':');
+
+            // Track explicit line continuation and open brackets (approximate: count unmatched brackets)
+            bool endsWithBackslash = line.TrimEnd().EndsWith("\\");
+            int opens = trimmed.Count(c => c is '(' or '[' or '{');
+            int closes = trimmed.Count(c => c is ')' or ']' or '}');
+            bracketDepth = Math.Max(0, bracketDepth + opens - closes);
+
+            if (isCodeLine && !isBlockHeader && !wasInTripleString && bracketDepth == 0 && !endsWithBackslash)
+            {
+                var indent = line[..(line.Length - line.TrimStart().Length)];
+                sb.Append(indent).Append($"__DebugCheckpoint({i}); ").Append(trimmed).Append('\n');
+            }
+            else
+            {
+                sb.Append(line).Append('\n');
+            }
+
+            prevContinuation = endsWithBackslash;
+        }
+
+        return sb.ToString();
+    }
+
     private DebugSession GetOrCreateSession(string scriptName)
     {
         return _sessions.GetOrAdd(scriptName, _ => new DebugSession());

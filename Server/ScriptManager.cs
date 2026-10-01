@@ -14,6 +14,8 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Scripting;
 using Microsoft.CodeAnalysis.Scripting;
 using Microsoft.CodeAnalysis.VisualBasic;
+using IronPython.Hosting;
+using Microsoft.Scripting.Hosting;
 using Opc.Ua;
 using SharedModels;
 using Serilog;
@@ -131,11 +133,15 @@ namespace SimpleOpcFileServer
         private Script<object>? _compiledDebugScript;
         private bool _lastDebugActive;
         private (Assembly assembly, MethodInfo method)? _compiledVbScript;
+        private ScriptScope? _pythonScope;
+        private string? _lastCompiledPythonCode;
+        private CompiledCode? _compiledPythonCode;
 
         // Static compilation cache: survives ScriptRunner/ScriptManager disposal (e.g. redundancy failover)
         // so scripts are compiled only once per process lifetime. Script<object> is immutable and thread-safe.
         private static readonly ConcurrentDictionary<string, Script<object>> s_compilationCache = new();
         private static readonly ConcurrentDictionary<string, (Assembly assembly, MethodInfo method)> s_vbCompilationCache = new();
+        private static readonly Lazy<ScriptEngine> s_pythonEngine = new(() => Python.CreateEngine());
 
         // Error backoff: prevents tight-loop re-execution on persistent script failures
         private int _consecutiveErrors;
@@ -152,6 +158,9 @@ namespace SimpleOpcFileServer
         private bool IsVb => _config.Language.Equals("VB", StringComparison.OrdinalIgnoreCase)
                           || _config.Language.Equals("VB.NET", StringComparison.OrdinalIgnoreCase)
                           || _config.Language.Equals("VisualBasic", StringComparison.OrdinalIgnoreCase);
+
+        private bool IsPython => _config.Language.Equals("Python", StringComparison.OrdinalIgnoreCase)
+                               || _config.Language.Equals("Py", StringComparison.OrdinalIgnoreCase);
 
         public void Start()
         {
@@ -173,6 +182,8 @@ namespace SimpleOpcFileServer
 
                         if (IsVb)
                             await RunVbAsync(globals);
+                        else if (IsPython)
+                            await RunPythonAsync(globals);
                         else
                             await RunCSharpAsync(globals);
 
@@ -338,6 +349,48 @@ End Module";
             return (assembly, method);
         }
 
+        private Task RunPythonAsync(ScriptGlobals globals)
+        {
+            bool debugActive = ScriptDebugger.Instance.HasActiveSession(_config.Name);
+
+            // Invalidate cached scope/compiled code if debug mode changed or code changed
+            if (debugActive != _lastDebugActive || _pythonScope == null || _lastCompiledPythonCode != _config.Code)
+            {
+                _pythonScope = s_pythonEngine.Value.CreateScope();
+                _lastCompiledPythonCode = _config.Code;
+                _lastDebugActive = debugActive;
+                _compiledPythonCode = null;
+            }
+
+            _pythonScope.SetVariable("Read", (Func<string, object?>)globals.Read);
+            _pythonScope.SetVariable("ReadDouble", (Func<string, double>)globals.ReadDouble);
+            _pythonScope.SetVariable("ReadInt", (Func<string, int>)globals.ReadInt);
+            _pythonScope.SetVariable("ReadBool", (Func<string, bool>)globals.ReadBool);
+            _pythonScope.SetVariable("Write", (Action<string, object>)globals.Write);
+            _pythonScope.SetVariable("Log", (Action<string>)globals.Log);
+            _pythonScope.SetVariable("OnChanged", (Action<string, Action<VariableChangedEventArgs>>)globals.OnChanged);
+            _pythonScope.SetVariable("__DebugCheckpoint", (Action<int>)globals.__DebugCheckpoint);
+
+            try
+            {
+                if (_compiledPythonCode == null)
+                {
+                    var codeToRun = debugActive ? ScriptDebugger.InstrumentPythonSource(_config.Code) : _config.Code;
+                    var source = s_pythonEngine.Value.CreateScriptSourceFromString(codeToRun, Microsoft.Scripting.SourceCodeKind.Statements);
+                    _compiledPythonCode = source.Compile();
+                }
+
+                _compiledPythonCode.Execute(_pythonScope);
+            }
+            catch (Exception ex)
+            {
+                var tb = s_pythonEngine.Value.GetService<ExceptionOperations>().FormatException(ex);
+                throw new InvalidOperationException(tb, ex);
+            }
+
+            return Task.CompletedTask;
+        }
+
         private static List<MetadataReference> GetVbCompilationReferences()
         {
             var refs = new Dictionary<string, MetadataReference>(StringComparer.OrdinalIgnoreCase);
@@ -413,6 +466,8 @@ End Module";
                 var globals = new ScriptGlobals(_nodeManager, _scriptManager, _config.Name, _token, false);
                 if (IsVb)
                     await RunVbAsync(globals);
+                else if (IsPython)
+                    await RunPythonAsync(globals);
                 else
                     await RunCSharpAsync(globals);
             }

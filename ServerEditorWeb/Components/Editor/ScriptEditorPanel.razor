@@ -108,7 +108,7 @@
                         EnableBreakpoints="true"
                         BreakpointsChanged="OnBreakpointsChanged"
                         Initialized="OnEditorInitialized"
-                        RequestCompletions="HandleCompletionRequest" />
+                        RequestCompletions="@(IsPythonLanguage(script.Language) ? null : HandleCompletionRequest)" />
             <ProgramDebugPanel Category="Script" ProgramName="@script.Name"
                               ServerRunning="ServerProcess.IsServerRunning"
                               SourceCode="@script.Code" Height="100%"
@@ -366,10 +366,14 @@
 
     private static string GetEditorLanguage(string language)
     {
-        return language.Equals("VB", StringComparison.OrdinalIgnoreCase)
+        if (language.Equals("VB", StringComparison.OrdinalIgnoreCase)
             || language.Equals("VB.NET", StringComparison.OrdinalIgnoreCase)
-            || language.Equals("VisualBasic", StringComparison.OrdinalIgnoreCase)
-            ? "vb" : "csharp";
+            || language.Equals("VisualBasic", StringComparison.OrdinalIgnoreCase))
+            return "vb";
+        if (language.Equals("Python", StringComparison.OrdinalIgnoreCase)
+            || language.Equals("Py", StringComparison.OrdinalIgnoreCase))
+            return "python";
+        return "csharp";
     }
 
     private async Task OnBreakpointsChanged(int[] lines)
@@ -522,6 +526,12 @@
     private void CancelAddReference() { _showAddReference = false; _newReferencePath = ""; }
 
     // --- Roslyn IntelliSense ------------------------------------
+
+    private static bool IsPythonLanguage(string language)
+    {
+        return language.Equals("Python", StringComparison.OrdinalIgnoreCase)
+            || language.Equals("Py", StringComparison.OrdinalIgnoreCase);
+    }
 
     private async Task<List<CodeEditor.CompletionItem>> HandleCompletionRequest(string code, int cursorPosition)
     {
