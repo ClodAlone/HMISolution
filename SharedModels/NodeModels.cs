@@ -1389,7 +1389,7 @@ namespace SharedModels
     public class ScreenSymbol
     {
         public string Id { get; set; } = "";
-        public string Type { get; set; } = "rect"; // rect, circle, ellipse, text, line, gauge, indicator, svg, alarmlist, hdachart, hdagrid, eventlog, editbox, ipcamera, recipe, weeklyplanner, screenembed, reportviewer, imagemap, trend, progressbar, numericdisplay, ledarray, pipe, tank, dropdown, datatable, sparkline, motorcontrol, valve, alarmbanner, colorzone, conveyor, piechart, barchart, navbutton, heatexchanger, popup, setpointramp, flowmeter, xyplot, pdfviewer, switch, rotaryswitch, knob, hslider, vslider, button, animtext, mimicpump, mimicvalve, mimictank, mimicsensor, mimiccontroller, mimicmixer, mimicheater, mimicfilter, mimiccompressor, mimicreactor, geomap, nlquery, plantoverview
+        public string Type { get; set; } = "rect"; // rect, circle, ellipse, text, line, gauge, indicator, svg, alarmlist, hdachart, hdagrid, eventlog, editbox, ipcamera, recipe, weeklyplanner, screenembed, reportviewer, imagemap, trend, progressbar, numericdisplay, ledarray, pipe, tank, dropdown, datatable, sparkline, motorcontrol, valve, alarmbanner, colorzone, conveyor, piechart, barchart, navbutton, heatexchanger, popup, setpointramp, flowmeter, xyplot, pdfviewer, switch, rotaryswitch, knob, hslider, vslider, button, animtext, mimicpump, mimicvalve, mimictank, mimicsensor, mimiccontroller, mimicmixer, mimicheater, mimicfilter, mimiccompressor, mimicreactor, geomap, nlquery, plantoverview, scene3d
         public double X { get; set; }
         public double Y { get; set; }
         public double Width { get; set; } = 80;
@@ -2182,6 +2182,58 @@ namespace SharedModels
         /// <summary>Markers placed on the map, each bound to a variable.</summary>
         public List<MapMarker> MapMarkers { get; set; } = new();
 
+        // ——— 3D Scene properties (Type == "scene3d") ———————
+        /// <summary>
+        /// Built-in primitive shape rendered when no custom model is supplied:
+        /// "box", "sphere", "cylinder", "cone", "torus". Default "box".
+        /// Ignored when <see cref="Scene3DModelUrl"/> is set.
+        /// </summary>
+        public string Scene3DShape { get; set; } = "box";
+
+        /// <summary>
+        /// Optional URL or base64 data URI of a glTF/GLB 3D model to load instead of the built-in primitive.
+        /// </summary>
+        public string Scene3DModelUrl { get; set; } = "";
+
+        /// <summary>Base object/material color (hex). Default "#3b82f6".</summary>
+        public string Scene3DColor { get; set; } = "#3b82f6";
+
+        /// <summary>Scene background color (hex). Default "#0f172a".</summary>
+        public string Scene3DBackground { get; set; } = "#0f172a";
+
+        /// <summary>Automatically spin the object/model around the Y axis. Default true.</summary>
+        public bool Scene3DAutoRotate { get; set; } = true;
+
+        /// <summary>Auto-rotation speed in degrees/second (ignored if Scene3DAutoRotate is false). Default 30.</summary>
+        public double Scene3DRotateSpeed { get; set; } = 30;
+
+        /// <summary>Allow the user to orbit/zoom/pan the camera with the mouse. Default true.</summary>
+        public bool Scene3DOrbitControls { get; set; } = true;
+
+        /// <summary>Show a simple ground grid helper. Default true.</summary>
+        public bool Scene3DShowGrid { get; set; } = true;
+
+        /// <summary>Variable path bound to Y-axis rotation (degrees). Overrides auto-rotate when set.</summary>
+        public string Scene3DRotationVariablePath { get; set; } = "";
+
+        /// <summary>Variable path bound to a numeric value (e.g. 0-100) mapped onto color/height via <see cref="Scene3DColorRules"/>.</summary>
+        public string Scene3DValueVariablePath { get; set; } = "";
+
+        /// <summary>
+        /// Color rule expression evaluated against <see cref="Scene3DValueVariablePath"/>.
+        /// Semicolon-separated: ">80 #ef4444;>=20 #22c55e;* #3b82f6".
+        /// Empty = use base Scene3DColor always.
+        /// </summary>
+        public string Scene3DColorRules { get; set; } = "";
+
+        /// <summary>
+        /// Per-part animation bindings for glTF/GLB models (Type == "scene3d" with Scene3DModelUrl set).
+        /// Each entry targets a named node/mesh inside the loaded model (by its glTF node name) and
+        /// drives that part's local rotation/position/scale/color from a bound variable, independent
+        /// of the whole-model Scene3DRotationVariablePath/Scene3DColorRules which only affect the root group.
+        /// </summary>
+        public List<Scene3DPartBinding> Scene3DPartBindings { get; set; } = new();
+
         /// <summary>Connection ports defined on this symbol for auto-routed connections.</summary>
         public List<ConnectionPort> ConnectionPorts { get; set; } = new();
     }
@@ -2299,6 +2351,62 @@ namespace SharedModels
 
         /// <summary>Alias map name to apply when opening the popup screen.</summary>
         public string PopupAliasMapName { get; set; } = "";
+    }
+
+    /// <summary>
+    /// Binds a single named part (node/mesh) inside a loaded glTF/GLB model
+    /// (ScreenSymbol.Scene3DModelUrl) to live variables, allowing independent
+    /// animation of sub-components — e.g. a door hinge, a valve handle, a fan
+    /// blade — instead of only rotating/coloring the model as a whole.
+    /// </summary>
+    public class Scene3DPartBinding
+    {
+        public string Id { get; set; } = "";
+
+        /// <summary>
+        /// Name of the target node/mesh inside the glTF scene graph (as authored in the
+        /// model file, e.g. in Blender's Outliner). Matched case-insensitively against
+        /// Object3D.name during traversal. Use the "Discover parts" action in the editor
+        /// to list the names actually present in a loaded model.
+        /// </summary>
+        public string PartName { get; set; } = "";
+
+        /// <summary>Friendly label shown in the editor UI for this binding.</summary>
+        public string Label { get; set; } = "";
+
+        /// <summary>
+        /// What property of the part this binding animates: "rotateX", "rotateY", "rotateZ"
+        /// (degrees), "posX", "posY", "posZ" (local units), "scale" (uniform), or "color"
+        /// (requires the part to have its own material — shared materials are auto-cloned).
+        /// </summary>
+        public string Property { get; set; } = "rotateY";
+
+        /// <summary>Variable path driving this part's animated property.</summary>
+        public string VariablePath { get; set; } = "";
+
+        /// <summary>Input value range minimum (maps to <see cref="OutputMin"/>).</summary>
+        public double InputMin { get; set; }
+
+        /// <summary>Input value range maximum (maps to <see cref="OutputMax"/>).</summary>
+        public double InputMax { get; set; } = 100;
+
+        /// <summary>
+        /// Output range minimum for the animated property (degrees for rotate*, local units
+        /// for pos*, multiplier for scale). Ignored for Property == "color".
+        /// </summary>
+        public double OutputMin { get; set; }
+
+        /// <summary>Output range maximum. Ignored for Property == "color".</summary>
+        public double OutputMax { get; set; } = 360;
+
+        /// <summary>
+        /// Color rule expression used only when Property == "color".
+        /// Semicolon-separated: ">80 #ef4444;>=20 #22c55e;* #3b82f6".
+        /// </summary>
+        public string ColorRules { get; set; } = "";
+
+        /// <summary>Smoothly interpolate towards the target value instead of snapping. Default true.</summary>
+        public bool Smooth { get; set; } = true;
     }
 
     /// <summary>

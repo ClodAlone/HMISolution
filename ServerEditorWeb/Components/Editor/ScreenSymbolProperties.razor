@@ -111,6 +111,7 @@
                 <option value="kpiwidget">KPI Widget</option>
                 <option value="reportviewer">Report Viewer</option>
                 <option value="geomap">Map / Floor Plan</option>
+                <option value="scene3d">3D Object</option>
             </select>
         </div>
 
@@ -3034,6 +3035,171 @@
                     @onclick="AddMapMarker">＋ Add Marker</button>
         }
 
+        @if (_selectedSymbol.Type is "scene3d")
+        {
+            <hr class="my-2" />
+            <h6 class="mb-2 small" style="color: #22c55e;">🧊 3D Object Settings</h6>
+            <div class="mb-2">
+                <label class="form-label mb-0 small">Shape (used when no model URL set)</label>
+                <select class="form-select form-select-sm" style="font-size: 11px;"
+                        @bind="_selectedSymbol.Scene3DShape" @bind:after="OnChanged">
+                    <option value="box">Box</option>
+                    <option value="sphere">Sphere</option>
+                    <option value="cylinder">Cylinder</option>
+                    <option value="cone">Cone</option>
+                    <option value="torus">Torus</option>
+                </select>
+            </div>
+            <div class="mb-2">
+                <label class="form-label mb-0 small">glTF/GLB Model URL (optional)</label>
+                <input type="text" class="form-control form-control-sm" style="font-size: 10px;"
+                       placeholder="https://.../model.glb or data:model/gltf-binary;base64,..."
+                       @bind="_selectedSymbol.Scene3DModelUrl" @bind:after="OnChanged" />
+            </div>
+            <div class="d-flex gap-2 mb-2">
+                <div>
+                    <label class="form-label mb-0 small">Object Color</label>
+                    <ColorPicker Value="@_selectedSymbol.Scene3DColor" ValueChanged="(v) => { _selectedSymbol.Scene3DColor = v; }" OnAfterChange="OnChanged" />
+                </div>
+                <div>
+                    <label class="form-label mb-0 small">Background</label>
+                    <ColorPicker Value="@_selectedSymbol.Scene3DBackground" ValueChanged="(v) => { _selectedSymbol.Scene3DBackground = v; }" OnAfterChange="OnChanged" />
+                </div>
+            </div>
+            <div class="form-check form-switch mb-1">
+                <input class="form-check-input" type="checkbox"
+                       @bind="_selectedSymbol.Scene3DAutoRotate" @bind:after="OnChanged" />
+                <label class="form-check-label small">Auto-rotate</label>
+            </div>
+            @if (_selectedSymbol.Scene3DAutoRotate)
+            {
+                <div class="mb-2">
+                    <label class="form-label mb-0 small">Rotation Speed (deg/sec)</label>
+                    <input type="number" step="1" class="form-control form-control-sm" style="font-size: 10px; width: 80px;"
+                           @bind="_selectedSymbol.Scene3DRotateSpeed" @bind:after="OnChanged" />
+                </div>
+            }
+            <div class="form-check form-switch mb-1">
+                <input class="form-check-input" type="checkbox"
+                       @bind="_selectedSymbol.Scene3DOrbitControls" @bind:after="OnChanged" />
+                <label class="form-check-label small">Mouse orbit/zoom controls</label>
+            </div>
+            <div class="form-check form-switch mb-2">
+                <input class="form-check-input" type="checkbox"
+                       @bind="_selectedSymbol.Scene3DShowGrid" @bind:after="OnChanged" />
+                <label class="form-check-label small">Show ground grid</label>
+            </div>
+            <div class="mb-2">
+                <label class="form-label mb-0 small">Rotation Variable (degrees, overrides auto-rotate)</label>
+                <VariablePathPicker Value="@_selectedSymbol.Scene3DRotationVariablePath"
+                                    ValueChanged="(v) => { _selectedSymbol.Scene3DRotationVariablePath = v; OnChanged(); }"
+                                    Placeholder="Optional — bind Y-rotation to a variable" />
+            </div>
+            <div class="mb-2">
+                <label class="form-label mb-0 small">Color Value Variable</label>
+                <VariablePathPicker Value="@_selectedSymbol.Scene3DValueVariablePath"
+                                    ValueChanged="(v) => { _selectedSymbol.Scene3DValueVariablePath = v; OnChanged(); }"
+                                    Placeholder="Optional — drive color via rules below" />
+            </div>
+            <div class="mb-2">
+                <label class="form-label mb-0 small">Color Rules (e.g. "&gt;80 #ef4444;&gt;=20 #22c55e;* #3b82f6")</label>
+                <input type="text" class="form-control form-control-sm" style="font-size: 10px;"
+                       placeholder="Empty = use base object color"
+                       @bind="_selectedSymbol.Scene3DColorRules" @bind:after="OnChanged" />
+            </div>
+            <div class="form-text" style="font-size: 9px;">
+                Rendered with Three.js (WebGL). Supports built-in primitives or custom glTF/GLB models, with
+                auto-rotate animation, mouse orbit controls, and live variable bindings for rotation and color.
+            </div>
+
+            <hr class="my-2" />
+            <h6 class="mb-2 small" style="color: #22c55e;">🦾 Part Animations (@_selectedSymbol.Scene3DPartBindings.Count)</h6>
+            <div class="form-text mb-2" style="font-size: 9px;">
+                Animate individual named parts of a loaded glTF/GLB model independently (e.g. a door, valve,
+                or arm) by targeting the node name used inside the model file. Requires a Model URL above.
+            </div>
+            @foreach (var pb in _selectedSymbol.Scene3DPartBindings)
+            {
+                var p = pb;
+                <div class="border rounded p-1 mb-2" style="font-size: 11px; background: var(--surface-alt, #f8f8f8);">
+                    <div class="d-flex gap-1 mb-1 align-items-center">
+                        <input type="text" class="form-control form-control-sm" style="font-size: 10px; flex: 1;"
+                               placeholder="Label" @bind="p.Label" @bind:after="OnChanged" />
+                        <button class="btn btn-sm btn-outline-danger py-0 px-1" style="font-size: 10px;"
+                                @onclick="() => { _selectedSymbol.Scene3DPartBindings.Remove(p); OnChanged(); }">✕</button>
+                    </div>
+                    <div class="mb-1">
+                        <label class="form-label mb-0" style="font-size: 9px;">Part Name (node name in model)</label>
+                        <input type="text" class="form-control form-control-sm" style="font-size: 10px;"
+                               placeholder="e.g. Door_L, Valve01, Fan_Blade"
+                               @bind="p.PartName" @bind:after="OnChanged" />
+                    </div>
+                    <div class="d-flex gap-1 mb-1">
+                        <div style="flex:1;">
+                            <label class="form-label mb-0" style="font-size: 9px;">Animates</label>
+                            <select class="form-select form-select-sm" style="font-size: 10px;"
+                                    @bind="p.Property" @bind:after="OnChanged">
+                                <option value="rotateX">Rotate X (deg)</option>
+                                <option value="rotateY">Rotate Y (deg)</option>
+                                <option value="rotateZ">Rotate Z (deg)</option>
+                                <option value="posX">Position X</option>
+                                <option value="posY">Position Y</option>
+                                <option value="posZ">Position Z</option>
+                                <option value="scale">Scale (uniform)</option>
+                                <option value="color">Color</option>
+                            </select>
+                        </div>
+                        <div class="form-check form-switch ms-2 mt-3">
+                            <input class="form-check-input" type="checkbox"
+                                   @bind="p.Smooth" @bind:after="OnChanged" />
+                            <label class="form-check-label" style="font-size: 9px;">Smooth</label>
+                        </div>
+                    </div>
+                    <div class="mb-1">
+                        <label class="form-label mb-0" style="font-size: 9px;">Variable Path</label>
+                        <VariablePathPicker Value="@p.VariablePath"
+                                            ValueChanged="(v) => { p.VariablePath = v; OnChanged(); }"
+                                            Placeholder="Select variable..." />
+                    </div>
+                    @if (p.Property == "color")
+                    {
+                        <div class="mb-1">
+                            <label class="form-label mb-0" style="font-size: 9px;">Color Rules (e.g. "&gt;80 #ef4444;&gt;=20 #22c55e;* #3b82f6")</label>
+                            <input type="text" class="form-control form-control-sm" style="font-size: 10px;"
+                                   @bind="p.ColorRules" @bind:after="OnChanged" />
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="d-flex gap-1 mb-1">
+                            <div>
+                                <label class="form-label mb-0" style="font-size: 9px;">Input Min</label>
+                                <input type="number" class="form-control form-control-sm" style="font-size: 10px; width: 70px;"
+                                       @bind="p.InputMin" @bind:after="OnChanged" />
+                            </div>
+                            <div>
+                                <label class="form-label mb-0" style="font-size: 9px;">Input Max</label>
+                                <input type="number" class="form-control form-control-sm" style="font-size: 10px; width: 70px;"
+                                       @bind="p.InputMax" @bind:after="OnChanged" />
+                            </div>
+                            <div>
+                                <label class="form-label mb-0" style="font-size: 9px;">Output Min</label>
+                                <input type="number" class="form-control form-control-sm" style="font-size: 10px; width: 70px;"
+                                       @bind="p.OutputMin" @bind:after="OnChanged" />
+                            </div>
+                            <div>
+                                <label class="form-label mb-0" style="font-size: 9px;">Output Max</label>
+                                <input type="number" class="form-control form-control-sm" style="font-size: 10px; width: 70px;"
+                                       @bind="p.OutputMax" @bind:after="OnChanged" />
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+            <button class="btn btn-sm btn-outline-success w-100 py-0" style="font-size: 11px;"
+                    @onclick="AddPartBinding">＋ Add Part Animation</button>
+        }
+
 
         @* ── Connection Ports (mimic / schematic symbols) ── *@
         @if (_selectedSymbol.ConnectionPorts.Count > 0 || _selectedSymbol.Type.StartsWith("mimic"))
@@ -3620,6 +3786,23 @@ else
             Color = "#3b82f6",
             Size = 24,
             ShowPopup = true
+        });
+        OnChanged();
+    }
+
+    private void AddPartBinding()
+    {
+        if (_selectedSymbol == null) return;
+        _selectedSymbol.Scene3DPartBindings.Add(new SharedModels.Scene3DPartBinding
+        {
+            Id = Guid.NewGuid().ToString("N")[..8],
+            Label = $"Part {(_selectedSymbol.Scene3DPartBindings.Count + 1)}",
+            Property = "rotateY",
+            OutputMin = 0,
+            OutputMax = 360,
+            InputMin = 0,
+            InputMax = 100,
+            Smooth = true
         });
         OnChanged();
     }

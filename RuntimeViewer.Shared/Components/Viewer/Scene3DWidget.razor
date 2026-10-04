@@ -1,0 +1,219 @@
+@* Copyright (c) 2026 Claudio Fiorani - All rights reserved. *@
+
+@using RuntimeViewer.Shared.Services
+@using SharedModels
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+@inject OpcRuntimeClient Opc
+
+<div class="scene3d-widget" style="width: 100%; height: 100%; position: relative; background: @Background; border-radius: 4px; overflow: hidden;">
+    @* The inner div is owned exclusively by JS (scene3dWidget.js clears/appends
+       into it directly). Keeping it separate from any Blazor-rendered sibling
+       content prevents a DOM diff mismatch: if Blazor also rendered children
+       into this same element, removing the "Loading…" placeholder via
+       StateHasChanged() after JS has already mutated the DOM out-of-band
+       causes "error applying batch N" and terminates the circuit. *@
+    <div @ref="_container" id="@_sceneId" style="width: 100%; height: 100%;"></div>
+    @if (!_ready)
+    {
+        <div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#64748b; font-size:13px; pointer-events:none;">
+            Loading 3D scene…
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string Shape { get; set; } = "box";
+    [Parameter] public string ModelUrl { get; set; } = "";
+    [Parameter] public string Color { get; set; } = "#3b82f6";
+    [Parameter] public string Background { get; set; } = "#0f172a";
+    [Parameter] public bool AutoRotate { get; set; } = true;
+    [Parameter] public double RotateSpeed { get; set; } = 30;
+    [Parameter] public bool OrbitControls { get; set; } = true;
+    [Parameter] public bool ShowGrid { get; set; } = true;
+    [Parameter] public string? RotationVariablePath { get; set; }
+    [Parameter] public string? ValueVariablePath { get; set; }
+    [Parameter] public string? ColorRules { get; set; }
+    [Parameter] public List<Scene3DPartBinding>? PartBindings { get; set; }
+
+    private ElementReference _container;
+    private string _sceneId = $"scene3d_{Guid.NewGuid():N}";
+    private IJSObjectReference? _module;
+    private bool _ready;
+    private System.Threading.Timer? _updateTimer;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _module = await JS.InvokeAsync<IJSObjectReference>("import",
+                "./_content/RuntimeViewer.Shared/js/scene3dWidget.js");
+            await _module.InvokeVoidAsync("initScene", _sceneId, new
+            {
+                shape = Shape,
+                modelUrl = ModelUrl,
+                color = Color,
+                background = Background,
+                autoRotate = AutoRotate,
+                rotateSpeed = RotateSpeed,
+                orbitControls = OrbitControls,
+                showGrid = ShowGrid
+            });
+            _ready = true;
+            StateHasChanged();
+
+            var hasPartBindings = PartBindings != null && PartBindings.Any(b => !string.IsNullOrEmpty(b.VariablePath) && !string.IsNullOrEmpty(b.PartName));
+            if (!string.IsNullOrEmpty(RotationVariablePath) || !string.IsNullOrEmpty(ValueVariablePath) || hasPartBindings)
+                _updateTimer = new System.Threading.Timer(OnUpdateTimerTick, null, 500, 250);
+        }
+    }
+
+    private async Task UpdateFromVariables()
+    {
+        if (_module == null) return;
+        try
+        {
+            double? rotationDeg = null;
+            string? resolvedColor = null;
+
+            if (!string.IsNullOrEmpty(RotationVariablePath))
+            {
+                var raw = Opc.GetValue(RotationVariablePath);
+                if (double.TryParse(raw, System.Globalization.NumberStyles.Any,
+                    System.Globalization.CultureInfo.InvariantCulture, out var deg))
+                    rotationDeg = deg;
+            }
+
+            if (!string.IsNullOrEmpty(ValueVariablePath))
+            {
+                var raw = Opc.GetValue(ValueVariablePath);
+                resolvedColor = ResolveColor(raw);
+            }
+
+            var partUpdates = ResolvePartUpdates();
+
+            if (rotationDeg != null || resolvedColor != null || partUpdates.Count > 0)
+            {
+                await _module.InvokeVoidAsync("updateScene", _sceneId, new
+                {
+                    rotationDeg,
+                    color = resolvedColor,
+                    partUpdates
+                });
+            }
+        }
+        catch { /* ignore during disposal */ }
+    }
+
+    private List<object> ResolvePartUpdates()
+    {
+        var result = new List<object>();
+        if (PartBindings == null) return result;
+
+        foreach (var b in PartBindings)
+        {
+            if (string.IsNullOrEmpty(b.PartName) || string.IsNullOrEmpty(b.VariablePath)) continue;
+            var raw = Opc.GetValue(b.VariablePath);
+            if (raw == null) continue;
+
+            if (b.Property == "color")
+            {
+                var color = ResolveColorForRules(raw, b.ColorRules);
+                if (color != null)
+                    result.Add(new { id = b.Id, partName = b.PartName, property = b.Property, color });
+                continue;
+            }
+
+            if (!double.TryParse(raw, System.Globalization.NumberStyles.Any,
+                System.Globalization.CultureInfo.InvariantCulture, out var numVal)) continue;
+
+            var inRange = Math.Max(0.0001, b.InputMax - b.InputMin);
+            var t = (numVal - b.InputMin) / inRange;
+            var outVal = b.OutputMin + t * (b.OutputMax - b.OutputMin);
+
+            result.Add(new { id = b.Id, partName = b.PartName, property = b.Property, value = outVal, smooth = b.Smooth });
+        }
+        return result;
+    }
+
+    // The System.Threading.Timer callback fires on a ThreadPool thread, not on
+    // Blazor's renderer sync context. JS interop (and any UI updates) must be
+    // marshaled back via InvokeAsync — calling it directly from the ThreadPool
+    // thread can throw repeatedly (wrong-thread/invalid-op) on every tick for
+    // every scene3d widget on screen, which was a contributor to CPU/UI issues.
+    private void OnUpdateTimerTick(object? _)
+    {
+        _ = InvokeAsync(async () =>
+        {
+            try { await UpdateFromVariables(); }
+            catch { /* ignore during disposal or transient circuit issues */ }
+        });
+    }
+
+    private string? ResolveColor(string? value)
+    {
+        return ResolveColorForRules(value, ColorRules);
+    }
+
+    private static string? ResolveColorForRules(string? value, string? colorRules)
+    {
+        if (string.IsNullOrEmpty(colorRules) || value == null)
+            return null;
+
+        if (!double.TryParse(value, System.Globalization.NumberStyles.Any,
+            System.Globalization.CultureInfo.InvariantCulture, out var numVal))
+            return null;
+
+        foreach (var rule in colorRules.Split(';', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var trimmed = rule.Trim();
+            if (trimmed.StartsWith("*"))
+            {
+                var parts = trimmed.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length >= 2) return parts[1];
+                continue;
+            }
+
+            var match = System.Text.RegularExpressions.Regex.Match(trimmed, @"^([><=!]+)\s*([\d.]+)\s+(#[0-9a-fA-F]{3,8})$");
+            if (!match.Success) continue;
+
+            var op = match.Groups[1].Value;
+            if (!double.TryParse(match.Groups[2].Value, System.Globalization.NumberStyles.Any,
+                System.Globalization.CultureInfo.InvariantCulture, out var threshold)) continue;
+            var ruleColor = match.Groups[3].Value;
+
+            var passes = op switch
+            {
+                ">" => numVal > threshold,
+                ">=" => numVal >= threshold,
+                "<" => numVal < threshold,
+                "<=" => numVal <= threshold,
+                "==" => Math.Abs(numVal - threshold) < 0.001,
+                "!=" => Math.Abs(numVal - threshold) >= 0.001,
+                _ => false
+            };
+
+            if (passes) return ruleColor;
+        }
+
+        return null;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_updateTimer != null)
+            await _updateTimer.DisposeAsync();
+        if (_module != null)
+        {
+            try { await _module.InvokeVoidAsync("destroyScene", _sceneId); } catch { }
+            try { await _module.DisposeAsync(); } catch { }
+        }
+    }
+}
+
+<style>
+    .scene3d-widget {
+        font-family: var(--widget-font-family, sans-serif);
+        font-size: var(--widget-font-size, 13px);
+    }
+</style>

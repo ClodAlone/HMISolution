@@ -1159,6 +1159,9 @@
                                         case "geomap":
                                             @RenderGeoMapEditorPreview(sym)
                                             break;
+                                        case "scene3d":
+                                            @RenderScene3DEditorPreview(sym)
+                                            break;
                                         case "mimicpump":
                                             <circle cx="@(sym.Width/2)" cy="@(sym.Height/2)" r="@(Math.Min(sym.Width,sym.Height)/2-2)" fill="@fillColor" stroke="@sym.Stroke" stroke-width="@sym.StrokeWidth"/>
                                             <polygon points="@($"{sym.Width*0.3},{sym.Height*0.3} {sym.Width*0.7},{sym.Height*0.5} {sym.Width*0.3},{sym.Height*0.7}")" fill="@sym.Stroke" opacity="0.8"/>
@@ -3688,6 +3691,62 @@ Right-click a symbol for actions</div>
             builder.AddAttribute(seq++, "text-anchor", "middle"); builder.AddAttribute(seq++, "fill", "#64748b");
             builder.AddAttribute(seq++, "font-size", ScaledFontSize(8, sym));
             builder.AddContent(seq++, $"{sym.MapMarkers.Count} marker(s) \u2014 {info}");
+            builder.CloseElement();
+        }
+    };
+
+    // ─── 3D Object editor preview (static isometric cube stand-in; real rendering is WebGL at runtime) ──
+
+    private RenderFragment RenderScene3DEditorPreview(ScreenSymbol sym) => builder =>
+    {
+        int seq = 0;
+        var w = sym.Width; var h = sym.Height;
+        var bg = string.IsNullOrEmpty(sym.Scene3DBackground) ? "#0f172a" : sym.Scene3DBackground;
+        var color = string.IsNullOrEmpty(sym.Scene3DColor) ? "#3b82f6" : sym.Scene3DColor;
+
+        builder.OpenElement(seq++, "rect");
+        builder.AddAttribute(seq++, "width", w); builder.AddAttribute(seq++, "height", h);
+        builder.AddAttribute(seq++, "fill", bg); builder.AddAttribute(seq++, "stroke", sym.Stroke ?? "#334155");
+        builder.AddAttribute(seq++, "stroke-width", sym.StrokeWidth); builder.AddAttribute(seq++, "rx", 4);
+        builder.CloseElement();
+
+        var cx = w / 2.0; var cy = h / 2.0 + 4;
+        var size = Math.Min(w, h) * 0.32;
+
+        if (sym.Scene3DShape == "sphere")
+        {
+            builder.OpenElement(seq++, "circle");
+            builder.AddAttribute(seq++, "cx", F(cx)); builder.AddAttribute(seq++, "cy", F(cy));
+            builder.AddAttribute(seq++, "r", F(size)); builder.AddAttribute(seq++, "fill", color);
+            builder.AddAttribute(seq++, "opacity", 0.85);
+            builder.CloseElement();
+        }
+        else
+        {
+            // Isometric cube/box stand-in (used for box/cylinder/cone/torus/model placeholder)
+            var top = $"{F(cx)},{F(cy - size)} {F(cx + size)},{F(cy - size * 0.5)} {F(cx)},{F(cy)} {F(cx - size)},{F(cy - size * 0.5)}";
+            var left = $"{F(cx - size)},{F(cy - size * 0.5)} {F(cx)},{F(cy)} {F(cx)},{F(cy + size)} {F(cx - size)},{F(cy + size * 0.5)}";
+            var right = $"{F(cx + size)},{F(cy - size * 0.5)} {F(cx)},{F(cy)} {F(cx)},{F(cy + size)} {F(cx + size)},{F(cy + size * 0.5)}";
+
+            builder.OpenElement(seq++, "polygon");
+            builder.AddAttribute(seq++, "points", top); builder.AddAttribute(seq++, "fill", color); builder.AddAttribute(seq++, "opacity", 0.9);
+            builder.CloseElement();
+            builder.OpenElement(seq++, "polygon");
+            builder.AddAttribute(seq++, "points", left); builder.AddAttribute(seq++, "fill", color); builder.AddAttribute(seq++, "opacity", 0.55);
+            builder.CloseElement();
+            builder.OpenElement(seq++, "polygon");
+            builder.AddAttribute(seq++, "points", right); builder.AddAttribute(seq++, "fill", color); builder.AddAttribute(seq++, "opacity", 0.7);
+            builder.CloseElement();
+        }
+
+        if (sym.Width > 70 && sym.Height > 50)
+        {
+            var label = !string.IsNullOrEmpty(sym.Scene3DModelUrl) ? "🧊 3D Model" : $"🧊 {sym.Scene3DShape}";
+            builder.OpenElement(seq++, "text");
+            builder.AddAttribute(seq++, "x", F(w / 2.0)); builder.AddAttribute(seq++, "y", F(h - 8));
+            builder.AddAttribute(seq++, "text-anchor", "middle"); builder.AddAttribute(seq++, "fill", "#64748b");
+            builder.AddAttribute(seq++, "font-size", ScaledFontSize(8, sym));
+            builder.AddContent(seq++, label + (sym.Scene3DAutoRotate ? " (auto-rotate)" : ""));
             builder.CloseElement();
         }
     };
