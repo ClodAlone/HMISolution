@@ -21,7 +21,7 @@ namespace SimpleOpcFileServer;
 /// Lightweight REST API server for exposing variables, alarms, recipes, and audit trail
 /// to external systems (MES, ERP, dashboards) via HTTP.
 /// </summary>
-public sealed class RestApiServer : IDisposable
+public sealed partial class RestApiServer : IDisposable
 {
     private TcpListener? _listener;
     private CancellationTokenSource? _cts;
@@ -290,6 +290,19 @@ public sealed class RestApiServer : IDisposable
             if (method == "GET" && path == "/api/export/csv")
             {
                 HandleExportCsv(stream, query);
+                return;
+            }
+
+            if (method == "POST" && path == "/mcp")
+            {
+                HandleMcpRequest(stream, body);
+                return;
+            }
+
+            if (method == "GET" && path == "/mcp")
+            {
+                // Some MCP clients probe the endpoint with a GET before issuing JSON-RPC POSTs.
+                SendJsonResponse(stream, 200, "OK", new { protocol = "mcp", transport = "http-jsonrpc", endpoint = "/mcp" });
                 return;
             }
 
