@@ -2360,6 +2360,55 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 CreateLimitAlarm(variableState, alarmConfig, variablePath, parent, batch);
         }
 
+        /// <summary>Ensures an optional PropertyState child on a cloned ConditionState is
+        /// instantiated. Some SDK versions do not auto-create every optional ConditionState
+        /// property via Create(), which leads to a NullReferenceException later when code
+        /// assumes the property exists (mirrors the BranchId guard above).</summary>
+        private static PropertyState<T> EnsureConditionProperty<T>(NodeState parent, PropertyState<T> property, QualifiedName browseName, NodeId dataType, string nodeIdPath)
+        {
+            if (property != null)
+                return property;
+
+            property = new PropertyState<T>(parent)
+            {
+                NodeId = new NodeId(nodeIdPath, parent.NodeId.NamespaceIndex),
+                BrowseName = browseName,
+                DisplayName = browseName.Name,
+                DataType = dataType,
+                ValueRank = ValueRanks.Scalar,
+                AccessLevel = AccessLevels.CurrentRead,
+                UserAccessLevel = AccessLevels.CurrentRead,
+                ReferenceTypeId = ReferenceTypeIds.HasProperty,
+                TypeDefinitionId = VariableTypeIds.PropertyType
+            };
+            parent.AddChild(property);
+            return property;
+        }
+
+        /// <summary>Ensures an optional TwoStateVariableState child (EnabledState, ActiveState,
+        /// AckedState, etc.) on a cloned ConditionState is instantiated. Some SDK versions do
+        /// not auto-create every optional ConditionState sub-state in Create().</summary>
+        private static TwoStateVariableState EnsureTwoStateVariable(NodeState parent, TwoStateVariableState state, QualifiedName browseName, string nodeIdPath, ushort namespaceIndex)
+        {
+            if (state != null)
+                return state;
+
+            state = new TwoStateVariableState(parent)
+            {
+                NodeId = new NodeId(nodeIdPath, namespaceIndex),
+                BrowseName = browseName,
+                DisplayName = browseName.Name,
+                DataType = DataTypeIds.LocalizedText,
+                ValueRank = ValueRanks.Scalar,
+                AccessLevel = AccessLevels.CurrentRead,
+                UserAccessLevel = AccessLevels.CurrentRead,
+                ReferenceTypeId = ReferenceTypeIds.HasComponent,
+                TypeDefinitionId = VariableTypeIds.TwoStateVariableType
+            };
+            parent.AddChild(state);
+            return state;
+        }
+
         private void CreateLimitAlarm(BaseDataVariableState variableState, AlarmConfig alarmConfig, string variablePath, BaseObjectState parent, List<NodeState>? batch = null)
         {
             var alarmNodeId = new NodeId(variablePath + ".Alarm", _namespaceIndex);
@@ -2410,7 +2459,13 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 alarm.BranchId.Value = NodeId.Null;
             }
 
-            // Source & condition references
+            // Source & condition references.
+            // Some SDK versions do not auto-create these optional ConditionState
+            // properties in Create(), so guard against null the same way as BranchId above.
+            alarm.SourceNode = EnsureConditionProperty(alarm, alarm.SourceNode, BrowseNames.SourceNode, DataTypeIds.NodeId, variablePath + ".Alarm.SourceNode");
+            alarm.SourceName = EnsureConditionProperty(alarm, alarm.SourceName, BrowseNames.SourceName, DataTypeIds.String, variablePath + ".Alarm.SourceName");
+            alarm.ConditionName = EnsureConditionProperty(alarm, alarm.ConditionName, BrowseNames.ConditionName, DataTypeIds.String, variablePath + ".Alarm.ConditionName");
+
             alarm.SourceNode.Value = variableState.NodeId;
             alarm.SourceName.Value = variablePath;
             alarm.ConditionName.Value = alarmConfig.Message;
@@ -2428,39 +2483,53 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
 
             // Initial state — set directly on the property values to avoid
             // the SetEnableState/SetActiveState call chain that can throw in some SDK versions.
+            alarm.EnabledState = EnsureTwoStateVariable(alarm, alarm.EnabledState, BrowseNames.EnabledState, prefix + ".EnabledState", _namespaceIndex);
+            alarm.ActiveState = EnsureTwoStateVariable(alarm, alarm.ActiveState, BrowseNames.ActiveState, prefix + ".ActiveState", _namespaceIndex);
+
             alarm.EnabledState.Value = new LocalizedText("en", "Enabled");
-            alarm.EnabledState.Id.Value = true;
-            alarm.EnabledState.TransitionTime.Value = DateTime.UtcNow;
+            if (alarm.EnabledState.Id != null)
+                alarm.EnabledState.Id.Value = true;
+            if (alarm.EnabledState.TransitionTime != null)
+                alarm.EnabledState.TransitionTime.Value = DateTime.UtcNow;
 
             alarm.ActiveState.Value = new LocalizedText("en", "Inactive");
-            alarm.ActiveState.Id.Value = false;
-            alarm.ActiveState.TransitionTime.Value = DateTime.UtcNow;
+            if (alarm.ActiveState.Id != null)
+                alarm.ActiveState.Id.Value = false;
+            if (alarm.ActiveState.TransitionTime != null)
+                alarm.ActiveState.TransitionTime.Value = DateTime.UtcNow;
 
             if (alarm.AckedState != null)
             {
                 alarm.AckedState.Value = new LocalizedText("en", "Acknowledged");
-                alarm.AckedState.Id.Value = true;
+                if (alarm.AckedState.Id != null)
+                    alarm.AckedState.Id.Value = true;
             }
 
             if (alarm.ConfirmedState != null)
             {
                 alarm.ConfirmedState.Value = new LocalizedText("en", "Confirmed");
-                alarm.ConfirmedState.Id.Value = true;
+                if (alarm.ConfirmedState.Id != null)
+                    alarm.ConfirmedState.Id.Value = true;
             }
 
             if (alarm.SuppressedState != null)
             {
                 alarm.SuppressedState.Value = new LocalizedText("en", "Unsuppressed");
-                alarm.SuppressedState.Id.Value = false;
+                if (alarm.SuppressedState.Id != null)
+                    alarm.SuppressedState.Id.Value = false;
             }
 
+            alarm.Retain = EnsureConditionProperty(alarm, alarm.Retain, BrowseNames.Retain, DataTypeIds.Boolean, prefix + ".Retain");
             alarm.Retain.Value = false;
             alarm.AutoReportStateChanges = true;
 
             // Severity: 500 = medium by default
+            alarm.Severity = EnsureConditionProperty(alarm, alarm.Severity, BrowseNames.Severity, DataTypeIds.UInt16, prefix + ".Severity");
             alarm.Severity.Value = 500;
 
+            alarm.Message = EnsureConditionProperty(alarm, alarm.Message, BrowseNames.Message, DataTypeIds.LocalizedText, prefix + ".Message");
             alarm.Message.Value = new LocalizedText(alarmConfig.Message);
+            alarm.Time = EnsureConditionProperty(alarm, alarm.Time, BrowseNames.Time, DataTypeIds.UtcTime, prefix + ".Time");
             alarm.Time.Value = DateTime.UtcNow;
 
             // Wire up Acknowledge handler
@@ -2539,35 +2608,49 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 alarm.BranchId.Value = NodeId.Null;
             }
 
+            alarm.SourceNode = EnsureConditionProperty(alarm, alarm.SourceNode, BrowseNames.SourceNode, DataTypeIds.NodeId, variablePath + ".Alarm.SourceNode");
+            alarm.SourceName = EnsureConditionProperty(alarm, alarm.SourceName, BrowseNames.SourceName, DataTypeIds.String, variablePath + ".Alarm.SourceName");
+            alarm.ConditionName = EnsureConditionProperty(alarm, alarm.ConditionName, BrowseNames.ConditionName, DataTypeIds.String, variablePath + ".Alarm.ConditionName");
+
             alarm.SourceNode.Value = variableState.NodeId;
             alarm.SourceName.Value = variablePath;
             alarm.ConditionName.Value = alarmConfig.Message;
 
             // Initial state — set directly on property values to avoid SDK internal NRE
+            alarm.EnabledState = EnsureTwoStateVariable(alarm, alarm.EnabledState, BrowseNames.EnabledState, prefix + ".EnabledState", _namespaceIndex);
+            alarm.ActiveState = EnsureTwoStateVariable(alarm, alarm.ActiveState, BrowseNames.ActiveState, prefix + ".ActiveState", _namespaceIndex);
+
             alarm.EnabledState.Value = new LocalizedText("en", "Enabled");
-            alarm.EnabledState.Id.Value = true;
-            alarm.EnabledState.TransitionTime.Value = DateTime.UtcNow;
+            if (alarm.EnabledState.Id != null)
+                alarm.EnabledState.Id.Value = true;
+            if (alarm.EnabledState.TransitionTime != null)
+                alarm.EnabledState.TransitionTime.Value = DateTime.UtcNow;
 
             alarm.ActiveState.Value = new LocalizedText("en", "Inactive");
-            alarm.ActiveState.Id.Value = false;
-            alarm.ActiveState.TransitionTime.Value = DateTime.UtcNow;
+            if (alarm.ActiveState.Id != null)
+                alarm.ActiveState.Id.Value = false;
+            if (alarm.ActiveState.TransitionTime != null)
+                alarm.ActiveState.TransitionTime.Value = DateTime.UtcNow;
 
             if (alarm.AckedState != null)
             {
                 alarm.AckedState.Value = new LocalizedText("en", "Acknowledged");
-                alarm.AckedState.Id.Value = true;
+                if (alarm.AckedState.Id != null)
+                    alarm.AckedState.Id.Value = true;
             }
 
             if (alarm.ConfirmedState != null)
             {
                 alarm.ConfirmedState.Value = new LocalizedText("en", "Confirmed");
-                alarm.ConfirmedState.Id.Value = true;
+                if (alarm.ConfirmedState.Id != null)
+                    alarm.ConfirmedState.Id.Value = true;
             }
 
             if (alarm.SuppressedState != null)
             {
                 alarm.SuppressedState.Value = new LocalizedText("en", "Unsuppressed");
-                alarm.SuppressedState.Id.Value = false;
+                if (alarm.SuppressedState.Id != null)
+                    alarm.SuppressedState.Id.Value = false;
             }
 
             alarm.Retain.Value = false;
