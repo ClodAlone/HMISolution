@@ -88,6 +88,21 @@ echo [OK] All-in-one image built successfully
 echo.
 
 REM ============================================================================
+echo [STEP 2/2] Syncing 'latest' tag with freshly built image...
+echo ============================================================================
+REM Force-retag 'latest' from the just-built %VERSION% image. This guards
+REM against 'latest' silently going stale if a previous build/tag step
+REM only touched the version tag (e.g. manual docker tag/build runs).
+docker tag "%ALLINONE_IMAGE%:%VERSION%" "%ALLINONE_IMAGE%:latest"
+if errorlevel 1 (
+    echo [ERROR] Failed to re-tag %ALLINONE_IMAGE%:latest
+    set "ERROR_OCCURRED=1"
+    goto :error
+)
+echo [OK] 'latest' tag now points to the image just built
+echo.
+
+REM ============================================================================
 echo [SUCCESS] All-in-one image build completed!
 echo ============================================================================
 echo.
