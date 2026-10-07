@@ -37,18 +37,33 @@ echo [CONFIG] Version Tag: %VERSION%
 echo.
 
 REM ============================================================================
-echo [CHECK] Verifying Docker login...
+echo [CHECK] Verifying Docker is running...
 echo ============================================================================
 docker info >nul 2>&1
 if errorlevel 1 (
-    echo [ERROR] Docker is not running or you are not logged in
+    echo [ERROR] Docker is not running
     echo.
-    echo Please run: docker login
+    echo Please start Docker Desktop and try again.
     echo.
     set "ERROR_OCCURRED=1"
     goto :error
 )
-echo [OK] Docker is available
+echo [OK] Docker is running
+echo.
+
+REM ============================================================================
+echo [CHECK] Verifying Docker Hub login...
+echo ============================================================================
+echo [INFO] Running 'docker login' (uses cached credentials if already logged in)...
+echo.
+docker login
+if errorlevel 1 (
+    echo [ERROR] Docker login failed
+    echo.
+    set "ERROR_OCCURRED=1"
+    goto :error
+)
+echo [OK] Docker Hub login verified
 echo.
 
 REM ============================================================================
