@@ -253,11 +253,12 @@
 
                 Generate a full project configuration with:
                 1. A well-organized folder hierarchy with realistic variables (Double, Int32, Boolean types) including engineering units
-                2. Multiple screens with appropriate widgets (gauges, indicators, charts, alarm lists, trends)
-                3. Alarm configurations on critical variables (HighHigh, High, Low, LowLow thresholds)
-                4. At least one script for automation logic
-                5. Data logging on key process variables
-                6. Realistic initial values and appropriate variable access modes (Read, ReadWrite)
+                2. Driver connections (see DriverConfigs rules below) wiring variables to the field devices/protocols implied by the description
+                3. Multiple screens with appropriate widgets (gauges, indicators, charts, alarm lists, trends)
+                4. Alarm configurations on critical variables (HighHigh, High, Low, LowLow thresholds)
+                5. At least one script for automation logic
+                6. Data logging on key process variables
+                7. Realistic initial values and appropriate variable access modes (Read, ReadWrite)
 
                 CRITICAL rules for variable paths used in Scripts, VariablePath, and HdaVariablePaths:
                 - The root folder is named "Root" but it is TRANSPARENT - never include "Root." in any path.
@@ -265,6 +266,26 @@
                 - Do NOT append engineering units to variable names (wrong: "Energy.TotalPower_kW", correct: "Energy.TotalPower").
                 - In script Code, use Read("Folder.Variable") and Write("Folder.Variable", value) with the exact same paths.
                 - Example: if Root contains folder "Energy" with variable "TotalPower", the path is "Energy.TotalPower" everywhere.
+
+                DRIVER CONFIGURATION rules (connecting variables to real field devices/protocols):
+                - Each Variable can have a "DriverConfigs" object: a dictionary keyed by driver name, value is the driver-specific settings object.
+                - Only add DriverConfigs to variables that should be sourced from an external device/protocol based on the description. Variables without a real-world source should omit DriverConfigs (plain internal/calculated tags).
+                - Supported driver keys and their field schemas (use exactly these property names):
+                  - Modbus fields: IpAddress (string), Port (int, default 502), UnitId (byte, 1-247), Register (ushort), RegisterType (HoldingRegister/InputRegister/Coil/DiscreteInput), PollTime (int ms)
+                  - S7 fields: IpAddress (string), Rack (int), Slot (int), Address (string, e.g. DB1.DBD0, DB1.DBX0.0, MW100), PollTime (int ms)
+                  - OpcUaClient fields: EndpointUrl (string, e.g. opc.tcp://host:4840), NodeId (string, e.g. ns=2;s=Tag1), PollTime (int ms)
+                  - Mqtt fields: Broker (string), Port (int, default 1883), Topic (string), JsonPath (string or null, e.g. $.value)
+                  - Rest fields: Url (string), JsonPath (string or null), PollTime (int ms)
+                  - Csv fields: FilePath (string), RowIndex (int), ColumnIndex (int), Key (string or null), PollTime (int ms)
+                  - Tcp fields: IpAddress (string), Port (int), Command (string), Regex (string or null), PollTime (int ms)
+                  - Sql fields: ConnectionString (string), Query (string), PollTime (int ms)
+                  - EtherNetIP fields: IpAddress (string), Path (string, e.g. 1,0), Tag (string), Type (DINT/REAL/BOOL/SINT/INT/LINT/STRING or empty), PollTime (int ms)
+                  - Knx fields: IpAddress (string), Port (int, default 3671), GroupAddress (string, e.g. 1/2/3), DptType (string, e.g. 9.001)
+                  - Simulation fields: Function (Sine/Cosine/Sawtooth/Square/Triangle/Random/RandomInt/Counter/Pulse), Period (double ms), Amplitude (double), Offset (double), Phase (double), PollTime (int ms), Min (double), Max (double)
+                - Example: a variable read from a Modbus holding register has JSON shape:
+                  Name: "RawWaterFlow_m3h", Type: "Double", Access: "Read", Value: 450.0,
+                  DriverConfigs -> Modbus -> IpAddress: "192.168.1.50", Port: 502, UnitId: 1, Register: 40001, RegisterType: "HoldingRegister", PollTime: 1000
+                - If the description has no real hardware/protocol context (e.g. a pure demo/simulation), use "Simulation" DriverConfigs on live-looking variables instead of leaving them static.
 
                 Make variable names clear and descriptive. Use a dark theme (#1a1a2e) for screen backgrounds.
                 """;

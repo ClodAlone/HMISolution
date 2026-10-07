@@ -1035,8 +1035,47 @@ public class AiService
 
             // Detect file type and provide format-specific parsing instructions
             var ext = System.IO.Path.GetExtension(referenceFileName ?? "").ToLowerInvariant();
+            var refContent = referenceJson ?? "";
             sb.Append(ext switch
             {
+                ".xml" or ".amlx" when refContent.Contains("CAEXFile") || refContent.Contains("InstanceHierarchy") => """
+The reference file is an AutomationML (AML) export — a vendor-neutral CAEX-based standard (IEC 62714) describing plant topology and device instances.
+Parse the XML to extract variables from each <InternalElement>. For every <InternalElement>:
+- Folder path is derived from the nesting of <InternalElement Name="..."> under the <InstanceHierarchy> (each level of nesting is a sub-folder).
+- For each <Attribute Name="...">, read the nested <Value> element (and AttributeDataType, e.g. xs:boolean, xs:int, xs:double, xs:string) to create a Variable:
+  - Name from the Attribute's Name attribute (cleaned to a valid identifier)
+  - Type mapped from AttributeDataType: xs:double/xs:float→Double, xs:int/xs:short/xs:long→Int32, xs:boolean→Boolean, xs:string→String
+  - InitialValue / Value from the <Value> element content
+- If the InternalElement has a <SupportedRoleClass> or RefBaseClassPath referencing a communication interface (e.g. OPCUAClientInterface, ModbusTCPInterface, ProfinetInterface, EtherNetIPInterface), use the interface's attributes (IP address, port, node id, slot/rack, slave/unit id, register) to populate the matching DriverConfigs entry (OpcUaClient, Modbus, S7, EtherNetIP) as documented above.
+- If no communication interface is present but the element looks like a live process value, default to a Simulation DriverConfigs entry.
+- Preserve the AML hierarchy depth as the Folder/sub-Folder nesting so the resulting project mirrors the plant topology.
+
+""",
+                ".xml" when refContent.Contains("ISO15745Profile") || refContent.Contains("GSDML") || refContent.Contains("ProfinetDeviceProfile") => """
+The reference file is a GSDML file — the PROFINET/PROFIBUS device description standard (IEC 61158) used to describe device modules, submodules, and their I/O data.
+Parse the XML to extract variables:
+- Folder path derived from the device/module hierarchy: <DeviceAccessPointList>/<DeviceAccessPointItem> as the root folder, each <ModuleItem>/<SubmoduleItem> as a sub-folder.
+- For each <Input>/<Output> <DataItem> inside <IOData>, create a Variable:
+  - Name from the DataItem's TextId or Name attribute (resolved via <ExternalTextList> if present, cleaned to a valid identifier)
+  - Type mapped from DataType: Unsigned8/Unsigned16/Unsigned32→Int32, Float32/Float64→Double, Boolean→Boolean, OctetString/VisibleString→String
+  - Access: "Read" for Input data items, "Write" or "ReadWrite" for Output data items
+  - EtherNetIP or generic fieldbus driver config using the device's station name/IP (if present in comments) and the slot/subslot numbers as the Path, and the DataItem index as the Tag/Address
+- Group alarms/diagnostics text from <ChannelDiagList>/<SystemDefinedChannelDiagList> as AlarmConfig Message text where relevant.
+
+""",
+                ".eds" => """
+The reference file is an EDS (Electronic Data Sheet) file — the ODVA standard (EtherNet/IP, DeviceNet, CIP) describing a device's parameters and I/O assembly, in an INI-like key=value format with bracketed sections.
+Parse the file to extract variables:
+- The [Device] section gives the device Name (use as the root Folder name) and VendCode/ProdType/ProdCode for reference.
+- The [Params] section lists numbered Param entries like "Param1 = ...,"Name","Units",...,DataType,...,Min,Max,Default,...". For each Param:
+  - Name from the quoted Name field (cleaned to a valid identifier)
+  - Type mapped from DataType: INT/UINT/DINT/UDINT→Int32, REAL→Double, BOOL→Boolean, STRING→String
+  - EngineeringUnit from the quoted Units field
+  - InitialValue from the Default field
+  - EtherNetIP driver config: IpAddress (from context or placeholder "192.168.1.1"), Path ("1,0" default), Tag set to the parameter's instance/attribute reference (e.g. "Param<N>"), Type set to the mapped CIP type (DINT/REAL/BOOL/INT), PollTime 1000
+- The [Assembly] section (if present) lists Input/Output assembly instances; map each member to a variable with Access "Read" for input assembly members and "ReadWrite"/"Write" for output assembly members, using the same EtherNetIP driver config pattern with the assembly instance number as Path.
+
+""",
                 ".xml" => """
 The reference file is a PLC program export (e.g. Siemens TIA Portal SimaticML DB export).
 Parse the XML to extract variables. For each <Member> inside a <SW.Blocks.GlobalDB>, create a variable with:
@@ -1045,19 +1084,19 @@ Parse the XML to extract variables. For each <Member> inside a <SW.Blocks.Global
 - Type mapped from Siemens types: Real→Double, Int→Int32, DInt→Int32, Bool→Boolean, String[...]→String
 - Access: "ReadWrite" for Remanence="Retain", "Read" for "NonRetain"
 - Value from <StartValue>
-- S7 driver config: { "IpAddress": from the XML comment or "192.168.0.10", "Rack": 0, "Slot": 1, "Address": "DB<Number>.DBB0" (calculate offsets), "PollTime": 1000 }
+- S7 driver config: IpAddress from the XML comment or "192.168.0.10", Rack 0, Slot 1, Address "DB<Number>.DBB0" (calculate offsets), PollTime 1000
 For <Tag> entries in <SW.Tags.PlcTagTable>, map Address (%I=input, %Q=output) to S7 addresses.
 Also check the XML comments at the top for PLC IP address, Rack, and Slot information.
 
 """,
-                ".csv" when (referenceJson ?? "").Contains("Group Address") => """
+                ".csv" when refContent.Contains("Group Address") => """
 The reference file is a KNX ETS group address export (CSV with semicolons).
 Parse each row to extract variables. For each group address, create a variable with:
 - Folder path derived from the Building/Floor/Room columns
 - Name derived from the Description column (clean it into a valid identifier)
 - Type mapped from KNX DPT: DPST-1-x→Boolean, DPST-5-x→Double (0-100), DPST-9-x→Double, DPST-12-x→Int32
 - Access: "ReadWrite" for switches/dimmers/setpoints, "Read" for sensors
-- KNX driver config: { "ConnectionType": "Tunneling", "GatewayAddress": "192.168.1.100", "GroupAddress": "<the group address>", "DPT": "<the datapoint type id>", "PollTime": 5000 }
+- Knx driver config: IpAddress "192.168.1.100" (KNX/IP gateway), Port 3671, GroupAddress "<the group address>", DptType "<the datapoint type id, e.g. 9.001>"
 
 """,
                 ".csv" => """
@@ -1067,8 +1106,8 @@ Lines starting with # or ## are comments — read them for IP/port info. Parse d
 - Name from the Name column (cleaned)
 - Type mapped from DataType: Float32→Double, UInt16→Int32, Boolean→Boolean
 - Access from R/W column: "R"→"Read", "RW"→"ReadWrite"
-- Modbus driver config: { "IpAddress": from comments or "10.0.1.50", "Port": 502, "SlaveId": <SlaveID>, "RegisterType": "<RegisterType>", "Address": <Address>, "DataType": "<DataType>", "ScaleFactor": <ScaleFactor>, "PollTime": 1000 }
-- Unit from the Unit column can be used for alarm/display purposes
+- Modbus driver config: IpAddress from comments or "10.0.1.50", Port 502, UnitId from SlaveID column, RegisterType mapped to HoldingRegister/InputRegister/Coil/DiscreteInput, Register set to the Address column, PollTime 1000
+- Unit from the Unit column can be used for EngineeringUnit/alarm/display purposes
 
 """,
                 _ => "The following is a reference file that the user wants to import from. Extract variables, folders, screens, scripts, PLC programs, recipes, or other elements as instructed by the user:\n\n"
@@ -1077,6 +1116,7 @@ Lines starting with # or ## are comments — read them for IP/port info. Parse d
             sb.Append(referenceJson);
             sb.Append("\n--- END REFERENCE FILE ---\n");
         }
+
 
         sb.Append("\n\nUser Instruction: ");
         sb.Append(userPrompt);
