@@ -54,7 +54,7 @@ namespace SimpleOpcFileServer
                 }
                 var item = new TcpItem { Variable = variable, Config = tcpConfig };
                 device.AddItem(item);
-                variable.OnSimpleWriteValue = (ISystemContext ctx, NodeState node, ref object value) => device.Write(item, value);
+                variable.OnSimpleWriteValue = (ISystemContext ctx, NodeState node, ref Variant value) => device.Write(item, value.Value);
             }
         }
 
@@ -180,7 +180,7 @@ namespace SimpleOpcFileServer
                 else if (variable.DataType == DataTypeIds.Int32) value = int.TryParse(valStr, out var i) ? i : 0;
                 else if (variable.DataType == DataTypeIds.Boolean) value = bool.TryParse(valStr, out var b) ? b : false;
                 else value = valStr;
-                variable.Value = value; variable.StatusCode = StatusCodes.Good;
+                variable.Value = new Variant(value); variable.StatusCode = StatusCodes.Good;
                 variable.Timestamp = DateTime.UtcNow; variable.ClearChangeMasks(_context, false);
             }
 
@@ -191,7 +191,7 @@ namespace SimpleOpcFileServer
                 if (!string.IsNullOrEmpty(message))
                 {
                     var n = variable.FindChild(_context, new QualifiedName("LastError", variable.BrowseName.NamespaceIndex));
-                    if (n is BaseVariableState v) { v.Value = message; v.Timestamp = DateTime.UtcNow; v.ClearChangeMasks(_context, false); }
+                    if (n is BaseVariableState v) { v.Value = new Variant(message); v.Timestamp = DateTime.UtcNow; v.ClearChangeMasks(_context, false); }
                 }
             }
 
@@ -215,7 +215,7 @@ namespace SimpleOpcFileServer
                     using var stream = client.GetStream();
                     var bytes = Encoding.ASCII.GetBytes(payload);
                     stream.Write(bytes, 0, bytes.Length);
-                    item.Variable.Value = value; item.Variable.StatusCode = StatusCodes.Good;
+                    item.Variable.Value = new Variant(value); item.Variable.StatusCode = StatusCodes.Good;
                     item.Variable.Timestamp = DateTime.UtcNow; item.Variable.ClearChangeMasks(_context, false);
                     return ServiceResult.Good;
                 }

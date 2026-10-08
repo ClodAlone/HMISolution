@@ -1,4 +1,4 @@
-// Copyright (c) 2026 Claudio Fiorani
+﻿// Copyright (c) 2026 Claudio Fiorani
 // All rights reserved.
 
 using System.Diagnostics;
@@ -119,7 +119,7 @@ public class DriverTestService
         var cfg = JsonSerializer.Deserialize<OpcUaTestCfg>(configJson, _jsonOpts);
         if (cfg is null || string.IsNullOrWhiteSpace(cfg.EndpointUrl))
             return new DriverTestResult(false, "Invalid OPC UA Client configuration");
-        var pkiRoot = "%LocalApplicationData%/ServerEditorWeb/pki";
+        var pkiRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ServerEditorWeb", "pki");
         var appCfg = new Opc.Ua.ApplicationConfiguration
         {
             ApplicationName = "DriverTestOpcClient",
@@ -136,12 +136,14 @@ public class DriverTestService
             ClientConfiguration = new Opc.Ua.ClientConfiguration { DefaultSessionTimeout = 30000 }
         };
         await appCfg.Validate(Opc.Ua.ApplicationType.Client);
-        appCfg.CertificateValidator.CertificateValidation += (_, e) =>
-        { if (e.Error.StatusCode == Opc.Ua.StatusCodes.BadCertificateUntrusted) e.Accept = true; };
+        if (appCfg.CertificateManager is Opc.Ua.CertificateManager certManager)
+        {
+            certManager.AcceptError = (_, result) => result.StatusCode == Opc.Ua.StatusCodes.BadCertificateUntrusted;
+        }
         var selectedEndpoint = Opc.Ua.Client.CoreClientUtils.SelectEndpoint(appCfg, cfg.EndpointUrl, false, 10000);
-        var epCfg = Opc.Ua.EndpointConfiguration.Create(appCfg);
+        var epCfg = new Opc.Ua.EndpointConfiguration { OperationTimeout = appCfg.TransportQuotas.OperationTimeout };
         var endpoint = new Opc.Ua.ConfiguredEndpoint(null, selectedEndpoint, epCfg);
-        var session = await Opc.Ua.Client.Session.Create(appCfg, endpoint, false, "DriverTestSession", 30000, new Opc.Ua.UserIdentity(new Opc.Ua.AnonymousIdentityToken()), null);
+        var session = await new Opc.Ua.Client.DefaultSessionFactory().CreateAsync(appCfg, endpoint, false, "DriverTestSession", 30000, new Opc.Ua.UserIdentity(new Opc.Ua.AnonymousIdentityToken()), default);
         try
         {
             if (string.IsNullOrWhiteSpace(cfg.NodeId))
@@ -149,7 +151,7 @@ public class DriverTestService
             var nodeId = Opc.Ua.NodeId.Parse(cfg.NodeId);
             var dv = await Opc.Ua.Client.SessionClientExtensions.ReadValueAsync(session, nodeId);
             if (Opc.Ua.StatusCode.IsBad(dv.StatusCode))
-                return new DriverTestResult(false, $"Read failed: {Opc.Ua.StatusCodes.GetBrowseName(dv.StatusCode.Code)}");
+                return new DriverTestResult(false, $"Read failed: {dv.StatusCode}");
             return new DriverTestResult(true, "OPC UA read OK", dv.WrappedValue.ToString() ?? "(null)");
         }
         finally { await session.CloseAsync(); session.Dispose(); }
@@ -431,7 +433,7 @@ public class DriverTestService
             return new DriverTestResult(false, "Invalid OPC UA Client configuration");
         if (string.IsNullOrWhiteSpace(cfg.NodeId))
             return new DriverTestResult(false, "No NodeId specified to write");
-        var pkiRoot = "%LocalApplicationData%/ServerEditorWeb/pki";
+        var pkiRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ServerEditorWeb", "pki");
         var appCfg = new Opc.Ua.ApplicationConfiguration
         {
             ApplicationName = "DriverTestOpcClient",
@@ -448,12 +450,14 @@ public class DriverTestService
             ClientConfiguration = new Opc.Ua.ClientConfiguration { DefaultSessionTimeout = 30000 }
         };
         await appCfg.Validate(Opc.Ua.ApplicationType.Client);
-        appCfg.CertificateValidator.CertificateValidation += (_, e) =>
-        { if (e.Error.StatusCode == Opc.Ua.StatusCodes.BadCertificateUntrusted) e.Accept = true; };
+        if (appCfg.CertificateManager is Opc.Ua.CertificateManager certManager)
+        {
+            certManager.AcceptError = (_, result) => result.StatusCode == Opc.Ua.StatusCodes.BadCertificateUntrusted;
+        }
         var selectedEndpoint = Opc.Ua.Client.CoreClientUtils.SelectEndpoint(appCfg, cfg.EndpointUrl, false, 10000);
-        var epCfg = Opc.Ua.EndpointConfiguration.Create(appCfg);
+        var epCfg = new Opc.Ua.EndpointConfiguration { OperationTimeout = appCfg.TransportQuotas.OperationTimeout };
         var endpoint = new Opc.Ua.ConfiguredEndpoint(null, selectedEndpoint, epCfg);
-        var session = await Opc.Ua.Client.Session.Create(appCfg, endpoint, false, "DriverTestSession", 30000, new Opc.Ua.UserIdentity(new Opc.Ua.AnonymousIdentityToken()), null);
+        var session = await new Opc.Ua.Client.DefaultSessionFactory().CreateAsync(appCfg, endpoint, false, "DriverTestSession", 30000, new Opc.Ua.UserIdentity(new Opc.Ua.AnonymousIdentityToken()), default);
         try
         {
             var nodeId = Opc.Ua.NodeId.Parse(cfg.NodeId);
@@ -474,10 +478,9 @@ public class DriverTestService
                 AttributeId = Opc.Ua.Attributes.Value,
                 Value = new Opc.Ua.DataValue(new Opc.Ua.Variant(writeVal))
             };
-            var writeRequest = new Opc.Ua.WriteValueCollection { writeValue };
-            var response = await session.WriteAsync(null, writeRequest, CancellationToken.None);
+            var response = await session.WriteAsync(null, new List<Opc.Ua.WriteValue> { writeValue }, CancellationToken.None);
             if (response.Results.Count > 0 && Opc.Ua.StatusCode.IsBad(response.Results[0]))
-                return new DriverTestResult(false, $"Write failed: {Opc.Ua.StatusCodes.GetBrowseName(response.Results[0].Code)}");
+                return new DriverTestResult(false, $"Write failed: {response.Results[0]}");
             return new DriverTestResult(true, "OPC UA write OK", writeVal.ToString());
         }
         finally { await session.CloseAsync(); session.Dispose(); }

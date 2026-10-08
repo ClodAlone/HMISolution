@@ -219,23 +219,23 @@ public class CertificateService
                 // Input args: ApplicationRecordDataType encoded as an ExtensionObject.
                 // We build the record manually via EncodeableObject to avoid dependency
                 // on the GDS-specific type if it is not available at compile time.
-                var registerResult = session.Call(
+                var registerResult = await CallMethodAsync(session,
                     gdsObjectId,
                     registerMethodId,
                     applicationName,
                     applicationUri,
                     (byte)ApplicationType.Server,
-                    new StringCollection());
+                    new[] { System.Net.Dns.GetHostName() });
 
-                var applicationId = registerResult?.Count > 0 ? registerResult[0]?.ToString() : "unknown";
+                var applicationId = registerResult.Count > 0 ? registerResult[0].Value?.ToString() : "unknown";
 
                 // Request a new key pair
                 var subjectName = $"CN={applicationName}";
-                var domainNames = new StringCollection { System.Net.Dns.GetHostName() };
+                var domainNames = new[] { System.Net.Dns.GetHostName() };
 
                 try
                 {
-                    session.Call(
+                    await CallMethodAsync(session,
                         gdsObjectId,
                         startKeyPairMethodId,
                         applicationId,
@@ -265,7 +265,7 @@ public class CertificateService
             }
             finally
             {
-                session.Close();
+                await session.CloseAsync(default);
                 session.Dispose();
             }
         }
@@ -302,13 +302,13 @@ public class CertificateService
 
                 try
                 {
-                    var trustListResult = session.Call(
+                    var trustListResult = await CallMethodAsync(session,
                         gdsObjectId,
                         getTrustListMethodId,
-                        NodeId.Null,    // applicationId
-                        NodeId.Null);   // certificateGroupId
+                        NodeId.Null,
+                        NodeId.Null);
 
-                    if (trustListResult?.Count > 0 && trustListResult[0] is NodeId trustListNodeId)
+                    if (trustListResult.Count > 0 && trustListResult[0].Value is NodeId trustListNodeId)
                     {
                         // Read the trust list using the OPC UA File Transfer (Open, Read, Close)
                         importedCount = await ReadAndImportTrustListFileAsync(session, trustListNodeId);
@@ -326,7 +326,7 @@ public class CertificateService
             }
             finally
             {
-                session.Close();
+                await session.CloseAsync(default);
                 session.Dispose();
             }
 
@@ -384,19 +384,13 @@ public class CertificateService
         };
 
         await config.Validate(Opc.Ua.ApplicationType.Client);
-        config.CertificateValidator.CertificateValidation += (s, e) => { e.Accept = true; };
-
-        var app = new ApplicationInstance
+        if (config.CertificateManager is CertificateManager certManager)
         {
-            ApplicationName = "ServerEditorWebGdsClient",
-            ApplicationType = Opc.Ua.ApplicationType.Client,
-            ApplicationConfiguration = config
-        };
-
-        await app.CheckApplicationInstanceCertificates(false, 2048);
+            certManager.AcceptError = (_, _) => true;
+        }
 
         var discoveryClient = DiscoveryClient.Create(new Uri(gdsEndpointUrl));
-        var endpoints = discoveryClient.GetEndpoints(null);
+        var endpoints = discoveryClient.GetEndpoints(default(ArrayOf<string>)).ToList();
         discoveryClient.Dispose();
 
         var selectedEndpoint = endpoints
@@ -406,27 +400,16 @@ public class CertificateService
         if (selectedEndpoint == null)
             throw new Exception("No GDS endpoints found");
 
-        var endpointConfig = EndpointConfiguration.Create(config);
+        var endpointConfig = new EndpointConfiguration { OperationTimeout = config.TransportQuotas.OperationTimeout };
         var endpoint = new ConfiguredEndpoint(null, selectedEndpoint, endpointConfig);
 
-        UserIdentity identity;
-        if (string.IsNullOrEmpty(userName))
-        {
-            identity = new UserIdentity(new AnonymousIdentityToken());
-        }
-        else
-        {
-            var token = new UserNameIdentityToken
-            {
-                UserName = userName,
-                DecryptedPassword = System.Text.Encoding.UTF8.GetBytes(password ?? "")
-            };
-            identity = new UserIdentity(token);
-        }
+        UserIdentity identity = string.IsNullOrEmpty(userName)
+            ? new UserIdentity(new AnonymousIdentityToken())
+            : new UserIdentity(userName, System.Text.Encoding.UTF8.GetBytes(password ?? ""));
 
-        var session = await Session.Create(
+        var session = await new DefaultSessionFactory().CreateAsync(
             config, endpoint, false,
-            "ServerEditorWebGdsClient", 60000, identity, null);
+            "ServerEditorWebGdsClient", 60000, identity, default);
 
         return (session, config);
     }
@@ -437,33 +420,30 @@ public class CertificateService
         int count = 0;
         try
         {
-            // Read the Size property to know how much data to expect
-            var sizeNodeId = new NodeId(trustListNodeId.Identifier + "/Size", trustListNodeId.NamespaceIndex);
-
             // Open the file (mode 1 = read)
-            var openMethod = new NodeId(trustListNodeId.Identifier + "/Open", trustListNodeId.NamespaceIndex);
-            var openResult = session.Call(trustListNodeId, openMethod, (byte)1);
-            if (openResult?.Count > 0 && openResult[0] is uint fileHandle)
+            var openMethod = new NodeId(trustListNodeId.IdentifierAsString + "/Open", trustListNodeId.NamespaceIndex);
+            var openResult = await CallMethodAsync(session, trustListNodeId, openMethod, (byte)1);
+            if (openResult.Count > 0 && openResult[0].Value is uint fileHandle)
             {
                 try
                 {
                     // Read data in chunks
-                    var readMethod = new NodeId(trustListNodeId.Identifier + "/Read", trustListNodeId.NamespaceIndex);
+                    var readMethod = new NodeId(trustListNodeId.IdentifierAsString + "/Read", trustListNodeId.NamespaceIndex);
                     var allData = new List<byte>();
                     while (true)
                     {
-                        var readResult = session.Call(trustListNodeId, readMethod, fileHandle, 65536);
-                        if (readResult?.Count > 0 && readResult[0] is byte[] chunk && chunk.Length > 0)
+                        var readResult = await CallMethodAsync(session, trustListNodeId, readMethod, fileHandle, 65536);
+                        if (readResult.Count > 0 && readResult[0].Value is ByteString chunk && chunk.Length > 0)
                         {
-                            allData.AddRange(chunk);
+                            allData.AddRange(chunk.ToArray());
                             if (chunk.Length < 65536) break;
                         }
                         else break;
                     }
 
                     // Close the file
-                    var closeMethod = new NodeId(trustListNodeId.Identifier + "/Close", trustListNodeId.NamespaceIndex);
-                    session.Call(trustListNodeId, closeMethod, fileHandle);
+                    var closeMethod = new NodeId(trustListNodeId.IdentifierAsString + "/Close", trustListNodeId.NamespaceIndex);
+                    await CallMethodAsync(session, trustListNodeId, closeMethod, fileHandle);
 
                     // Parse the trust list (UA Binary encoded TrustListDataType)
                     if (allData.Count > 0)
@@ -476,8 +456,8 @@ public class CertificateService
                     // Try to close the file handle on error
                     try
                     {
-                        var closeMethod = new NodeId(trustListNodeId.Identifier + "/Close", trustListNodeId.NamespaceIndex);
-                        session.Call(trustListNodeId, closeMethod, fileHandle);
+                        var closeMethod = new NodeId(trustListNodeId.IdentifierAsString + "/Close", trustListNodeId.NamespaceIndex);
+                        await CallMethodAsync(session, trustListNodeId, closeMethod, fileHandle);
                     }
                     catch { }
                     throw;
@@ -491,6 +471,26 @@ public class CertificateService
 
         await Task.CompletedTask;
         return count;
+    }
+
+    private static async Task<IList<Variant>> CallMethodAsync(OpcSession session, NodeId objectId, NodeId methodId, params object[] inputArguments)
+    {
+        var request = new CallMethodRequest
+        {
+            ObjectId = objectId,
+            MethodId = methodId,
+            InputArguments = inputArguments.Select(argument => new Variant(argument)).ToList()
+        };
+
+        var response = await session.CallAsync(null, new[] { request }, default);
+        var result = response.Results.Count > 0 ? response.Results[0] : null;
+        if (result == null)
+            return Array.Empty<Variant>();
+
+        if (StatusCode.IsBad(result.StatusCode))
+            throw new ServiceResultException(result.StatusCode);
+
+        return result.OutputArguments.ToList();
     }
 
     private int ImportTrustListData(byte[] data)
@@ -519,8 +519,9 @@ public class CertificateService
                     {
                         try
                         {
-                            var cert = X509CertificateLoader.LoadCertificate(certData);
-                            File.WriteAllBytes(Path.Combine(trustedDir, $"{cert.Thumbprint}.der"), certData);
+                            var certBytes = certData.ToArray();
+                            var cert = X509CertificateLoader.LoadCertificate(certBytes);
+                            File.WriteAllBytes(Path.Combine(trustedDir, $"{cert.Thumbprint}.der"), certBytes);
                             cert.Dispose();
                             count++;
                         }
@@ -548,8 +549,9 @@ public class CertificateService
                     {
                         try
                         {
-                            var cert = X509CertificateLoader.LoadCertificate(certData);
-                            File.WriteAllBytes(Path.Combine(issuerDir, $"{cert.Thumbprint}.der"), certData);
+                            var certBytes = certData.ToArray();
+                            var cert = X509CertificateLoader.LoadCertificate(certBytes);
+                            File.WriteAllBytes(Path.Combine(issuerDir, $"{cert.Thumbprint}.der"), certBytes);
                             cert.Dispose();
                             count++;
                         }

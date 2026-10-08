@@ -321,8 +321,8 @@ public class OpcUaServerApp
             },
             ServerConfiguration = new ServerConfiguration
             {
-                BaseAddresses = new StringCollection { endpointUrl },
-                SecurityPolicies = new ServerSecurityPolicyCollection
+                BaseAddresses = new List<string> { endpointUrl },
+                SecurityPolicies = new List<ServerSecurityPolicy>
                 {
                     new ServerSecurityPolicy
                     {
@@ -330,7 +330,7 @@ public class OpcUaServerApp
                         SecurityPolicyUri = SecurityPolicies.None
                     }
                 },
-                UserTokenPolicies = new UserTokenPolicyCollection()
+                UserTokenPolicies = new List<UserTokenPolicy>()
             },
             ClientConfiguration = new ClientConfiguration { DefaultSessionTimeout = 60000 },
             TraceConfiguration = new TraceConfiguration()
@@ -351,23 +351,21 @@ public class OpcUaServerApp
             Log.Warning(ex, "Failed to create PKI directories.");
         }
         
-        config.ServerConfiguration.UserTokenPolicies.Clear();
+        var userTokenPolicies = new List<UserTokenPolicy>();
         if (enableAnonymous)
         {
-            config.ServerConfiguration.UserTokenPolicies.Add(new UserTokenPolicy(UserTokenType.Anonymous));
+            userTokenPolicies.Add(new UserTokenPolicy(UserTokenType.Anonymous));
         }
-        config.ServerConfiguration.UserTokenPolicies.Add(new UserTokenPolicy(UserTokenType.UserName));
+        userTokenPolicies.Add(new UserTokenPolicy(UserTokenType.UserName));
+        config.ServerConfiguration.UserTokenPolicies = userTokenPolicies;
         
         Log.Information("Validating OPC UA configuration...");
         await config.ValidateAsync(ApplicationType.Server);
 
-        config.CertificateValidator.CertificateValidation += (s, e) =>
+        if (config.CertificateManager is ICertificateValidatorEx certificateValidator)
         {
-            if (e.Error.StatusCode == StatusCodes.BadCertificateUntrusted)
-            {
-                e.Accept = true;
-            }
-        };
+            certificateValidator.AcceptError = (certificate, error) => error.StatusCode == StatusCodes.BadCertificateUntrusted;
+        }
 
         Log.Information("Checking application certificates...");
         try
@@ -439,7 +437,7 @@ public class OpcUaServer : StandardServer
     private readonly string _configPath;
     private SimpleFileServerNodeManager? _nodeManager;
 
-    public OpcUaServer(string configPath)
+    public OpcUaServer(string configPath) : base(new ServiceProviderTelemetryContext(new Microsoft.Extensions.DependencyInjection.ServiceCollection().BuildServiceProvider()))
     {
         _configPath = configPath;
     }
@@ -470,4 +468,5 @@ public class OpcUaServer : StandardServer
         return _nodeManager;
     }
 }
+
 

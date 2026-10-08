@@ -19,10 +19,10 @@ internal static class DriverTestHelpers
         {
             NodeId = new NodeId(name, 2),
             BrowseName = new QualifiedName(name, 2),
-            DisplayName = name,
+            DisplayName = new LocalizedText(name),
             DataType = dataType ?? DataTypeIds.Double,
             ValueRank = ValueRanks.Scalar,
-            Value = 0.0
+            Value = new Variant(0.0)
         };
     }
 }

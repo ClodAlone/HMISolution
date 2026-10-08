@@ -262,8 +262,8 @@ public sealed class SparkplugPublisher : IDisposable
                 var metric = new SparkplugB.SparkplugPayload.Metric
                 {
                     Alias = alias,
-                    Timestamp = variable.Timestamp != DateTime.MinValue
-                        ? (ulong)new DateTimeOffset(variable.Timestamp).ToUnixTimeMilliseconds()
+                    Timestamp = ((DateTime)variable.Timestamp) != DateTime.MinValue
+                        ? (ulong)new DateTimeOffset((DateTime)variable.Timestamp).ToUnixTimeMilliseconds()
                         : (ulong)DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
                     Datatype = MapOpcToSparkplugType(variable.DataType),
                 };

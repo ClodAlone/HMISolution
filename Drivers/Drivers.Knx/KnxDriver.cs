@@ -46,12 +46,12 @@ namespace SimpleOpcFileServer
             {
                 var item = new KnxItem { Variable = variable, Config = knxConfig };
                 _items.Add(item);
-                variable.OnSimpleWriteValue = (ISystemContext ctx, NodeState node, ref object value) =>
+                variable.OnSimpleWriteValue = (ISystemContext ctx, NodeState node, ref Variant value) =>
                 {
                     if (!_clients.TryGetValue($"{knxConfig.IpAddress}:{knxConfig.Port}", out var client))
                         return ServiceResult.Create(StatusCodes.BadNotConnected, "KNX client not initialized");
 
-                    client.Write(knxConfig.GroupAddress, value);
+                    client.Write(knxConfig.GroupAddress, value.Value);
                     return ServiceResult.Good;
                 };
                 InitializeClient(knxConfig);
@@ -92,7 +92,7 @@ namespace SimpleOpcFileServer
 
         private void Update(BaseDataVariableState variable, object value)
         {
-            variable.Value = value; variable.StatusCode = StatusCodes.Good;
+            variable.Value = new Variant(value); variable.StatusCode = StatusCodes.Good;
             variable.Timestamp = DateTime.UtcNow; variable.ClearChangeMasks(_context, false);
         }
 
@@ -103,7 +103,7 @@ namespace SimpleOpcFileServer
             if (!string.IsNullOrEmpty(message))
             {
                 var n = variable.FindChild(_context, new QualifiedName("LastError", variable.BrowseName.NamespaceIndex));
-                if (n is BaseVariableState v) { v.Value = message; v.Timestamp = DateTime.UtcNow; v.ClearChangeMasks(_context, false); }
+                if (n is BaseVariableState v) { v.Value = new Variant(message); v.Timestamp = DateTime.UtcNow; v.ClearChangeMasks(_context, false); }
             }
         }
 

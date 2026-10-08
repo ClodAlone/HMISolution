@@ -1,4 +1,4 @@
-// Copyright (c) 2026 Claudio Fiorani
+﻿// Copyright (c) 2026 Claudio Fiorani
 // All rights reserved.
 
 using Opc.Ua;
@@ -59,7 +59,7 @@ public class LiveTagService : IDisposable
             await EnsureConfigAsync();
 
             var client = DiscoveryClient.Create(new Uri(endpointUrl));
-            var endpoints = client.GetEndpoints(null);
+            var endpoints = client.GetEndpoints(default(ArrayOf<string>)).ToList();
             client.Dispose();
 
             var endpointDesc =
@@ -77,13 +77,13 @@ public class LiveTagService : IDisposable
                 endpointDesc.EndpointUrl = builder.Uri.ToString();
             }
 
-            var epConfig = EndpointConfiguration.Create(_appConfig);
+            var epConfig = new EndpointConfiguration { OperationTimeout = _appConfig!.TransportQuotas.OperationTimeout };
             var endpoint = new ConfiguredEndpoint(null, endpointDesc, epConfig);
 
-            _session = await Session.Create(
-                _appConfig!, endpoint, false,
+            _session = await new DefaultSessionFactory().CreateAsync(
+                _appConfig, endpoint, false,
                 "LiveTagSession", 60000,
-                new UserIdentity(new AnonymousIdentityToken()), null);
+                new UserIdentity(new AnonymousIdentityToken()), default) as Session;
 
             if (_session?.Connected != true) throw new Exception("Session could not be created");
 
@@ -136,7 +136,7 @@ public class LiveTagService : IDisposable
         // Clear existing subscription
         if (_subscription != null)
         {
-            try { _subscription.Delete(true); } catch { }
+            try { _subscription.DeleteAsync(true, default).GetAwaiter().GetResult(); } catch { }
             _subscription = null;
         }
 
@@ -180,8 +180,8 @@ public class LiveTagService : IDisposable
         }
 
         _session.AddSubscription(_subscription);
-        _subscription.Create();
-        _subscription.ApplyChanges();
+        _subscription.CreateAsync(default).GetAwaiter().GetResult();
+        _subscription.ApplyChangesAsync(default).GetAwaiter().GetResult();
     }
 
     private NodeId ResolveNodeId(string variablePath)
@@ -194,12 +194,12 @@ public class LiveTagService : IDisposable
     {
         if (_subscription != null)
         {
-            try { _subscription.Delete(true); } catch { }
+            try { _subscription.DeleteAsync(true, default).GetAwaiter().GetResult(); } catch { }
             _subscription = null;
         }
         if (_session != null)
         {
-            try { _session.Close(); } catch { }
+            try { _session.CloseAsync(default).GetAwaiter().GetResult(); } catch { }
             _session = null;
         }
         _lastEndpoint = "";
@@ -226,23 +226,23 @@ public class LiveTagService : IDisposable
                 ApplicationCertificate = new CertificateIdentifier
                 {
                     StoreType = CertificateStoreType.Directory,
-                    StorePath = "%LocalApplicationData%/ServerEditorWeb/pki/own",
+                    StorePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ServerEditorWeb", "pki", "own"),
                     SubjectName = "LiveTagClient"
                 },
                 TrustedPeerCertificates = new CertificateTrustList
                 {
                     StoreType = CertificateStoreType.Directory,
-                    StorePath = "%LocalApplicationData%/ServerEditorWeb/pki/trusted"
+                    StorePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ServerEditorWeb", "pki", "trusted")
                 },
                 TrustedIssuerCertificates = new CertificateTrustList
                 {
                     StoreType = CertificateStoreType.Directory,
-                    StorePath = "%LocalApplicationData%/ServerEditorWeb/pki/issuer"
+                    StorePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ServerEditorWeb", "pki", "issuer")
                 },
                 RejectedCertificateStore = new CertificateTrustList
                 {
                     StoreType = CertificateStoreType.Directory,
-                    StorePath = "%LocalApplicationData%/ServerEditorWeb/pki/rejected"
+                    StorePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ServerEditorWeb", "pki", "rejected")
                 }
             },
             TransportQuotas = new TransportQuotas
@@ -257,18 +257,10 @@ public class LiveTagService : IDisposable
             TraceConfiguration = new TraceConfiguration()
         };
         await _appConfig.Validate(ApplicationType.Client);
-        _appConfig.CertificateValidator.CertificateValidation += (s, e) =>
+        if (_appConfig.CertificateManager is CertificateManager certManager)
         {
-            if (e.Error.StatusCode == Opc.Ua.StatusCodes.BadCertificateUntrusted)
-                e.Accept = true;
-        };
-        var app = new ApplicationInstance
-        {
-            ApplicationName = _appConfig.ApplicationName,
-            ApplicationType = ApplicationType.Client,
-            ApplicationConfiguration = _appConfig
-        };
-        await app.CheckApplicationInstanceCertificates(false, 2048);
+            certManager.AcceptError = (_, result) => result.StatusCode == Opc.Ua.StatusCodes.BadCertificateUntrusted;
+        }
     }
 
     public void Dispose()

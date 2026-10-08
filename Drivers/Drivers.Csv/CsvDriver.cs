@@ -55,7 +55,7 @@ namespace SimpleOpcFileServer
                 }
                 var item = new CsvItem { Variable = variable, Config = csvConfig };
                 device.AddItem(item);
-                variable.OnSimpleWriteValue = (ISystemContext ctx, NodeState node, ref object value) => device.Write(item, value);
+                variable.OnSimpleWriteValue = (ISystemContext ctx, NodeState node, ref Variant value) => device.Write(item, value.Value);
             }
         }
 
@@ -189,7 +189,7 @@ namespace SimpleOpcFileServer
 
                 if (value != null)
                 {
-                    variable.Value = value;
+                    variable.Value = new Variant(value);
                     variable.StatusCode = StatusCodes.Good;
                     variable.Timestamp = DateTime.UtcNow;
                     variable.ClearChangeMasks(_context, false);
@@ -206,7 +206,7 @@ namespace SimpleOpcFileServer
                     var lastErrorNode = variable.FindChild(_context, new QualifiedName("LastError", variable.BrowseName.NamespaceIndex));
                     if (lastErrorNode is BaseVariableState lastErrorVar)
                     {
-                        lastErrorVar.Value = message;
+                        lastErrorVar.Value = new Variant(message);
                         lastErrorVar.Timestamp = DateTime.UtcNow;
                         lastErrorVar.ClearChangeMasks(_context, false);
                     }
@@ -263,7 +263,7 @@ namespace SimpleOpcFileServer
                         }
 
                         File.WriteAllLines(_filePath, lines);
-                        item.Variable.Value = value; item.Variable.StatusCode = StatusCodes.Good;
+                        item.Variable.Value = new Variant(value); item.Variable.StatusCode = StatusCodes.Good;
                         item.Variable.Timestamp = DateTime.UtcNow; item.Variable.ClearChangeMasks(_context, false);
                         return ServiceResult.Good;
                     }

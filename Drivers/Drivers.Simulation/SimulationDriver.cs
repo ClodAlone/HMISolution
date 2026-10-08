@@ -142,7 +142,7 @@ namespace SimpleOpcFileServer
                     item.LastPollTime = now;
 
                     var value = Compute(item, elapsed);
-                    item.Variable.Value = value;
+                    item.Variable.Value = new Variant(value);
                     item.Variable.StatusCode = StatusCodes.Good;
                     item.Variable.Timestamp = now;
                     item.Variable.ClearChangeMasks(_context, false);

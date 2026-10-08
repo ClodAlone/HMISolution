@@ -59,12 +59,12 @@ namespace SimpleOpcFileServer
                 device.AddItem(item);
 
                 // Attach write handler to allow OPC UA client writes to be sent to Modbus device.
-                variable.OnSimpleWriteValue = (ISystemContext ctx, NodeState node, ref object value) =>
+                variable.OnSimpleWriteValue = (ISystemContext ctx, NodeState node, ref Variant value) =>
                 {
                     try
                     {
                         // Delegate to the device write method.
-                        var res = device.Write(item, value);
+                        var res = device.Write(item, value.Value);
                         return res;
                     }
                     catch (Exception ex)
@@ -289,7 +289,7 @@ namespace SimpleOpcFileServer
 
             private void Update(BaseDataVariableState variable, object value)
             {
-                variable.Value = value;
+                variable.Value = new Variant(value);
                 variable.StatusCode = StatusCodes.Good;
                 variable.Timestamp = DateTime.UtcNow;
                 variable.ClearChangeMasks(_context, false);
@@ -305,7 +305,7 @@ namespace SimpleOpcFileServer
                     var lastErrorNode = variable.FindChild(_context, new QualifiedName("LastError", variable.BrowseName.NamespaceIndex));
                     if (lastErrorNode is BaseVariableState lastErrorVar)
                     {
-                        lastErrorVar.Value = message;
+                        lastErrorVar.Value = new Variant(message);
                         lastErrorVar.Timestamp = DateTime.UtcNow;
                         lastErrorVar.ClearChangeMasks(_context, false);
                     }
@@ -441,7 +441,7 @@ namespace SimpleOpcFileServer
                     }
 
                     // On success, update variable in address space to reflect new value
-                    item.Variable.Value = value; item.Variable.StatusCode = StatusCodes.Good;
+                    item.Variable.Value = new Variant(value); item.Variable.StatusCode = StatusCodes.Good;
                     item.Variable.Timestamp = DateTime.UtcNow; item.Variable.ClearChangeMasks(_context, false);
 
                     return ServiceResult.Good;

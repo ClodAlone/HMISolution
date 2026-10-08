@@ -46,8 +46,9 @@ namespace SimpleOpcFileServer
             Task.Run(() => InitializeClient(mqttConfig));
 
             // Publish to MQTT when an OPC UA client writes this variable.
-            variable.OnSimpleWriteValue = (ISystemContext ctx, NodeState node, ref object value) =>
+            variable.OnSimpleWriteValue = (ISystemContext ctx, NodeState node, ref Variant valueVariant) =>
             {
+                object? value = valueVariant.Value;
                 try
                 {
                     var key = $"{mqttConfig.Broker}:{mqttConfig.Port}";
@@ -223,7 +224,7 @@ namespace SimpleOpcFileServer
 
                 if (value != null)
                 {
-                    item.Variable.Value = value; item.Variable.StatusCode = StatusCodes.Good;
+                    item.Variable.Value = new Variant(value); item.Variable.StatusCode = StatusCodes.Good;
                     item.Variable.Timestamp = DateTime.UtcNow; item.Variable.ClearChangeMasks(_context, false);
                 }
             }
@@ -237,7 +238,7 @@ namespace SimpleOpcFileServer
             if (!string.IsNullOrEmpty(message))
             {
                 var n = variable.FindChild(_context, new QualifiedName("LastError", variable.BrowseName.NamespaceIndex));
-                if (n is BaseVariableState v) { v.Value = message; v.Timestamp = DateTime.UtcNow; v.ClearChangeMasks(_context, false); }
+                if (n is BaseVariableState v) { v.Value = new Variant(message); v.Timestamp = DateTime.UtcNow; v.ClearChangeMasks(_context, false); }
             }
         }
 

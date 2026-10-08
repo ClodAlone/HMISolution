@@ -302,7 +302,7 @@ public class SparkplugBDriver : IDriver, IDisposable
                 var value = ExtractValue(metric, item.Variable.DataType);
                 if (value != null || metric.IsNull)
                 {
-                    item.Variable.Value = metric.IsNull ? null : value;
+                    item.Variable.Value = metric.IsNull ? Variant.Null : new Variant(value);
                     item.Variable.StatusCode = StatusCodes.Good;
                     item.Variable.Timestamp = metric.Timestamp > 0
                         ? DateTimeOffset.FromUnixTimeMilliseconds((long)metric.Timestamp).UtcDateTime

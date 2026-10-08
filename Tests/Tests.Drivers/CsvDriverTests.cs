@@ -163,7 +163,7 @@ public class CsvDriverTests : IDisposable
         driver.Start();
 
         Thread.Sleep(500);
-        Assert.Equal("bar", variable.Value?.ToString());
+        Assert.Equal("bar", variable.Value.Value?.ToString());
     }
 
     [Fact]

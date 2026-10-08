@@ -33,13 +33,13 @@ public class ModbusWriteDriverTests
 
         driver.AddItem(variable, config);
 
-        object writeValue = (ushort)123;
+        Variant writeValue = new Variant((ushort)123);
         var result = variable.OnSimpleWriteValue!(null!, variable, ref writeValue);
 
         Assert.Equal(StatusCodes.Good, result.StatusCode);
         Assert.Equal((ushort)123, server.LastWrittenValue);
         Assert.Equal((ushort)7, server.LastRegister);
-        Assert.Equal((ushort)123, variable.Value);
+        Assert.Equal((ushort)123, variable.Value.Value);
     }
 
     private sealed class ModbusWriteTestServer : IAsyncDisposable

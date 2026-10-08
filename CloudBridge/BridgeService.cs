@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.SignalR.Client;
 using Opc.Ua;
 using Opc.Ua.Client;
 using Opc.Ua.Configuration;
+using Opc.Ua.Security.Certificates;
 using SharedModels;
 using SharedModels.CloudRelay;
 
@@ -132,8 +133,7 @@ public sealed class BridgeService : IDisposable
     {
         try
         {
-            _subscription?.Delete(true);
-            _session?.Close();
+            await CleanupOpcResourcesAsync();
         }
         catch { }
 
@@ -175,8 +175,11 @@ public sealed class BridgeService : IDisposable
             TraceConfiguration = new TraceConfiguration()
         };
 
-        await _appConfig.Validate(ApplicationType.Client);
-        _appConfig.CertificateValidator.CertificateValidation += (s, e) => e.Accept = true;
+        await _appConfig.ValidateAsync(ApplicationType.Client);
+        if (_appConfig.CertificateManager is CertificateManager certManager)
+        {
+            certManager.AcceptError = (_, _) => true;
+        }
 
         var app = new ApplicationInstance
         {
@@ -185,19 +188,19 @@ public sealed class BridgeService : IDisposable
             ApplicationConfiguration = _appConfig
         };
 
-        try { await app.CheckApplicationInstanceCertificates(false, 2048); }
+        try { await app.CheckApplicationInstanceCertificatesAsync(false, 2048); }
         catch
         {
             var storePath = _appConfig.SecurityConfiguration.ApplicationCertificate.StorePath;
             if (Directory.Exists(storePath))
                 foreach (var f in Directory.EnumerateFiles(storePath))
                     try { File.Delete(f); } catch { }
-            await app.CheckApplicationInstanceCertificates(false, 2048);
+            await app.CheckApplicationInstanceCertificatesAsync(false, 2048);
         }
 
         Log($"Discovering OPC endpoints at {_opcEndpoint}...");
         var client = DiscoveryClient.Create(new Uri(_opcEndpoint));
-        var endpoints = client.GetEndpoints(null);
+        var endpoints = client.GetEndpoints(default(ArrayOf<string>)).ToList();
         client.Dispose();
 
         var endpointDesc =
@@ -221,10 +224,10 @@ public sealed class BridgeService : IDisposable
         var endpoint = new ConfiguredEndpoint(null, endpointDesc, epConfig);
 
         Log("Creating OPC session...");
-        _session = await Session.Create(
+        _session = await new DefaultSessionFactory().CreateAsync(
             _appConfig, endpoint, false,
             "CloudBridgeSession", 60000,
-            new UserIdentity(new AnonymousIdentityToken()), null);
+            new UserIdentity(new AnonymousIdentityToken()), default) as Session;
 
         _subscription = new Subscription(_session.DefaultSubscription)
         {
@@ -234,12 +237,29 @@ public sealed class BridgeService : IDisposable
             MaxNotificationsPerPublish = 1000
         };
         _session.AddSubscription(_subscription);
-        _subscription.Create();
+        await _subscription.CreateAsync(CancellationToken.None);
 
         Log($"✓ Connected to OPC UA — SessionId={_session.SessionId}");
     }
 
     // ─── Hub → Bridge command handlers ───────────────────────
+
+    private async Task CleanupOpcResourcesAsync()
+    {
+        if (_subscription != null)
+        {
+            try { await _subscription.DeleteAsync(true, CancellationToken.None); } catch { }
+            try { _subscription.Dispose(); } catch { }
+            _subscription = null;
+        }
+
+        if (_session != null)
+        {
+            try { await _session.CloseAsync(CancellationToken.None); } catch { }
+            try { _session.Dispose(); } catch { }
+            _session = null;
+        }
+    }
 
     private void OnSubscribeRequested(List<string> variablePaths, int namespaceIndex)
     {
@@ -251,7 +271,7 @@ public sealed class BridgeService : IDisposable
         if (existing.Count > 0)
         {
             _subscription.RemoveItems(existing);
-            _subscription.ApplyChanges();
+            _subscription.ApplyChangesAsync(CancellationToken.None).GetAwaiter().GetResult();
         }
 
         foreach (var path in variablePaths.Where(p => !string.IsNullOrEmpty(p)))
@@ -269,7 +289,7 @@ public sealed class BridgeService : IDisposable
             _subscription.AddItem(item);
         }
 
-        _subscription.ApplyChanges();
+        _subscription.ApplyChangesAsync(CancellationToken.None).GetAwaiter().GetResult();
         Log($"  → {_subscription.MonitoredItemCount} monitored item(s) active");
     }
 
@@ -283,28 +303,37 @@ public sealed class BridgeService : IDisposable
                 var nodeId = new NodeId(req.VariablePath, (ushort)req.NamespaceIndex);
 
                 // Read data type
-                var nodesToRead = new ReadValueIdCollection
-                {
-                    new ReadValueId { NodeId = nodeId, AttributeId = Attributes.DataType }
-                };
-                _session.Read(null, 0, TimestampsToReturn.Neither, nodesToRead,
-                    out var readResults, out _);
+                var readResponse = await _session.ReadAsync(
+                    null,
+                    0,
+                    TimestampsToReturn.Neither,
+                    new List<ReadValueId>
+                    {
+                        new ReadValueId { NodeId = nodeId, AttributeId = Attributes.DataType }
+                    },
+                    CancellationToken.None);
 
-                var dataTypeId = readResults.Count > 0 && StatusCode.IsGood(readResults[0].StatusCode)
-                    ? readResults[0].Value as NodeId : null;
+                var readResults = readResponse.Results;
+                NodeId? dataTypeId = null;
+                if (readResults.Count > 0 && StatusCode.IsGood(readResults[0].StatusCode) && readResults[0].WrappedValue.AsBoxedObject() is NodeId typedNodeId)
+                {
+                    dataTypeId = typedNodeId;
+                }
                 var typed = ConvertValue(dataTypeId, req.Value);
 
-                var nodesToWrite = new WriteValueCollection
-                {
-                    new WriteValue
+                var writeResponse = await _session.WriteAsync(
+                    null,
+                    new List<WriteValue>
                     {
-                        NodeId = nodeId,
-                        AttributeId = Attributes.Value,
-                        Value = new DataValue(new Variant(typed))
-                    }
-                };
-                _session.Write(null, nodesToWrite, out var results, out _);
-                success = results != null && StatusCode.IsGood(results[0]);
+                        new WriteValue
+                        {
+                            NodeId = nodeId,
+                            AttributeId = Attributes.Value,
+                            Value = new DataValue(new Variant(typed))
+                        }
+                    },
+                    CancellationToken.None);
+                success = writeResponse.Results.Count > 0 && StatusCode.IsGood(writeResponse.Results[0]);
             }
         }
         catch (Exception ex) { Log($"Write error: {ex.Message}"); }
@@ -323,8 +352,12 @@ public sealed class BridgeService : IDisposable
         {
             var conditionId = NodeId.Parse(action.ConditionId);
             var eventId = Convert.FromBase64String(action.EventIdBase64);
-            _session.Call(conditionId, MethodIds.AcknowledgeableConditionType_Acknowledge,
-                new object[] { eventId, new LocalizedText(action.Comment) });
+            await _session.CallAsync(
+                conditionId,
+                MethodIds.AcknowledgeableConditionType_Acknowledge,
+                CancellationToken.None,
+                new Variant(eventId),
+                new Variant(new LocalizedText(action.Comment))); 
             Log($"Acknowledged alarm {action.ConditionId}");
         }
         catch (Exception ex) { Log($"Ack error: {ex.Message}"); }
@@ -337,8 +370,12 @@ public sealed class BridgeService : IDisposable
         {
             var conditionId = NodeId.Parse(action.ConditionId);
             var eventId = Convert.FromBase64String(action.EventIdBase64);
-            _session.Call(conditionId, MethodIds.AcknowledgeableConditionType_Confirm,
-                new object[] { eventId, new LocalizedText(action.Comment) });
+            await _session.CallAsync(
+                conditionId,
+                MethodIds.AcknowledgeableConditionType_Confirm,
+                CancellationToken.None,
+                new Variant(eventId),
+                new Variant(new LocalizedText(action.Comment))); 
             Log($"Confirmed alarm {action.ConditionId}");
         }
         catch (Exception ex) { Log($"Confirm error: {ex.Message}"); }
@@ -364,7 +401,7 @@ public sealed class BridgeService : IDisposable
     {
         if (e.NotificationValue is not MonitoredItemNotification notification) return;
 
-        var val = notification.Value?.WrappedValue.ToString() ?? "";
+        var val = notification.Value.WrappedValue.ToString() ?? "";
         lock (_lock) { _latestValues[item.DisplayName] = val; }
 
         // Batch: push all current values to the cloud
@@ -405,19 +442,25 @@ public sealed class BridgeService : IDisposable
         if (_session == null) return result;
 
         var filter = new EventFilter();
-        filter.SelectClauses.Add(new SimpleAttributeOperand(ObjectTypeIds.BaseEventType, BrowseNames.EventId));
-        filter.SelectClauses.Add(new SimpleAttributeOperand(ObjectTypeIds.ConditionType, BrowseNames.Retain));
-        filter.SelectClauses.Add(new SimpleAttributeOperand(ObjectTypeIds.BaseEventType, BrowseNames.SourceName));
-        filter.SelectClauses.Add(new SimpleAttributeOperand(ObjectTypeIds.ConditionType, BrowseNames.NodeId));
-        filter.SelectClauses.Add(new SimpleAttributeOperand(ObjectTypeIds.BaseEventType, BrowseNames.Message));
-        filter.SelectClauses.Add(new SimpleAttributeOperand(ObjectTypeIds.BaseEventType, BrowseNames.Severity));
-        filter.SelectClauses.Add(new SimpleAttributeOperand(ObjectTypeIds.BaseEventType, BrowseNames.Time));
-        filter.SelectClauses.Add(new SimpleAttributeOperand(
-            ObjectTypeIds.AcknowledgeableConditionType,
-            new QualifiedName[] { BrowseNames.AckedState, BrowseNames.Id }));
-        filter.SelectClauses.Add(new SimpleAttributeOperand(
-            ObjectTypeIds.AcknowledgeableConditionType,
-            new QualifiedName[] { BrowseNames.ConfirmedState, BrowseNames.Id }));
+        filter.AddSelectClause(ObjectTypeIds.BaseEventType, new QualifiedName(BrowseNames.EventId));
+        filter.AddSelectClause(ObjectTypeIds.ConditionType, new QualifiedName(BrowseNames.Retain));
+        filter.AddSelectClause(ObjectTypeIds.BaseEventType, new QualifiedName(BrowseNames.SourceName));
+        filter.AddSelectClause(ObjectTypeIds.ConditionType, new QualifiedName(BrowseNames.NodeId));
+        filter.AddSelectClause(ObjectTypeIds.BaseEventType, new QualifiedName(BrowseNames.Message));
+        filter.AddSelectClause(ObjectTypeIds.BaseEventType, new QualifiedName(BrowseNames.Severity));
+        filter.AddSelectClause(ObjectTypeIds.BaseEventType, new QualifiedName(BrowseNames.Time));
+        filter.SelectClauses = new List<SimpleAttributeOperand>
+        {
+            new SimpleAttributeOperand(ObjectTypeIds.BaseEventType, new QualifiedName(BrowseNames.EventId)),
+            new SimpleAttributeOperand(ObjectTypeIds.ConditionType, new QualifiedName(BrowseNames.Retain)),
+            new SimpleAttributeOperand(ObjectTypeIds.BaseEventType, new QualifiedName(BrowseNames.SourceName)),
+            new SimpleAttributeOperand(ObjectTypeIds.ConditionType, new QualifiedName(BrowseNames.NodeId)),
+            new SimpleAttributeOperand(ObjectTypeIds.BaseEventType, new QualifiedName(BrowseNames.Message)),
+            new SimpleAttributeOperand(ObjectTypeIds.BaseEventType, new QualifiedName(BrowseNames.Severity)),
+            new SimpleAttributeOperand(ObjectTypeIds.BaseEventType, new QualifiedName(BrowseNames.Time)),
+            new SimpleAttributeOperand(ObjectTypeIds.AcknowledgeableConditionType, new[] { new QualifiedName(BrowseNames.AckedState), new QualifiedName(BrowseNames.Id) }),
+            new SimpleAttributeOperand(ObjectTypeIds.AcknowledgeableConditionType, new[] { new QualifiedName(BrowseNames.ConfirmedState), new QualifiedName(BrowseNames.Id) })
+        }; 
 
         var sub = new Subscription(_session.DefaultSubscription)
         {
@@ -425,7 +468,7 @@ public sealed class BridgeService : IDisposable
             LifetimeCount = 20, MaxNotificationsPerPublish = 1000
         };
         _session.AddSubscription(sub);
-        sub.Create();
+        await sub.CreateAsync(CancellationToken.None);
 
         var mi = new MonitoredItem(sub.DefaultItem)
         {
@@ -441,47 +484,71 @@ public sealed class BridgeService : IDisposable
                 foreach (var evt in enl.Events) events.Add(evt);
         };
         sub.AddItem(mi);
-        sub.ApplyChanges();
+        await sub.ApplyChangesAsync(CancellationToken.None);
 
-        _session.Call(ObjectTypeIds.ConditionType,
-            MethodIds.ConditionType_ConditionRefresh, new object[] { sub.Id });
+        await _session.CallAsync(
+            ObjectTypeIds.ConditionType,
+            MethodIds.ConditionType_ConditionRefresh,
+            CancellationToken.None,
+            new Variant(sub.Id));
         await Task.Delay(500);
 
         int idx = 0;
         foreach (var evt in events)
         {
             if (evt.EventFields.Count < 7) continue;
-            if (evt.EventFields[1].Value is not true) continue;
+            if (!TryGetVariantValue<bool>(evt.EventFields[1], out var retain) || !retain) continue;
 
-            var eventId = evt.EventFields[0].Value as byte[];
-            var conditionId = evt.EventFields[3].Value as NodeId;
-            if (conditionId == null || eventId == null) continue;
+            if (!TryGetVariantValue<byte[]>(evt.EventFields[0], out var eventId) ||
+                !TryGetVariantValue<NodeId>(evt.EventFields[3], out var conditionId))
+            {
+                continue;
+            }
 
             result.Add(new AlarmEntryDto
             {
                 Id = $"alarm_{idx++}",
                 ConditionId = conditionId.ToString(),
                 EventIdBase64 = Convert.ToBase64String(eventId),
-                SourceName = evt.EventFields[2].Value?.ToString() ?? "",
-                Message = evt.EventFields[4].Value is LocalizedText lt ? lt.Text : evt.EventFields[4].Value?.ToString() ?? "",
-                Severity = evt.EventFields[5].Value?.ToString() ?? "0",
-                Time = evt.EventFields[6].Value is DateTime dt ? dt : DateTime.UtcNow,
-                IsAcked = evt.EventFields.Count > 7 && evt.EventFields[7].Value is true,
-                IsConfirmed = evt.EventFields.Count > 8 && evt.EventFields[8].Value is true
+                SourceName = GetVariantString(evt.EventFields[2]),
+                Message = TryGetVariantValue<LocalizedText>(evt.EventFields[4], out var lt) ? lt.Text : GetVariantString(evt.EventFields[4]),
+                Severity = GetVariantString(evt.EventFields[5], "0"),
+                Time = TryGetVariantValue<DateTime>(evt.EventFields[6], out var dt) ? dt : DateTime.UtcNow,
+                IsAcked = evt.EventFields.Count > 7 && TryGetVariantValue<bool>(evt.EventFields[7], out var isAcked) && isAcked,
+                IsConfirmed = evt.EventFields.Count > 8 && TryGetVariantValue<bool>(evt.EventFields[8], out var isConfirmed) && isConfirmed
             });
         }
 
-        sub.Delete(true);
-        _session.RemoveSubscription(sub);
+        await sub.DeleteAsync(true, CancellationToken.None);
+        await _session.RemoveSubscriptionAsync(sub, CancellationToken.None);
         return result;
     }
 
     // ─── Helpers ─────────────────────────────────────────────
 
+    private static bool TryGetVariantValue<T>(Variant variant, out T value)
+    {
+        var boxed = variant.AsBoxedObject();
+        if (boxed is T typed)
+        {
+            value = typed;
+            return true;
+        }
+
+        value = default!;
+        return false;
+    }
+
+    private static string GetVariantString(Variant variant, string fallback = "")
+    {
+        var boxed = variant.AsBoxedObject();
+        return boxed?.ToString() ?? fallback;
+    }
+
     private static object ConvertValue(NodeId? dataTypeId, string value)
     {
         if (dataTypeId == null) return value;
-        var id = dataTypeId.Identifier is uint uid ? uid : 0u;
+        var id = dataTypeId?.Identifier is uint uid ? uid : 0u;
         return id switch
         {
             DataTypes.Boolean => bool.Parse(value),
@@ -542,8 +609,7 @@ public sealed class BridgeService : IDisposable
     {
         _drainTimer?.Dispose();
         _spool?.Dispose();
-        try { _subscription?.Delete(true); } catch { }
-        try { _session?.Close(); } catch { }
+        try { CleanupOpcResourcesAsync().GetAwaiter().GetResult(); } catch { }
         _hub?.DisposeAsync().AsTask().Wait(TimeSpan.FromSeconds(2));
     }
 }

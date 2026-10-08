@@ -48,7 +48,7 @@ namespace SimpleOpcFileServer
                 }
                 var item = new OpcUaItem { Variable = variable, Config = opcConfig };
                 device.AddItem(item);
-                variable.OnSimpleWriteValue = (ISystemContext ctx, NodeState node, ref object value) => device.Write(item, value);
+                variable.OnSimpleWriteValue = (ISystemContext ctx, NodeState node, ref Variant value) => device.Write(item, value);
             }
         }
 
@@ -123,8 +123,8 @@ namespace SimpleOpcFileServer
                         try
                         {
                             var nodeId = Opc.Ua.NodeId.Parse(item.Config.NodeId);
-                            var dv = _session.ReadValue(nodeId);
-                            Update(item.Variable, dv.Value, dv.StatusCode);
+                            var dv = _session.ReadValueAsync(nodeId).GetAwaiter().GetResult();
+                            Update(item.Variable, dv.WrappedValue, dv.StatusCode);
                         }
                         catch (Exception ex)
                         {
@@ -168,17 +168,17 @@ namespace SimpleOpcFileServer
                 Disconnect();
                 _config ??= CreateClientConfiguration();
                 var endpointDescription = GetEndpointDescription(_endpointUrl);
-                var endpointConfiguration = EndpointConfiguration.Create(_config);
+                var endpointConfiguration = new EndpointConfiguration { OperationTimeout = _config.TransportQuotas.OperationTimeout };
                 var endpoint = new ConfiguredEndpoint(null, endpointDescription, endpointConfiguration);
-                _session = Session.Create(_config, endpoint, false,
+                _session = new DefaultSessionFactory().CreateAsync(_config, endpoint, false,
                     $"SimpleOpcFileServer-{Utils.GetHostName()}", 60000,
-                    new UserIdentity(new AnonymousIdentityToken()), null).GetAwaiter().GetResult();
+                    new UserIdentity(new AnonymousIdentityToken()), default).GetAwaiter().GetResult() as Session;
             }
 
             private static EndpointDescription GetEndpointDescription(string url)
             {
                 using var client = DiscoveryClient.Create(new Uri(url));
-                var endpoints = client.GetEndpoints(null);
+                var endpoints = client.GetEndpoints(default(ArrayOf<string>)).ToList();
                 return endpoints.FirstOrDefault(e => e.SecurityMode == MessageSecurityMode.None)
                        ?? endpoints.FirstOrDefault()
                        ?? throw new ServiceResultException(StatusCodes.BadConfigurationError, "No endpoints found");
@@ -203,18 +203,21 @@ namespace SimpleOpcFileServer
                     ClientConfiguration = new ClientConfiguration { DefaultSessionTimeout = 60000 }
                 };
                 config.Validate(ApplicationType.Client).GetAwaiter().GetResult();
-                config.CertificateValidator.CertificateValidation += (_, e) => { if (e.Error.StatusCode == StatusCodes.BadCertificateUntrusted) e.Accept = true; };
+                if (config.CertificateManager is CertificateManager certManager)
+                {
+                    certManager.AcceptError = (_, result) => result.StatusCode == StatusCodes.BadCertificateUntrusted;
+                }
                 return config;
             }
 
             private void Disconnect()
             {
-                try { _session?.Close(); } catch { }
+                try { _session?.CloseAsync().GetAwaiter().GetResult(); } catch { }
                 try { _session?.Dispose(); } catch { }
                 _session = null;
             }
 
-            public ServiceResult Write(OpcUaItem item, object value)
+            public ServiceResult Write(OpcUaItem item, Variant value)
             {
                 try
                 {
@@ -227,17 +230,16 @@ namespace SimpleOpcFileServer
                     {
                         NodeId = nodeId,
                         AttributeId = Attributes.Value,
-                        Value = new DataValue(new Variant(value))
+                        Value = new DataValue(value)
                     };
 
-                    var collection = new WriteValueCollection { writeValue };
-                    StatusCodeCollection results;
-                    DiagnosticInfoCollection diagnostics;
-                    var response = _session.Write(null, collection, out results, out diagnostics);
-                    var writeStatus = response?.ServiceResult ?? StatusCodes.Good;
-                    if (StatusCode.IsBad(writeStatus) || results == null || results.Count == 0 || StatusCode.IsBad(results[0]))
+                    var collection = new List<WriteValue> { writeValue };
+                    var response = _session.WriteAsync(null, collection, default).GetAwaiter().GetResult();
+                    var results = response.Results;
+                    var writeStatus = response.ResponseHeader?.ServiceResult ?? StatusCodes.Good;
+                    if (StatusCode.IsBad(writeStatus) || results.Count == 0 || StatusCode.IsBad(results[0]))
                     {
-                        var detail = results != null && results.Count > 0 ? results[0].ToString() : writeStatus.ToString();
+                        var detail = results.Count > 0 ? results[0].ToString() : writeStatus.ToString();
                         return ServiceResult.Create(writeStatus, detail);
                     }
 
@@ -253,7 +255,7 @@ namespace SimpleOpcFileServer
                 }
             }
 
-            private void Update(BaseDataVariableState variable, object? value, StatusCode statusCode)
+            private void Update(BaseDataVariableState variable, Variant value, StatusCode statusCode)
             {
                 variable.Value = value; variable.StatusCode = statusCode;
                 variable.Timestamp = DateTime.UtcNow; variable.ClearChangeMasks(_context, false);

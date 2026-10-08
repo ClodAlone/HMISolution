@@ -228,13 +228,13 @@ public sealed class RedundancyService : IDisposable
             {
                 Timestamp = DateTime.UtcNow,
                 Variables = _variables
-                    .Where(kv => kv.Value.Value != null)
+                    .Where(kv => kv.Value.Value.AsBoxedObject() != null)
                     .Select(kv => new VariableSnapshot
                     {
                         Path = kv.Key,
-                        Value = kv.Value.Value?.ToString() ?? "",
+                        Value = kv.Value.Value.AsBoxedObject()?.ToString() ?? "",
                         StatusCode = kv.Value.StatusCode.Code,
-                        Timestamp = kv.Value.Timestamp
+                        Timestamp = (DateTime)kv.Value.Timestamp
                     })
                     .ToList()
             };
@@ -412,7 +412,7 @@ public sealed class RedundancyService : IDisposable
                 else if (variable.DataType == DataTypeIds.UInt16 && ushort.TryParse(snap.Value, out var u16)) value = u16;
                 else if (variable.DataType == DataTypeIds.Int16 && short.TryParse(snap.Value, out var i16)) value = i16;
 
-                variable.Value = value;
+                variable.Value = new Variant(value);
                 variable.StatusCode = new StatusCode(snap.StatusCode);
                 variable.Timestamp = snap.Timestamp;
             }

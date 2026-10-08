@@ -1,4 +1,4 @@
-// Copyright (c) 2026 Claudio Fiorani
+﻿// Copyright (c) 2026 Claudio Fiorani
 // All rights reserved.
 
 using System.Text.Json;
@@ -92,7 +92,7 @@ public class ServerDiagnosticsClient : IDisposable
                 _diagNodeId = new NodeId(DiagNodeIdentifier, (ushort)nsIndex);
             }
 
-            var value = _session.ReadValue(_diagNodeId);
+            var value = await SessionClientExtensions.ReadValueAsync(_session, _diagNodeId.Value);
 
             if (StatusCode.IsGood(value.StatusCode) && value.Value is string json)
             {
@@ -114,7 +114,7 @@ public class ServerDiagnosticsClient : IDisposable
         {
             Latest = null;
             Error = ex.Message;
-            try { _session?.Close(); } catch { }
+            try { _session?.CloseAsync(default).GetAwaiter().GetResult(); } catch { }
             _session = null;
             _diagNodeId = null;
             // Back off: wait 10 seconds before trying to connect again
@@ -129,7 +129,7 @@ public class ServerDiagnosticsClient : IDisposable
             return;
 
         // Disconnect from previous
-        try { _session?.Close(); } catch { }
+        try { _session?.CloseAsync(default).GetAwaiter().GetResult(); } catch { }
         _session = null;
         _diagNodeId = null;
 
@@ -145,23 +145,23 @@ public class ServerDiagnosticsClient : IDisposable
                     ApplicationCertificate = new CertificateIdentifier
                     {
                         StoreType = CertificateStoreType.Directory,
-                        StorePath = "%LocalApplicationData%/ServerEditorWeb/pki/own",
+                        StorePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ServerEditorWeb", "pki", "own"),
                         SubjectName = "ServerEditorDiagClient"
                     },
                     TrustedPeerCertificates = new CertificateTrustList
                     {
                         StoreType = CertificateStoreType.Directory,
-                        StorePath = "%LocalApplicationData%/ServerEditorWeb/pki/trusted"
+                        StorePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ServerEditorWeb", "pki", "trusted")
                     },
                     TrustedIssuerCertificates = new CertificateTrustList
                     {
                         StoreType = CertificateStoreType.Directory,
-                        StorePath = "%LocalApplicationData%/ServerEditorWeb/pki/issuer"
+                        StorePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ServerEditorWeb", "pki", "issuer")
                     },
                     RejectedCertificateStore = new CertificateTrustList
                     {
                         StoreType = CertificateStoreType.Directory,
-                        StorePath = "%LocalApplicationData%/ServerEditorWeb/pki/rejected"
+                        StorePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ServerEditorWeb", "pki", "rejected")
                     }
                 },
                 TransportQuotas = new TransportQuotas
@@ -177,23 +177,14 @@ public class ServerDiagnosticsClient : IDisposable
             };
 
             await _appConfig.Validate(ApplicationType.Client);
-            _appConfig.CertificateValidator.CertificateValidation += (s, e) =>
+            if (_appConfig.CertificateManager is CertificateManager certManager)
             {
-                if (e.Error.StatusCode == Opc.Ua.StatusCodes.BadCertificateUntrusted)
-                    e.Accept = true;
-            };
-
-            var app = new ApplicationInstance
-            {
-                ApplicationName = _appConfig.ApplicationName,
-                ApplicationType = ApplicationType.Client,
-                ApplicationConfiguration = _appConfig
-            };
-            await app.CheckApplicationInstanceCertificates(false, 2048);
+                certManager.AcceptError = (_, result) => result.StatusCode == Opc.Ua.StatusCodes.BadCertificateUntrusted;
+            }
         }
 
         var client = DiscoveryClient.Create(new Uri(endpointUrl));
-        var endpoints = client.GetEndpoints(null);
+        var endpoints = client.GetEndpoints(default(ArrayOf<string>)).ToList();
         client.Dispose();
 
         var endpointDescription =
@@ -205,13 +196,13 @@ public class ServerDiagnosticsClient : IDisposable
         if (endpointDescription == null)
             throw new Exception("No OPC UA endpoints found");
 
-        var endpointConfiguration = EndpointConfiguration.Create(_appConfig);
+        var endpointConfiguration = new EndpointConfiguration { OperationTimeout = _appConfig.TransportQuotas.OperationTimeout };
         var endpoint = new ConfiguredEndpoint(null, endpointDescription, endpointConfiguration);
 
-        _session = await Session.Create(
+        _session = await new DefaultSessionFactory().CreateAsync(
             _appConfig, endpoint, false,
             "DiagSession", 30000,
-            CreateIdentity(username, password), null);
+            CreateIdentity(username, password), default) as Session;
 
         _lastEndpoint = endpointUrl;
         _lastUsername = username;
@@ -222,19 +213,14 @@ public class ServerDiagnosticsClient : IDisposable
     {
         if (!string.IsNullOrEmpty(username))
         {
-            var token = new UserNameIdentityToken
-            {
-                UserName = username,
-                DecryptedPassword = System.Text.Encoding.UTF8.GetBytes(password ?? "")
-            };
-            return new UserIdentity(token);
+            return new UserIdentity(username, System.Text.Encoding.UTF8.GetBytes(password ?? ""));
         }
         return new UserIdentity(new AnonymousIdentityToken());
     }
 
     public void Dispose()
     {
-        try { _session?.Close(); } catch { }
+        try { _session?.CloseAsync(default).GetAwaiter().GetResult(); } catch { }
         _session = null;
     }
 }

@@ -349,7 +349,7 @@ public sealed partial class RestApiServer : IDisposable
                 {
                     path = kvp.Key,
                     value = kvp.Value.Value,
-                    dataType = kvp.Value.DataType?.ToString() ?? "Unknown",
+                    dataType = kvp.Value.DataType.ToString(),
                     timestamp = DateTime.UtcNow
                 }).ToList();
 
@@ -507,7 +507,7 @@ public sealed partial class RestApiServer : IDisposable
                 {
                     id = a.NodeId.ToString(),
                     source = a.SourceName,
-                    message = a.Message?.Value ?? "",
+                    message = a.Message?.Value.Text ?? "",
                     severity = a.Severity?.Value ?? 0,
                     acknowledged = a.AckedState?.Id?.Value ?? false,
                     activeTime = a.Time?.Value ?? DateTime.MinValue,

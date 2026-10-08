@@ -1,4 +1,4 @@
-// Copyright (c) 2026 Claudio Fiorani
+﻿// Copyright (c) 2026 Claudio Fiorani
 // All rights reserved.
 
 using Opc.Ua;
@@ -86,23 +86,23 @@ public class WatchTableService : IDisposable
                         ApplicationCertificate = new CertificateIdentifier
                         {
                             StoreType = CertificateStoreType.Directory,
-                            StorePath = "%LocalApplicationData%/ServerEditorWeb/pki/own",
+                            StorePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ServerEditorWeb", "pki", "own"),
                             SubjectName = "WatchTableClient"
                         },
                         TrustedPeerCertificates = new CertificateTrustList
                         {
                             StoreType = CertificateStoreType.Directory,
-                            StorePath = "%LocalApplicationData%/ServerEditorWeb/pki/trusted"
+                            StorePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ServerEditorWeb", "pki", "trusted")
                         },
                         TrustedIssuerCertificates = new CertificateTrustList
                         {
                             StoreType = CertificateStoreType.Directory,
-                            StorePath = "%LocalApplicationData%/ServerEditorWeb/pki/issuer"
+                            StorePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ServerEditorWeb", "pki", "issuer")
                         },
                         RejectedCertificateStore = new CertificateTrustList
                         {
                             StoreType = CertificateStoreType.Directory,
-                            StorePath = "%LocalApplicationData%/ServerEditorWeb/pki/rejected"
+                            StorePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ServerEditorWeb", "pki", "rejected")
                         }
                     },
                     TransportQuotas = new TransportQuotas
@@ -118,23 +118,14 @@ public class WatchTableService : IDisposable
                 };
 
                 await _appConfig.Validate(ApplicationType.Client);
-                _appConfig.CertificateValidator.CertificateValidation += (s, e) =>
+                if (_appConfig.CertificateManager is CertificateManager certManager)
                 {
-                    if (e.Error.StatusCode == Opc.Ua.StatusCodes.BadCertificateUntrusted)
-                        e.Accept = true;
-                };
-
-                var app = new ApplicationInstance
-                {
-                    ApplicationName = _appConfig.ApplicationName,
-                    ApplicationType = ApplicationType.Client,
-                    ApplicationConfiguration = _appConfig
-                };
-                await app.CheckApplicationInstanceCertificates(false, 2048);
+                    certManager.AcceptError = (_, result) => result.StatusCode == Opc.Ua.StatusCodes.BadCertificateUntrusted;
+                }
             }
 
             var client = DiscoveryClient.Create(new Uri(endpointUrl));
-            var endpoints = client.GetEndpoints(null);
+            var endpoints = client.GetEndpoints(default(ArrayOf<string>)).ToList();
             client.Dispose();
 
             var endpointDescription =
@@ -154,13 +145,13 @@ public class WatchTableService : IDisposable
                 endpointDescription.EndpointUrl = builder.Uri.ToString();
             }
 
-            var endpointConfiguration = EndpointConfiguration.Create(_appConfig);
+            var endpointConfiguration = new EndpointConfiguration { OperationTimeout = _appConfig.TransportQuotas.OperationTimeout };
             var endpoint = new ConfiguredEndpoint(null, endpointDescription, endpointConfiguration);
 
-            _session = await Session.Create(
+            _session = await new DefaultSessionFactory().CreateAsync(
                 _appConfig, endpoint, false,
                 "WatchTableSession", 60000,
-                new UserIdentity(new AnonymousIdentityToken()), null);
+                new UserIdentity(new AnonymousIdentityToken()), default) as Session;
 
             if (_session?.Connected != true)
                 throw new Exception("Session could not be created");
@@ -189,12 +180,12 @@ public class WatchTableService : IDisposable
     {
         if (_subscription != null)
         {
-            try { _subscription.Delete(true); } catch { }
+            try { _subscription.DeleteAsync(true, default).GetAwaiter().GetResult(); } catch { }
             _subscription = null;
         }
         if (_session != null)
         {
-            try { _session.Close(); } catch { }
+            try { _session.CloseAsync(default).GetAwaiter().GetResult(); } catch { }
             _session = null;
         }
         _lastEndpoint = "";
@@ -258,36 +249,31 @@ public class WatchTableService : IDisposable
 
         try
         {
-            var nodesToRead = new ReadValueIdCollection
+            var readResponse = await _session.ReadAsync(null, 0, TimestampsToReturn.Neither, new List<ReadValueId>
             {
-                new ReadValueId { NodeId = entry.ResolvedNodeId, AttributeId = Attributes.DataType }
-            };
-            DataValueCollection readResults = null!;
-            DiagnosticInfoCollection readDiag = null!;
-            await Task.Run(() => _session.Read(null, 0, TimestampsToReturn.Neither, nodesToRead, out readResults, out readDiag));
+                new ReadValueId { NodeId = entry.ResolvedNodeId.Value, AttributeId = Attributes.DataType }
+            }, default);
+            var readResults = readResponse.Results;
 
             var typedValue = ConvertToExpectedType(
                 readResults.Count > 0 && Opc.Ua.StatusCode.IsGood(readResults[0].StatusCode)
-                    ? readResults[0].Value as NodeId
+                    ? (readResults[0].Value is NodeId dataTypeId ? dataTypeId : null)
                     : null,
                 newValue);
 
-            var nodesToWrite = new WriteValueCollection
+            var writeResponse = await _session.WriteAsync(null, new List<WriteValue>
             {
                 new WriteValue
                 {
-                    NodeId = entry.ResolvedNodeId,
+                    NodeId = entry.ResolvedNodeId.Value,
                     AttributeId = Attributes.Value,
                     Value = new DataValue(new Variant(typedValue))
                 }
-            };
+            }, default);
+            var results = writeResponse.Results;
 
-            StatusCodeCollection? results = null;
-            DiagnosticInfoCollection? diagnosticInfos = null;
-            await Task.Run(() => _session.Write(null, nodesToWrite, out results, out diagnosticInfos));
-
-            if (results == null || Opc.Ua.StatusCode.IsBad(results[0]))
-                return (false, $"Write failed: {results?[0]}");
+            if (results.Count == 0 || Opc.Ua.StatusCode.IsBad(results[0]))
+                return (false, $"Write failed: {(results.Count > 0 ? results[0].ToString() : writeResponse.ResponseHeader?.ServiceResult.ToString())}");
 
             return (true, "Value written");
         }
@@ -307,7 +293,7 @@ public class WatchTableService : IDisposable
         // Remove old subscription
         if (_subscription != null)
         {
-            try { _subscription.Delete(true); } catch { }
+            try { _subscription.DeleteAsync(true, default).GetAwaiter().GetResult(); } catch { }
             _subscription = null;
         }
 
@@ -317,7 +303,7 @@ public class WatchTableService : IDisposable
             PublishingEnabled = true
         };
         _session.AddSubscription(_subscription);
-        _subscription.Create();
+        _subscription.CreateAsync(default).GetAwaiter().GetResult();
 
         foreach (var entry in Entries)
         {
@@ -336,8 +322,7 @@ public class WatchTableService : IDisposable
                 if (args.NotificationValue is MonitoredItemNotification notification && notification.Value != null)
                 {
                     var sc = notification.Value.StatusCode;
-                    var text = Opc.Ua.StatusCodes.GetBrowseName(sc.Code);
-                    if (text == "Unknown") text = $"{sc} (0x{sc.Code:X8})";
+                    var text = sc.ToString();
 
                     entry.Value = notification.Value.WrappedValue.ToString() ?? "";
                     entry.Quality = text;
@@ -354,11 +339,11 @@ public class WatchTableService : IDisposable
             {
                 try
                 {
-                    var nodesToRead = new ReadValueIdCollection
+                    var response = _session.ReadAsync(null, 0, TimestampsToReturn.Neither, new List<ReadValueId>
                     {
                         new ReadValueId { NodeId = nodeId, AttributeId = Attributes.UserAccessLevel }
-                    };
-                    _session.Read(null, 0, TimestampsToReturn.Neither, nodesToRead, out var results, out _);
+                    }, default).GetAwaiter().GetResult();
+                    var results = response.Results;
                     if (results.Count > 0 && Opc.Ua.StatusCode.IsGood(results[0].StatusCode) && results[0].Value is byte b)
                         entry.IsWritable = (b & AccessLevels.CurrentWrite) == AccessLevels.CurrentWrite;
                 }
@@ -366,7 +351,7 @@ public class WatchTableService : IDisposable
             });
         }
 
-        await Task.Run(() => _subscription.ApplyChanges());
+        await _subscription.ApplyChangesAsync(default);
     }
 
     #region Watch List Persistence
@@ -449,7 +434,7 @@ public class WatchTableService : IDisposable
     private static object ConvertToExpectedType(NodeId? dataTypeId, string value)
     {
         if (dataTypeId == null) return value;
-        var id = dataTypeId.Identifier is uint uid ? uid : 0u;
+        var id = dataTypeId.Value.Identifier is uint uid ? uid : 0u;
         return id switch
         {
             DataTypes.Boolean => bool.Parse(value),

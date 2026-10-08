@@ -1,4 +1,4 @@
-// Copyright (c) 2026 Claudio Fiorani
+﻿// Copyright (c) 2026 Claudio Fiorani
 // All rights reserved.
 
 using Opc.Ua;
@@ -111,23 +111,23 @@ public class OpcClientService : IDisposable
                         ApplicationCertificate = new CertificateIdentifier
                         {
                             StoreType = CertificateStoreType.Directory,
-                            StorePath = "%LocalApplicationData%/ServerEditorWeb/pki/own",
+                            StorePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ServerEditorWeb", "pki", "own"),
                             SubjectName = "ServerEditorWebClient"
                         },
                         TrustedPeerCertificates = new CertificateTrustList
                         {
                             StoreType = CertificateStoreType.Directory,
-                            StorePath = "%LocalApplicationData%/ServerEditorWeb/pki/trusted"
+                            StorePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ServerEditorWeb", "pki", "trusted")
                         },
                         TrustedIssuerCertificates = new CertificateTrustList
                         {
                             StoreType = CertificateStoreType.Directory,
-                            StorePath = "%LocalApplicationData%/ServerEditorWeb/pki/issuer"
+                            StorePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ServerEditorWeb", "pki", "issuer")
                         },
                         RejectedCertificateStore = new CertificateTrustList
                         {
                             StoreType = CertificateStoreType.Directory,
-                            StorePath = "%LocalApplicationData%/ServerEditorWeb/pki/rejected"
+                            StorePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ServerEditorWeb", "pki", "rejected")
                         }
                     },
                     TransportQuotas = new TransportQuotas
@@ -143,24 +143,14 @@ public class OpcClientService : IDisposable
                 };
 
                 await _appConfig.Validate(ApplicationType.Client);
-
-                _appConfig.CertificateValidator.CertificateValidation += (s, e) =>
+                if (_appConfig.CertificateManager is CertificateManager certManager)
                 {
-                    if (e.Error.StatusCode == Opc.Ua.StatusCodes.BadCertificateUntrusted)
-                        e.Accept = true;
-                };
-
-                var app = new ApplicationInstance
-                {
-                    ApplicationName = _appConfig.ApplicationName,
-                    ApplicationType = ApplicationType.Client,
-                    ApplicationConfiguration = _appConfig
-                };
-                await app.CheckApplicationInstanceCertificates(false, 2048);
+                    certManager.AcceptError = (_, result) => result.StatusCode == Opc.Ua.StatusCodes.BadCertificateUntrusted;
+                }
             }
 
             var client = DiscoveryClient.Create(new Uri(endpointUrl));
-            var endpoints = client.GetEndpoints(null);
+            var endpoints = client.GetEndpoints(default(ArrayOf<string>)).ToList();
             client.Dispose();
 
             // Prefer opc.tcp endpoints without security, then any opc.tcp endpoint
@@ -188,13 +178,13 @@ public class OpcClientService : IDisposable
                 endpointDescription.EndpointUrl = builder.Uri.ToString();
             }
 
-            var endpointConfiguration = EndpointConfiguration.Create(_appConfig);
+            var endpointConfiguration = new EndpointConfiguration { OperationTimeout = _appConfig.TransportQuotas.OperationTimeout };
             var endpoint = new ConfiguredEndpoint(null, endpointDescription, endpointConfiguration);
 
-            _session = await Session.Create(
+            _session = await new DefaultSessionFactory().CreateAsync(
                 _appConfig, endpoint, false,
                 "ServerEditorWebSession", 60000,
-                new UserIdentity(new AnonymousIdentityToken()), null);
+                new UserIdentity(new AnonymousIdentityToken()), default) as Session;
 
             if (_session?.Connected != true)
                 throw new Exception("Session could not be created");
@@ -226,14 +216,14 @@ public class OpcClientService : IDisposable
         {
             if (_subscription != null)
             {
-                try { _subscription.Delete(true); } catch { }
+                try { _subscription.DeleteAsync(true, default).GetAwaiter().GetResult(); } catch { }
                 _subscription = null;
             }
             MonitoredItems.Clear();
 
             if (_session != null)
             {
-                try { _session.Close(); } catch { }
+                try { _session.CloseAsync(default).GetAwaiter().GetResult(); } catch { }
                 _session = null;
             }
             RootNodes.Clear();
@@ -267,8 +257,8 @@ public class OpcClientService : IDisposable
                 parent.Children.Add(new OpcBrowseNode
                 {
                     DisplayName = r.DisplayName.Text,
-                    NodeIdString = childNodeId?.ToString() ?? r.NodeId.ToString(),
-                    ResolvedNodeId = childNodeId ?? NodeId.Null,
+                    NodeIdString = childNodeId.ToString(),
+                    ResolvedNodeId = childNodeId,
                     NodeClass = r.NodeClass.ToString(),
                     BrowseName = r.BrowseName.ToString(),
                     IsVariable = r.NodeClass == NodeClass.Variable,
@@ -295,7 +285,7 @@ public class OpcClientService : IDisposable
         {
             if (_subscription != null)
             {
-                try { _subscription.Delete(true); } catch { }
+                try { _subscription.DeleteAsync(true, default).GetAwaiter().GetResult(); } catch { }
                 _subscription = null;
             }
             MonitoredItems.Clear();
@@ -313,7 +303,7 @@ public class OpcClientService : IDisposable
                 PublishingEnabled = true
             };
             _session.AddSubscription(_subscription);
-            _subscription.Create();
+            _subscription.CreateAsync(default).GetAwaiter().GetResult();
 
             // Monitor the node itself if it's a variable
             if (node.IsVariable)
@@ -323,7 +313,7 @@ public class OpcClientService : IDisposable
             foreach (var child in node.Children.Where(c => c.IsVariable))
                 AddMonitoredItem(child);
 
-            _subscription.ApplyChanges();
+            _subscription.ApplyChangesAsync(default).GetAwaiter().GetResult();
         }
         catch (Exception ex)
         {
@@ -358,12 +348,11 @@ public class OpcClientService : IDisposable
         {
             try
             {
-                var nodesToRead = new ReadValueIdCollection
+                var response = _session.ReadAsync(null, 0, TimestampsToReturn.Neither, new List<ReadValueId>
                 {
-                    new ReadValueId { NodeId = nodeIdForRead, AttributeId = Attributes.UserAccessLevel }
-                };
-                _session.Read(null, 0, TimestampsToReturn.Neither, nodesToRead,
-                    out var results, out _);
+                    new ReadValueId { NodeId = nodeIdForRead!, AttributeId = Attributes.UserAccessLevel }
+                }, default).GetAwaiter().GetResult();
+                var results = response.Results;
                 if (results.Count > 0 && StatusCode.IsGood(results[0].StatusCode) && results[0].Value is byte b)
                     monValue.IsWritable = (b & AccessLevels.CurrentWrite) == AccessLevels.CurrentWrite;
             }
@@ -375,7 +364,7 @@ public class OpcClientService : IDisposable
             if (args.NotificationValue is MonitoredItemNotification notification && notification.Value != null)
             {
                 var sc = notification.Value.StatusCode;
-                var text = Opc.Ua.StatusCodes.GetBrowseName(sc.Code);
+                var text = sc.ToString();
                 if (text == "Unknown") text = $"{sc} (0x{sc.Code:X8})";
 
                 monValue.Value = notification.Value.WrappedValue.ToString() ?? "";
@@ -396,21 +385,19 @@ public class OpcClientService : IDisposable
         try
         {
             // Read the node's DataType so we can convert the string to the correct type.
-            var nodesToRead = new ReadValueIdCollection
+            var readResponse = await _session.ReadAsync(null, 0, TimestampsToReturn.Neither, new List<ReadValueId>
             {
                 new ReadValueId { NodeId = nodeId, AttributeId = Attributes.DataType }
-            };
-            DataValueCollection readResults = null!;
-            DiagnosticInfoCollection readDiag = null!;
-            await Task.Run(() => _session.Read(null, 0, TimestampsToReturn.Neither, nodesToRead, out readResults, out readDiag));
+            }, default);
+            var readResults = readResponse.Results;
 
             var typedValue = ConvertToExpectedType(
                 readResults.Count > 0 && StatusCode.IsGood(readResults[0].StatusCode)
-                    ? readResults[0].Value as NodeId
+                    ? (readResults[0].Value is NodeId dataTypeId ? dataTypeId : null)
                     : null,
                 newValue);
 
-            var nodesToWrite = new WriteValueCollection
+            var writeResponse = await _session.WriteAsync(null, new List<WriteValue>
             {
                 new WriteValue
                 {
@@ -418,14 +405,11 @@ public class OpcClientService : IDisposable
                     AttributeId = Attributes.Value,
                     Value = new DataValue(new Variant(typedValue))
                 }
-            };
+            }, default);
+            var results = writeResponse.Results;
 
-            StatusCodeCollection? results = null;
-            DiagnosticInfoCollection? diagnosticInfos = null;
-            await Task.Run(() => _session.Write(null, nodesToWrite, out results, out diagnosticInfos));
-
-            if (results == null || StatusCode.IsBad(results[0]))
-                return (false, $"Write failed: {results[0]}");
+            if (results.Count == 0 || StatusCode.IsBad(results[0]))
+                return (false, $"Write failed: {(results.Count > 0 ? results[0].ToString() : writeResponse.ResponseHeader?.ServiceResult.ToString())}");
 
             return (true, "Value written");
         }
@@ -440,7 +424,7 @@ public class OpcClientService : IDisposable
         if (dataTypeId == null)
             return value;
 
-        var id = dataTypeId.Identifier is uint uid ? uid : 0u;
+        var id = dataTypeId.Value.Identifier is uint uid ? uid : 0u;
         return id switch
         {
             DataTypes.Boolean => bool.Parse(value),

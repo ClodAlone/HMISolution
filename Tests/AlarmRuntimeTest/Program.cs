@@ -14,41 +14,50 @@ var appConfig = new ApplicationConfiguration
         RejectedCertificateStore = new CertificateTrustList { StoreType = CertificateStoreType.Directory, StorePath = Path.Combine(Path.GetTempPath(), "AlarmTestCerts", "rejected") },
         AutoAcceptUntrustedCertificates = true
     },
-    TransportConfigurations = new TransportConfigurationCollection(),
+    TransportConfigurations = new List<TransportConfiguration>(),
     TransportQuotas = new TransportQuotas { OperationTimeout = 15000 },
     ClientConfiguration = new ClientConfiguration { DefaultSessionTimeout = 60000 }
 };
 await appConfig.Validate(ApplicationType.Client);
-appConfig.CertificateValidator.CertificateValidation += (s, e) => e.Accept = true;
+if (appConfig.CertificateManager is CertificateManager certManager)
+{
+    certManager.AcceptError = (_, result) => true;
+}
 var endpoint = CoreClientUtils.SelectEndpoint(appConfig, "opc.tcp://localhost:14880/AlarmDemo", false, 15000);
-var session = await Session.Create(appConfig, new ConfiguredEndpoint(null, endpoint, EndpointConfiguration.Create(appConfig)), false, "Test", 60000, null, null);
+var endpointConfiguration = new EndpointConfiguration { OperationTimeout = appConfig.TransportQuotas.OperationTimeout };
+var session = (Session)await new DefaultSessionFactory().CreateAsync(appConfig, new ConfiguredEndpoint(null, endpoint, endpointConfiguration), false, "Test", 60000, new UserIdentity(new AnonymousIdentityToken()), default);
 Console.WriteLine("Connected");
 // Write all three above limits: Temp=100(>HH95), Pressure=10(>H8), Level=95(>H90)
-var writes = new WriteValueCollection
+var writes = new List<WriteValue>
 {
     new WriteValue { NodeId = new NodeId("Alarm.Process.Temperature", 2), AttributeId = Attributes.Value, Value = new DataValue(new Variant("100")) },
     new WriteValue { NodeId = new NodeId("Alarm.Process.Pressure", 2), AttributeId = Attributes.Value, Value = new DataValue(new Variant("10")) },
     new WriteValue { NodeId = new NodeId("Alarm.Process.Level", 2), AttributeId = Attributes.Value, Value = new DataValue(new Variant("95")) }
 };
-session.Write(null, writes, out StatusCodeCollection wr, out DiagnosticInfoCollection wd);
+var writeResponse = await session.WriteAsync(null, writes, default);
+var wr = writeResponse.Results;
 for (int i = 0; i < wr.Count; i++) Console.WriteLine("Write[" + i + "]: " + wr[i]);
 await Task.Delay(2000);
 
 // Now do ConditionRefresh
 var filter = new EventFilter();
-filter.SelectClauses.Add(new SimpleAttributeOperand(ObjectTypeIds.BaseEventType, BrowseNames.EventId));
-filter.SelectClauses.Add(new SimpleAttributeOperand(ObjectTypeIds.ConditionType, BrowseNames.Retain));
-filter.SelectClauses.Add(new SimpleAttributeOperand(ObjectTypeIds.BaseEventType, BrowseNames.SourceName));
-filter.SelectClauses.Add(new SimpleAttributeOperand(ObjectTypeIds.ConditionType, BrowseNames.NodeId));
-filter.SelectClauses.Add(new SimpleAttributeOperand(ObjectTypeIds.BaseEventType, BrowseNames.Message));
-filter.SelectClauses.Add(new SimpleAttributeOperand(ObjectTypeIds.BaseEventType, BrowseNames.Severity));
+var selectClauses = new List<SimpleAttributeOperand>
+{
+    new SimpleAttributeOperand(ObjectTypeIds.BaseEventType, new QualifiedName(BrowseNames.EventId)),
+    new SimpleAttributeOperand(ObjectTypeIds.ConditionType, new QualifiedName(BrowseNames.Retain)),
+    new SimpleAttributeOperand(ObjectTypeIds.BaseEventType, new QualifiedName(BrowseNames.SourceName)),
+    new SimpleAttributeOperand(ObjectTypeIds.ConditionType, new QualifiedName(BrowseNames.NodeId)),
+    new SimpleAttributeOperand(ObjectTypeIds.BaseEventType, new QualifiedName(BrowseNames.Message)),
+    new SimpleAttributeOperand(ObjectTypeIds.BaseEventType, new QualifiedName(BrowseNames.Severity))
+};
+filter.SelectClauses = selectClauses;
 var sub = new Subscription(session.DefaultSubscription) { PublishingInterval = 100 };
-session.AddSubscription(sub); sub.Create();
+session.AddSubscription(sub); await sub.CreateAsync();
 var mi = new MonitoredItem(sub.DefaultItem) { StartNodeId = ObjectIds.Server, AttributeId = Attributes.EventNotifier, Filter = filter, QueueSize = 1000 };
 var events = new List<EventFieldList>();
 mi.Notification += (item, e) => { if (e.NotificationValue is EventFieldList efl) events.Add(efl); };
-sub.AddItem(mi); sub.ApplyChanges();
-session.Call(ObjectTypeIds.ConditionType, MethodIds.ConditionType_ConditionRefresh, new object[] { sub.Id });
+sub.AddItem(mi); await sub.ApplyChangesAsync();
+await session.CallAsync(ObjectTypeIds.ConditionType, MethodIds.ConditionType_ConditionRefresh, default, new Variant((int)sub.Id));
 await Task.Delay(2000);
 int alarms = 0;
 foreach (var evt in events)
@@ -64,4 +73,4 @@ foreach (var evt in events)
     Console.WriteLine("ALARM #" + alarms + ": src=" + src + " cid=" + cid + " sev=" + sev + " msg=" + msg);
 }
 Console.WriteLine("Total alarms: " + alarms);
-sub.Delete(true); session.RemoveSubscription(sub); session.Close();
+await sub.DeleteAsync(true); await session.RemoveSubscriptionAsync(sub); await session.CloseAsync();

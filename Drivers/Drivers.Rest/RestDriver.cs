@@ -51,7 +51,7 @@ namespace SimpleOpcFileServer
                 }
                 var item = new RestItem { Variable = variable, Config = restConfig };
                 device.AddItem(item);
-                variable.OnSimpleWriteValue = (ISystemContext ctx, NodeState node, ref object value) => device.Write(item, value);
+                variable.OnSimpleWriteValue = (ISystemContext ctx, NodeState node, ref Variant value) => device.Write(item, value.Value);
             }
         }
 
@@ -169,7 +169,7 @@ namespace SimpleOpcFileServer
 
                 if (val != null)
                 {
-                    item.Variable.Value = val; item.Variable.StatusCode = StatusCodes.Good;
+                    item.Variable.Value = new Variant(val); item.Variable.StatusCode = StatusCodes.Good;
                     item.Variable.Timestamp = DateTime.UtcNow; item.Variable.ClearChangeMasks(_context, false);
                 }
             }
@@ -181,7 +181,7 @@ namespace SimpleOpcFileServer
                 if (!string.IsNullOrEmpty(message))
                 {
                     var n = variable.FindChild(_context, new QualifiedName("LastError", variable.BrowseName.NamespaceIndex));
-                    if (n is BaseVariableState v) { v.Value = message; v.Timestamp = DateTime.UtcNow; v.ClearChangeMasks(_context, false); }
+                    if (n is BaseVariableState v) { v.Value = new Variant(message); v.Timestamp = DateTime.UtcNow; v.ClearChangeMasks(_context, false); }
                 }
             }
 
@@ -197,7 +197,7 @@ namespace SimpleOpcFileServer
                     if (!response.IsSuccessStatusCode)
                         return ServiceResult.Create(StatusCodes.BadUnexpectedError, $"HTTP {(int)response.StatusCode} {response.ReasonPhrase}");
 
-                    item.Variable.Value = value; item.Variable.StatusCode = StatusCodes.Good;
+                    item.Variable.Value = new Variant(value); item.Variable.StatusCode = StatusCodes.Good;
                     item.Variable.Timestamp = DateTime.UtcNow; item.Variable.ClearChangeMasks(_context, false);
                     return ServiceResult.Good;
                 }

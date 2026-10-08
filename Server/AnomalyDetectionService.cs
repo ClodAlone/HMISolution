@@ -141,7 +141,7 @@ namespace SimpleOpcFileServer
                 {
                     var numVal = AlarmEvaluator.GetNumericValue(dv.Value);
                     if (numVal.HasValue)
-                        points.Add((dv.SourceTimestamp, numVal.Value));
+                        points.Add(((DateTime)dv.SourceTimestamp, numVal.Value));
                 }
 
                 if (points.Count < _settings.MinSampleCount) return;

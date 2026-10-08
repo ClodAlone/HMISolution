@@ -52,7 +52,7 @@ namespace SimpleOpcFileServer
                 }
                 var item = new S7Item { Variable = variable, Config = s7Config };
                 device.AddItem(item);
-                variable.OnSimpleWriteValue = (ISystemContext ctx, NodeState node, ref object value) => device.Write(item, value);
+                variable.OnSimpleWriteValue = (ISystemContext ctx, NodeState node, ref Variant value) => device.Write(item, value.Value);
             }
         }
 
@@ -195,7 +195,7 @@ namespace SimpleOpcFileServer
 
             private void Update(BaseDataVariableState variable, object value)
             {
-                variable.Value = value; variable.StatusCode = StatusCodes.Good;
+                variable.Value = new Variant(value); variable.StatusCode = StatusCodes.Good;
                 variable.Timestamp = DateTime.UtcNow; variable.ClearChangeMasks(_context, false);
             }
 
@@ -206,7 +206,7 @@ namespace SimpleOpcFileServer
                 if (!string.IsNullOrEmpty(message))
                 {
                     var n = variable.FindChild(_context, new QualifiedName("LastError", variable.BrowseName.NamespaceIndex));
-                    if (n is BaseVariableState v) { v.Value = message; v.Timestamp = DateTime.UtcNow; v.ClearChangeMasks(_context, false); }
+                    if (n is BaseVariableState v) { v.Value = new Variant(message); v.Timestamp = DateTime.UtcNow; v.ClearChangeMasks(_context, false); }
                 }
             }
 
@@ -230,7 +230,7 @@ namespace SimpleOpcFileServer
                         }
 
                         _plc.Write(item.Config.Address, value);
-                        item.Variable.Value = value; item.Variable.StatusCode = StatusCodes.Good;
+                        item.Variable.Value = new Variant(value); item.Variable.StatusCode = StatusCodes.Good;
                         item.Variable.Timestamp = DateTime.UtcNow; item.Variable.ClearChangeMasks(_context, false);
                         return ServiceResult.Good;
                     }

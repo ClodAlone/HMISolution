@@ -88,10 +88,10 @@ namespace SimpleOpcFileServer
         public void Log(BaseDataVariableState variable, DataLoggingConfig config)
         {
             if (!_tablesCreated) return;
-            if (variable.Value == null) return;
+            var value = variable.Value.AsBoxedObject();
+            if (value == null) return;
 
             string key = variable.NodeId.ToString();
-            object value = variable.Value;
             
             // Check hysteresis
             if (_lastLoggedValues.TryGetValue(key, out var lastValue) && lastValue != null)
@@ -251,13 +251,7 @@ namespace SimpleOpcFileServer
                     
                     var quality = (uint)reader.GetInt32(3);
 
-                    var dv = new DataValue
-                    {
-                        Value = val,
-                        SourceTimestamp = time,
-                        ServerTimestamp = time,
-                        StatusCode = new StatusCode(quality)
-                    };
+                    var dv = new DataValue(new Variant(val), new StatusCode(quality), time, time);
                     values.Add(dv);
                 }
             }
