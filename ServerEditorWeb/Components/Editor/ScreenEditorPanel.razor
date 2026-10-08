@@ -107,6 +107,10 @@
                         @onclick="ToggleConnectMode" title="Connect mode – click a port then click another to create a connection">
                     🔗 Connect
                 </button>
+                <span class="mx-1">|</span>
+                <button class="btn btn-sm btn-outline-info" @onclick="() => _showThemeDialog = true" title="Apply a common font/color theme to objects on this screen or the whole project">
+                    🎨 Theme
+                </button>
 
 
 
@@ -1507,6 +1511,120 @@ Right-click a symbol for actions</div>
             </div>
         </div>
     }
+    @if (_showThemeDialog)
+    {
+        <div class="modal show d-block" style="background: rgba(0,0,0,0.5);">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header py-2">
+                        <h6 class="modal-title">🎨 Apply Theme</h6>
+                        <button class="btn-close" @onclick="() => _showThemeDialog = false"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p class="small text-muted">Set the style values below, choose which properties to apply and the scope, then click Apply. This updates the Font/Fill/Stroke properties directly on existing objects (like a one-time style theme) — it does not create a linked/live theme.</p>
+
+                        <div class="d-flex gap-1 mb-2 flex-wrap">
+                            <div class="flex-grow-1">
+                                <label class="form-label mb-0 small">
+                                    <input type="checkbox" @bind="_themeApplyFontFamily" /> Font Family
+                                </label>
+                                <select class="form-select form-select-sm" @bind="_themeFontFamily">
+                                    <option value="">(default sans-serif)</option>
+                                    <option value="sans-serif">Sans-Serif</option>
+                                    <option value="serif">Serif</option>
+                                    <option value="monospace">Monospace</option>
+                                    <option value="Arial">Arial</option>
+                                    <option value="Verdana">Verdana</option>
+                                    <option value="Georgia">Georgia</option>
+                                    <option value="Courier New">Courier New</option>
+                                    <option value="Times New Roman">Times New Roman</option>
+                                    <option value="Trebuchet MS">Trebuchet MS</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="form-label mb-0 small">
+                                    <input type="checkbox" @bind="_themeApplyFontSize" /> Size
+                                </label>
+                                <input type="number" class="form-control form-control-sm" style="width: 70px;" min="0" max="200" @bind="_themeFontSize" />
+                            </div>
+                        </div>
+                        <div class="d-flex gap-1 mb-2 flex-wrap">
+                            <div>
+                                <label class="form-label mb-0 small">
+                                    <input type="checkbox" @bind="_themeApplyFontWeight" /> Weight
+                                </label>
+                                <select class="form-select form-select-sm" style="width: 100px;" @bind="_themeFontWeight">
+                                    <option value="">Normal</option>
+                                    <option value="bold">Bold</option>
+                                    <option value="lighter">Lighter</option>
+                                    <option value="100">100</option>
+                                    <option value="200">200</option>
+                                    <option value="300">300</option>
+                                    <option value="400">400</option>
+                                    <option value="500">500</option>
+                                    <option value="600">600</option>
+                                    <option value="700">700</option>
+                                    <option value="800">800</option>
+                                    <option value="900">900</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="form-label mb-0 small">
+                                    <input type="checkbox" @bind="_themeApplyFontStyle" /> Style
+                                </label>
+                                <select class="form-select form-select-sm" style="width: 100px;" @bind="_themeFontStyle">
+                                    <option value="">Normal</option>
+                                    <option value="italic">Italic</option>
+                                    <option value="oblique">Oblique</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="d-flex gap-2 mb-2 flex-wrap align-items-end">
+                            <div>
+                                <label class="form-label mb-0 small">
+                                    <input type="checkbox" @bind="_themeApplyFill" /> Fill
+                                </label>
+                                <ColorPicker Value="@_themeFill" ValueChanged="(v) => _themeFill = v" />
+                            </div>
+                            <div>
+                                <label class="form-label mb-0 small">
+                                    <input type="checkbox" @bind="_themeApplyStroke" /> Stroke
+                                </label>
+                                <ColorPicker Value="@_themeStroke" ValueChanged="(v) => _themeStroke = v" />
+                            </div>
+                            <div>
+                                <label class="form-label mb-0 small">
+                                    <input type="checkbox" @bind="_themeApplyStrokeWidth" /> Stroke W
+                                </label>
+                                <input type="number" class="form-control form-control-sm" style="width: 60px;" step="0.5" @bind="_themeStrokeWidth" />
+                            </div>
+                        </div>
+
+                        <hr class="my-2" />
+                        <div class="mb-2">
+                            <label class="form-label mb-0 small d-block">Scope</label>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="themeScope" id="themeScopeScreen" checked="@(!_themeApplyToProject)" @onchange="() => _themeApplyToProject = false" />
+                                <label class="form-check-label small" for="themeScopeScreen">Current screen only</label>
+                            </div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="themeScope" id="themeScopeProject" checked="@_themeApplyToProject" @onchange="() => _themeApplyToProject = true" />
+                                <label class="form-check-label small" for="themeScopeProject">All screens in project</label>
+                            </div>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="themeSelectedOnly" @bind="_themeSelectedOnly" disabled="@(_themeApplyToProject || _selectedSymbols.Count == 0)" />
+                            <label class="form-check-label small" for="themeSelectedOnly">Selected objects only (@_selectedSymbols.Count selected)</label>
+                        </div>
+                    </div>
+                    <div class="modal-footer py-1">
+                        <button class="btn btn-sm btn-primary" @onclick="ApplyTheme">Apply</button>
+                        <button class="btn btn-sm btn-secondary" @onclick="() => _showThemeDialog = false">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
     @if (_showDistributeDialog)
     {
         <div class="modal show d-block" style="background: rgba(0,0,0,0.5);">
@@ -1617,6 +1735,26 @@ Right-click a symbol for actions</div>
     private int _distributeColumns = 3;
     private int _distributeGapX = 10;
     private int _distributeGapY = 10;
+
+    // ─── Theme dialog state ──────────────────────────────────
+    private bool _showThemeDialog;
+    private bool _themeApplyToProject;
+    private bool _themeSelectedOnly;
+
+    private bool _themeApplyFontFamily;
+    private string _themeFontFamily = "";
+    private bool _themeApplyFontSize;
+    private int _themeFontSize = 14;
+    private bool _themeApplyFontWeight;
+    private string _themeFontWeight = "";
+    private bool _themeApplyFontStyle;
+    private string _themeFontStyle = "";
+    private bool _themeApplyFill;
+    private string _themeFill = "#4a90d9";
+    private bool _themeApplyStroke;
+    private string _themeStroke = "#333333";
+    private bool _themeApplyStrokeWidth;
+    private double _themeStrokeWidth = 1;
 
 
     // --- User Symbol Library dialog state ---
@@ -4431,6 +4569,44 @@ Right-click a symbol for actions</div>
             sorted[i].Y = startY + row * cellH;
         }
         RecordSnapshotUndo("Distribute symbols");
+        OnChanged();
+    }
+
+    // ─── Theme: apply common style to objects ───────────────
+    private void ApplyTheme()
+    {
+        _showThemeDialog = false;
+
+        var screens = _themeApplyToProject
+            ? (Editor.RootModel?.Screens ?? new())
+            : (GetScreen() is ScreenConfig s ? new List<ScreenConfig> { s } : new());
+        if (screens.Count == 0) return;
+
+        List<ScreenSymbol> targets;
+        if (!_themeApplyToProject && _themeSelectedOnly && _selectedSymbols.Count > 0)
+        {
+            targets = _selectedSymbols.ToList();
+        }
+        else
+        {
+            targets = screens.SelectMany(sc => sc.Symbols).ToList();
+        }
+        if (targets.Count == 0) return;
+
+        CaptureSnapshots(targets);
+
+        foreach (var sym in targets)
+        {
+            if (_themeApplyFontFamily) sym.FontFamily = _themeFontFamily;
+            if (_themeApplyFontSize) sym.FontSize = _themeFontSize;
+            if (_themeApplyFontWeight) sym.FontWeight = _themeFontWeight;
+            if (_themeApplyFontStyle) sym.FontStyle = _themeFontStyle;
+            if (_themeApplyFill) sym.Fill = _themeFill;
+            if (_themeApplyStroke) sym.Stroke = _themeStroke;
+            if (_themeApplyStrokeWidth) sym.StrokeWidth = _themeStrokeWidth;
+        }
+
+        RecordSnapshotUndo("Apply theme");
         OnChanged();
     }
 
