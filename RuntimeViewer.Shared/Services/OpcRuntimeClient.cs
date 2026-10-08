@@ -2,6 +2,7 @@
 // All rights reserved.
 
 using System.Collections.Concurrent;
+using Microsoft.Extensions.DependencyInjection;
 using Opc.Ua;
 using Opc.Ua.Client;
 using Opc.Ua.Configuration;
@@ -96,8 +97,9 @@ public class OpcRuntimeClient : IDisposable
             Disconnect();
 
             var pkiRoot = "%LocalApplicationData%/RuntimeViewer/pki";
+            var telemetry = new ServiceProviderTelemetryContext(new ServiceCollection().BuildServiceProvider());
 
-            _appConfig = new ApplicationConfiguration
+            _appConfig = new ApplicationConfiguration(telemetry)
             {
                 ApplicationName = "RuntimeViewer",
                 ApplicationUri = $"urn:{Utils.GetHostName()}:RuntimeViewer",
@@ -139,13 +141,12 @@ public class OpcRuntimeClient : IDisposable
             };
 
             await _appConfig.ValidateAsync(ApplicationType.Client);
-
-            _appConfig.CertificateValidator.CertificateValidation += (s, e) =>
+            if (_appConfig.CertificateManager is CertificateManager certManager)
             {
-                e.Accept = true;
-            };
+                certManager.AcceptError = (_, _) => true;
+            }
 
-            var app = new ApplicationInstance(new ApplicationConfiguration())
+            var app = new ApplicationInstance(new ApplicationConfiguration(telemetry), telemetry)
             {
                 ApplicationName = _appConfig.ApplicationName,
                 ApplicationType = ApplicationType.Client,
@@ -165,8 +166,8 @@ public class OpcRuntimeClient : IDisposable
 
             // Discover endpoints
             Log($"CONNECT: Discovering endpoints at {endpointUrl}");
-            var client = DiscoveryClient.Create(new Uri(endpointUrl));
-            var endpoints = client.GetEndpoints(null);
+            var client = DiscoveryClient.Create(_appConfig, new Uri(endpointUrl));
+            var endpoints = client.GetEndpoints(default(ArrayOf<string>)).ToList();
             client.Dispose();
 
             Log($"CONNECT: Discovered {endpoints.Count} endpoint(s)");
@@ -201,26 +202,26 @@ public class OpcRuntimeClient : IDisposable
             var endpoint = new ConfiguredEndpoint(null, endpointDescription, endpointConfiguration);
 
             // Log supported token types for diagnostics
-            var tokenTypes = endpointDescription.UserIdentityTokens?
-                .Select(t => t.TokenType.ToString()) ?? [];
+            var tokenPolicies = new List<UserTokenPolicy>();
+            if (!endpointDescription.UserIdentityTokens.IsNull)
+            {
+                foreach (var policy in endpointDescription.UserIdentityTokens)
+                    tokenPolicies.Add(policy);
+            }
+            var tokenTypes = tokenPolicies.Select(t => t.TokenType.ToString());
             Log($"CONNECT: Endpoint supports token types: [{string.Join(", ", tokenTypes)}]");
 
             UserIdentity identity;
             if (!string.IsNullOrEmpty(username))
             {
-                var token = new UserNameIdentityToken
-                {
-                    UserName = username,
-                    DecryptedPassword = System.Text.Encoding.UTF8.GetBytes(password ?? "")
-                };
-                identity = new UserIdentity(token);
+                identity = new UserIdentity(username, System.Text.Encoding.UTF8.GetBytes(password ?? ""));
                 Log($"CONNECT: Creating session with user '{username}'...");
             }
             else
             {
                 // Prefer anonymous; log a warning if the endpoint does not advertise it
-                var supportsAnonymous = endpointDescription.UserIdentityTokens?
-                    .Any(t => t.TokenType == UserTokenType.Anonymous) ?? false;
+                var supportsAnonymous = tokenPolicies
+                    .Any(t => t.TokenType == UserTokenType.Anonymous);
 
                 identity = new UserIdentity(new AnonymousIdentityToken());
                 Log(supportsAnonymous
@@ -228,10 +229,13 @@ public class OpcRuntimeClient : IDisposable
                     : "CONNECT: WARNING — endpoint does not advertise Anonymous; attempting anyway...");
             }
 
-            _session = await Session.Create(
+            _session = await new DefaultSessionFactory(telemetry).CreateAsync(
                 _appConfig, endpoint, false,
                 "RuntimeViewerSession", 60000,
-                identity, null);
+                identity, default) as Session;
+
+            if (_session?.Connected != true)
+                throw new Exception("Session could not be created");
 
             Log($"CONNECT: Session created. Connected={_session.Connected}, SessionId={_session.SessionId}");
             Log($"CONNECT: Server namespaces: [{string.Join(", ", _session.NamespaceUris.ToArray())}]");
@@ -360,7 +364,7 @@ public class OpcRuntimeClient : IDisposable
             _subscription.AddItem(item);
         }
 
-        _subscription.ApplyChanges();
+        _subscription.ApplyChangesAsync(default).GetAwaiter().GetResult();
 
         // Fallback: for items that failed, try dropping the first path segment.
         // This handles cases like "Building.HVAC.AHU1.Temp" where the server uses
@@ -387,7 +391,7 @@ public class OpcRuntimeClient : IDisposable
             if (retryCount > 0)
             {
                 Log($"MONITOR: Retrying {retryCount} failed item(s) with first path segment stripped.");
-                _subscription.ApplyChanges();
+                _subscription.ApplyChangesAsync(default).GetAwaiter().GetResult();
             }
         }
 
@@ -405,12 +409,13 @@ public class OpcRuntimeClient : IDisposable
         {
             try
             {
-                var nodesToRead = new ReadValueIdCollection();
-                foreach (var mi in itemsToRead)
-                    nodesToRead.Add(new ReadValueId { NodeId = mi.StartNodeId, AttributeId = Attributes.Value });
+                var nodesToRead = itemsToRead
+                    .Select(mi => new ReadValueId { NodeId = mi.StartNodeId, AttributeId = Attributes.Value })
+                    .ToList();
 
-                _session.Read(null, 0, TimestampsToReturn.Neither, nodesToRead,
-                    out DataValueCollection results, out _);
+                var readResponse = _session.ReadAsync(null, 0, TimestampsToReturn.Neither, nodesToRead, default)
+                    .GetAwaiter().GetResult();
+                var results = readResponse.Results;
 
                 for (var i = 0; i < results.Count; i++)
                 {
@@ -468,7 +473,7 @@ public class OpcRuntimeClient : IDisposable
             _subscription.AddItem(item);
         }
 
-        _subscription.ApplyChanges();
+        _subscription.ApplyChangesAsync(default).GetAwaiter().GetResult();
         Log($"PRECONNECT: Done. {_subscription.MonitoredItemCount} total item(s)");
     }
 
@@ -505,7 +510,7 @@ public class OpcRuntimeClient : IDisposable
             _subscription.AddItem(item);
         }
 
-        _subscription.ApplyChanges();
+        _subscription.ApplyChangesAsync(default).GetAwaiter().GetResult();
 
         // Fallback: try stripping first path segment for items still failing
         var stillBad = _subscription.MonitoredItems
@@ -525,7 +530,7 @@ public class OpcRuntimeClient : IDisposable
             if (retryCount > 0)
             {
                 Log($"RETRY: Retrying {retryCount} item(s) with first path segment stripped.");
-                _subscription.ApplyChanges();
+                _subscription.ApplyChangesAsync(default).GetAwaiter().GetResult();
             }
         }
 
@@ -549,11 +554,11 @@ public class OpcRuntimeClient : IDisposable
     {
         if (e.NotificationValue is MonitoredItemNotification notification)
         {
-            var rawVal = notification.Value?.WrappedValue.Value;
+            var rawVal = notification.Value.WrappedValue.Value;
             var val = rawVal is IFormattable fmt
                 ? fmt.ToString(null, System.Globalization.CultureInfo.InvariantCulture)
                 : rawVal?.ToString() ?? "";
-            var statusCode = notification.Value?.StatusCode ?? StatusCodes.Bad;
+            var statusCode = notification.Value.StatusCode;
             _values[item.DisplayName] = val;
             _notificationCount++;
             // Log first 20 notifications, then every 50th to avoid flooding
@@ -591,7 +596,7 @@ public class OpcRuntimeClient : IDisposable
 
             // Send the value as a string â€” the server's HandleWriteValue
             // converts strings to the correct DataType (Double, Int32, etc.).
-            var nodesToWrite = new WriteValueCollection
+            var nodesToWrite = new ArrayOf<WriteValue>(new[]
             {
                 new WriteValue
                 {
@@ -599,14 +604,13 @@ public class OpcRuntimeClient : IDisposable
                     AttributeId = Attributes.Value,
                     Value = new DataValue(new Variant(value))
                 }
-            };
+            });
 
-            StatusCodeCollection? results = null;
             var writeResp = await _session.WriteAsync(null, nodesToWrite, CancellationToken.None);
-            results = writeResp.Results;
+            var results = writeResp.Results;
 
-            var statusCode = results != null ? results[0] : StatusCodes.Bad;
-            var ok = results != null && StatusCode.IsGood(statusCode);
+            var statusCode = results.Count > 0 ? results[0] : StatusCodes.Bad;
+            var ok = results.Count > 0 && StatusCode.IsGood(statusCode);
             if (ok)
             {
                 // Immediately reflect the written value in the local cache
@@ -716,19 +720,16 @@ public class OpcRuntimeClient : IDisposable
         try
         {
             // Use ConditionRefresh via a temporary event subscription to collect active alarms
-            var filter = new EventFilter();
-            // [0] EventId â€” needed for Acknowledge/Confirm calls
-            filter.SelectClauses.Add(new SimpleAttributeOperand(
-                ObjectTypeIds.BaseEventType, BrowseNames.EventId));
-            // [1] Retain â€” true if the alarm is still active
-            filter.SelectClauses.Add(new SimpleAttributeOperand(
-                ObjectTypeIds.ConditionType, BrowseNames.Retain));
-            // [2] SourceNode â€” the NodeId of the condition source
-            filter.SelectClauses.Add(new SimpleAttributeOperand(
-                ObjectTypeIds.BaseEventType, BrowseNames.SourceNode));
-            // [3] NodeId of the condition â€” used as ObjectId for method calls
-            filter.SelectClauses.Add(new SimpleAttributeOperand(
-                ObjectTypeIds.ConditionType, BrowseNames.NodeId));
+            var filter = new EventFilter
+            {
+                SelectClauses = new ArrayOf<SimpleAttributeOperand>(new[]
+                {
+                    new SimpleAttributeOperand(ObjectTypeIds.BaseEventType, new QualifiedName(BrowseNames.EventId)),
+                    new SimpleAttributeOperand(ObjectTypeIds.ConditionType, new QualifiedName(BrowseNames.Retain)),
+                    new SimpleAttributeOperand(ObjectTypeIds.BaseEventType, new QualifiedName(BrowseNames.SourceNode)),
+                    new SimpleAttributeOperand(ObjectTypeIds.ConditionType, new QualifiedName(BrowseNames.NodeId))
+                })
+            };
 
             var sub = new Subscription(_session.DefaultSubscription)
             {
@@ -764,7 +765,7 @@ public class OpcRuntimeClient : IDisposable
             };
 
             sub.AddItem(monitoredItem);
-            sub.ApplyChanges();
+            await sub.ApplyChangesAsync(default);
 
             // Request ConditionRefresh to get all active conditions
             await SessionCallAsync(ObjectTypeIds.ConditionType,
@@ -783,9 +784,9 @@ public class OpcRuntimeClient : IDisposable
                 if (!isRetained) continue;
 
                 var eventId = evt.EventFields[0].Value as byte[];
-                var conditionId = evt.EventFields[3].Value as NodeId;
+                var conditionId = evt.EventFields[3].Value is NodeId cid ? cid : NodeId.Null;
 
-                if (conditionId != null && eventId != null)
+                if (conditionId != NodeId.Null && eventId != null)
                     alarms.Add((conditionId, eventId));
             }
 
@@ -809,39 +810,40 @@ public class OpcRuntimeClient : IDisposable
 
         try
         {
-            var filter = new EventFilter();
-            // [0] EventId
-            filter.SelectClauses.Add(new SimpleAttributeOperand(ObjectTypeIds.BaseEventType, BrowseNames.EventId));
-            // [1] Retain
-            filter.SelectClauses.Add(new SimpleAttributeOperand(ObjectTypeIds.ConditionType, BrowseNames.Retain));
-            // [2] SourceName
-            filter.SelectClauses.Add(new SimpleAttributeOperand(ObjectTypeIds.BaseEventType, BrowseNames.SourceName));
-            // [3] ConditionNodeId
-            filter.SelectClauses.Add(new SimpleAttributeOperand(ObjectTypeIds.ConditionType, BrowseNames.NodeId));
-            // [4] Message
-            filter.SelectClauses.Add(new SimpleAttributeOperand(ObjectTypeIds.BaseEventType, BrowseNames.Message));
-            // [5] Severity
-            filter.SelectClauses.Add(new SimpleAttributeOperand(ObjectTypeIds.BaseEventType, BrowseNames.Severity));
-            // [6] Time
-            filter.SelectClauses.Add(new SimpleAttributeOperand(ObjectTypeIds.BaseEventType, BrowseNames.Time));
-            // [7] AckedState/Id
-            filter.SelectClauses.Add(new SimpleAttributeOperand(
-                ObjectTypeIds.AcknowledgeableConditionType,
-                new QualifiedName[] { BrowseNames.AckedState, BrowseNames.Id }));
-            // [8] ConfirmedState/Id
-            filter.SelectClauses.Add(new SimpleAttributeOperand(
-                ObjectTypeIds.AcknowledgeableConditionType,
-                new QualifiedName[] { BrowseNames.ConfirmedState, BrowseNames.Id }));
-
-            // [9] SuppressedState/Id (shelving)
-            filter.SelectClauses.Add(new SimpleAttributeOperand(
-                ObjectTypeIds.AlarmConditionType,
-                new QualifiedName[] { BrowseNames.SuppressedState, BrowseNames.Id }));
-
-            // [10] ActiveState/Id (whether the alarm condition is currently active/in-alarm, vs. returned to normal and awaiting ack)
-            filter.SelectClauses.Add(new SimpleAttributeOperand(
-                ObjectTypeIds.AlarmConditionType,
-                new QualifiedName[] { BrowseNames.ActiveState, BrowseNames.Id }));
+            var selectClauses = new List<SimpleAttributeOperand>
+            {
+                // [0] EventId
+                new SimpleAttributeOperand(ObjectTypeIds.BaseEventType, new QualifiedName(BrowseNames.EventId)),
+                // [1] Retain
+                new SimpleAttributeOperand(ObjectTypeIds.ConditionType, new QualifiedName(BrowseNames.Retain)),
+                // [2] SourceName
+                new SimpleAttributeOperand(ObjectTypeIds.BaseEventType, new QualifiedName(BrowseNames.SourceName)),
+                // [3] ConditionNodeId
+                new SimpleAttributeOperand(ObjectTypeIds.ConditionType, new QualifiedName(BrowseNames.NodeId)),
+                // [4] Message
+                new SimpleAttributeOperand(ObjectTypeIds.BaseEventType, new QualifiedName(BrowseNames.Message)),
+                // [5] Severity
+                new SimpleAttributeOperand(ObjectTypeIds.BaseEventType, new QualifiedName(BrowseNames.Severity)),
+                // [6] Time
+                new SimpleAttributeOperand(ObjectTypeIds.BaseEventType, new QualifiedName(BrowseNames.Time)),
+                // [7] AckedState/Id
+                new SimpleAttributeOperand(
+                    ObjectTypeIds.AcknowledgeableConditionType,
+                    new ArrayOf<QualifiedName>(new[] { new QualifiedName(BrowseNames.AckedState), new QualifiedName(BrowseNames.Id) })),
+                // [8] ConfirmedState/Id
+                new SimpleAttributeOperand(
+                    ObjectTypeIds.AcknowledgeableConditionType,
+                    new ArrayOf<QualifiedName>(new[] { new QualifiedName(BrowseNames.ConfirmedState), new QualifiedName(BrowseNames.Id) })),
+                // [9] SuppressedState/Id (shelving)
+                new SimpleAttributeOperand(
+                    ObjectTypeIds.AlarmConditionType,
+                    new ArrayOf<QualifiedName>(new[] { new QualifiedName(BrowseNames.SuppressedState), new QualifiedName(BrowseNames.Id) })),
+                // [10] ActiveState/Id (whether the alarm condition is currently active/in-alarm, vs. returned to normal and awaiting ack)
+                new SimpleAttributeOperand(
+                    ObjectTypeIds.AlarmConditionType,
+                    new ArrayOf<QualifiedName>(new[] { new QualifiedName(BrowseNames.ActiveState), new QualifiedName(BrowseNames.Id) }))
+            };
+            var filter = new EventFilter { SelectClauses = new ArrayOf<SimpleAttributeOperand>(selectClauses.ToArray()) };
             var sub = new Subscription(_session.DefaultSubscription)
 
             {
@@ -868,7 +870,7 @@ public class OpcRuntimeClient : IDisposable
             };
 
             sub.AddItem(mi);
-            sub.ApplyChanges();
+            await sub.ApplyChangesAsync();
 
             await SessionCallAsync(ObjectTypeIds.ConditionType,
                 MethodIds.ConditionType_ConditionRefresh,
@@ -885,7 +887,7 @@ public class OpcRuntimeClient : IDisposable
                 if (retain is not true) continue;
 
                 var eventId = evt.EventFields[0].Value as byte[];
-                var conditionId = evt.EventFields[3].Value as NodeId;
+                var conditionId = evt.EventFields[3].Value is NodeId cid ? cid : NodeId.Null;
                 if (eventId == null) continue;
 
                 var sourceName = evt.EventFields[2].Value?.ToString() ?? "";
@@ -902,7 +904,7 @@ public class OpcRuntimeClient : IDisposable
                 result.Add(new AlarmEntry
                 {
                     Id = $"alarm_{idx++}",
-                    ConditionId = conditionId ?? NodeId.Null,
+                    ConditionId = conditionId,
                     EventId = eventId,
                     SourceName = sourceName,
                     Message = message,
@@ -1016,8 +1018,8 @@ public class OpcRuntimeClient : IDisposable
                 ResultMask = (uint)(BrowseResultMask.DisplayName | BrowseResultMask.NodeClass | BrowseResultMask.TypeDefinition)
             };
 
-            ReferenceDescriptionCollection? references = null;
-            byte[]? continuationPoint = null;
+            ArrayOf<ReferenceDescription>? references = null;
+            ByteString continuationPoint = ByteString.Empty;
 
             var browseResp = await _session.BrowseAsync(null, null, startNode,
                 0u, browseDesc.BrowseDirection,
@@ -1030,7 +1032,11 @@ public class OpcRuntimeClient : IDisposable
 
             if (references != null)
             {
+                var referenceList = new List<ReferenceDescription>();
                 foreach (var rd in references)
+                    referenceList.Add(rd);
+
+                foreach (var rd in referenceList)
                 {
                     var nodeId = ExpandedNodeId.ToNodeId(rd.NodeId, _session.NamespaceUris);
                     var isFolder = rd.NodeClass == NodeClass.Object;
@@ -1041,7 +1047,7 @@ public class OpcRuntimeClient : IDisposable
                         try
                         {
                             var dtVal = await _session.ReadValueAsync(nodeId);
-                            dataType = dtVal?.WrappedValue.TypeInfo?.BuiltInType.ToString() ?? "";
+                            dataType = dtVal.WrappedValue.TypeInfo.BuiltInType.ToString();
                         }
                         catch { }
                     }
@@ -1049,10 +1055,10 @@ public class OpcRuntimeClient : IDisposable
                     result.Add(new BrowsedTag
                     {
                         NodeId = nodeId.ToString(),
-                        DisplayName = rd.DisplayName?.Text ?? "",
+                        DisplayName = rd.DisplayName.Text ?? "",
                         BrowsePath = nodeId is { NamespaceIndex: > 0, IdType: IdType.String }
-                            ? (string)nodeId.Identifier
-                            : rd.DisplayName?.Text ?? "",
+                            ? nodeId.IdentifierAsString
+                            : rd.DisplayName.Text ?? "",
                         NodeClass = rd.NodeClass.ToString(),
                         DataType = dataType,
                         IsFolder = isFolder
@@ -1061,16 +1067,18 @@ public class OpcRuntimeClient : IDisposable
             }
 
             // Release continuation point if any
-            while (continuationPoint != null && continuationPoint.Length > 0)
+            while (!continuationPoint.IsNull && continuationPoint.Length > 0)
             {
-                var cp = continuationPoint;
-                var browseNextResult = await _session.BrowseNextAsync(null, false, new ByteStringCollection { cp }, CancellationToken.None);
-                continuationPoint = browseNextResult.Results?.FirstOrDefault()?.ContinuationPoint;
-                var nextRefs = browseNextResult.Results?.FirstOrDefault()?.References;
-
-                if (nextRefs != null)
+                var browseNextResponse = await _session.BrowseNextAsync(null, false, continuationPoint, CancellationToken.None);
+                continuationPoint = browseNextResponse.Item2;
+                var nextRefs = browseNextResponse.Item3;
+                if (!nextRefs.IsNull && !nextRefs.IsEmpty)
                 {
+                    var nextReferenceList = new List<ReferenceDescription>();
                     foreach (var rd in nextRefs)
+                        nextReferenceList.Add(rd);
+
+                    foreach (var rd in nextReferenceList)
                     {
                         var nodeId = ExpandedNodeId.ToNodeId(rd.NodeId, _session.NamespaceUris);
                         var isFolder = rd.NodeClass == NodeClass.Object;
@@ -1081,7 +1089,7 @@ public class OpcRuntimeClient : IDisposable
                             try
                             {
                                 var dtVal = await _session.ReadValueAsync(nodeId);
-                                dataType = dtVal?.WrappedValue.TypeInfo?.BuiltInType.ToString() ?? "";
+                                dataType = dtVal.WrappedValue.TypeInfo.BuiltInType.ToString();
                             }
                             catch { }
                         }
@@ -1089,10 +1097,10 @@ public class OpcRuntimeClient : IDisposable
                         result.Add(new BrowsedTag
                         {
                             NodeId = nodeId.ToString(),
-                            DisplayName = rd.DisplayName?.Text ?? "",
+                            DisplayName = rd.DisplayName.Text ?? "",
                             BrowsePath = nodeId is { NamespaceIndex: > 0, IdType: IdType.String }
-                                ? (string)nodeId.Identifier
-                                : rd.DisplayName?.Text ?? "",
+                                ? nodeId.IdentifierAsString
+                                : rd.DisplayName.Text ?? "",
                             NodeClass = rd.NodeClass.ToString(),
                             DataType = dataType,
                             IsFolder = isFolder
@@ -1147,9 +1155,9 @@ public class OpcRuntimeClient : IDisposable
         {
             var nodeId = NodeId.Parse(nodeIdStr);
             var val = await _session.ReadValueAsync(nodeId);
-            if (val?.WrappedValue.Value is IFormattable fmt)
+            if (val.WrappedValue.Value is IFormattable fmt)
                 return fmt.ToString(null, System.Globalization.CultureInfo.InvariantCulture);
-            return val?.WrappedValue.Value?.ToString();
+            return val.WrappedValue.Value?.ToString();
         }
         catch (Exception ex)
         {
@@ -1165,7 +1173,7 @@ public class OpcRuntimeClient : IDisposable
         try
         {
             var nodeId = NodeId.Parse(nodeIdStr);
-            var nodesToWrite = new WriteValueCollection
+            var nodesToWrite = new ArrayOf<WriteValue>(new[]
             {
                 new WriteValue
                 {
@@ -1173,11 +1181,10 @@ public class OpcRuntimeClient : IDisposable
                     AttributeId = Attributes.Value,
                     Value = new DataValue(new Variant(value))
                 }
-            };
-            StatusCodeCollection? results = null;
+            });
             var writeResponse = await _session.WriteAsync(null, nodesToWrite, CancellationToken.None);
-            results = writeResponse.Results;
-            var ok = results != null && StatusCode.IsGood(results[0]);
+            var results = writeResponse.Results;
+            var ok = results != null && results.Count > 0 && StatusCode.IsGood(results[0]);
             if (!ok) Log($"WRITE TAG FAIL: {nodeIdStr} = {value}");
             return ok;
         }
@@ -1193,14 +1200,18 @@ public class OpcRuntimeClient : IDisposable
     private async Task<IList<object>?> SessionCallAsync(NodeId objectId, NodeId methodId, object[] inputArgs)
     {
         if (_session == null) return null;
-        var requests = new CallMethodRequestCollection
+        var requests = new ArrayOf<CallMethodRequest>(new[]
         {
             new CallMethodRequest { ObjectId = objectId, MethodId = methodId,
-                InputArguments = new VariantCollection(inputArgs.Select(a => new Variant(a))) }
-        };
+                InputArguments = new ArrayOf<Variant>(inputArgs.Select(a => new Variant(a)).ToArray()) }
+        });
         var response = await _session.CallAsync(null, requests, CancellationToken.None);
-        var res = response.Results?.FirstOrDefault();
-        return res?.OutputArguments?.Select(v => v.Value).ToList();
+        if (response.Results.IsNull || response.Results.IsEmpty)
+            return null;
+        var res = response.Results[0];
+        if (res.OutputArguments.IsNull || res.OutputArguments.IsEmpty)
+            return [];
+        return res.OutputArguments.ToArray().Select(v => v.Value).ToList<object>();
     }
 
     public void Dispose()
