@@ -89,7 +89,7 @@ public class SimulationDriverTests
         Thread.Sleep(350); // ~3 poll cycles
 
         // Counter should have been incremented
-        var value = Convert.ToDouble(variable.Value);
+        var value = Convert.ToDouble(variable.Value.Value);
         Assert.True(value > 0, $"Counter value should be > 0, was {value}");
     }
 
@@ -112,7 +112,7 @@ public class SimulationDriverTests
         driver.Start();
         Thread.Sleep(200);
 
-        var value = Convert.ToDouble(variable.Value);
+        var value = Convert.ToDouble(variable.Value.Value);
         // Sine with amplitude 50 and offset 10: range is -40 to 60
         Assert.InRange(value, -40.0, 60.0);
     }
@@ -138,12 +138,12 @@ public class SimulationDriverTests
         var deadline = DateTime.UtcNow.AddSeconds(5);
         while (DateTime.UtcNow < deadline)
         {
-            if (variable.Value is int) break;
+            if (variable.Value.Value is int) break;
             Thread.Sleep(50);
         }
 
         // RandomInt produces an int; convert carefully
-        var value = Convert.ToInt32(variable.Value);
+        var value = Convert.ToInt32(variable.Value.Value);
         Assert.InRange(value, 10, 20);
     }
 
@@ -165,7 +165,7 @@ public class SimulationDriverTests
         driver.Start();
         Thread.Sleep(150);
 
-        Assert.IsType<bool>(variable.Value);
+        Assert.IsType<bool>(variable.Value.Value);
     }
 
     [Fact]
@@ -187,7 +187,7 @@ public class SimulationDriverTests
         driver.Start();
         Thread.Sleep(150);
 
-        var value = Convert.ToDouble(variable.Value);
+        var value = Convert.ToDouble(variable.Value.Value);
         // Square wave: either +Amplitude or -Amplitude (plus offset=0)
         Assert.True(Math.Abs(value) == 100 || Math.Abs(value) < 0.001,
             $"Square value should be ±100, was {value}");
@@ -231,11 +231,11 @@ public class SimulationDriverTests
         driver.AddItem(variable, config);
         Thread.Sleep(150);
 
-        var valueBefore = Convert.ToDouble(variable.Value);
+        var valueBefore = Convert.ToDouble(variable.Value.Value);
         driver.Dispose();
         Thread.Sleep(200);
 
-        var valueAfter = Convert.ToDouble(variable.Value);
+        var valueAfter = Convert.ToDouble(variable.Value.Value);
         // After dispose, no more increments should happen (or at most 1 in-flight)
         Assert.True(valueAfter - valueBefore <= 1,
             $"Counter continued after dispose: before={valueBefore} after={valueAfter}");

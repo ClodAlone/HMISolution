@@ -59,11 +59,11 @@ public class AlarmPipelineIntegrationTests
         };
 
         object boxedValue = 50.0;
-        variable.Value = boxedValue;
+        variable.Value = new Variant(boxedValue);
         variable.ClearChangeMasks(null, false);
 
         // Act: Set the SAME boxed reference again
-        variable.Value = boxedValue;
+        variable.Value = new Variant(boxedValue);
 
         // Assert: ChangeMasks should NOT include Value (same reference)
         Assert.True((variable.ChangeMasks & NodeStateChangeMasks.Value) == 0,
@@ -84,12 +84,15 @@ public class AlarmPipelineIntegrationTests
         };
         variable.ClearChangeMasks(null, false);
 
-        // Act: Set a NEW boxed double (different reference even if same value)
-        variable.Value = 50.0; // This creates a new boxed double
+        // Act: Set a value that differs from the current one.
+        // Note: in OPC UA SDK v2.0.0, BaseVariableState.Value is typed as Opc.Ua.Variant and
+        // change detection compares Variant equality (by value), not boxed object reference
+        // identity as in v1.5.x. Re-assigning an equal numeric value no longer sets ChangeMasks.
+        variable.Value = 75.0;
 
-        // Assert: ChangeMasks SHOULD include Value because ReferenceEquals is false
+        // Assert: ChangeMasks SHOULD include Value because the value actually changed
         Assert.True((variable.ChangeMasks & NodeStateChangeMasks.Value) != 0,
-            "Setting a new boxed value (even same numeric value) should set ChangeMasks.Value");
+            "Setting a different value should set ChangeMasks.Value");
     }
 
     [Fact]
@@ -219,7 +222,7 @@ public class AlarmPipelineIntegrationTests
             if ((masks & NodeStateChangeMasks.Value) != 0)
             {
                 alarmEvaluated = true;
-                var result = AlarmEvaluator.EvaluateLimitAlarm(variable.Value, alarmConfig, isActive);
+                var result = AlarmEvaluator.EvaluateLimitAlarm(variable.Value.Value, alarmConfig, isActive);
                 if (result != null && result.ShouldActivate)
                 {
                     alarmActivated = true;
@@ -278,7 +281,7 @@ public class AlarmPipelineIntegrationTests
         {
             if ((masks & NodeStateChangeMasks.Value) != 0)
             {
-                var result = AlarmEvaluator.EvaluateLimitAlarm(variable.Value, alarmConfig, isActive);
+                var result = AlarmEvaluator.EvaluateLimitAlarm(variable.Value.Value, alarmConfig, isActive);
                 if (result != null && result.ShouldActivate)
                 {
                     alarmActivated = true;
@@ -328,7 +331,7 @@ public class AlarmPipelineIntegrationTests
         {
             if ((masks & NodeStateChangeMasks.Value) != 0)
             {
-                var result = AlarmEvaluator.EvaluateLimitAlarm(variable.Value, alarmConfig, isActive);
+                var result = AlarmEvaluator.EvaluateLimitAlarm(variable.Value.Value, alarmConfig, isActive);
                 if (result != null)
                 {
                     if (result.ShouldActivate)
@@ -454,7 +457,7 @@ public class AlarmPipelineIntegrationTests
         {
             if ((masks & NodeStateChangeMasks.Value) != 0)
             {
-                var result = AlarmEvaluator.EvaluateLimitAlarm(variable.Value, alarmConfig, isActive);
+                var result = AlarmEvaluator.EvaluateLimitAlarm(variable.Value.Value, alarmConfig, isActive);
                 if (result != null && result.ShouldActivate)
                 {
                     activated = true;
@@ -475,7 +478,7 @@ public class AlarmPipelineIntegrationTests
         }
 
         // Set value (as in HandleWriteValue line 2044)
-        variable.Value = incoming;
+        variable.Value = new Variant(incoming);
         variable.StatusCode = StatusCodes.Good;
         variable.Timestamp = DateTime.UtcNow;
         variable.ClearChangeMasks(null, false);
@@ -516,7 +519,7 @@ public class AlarmPipelineIntegrationTests
         {
             if ((masks & NodeStateChangeMasks.Value) != 0)
             {
-                var result = AlarmEvaluator.EvaluateLimitAlarm(variable.Value, config, isActive);
+                var result = AlarmEvaluator.EvaluateLimitAlarm(variable.Value.Value, config, isActive);
                 if (result != null && result.ShouldActivate)
                 {
                     activated = true;
@@ -532,7 +535,7 @@ public class AlarmPipelineIntegrationTests
                 System.Globalization.CultureInfo.InvariantCulture, out var d))
             incoming = d;
 
-        variable.Value = incoming;
+        variable.Value = new Variant(incoming);
         variable.Timestamp = DateTime.UtcNow;
         variable.ClearChangeMasks(null, false);
 
@@ -572,7 +575,7 @@ public class AlarmPipelineIntegrationTests
         {
             if ((masks & NodeStateChangeMasks.Value) != 0)
             {
-                var result = AlarmEvaluator.EvaluateLimitAlarm(variable.Value, config, isActive);
+                var result = AlarmEvaluator.EvaluateLimitAlarm(variable.Value.Value, config, isActive);
                 if (result != null && result.ShouldActivate)
                 {
                     activated = true;

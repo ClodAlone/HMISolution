@@ -64,7 +64,7 @@ public class CsvDriverTests : IDisposable
         driver.Start();
 
         Thread.Sleep(500);
-        Assert.Equal(20.3, Convert.ToDouble(variable.Value));
+        Assert.Equal(20.3, Convert.ToDouble(variable.Value.Value));
         Assert.Equal(StatusCodes.Good, variable.StatusCode.Code);
     }
 
@@ -80,7 +80,7 @@ public class CsvDriverTests : IDisposable
         driver.Start();
 
         Thread.Sleep(500);
-        Assert.Equal(5.0, Convert.ToDouble(variable.Value));
+        Assert.Equal(5.0, Convert.ToDouble(variable.Value.Value));
     }
 
     [Fact]
@@ -98,11 +98,11 @@ public class CsvDriverTests : IDisposable
         var deadline = DateTime.UtcNow.AddSeconds(5);
         while (DateTime.UtcNow < deadline)
         {
-            if (Convert.ToDouble(variable.Value) != 0.0) break;
+            if (Convert.ToDouble(variable.Value.Value) != 0.0) break;
             Thread.Sleep(50);
         }
 
-        Assert.Equal(200.0, Convert.ToDouble(variable.Value));
+        Assert.Equal(200.0, Convert.ToDouble(variable.Value.Value));
     }
 
     [Fact]
@@ -133,7 +133,7 @@ public class CsvDriverTests : IDisposable
         driver.Start();
 
         Thread.Sleep(500);
-        Assert.Equal(99, Convert.ToInt32(variable.Value));
+        Assert.Equal(99, Convert.ToInt32(variable.Value.Value));
     }
 
     [Fact]
@@ -148,7 +148,7 @@ public class CsvDriverTests : IDisposable
         driver.Start();
 
         Thread.Sleep(500);
-        Assert.Equal(true, variable.Value);
+        Assert.Equal(true, variable.Value.Value);
     }
 
     [Fact]
@@ -178,7 +178,7 @@ public class CsvDriverTests : IDisposable
         driver.Start();
 
         Thread.Sleep(500);
-        Assert.Equal(30.0, Convert.ToDouble(variable.Value));
+        Assert.Equal(30.0, Convert.ToDouble(variable.Value.Value));
     }
 
     [Fact]
@@ -214,8 +214,8 @@ public class CsvDriverTests : IDisposable
         driver.Start();
 
         Thread.Sleep(500);
-        Assert.Equal(10.0, Convert.ToDouble(v1.Value));
-        Assert.Equal(60.0, Convert.ToDouble(v2.Value));
+        Assert.Equal(10.0, Convert.ToDouble(v1.Value.Value));
+        Assert.Equal(60.0, Convert.ToDouble(v2.Value.Value));
     }
 
     [Fact]
