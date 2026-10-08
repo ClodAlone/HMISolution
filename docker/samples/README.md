@@ -171,7 +171,7 @@ docker run -d --name hmi-server \
 
 - All IP addresses in driver configurations are fictional examples.
   Update them to match your actual hardware/network before running.
-- Password hashes are empty â€” set proper passwords via the editor before production use.
+- For samples with login enabled, all demo users use the password `Admin123!` — change these via the editor before production use. Some samples have empty password hashes (login effectively open); set proper passwords via the editor before production use.
 - Database connection strings point to `localhost` â€” update for your PostgreSQL/TimescaleDB instance.
 - The Simulation driver can be added to any variable via the editor for testing without real hardware.
 - The **PLCScriptLab** sample requires no external hardware â€” it runs entirely on the Simulation driver
