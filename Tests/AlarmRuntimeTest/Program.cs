@@ -1,9 +1,11 @@
 ﻿using Opc.Ua;
 using Opc.Ua.Client;
 using Opc.Ua.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 #pragma warning disable CS0618
 
-var appConfig = new ApplicationConfiguration
+var telemetry = new ServiceProviderTelemetryContext(new ServiceCollection().BuildServiceProvider());
+var appConfig = new ApplicationConfiguration(telemetry)
 {
     ApplicationName = "Test", ApplicationUri = "urn:Test", ApplicationType = ApplicationType.Client,
     SecurityConfiguration = new SecurityConfiguration
@@ -24,8 +26,20 @@ if (appConfig.CertificateManager is CertificateManager certManager)
     certManager.AcceptError = (_, result) => true;
 }
 var endpoint = CoreClientUtils.SelectEndpoint(appConfig, "opc.tcp://localhost:14880/AlarmDemo", false, 15000);
-var endpointConfiguration = new EndpointConfiguration { OperationTimeout = appConfig.TransportQuotas.OperationTimeout };
-var session = (Session)await new DefaultSessionFactory().CreateAsync(appConfig, new ConfiguredEndpoint(null, endpoint, endpointConfiguration), false, "Test", 60000, new UserIdentity(new AnonymousIdentityToken()), default);
+var endpointConfiguration = EndpointConfiguration.Create(appConfig);
+Session session;
+try
+{
+    session = (Session)await new DefaultSessionFactory().CreateAsync(appConfig, new ConfiguredEndpoint(null, endpoint, endpointConfiguration), false, "Test", 60000, new UserIdentity(new AnonymousIdentityToken()), default);
+}
+catch (Exception ex)
+{
+    Console.WriteLine("CONNECT FAILED: " + ex.GetType().FullName + ": " + ex.Message);
+    Console.WriteLine(ex.StackTrace);
+    var inner = ex.InnerException;
+    while (inner != null) { Console.WriteLine("INNER: " + inner.GetType().FullName + ": " + inner.Message); Console.WriteLine(inner.StackTrace); inner = inner.InnerException; }
+    return;
+}
 Console.WriteLine("Connected");
 // Write all three above limits: Temp=100(>HH95), Pressure=10(>H8), Level=95(>H90)
 var writes = new List<WriteValue>

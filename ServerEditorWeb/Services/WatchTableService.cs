@@ -76,7 +76,8 @@ public class WatchTableService : IDisposable
 
             if (_appConfig == null)
             {
-                _appConfig = new ApplicationConfiguration
+                var telemetry = new ServiceProviderTelemetryContext(new Microsoft.Extensions.DependencyInjection.ServiceCollection().BuildServiceProvider());
+                _appConfig = new ApplicationConfiguration(telemetry)
                 {
                     ApplicationName = "WatchTableClient",
                     ApplicationUri = Utils.Format("urn:{0}:WatchTableClient", System.Net.Dns.GetHostName()),
@@ -124,7 +125,7 @@ public class WatchTableService : IDisposable
                 }
             }
 
-            var client = DiscoveryClient.Create(new Uri(endpointUrl));
+            var client = DiscoveryClient.Create(_appConfig, new Uri(endpointUrl));
             var endpoints = client.GetEndpoints(default(ArrayOf<string>)).ToList();
             client.Dispose();
 
@@ -145,7 +146,7 @@ public class WatchTableService : IDisposable
                 endpointDescription.EndpointUrl = builder.Uri.ToString();
             }
 
-            var endpointConfiguration = new EndpointConfiguration { OperationTimeout = _appConfig.TransportQuotas.OperationTimeout };
+            var endpointConfiguration = EndpointConfiguration.Create(_appConfig);
             var endpoint = new ConfiguredEndpoint(null, endpointDescription, endpointConfiguration);
 
             _session = await new DefaultSessionFactory().CreateAsync(

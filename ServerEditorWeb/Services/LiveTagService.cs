@@ -58,7 +58,7 @@ public class LiveTagService : IDisposable
             Disconnect();
             await EnsureConfigAsync();
 
-            var client = DiscoveryClient.Create(new Uri(endpointUrl));
+            var client = DiscoveryClient.Create(_appConfig, new Uri(endpointUrl));
             var endpoints = client.GetEndpoints(default(ArrayOf<string>)).ToList();
             client.Dispose();
 
@@ -77,7 +77,7 @@ public class LiveTagService : IDisposable
                 endpointDesc.EndpointUrl = builder.Uri.ToString();
             }
 
-            var epConfig = new EndpointConfiguration { OperationTimeout = _appConfig!.TransportQuotas.OperationTimeout };
+            var epConfig = EndpointConfiguration.Create(_appConfig!);
             var endpoint = new ConfiguredEndpoint(null, endpointDesc, epConfig);
 
             _session = await new DefaultSessionFactory().CreateAsync(
@@ -216,7 +216,8 @@ public class LiveTagService : IDisposable
     private async Task EnsureConfigAsync()
     {
         if (_appConfig != null) return;
-        _appConfig = new ApplicationConfiguration
+        var telemetry = new ServiceProviderTelemetryContext(new Microsoft.Extensions.DependencyInjection.ServiceCollection().BuildServiceProvider());
+        _appConfig = new ApplicationConfiguration(telemetry)
         {
             ApplicationName = "LiveTagClient",
             ApplicationUri = Utils.Format("urn:{0}:LiveTagClient", System.Net.Dns.GetHostName()),

@@ -349,7 +349,8 @@ public class CertificateService
     private async Task<(OpcSession session, ApplicationConfiguration config)> CreateGdsSessionAsync(
         string gdsEndpointUrl, string? userName, string? password)
     {
-        var config = new ApplicationConfiguration
+        var telemetry = new ServiceProviderTelemetryContext(new Microsoft.Extensions.DependencyInjection.ServiceCollection().BuildServiceProvider());
+        var config = new ApplicationConfiguration(telemetry)
         {
             ApplicationName = "ServerEditorWebGdsClient",
             ApplicationUri = Utils.Format("urn:{0}:ServerEditorWebGdsClient", System.Net.Dns.GetHostName()),
@@ -389,7 +390,7 @@ public class CertificateService
             certManager.AcceptError = (_, _) => true;
         }
 
-        var discoveryClient = DiscoveryClient.Create(new Uri(gdsEndpointUrl));
+        var discoveryClient = DiscoveryClient.Create(config, new Uri(gdsEndpointUrl));
         var endpoints = discoveryClient.GetEndpoints(default(ArrayOf<string>)).ToList();
         discoveryClient.Dispose();
 
@@ -400,7 +401,7 @@ public class CertificateService
         if (selectedEndpoint == null)
             throw new Exception("No GDS endpoints found");
 
-        var endpointConfig = new EndpointConfiguration { OperationTimeout = config.TransportQuotas.OperationTimeout };
+        var endpointConfig = EndpointConfiguration.Create(config);
         var endpoint = new ConfiguredEndpoint(null, selectedEndpoint, endpointConfig);
 
         UserIdentity identity = string.IsNullOrEmpty(userName)

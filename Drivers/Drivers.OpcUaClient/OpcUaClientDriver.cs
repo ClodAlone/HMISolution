@@ -9,6 +9,7 @@ using System.Threading;
 using Opc.Ua;
 using Opc.Ua.Client;
 using Serilog;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace SimpleOpcFileServer
 {
@@ -168,16 +169,16 @@ namespace SimpleOpcFileServer
                 Disconnect();
                 _config ??= CreateClientConfiguration();
                 var endpointDescription = GetEndpointDescription(_endpointUrl);
-                var endpointConfiguration = new EndpointConfiguration { OperationTimeout = _config.TransportQuotas.OperationTimeout };
+                var endpointConfiguration = EndpointConfiguration.Create(_config);
                 var endpoint = new ConfiguredEndpoint(null, endpointDescription, endpointConfiguration);
                 _session = new DefaultSessionFactory().CreateAsync(_config, endpoint, false,
                     $"SimpleOpcFileServer-{Utils.GetHostName()}", 60000,
                     new UserIdentity(new AnonymousIdentityToken()), default).GetAwaiter().GetResult() as Session;
             }
 
-            private static EndpointDescription GetEndpointDescription(string url)
+            private EndpointDescription GetEndpointDescription(string url)
             {
-                using var client = DiscoveryClient.Create(new Uri(url));
+                using var client = DiscoveryClient.Create(_config, new Uri(url));
                 var endpoints = client.GetEndpoints(default(ArrayOf<string>)).ToList();
                 return endpoints.FirstOrDefault(e => e.SecurityMode == MessageSecurityMode.None)
                        ?? endpoints.FirstOrDefault()
@@ -187,7 +188,8 @@ namespace SimpleOpcFileServer
             private static ApplicationConfiguration CreateClientConfiguration()
             {
                 var pkiRoot = "%LocalApplicationData%/SimpleOpcFileServer/pki";
-                var config = new ApplicationConfiguration
+                var telemetry = new ServiceProviderTelemetryContext(new ServiceCollection().BuildServiceProvider());
+                var config = new ApplicationConfiguration(telemetry)
                 {
                     ApplicationName = "SimpleOpcFileServer.OpcUaClient",
                     ApplicationUri = $"urn:{Utils.GetHostName()}:SimpleOpcFileServer:OpcUaClient",

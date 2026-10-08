@@ -2,6 +2,7 @@
 // All rights reserved.
 
 using Microsoft.AspNetCore.SignalR.Client;
+using Microsoft.Extensions.DependencyInjection;
 using Opc.Ua;
 using Opc.Ua.Client;
 using Opc.Ua.Configuration;
@@ -141,7 +142,8 @@ public sealed class BridgeService : IDisposable
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "CloudBridge", "pki");
 
-        _appConfig = new ApplicationConfiguration
+        var telemetry = new ServiceProviderTelemetryContext(new Microsoft.Extensions.DependencyInjection.ServiceCollection().BuildServiceProvider());
+        _appConfig = new ApplicationConfiguration(telemetry)
         {
             ApplicationName = "CloudBridge",
             ApplicationUri = $"urn:{Utils.GetHostName()}:CloudBridge",
@@ -181,7 +183,7 @@ public sealed class BridgeService : IDisposable
             certManager.AcceptError = (_, _) => true;
         }
 
-        var app = new ApplicationInstance
+        var app = new ApplicationInstance(telemetry)
         {
             ApplicationName = _appConfig.ApplicationName,
             ApplicationType = ApplicationType.Client,
@@ -199,7 +201,7 @@ public sealed class BridgeService : IDisposable
         }
 
         Log($"Discovering OPC endpoints at {_opcEndpoint}...");
-        var client = DiscoveryClient.Create(new Uri(_opcEndpoint));
+        var client = DiscoveryClient.Create(_appConfig, new Uri(_opcEndpoint));
         var endpoints = client.GetEndpoints(default(ArrayOf<string>)).ToList();
         client.Dispose();
 
