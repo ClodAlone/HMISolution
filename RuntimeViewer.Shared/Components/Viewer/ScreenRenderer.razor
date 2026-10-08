@@ -31,7 +31,7 @@ else if (Screen.LayoutMode == "responsive")
                 continue;
 
             var hasCmd = sym.Commands.Count > 0;
-            var isInputWidget = sym.Type is "knob" or "rotaryswitch" or "switch" or "hslider" or "vslider";
+            var isInputWidget = sym.Type is "knob" or "rotaryswitch" or "switch" or "hslider" or "vslider" or "rangeslider";
             var isNavButton = sym.Type == "navbutton" && !string.IsNullOrEmpty(sym.NavButtonTarget);
             var isInteractive = hasCmd || isInputWidget || isNavButton;
             var canExecute = hasCmd && Auth.HasWriteAccess(sym.RequiredAccess);
@@ -280,6 +280,31 @@ else if (Screen.LayoutMode == "responsive")
                             }
                         </div>
                         break;
+                    case "rangeslider":
+                        var rsMin = sym.MinValue ?? 0;
+                        var rsMax = sym.MaxValue ?? 100;
+                        var rsRange = rsMax > rsMin ? rsMax - rsMin : 1;
+                        var rsLow = ParseDouble(OpcGet(sym.RangeLowPath, sym) ?? sym.RangeLowValue.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                        var rsHigh = ParseDouble(OpcGet(sym.RangeHighPath, sym) ?? sym.RangeHighValue.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                        var rsLowFrac = Math.Clamp((rsLow - rsMin) / rsRange, 0, 1);
+                        var rsHighFrac = Math.Clamp((rsHigh - rsMin) / rsRange, 0, 1);
+                        <div style="display: inline-flex; flex-direction: column; align-items: center; cursor: pointer; padding: 4px;">
+                            <svg width="160" height="36" viewBox="0 0 160 36" xmlns="http://www.w3.org/2000/svg">
+                                <rect x="8" y="14" width="144" height="8" rx="4" fill="@(sym.RangeTrackColor ?? "#2a2a3a")" />
+                                <rect x="@F(8 + 144 * Math.Min(rsLowFrac, rsHighFrac))" y="14"
+                                      width="@F(144 * Math.Abs(rsHighFrac - rsLowFrac))" height="8" rx="4"
+                                      fill="@(sym.RangeFillColor ?? "#22d3ee")" />
+                                <circle cx="@F(8 + 144 * rsLowFrac)" cy="18" r="8" fill="@(sym.RangeLowHandleColor ?? "#38bdf8")" stroke="#fff" stroke-width="1"
+                                        style="filter: drop-shadow(0 1px 3px rgba(0,0,0,0.4));" />
+                                <circle cx="@F(8 + 144 * rsHighFrac)" cy="18" r="8" fill="@(sym.RangeHighHandleColor ?? "#f97316")" stroke="#fff" stroke-width="1"
+                                        style="filter: drop-shadow(0 1px 3px rgba(0,0,0,0.4));" />
+                            </svg>
+                            @if (sym.RangeShowValues)
+                            {
+                                <span style="font-size: 10px; color: #ccc;">@(rsLow.ToString("F1", System.Globalization.CultureInfo.InvariantCulture)) – @(rsHigh.ToString("F1", System.Globalization.CultureInfo.InvariantCulture))</span>
+                            }
+                        </div>
+                        break;
                     case "button":
                         @RenderResponsiveButton(sym, resolvedLabel)
                         break;
@@ -467,7 +492,7 @@ else
                 continue;
 
             var hasCmd = sym.Commands.Count > 0;
-            var isInputWidget = sym.Type is "knob" or "rotaryswitch" or "switch" or "hslider" or "vslider";
+            var isInputWidget = sym.Type is "knob" or "rotaryswitch" or "switch" or "hslider" or "vslider" or "rangeslider";
             var isNavButton = sym.Type == "navbutton" && !string.IsNullOrEmpty(sym.NavButtonTarget);
             var isInteractive = hasCmd || isInputWidget || isNavButton;
             var canExecute = hasCmd && Auth.HasWriteAccess(sym.RequiredAccess);
@@ -475,7 +500,12 @@ else
             var isPressed = _pressedSymbolId == sym.Id;
             var isLocked = hasCmd && !canExecute && !string.IsNullOrEmpty(sym.RequiredAccess);
 
-            <LiveSymbol @key="sym.Id" Value="@liveValue"><g transform="translate(@sym.X, @sym.Y) rotate(@F(rotation), @F(sym.Width / 2), @F(sym.Height / 2))"
+            // rangeslider has no single VariablePath - track its two bound values plus drag state so it re-renders
+            var liveSymbolValue = sym.Type == "rangeslider"
+                ? $"{OpcGet(sym.RangeLowPath, sym)}|{OpcGet(sym.RangeHighPath, sym)}|{(_isDraggingRangeSlider && _dragRangeSliderSymbol == sym ? "d" : "")}"
+                : liveValue;
+
+            <LiveSymbol @key="sym.Id" Value="@liveSymbolValue"><g transform="translate(@sym.X, @sym.Y) rotate(@F(rotation), @F(sym.Width / 2), @F(sym.Height / 2))"
                class="@(isInteractive ? "rv-interactive" : "") @(isPressed ? "rv-pressed" : "") @(isLocked ? "rv-locked" : "")"
                style="@(isInteractive ? "cursor: pointer;" : "") @BuildPositionAnimStyle(sym)"
                @onmousedown="(e) => OnSymbolMouseDown(e, sym)" @onmousedown:stopPropagation
@@ -675,6 +705,9 @@ else
                         break;
                     case "vslider":
                         @RenderVSlider(sym, liveValue)
+                        break;
+                    case "rangeslider":
+                        @RenderRangeSlider(sym)
                         break;
                     case "button":
                         @RenderButton(sym, resolvedLabel)
@@ -1006,6 +1039,9 @@ else
     private const double _gaugeLerpSpeed = 0.18;
     private ScreenSymbol? _dragSliderSymbol;
     private bool _isDraggingSlider;
+    private ScreenSymbol? _dragRangeSliderSymbol;
+    private bool _isDraggingRangeSlider;
+    private bool _rangeDraggingHighHandle;
     private ScreenSymbol? _dragKnobSymbol;
     private bool _isDraggingKnob;
     private double _knobDragStartAngle;
@@ -1244,6 +1280,18 @@ else
             return;
         }
 
+        // Start range slider drag if applicable (choose nearest handle)
+        if (sym.Type == "rangeslider" && (!string.IsNullOrEmpty(sym.RangeLowPath) || !string.IsNullOrEmpty(sym.RangeHighPath)))
+        {
+            var svgPtR = await GetSvgPoint(e);
+            _rangeDraggingHighHandle = PickRangeSliderHandle(sym, svgPtR);
+            _dragRangeSliderSymbol = sym;
+            _isDraggingRangeSlider = true;
+            await StartJsDrag();
+            ApplyRangeSliderDragFromSvg(svgPtR);
+            return;
+        }
+
         // Start knob drag if applicable
         if (sym.Type == "knob" && !string.IsNullOrEmpty(sym.VariablePath))
         {
@@ -1441,6 +1489,8 @@ else
         var pt = new SvgPoint(svgX, svgY);
         if (_isDraggingSlider && _dragSliderSymbol != null)
             ApplySliderDragFromSvg(pt);
+        if (_isDraggingRangeSlider && _dragRangeSliderSymbol != null)
+            ApplyRangeSliderDragFromSvg(pt);
         if (_isDraggingKnob && _dragKnobSymbol != null)
             ApplyKnobDragFromSvg(pt);
         InvokeAsync(StateHasChanged);
@@ -1458,6 +1508,13 @@ else
         {
             _isDraggingSlider = false;
             _dragSliderSymbol = null;
+            _suppressNextClick = true;
+            await FlushPendingDragWrite();
+        }
+        if (_isDraggingRangeSlider)
+        {
+            _isDraggingRangeSlider = false;
+            _dragRangeSliderSymbol = null;
             _suppressNextClick = true;
             await FlushPendingDragWrite();
         }
@@ -1538,6 +1595,85 @@ else
             var valueDelta = delta / 300.0 * (max - min);
             _knobCurrentValue = Math.Clamp(_knobCurrentValue + valueDelta, min, max);
             ThrottledDragWrite(sym.VariablePath, _knobCurrentValue.ToString("F2", System.Globalization.CultureInfo.InvariantCulture));
+        }
+        catch { }
+    }
+
+    /// <summary>Determines whether the high (true) or low (false) handle of a range slider is nearest to the given SVG point.</summary>
+    private bool PickRangeSliderHandle(ScreenSymbol sym, SvgPoint svgPt)
+    {
+        var min = sym.MinValue ?? 0;
+        var max = sym.MaxValue ?? 100;
+        var range = max > min ? max - min : 1;
+        var lowVal = ParseDouble(OpcGet(sym.RangeLowPath, sym) ?? sym.RangeLowValue.ToString(CultureInfo.InvariantCulture));
+        var highVal = ParseDouble(OpcGet(sym.RangeHighPath, sym) ?? sym.RangeHighValue.ToString(CultureInfo.InvariantCulture));
+        var lowFrac = Math.Clamp((lowVal - min) / range, 0, 1);
+        var highFrac = Math.Clamp((highVal - min) / range, 0, 1);
+
+        if (sym.RangeOrientation == "vertical")
+        {
+            var thumbR = Math.Min(sym.Width * 0.35, 12);
+            var pad = thumbR + 2;
+            var trackH = sym.Height - pad * 2;
+            var localY = svgPt.Y - sym.Y - pad;
+            var lowY = trackH * (1 - lowFrac);
+            var highY = trackH * (1 - highFrac);
+            return Math.Abs(localY - highY) < Math.Abs(localY - lowY);
+        }
+        else
+        {
+            var thumbR = Math.Min(sym.Height * 0.35, 12);
+            var pad = thumbR + 2;
+            var trackW = sym.Width - pad * 2;
+            var localX = svgPt.X - sym.X;
+            var lowX = pad + trackW * lowFrac;
+            var highX = pad + trackW * highFrac;
+            return Math.Abs(localX - highX) < Math.Abs(localX - lowX);
+        }
+    }
+
+    private void ApplyRangeSliderDragFromSvg(SvgPoint svgPt)
+    {
+        var sym = _dragRangeSliderSymbol;
+        if (sym == null) return;
+        var path = _rangeDraggingHighHandle ? sym.RangeHighPath : sym.RangeLowPath;
+        if (string.IsNullOrEmpty(path)) return;
+        try
+        {
+            var min = sym.MinValue ?? 0;
+            var max = sym.MaxValue ?? 100;
+            double frac;
+            if (sym.RangeOrientation == "vertical")
+            {
+                var thumbR = Math.Min(sym.Width * 0.35, 12);
+                var pad = thumbR + 2;
+                var trackH = sym.Height - pad * 2;
+                var localY = svgPt.Y - sym.Y - pad;
+                frac = Math.Clamp(1.0 - localY / trackH, 0, 1);
+            }
+            else
+            {
+                var thumbR = Math.Min(sym.Height * 0.35, 12);
+                var pad = thumbR + 2;
+                var trackW = sym.Width - pad * 2;
+                var localX = svgPt.X - sym.X - pad;
+                frac = Math.Clamp(localX / trackW, 0, 1);
+            }
+            var newVal = Math.Clamp(min + frac * (max - min), min, max);
+
+            // Enforce minimum gap between handles
+            var otherPath = _rangeDraggingHighHandle ? sym.RangeLowPath : sym.RangeHighPath;
+            if (!string.IsNullOrEmpty(otherPath) && sym.RangeMinGap > 0)
+            {
+                var otherVal = ParseDouble(OpcGet(otherPath, sym) ?? "0");
+                if (_rangeDraggingHighHandle)
+                    newVal = Math.Max(newVal, otherVal + sym.RangeMinGap);
+                else
+                    newVal = Math.Min(newVal, otherVal - sym.RangeMinGap);
+                newVal = Math.Clamp(newVal, min, max);
+            }
+
+            ThrottledDragWrite(path, newVal.ToString("F2", System.Globalization.CultureInfo.InvariantCulture));
         }
         catch { }
     }
@@ -2602,7 +2738,176 @@ else
         }
     };
 
-    // â”€â”€â”€ Command Button rendering (SVG canvas) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ─── Range Slider rendering (dual-handle min/max band) ───────────
+
+    private RenderFragment RenderRangeSlider(ScreenSymbol sym) => builder =>
+    {
+        int seq = 0;
+        var min = sym.MinValue ?? 0;
+        var max = sym.MaxValue ?? 100;
+        var range = max > min ? max - min : 1;
+        var lowVal = ParseDouble(OpcGet(sym.RangeLowPath, sym) ?? sym.RangeLowValue.ToString(CultureInfo.InvariantCulture));
+        var highVal = ParseDouble(OpcGet(sym.RangeHighPath, sym) ?? sym.RangeHighValue.ToString(CultureInfo.InvariantCulture));
+        var lowFrac = Math.Clamp((lowVal - min) / range, 0, 1);
+        var highFrac = Math.Clamp((highVal - min) / range, 0, 1);
+        var trackColor = sym.RangeTrackColor ?? "#2a2a3a";
+        var fillColor = sym.RangeFillColor ?? "#22d3ee";
+        var lowColor = sym.RangeLowHandleColor ?? "#38bdf8";
+        var highColor = sym.RangeHighHandleColor ?? "#f97316";
+        var w = sym.Width;
+        var h = sym.Height;
+        var vertical = sym.RangeOrientation == "vertical";
+
+        // Background
+        builder.OpenElement(seq++, "rect");
+        builder.AddAttribute(seq++, "width", w);
+        builder.AddAttribute(seq++, "height", h);
+        builder.AddAttribute(seq++, "rx", 6);
+        builder.AddAttribute(seq++, "fill", "#1a1a2e");
+        builder.AddAttribute(seq++, "stroke", sym.Stroke ?? "#334155");
+        builder.AddAttribute(seq++, "stroke-width", sym.StrokeWidth);
+        builder.CloseElement();
+
+        if (!vertical)
+        {
+            var trackH = Math.Max(4, h * 0.15);
+            var trackY = h / 2.0;
+            var thumbR = Math.Min(h * 0.35, 12);
+            var pad = thumbR + 2;
+            var trackW = w - pad * 2;
+            var lowX = pad + trackW * lowFrac;
+            var highX = pad + trackW * highFrac;
+
+            builder.OpenElement(seq++, "rect");
+            builder.AddAttribute(seq++, "x", F(pad));
+            builder.AddAttribute(seq++, "y", F(trackY - trackH / 2));
+            builder.AddAttribute(seq++, "width", F(trackW));
+            builder.AddAttribute(seq++, "height", F(trackH));
+            builder.AddAttribute(seq++, "rx", F(trackH / 2));
+            builder.AddAttribute(seq++, "fill", trackColor);
+            builder.CloseElement();
+
+            // Selected band between the two handles
+            builder.OpenElement(seq++, "rect");
+            builder.AddAttribute(seq++, "x", F(Math.Min(lowX, highX)));
+            builder.AddAttribute(seq++, "y", F(trackY - trackH / 2));
+            builder.AddAttribute(seq++, "width", F(Math.Abs(highX - lowX)));
+            builder.AddAttribute(seq++, "height", F(trackH));
+            builder.AddAttribute(seq++, "rx", F(trackH / 2));
+            builder.AddAttribute(seq++, "fill", fillColor);
+            builder.AddAttribute(seq++, "style", "transition: x 0.2s ease, width 0.2s ease;");
+            builder.CloseElement();
+
+            if (sym.RangeShowTicks)
+            {
+                var numTicks = 5;
+                for (int i = 0; i <= numTicks; i++)
+                {
+                    var tx = pad + trackW / numTicks * i;
+                    builder.OpenElement(seq++, "line");
+                    builder.AddAttribute(seq++, "x1", F(tx));
+                    builder.AddAttribute(seq++, "y1", F(trackY + trackH / 2 + 3));
+                    builder.AddAttribute(seq++, "x2", F(tx));
+                    builder.AddAttribute(seq++, "y2", F(trackY + trackH / 2 + 7));
+                    builder.AddAttribute(seq++, "stroke", "#666");
+                    builder.AddAttribute(seq++, "stroke-width", 1);
+                    builder.CloseElement();
+                }
+            }
+
+            RenderRangeHandle(builder, ref seq, lowX, trackY, thumbR, lowColor);
+            RenderRangeHandle(builder, ref seq, highX, trackY, thumbR, highColor);
+
+            if (sym.RangeShowValues)
+            {
+                RenderRangeValueLabel(builder, ref seq, lowX, trackY - thumbR - 4, "middle", lowVal);
+                RenderRangeValueLabel(builder, ref seq, highX, trackY - thumbR - 4, "middle", highVal);
+            }
+        }
+        else
+        {
+            var trackW = Math.Max(4, w * 0.15);
+            var trackX = w / 2.0;
+            var thumbR = Math.Min(w * 0.35, 12);
+            var pad = thumbR + 2;
+            var trackH = h - pad * 2;
+            var lowY = h - pad - trackH * lowFrac;
+            var highY = h - pad - trackH * highFrac;
+
+            builder.OpenElement(seq++, "rect");
+            builder.AddAttribute(seq++, "x", F(trackX - trackW / 2));
+            builder.AddAttribute(seq++, "y", F(pad));
+            builder.AddAttribute(seq++, "width", F(trackW));
+            builder.AddAttribute(seq++, "height", F(trackH));
+            builder.AddAttribute(seq++, "rx", F(trackW / 2));
+            builder.AddAttribute(seq++, "fill", trackColor);
+            builder.CloseElement();
+
+            builder.OpenElement(seq++, "rect");
+            builder.AddAttribute(seq++, "x", F(trackX - trackW / 2));
+            builder.AddAttribute(seq++, "y", F(Math.Min(lowY, highY)));
+            builder.AddAttribute(seq++, "width", F(trackW));
+            builder.AddAttribute(seq++, "height", F(Math.Abs(highY - lowY)));
+            builder.AddAttribute(seq++, "rx", F(trackW / 2));
+            builder.AddAttribute(seq++, "fill", fillColor);
+            builder.AddAttribute(seq++, "style", "transition: y 0.2s ease, height 0.2s ease;");
+            builder.CloseElement();
+
+            if (sym.RangeShowTicks)
+            {
+                var numTicks = 5;
+                for (int i = 0; i <= numTicks; i++)
+                {
+                    var ty = pad + trackH / numTicks * i;
+                    builder.OpenElement(seq++, "line");
+                    builder.AddAttribute(seq++, "x1", F(trackX + trackW / 2 + 3));
+                    builder.AddAttribute(seq++, "y1", F(ty));
+                    builder.AddAttribute(seq++, "x2", F(trackX + trackW / 2 + 7));
+                    builder.AddAttribute(seq++, "y2", F(ty));
+                    builder.AddAttribute(seq++, "stroke", "#666");
+                    builder.AddAttribute(seq++, "stroke-width", 1);
+                    builder.CloseElement();
+                }
+            }
+
+            RenderRangeHandle(builder, ref seq, trackX, lowY, thumbR, lowColor);
+            RenderRangeHandle(builder, ref seq, trackX, highY, thumbR, highColor);
+
+            if (sym.RangeShowValues)
+            {
+                RenderRangeValueLabel(builder, ref seq, trackX + thumbR + 6, lowY + 3, "start", lowVal);
+                RenderRangeValueLabel(builder, ref seq, trackX + thumbR + 6, highY + 3, "start", highVal);
+            }
+        }
+    };
+
+    private static void RenderRangeHandle(Microsoft.AspNetCore.Components.Rendering.RenderTreeBuilder builder, ref int seq, double cx, double cy, double r, string color)
+    {
+        builder.OpenElement(seq++, "circle");
+        builder.AddAttribute(seq++, "cx", F(cx));
+        builder.AddAttribute(seq++, "cy", F(cy));
+        builder.AddAttribute(seq++, "r", F(r));
+        builder.AddAttribute(seq++, "fill", color);
+        builder.AddAttribute(seq++, "stroke", "#fff");
+        builder.AddAttribute(seq++, "stroke-width", 1.5);
+        builder.AddAttribute(seq++, "style",
+            "filter: drop-shadow(0 1px 3px rgba(0,0,0,0.5)); transition: cx 0.2s ease, cy 0.2s ease; cursor: grab;");
+        builder.CloseElement();
+    }
+
+    private static void RenderRangeValueLabel(Microsoft.AspNetCore.Components.Rendering.RenderTreeBuilder builder, ref int seq, double x, double y, string anchor, double value)
+    {
+        builder.OpenElement(seq++, "text");
+        builder.AddAttribute(seq++, "x", F(x));
+        builder.AddAttribute(seq++, "y", F(y));
+        builder.AddAttribute(seq++, "text-anchor", anchor);
+        builder.AddAttribute(seq++, "fill", "#ccc");
+        builder.AddAttribute(seq++, "font-size", 8);
+        builder.AddContent(seq++, value.ToString("F1", CultureInfo.InvariantCulture));
+        builder.CloseElement();
+    }
+
+    // ─── Command Button rendering (SVG canvas) ───────────────────────
 
     private RenderFragment RenderButton(ScreenSymbol sym, string? label) => builder =>
     {

@@ -1389,7 +1389,7 @@ namespace SharedModels
     public class ScreenSymbol
     {
         public string Id { get; set; } = "";
-        public string Type { get; set; } = "rect"; // rect, circle, ellipse, text, line, gauge, indicator, svg, alarmlist, hdachart, hdagrid, eventlog, editbox, ipcamera, recipe, weeklyplanner, screenembed, reportviewer, imagemap, trend, progressbar, numericdisplay, ledarray, pipe, tank, dropdown, datatable, sparkline, motorcontrol, valve, alarmbanner, colorzone, conveyor, piechart, barchart, navbutton, heatexchanger, popup, setpointramp, flowmeter, xyplot, pdfviewer, switch, rotaryswitch, knob, hslider, vslider, button, animtext, mimicpump, mimicvalve, mimictank, mimicsensor, mimiccontroller, mimicmixer, mimicheater, mimicfilter, mimiccompressor, mimicreactor, geomap, nlquery, plantoverview, scene3d
+        public string Type { get; set; } = "rect"; // rect, circle, ellipse, text, line, gauge, indicator, svg, alarmlist, hdachart, hdagrid, eventlog, editbox, ipcamera, recipe, weeklyplanner, screenembed, reportviewer, imagemap, trend, progressbar, numericdisplay, ledarray, pipe, tank, dropdown, datatable, sparkline, motorcontrol, valve, alarmbanner, colorzone, conveyor, piechart, barchart, navbutton, heatexchanger, popup, setpointramp, flowmeter, xyplot, pdfviewer, switch, rotaryswitch, knob, hslider, vslider, rangeslider, button, animtext, mimicpump, mimicvalve, mimictank, mimicsensor, mimiccontroller, mimicmixer, mimicheater, mimicfilter, mimiccompressor, mimicreactor, geomap, nlquery, plantoverview, scene3d
         public double X { get; set; }
         public double Y { get; set; }
         public double Width { get; set; } = 80;
@@ -1691,6 +1691,44 @@ namespace SharedModels
 
         /// <summary>Whether to show tick marks on the slider scale. Default true.</summary>
         public bool SliderShowTicks { get; set; } = true;
+
+        // --- Range Slider properties (Type == "rangeslider") ---
+
+        /// <summary>Variable path bound to the low/min handle of the range slider. Falls back to RangeLowValue if empty.</summary>
+        public string RangeLowPath { get; set; } = "";
+
+        /// <summary>Variable path bound to the high/max handle of the range slider. Falls back to RangeHighValue if empty.</summary>
+        public string RangeHighPath { get; set; } = "";
+
+        /// <summary>Design-time/default value for the low handle when RangeLowPath is empty. Default 25.</summary>
+        public double RangeLowValue { get; set; } = 25;
+
+        /// <summary>Design-time/default value for the high handle when RangeHighPath is empty. Default 75.</summary>
+        public double RangeHighValue { get; set; } = 75;
+
+        /// <summary>Orientation of the range slider: "horizontal" (default) or "vertical".</summary>
+        public string RangeOrientation { get; set; } = "horizontal";
+
+        /// <summary>Color of the unfilled track outside the selected band. Default "#2a2a3a".</summary>
+        public string RangeTrackColor { get; set; } = "#2a2a3a";
+
+        /// <summary>Color of the filled band between the two handles. Default gradient-friendly teal.</summary>
+        public string RangeFillColor { get; set; } = "#22d3ee";
+
+        /// <summary>Color of the low handle. Default "#38bdf8".</summary>
+        public string RangeLowHandleColor { get; set; } = "#38bdf8";
+
+        /// <summary>Color of the high handle. Default "#f97316".</summary>
+        public string RangeHighHandleColor { get; set; } = "#f97316";
+
+        /// <summary>Whether to show numeric value labels above each handle. Default true.</summary>
+        public bool RangeShowValues { get; set; } = true;
+
+        /// <summary>Whether to show tick marks along the track. Default true.</summary>
+        public bool RangeShowTicks { get; set; } = true;
+
+        /// <summary>Minimum allowed gap between the low and high handles, in engineering units. Default 0.</summary>
+        public double RangeMinGap { get; set; }
 
         // --- Command Button properties (Type == "button") ---
 
