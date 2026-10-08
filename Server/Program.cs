@@ -274,15 +274,14 @@ public class OpcUaServerApp
             Log.Warning("Failed to load server settings from config: {Message}. Using defaults.", ex.Message);
         }
 
-        #pragma warning disable CS0618 // ApplicationInstance() — ITelemetryContext not available in this host model
-        var application = new ApplicationInstance
+        var telemetry = new ServiceProviderTelemetryContext(new Microsoft.Extensions.DependencyInjection.ServiceCollection().BuildServiceProvider());
+        var application = new ApplicationInstance(telemetry)
         {
             ApplicationName = "SimpleOpcFileServer",
             ApplicationType = ApplicationType.Server
         };
-#pragma warning restore CS0618
 
-        var config = new ApplicationConfiguration
+        var config = new ApplicationConfiguration(telemetry)
         {
             ApplicationName = application.ApplicationName,
             ApplicationUri = $"urn:{Utils.GetHostName()}:{application.ApplicationName}",
