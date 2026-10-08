@@ -543,15 +543,13 @@ using (response)
             {
                 foreach (var det in detections)
                 {
-                    var rect = new SixLabors.ImageSharp.Drawing.RectangularPolygon(det.X, det.Y, det.W, det.H);
+                    var rect = new SixLabors.ImageSharp.Drawing.RectanglePolygon(det.X, det.Y, det.W, det.H);
                     var color = SixLabors.ImageSharp.Color.LimeGreen;
-                    image.Mutate(ctx =>
-                    {
-                        ctx.Draw(color, 2, rect);
-                    });
+                    image.Mutate(ctx => ctx.Paint(canvas => canvas.Draw(Pens.Solid(color, 2), rect)));
                     // Label text is drawn as a simple rect overlay
-                    var labelRect = new SixLabors.ImageSharp.Drawing.RectangularPolygon(det.X, Math.Max(0, det.Y - 16), det.Label.Length * 8 + 8, 16);
-                    image.Mutate(ctx => ctx.Fill(SixLabors.ImageSharp.Color.FromRgba(0, 0, 0, 160), labelRect));
+                    var labelRect = new SixLabors.ImageSharp.Drawing.RectanglePolygon(det.X, Math.Max(0, det.Y - 16), det.Label.Length * 8 + 8, 16);
+                    var labelColor = SixLabors.ImageSharp.Color.FromPixel(new Rgba32(0, 0, 0, 160));
+                    image.Mutate(ctx => ctx.Paint(canvas => canvas.Fill(Brushes.Solid(labelColor), labelRect)));
                 }
             }
 
