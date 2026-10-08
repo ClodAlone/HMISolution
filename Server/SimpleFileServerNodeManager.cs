@@ -58,7 +58,7 @@ namespace SimpleOpcFileServer
         // Suppress alarm evaluation and data logging during bulk node creation
         private volatile bool _loading;
 
-        // Pre-built alarm templates -- created once, then cloned for each variable.
+        // Pre-built alarm templates Ã¢â‚¬â€ created once, then cloned for each variable.
         // Avoids 100K Ãƒâ€” base64-decode + binary-deserialize + 7 recursive walks per alarm.
         [ThreadStatic] private static ExclusiveLimitAlarmState? t_limitAlarmTemplate;
         [ThreadStatic] private static OffNormalAlarmState? t_conditionAlarmTemplate;
@@ -86,7 +86,7 @@ namespace SimpleOpcFileServer
         // Alarm tracking
         private readonly System.Collections.Concurrent.ConcurrentDictionary<string, AlarmConditionInfo> _alarmConditions = new();
 
-        // Alarm analytics -- in-memory ring buffer for activation / acknowledgement events
+        // Alarm analytics Ã¢â‚¬â€ in-memory ring buffer for activation / acknowledgement events
         private readonly List<AlarmAnalyticsEvent> _alarmAnalyticsLog = new();
         private readonly object _analyticsLock = new();
         private const int AlarmAnalyticsMaxEvents = 10_000;
@@ -168,7 +168,7 @@ namespace SimpleOpcFileServer
                 {
                     if (wv.AttributeId != Attributes.Value)
                     {
-                        // Not our concern -- leave Processed=false so the
+                        // Not our concern Ã¢â‚¬â€ leave Processed=false so the
                         // base node manager or others can handle it.
                         continue;
                     }
@@ -176,7 +176,7 @@ namespace SimpleOpcFileServer
                     var variable = FindPredefinedNode<BaseDataVariableState>(wv.NodeId);
                     if (variable == null)
                     {
-                        // Node doesn't belong to this manager -- leave
+                        // Node doesn't belong to this manager Ã¢â‚¬â€ leave
                         // Processed=false so MasterNodeManager tries others.
                         continue;
                     }
@@ -192,7 +192,7 @@ namespace SimpleOpcFileServer
 
                     // For non-ServerVariableState nodes (recipes, etc.), delegate to the base
                     // Write which handles OnWriteValue/WriteAttribute pipeline.
-                    // Do NOT set Processed=true before calling base -- base checks that flag.
+                    // Do NOT set Processed=true before calling base Ã¢â‚¬â€ base checks that flag.
                     var singleErrors = new ServiceResult[1];
                     base.Write(context, new[] { wv }, singleErrors);
                     errors[i] = singleErrors[0] ?? StatusCodes.BadInternalError;
@@ -211,8 +211,8 @@ namespace SimpleOpcFileServer
             // Redundancy: drivers only run on the active server
             if (_redundancy != null && !_redundancy.IsActive)
             {
-                Log.Information("[Redundancy] Standby mode -- skipping driver initialization.");
-                _eventLogger?.LogSystem("Info", "Redundancy", "Standby mode -- drivers not started");
+                Log.Information("[Redundancy] Standby mode Ã¢â‚¬â€ skipping driver initialization.");
+                _eventLogger?.LogSystem("Info", "Redundancy", "Standby mode Ã¢â‚¬â€ drivers not started");
                 return;
             }
 
@@ -393,7 +393,7 @@ namespace SimpleOpcFileServer
                 }
             }
 
-            // Phase 2: LoadModel -- runs mostly outside lock, acquires lock per-node via RegisterNode
+            // Phase 2: LoadModel Ã¢â‚¬â€ runs mostly outside lock, acquires lock per-node via RegisterNode
             if (nodeModel != null)
             {
                 try
@@ -426,7 +426,7 @@ namespace SimpleOpcFileServer
             // Push external references to other node managers (e.g. ObjectsFolder).
             // During normal (non-deferred) startup MasterNodeManager calls
             // AddReferences on every node manager after CreateAddressSpace completes.
-            // Because we deferred, the dict was empty at that point -- replay it now.
+            // Because we deferred, the dict was empty at that point Ã¢â‚¬â€ replay it now.
             foreach (var kvp in externalReferences)
             {
                 Server.NodeManager.AddReferencesAsync(kvp.Key, kvp.Value, default).AsTask().GetAwaiter().GetResult();
@@ -436,7 +436,7 @@ namespace SimpleOpcFileServer
             if (SharedModels.LicenseManager.DemoStartedUtc.HasValue)
             {
                 _demoCheckTimer = new System.Threading.Timer(OnDemoCheckTimer, null, 30_000, 30_000);
-                Log.Information("Demo mode active -- full features for {Minutes} minutes.",
+                Log.Information("Demo mode active Ã¢â‚¬â€ full features for {Minutes} minutes.",
                     SharedModels.LicenseManager.Current.DemoGraceMinutes);
             }
         }
@@ -472,7 +472,7 @@ namespace SimpleOpcFileServer
                         if (_lastModel != null && IsIncrementalChange(_lastModel, newModel, out newVariables)) 
                         {
                             Log.Debug("Incremental update detected. Adding {Count} new variables.", newVariables.Count);
-                            _eventLogger?.LogSystem("Info", "Config", $"Incremental config update -- {newVariables.Count} new variable(s)");
+                            _eventLogger?.LogSystem("Info", "Config", $"Incremental config update Ã¢â‚¬â€ {newVariables.Count} new variable(s)");
                             foreach (var (variable, parentPath) in newVariables)
                             {
                                 var parentNodeId = new NodeId(parentPath, _namespaceIndex);
@@ -548,7 +548,7 @@ namespace SimpleOpcFileServer
             }
             _rootNodeIds.Clear();
 
-            // Re-create -- build an externalReferences dictionary so that
+            // Re-create Ã¢â‚¬â€ build an externalReferences dictionary so that
             // AddReverseReferences can wire up ObjectsFolder Ã¢â€ â€™ root folder references
             // making the address space browseable after reload.
             var externalReferences = new Dictionary<NodeId, IList<IReference>>();
@@ -602,7 +602,7 @@ namespace SimpleOpcFileServer
                     }
                 }
 
-                _eventLogger?.LogAuth("Warning", username, $"Login failed for user '{username}' -- invalid credentials");
+                _eventLogger?.LogAuth("Warning", username, $"Login failed for user '{username}' Ã¢â‚¬â€ invalid credentials");
                 throw new ServiceResultException(StatusCodes.BadUserAccessDenied, "Invalid username or password.");
             }
             else if (args.NewIdentity is AnonymousIdentityToken)
@@ -777,7 +777,7 @@ namespace SimpleOpcFileServer
                          ? $"Last known active: {lastActive.Value:yyyy-MM-dd HH:mm:ss} UTC ({FormatTimeAgo(DateTime.UtcNow - lastActive.Value)} ago)"
                          : "No previous activity recorded (first start)";
 
-                     _eventLogger.LogSystem("Info", "Server", $"Server started -- configuration loaded. {lastActiveText}");
+                     _eventLogger.LogSystem("Info", "Server", $"Server started Ã¢â‚¬â€ configuration loaded. {lastActiveText}");
                      DiagnosticsCollector.Instance.Register("EventLogger", "EventLog");
                  }
 
@@ -848,7 +848,7 @@ namespace SimpleOpcFileServer
 
                          if (role == RedundancyRole.Active)
                          {
-                             _eventLogger?.LogSystem("Info", "Redundancy", "Now ACTIVE -- starting drivers");
+                             _eventLogger?.LogSystem("Info", "Redundancy", "Now ACTIVE Ã¢â‚¬â€ starting drivers");
                              InitializeDrivers();
 
                              // Start scripts if not already running and not configured to run on standby
@@ -877,7 +877,7 @@ namespace SimpleOpcFileServer
                          }
                          else
                          {
-                             _eventLogger?.LogSystem("Info", "Redundancy", "Now STANDBY -- stopping drivers");
+                             _eventLogger?.LogSystem("Info", "Redundancy", "Now STANDBY Ã¢â‚¬â€ stopping drivers");
                              foreach (var d in _drivers) d.Dispose();
                              _drivers.Clear();
 
@@ -909,7 +909,7 @@ namespace SimpleOpcFileServer
 
                      _redundancy.Start();
                      DiagnosticsCollector.Instance.Register("Redundancy", redCfg.Role, status: _redundancy.ActiveRole.ToString());
-                     _eventLogger?.LogSystem("Info", "Redundancy", $"Service initialized -- role: {_redundancy.ActiveRole}");
+                     _eventLogger?.LogSystem("Info", "Redundancy", $"Service initialized Ã¢â‚¬â€ role: {_redundancy.ActiveRole}");
                  }
 
                  Log.Information("Initializing subsystems...");
@@ -923,7 +923,7 @@ namespace SimpleOpcFileServer
                      _loading = false;
                      Log.Information("OPC UA nodes created. Total tracked variables: {Count}.", _variables.Count);
 
-                     // Deferred alarm evaluation -- now that all nodes are created,
+                     // Deferred alarm evaluation Ã¢â‚¬â€ now that all nodes are created,
                      // evaluate initial alarm states in a single pass.
                      if (_alarmConditions.Count > 0)
                      {
@@ -942,7 +942,7 @@ namespace SimpleOpcFileServer
            lock (Lock)
            { // re-acquire Lock for post-parallel setup
 
-                 // Start all drivers now that loading is complete -- timers were deferred
+                 // Start all drivers now that loading is complete Ã¢â‚¬â€ timers were deferred
                  // to avoid driver polling competing with parallel node creation.
                  foreach (var d in _drivers) d.Start();
 
@@ -959,7 +959,7 @@ namespace SimpleOpcFileServer
                      _eventLogger?.LogSystem("Info", "SparkplugB", "Publisher initialized");
                  }
 
-                 // scripts -- skip on standby unless ScriptsRunOnStandby is set
+                 // scripts Ã¢â‚¬â€ skip on standby unless ScriptsRunOnStandby is set
                  if (nodeModel.Scripts != null && (_redundancy == null || _redundancy.ShouldRunScripts))
                  {
                      _scriptManager = new ScriptManager(this);
@@ -968,7 +968,7 @@ namespace SimpleOpcFileServer
                  // Cache script configs for deferred start on failover
                  _cachedScripts = nodeModel.Scripts;
 
-                 // PLC programs -- skip on standby unless PlcRunOnStandby is set
+                 // PLC programs Ã¢â‚¬â€ skip on standby unless PlcRunOnStandby is set
                  if (nodeModel.PlcPrograms != null && nodeModel.PlcPrograms.Count > 0
                      && (_redundancy == null || _redundancy.ShouldRunPlc))
                  {
@@ -1084,13 +1084,13 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 recipeFolder.AddChild(subFolder);
                 AddPredefinedNode(SystemContext, subFolder);
 
-                // Command variables -- write a recipe name to trigger the action
+                // Command variables Ã¢â‚¬â€ write a recipe name to trigger the action
                 CreateRecipeCommandVariable(subFolder, prefix, "Load", recipe);
                 CreateRecipeCommandVariable(subFolder, prefix, "Save", recipe);
                 CreateRecipeCommandVariable(subFolder, prefix, "Activate", recipe);
                 CreateRecipeCommandVariable(subFolder, prefix, "Delete", recipe);
 
-                // Status variables -- read-only
+                // Status variables Ã¢â‚¬â€ read-only
                 CreateRecipeStatusVariable(subFolder, prefix, "ActiveName", "");
                 CreateRecipeStatusVariable(subFolder, prefix, "RecipeList", "");
                 CreateRecipeStatusVariable(subFolder, prefix, "LastStatus", "");
@@ -1164,7 +1164,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
         /// Creates a _Diagnostics folder in the OPC UA address space with a DiagnosticsJson
         /// variable that is updated every 2 seconds from DiagnosticsCollector.
         /// The editor reads this variable instead of using a separate HTTP endpoint.
-        /// Safe to call on reload -- skips if already created.
+        /// Safe to call on reload Ã¢â‚¬â€ skips if already created.
         /// </summary>
 
         private void CreateAssetVariables(List<AssetConfig> assets, IList<IReference>? references)
@@ -1341,7 +1341,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
         }
         private void CreateDiagnosticsNode(IList<IReference>? references)
         {
-            // Only create once -- the diagnostics node survives reloads
+            // Only create once Ã¢â‚¬â€ the diagnostics node survives reloads
             if (_diagVariable != null)
                 return;
 
@@ -1594,7 +1594,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             }
             else
             {
-                // Single or no subfolders -- run sequentially
+                // Single or no subfolders Ã¢â‚¬â€ run sequentially
                 foreach (var subFolder in rootFolder.Folders)
                     CreateFolder(subFolder, rootFolderState, null, childPrefix);
             }
@@ -1654,11 +1654,11 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
         /// then does a fast flat dictionary insertion under the lock.</summary>
         private void FlushNodeBatch(ISystemContext context, NodeState subtreeRoot)
         {
-            // Phase 1: Collect all nodes from the subtree (outside the lock -- fully parallel)
+            // Phase 1: Collect all nodes from the subtree (outside the lock Ã¢â‚¬â€ fully parallel)
             var allNodes = new List<NodeState>(4096);
             CollectSubtreeNodes(context, subtreeRoot, allNodes);
 
-            // Phase 2: Register all nodes in the predefined dictionary (under lock -- fast flat loop)
+            // Phase 2: Register all nodes in the predefined dictionary (under lock Ã¢â‚¬â€ fast flat loop)
             var dict = PredefinedNodes;
             lock (Lock)
             {
@@ -1799,7 +1799,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
 
             // Notify scripts when the variable value changes (from drivers, OPC writes, etc.)
             // IMPORTANT: use the StateChanged *event* (supports multiple subscribers), not the
-            // OnStateChanged field -- the OPC UA SDK's MonitoredNode2 assigns OnStateChanged
+            // OnStateChanged field Ã¢â‚¬â€ the OPC UA SDK's MonitoredNode2 assigns OnStateChanged
             // directly (node.OnStateChanged = ...) the first time a client subscribes/monitors
             // this node, which would silently overwrite (not add to) any handlers wired via
             // OnStateChanged +=, breaking alarm evaluation, statistics and retentive persistence.
@@ -2303,7 +2303,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                         globalMtta = Math.Round(deltas.Average(), 1);
                 }
 
-                // Flood detection -- count activations in the last N seconds
+                // Flood detection Ã¢â‚¬â€ count activations in the last N seconds
                 var floodCutoff = DateTime.UtcNow.AddSeconds(-AlarmFloodWindowSeconds);
                 int floodCount = activations.Count(e => e.TimeUtc >= floodCutoff);
 
@@ -2415,7 +2415,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 parent.AddChild(state);
             }
 
-            // Ensure the Id child exists too -- the SDK's base AlarmConditionState.SetActiveState
+            // Ensure the Id child exists too Ã¢â‚¬â€ the SDK's base AlarmConditionState.SetActiveState
             // unconditionally writes to ActiveState.Id.Value, which throws a NullReferenceException
             // if this optional child wasn't instantiated by Clone() (observed to be silently
             // swallowed by the caller's try/catch, preventing alarms from ever activating).
@@ -2576,7 +2576,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             alarm.TypeDefinitionId = ObjectTypeIds.ExclusiveLimitAlarmType;
             alarm.ReferenceTypeId = ReferenceTypeIds.HasComponent;
 
-            // Ensure BranchId is initialized -- required by ConditionState.IsBranch().
+            // Ensure BranchId is initialized Ã¢â‚¬â€ required by ConditionState.IsBranch().
             // Some SDK versions do not auto-create this property in Create().
             if (alarm.BranchId == null)
             {
@@ -2612,7 +2612,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             alarm.ConditionName.Value = alarmConfig.Message;
 
             // Set limit values on the properties already created by Create().
-            // Do NOT replace the PropertyState objects -- they have NodeIds wired up.
+            // Do NOT replace the PropertyState objects Ã¢â‚¬â€ they have NodeIds wired up.
             if (alarm.HighHighLimit != null)
                 alarm.HighHighLimit.Value = alarmConfig.HighHighLimit ?? alarmConfig.HighLimit;
             if (alarm.HighLimit != null)
@@ -2622,10 +2622,10 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             if (alarm.LowLowLimit != null)
                 alarm.LowLowLimit.Value = alarmConfig.LowLowLimit ?? alarmConfig.LowLimit;
 
-            // Initial state -- set directly on the property values to avoid
+            // Initial state Ã¢â‚¬â€ set directly on the property values to avoid
             // the SetEnableState/SetActiveState call chain that can throw in some SDK versions.
-            alarm.EnabledState = EnsureTwoStateVariable(alarm, alarm.EnabledState, BrowseNames.EnabledState, prefix + ".EnabledState", _namespaceIndex);
-            alarm.ActiveState = EnsureTwoStateVariable(alarm, alarm.ActiveState, BrowseNames.ActiveState, prefix + ".ActiveState", _namespaceIndex);
+            alarm.EnabledState = EnsureTwoStateVariable(alarm, alarm.EnabledState, new QualifiedName(BrowseNames.EnabledState), prefix + ".EnabledState", _namespaceIndex);
+            alarm.ActiveState = EnsureTwoStateVariable(alarm, alarm.ActiveState, new QualifiedName(BrowseNames.ActiveState), prefix + ".ActiveState", _namespaceIndex);
 
             alarm.EnabledState.Value = new LocalizedText("en", "Enabled");
             if (alarm.EnabledState.Id != null)
@@ -2650,8 +2650,8 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 alarm.LimitState = new ExclusiveLimitStateMachineState(alarm)
                 {
                     NodeId = new NodeId(prefix + ".LimitState", _namespaceIndex),
-                    BrowseName = BrowseNames.LimitState,
-                    DisplayName = BrowseNames.LimitState,
+                    BrowseName = new QualifiedName(BrowseNames.LimitState),
+                    DisplayName = new LocalizedText(BrowseNames.LimitState),
                     ReferenceTypeId = ReferenceTypeIds.HasComponent,
                     TypeDefinitionId = ObjectTypeIds.ExclusiveLimitStateMachineType
                 };
@@ -2662,8 +2662,8 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 alarm.LimitState.CurrentState = new FiniteStateVariableState(alarm.LimitState)
                 {
                     NodeId = new NodeId(prefix + ".LimitState.CurrentState", _namespaceIndex),
-                    BrowseName = BrowseNames.CurrentState,
-                    DisplayName = BrowseNames.CurrentState,
+                    BrowseName = new QualifiedName(BrowseNames.CurrentState),
+                    DisplayName = new LocalizedText(BrowseNames.CurrentState),
                     DataType = DataTypeIds.LocalizedText,
                     ValueRank = ValueRanks.Scalar,
                     AccessLevel = AccessLevels.CurrentRead,
@@ -2677,8 +2677,8 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             {
                 alarm.LimitState.CurrentState.Id = (PropertyState<NodeId>)Activator.CreateInstance(typeof(PropertyState<>).MakeGenericType(typeof(NodeId)), alarm.LimitState.CurrentState)!;
                 alarm.LimitState.CurrentState.Id.NodeId = new NodeId(prefix + ".LimitState.CurrentState.Id", _namespaceIndex);
-                alarm.LimitState.CurrentState.Id.BrowseName = new QualifiedName(BrowseNames.Id.Name, BrowseNames.Id.NamespaceIndex);
-                alarm.LimitState.CurrentState.Id.DisplayName = new LocalizedText(BrowseNames.Id.Name);
+                alarm.LimitState.CurrentState.Id.BrowseName = new QualifiedName(BrowseNames.Id);
+                alarm.LimitState.CurrentState.Id.DisplayName = new LocalizedText(BrowseNames.Id);
                 alarm.LimitState.CurrentState.Id.DataType = DataTypeIds.NodeId;
                 alarm.LimitState.CurrentState.Id.ValueRank = ValueRanks.Scalar;
                 alarm.LimitState.CurrentState.Id.AccessLevel = AccessLevels.CurrentRead;
@@ -2690,11 +2690,11 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
 
             // Use EnsureTwoStateVariable so the Id child (dereferenced unconditionally by
             // the SDK's SetAcknowledgedState/SetConfirmedState logic) is always present.
-            alarm.AckedState = EnsureTwoStateVariable(alarm, alarm.AckedState, BrowseNames.AckedState, prefix + ".AckedState", _namespaceIndex);
+            alarm.AckedState = EnsureTwoStateVariable(alarm, alarm.AckedState, new QualifiedName(BrowseNames.AckedState), prefix + ".AckedState", _namespaceIndex);
             alarm.AckedState.Value = new LocalizedText("en", "Acknowledged");
             alarm.AckedState.Id.Value = true;
 
-            alarm.ConfirmedState = EnsureTwoStateVariable(alarm, alarm.ConfirmedState, BrowseNames.ConfirmedState, prefix + ".ConfirmedState", _namespaceIndex);
+            alarm.ConfirmedState = EnsureTwoStateVariable(alarm, alarm.ConfirmedState, new QualifiedName(BrowseNames.ConfirmedState), prefix + ".ConfirmedState", _namespaceIndex);
             alarm.ConfirmedState.Value = new LocalizedText("en", "Confirmed");
             alarm.ConfirmedState.Id.Value = true;
 
@@ -2705,19 +2705,19 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                     alarm.SuppressedState.Id.Value = false;
             }
 
-            alarm.Retain = EnsureConditionProperty(alarm, alarm.Retain, BrowseNames.Retain, DataTypeIds.Boolean, prefix + ".Retain");
+            alarm.Retain = EnsureConditionProperty(alarm, alarm.Retain, new QualifiedName(BrowseNames.Retain), DataTypeIds.Boolean, prefix + ".Retain");
             alarm.Retain.Value = false;
             alarm.AutoReportStateChanges = true;
 
             // Severity: 500 = medium by default
-            alarm.Severity = EnsureConditionProperty(alarm, alarm.Severity, BrowseNames.Severity, DataTypeIds.UInt16, prefix + ".Severity");
+            alarm.Severity = EnsureConditionProperty(alarm, alarm.Severity, new QualifiedName(BrowseNames.Severity), DataTypeIds.UInt16, prefix + ".Severity");
             alarm.Severity.Value = 500;
 
-            alarm.Message = EnsureConditionProperty(alarm, alarm.Message, BrowseNames.Message, DataTypeIds.LocalizedText, prefix + ".Message");
+            alarm.Message = EnsureConditionProperty(alarm, alarm.Message, new QualifiedName(BrowseNames.Message), DataTypeIds.LocalizedText, prefix + ".Message");
             alarm.Message.Value = new LocalizedText(alarmConfig.Message);
-            alarm.Time = EnsureConditionProperty(alarm, alarm.Time, BrowseNames.Time, DataTypeIds.UtcTime, prefix + ".Time");
+            alarm.Time = EnsureConditionProperty(alarm, alarm.Time, new QualifiedName(BrowseNames.Time), DataTypeIds.UtcTime, prefix + ".Time");
             alarm.Time.Value = DateTime.UtcNow;
-            alarm.ReceiveTime = EnsureConditionProperty(alarm, alarm.ReceiveTime, BrowseNames.ReceiveTime, DataTypeIds.UtcTime, prefix + ".ReceiveTime");
+            alarm.ReceiveTime = EnsureConditionProperty(alarm, alarm.ReceiveTime, new QualifiedName(BrowseNames.ReceiveTime), DataTypeIds.UtcTime, prefix + ".ReceiveTime");
             alarm.ReceiveTime.Value = DateTime.UtcNow;
 
             // Wire up Acknowledge handler
@@ -2748,7 +2748,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                     EvaluateAlarmCondition(info);
             };
 
-            // Initial evaluation is deferred -- performed in bulk after all nodes are created.
+            // Initial evaluation is deferred Ã¢â‚¬â€ performed in bulk after all nodes are created.
         }
 
         private void EvaluateAlarmCondition(AlarmConditionInfo info)
@@ -2796,8 +2796,8 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 string limitText = result.LimitText;
 
                 string message = string.IsNullOrEmpty(cfg.Message)
-                    ? $"{info.VariablePath}: {limitText} -- value={val:G6}"
-                    : $"{cfg.Message} -- {limitText} -- value={val:G6}";
+                    ? $"{info.VariablePath}: {limitText} Ã¢â‚¬â€ value={val:G6}"
+                    : $"{cfg.Message} Ã¢â‚¬â€ {limitText} Ã¢â‚¬â€ value={val:G6}";
 
                 alarm.SetActiveState(SystemContext, true);
                 alarm.SetAcknowledgedState(SystemContext, false);
@@ -2813,7 +2813,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
 
                 alarm.Retain.Value = true;
 
-                alarm.EventId.Value = Guid.NewGuid().ToByteArray();
+                alarm.EventId.Value = (ByteString)Guid.NewGuid().ToByteArray();
                 alarm.EventType.Value = ObjectTypeIds.ExclusiveLimitAlarmType;
 
                 ReportAlarmEvent(alarm);
@@ -2832,18 +2832,18 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 alarm.SetActiveState(SystemContext, false);
 
                 alarm.Severity.Value = 1;
-                alarm.Message.Value = new LocalizedText($"{info.VariablePath}: Returned to normal -- value={val:G6}");
+                alarm.Message.Value = new LocalizedText($"{info.VariablePath}: Returned to normal Ã¢â‚¬â€ value={val:G6}");
                 alarm.Time.Value = DateTime.UtcNow;
                 alarm.ReceiveTime.Value = DateTime.UtcNow;
 
                 bool fullyCleared = alarm.AckedState.Id.Value && alarm.ConfirmedState.Id.Value;
                 alarm.Retain.Value = !fullyCleared;
 
-                alarm.EventId.Value = Guid.NewGuid().ToByteArray();
+                alarm.EventId.Value = (ByteString)Guid.NewGuid().ToByteArray();
                 alarm.EventType.Value = ObjectTypeIds.ExclusiveLimitAlarmType;
 
                 ReportAlarmEvent(alarm);
-                _eventLogger?.LogAlarm("Info", info.VariablePath, $"Returned to normal -- value={val:G6}");
+                _eventLogger?.LogAlarm("Info", info.VariablePath, $"Returned to normal Ã¢â‚¬â€ value={val:G6}");
             }
         }
 
@@ -2870,11 +2870,11 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 info.IsActive = true;
                 var alarm = info.AlarmState;
 
-                string valueStr = value?.ToString() ?? "null";
+                string valueStr = value.Value?.ToString() ?? "null";
                 string conditionText = $"{cfg.Operator} {cfg.CompareValue}".Trim();
                 string message = string.IsNullOrEmpty(cfg.Message)
-                    ? $"{info.VariablePath}: Condition met ({conditionText}) -- value={valueStr}"
-                    : $"{cfg.Message} -- Condition ({conditionText}) -- value={valueStr}";
+                    ? $"{info.VariablePath}: Condition met ({conditionText}) Ã¢â‚¬â€ value={valueStr}"
+                    : $"{cfg.Message} Ã¢â‚¬â€ Condition ({conditionText}) Ã¢â‚¬â€ value={valueStr}";
 
                 alarm.SetActiveState(SystemContext, true);
                 alarm.SetAcknowledgedState(SystemContext, false);
@@ -2886,7 +2886,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 alarm.ReceiveTime.Value = DateTime.UtcNow;
                 alarm.Retain.Value = true;
 
-                alarm.EventId.Value = Guid.NewGuid().ToByteArray();
+                alarm.EventId.Value = (ByteString)Guid.NewGuid().ToByteArray();
                 alarm.EventType.Value = ObjectTypeIds.OffNormalAlarmType;
 
                 ReportAlarmEvent(alarm);
@@ -2902,22 +2902,22 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 info.IsActive = false;
                 var alarm = info.AlarmState;
 
-                string valueStr = value?.ToString() ?? "null";
+                string valueStr = value.Value?.ToString() ?? "null";
                 alarm.SetActiveState(SystemContext, false);
 
                 alarm.Severity.Value = 1;
-                alarm.Message.Value = new LocalizedText($"{info.VariablePath}: Condition cleared -- value={valueStr}");
+                alarm.Message.Value = new LocalizedText($"{info.VariablePath}: Condition cleared Ã¢â‚¬â€ value={valueStr}");
                 alarm.Time.Value = DateTime.UtcNow;
                 alarm.ReceiveTime.Value = DateTime.UtcNow;
 
                 bool fullyCleared = alarm.AckedState.Id.Value && alarm.ConfirmedState.Id.Value;
                 alarm.Retain.Value = !fullyCleared;
 
-                alarm.EventId.Value = Guid.NewGuid().ToByteArray();
+                alarm.EventId.Value = (ByteString)Guid.NewGuid().ToByteArray();
                 alarm.EventType.Value = ObjectTypeIds.OffNormalAlarmType;
 
                 ReportAlarmEvent(alarm);
-                _eventLogger?.LogAlarm("Info", info.VariablePath, $"Condition cleared -- value={valueStr}");
+                _eventLogger?.LogAlarm("Info", info.VariablePath, $"Condition cleared Ã¢â‚¬â€ value={valueStr}");
             }
         }
 
@@ -3040,7 +3040,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
         {
             if (SharedModels.LicenseManager.CheckDemoExpiry())
             {
-                Log.Warning("Demo period expired -- degrading to Trial mode with limited features.");
+                Log.Warning("Demo period expired Ã¢â‚¬â€ degrading to Trial mode with limited features.");
                 _eventLogger?.LogSystem("Warning", "License",
                     "Demo period expired. Running in Trial mode. Add a license file to restore full functionality.");
 
@@ -3054,7 +3054,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                     }
                 }
 
-                // Stop checking -- degradation is permanent until restart with a license file
+                // Stop checking Ã¢â‚¬â€ degradation is permanent until restart with a license file
                 _demoCheckTimer?.Dispose();
                 _demoCheckTimer = null;
             }
@@ -3161,7 +3161,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             if (!lic.AllowDataLogging && model.Database != null)
             {
                 Serilog.Log.Warning("License limit: Data logging not allowed in {Tier} tier. Database disabled.", lic.Tier);
-                _eventLogger?.LogSystem("Warning", "License", $"Data logging not allowed in {lic.Tier} tier -- disabled");
+                _eventLogger?.LogSystem("Warning", "License", $"Data logging not allowed in {lic.Tier} tier Ã¢â‚¬â€ disabled");
                 model.Database = null;
             }
         }
