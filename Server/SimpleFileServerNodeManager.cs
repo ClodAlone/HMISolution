@@ -46,7 +46,7 @@ namespace SimpleOpcFileServer
         private List<PlcProgramConfig>? _cachedPlcPrograms;
 
         // Redundancy system variable (_System.Redundancy.IsActive)
-        private BaseDataVariableState<bool>? _redundancyIsActiveVar;
+        private BaseDataVariableState? _redundancyIsActiveVar;
 
         private readonly List<NodeId> _rootNodeIds = new();
         private int _nodeCreationCount;
@@ -58,8 +58,8 @@ namespace SimpleOpcFileServer
         // Suppress alarm evaluation and data logging during bulk node creation
         private volatile bool _loading;
 
-        // Pre-built alarm templates — created once, then cloned for each variable.
-        // Avoids 100K × base64-decode + binary-deserialize + 7 recursive walks per alarm.
+        // Pre-built alarm templates Ã¢â‚¬â€ created once, then cloned for each variable.
+        // Avoids 100K Ãƒâ€” base64-decode + binary-deserialize + 7 recursive walks per alarm.
         [ThreadStatic] private static ExclusiveLimitAlarmState? t_limitAlarmTemplate;
         [ThreadStatic] private static OffNormalAlarmState? t_conditionAlarmTemplate;
         private IDictionary<NodeId, IList<IReference>>? _deferredExternalRefs;
@@ -86,7 +86,7 @@ namespace SimpleOpcFileServer
         // Alarm tracking
         private readonly System.Collections.Concurrent.ConcurrentDictionary<string, AlarmConditionInfo> _alarmConditions = new();
 
-        // Alarm analytics — in-memory ring buffer for activation / acknowledgement events
+        // Alarm analytics Ã¢â‚¬â€ in-memory ring buffer for activation / acknowledgement events
         private readonly List<AlarmAnalyticsEvent> _alarmAnalyticsLog = new();
         private readonly object _analyticsLock = new();
         private const int AlarmAnalyticsMaxEvents = 10_000;
@@ -124,7 +124,7 @@ namespace SimpleOpcFileServer
         private readonly System.Collections.Concurrent.ConcurrentDictionary<string, VariableStatisticsTracker> _statsTrackers = new();
 
         // Diagnostics OPC UA node
-        private BaseDataVariableState<string>? _diagVariable;
+        private BaseDataVariableState? _diagVariable;
         private System.Threading.Timer? _diagTimer;
         private System.Threading.Timer? _demoCheckTimer;
 
@@ -168,7 +168,7 @@ namespace SimpleOpcFileServer
                 {
                     if (wv.AttributeId != Attributes.Value)
                     {
-                        // Not our concern — leave Processed=false so the
+                        // Not our concern Ã¢â‚¬â€ leave Processed=false so the
                         // base node manager or others can handle it.
                         continue;
                     }
@@ -176,7 +176,7 @@ namespace SimpleOpcFileServer
                     var variable = FindPredefinedNode<BaseDataVariableState>(wv.NodeId);
                     if (variable == null)
                     {
-                        // Node doesn't belong to this manager — leave
+                        // Node doesn't belong to this manager Ã¢â‚¬â€ leave
                         // Processed=false so MasterNodeManager tries others.
                         continue;
                     }
@@ -185,14 +185,14 @@ namespace SimpleOpcFileServer
                     {
                         // Mark as processed so MasterNodeManager knows we handled it.
                         wv.Processed = true;
-                        object? v = wv.Value?.Value ?? (object?)wv.Value;
+                        object? v = wv.Value.Value;
                         errors[i] = serverVar.InvokeWrite(SystemContext, variable, ref v!) ?? ServiceResult.Good;
                         continue;
                     }
 
                     // For non-ServerVariableState nodes (recipes, etc.), delegate to the base
                     // Write which handles OnWriteValue/WriteAttribute pipeline.
-                    // Do NOT set Processed=true before calling base — base checks that flag.
+                    // Do NOT set Processed=true before calling base Ã¢â‚¬â€ base checks that flag.
                     var singleErrors = new ServiceResult[1];
                     base.Write(context, new[] { wv }, singleErrors);
                     errors[i] = singleErrors[0] ?? StatusCodes.BadInternalError;
@@ -211,8 +211,8 @@ namespace SimpleOpcFileServer
             // Redundancy: drivers only run on the active server
             if (_redundancy != null && !_redundancy.IsActive)
             {
-                Log.Information("[Redundancy] Standby mode — skipping driver initialization.");
-                _eventLogger?.LogSystem("Info", "Redundancy", "Standby mode — drivers not started");
+                Log.Information("[Redundancy] Standby mode Ã¢â‚¬â€ skipping driver initialization.");
+                _eventLogger?.LogSystem("Info", "Redundancy", "Standby mode Ã¢â‚¬â€ drivers not started");
                 return;
             }
 
@@ -393,7 +393,7 @@ namespace SimpleOpcFileServer
                 }
             }
 
-            // Phase 2: LoadModel — runs mostly outside lock, acquires lock per-node via RegisterNode
+            // Phase 2: LoadModel Ã¢â‚¬â€ runs mostly outside lock, acquires lock per-node via RegisterNode
             if (nodeModel != null)
             {
                 try
@@ -426,19 +426,17 @@ namespace SimpleOpcFileServer
             // Push external references to other node managers (e.g. ObjectsFolder).
             // During normal (non-deferred) startup MasterNodeManager calls
             // AddReferences on every node manager after CreateAddressSpace completes.
-            // Because we deferred, the dict was empty at that point — replay it now.
-#pragma warning disable CS0618 // AddReferences — AddReferencesAsync not usable in sync CompleteDeferredLoad
+            // Because we deferred, the dict was empty at that point Ã¢â‚¬â€ replay it now.
             foreach (var kvp in externalReferences)
             {
-                Server.NodeManager.AddReferences(kvp.Key, kvp.Value);
+                Server.NodeManager.AddReferencesAsync(kvp.Key, kvp.Value, default).AsTask().GetAwaiter().GetResult();
             }
-#pragma warning restore CS0618
 
             // Start demo license expiry check timer (fires every 30s)
             if (SharedModels.LicenseManager.DemoStartedUtc.HasValue)
             {
                 _demoCheckTimer = new System.Threading.Timer(OnDemoCheckTimer, null, 30_000, 30_000);
-                Log.Information("Demo mode active — full features for {Minutes} minutes.",
+                Log.Information("Demo mode active Ã¢â‚¬â€ full features for {Minutes} minutes.",
                     SharedModels.LicenseManager.Current.DemoGraceMinutes);
             }
         }
@@ -474,7 +472,7 @@ namespace SimpleOpcFileServer
                         if (_lastModel != null && IsIncrementalChange(_lastModel, newModel, out newVariables)) 
                         {
                             Log.Debug("Incremental update detected. Adding {Count} new variables.", newVariables.Count);
-                            _eventLogger?.LogSystem("Info", "Config", $"Incremental config update — {newVariables.Count} new variable(s)");
+                            _eventLogger?.LogSystem("Info", "Config", $"Incremental config update Ã¢â‚¬â€ {newVariables.Count} new variable(s)");
                             foreach (var (variable, parentPath) in newVariables)
                             {
                                 var parentNodeId = new NodeId(parentPath, _namespaceIndex);
@@ -550,8 +548,8 @@ namespace SimpleOpcFileServer
             }
             _rootNodeIds.Clear();
 
-            // Re-create — build an externalReferences dictionary so that
-            // AddReverseReferences can wire up ObjectsFolder → root folder references
+            // Re-create Ã¢â‚¬â€ build an externalReferences dictionary so that
+            // AddReverseReferences can wire up ObjectsFolder Ã¢â€ â€™ root folder references
             // making the address space browseable after reload.
             var externalReferences = new Dictionary<NodeId, IList<IReference>>();
             externalReferences[ObjectIds.ObjectsFolder] = new List<IReference>();
@@ -560,12 +558,10 @@ namespace SimpleOpcFileServer
 
             // Push external references to other node managers (e.g. ObjectsFolder)
             // so that browsing ObjectsFolder shows the new root folder.
-#pragma warning disable CS0618 // AddReferences — AddReferencesAsync not usable in sync reload
             foreach (var kvp in externalReferences)
             {
-                Server.NodeManager.AddReferences(kvp.Key, kvp.Value);
+                Server.NodeManager.AddReferencesAsync(kvp.Key, kvp.Value, default).AsTask().GetAwaiter().GetResult();
             }
-#pragma warning restore CS0618
 
             StripModelForCache(nodeModel);
             _lastModel = nodeModel;
@@ -581,9 +577,9 @@ namespace SimpleOpcFileServer
                 if (_users.TryGetValue(username, out var userConfig))
                 {
                     string? password = null;
-                    if (userNameToken.DecryptedPassword != null)
+                    if (userNameToken.Password.Length > 0)
                     {
-                         password = System.Text.Encoding.UTF8.GetString(userNameToken.DecryptedPassword);
+                         password = System.Text.Encoding.UTF8.GetString(userNameToken.Password.ToArray());
                     }
 
                     // Try hashed password first, then fall back to legacy plain-text
@@ -606,7 +602,7 @@ namespace SimpleOpcFileServer
                     }
                 }
 
-                _eventLogger?.LogAuth("Warning", username, $"Login failed for user '{username}' — invalid credentials");
+                _eventLogger?.LogAuth("Warning", username, $"Login failed for user '{username}' Ã¢â‚¬â€ invalid credentials");
                 throw new ServiceResultException(StatusCodes.BadUserAccessDenied, "Invalid username or password.");
             }
             else if (args.NewIdentity is AnonymousIdentityToken)
@@ -728,7 +724,7 @@ namespace SimpleOpcFileServer
              }
              if (nodeModel != null)
              {
-                 // ─── License enforcement (skipped in DEBUG builds) ────
+                 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ License enforcement (skipped in DEBUG builds) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
                  // Note: only user-defined variables (from the Folder tree) are
                  // counted towards MaxVariables. Infrastructure nodes such as
                  // _Diagnostics and Recipe are created separately and are never
@@ -781,7 +777,7 @@ namespace SimpleOpcFileServer
                          ? $"Last known active: {lastActive.Value:yyyy-MM-dd HH:mm:ss} UTC ({FormatTimeAgo(DateTime.UtcNow - lastActive.Value)} ago)"
                          : "No previous activity recorded (first start)";
 
-                     _eventLogger.LogSystem("Info", "Server", $"Server started — configuration loaded. {lastActiveText}");
+                     _eventLogger.LogSystem("Info", "Server", $"Server started Ã¢â‚¬â€ configuration loaded. {lastActiveText}");
                      DiagnosticsCollector.Instance.Register("EventLogger", "EventLog");
                  }
 
@@ -852,7 +848,7 @@ namespace SimpleOpcFileServer
 
                          if (role == RedundancyRole.Active)
                          {
-                             _eventLogger?.LogSystem("Info", "Redundancy", "Now ACTIVE — starting drivers");
+                             _eventLogger?.LogSystem("Info", "Redundancy", "Now ACTIVE Ã¢â‚¬â€ starting drivers");
                              InitializeDrivers();
 
                              // Start scripts if not already running and not configured to run on standby
@@ -881,7 +877,7 @@ namespace SimpleOpcFileServer
                          }
                          else
                          {
-                             _eventLogger?.LogSystem("Info", "Redundancy", "Now STANDBY — stopping drivers");
+                             _eventLogger?.LogSystem("Info", "Redundancy", "Now STANDBY Ã¢â‚¬â€ stopping drivers");
                              foreach (var d in _drivers) d.Dispose();
                              _drivers.Clear();
 
@@ -913,7 +909,7 @@ namespace SimpleOpcFileServer
 
                      _redundancy.Start();
                      DiagnosticsCollector.Instance.Register("Redundancy", redCfg.Role, status: _redundancy.ActiveRole.ToString());
-                     _eventLogger?.LogSystem("Info", "Redundancy", $"Service initialized — role: {_redundancy.ActiveRole}");
+                     _eventLogger?.LogSystem("Info", "Redundancy", $"Service initialized Ã¢â‚¬â€ role: {_redundancy.ActiveRole}");
                  }
 
                  Log.Information("Initializing subsystems...");
@@ -927,13 +923,18 @@ namespace SimpleOpcFileServer
                      _loading = false;
                      Log.Information("OPC UA nodes created. Total tracked variables: {Count}.", _variables.Count);
 
-                     // Deferred alarm evaluation — now that all nodes are created,
+                     // Deferred alarm evaluation Ã¢â‚¬â€ now that all nodes are created,
                      // evaluate initial alarm states in a single pass.
                      if (_alarmConditions.Count > 0)
                      {
                          Log.Information("Evaluating initial alarm states for {Count} alarms...", _alarmConditions.Count);
                          foreach (var info in _alarmConditions.Values)
-                             EvaluateAlarmCondition(info);
+                         {
+                             if (info.Config.TriggerType == AlarmTriggerType.Condition)
+                                 EvaluateConditionAlarm(info);
+                             else
+                                 EvaluateLimitAlarm(info);
+                         }
                          Log.Information("Initial alarm evaluation complete.");
                      }
                  }
@@ -941,7 +942,7 @@ namespace SimpleOpcFileServer
            lock (Lock)
            { // re-acquire Lock for post-parallel setup
 
-                 // Start all drivers now that loading is complete — timers were deferred
+                 // Start all drivers now that loading is complete Ã¢â‚¬â€ timers were deferred
                  // to avoid driver polling competing with parallel node creation.
                  foreach (var d in _drivers) d.Start();
 
@@ -958,7 +959,7 @@ namespace SimpleOpcFileServer
                      _eventLogger?.LogSystem("Info", "SparkplugB", "Publisher initialized");
                  }
 
-                 // scripts — skip on standby unless ScriptsRunOnStandby is set
+                 // scripts Ã¢â‚¬â€ skip on standby unless ScriptsRunOnStandby is set
                  if (nodeModel.Scripts != null && (_redundancy == null || _redundancy.ShouldRunScripts))
                  {
                      _scriptManager = new ScriptManager(this);
@@ -967,7 +968,7 @@ namespace SimpleOpcFileServer
                  // Cache script configs for deferred start on failover
                  _cachedScripts = nodeModel.Scripts;
 
-                 // PLC programs — skip on standby unless PlcRunOnStandby is set
+                 // PLC programs Ã¢â‚¬â€ skip on standby unless PlcRunOnStandby is set
                  if (nodeModel.PlcPrograms != null && nodeModel.PlcPrograms.Count > 0
                      && (_redundancy == null || _redundancy.ShouldRunPlc))
                  {
@@ -1016,7 +1017,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                               }
 
 
-                  // ─── Assets / Maintenance ───
+                  // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Assets / Maintenance Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
                   if (nodeModel.Assets != null && nodeModel.Assets.Count > 0)
                   {
                       CreateAssetVariables(nodeModel.Assets, references);
@@ -1024,7 +1025,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                       _assetManager.Initialize(nodeModel.Assets);
                   }
 
-                  // ─── Batch / Sequence Manager ───
+                  // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Batch / Sequence Manager Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
                   if (nodeModel.BatchSequences != null && nodeModel.BatchSequences.Count > 0)
                   {
                       CreateBatchVariables(nodeModel.BatchSequences, references);
@@ -1032,17 +1033,17 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                       _batchManager.Initialize(nodeModel.BatchSequences);
                   }
 
-                  // ─── Events (condition → command) ───
+                  // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Events (condition Ã¢â€ â€™ command) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
                   if (nodeModel.Events != null && nodeModel.Events.Count > 0)
                   {
                       CreateEventVariables(nodeModel.Events, references);
                       _eventManager = new EventManager(this);
                       _eventManager.Initialize(nodeModel.Events);
                   }
-                              // ─── Diagnostics OPC UA node (always created, license-exempt) ───
+                              // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Diagnostics OPC UA node (always created, license-exempt) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
                           CreateDiagnosticsNode(references);
 
-                          // ─── Redundancy system variable ───
+                          // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Redundancy system variable Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
                           if (_redundancy != null)
                               CreateRedundancySystemVariable(references);
                       }
@@ -1058,7 +1059,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             recipeFolder.BrowseName = new QualifiedName("Recipe", _namespaceIndex);
             recipeFolder.DisplayName = new LocalizedText("Recipe");
             recipeFolder.TypeDefinitionId = ObjectTypeIds.FolderType;
-            recipeFolder.ReferenceTypeId = ReferenceTypes.Organizes;
+            recipeFolder.ReferenceTypeId = ReferenceTypeIds.Organizes;
 
             _rootNodeIds.Add(recipeFolder.NodeId);
             AddPredefinedNode(SystemContext, recipeFolder);
@@ -1079,17 +1080,17 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 subFolder.BrowseName = new QualifiedName(recipe.Name, _namespaceIndex);
                 subFolder.DisplayName = new LocalizedText(recipe.Name);
                 subFolder.TypeDefinitionId = ObjectTypeIds.FolderType;
-                subFolder.ReferenceTypeId = ReferenceTypes.Organizes;
+                subFolder.ReferenceTypeId = ReferenceTypeIds.Organizes;
                 recipeFolder.AddChild(subFolder);
                 AddPredefinedNode(SystemContext, subFolder);
 
-                // Command variables — write a recipe name to trigger the action
+                // Command variables Ã¢â‚¬â€ write a recipe name to trigger the action
                 CreateRecipeCommandVariable(subFolder, prefix, "Load", recipe);
                 CreateRecipeCommandVariable(subFolder, prefix, "Save", recipe);
                 CreateRecipeCommandVariable(subFolder, prefix, "Activate", recipe);
                 CreateRecipeCommandVariable(subFolder, prefix, "Delete", recipe);
 
-                // Status variables — read-only
+                // Status variables Ã¢â‚¬â€ read-only
                 CreateRecipeStatusVariable(subFolder, prefix, "ActiveName", "");
                 CreateRecipeStatusVariable(subFolder, prefix, "RecipeList", "");
                 CreateRecipeStatusVariable(subFolder, prefix, "LastStatus", "");
@@ -1099,22 +1100,22 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
         private void CreateRecipeCommandVariable(FolderState parent, string prefix, string action, RecipeConfig recipe)
         {
             var path = $"{prefix}.{action}";
-            var variable = new BaseDataVariableState<string>(parent);
+            var variable = new BaseDataVariableState(parent);
             variable.NodeId = new NodeId(path, _namespaceIndex);
             variable.BrowseName = new QualifiedName(action, _namespaceIndex);
             variable.DisplayName = new LocalizedText(action);
             variable.DataType = DataTypeIds.String;
             variable.ValueRank = ValueRanks.Scalar;
-            variable.Value = "";
+            variable.Value = new Variant("");
             variable.AccessLevel = AccessLevels.CurrentReadOrWrite;
             variable.UserAccessLevel = AccessLevels.CurrentReadOrWrite;
             variable.Timestamp = DateTime.UtcNow;
             variable.StatusCode = StatusCodes.Good;
 
             // Hook the write to trigger the recipe action
-            variable.OnWriteValue = (ISystemContext context, NodeState node, NumericRange indexRange, QualifiedName dataEncoding, ref object value, ref StatusCode statusCode, ref DateTime timestamp) =>
+            variable.OnWriteValue = (ISystemContext context, NodeState node, NumericRange indexRange, QualifiedName dataEncoding, ref Variant value, ref StatusCode statusCode, ref DateTimeUtc timestamp) =>
             {
-                var recipeName = value?.ToString() ?? "";
+                var recipeName = value.Value?.ToString() ?? "";
                 if (!string.IsNullOrWhiteSpace(recipeName))
                 {
                     ExecuteRecipeAction(recipe.Name, action, recipeName);
@@ -1130,13 +1131,13 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
         private void CreateRecipeStatusVariable(FolderState parent, string prefix, string name, string defaultValue)
         {
             var path = $"{prefix}.{name}";
-            var variable = new BaseDataVariableState<string>(parent);
+            var variable = new BaseDataVariableState(parent);
             variable.NodeId = new NodeId(path, _namespaceIndex);
             variable.BrowseName = new QualifiedName(name, _namespaceIndex);
             variable.DisplayName = new LocalizedText(name);
             variable.DataType = DataTypeIds.String;
             variable.ValueRank = ValueRanks.Scalar;
-            variable.Value = defaultValue;
+            variable.Value = new Variant(defaultValue);
             variable.AccessLevel = AccessLevels.CurrentRead;
             variable.UserAccessLevel = AccessLevels.CurrentRead;
             variable.Timestamp = DateTime.UtcNow;
@@ -1163,7 +1164,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
         /// Creates a _Diagnostics folder in the OPC UA address space with a DiagnosticsJson
         /// variable that is updated every 2 seconds from DiagnosticsCollector.
         /// The editor reads this variable instead of using a separate HTTP endpoint.
-        /// Safe to call on reload — skips if already created.
+        /// Safe to call on reload Ã¢â‚¬â€ skips if already created.
         /// </summary>
 
         private void CreateAssetVariables(List<AssetConfig> assets, IList<IReference>? references)
@@ -1198,19 +1199,19 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 CreateAssetVar<double>(folder, prefix, "NextServiceIn", 0.0);
                 CreateAssetVar<string>(folder, prefix, "NextServiceName", "");
                 var resetPath = $"{prefix}.ResetSchedule";
-                var resetVar = new BaseDataVariableState<string>(folder)
+                var resetVar = new BaseDataVariableState(folder)
                 {
                     NodeId = new NodeId(resetPath, _namespaceIndex),
                     BrowseName = new QualifiedName("ResetSchedule", _namespaceIndex),
                     DisplayName = new LocalizedText("ResetSchedule"),
                     DataType = DataTypeIds.String, ValueRank = ValueRanks.Scalar,
-                    Value = "", AccessLevel = AccessLevels.CurrentReadOrWrite,
+                    Value = new Variant(""), AccessLevel = AccessLevels.CurrentReadOrWrite,
                     UserAccessLevel = AccessLevels.CurrentReadOrWrite,
                     Timestamp = DateTime.UtcNow, StatusCode = StatusCodes.Good
                 };
-                resetVar.OnWriteValue = (ISystemContext ctx, NodeState node, NumericRange indexRange, QualifiedName dataEncoding, ref object value, ref StatusCode statusCode, ref DateTime timestamp) =>
+                resetVar.OnWriteValue = (ISystemContext ctx, NodeState node, NumericRange indexRange, QualifiedName dataEncoding, ref Variant value, ref StatusCode statusCode, ref DateTimeUtc timestamp) =>
                 {
-                    var schedId = value?.ToString() ?? "";
+                    var schedId = value.Value?.ToString() ?? "";
                     if (!string.IsNullOrWhiteSpace(schedId))
                         _assetManager?.ResetSchedule(asset.Name, schedId);
                     return Opc.Ua.ServiceResult.Good;
@@ -1224,13 +1225,13 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
         private void CreateAssetVar<T>(FolderState parent, string prefix, string name, T defaultValue)
         {
             var path = $"{prefix}.{name}";
-            var variable = new BaseDataVariableState<T>(parent)
+            var variable = new BaseDataVariableState(parent)
             {
                 NodeId = new NodeId(path, _namespaceIndex),
                 BrowseName = new QualifiedName(name, _namespaceIndex),
                 DisplayName = new LocalizedText(name),
                 DataType = Opc.Ua.TypeInfo.GetDataTypeId(typeof(T)),
-                ValueRank = ValueRanks.Scalar, Value = defaultValue,
+                ValueRank = ValueRanks.Scalar, Value = new Variant(defaultValue),
                 AccessLevel = AccessLevels.CurrentRead,
                 UserAccessLevel = AccessLevels.CurrentRead,
                 Timestamp = DateTime.UtcNow, StatusCode = StatusCodes.Good
@@ -1276,13 +1277,13 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
         private void CreateEventVar<T>(FolderState parent, string prefix, string name, T defaultValue)
         {
             var path = $"{prefix}.{name}";
-            var variable = new BaseDataVariableState<T>(parent)
+            var variable = new BaseDataVariableState(parent)
             {
                 NodeId = new NodeId(path, _namespaceIndex),
                 BrowseName = new QualifiedName(name, _namespaceIndex),
                 DisplayName = new LocalizedText(name),
                 DataType = Opc.Ua.TypeInfo.GetDataTypeId(typeof(T)),
-                ValueRank = ValueRanks.Scalar, Value = defaultValue,
+                ValueRank = ValueRanks.Scalar, Value = new Variant(defaultValue),
                 AccessLevel = AccessLevels.CurrentRead,
                 UserAccessLevel = AccessLevels.CurrentRead,
                 Timestamp = DateTime.UtcNow, StatusCode = StatusCodes.Good
@@ -1340,7 +1341,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
         }
         private void CreateDiagnosticsNode(IList<IReference>? references)
         {
-            // Only create once — the diagnostics node survives reloads
+            // Only create once Ã¢â‚¬â€ the diagnostics node survives reloads
             if (_diagVariable != null)
                 return;
 
@@ -1357,13 +1358,13 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             _rootNodeIds.Add(folder.NodeId);
             AddPredefinedNode(SystemContext, folder);
 
-            var variable = new BaseDataVariableState<string>(folder);
+            var variable = new BaseDataVariableState(folder);
             variable.NodeId = new NodeId("_Diagnostics.Json", _namespaceIndex);
             variable.BrowseName = new QualifiedName("DiagnosticsJson", _namespaceIndex);
             variable.DisplayName = new LocalizedText("DiagnosticsJson");
             variable.DataType = DataTypeIds.String;
             variable.ValueRank = ValueRanks.Scalar;
-            variable.Value = "{}";
+            variable.Value = new Variant("{}");
             variable.AccessLevel = AccessLevels.CurrentRead;
             variable.UserAccessLevel = AccessLevels.CurrentRead;
             variable.Timestamp = DateTime.UtcNow;
@@ -1434,13 +1435,13 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             AddPredefinedNode(SystemContext, folder);
 
             // IsActive variable
-            var isActive = new BaseDataVariableState<bool>(folder);
+            var isActive = new BaseDataVariableState(folder);
             isActive.NodeId = new NodeId("_System.Redundancy.IsActive", _namespaceIndex);
             isActive.BrowseName = new QualifiedName("IsActive", _namespaceIndex);
             isActive.DisplayName = new LocalizedText("IsActive");
             isActive.DataType = DataTypeIds.Boolean;
             isActive.ValueRank = ValueRanks.Scalar;
-            isActive.Value = _redundancy?.IsActive ?? true;
+            isActive.Value = new Variant(_redundancy?.IsActive ?? true);
             isActive.AccessLevel = AccessLevels.CurrentRead;
             isActive.UserAccessLevel = AccessLevels.CurrentRead;
             isActive.Timestamp = DateTime.UtcNow;
@@ -1450,13 +1451,13 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             _redundancyIsActiveVar = isActive;
 
             // ConfiguredRole variable
-            var configuredRole = new BaseDataVariableState<string>(folder);
+            var configuredRole = new BaseDataVariableState(folder);
             configuredRole.NodeId = new NodeId("_System.Redundancy.ConfiguredRole", _namespaceIndex);
             configuredRole.BrowseName = new QualifiedName("ConfiguredRole", _namespaceIndex);
             configuredRole.DisplayName = new LocalizedText("ConfiguredRole");
             configuredRole.DataType = DataTypeIds.String;
             configuredRole.ValueRank = ValueRanks.Scalar;
-            configuredRole.Value = _redundancy?.GetDiagnostics().ConfiguredRole ?? "";
+            configuredRole.Value = new Variant(_redundancy?.GetDiagnostics().ConfiguredRole ?? "");
             configuredRole.AccessLevel = AccessLevels.CurrentRead;
             configuredRole.UserAccessLevel = AccessLevels.CurrentRead;
             configuredRole.Timestamp = DateTime.UtcNow;
@@ -1465,13 +1466,13 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             AddPredefinedNode(SystemContext, configuredRole);
 
             // PartnerAlive variable
-            var partnerAlive = new BaseDataVariableState<bool>(folder);
+            var partnerAlive = new BaseDataVariableState(folder);
             partnerAlive.NodeId = new NodeId("_System.Redundancy.PartnerAlive", _namespaceIndex);
             partnerAlive.BrowseName = new QualifiedName("PartnerAlive", _namespaceIndex);
             partnerAlive.DisplayName = new LocalizedText("PartnerAlive");
             partnerAlive.DataType = DataTypeIds.Boolean;
             partnerAlive.ValueRank = ValueRanks.Scalar;
-            partnerAlive.Value = _redundancy?.PartnerAlive ?? false;
+            partnerAlive.Value = new Variant(_redundancy?.PartnerAlive ?? false);
             partnerAlive.AccessLevel = AccessLevels.CurrentRead;
             partnerAlive.UserAccessLevel = AccessLevels.CurrentRead;
             partnerAlive.Timestamp = DateTime.UtcNow;
@@ -1480,13 +1481,13 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             AddPredefinedNode(SystemContext, partnerAlive);
 
             // ActiveRole variable
-            var activeRole = new BaseDataVariableState<string>(folder);
+            var activeRole = new BaseDataVariableState(folder);
             activeRole.NodeId = new NodeId("_System.Redundancy.ActiveRole", _namespaceIndex);
             activeRole.BrowseName = new QualifiedName("ActiveRole", _namespaceIndex);
             activeRole.DisplayName = new LocalizedText("ActiveRole");
             activeRole.DataType = DataTypeIds.String;
             activeRole.ValueRank = ValueRanks.Scalar;
-            activeRole.Value = _redundancy?.ActiveRole.ToString() ?? "Active";
+            activeRole.Value = new Variant(_redundancy?.ActiveRole.ToString() ?? "Active");
             activeRole.AccessLevel = AccessLevels.CurrentRead;
             activeRole.UserAccessLevel = AccessLevels.CurrentRead;
             activeRole.Timestamp = DateTime.UtcNow;
@@ -1510,7 +1511,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             rootFolderState.BrowseName = new QualifiedName(rootFolder.Name, _namespaceIndex);
             rootFolderState.DisplayName = new LocalizedText(rootFolder.Name);
             rootFolderState.TypeDefinitionId = ObjectTypeIds.FolderType;
-            rootFolderState.ReferenceTypeId = ReferenceTypes.Organizes;
+            rootFolderState.ReferenceTypeId = ReferenceTypeIds.Organizes;
             rootFolderState.EventNotifier = EventNotifiers.SubscribeToEvents;
 
             lock (Lock)
@@ -1593,7 +1594,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             }
             else
             {
-                // Single or no subfolders — run sequentially
+                // Single or no subfolders Ã¢â‚¬â€ run sequentially
                 foreach (var subFolder in rootFolder.Folders)
                     CreateFolder(subFolder, rootFolderState, null, childPrefix);
             }
@@ -1653,11 +1654,11 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
         /// then does a fast flat dictionary insertion under the lock.</summary>
         private void FlushNodeBatch(ISystemContext context, NodeState subtreeRoot)
         {
-            // Phase 1: Collect all nodes from the subtree (outside the lock — fully parallel)
+            // Phase 1: Collect all nodes from the subtree (outside the lock Ã¢â‚¬â€ fully parallel)
             var allNodes = new List<NodeState>(4096);
             CollectSubtreeNodes(context, subtreeRoot, allNodes);
 
-            // Phase 2: Register all nodes in the predefined dictionary (under lock — fast flat loop)
+            // Phase 2: Register all nodes in the predefined dictionary (under lock Ã¢â‚¬â€ fast flat loop)
             var dict = PredefinedNodes;
             lock (Lock)
             {
@@ -1675,7 +1676,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             folderState.BrowseName = new QualifiedName(folder.Name, _namespaceIndex);
             folderState.DisplayName = new LocalizedText(folder.Name);
             folderState.TypeDefinitionId = ObjectTypeIds.FolderType;
-            folderState.ReferenceTypeId = ReferenceTypes.Organizes;
+            folderState.ReferenceTypeId = ReferenceTypeIds.Organizes;
             folderState.EventNotifier = EventNotifiers.SubscribeToEvents;
 
             if (parent != null)
@@ -1740,15 +1741,15 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             variableState.NodeId = new NodeId(currentPath, _namespaceIndex);
             variableState.BrowseName = new QualifiedName(variable.Name, _namespaceIndex);
             variableState.DisplayName = new LocalizedText(variable.Name);
-            variableState.Value = ConvertValue(variable.Value, variable.Type); // Convert JsonElement
+            variableState.Value = new Variant(ConvertValue(variable.Value, variable.Type)); // Convert JsonElement
             // Apply initial value or retentive value
             if (variable.Retentive && _retentiveValues.TryGetValue(currentPath, out var retVal))
             {
-                variableState.Value = ConvertValue(retVal, variable.Type);
+                variableState.Value = new Variant(ConvertValue(retVal, variable.Type));
             }
             else if (!string.IsNullOrEmpty(variable.InitialValue))
             {
-                variableState.Value = ConvertValue(variable.InitialValue, variable.Type);
+                variableState.Value = new Variant(ConvertValue(variable.InitialValue, variable.Type));
             }
 
             variableState.DataType = GetDataTypeId(variable.Type);
@@ -1760,7 +1761,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             // Add LastError property
             if (variable.DriverConfigs != null && variable.DriverConfigs.Count > 0)
             {
-                var lastError = new PropertyState<string>(variableState);
+                var lastError = new PropertyState(variableState);
                 lastError.NodeId = new NodeId(currentPath + ".LastError", _namespaceIndex);
                 lastError.BrowseName = new QualifiedName("LastError", _namespaceIndex);
                 lastError.DisplayName = new LocalizedText("LastError");
@@ -1798,7 +1799,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
 
             // Notify scripts when the variable value changes (from drivers, OPC writes, etc.)
             // IMPORTANT: use the StateChanged *event* (supports multiple subscribers), not the
-            // OnStateChanged field — the OPC UA SDK's MonitoredNode2 assigns OnStateChanged
+            // OnStateChanged field Ã¢â‚¬â€ the OPC UA SDK's MonitoredNode2 assigns OnStateChanged
             // directly (node.OnStateChanged = ...) the first time a client subscribes/monitors
             // this node, which would silently overwrite (not add to) any handlers wired via
             // OnStateChanged +=, breaking alarm evaluation, statistics and retentive persistence.
@@ -1848,43 +1849,43 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 statsFolder.DisplayName = new LocalizedText("Statistics");
                 statsFolder.ReferenceTypeId = ReferenceTypeIds.HasComponent;
 
-                var statsMin = new BaseDataVariableState<double>(statsFolder);
+                var statsMin = new BaseDataVariableState(statsFolder);
                 statsMin.NodeId = new NodeId(currentPath + ".Statistics.Min", _namespaceIndex);
                 statsMin.BrowseName = new QualifiedName("Min", _namespaceIndex);
                 statsMin.DisplayName = new LocalizedText("Min");
                 statsMin.DataType = DataTypeIds.Double;
                 statsMin.ValueRank = ValueRanks.Scalar;
-                statsMin.Value = 0.0;
+                statsMin.Value = new Variant(0.0);
                 statsMin.AccessLevel = AccessLevels.CurrentRead;
                 statsMin.UserAccessLevel = AccessLevels.CurrentRead;
 
-                var statsMax = new BaseDataVariableState<double>(statsFolder);
+                var statsMax = new BaseDataVariableState(statsFolder);
                 statsMax.NodeId = new NodeId(currentPath + ".Statistics.Max", _namespaceIndex);
                 statsMax.BrowseName = new QualifiedName("Max", _namespaceIndex);
                 statsMax.DisplayName = new LocalizedText("Max");
                 statsMax.DataType = DataTypeIds.Double;
                 statsMax.ValueRank = ValueRanks.Scalar;
-                statsMax.Value = 0.0;
+                statsMax.Value = new Variant(0.0);
                 statsMax.AccessLevel = AccessLevels.CurrentRead;
                 statsMax.UserAccessLevel = AccessLevels.CurrentRead;
 
-                var statsAvg = new BaseDataVariableState<double>(statsFolder);
+                var statsAvg = new BaseDataVariableState(statsFolder);
                 statsAvg.NodeId = new NodeId(currentPath + ".Statistics.Average", _namespaceIndex);
                 statsAvg.BrowseName = new QualifiedName("Average", _namespaceIndex);
                 statsAvg.DisplayName = new LocalizedText("Average");
                 statsAvg.DataType = DataTypeIds.Double;
                 statsAvg.ValueRank = ValueRanks.Scalar;
-                statsAvg.Value = 0.0;
+                statsAvg.Value = new Variant(0.0);
                 statsAvg.AccessLevel = AccessLevels.CurrentRead;
                 statsAvg.UserAccessLevel = AccessLevels.CurrentRead;
 
-                var statsCount = new BaseDataVariableState<long>(statsFolder);
+                var statsCount = new BaseDataVariableState(statsFolder);
                 statsCount.NodeId = new NodeId(currentPath + ".Statistics.Count", _namespaceIndex);
                 statsCount.BrowseName = new QualifiedName("Count", _namespaceIndex);
                 statsCount.DisplayName = new LocalizedText("Count");
                 statsCount.DataType = DataTypeIds.Int64;
                 statsCount.ValueRank = ValueRanks.Scalar;
-                statsCount.Value = 0L;
+                statsCount.Value = new Variant(0L);
                 statsCount.AccessLevel = AccessLevels.CurrentRead;
                 statsCount.UserAccessLevel = AccessLevels.CurrentRead;
 
@@ -1894,7 +1895,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 statsReset.DisplayName = new LocalizedText("Reset");
                 statsReset.DataType = DataTypeIds.Boolean;
                 statsReset.ValueRank = ValueRanks.Scalar;
-                statsReset.Value = false;
+                statsReset.Value = new Variant(false);
                 statsReset.AccessLevel = AccessLevels.CurrentReadOrWrite;
                 statsReset.UserAccessLevel = AccessLevels.CurrentReadOrWrite;
 
@@ -1916,8 +1917,9 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 _statsTrackers[currentPath] = tracker;
 
                 // Feed initial value to statistics
-                if (variableState.Value != null && double.TryParse(
-                    Convert.ToString(variableState.Value, System.Globalization.CultureInfo.InvariantCulture),
+                var initialValue = variableState.Value.AsBoxedObject();
+                if (initialValue != null && double.TryParse(
+                    Convert.ToString(initialValue, System.Globalization.CultureInfo.InvariantCulture),
                     System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var initVal))
                 {
                     tracker.Record(initVal);
@@ -1929,14 +1931,18 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 {
                     if ((masks & NodeStateChangeMasks.Value) != 0 && _statsTrackers.TryGetValue(statsVarPath, out var t))
                     {
-                        if (state is BaseDataVariableState vs && vs.Value != null &&
-                            double.TryParse(Convert.ToString(vs.Value, System.Globalization.CultureInfo.InvariantCulture),
-                                System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var dv))
+                        if (state is BaseDataVariableState vs)
                         {
-                            t.Record(dv);
-                        }
-                    }
-                };
+                            var currentValue = vs.Value.AsBoxedObject();
+                            if (currentValue != null &&
+                                double.TryParse(Convert.ToString(currentValue, System.Globalization.CultureInfo.InvariantCulture),
+                                    System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var dv))
+                                    {
+                                        t.Record(dv);
+                                    }
+                                }
+                            }
+                        };
             }
 
             // Track retentive variable value changes
@@ -1947,7 +1953,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 {
                     if ((masks & NodeStateChangeMasks.Value) != 0 && state is BaseDataVariableState vs)
                     {
-                        _retentiveValues[retPath] = Convert.ToString(vs.Value, System.Globalization.CultureInfo.InvariantCulture) ?? "";
+                        _retentiveValues[retPath] = Convert.ToString(vs.Value.AsBoxedObject(), System.Globalization.CultureInfo.InvariantCulture) ?? "";
                         ScheduleRetentiveSave();
                     }
                 };
@@ -1966,7 +1972,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             variableState.NodeId = new NodeId(currentPath, _namespaceIndex);
             variableState.BrowseName = new QualifiedName(variable.Name, _namespaceIndex);
             variableState.DisplayName = new LocalizedText(variable.Name);
-            variableState.Value = variable.Value;
+            variableState.Value = new Variant(variable.Value);
             variableState.DataType = GetDataTypeId(variable.Type);
             variableState.ValueRank = ValueRanks.Scalar;
             
@@ -2044,7 +2050,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
 
         internal DateTime? GetVariableTimestamp(string variableName)
         {
-            return TryResolveVariable(variableName, out var v) ? v.Timestamp : null;
+            return TryResolveVariable(variableName, out var v) ? (DateTime?)v.Timestamp : null;
         }
 
         internal void SetVariableQuality(string variableName, bool good)
@@ -2061,7 +2067,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
         {
             if (TryResolveVariable(variableName, out var variable))
             {
-                return variable.Value;
+                return variable.Value.AsBoxedObject();
             }
             throw new InvalidOperationException("Variable not found: " + variableName);
         }
@@ -2078,13 +2084,13 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             {
                 var nodeId = variablePath;
                 if (TryResolveVariable(variablePath, out var vs))
-                    nodeId = vs.NodeId?.ToString() ?? variablePath;
+                    nodeId = vs.NodeId.ToString();
                 var dataValues = _logger.ReadHistory(nodeId, startTime, endTime);
                 var result = new List<(DateTime, double)>();
                 foreach (var dv in dataValues)
                 {
-                    if (dv?.Value != null && double.TryParse(dv.Value.ToString(), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var d))
-                        result.Add((dv.SourceTimestamp, d));
+                    if (dv.Value != null && double.TryParse(dv.Value.ToString(), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var d))
+                        result.Add(((DateTime)dv.SourceTimestamp, d));
                     if (result.Count >= maxPoints) break;
                 }
                 return result.Count > 0 ? result : null;
@@ -2097,10 +2103,10 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             if (TryResolveVariable(variableName, out var variable))
             {
                 var oldValue = variable.Value;
-                variable.Value = value;
+                variable.Value = new Variant(value);
                 variable.Timestamp = DateTime.UtcNow;
                 variable.ClearChangeMasks(SystemContext, false);
-                _scriptManager?.NotifyVariableChanged(variableName, oldValue, value, DateTime.UtcNow);
+                _scriptManager?.NotifyVariableChanged(variableName, oldValue.AsBoxedObject(), value, DateTime.UtcNow);
             }
             else
                 throw new InvalidOperationException("Variable not found: " + variableName);
@@ -2184,7 +2190,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             };
         }
 
-        // ─── Alarm & Condition support ──────────────────────────────────────
+        // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Alarm & Condition support Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
         /// <summary>Tracks state for each alarm condition instance.</summary>
         private class AlarmConditionInfo
@@ -2196,7 +2202,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             public bool IsActive { get; set; }
         }
 
-        // ─── Alarm analytics helpers ─────────────────────────────────────
+        // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Alarm analytics helpers Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
         private enum AlarmAnalyticsEventKind { Activated, Acknowledged }
 
@@ -2297,7 +2303,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                         globalMtta = Math.Round(deltas.Average(), 1);
                 }
 
-                // Flood detection — count activations in the last N seconds
+                // Flood detection Ã¢â‚¬â€ count activations in the last N seconds
                 var floodCutoff = DateTime.UtcNow.AddSeconds(-AlarmFloodWindowSeconds);
                 int floodCount = activations.Count(e => e.TimeUtc >= floodCutoff);
 
@@ -2372,18 +2378,16 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             if (property != null)
                 return property;
 
-            property = new PropertyState<T>(parent)
-            {
-                NodeId = new NodeId(nodeIdPath, parent.NodeId.NamespaceIndex),
-                BrowseName = browseName,
-                DisplayName = browseName.Name,
-                DataType = dataType,
-                ValueRank = ValueRanks.Scalar,
-                AccessLevel = AccessLevels.CurrentRead,
-                UserAccessLevel = AccessLevels.CurrentRead,
-                ReferenceTypeId = ReferenceTypeIds.HasProperty,
-                TypeDefinitionId = VariableTypeIds.PropertyType
-            };
+            property = (PropertyState<T>)Activator.CreateInstance(typeof(PropertyState<>).MakeGenericType(typeof(T)), parent)!;
+            property.NodeId = new NodeId(nodeIdPath, parent.NodeId.NamespaceIndex);
+            property.BrowseName = browseName;
+            property.DisplayName = new LocalizedText(browseName.Name);
+            property.DataType = dataType;
+            property.ValueRank = ValueRanks.Scalar;
+            property.AccessLevel = AccessLevels.CurrentRead;
+            property.UserAccessLevel = AccessLevels.CurrentRead;
+            property.ReferenceTypeId = ReferenceTypeIds.HasProperty;
+            property.TypeDefinitionId = VariableTypeIds.PropertyType;
             parent.AddChild(property);
             return property;
         }
@@ -2399,7 +2403,8 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 {
                     NodeId = new NodeId(nodeIdPath, namespaceIndex),
                     BrowseName = browseName,
-                    DisplayName = browseName.Name,
+                    DisplayName = new LocalizedText(browseName.Name),
+
                     DataType = DataTypeIds.LocalizedText,
                     ValueRank = ValueRanks.Scalar,
                     AccessLevel = AccessLevels.CurrentRead,
@@ -2410,28 +2415,139 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 parent.AddChild(state);
             }
 
-            // Ensure the Id child exists too — the SDK's base AlarmConditionState.SetActiveState
+            // Ensure the Id child exists too Ã¢â‚¬â€ the SDK's base AlarmConditionState.SetActiveState
             // unconditionally writes to ActiveState.Id.Value, which throws a NullReferenceException
             // if this optional child wasn't instantiated by Clone() (observed to be silently
             // swallowed by the caller's try/catch, preventing alarms from ever activating).
             if (state.Id == null)
             {
-                state.Id = new PropertyState<bool>(state)
-                {
-                    NodeId = new NodeId(nodeIdPath + ".Id", namespaceIndex),
-                    BrowseName = BrowseNames.Id,
-                    DisplayName = BrowseNames.Id,
-                    DataType = DataTypeIds.Boolean,
-                    ValueRank = ValueRanks.Scalar,
-                    AccessLevel = AccessLevels.CurrentRead,
-                    UserAccessLevel = AccessLevels.CurrentRead,
-                    ReferenceTypeId = ReferenceTypeIds.HasProperty,
-                    TypeDefinitionId = VariableTypeIds.PropertyType
-                };
+                state.Id = (PropertyState<bool>)Activator.CreateInstance(typeof(PropertyState<>).MakeGenericType(typeof(bool)), state)!;
+                state.Id.NodeId = new NodeId(nodeIdPath + ".Id", namespaceIndex);
+                state.Id.BrowseName = new QualifiedName(BrowseNames.Id);
+                state.Id.DisplayName = new LocalizedText(BrowseNames.Id);
+                state.Id.DataType = DataTypeIds.Boolean;
+                state.Id.ValueRank = ValueRanks.Scalar;
+                state.Id.Value = false;
+                state.Id.AccessLevel = AccessLevels.CurrentRead;
+                state.Id.UserAccessLevel = AccessLevels.CurrentRead;
+                state.Id.ReferenceTypeId = ReferenceTypeIds.HasProperty;
+                state.Id.TypeDefinitionId = VariableTypeIds.PropertyType;
                 state.AddChild(state.Id);
             }
 
             return state;
+        }
+
+        private void CreateConditionAlarm(BaseDataVariableState variableState, AlarmConfig alarmConfig, string variablePath, BaseObjectState parent, List<NodeState>? batch = null)
+        {
+            var alarmNodeId = new NodeId(variablePath + ".Alarm", _namespaceIndex);
+
+            if (t_conditionAlarmTemplate == null)
+            {
+                t_conditionAlarmTemplate = new OffNormalAlarmState(null);
+                t_conditionAlarmTemplate.Create(SystemContext, NodeId.Null, QualifiedName.Null, LocalizedText.Null, false);
+            }
+
+            var alarm = (OffNormalAlarmState)t_conditionAlarmTemplate.Clone();
+
+            alarm.NodeId = alarmNodeId;
+            var prefix = variablePath + ".Alarm";
+            AssignAlarmChildNodeIds(alarm, prefix);
+
+            alarm.BrowseName = new QualifiedName(variableState.BrowseName.Name + "Alarm", _namespaceIndex);
+            alarm.DisplayName = new LocalizedText(variableState.DisplayName.Text + " Alarm");
+            alarm.TypeDefinitionId = ObjectTypeIds.OffNormalAlarmType;
+            alarm.ReferenceTypeId = ReferenceTypeIds.HasComponent;
+
+            if (alarm.BranchId == null)
+            {
+                alarm.BranchId = (PropertyState<NodeId>)Activator.CreateInstance(typeof(PropertyState<>).MakeGenericType(typeof(NodeId)), alarm)!;
+                alarm.BranchId.NodeId = new NodeId(variablePath + ".Alarm.BranchId", _namespaceIndex);
+                alarm.BranchId.BrowseName = new QualifiedName(BrowseNames.BranchId);
+                alarm.BranchId.DisplayName = new LocalizedText(BrowseNames.BranchId);
+                alarm.BranchId.DataType = DataTypeIds.NodeId;
+                alarm.BranchId.ValueRank = ValueRanks.Scalar;
+                alarm.BranchId.Value = NodeId.Null;
+                alarm.BranchId.AccessLevel = AccessLevels.CurrentRead;
+                alarm.BranchId.UserAccessLevel = AccessLevels.CurrentRead;
+                alarm.BranchId.ReferenceTypeId = ReferenceTypeIds.HasProperty;
+                alarm.BranchId.TypeDefinitionId = VariableTypeIds.PropertyType;
+                alarm.AddChild(alarm.BranchId);
+            }
+            else if (alarm.BranchId.Value.IsNull)
+            {
+                alarm.BranchId.Value = NodeId.Null;
+            }
+
+            alarm.SourceNode = EnsureConditionProperty(alarm, alarm.SourceNode, new QualifiedName(BrowseNames.SourceNode), DataTypeIds.NodeId, variablePath + ".Alarm.SourceNode");
+            alarm.SourceName = EnsureConditionProperty(alarm, alarm.SourceName, new QualifiedName(BrowseNames.SourceName), DataTypeIds.String, variablePath + ".Alarm.SourceName");
+            alarm.ConditionName = EnsureConditionProperty(alarm, alarm.ConditionName, new QualifiedName(BrowseNames.ConditionName), DataTypeIds.String, variablePath + ".Alarm.ConditionName");
+            alarm.EventId = EnsureConditionProperty(alarm, alarm.EventId, new QualifiedName(BrowseNames.EventId), DataTypeIds.ByteString, variablePath + ".Alarm.EventId");
+            alarm.EventType = EnsureConditionProperty(alarm, alarm.EventType, new QualifiedName(BrowseNames.EventType), DataTypeIds.NodeId, variablePath + ".Alarm.EventType");
+
+            alarm.SourceNode.Value = variableState.NodeId;
+            alarm.SourceName.Value = variablePath;
+            alarm.ConditionName.Value = alarmConfig.Message;
+
+            alarm.EnabledState = EnsureTwoStateVariable(alarm, alarm.EnabledState, new QualifiedName(BrowseNames.EnabledState), prefix + ".EnabledState", _namespaceIndex);
+            alarm.ActiveState = EnsureTwoStateVariable(alarm, alarm.ActiveState, new QualifiedName(BrowseNames.ActiveState), prefix + ".ActiveState", _namespaceIndex);
+
+            alarm.EnabledState.Value = new LocalizedText("en", "Enabled");
+            if (alarm.EnabledState.Id != null)
+                alarm.EnabledState.Id.Value = true;
+            if (alarm.EnabledState.TransitionTime != null)
+                alarm.EnabledState.TransitionTime.Value = DateTime.UtcNow;
+
+            alarm.ActiveState.Value = new LocalizedText("en", "Inactive");
+            if (alarm.ActiveState.Id != null)
+                alarm.ActiveState.Id.Value = false;
+            if (alarm.ActiveState.TransitionTime != null)
+                alarm.ActiveState.TransitionTime.Value = DateTime.UtcNow;
+
+            alarm.AckedState = EnsureTwoStateVariable(alarm, alarm.AckedState, new QualifiedName(BrowseNames.AckedState), prefix + ".AckedState", _namespaceIndex);
+            alarm.AckedState.Value = new LocalizedText("en", "Acknowledged");
+            alarm.AckedState.Id.Value = true;
+
+            alarm.ConfirmedState = EnsureTwoStateVariable(alarm, alarm.ConfirmedState, new QualifiedName(BrowseNames.ConfirmedState), prefix + ".ConfirmedState", _namespaceIndex);
+            alarm.ConfirmedState.Value = new LocalizedText("en", "Confirmed");
+            alarm.ConfirmedState.Id.Value = true;
+
+            if (alarm.SuppressedState != null)
+            {
+                alarm.SuppressedState.Value = new LocalizedText("en", "Unsuppressed");
+                if (alarm.SuppressedState.Id != null)
+                    alarm.SuppressedState.Id.Value = false;
+            }
+
+            alarm.Retain.Value = false;
+            alarm.AutoReportStateChanges = true;
+            alarm.Severity.Value = alarmConfig.ConditionSeverity;
+            alarm.Message.Value = new LocalizedText(alarmConfig.Message);
+            alarm.Time.Value = DateTime.UtcNow;
+            alarm.ReceiveTime = EnsureConditionProperty(alarm, alarm.ReceiveTime, new QualifiedName(BrowseNames.ReceiveTime), DataTypeIds.UtcTime, prefix + ".ReceiveTime");
+            alarm.ReceiveTime.Value = DateTime.UtcNow;
+            alarm.OnAcknowledge = OnAlarmAcknowledge;
+            alarm.OnConfirm = OnAlarmConfirm;
+
+            RegisterChildNode(SystemContext, alarm, parent, batch);
+            variableState.AddReference(ReferenceTypeIds.HasCondition, false, alarm.NodeId);
+            alarm.AddReference(ReferenceTypeIds.HasCondition, true, variableState.NodeId);
+
+            var info = new AlarmConditionInfo
+            {
+                AlarmState = alarm,
+                Config = alarmConfig,
+                SourceVariable = variableState,
+                VariablePath = variablePath,
+                IsActive = false
+            };
+            _alarmConditions[variablePath] = info;
+
+            variableState.StateChanged += (context, state, masks) =>
+            {
+                if ((masks & NodeStateChangeMasks.Value) != 0 && !_loading)
+                    EvaluateConditionAlarm(info);
+            };
         }
 
         private void CreateLimitAlarm(BaseDataVariableState variableState, AlarmConfig alarmConfig, string variablePath, BaseObjectState parent, List<NodeState>? batch = null)
@@ -2439,12 +2555,12 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             var alarmNodeId = new NodeId(variablePath + ".Alarm", _namespaceIndex);
 
             // Clone from a pre-built template to avoid the very expensive
-            // base64-decode → binary-deserialize → 7-recursive-walk path in Create().
+            // base64-decode Ã¢â€ â€™ binary-deserialize Ã¢â€ â€™ 7-recursive-walk path in Create().
             // The template is [ThreadStatic] so there is zero lock contention.
             if (t_limitAlarmTemplate == null)
             {
                 t_limitAlarmTemplate = new ExclusiveLimitAlarmState(null);
-                t_limitAlarmTemplate.Create(SystemContext, null, null, null, false);
+                t_limitAlarmTemplate.Create(SystemContext, NodeId.Null, QualifiedName.Null, LocalizedText.Null, false);
             }
 
             var alarm = (ExclusiveLimitAlarmState)t_limitAlarmTemplate.Clone();
@@ -2460,26 +2576,24 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             alarm.TypeDefinitionId = ObjectTypeIds.ExclusiveLimitAlarmType;
             alarm.ReferenceTypeId = ReferenceTypeIds.HasComponent;
 
-            // Ensure BranchId is initialized — required by ConditionState.IsBranch().
+            // Ensure BranchId is initialized Ã¢â‚¬â€ required by ConditionState.IsBranch().
             // Some SDK versions do not auto-create this property in Create().
             if (alarm.BranchId == null)
             {
-                alarm.BranchId = new PropertyState<NodeId>(alarm)
-                {
-                    NodeId = new NodeId(variablePath + ".Alarm.BranchId", _namespaceIndex),
-                    BrowseName = BrowseNames.BranchId,
-                    DisplayName = BrowseNames.BranchId,
-                    DataType = DataTypeIds.NodeId,
-                    ValueRank = ValueRanks.Scalar,
-                    Value = NodeId.Null,
-                    AccessLevel = AccessLevels.CurrentRead,
-                    UserAccessLevel = AccessLevels.CurrentRead,
-                    ReferenceTypeId = ReferenceTypeIds.HasProperty,
-                    TypeDefinitionId = VariableTypeIds.PropertyType
-                };
+                alarm.BranchId = (PropertyState<NodeId>)Activator.CreateInstance(typeof(PropertyState<>).MakeGenericType(typeof(NodeId)), alarm)!;
+                alarm.BranchId.NodeId = new NodeId(variablePath + ".Alarm.BranchId", _namespaceIndex);
+                alarm.BranchId.BrowseName = new QualifiedName(BrowseNames.BranchId.Name, BrowseNames.BranchId.NamespaceIndex);
+                alarm.BranchId.DisplayName = new LocalizedText(BrowseNames.BranchId.Name);
+                alarm.BranchId.DataType = DataTypeIds.NodeId;
+                alarm.BranchId.ValueRank = ValueRanks.Scalar;
+                alarm.BranchId.Value = NodeId.Null;
+                alarm.BranchId.AccessLevel = AccessLevels.CurrentRead;
+                alarm.BranchId.UserAccessLevel = AccessLevels.CurrentRead;
+                alarm.BranchId.ReferenceTypeId = ReferenceTypeIds.HasProperty;
+                alarm.BranchId.TypeDefinitionId = VariableTypeIds.PropertyType;
                 alarm.AddChild(alarm.BranchId);
             }
-            else if (alarm.BranchId.Value == null)
+            else if (alarm.BranchId.Value.IsNull)
             {
                 alarm.BranchId.Value = NodeId.Null;
             }
@@ -2498,7 +2612,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             alarm.ConditionName.Value = alarmConfig.Message;
 
             // Set limit values on the properties already created by Create().
-            // Do NOT replace the PropertyState objects — they have NodeIds wired up.
+            // Do NOT replace the PropertyState objects Ã¢â‚¬â€ they have NodeIds wired up.
             if (alarm.HighHighLimit != null)
                 alarm.HighHighLimit.Value = alarmConfig.HighHighLimit ?? alarmConfig.HighLimit;
             if (alarm.HighLimit != null)
@@ -2508,7 +2622,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             if (alarm.LowLowLimit != null)
                 alarm.LowLowLimit.Value = alarmConfig.LowLowLimit ?? alarmConfig.LowLimit;
 
-            // Initial state — set directly on the property values to avoid
+            // Initial state Ã¢â‚¬â€ set directly on the property values to avoid
             // the SetEnableState/SetActiveState call chain that can throw in some SDK versions.
             alarm.EnabledState = EnsureTwoStateVariable(alarm, alarm.EnabledState, BrowseNames.EnabledState, prefix + ".EnabledState", _namespaceIndex);
             alarm.ActiveState = EnsureTwoStateVariable(alarm, alarm.ActiveState, BrowseNames.ActiveState, prefix + ".ActiveState", _namespaceIndex);
@@ -2561,18 +2675,16 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             }
             if (alarm.LimitState.CurrentState.Id == null)
             {
-                alarm.LimitState.CurrentState.Id = new PropertyState<NodeId>(alarm.LimitState.CurrentState)
-                {
-                    NodeId = new NodeId(prefix + ".LimitState.CurrentState.Id", _namespaceIndex),
-                    BrowseName = BrowseNames.Id,
-                    DisplayName = BrowseNames.Id,
-                    DataType = DataTypeIds.NodeId,
-                    ValueRank = ValueRanks.Scalar,
-                    AccessLevel = AccessLevels.CurrentRead,
-                    UserAccessLevel = AccessLevels.CurrentRead,
-                    ReferenceTypeId = ReferenceTypeIds.HasProperty,
-                    TypeDefinitionId = VariableTypeIds.PropertyType
-                };
+                alarm.LimitState.CurrentState.Id = (PropertyState<NodeId>)Activator.CreateInstance(typeof(PropertyState<>).MakeGenericType(typeof(NodeId)), alarm.LimitState.CurrentState)!;
+                alarm.LimitState.CurrentState.Id.NodeId = new NodeId(prefix + ".LimitState.CurrentState.Id", _namespaceIndex);
+                alarm.LimitState.CurrentState.Id.BrowseName = new QualifiedName(BrowseNames.Id.Name, BrowseNames.Id.NamespaceIndex);
+                alarm.LimitState.CurrentState.Id.DisplayName = new LocalizedText(BrowseNames.Id.Name);
+                alarm.LimitState.CurrentState.Id.DataType = DataTypeIds.NodeId;
+                alarm.LimitState.CurrentState.Id.ValueRank = ValueRanks.Scalar;
+                alarm.LimitState.CurrentState.Id.AccessLevel = AccessLevels.CurrentRead;
+                alarm.LimitState.CurrentState.Id.UserAccessLevel = AccessLevels.CurrentRead;
+                alarm.LimitState.CurrentState.Id.ReferenceTypeId = ReferenceTypeIds.HasProperty;
+                alarm.LimitState.CurrentState.Id.TypeDefinitionId = VariableTypeIds.PropertyType;
                 alarm.LimitState.CurrentState.AddChild(alarm.LimitState.CurrentState.Id);
             }
 
@@ -2636,131 +2748,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                     EvaluateAlarmCondition(info);
             };
 
-            // Initial evaluation is deferred — performed in bulk after all nodes are created.
-        }
-
-        private void CreateConditionAlarm(BaseDataVariableState variableState, AlarmConfig alarmConfig, string variablePath, BaseObjectState parent, List<NodeState>? batch = null)
-        {
-            var alarmNodeId = new NodeId(variablePath + ".Alarm", _namespaceIndex);
-
-            // Clone from a pre-built template (same pattern as CreateLimitAlarm).
-            if (t_conditionAlarmTemplate == null)
-            {
-                t_conditionAlarmTemplate = new OffNormalAlarmState(null);
-                t_conditionAlarmTemplate.Create(SystemContext, null, null, null, false);
-            }
-
-            var alarm = (OffNormalAlarmState)t_conditionAlarmTemplate.Clone();
-
-            alarm.NodeId = alarmNodeId;
-            var prefix = variablePath + ".Alarm";
-            AssignAlarmChildNodeIds(alarm, prefix);
-
-            alarm.BrowseName = new QualifiedName(variableState.BrowseName.Name + "Alarm", _namespaceIndex);
-            alarm.DisplayName = new LocalizedText(variableState.DisplayName.Text + " Alarm");
-            alarm.TypeDefinitionId = ObjectTypeIds.OffNormalAlarmType;
-            alarm.ReferenceTypeId = ReferenceTypeIds.HasComponent;
-
-            // Ensure BranchId is initialized — required by ConditionState.IsBranch()
-            if (alarm.BranchId == null)
-            {
-                alarm.BranchId = new PropertyState<NodeId>(alarm)
-                {
-                    NodeId = new NodeId(variablePath + ".Alarm.BranchId", _namespaceIndex),
-                    BrowseName = BrowseNames.BranchId,
-                    DisplayName = BrowseNames.BranchId,
-                    DataType = DataTypeIds.NodeId,
-                    ValueRank = ValueRanks.Scalar,
-                    Value = NodeId.Null,
-                    AccessLevel = AccessLevels.CurrentRead,
-                    UserAccessLevel = AccessLevels.CurrentRead,
-                    ReferenceTypeId = ReferenceTypeIds.HasProperty,
-                    TypeDefinitionId = VariableTypeIds.PropertyType
-                };
-                alarm.AddChild(alarm.BranchId);
-            }
-            else if (alarm.BranchId.Value == null)
-            {
-                alarm.BranchId.Value = NodeId.Null;
-            }
-
-            alarm.SourceNode = EnsureConditionProperty(alarm, alarm.SourceNode, BrowseNames.SourceNode, DataTypeIds.NodeId, variablePath + ".Alarm.SourceNode");
-            alarm.SourceName = EnsureConditionProperty(alarm, alarm.SourceName, BrowseNames.SourceName, DataTypeIds.String, variablePath + ".Alarm.SourceName");
-            alarm.ConditionName = EnsureConditionProperty(alarm, alarm.ConditionName, BrowseNames.ConditionName, DataTypeIds.String, variablePath + ".Alarm.ConditionName");
-            alarm.EventId = EnsureConditionProperty(alarm, alarm.EventId, BrowseNames.EventId, DataTypeIds.ByteString, variablePath + ".Alarm.EventId");
-            alarm.EventType = EnsureConditionProperty(alarm, alarm.EventType, BrowseNames.EventType, DataTypeIds.NodeId, variablePath + ".Alarm.EventType");
-
-            alarm.SourceNode.Value = variableState.NodeId;
-            alarm.SourceName.Value = variablePath;
-            alarm.ConditionName.Value = alarmConfig.Message;
-
-            // Initial state — set directly on property values to avoid SDK internal NRE
-            alarm.EnabledState = EnsureTwoStateVariable(alarm, alarm.EnabledState, BrowseNames.EnabledState, prefix + ".EnabledState", _namespaceIndex);
-            alarm.ActiveState = EnsureTwoStateVariable(alarm, alarm.ActiveState, BrowseNames.ActiveState, prefix + ".ActiveState", _namespaceIndex);
-
-            alarm.EnabledState.Value = new LocalizedText("en", "Enabled");
-            if (alarm.EnabledState.Id != null)
-                alarm.EnabledState.Id.Value = true;
-            if (alarm.EnabledState.TransitionTime != null)
-                alarm.EnabledState.TransitionTime.Value = DateTime.UtcNow;
-
-            alarm.ActiveState.Value = new LocalizedText("en", "Inactive");
-            if (alarm.ActiveState.Id != null)
-                alarm.ActiveState.Id.Value = false;
-            if (alarm.ActiveState.TransitionTime != null)
-                alarm.ActiveState.TransitionTime.Value = DateTime.UtcNow;
-
-            // Use EnsureTwoStateVariable so the Id child (dereferenced unconditionally by
-            // the SDK's SetAcknowledgedState/SetConfirmedState logic) is always present.
-            alarm.AckedState = EnsureTwoStateVariable(alarm, alarm.AckedState, BrowseNames.AckedState, prefix + ".AckedState", _namespaceIndex);
-            alarm.AckedState.Value = new LocalizedText("en", "Acknowledged");
-            alarm.AckedState.Id.Value = true;
-
-            alarm.ConfirmedState = EnsureTwoStateVariable(alarm, alarm.ConfirmedState, BrowseNames.ConfirmedState, prefix + ".ConfirmedState", _namespaceIndex);
-            alarm.ConfirmedState.Value = new LocalizedText("en", "Confirmed");
-            alarm.ConfirmedState.Id.Value = true;
-
-            if (alarm.SuppressedState != null)
-            {
-                alarm.SuppressedState.Value = new LocalizedText("en", "Unsuppressed");
-                if (alarm.SuppressedState.Id != null)
-                    alarm.SuppressedState.Id.Value = false;
-            }
-
-            alarm.Retain.Value = false;
-            alarm.AutoReportStateChanges = true;
-
-            alarm.Severity.Value = alarmConfig.ConditionSeverity;
-            alarm.Message.Value = new LocalizedText(alarmConfig.Message);
-            alarm.Time.Value = DateTime.UtcNow;
-            alarm.ReceiveTime = EnsureConditionProperty(alarm, alarm.ReceiveTime, BrowseNames.ReceiveTime, DataTypeIds.UtcTime, prefix + ".ReceiveTime");
-            alarm.ReceiveTime.Value = DateTime.UtcNow;
-
-            alarm.OnAcknowledge = OnAlarmAcknowledge;
-            alarm.OnConfirm = OnAlarmConfirm;
-
-            RegisterChildNode(SystemContext, alarm, parent, batch);
-
-            variableState.AddReference(ReferenceTypeIds.HasCondition, false, alarm.NodeId);
-            alarm.AddReference(ReferenceTypeIds.HasCondition, true, variableState.NodeId);
-
-            var info = new AlarmConditionInfo
-            {
-                AlarmState = alarm,
-                Config = alarmConfig,
-                SourceVariable = variableState,
-                VariablePath = variablePath,
-                IsActive = false
-            };
-            _alarmConditions[variablePath] = info;
-
-            variableState.StateChanged += (context, state, masks) =>
-            {
-                if ((masks & NodeStateChangeMasks.Value) != 0 && !_loading)
-                    EvaluateAlarmCondition(info);
-            };
-
-            // Initial evaluation is deferred — performed in bulk after all nodes are created.
+            // Initial evaluation is deferred Ã¢â‚¬â€ performed in bulk after all nodes are created.
         }
 
         private void EvaluateAlarmCondition(AlarmConditionInfo info)
@@ -2808,8 +2796,8 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 string limitText = result.LimitText;
 
                 string message = string.IsNullOrEmpty(cfg.Message)
-                    ? $"{info.VariablePath}: {limitText} — value={val:G6}"
-                    : $"{cfg.Message} — {limitText} — value={val:G6}";
+                    ? $"{info.VariablePath}: {limitText} Ã¢â‚¬â€ value={val:G6}"
+                    : $"{cfg.Message} Ã¢â‚¬â€ {limitText} Ã¢â‚¬â€ value={val:G6}";
 
                 alarm.SetActiveState(SystemContext, true);
                 alarm.SetAcknowledgedState(SystemContext, false);
@@ -2844,7 +2832,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 alarm.SetActiveState(SystemContext, false);
 
                 alarm.Severity.Value = 1;
-                alarm.Message.Value = new LocalizedText($"{info.VariablePath}: Returned to normal — value={val:G6}");
+                alarm.Message.Value = new LocalizedText($"{info.VariablePath}: Returned to normal Ã¢â‚¬â€ value={val:G6}");
                 alarm.Time.Value = DateTime.UtcNow;
                 alarm.ReceiveTime.Value = DateTime.UtcNow;
 
@@ -2855,7 +2843,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 alarm.EventType.Value = ObjectTypeIds.ExclusiveLimitAlarmType;
 
                 ReportAlarmEvent(alarm);
-                _eventLogger?.LogAlarm("Info", info.VariablePath, $"Returned to normal — value={val:G6}");
+                _eventLogger?.LogAlarm("Info", info.VariablePath, $"Returned to normal Ã¢â‚¬â€ value={val:G6}");
             }
         }
 
@@ -2885,8 +2873,8 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 string valueStr = value?.ToString() ?? "null";
                 string conditionText = $"{cfg.Operator} {cfg.CompareValue}".Trim();
                 string message = string.IsNullOrEmpty(cfg.Message)
-                    ? $"{info.VariablePath}: Condition met ({conditionText}) — value={valueStr}"
-                    : $"{cfg.Message} — Condition ({conditionText}) — value={valueStr}";
+                    ? $"{info.VariablePath}: Condition met ({conditionText}) Ã¢â‚¬â€ value={valueStr}"
+                    : $"{cfg.Message} Ã¢â‚¬â€ Condition ({conditionText}) Ã¢â‚¬â€ value={valueStr}";
 
                 alarm.SetActiveState(SystemContext, true);
                 alarm.SetAcknowledgedState(SystemContext, false);
@@ -2918,7 +2906,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 alarm.SetActiveState(SystemContext, false);
 
                 alarm.Severity.Value = 1;
-                alarm.Message.Value = new LocalizedText($"{info.VariablePath}: Condition cleared — value={valueStr}");
+                alarm.Message.Value = new LocalizedText($"{info.VariablePath}: Condition cleared Ã¢â‚¬â€ value={valueStr}");
                 alarm.Time.Value = DateTime.UtcNow;
                 alarm.ReceiveTime.Value = DateTime.UtcNow;
 
@@ -2929,7 +2917,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 alarm.EventType.Value = ObjectTypeIds.OffNormalAlarmType;
 
                 ReportAlarmEvent(alarm);
-                _eventLogger?.LogAlarm("Info", info.VariablePath, $"Condition cleared — value={valueStr}");
+                _eventLogger?.LogAlarm("Info", info.VariablePath, $"Condition cleared Ã¢â‚¬â€ value={valueStr}");
             }
         }
 
@@ -2941,7 +2929,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 e.Initialize(SystemContext, alarm);
                 // Ensure ConditionType.NodeId is included in the event so clients
                 // can identify which condition instance raised the event.
-                e.SetChildValue(BrowseNames.NodeId, NodeClass.Variable, alarm.NodeId);
+                e.SetChildValue(new QualifiedName(BrowseNames.NodeId), NodeClass.Variable, alarm.NodeId);
                 alarm.ReportEvent(SystemContext, e);
 
                 // Also report on the Server object so subscribers to Server events see it
@@ -2956,7 +2944,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
         private ServiceResult OnAlarmAcknowledge(
             ISystemContext context,
             ConditionState condition,
-            byte[] eventId,
+            ByteString eventId,
             LocalizedText comment)
         {
             if (condition is AcknowledgeableConditionState ackCondition)
@@ -2975,16 +2963,17 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                     ackCondition.Retain.Value = false;
 
                 // Report the state change
-                ackCondition.EventId.Value = Guid.NewGuid().ToByteArray();
+                ackCondition.EventId.Value = (ByteString)Guid.NewGuid().ToByteArray();
                 if (ackCondition is AlarmConditionState alarmState)
                     ReportAlarmEvent(alarmState);
 
-                _eventLogger?.LogAlarm("Info", ackCondition.ConditionName.Value ?? "Alarm",
+                _eventLogger?.LogAlarm("Info", ackCondition.ConditionName.Value,
                     $"Alarm acknowledged: {ackCondition.ConditionName.Value}",
-                    comment?.Text);
+                    comment.Text);
 
-                var ackPath = _alarmConditions.FirstOrDefault(kv => kv.Value.AlarmState == ackCondition as AlarmConditionState).Key
-                    ?? ackCondition.ConditionName.Value ?? "Alarm";
+                var ackPath = _alarmConditions.FirstOrDefault(kv => kv.Value.AlarmState == ackCondition as AlarmConditionState).Key;
+                if (string.IsNullOrEmpty(ackPath))
+                    ackPath = ackCondition.ConditionName.Value;
                 RecordAlarmAnalyticsEvent(AlarmAnalyticsEventKind.Acknowledged, ackPath, $"Acknowledged: {ackCondition.ConditionName.Value}");
             }
 
@@ -2994,7 +2983,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
         private ServiceResult OnAlarmConfirm(
             ISystemContext context,
             ConditionState condition,
-            byte[] eventId,
+            ByteString eventId,
             LocalizedText comment)
         {
             if (condition is AcknowledgeableConditionState ackCondition)
@@ -3012,13 +3001,13 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 if (!isActive && isAcked)
                     ackCondition.Retain.Value = false;
 
-                ackCondition.EventId.Value = Guid.NewGuid().ToByteArray();
+                ackCondition.EventId.Value = (ByteString)Guid.NewGuid().ToByteArray();
                 if (ackCondition is AlarmConditionState alarmState)
                     ReportAlarmEvent(alarmState);
 
-                _eventLogger?.LogAlarm("Info", ackCondition.ConditionName.Value ?? "Alarm",
+                _eventLogger?.LogAlarm("Info", ackCondition.ConditionName.Value,
                     $"Alarm confirmed: {ackCondition.ConditionName.Value}",
-                    comment?.Text);
+                    comment.Text);
             }
 
             return ServiceResult.Good;
@@ -3039,7 +3028,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                     {
                         var e = new InstanceStateSnapshot();
                         e.Initialize(SystemContext, info.AlarmState);
-                        e.SetChildValue(BrowseNames.NodeId, NodeClass.Variable, info.AlarmState.NodeId);
+                        e.SetChildValue(new QualifiedName(BrowseNames.NodeId), NodeClass.Variable, info.AlarmState.NodeId);
                         item.QueueEvent(e);
                     }
                 }
@@ -3051,7 +3040,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
         {
             if (SharedModels.LicenseManager.CheckDemoExpiry())
             {
-                Log.Warning("Demo period expired — degrading to Trial mode with limited features.");
+                Log.Warning("Demo period expired Ã¢â‚¬â€ degrading to Trial mode with limited features.");
                 _eventLogger?.LogSystem("Warning", "License",
                     "Demo period expired. Running in Trial mode. Add a license file to restore full functionality.");
 
@@ -3065,7 +3054,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                     }
                 }
 
-                // Stop checking — degradation is permanent until restart with a license file
+                // Stop checking Ã¢â‚¬â€ degradation is permanent until restart with a license file
                 _demoCheckTimer?.Dispose();
                 _demoCheckTimer = null;
             }
@@ -3172,7 +3161,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             if (!lic.AllowDataLogging && model.Database != null)
             {
                 Serilog.Log.Warning("License limit: Data logging not allowed in {Tier} tier. Database disabled.", lic.Tier);
-                _eventLogger?.LogSystem("Warning", "License", $"Data logging not allowed in {lic.Tier} tier — disabled");
+                _eventLogger?.LogSystem("Warning", "License", $"Data logging not allowed in {lic.Tier} tier Ã¢â‚¬â€ disabled");
                 model.Database = null;
             }
         }
@@ -3246,8 +3235,8 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                             continue;
                         }
 
-                        DateTime startTime = readRaw.StartTime;
-                        DateTime endTime = readRaw.EndTime;
+                        DateTime startTime = (DateTime)readRaw.StartTime;
+                        DateTime endTime = (DateTime)readRaw.EndTime;
 
                         if (startTime == DateTime.MinValue) startTime = DateTime.UtcNow.AddYears(-1);
                         if (endTime == DateTime.MinValue) endTime = DateTime.UtcNow;
@@ -3259,7 +3248,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                             values = values.GetRange(0, (int)readRaw.NumValuesPerNode);
                         }
 
-                        result.HistoryData = new ExtensionObject(new HistoryData { DataValues = new DataValueCollection(values) });
+                        result.HistoryData = new ExtensionObject(new HistoryData { DataValues = values });
                         result.StatusCode = StatusCodes.Good;
                     }
                     catch (Exception ex)
@@ -3312,7 +3301,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                                     // Redundancy: enqueue for replication to standby
                                     if (_manager._redundancy is { IsActive: true })
                                     {
-                                        var val = varState.Value;
+                                        var val = varState.Value.AsBoxedObject();
                                         double? numVal = val switch
                                         {
                                             double d => d, float f => f, int i => i, long l => l,
@@ -3321,7 +3310,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                                         };
                                         _manager._redundancy.EnqueueLogReplication(
                                             varState.NodeId.ToString(),
-                                            varState.Timestamp,
+                                            (DateTime)varState.Timestamp,
                                             numVal,
                                             numVal == null ? val?.ToString() : null,
                                             varState.StatusCode.Code);
@@ -3340,11 +3329,14 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             internal ServiceResult InvokeWrite(ISystemContext context, NodeState node, ref object value)
             {
                 StatusCode sc = StatusCodes.Good;
-                var ts = DateTime.UtcNow;
-                return HandleWriteValue(context, node, NumericRange.Empty, null!, ref value, ref sc, ref ts);
+                DateTimeUtc ts = DateTime.UtcNow;
+                var variantValue = new Variant(value);
+                var result = HandleWriteValue(context, node, NumericRange.Null, default, ref variantValue, ref sc, ref ts);
+                value = variantValue.Value;
+                return result;
             }
 
-            private ServiceResult HandleWriteValue(ISystemContext context, NodeState node, NumericRange indexRange, QualifiedName dataEncoding, ref object value, ref StatusCode statusCode, ref DateTime timestamp)
+            private ServiceResult HandleWriteValue(ISystemContext context, NodeState node, NumericRange indexRange, QualifiedName dataEncoding, ref Variant value, ref StatusCode statusCode, ref DateTimeUtc timestamp)
             {
                 // Enforce access.
                 var access = (byte)(AccessLevel | UserAccessLevel);
@@ -3355,7 +3347,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
 
                 try
                 {
-                    object? incoming = value;
+                    object? incoming = value.Value;
                     if (incoming is DataValue dv)
                     {
                         incoming = dv.Value;
@@ -3386,22 +3378,22 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                     // used by protocol drivers (MQTT/Modbus/etc.) when OPC UA clients write the variable.
                     if (OnSimpleWriteValue != null)
                     {
-                        var simpleWriteValue = incoming;
+                        var simpleWriteValue = new Variant(incoming);
                         var simpleResult = OnSimpleWriteValue(context, node, ref simpleWriteValue);
                         if (simpleResult != null && !StatusCode.IsGood(simpleResult.StatusCode))
                         {
                             statusCode = simpleResult.StatusCode;
                             return simpleResult;
                         }
-                        incoming = simpleWriteValue;
+                        incoming = simpleWriteValue.Value;
                     }
 
-                    Value = incoming;
+                    Value = new Variant(incoming);
                     StatusCode = StatusCodes.Good;
                     Timestamp = DateTime.UtcNow;
                     ClearChangeMasks(context, false);
 
-                    value = incoming!;
+                    value = new Variant(incoming);
                     return ServiceResult.Good;
                 }
                 catch (Exception ex)
@@ -3412,7 +3404,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             }
         }
 
-        // ─── Retentive variable persistence ─────────────────────────
+        // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Retentive variable persistence Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
         private void LoadRetentiveValues()
         {
             try
@@ -3458,13 +3450,13 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             }
         }
 
-        // ─── Variable statistics tracker
+        // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Variable statistics tracker
         private class VariableStatisticsTracker
         {
-            private readonly BaseDataVariableState<double> _min;
-            private readonly BaseDataVariableState<double> _max;
-            private readonly BaseDataVariableState<double> _avg;
-            private readonly BaseDataVariableState<long> _count;
+            private readonly BaseDataVariableState _min;
+            private readonly BaseDataVariableState _max;
+            private readonly BaseDataVariableState _avg;
+            private readonly BaseDataVariableState _count;
             private readonly ServerVariableState _reset;
             private readonly ISystemContext _context;
 
@@ -3475,10 +3467,10 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             private readonly object _lock = new();
 
             public VariableStatisticsTracker(
-                BaseDataVariableState<double> min,
-                BaseDataVariableState<double> max,
-                BaseDataVariableState<double> avg,
-                BaseDataVariableState<long> count,
+                BaseDataVariableState min,
+                BaseDataVariableState max,
+                BaseDataVariableState avg,
+                BaseDataVariableState count,
                 ServerVariableState reset,
                 ISystemContext context)
             {
@@ -3494,14 +3486,14 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 {
                     if ((masks & NodeStateChangeMasks.Value) != 0 && state is BaseDataVariableState vs)
                     {
-                        var rv = vs.Value;
-                        bool isReset = rv is true;
+                        var rv = vs.Value.AsBoxedObject();
+                        bool isReset = rv is bool b && b;
                         if (!isReset && rv is string sv)
                             isReset = sv.Equals("true", StringComparison.OrdinalIgnoreCase);
                         if (isReset)
                         {
                             Reset();
-                            vs.Value = false;
+                            vs.Value = new Variant(false);
                             vs.ClearChangeMasks(ctx, false);
                         }
                     }
@@ -3543,10 +3535,10 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                     _maxVal = double.MinValue;
                     _sampleCount = 0;
 
-                    _min.Value = 0.0;
-                    _max.Value = 0.0;
-                    _avg.Value = 0.0;
-                    _count.Value = 0L;
+                    _min.Value = new Variant(0.0);
+                    _max.Value = new Variant(0.0);
+                    _avg.Value = new Variant(0.0);
+                    _count.Value = new Variant(0L);
 
                     _min.Timestamp = DateTime.UtcNow;
                     _max.Timestamp = DateTime.UtcNow;
@@ -3561,7 +3553,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             }
         }
 
-        // ─── REST API Helper Methods ───────────────────────────────────────
+        // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ REST API Helper Methods Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
         /// <summary>
         /// Get all active alarms for REST API exposure.
