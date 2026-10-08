@@ -148,7 +148,7 @@ namespace SimpleOpcFileServer
 
         public override void Write(
             OperationContext context,
-            IList<WriteValue> nodesToWrite,
+            ArrayOf<WriteValue> nodesToWrite,
             IList<ServiceResult> errors)
         {
             if (nodesToWrite == null) throw new ArgumentNullException(nameof(nodesToWrite));
@@ -3208,7 +3208,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             HistoryReadDetails details,
             TimestampsToReturn timestampsToReturn,
             bool releaseContinuationPoints,
-            IList<HistoryReadValueId> nodesToRead,
+            ArrayOf<HistoryReadValueId> nodesToRead,
             IList<HistoryReadResult> results,
             IList<ServiceResult> errors)
         {
