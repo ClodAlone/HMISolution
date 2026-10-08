@@ -143,7 +143,7 @@ public sealed class SparkplugPublisher : IDisposable
                 foreach (var (path, variable) in _variables)
                 {
                     if (!ShouldPublish(path)) continue;
-                    variable.OnStateChanged += (ctx, state, masks) =>
+                    variable.StateChanged += (ctx, state, masks) =>
                     {
                         if ((masks & NodeStateChangeMasks.Value) != 0)
                         {

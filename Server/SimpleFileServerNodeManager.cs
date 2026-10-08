@@ -186,8 +186,6 @@ namespace SimpleOpcFileServer
                         // Mark as processed so MasterNodeManager knows we handled it.
                         wv.Processed = true;
                         object? v = wv.Value?.Value ?? (object?)wv.Value;
-                        Log.Verbose("WRITE-OVERRIDE: nodeId={NodeId} value={Value} (type={Type})",
-                            wv.NodeId, v, v?.GetType().Name ?? "null");
                         errors[i] = serverVar.InvokeWrite(SystemContext, variable, ref v!) ?? ServiceResult.Good;
                         continue;
                     }
@@ -1799,8 +1797,13 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             _variables[currentPath] = variableState;
 
             // Notify scripts when the variable value changes (from drivers, OPC writes, etc.)
+            // IMPORTANT: use the StateChanged *event* (supports multiple subscribers), not the
+            // OnStateChanged field — the OPC UA SDK's MonitoredNode2 assigns OnStateChanged
+            // directly (node.OnStateChanged = ...) the first time a client subscribes/monitors
+            // this node, which would silently overwrite (not add to) any handlers wired via
+            // OnStateChanged +=, breaking alarm evaluation, statistics and retentive persistence.
             var varPath = currentPath;
-            variableState.OnStateChanged += (context, state, masks) =>
+            variableState.StateChanged += (context, state, masks) =>
             {
                 if ((masks & NodeStateChangeMasks.Value) != 0)
                     _scriptManager?.NotifyVariableChanged(varPath, null, variableState.Value, DateTime.UtcNow);
@@ -1922,7 +1925,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
 
                 // Track value changes for statistics
                 var statsVarPath = currentPath;
-                variableState.OnStateChanged += (ctx, state, masks) =>
+                variableState.StateChanged += (ctx, state, masks) =>
                 {
                     if ((masks & NodeStateChangeMasks.Value) != 0 && _statsTrackers.TryGetValue(statsVarPath, out var t))
                     {
@@ -1940,7 +1943,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             if (variable.Retentive)
             {
                 var retPath = currentPath;
-                variableState.OnStateChanged += (ctx, state, masks) =>
+                variableState.StateChanged += (ctx, state, masks) =>
                 {
                     if ((masks & NodeStateChangeMasks.Value) != 0 && state is BaseDataVariableState vs)
                     {
@@ -1989,7 +1992,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
 
             // Notify scripts when the variable value changes (from drivers, OPC writes, etc.)
             var varPath = currentPath;
-            variableState.OnStateChanged += (context, state, masks) =>
+            variableState.StateChanged += (context, state, masks) =>
             {
                 if ((masks & NodeStateChangeMasks.Value) != 0)
                     _scriptManager?.NotifyVariableChanged(varPath, null, variableState.Value, DateTime.UtcNow);
@@ -2626,8 +2629,8 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             };
             _alarmConditions[variablePath] = info;
 
-            // Monitor value changes to activate/deactivate the alarm
-            variableState.OnStateChanged += (context, state, masks) =>
+            // Monitor value changes to activate/deactivate the alarm.
+            variableState.StateChanged += (context, state, masks) =>
             {
                 if ((masks & NodeStateChangeMasks.Value) != 0 && !_loading)
                     EvaluateAlarmCondition(info);
@@ -2751,7 +2754,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             };
             _alarmConditions[variablePath] = info;
 
-            variableState.OnStateChanged += (context, state, masks) =>
+            variableState.StateChanged += (context, state, masks) =>
             {
                 if ((masks & NodeStateChangeMasks.Value) != 0 && !_loading)
                     EvaluateAlarmCondition(info);
@@ -3296,7 +3299,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 
                 if (_logger != null && _config != null && _config.Enabled)
                 {
-                    this.OnStateChanged += (context, state, masks) =>
+                    this.StateChanged += (context, state, masks) =>
                     {
                         if ((masks & NodeStateChangeMasks.Value) != 0 && !_manager._loading)
                         {
@@ -3393,8 +3396,6 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                         incoming = simpleWriteValue;
                     }
 
-                    Log.Verbose("WRITE-HANDLER: nodeId={NodeId} incoming={Incoming} (type={Type}) DataType={DataType}",
-                        NodeId, incoming, incoming?.GetType().Name ?? "null", DataType);
                     Value = incoming;
                     StatusCode = StatusCodes.Good;
                     Timestamp = DateTime.UtcNow;
@@ -3403,8 +3404,9 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                     value = incoming!;
                     return ServiceResult.Good;
                 }
-                catch (Exception)
+                catch (Exception ex)
                 {
+                    Log.Error(ex, "Error writing value for {NodeId}", NodeId);
                     return StatusCodes.BadTypeMismatch;
                 }
             }
@@ -3487,8 +3489,8 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 _reset = reset;
                 _context = context;
 
-                // Handle reset writes via OnStateChanged
-                _reset.OnStateChanged += (ctx, state, masks) =>
+                // Handle reset writes via StateChanged
+                _reset.StateChanged += (ctx, state, masks) =>
                 {
                     if ((masks & NodeStateChangeMasks.Value) != 0 && state is BaseDataVariableState vs)
                     {

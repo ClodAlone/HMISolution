@@ -65,6 +65,7 @@
                         <th style="width: 50px;">Severity</th>
                         <th>Source</th>
                         <th>Message</th>
+                        <th style="width: 55px;">State</th>
                         <th style="width: 130px;">Time</th>
                         <th style="width: 40px;">Ack</th>
                         <th style="width: 40px;">Cfm</th>
@@ -77,13 +78,23 @@
                         var a = alarm;
                         var severityClass = GetSeverityClass(a.Severity);
                         var shelvedClass = a.IsShelved ? "alarm-shelved" : "";
-                        <tr class="@severityClass @shelvedClass @(a.IsSelected ? "alarm-selected" : "") @(!a.IsAcked ? "alarm-unacked" : "")" @onclick="() => ToggleSelection(a)">
+                        <tr class="@severityClass @shelvedClass @(a.IsSelected ? "alarm-selected" : "") @(!a.IsAcked ? "alarm-unacked" : "") @(!a.IsActive ? "alarm-inactive" : "")" @onclick="() => ToggleSelection(a)">
                             <td @onclick:stopPropagation>
                                 <input type="checkbox" checked="@a.IsSelected" @onchange="() => ToggleSelection(a)" />
                             </td>
                             <td><span class="alarm-sev @severityClass">@a.Severity</span></td>
                             <td class="alarm-source">@a.SourceName</td>
                             <td>@a.Message</td>
+                            <td>
+                                @if (a.IsActive)
+                                {
+                                    <span class="alarm-state-active" title="Condition is currently active">🔴 Active</span>
+                                }
+                                else
+                                {
+                                    <span class="alarm-state-inactive" title="Condition has returned to normal">⚪ Normal</span>
+                                }
+                            </td>
                             <td class="alarm-time">@a.Time.ToString("yyyy-MM-dd HH:mm:ss")</td>
                             <td>@(a.IsAcked ? "✔" : "—")</td>
                             <td>@(a.IsConfirmed ? "✔" : "—")</td>
@@ -118,6 +129,16 @@
     }
     .alarm-shelved td {
         font-style: italic;
+    }
+    .alarm-state-active {
+        color: #ff5252;
+        font-weight: bold;
+    }
+    .alarm-state-inactive {
+        color: #888;
+    }
+    .alarm-inactive {
+        opacity: 0.75;
     }
 </style>
 

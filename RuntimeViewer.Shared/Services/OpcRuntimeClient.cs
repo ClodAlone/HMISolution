@@ -20,6 +20,7 @@ public class AlarmEntry
     public DateTime Time { get; set; }
     public bool IsAcked { get; set; }
     public bool IsConfirmed { get; set; }
+    public bool IsActive { get; set; } = true;
     public bool IsShelved { get; set; }
     public bool AllowShelving { get; set; }
     public DateTime? ShelvedUntil { get; set; }
@@ -836,6 +837,11 @@ public class OpcRuntimeClient : IDisposable
             filter.SelectClauses.Add(new SimpleAttributeOperand(
                 ObjectTypeIds.AlarmConditionType,
                 new QualifiedName[] { BrowseNames.SuppressedState, BrowseNames.Id }));
+
+            // [10] ActiveState/Id (whether the alarm condition is currently active/in-alarm, vs. returned to normal and awaiting ack)
+            filter.SelectClauses.Add(new SimpleAttributeOperand(
+                ObjectTypeIds.AlarmConditionType,
+                new QualifiedName[] { BrowseNames.ActiveState, BrowseNames.Id }));
             var sub = new Subscription(_session.DefaultSubscription)
 
             {
@@ -890,6 +896,8 @@ public class OpcRuntimeClient : IDisposable
                 var isConfirmed = evt.EventFields.Count > 8 && evt.EventFields[8].Value is true;
 
                 var isShelved = evt.EventFields.Count > 9 && evt.EventFields[9].Value is true;
+                // ActiveState may be absent for non-alarm conditions; default to true (active) when not reported
+                var isActive = evt.EventFields.Count <= 10 || evt.EventFields[10].Value is null || evt.EventFields[10].Value is true;
 
                 result.Add(new AlarmEntry
                 {
@@ -902,6 +910,7 @@ public class OpcRuntimeClient : IDisposable
                     Time = time,
                     IsAcked = isAcked,
                     IsConfirmed = isConfirmed,
+                    IsActive = isActive,
                     IsShelved = isShelved
                 });
 
