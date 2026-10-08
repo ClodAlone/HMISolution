@@ -783,7 +783,7 @@ public class OpcRuntimeClient : IDisposable
                 bool isRetained = retain is bool b ? b : false;
                 if (!isRetained) continue;
 
-                var eventId = evt.EventFields[0].Value as byte[];
+                var eventId = evt.EventFields[0].Value is ByteString bs0 && !bs0.IsNull ? bs0.Memory.ToArray() : evt.EventFields[0].Value as byte[];
                 var conditionId = evt.EventFields[3].Value is NodeId cid ? cid : NodeId.Null;
 
                 if (conditionId != NodeId.Null && eventId != null)
@@ -886,7 +886,7 @@ public class OpcRuntimeClient : IDisposable
                 var retain = evt.EventFields[1].Value;
                 if (retain is not true) continue;
 
-                var eventId = evt.EventFields[0].Value as byte[];
+                var eventId = evt.EventFields[0].Value is ByteString bs && !bs.IsNull ? bs.Memory.ToArray() : evt.EventFields[0].Value as byte[];
                 var conditionId = evt.EventFields[3].Value is NodeId cid ? cid : NodeId.Null;
                 if (eventId == null) continue;
 
