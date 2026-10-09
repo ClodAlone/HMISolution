@@ -61,67 +61,6 @@
                     <button class="btn btn-sm btn-outline-secondary" @onclick="PasteSymbols" title="Paste (Ctrl+V)">📌 Paste</button>
                 }
 
-                <span class="mx-1">|</span>
-
-                <label class="form-label mb-0 small">W:</label>
-                <input type="number" class="form-control form-control-sm" style="width: 60px;" @bind="screen.Width" @bind:after="OnChanged" />
-                <label class="form-label mb-0 small">H:</label>
-                <input type="number" class="form-control form-control-sm" style="width: 60px;" @bind="screen.Height" @bind:after="OnChanged" />
-                <label class="form-label mb-0 small">BG:</label>
-                <ColorPicker Value="@(screen.Background)" ValueChanged="(v) => { screen.Background = v; }" OnAfterChange="OnChanged" />
-                <label class="form-label mb-0 small">BG Image:</label>
-                <select class="form-select form-select-sm" style="width: 130px; font-size: 10px;"
-                        value="@screen.BackgroundImageId"
-                        @onchange="(e) => { screen.BackgroundImageId = e.Value?.ToString() ?? string.Empty; OnChanged(); }">
-                    <option value="">(none)</option>
-                    @foreach (var img in (Editor.RootModel?.Images ?? []))
-                    {
-                        <option value="@img.Id">@img.Id</option>
-                    }
-                </select>
-                @if (!string.IsNullOrEmpty(screen.BackgroundImageId))
-                {
-                    <button class="btn btn-sm btn-outline-danger py-0 px-1" style="font-size: 10px;"
-                            @onclick="() => { screen.BackgroundImageId = string.Empty; OnChanged(); }" title="Remove background image">?</button>
-                }
-
-                <span class="mx-1">|</span>
-                <button class="btn btn-sm @(screen.ShowGrid ? "btn-primary" : "btn-outline-secondary")"
-                        @onclick="() => { screen.ShowGrid = !screen.ShowGrid; OnChanged(); }" title="Toggle Grid">
-                    Grid
-                </button>
-                @if (screen.ShowGrid)
-                {
-                    <input type="number" class="form-control form-control-sm" style="width: 50px;" min="5" max="100"
-                           @bind="screen.EditorGridSize" @bind:after="OnChanged" title="Grid size (px)" />
-                }
-                <button class="btn btn-sm @(screen.SnapToGrid ? "btn-primary" : "btn-outline-secondary")"
-                        @onclick="() => { screen.SnapToGrid = !screen.SnapToGrid; OnChanged(); }" title="Snap to Grid">
-                    Snap
-                </button>
-                <button class="btn btn-sm @(screen.SmartSnap ? "btn-primary" : "btn-outline-secondary")"
-                        @onclick="() => { screen.SmartSnap = !screen.SmartSnap; OnChanged(); }" title="Smart Snap (align to other objects)">
-                    Smart
-                </button>
-                <button class="btn btn-sm @(_isConnectMode ? "btn-warning" : "btn-outline-warning")"
-                        @onclick="ToggleConnectMode" title="Connect mode – click a port then click another to create a connection">
-                    🔗 Connect
-                </button>
-                <span class="mx-1">|</span>
-                <button class="btn btn-sm btn-outline-info" @onclick="() => _showThemeDialog = true" title="Apply a common font/color theme to objects on this screen or the whole project">
-                    🎨 Theme
-                </button>
-
-
-
-                @if (_selectedSymbols.Count > 1)
-                {
-                    <span class="mx-1">|</span>
-                    <button class="btn btn-sm btn-outline-info" @onclick="() => _showDistributeDialog = true" title="Distribute selected symbols into columns">
-                        Distribute
-                    </button>
-                }
-
                 @if (_selectedSymbols.Count > 0)
                 {
                     <span class="mx-1">|</span>
@@ -131,51 +70,132 @@
                     <button class="btn btn-sm btn-outline-secondary py-0 px-1" @onclick="SendToBack" title="Send to Back">&#x23EC;</button>
                 }
 
-                <span class="ms-auto small text-muted">Symbols: @screen.Symbols.Count</span>
-
+                @* QW-8: Zoom controls – always visible, kept small *@
                 <span class="mx-1">|</span>
-                @* QW-8: Zoom controls *@
                 <button class="btn btn-sm btn-outline-secondary py-0 px-1" @onclick="ZoomOut" title="Zoom Out (Ctrl+-)">-</button>
                 <span class="small px-1" style="min-width:42px;text-align:center;cursor:pointer" title="Reset zoom (Ctrl+0)" @onclick="ZoomReset">@(_zoom.ToString("P0"))</span>
                 <button class="btn btn-sm btn-outline-secondary py-0 px-1" @onclick="ZoomIn" title="Zoom In (Ctrl++)">+</button>
 
+                <span class="ms-auto small text-muted d-none d-lg-inline">Symbols: @screen.Symbols.Count</span>
+
+                @* ── Overflow "More" menu: collapses screen-level settings/tools
+                     so the toolbar stays usable at narrow panel widths. Uses a
+                     native <details>/<summary> element (no C# state) so CSS
+                     container queries can force it back inline automatically
+                     once the panel is wide enough again. ── *@
                 <span class="mx-1">|</span>
-                <button class="btn btn-sm btn-outline-secondary" @onclick="() => SwitchToResponsive(screen)" title="Switch to responsive HTML layout">
-                    📐 Responsive
-                </button>
-                @* QW-19: Copy screen as PNG *@
-                <button class="btn btn-sm btn-outline-secondary" @onclick="CopyAsPng" title="Copy screen as PNG to clipboard">📷 PNG</button>
+                <details class="screen-toolbar-more">
+                    <summary class="btn btn-sm btn-outline-secondary" title="More screen tools">⋯ More</summary>
+                    <div class="dock-context-backdrop screen-toolbar-more-backdrop" onclick="this.closest('details').open=false"></div>
+                    <div class="screen-toolbar-more-menu" style="min-width: 260px;">
+                        <h6 class="dropdown-header">Canvas</h6>
+                        <div class="d-flex align-items-center gap-1 mb-2 flex-wrap">
+                            <label class="form-label mb-0 small">W:</label>
+                            <input type="number" class="form-control form-control-sm" style="width: 60px;" @bind="screen.Width" @bind:after="OnChanged" />
+                            <label class="form-label mb-0 small">H:</label>
+                            <input type="number" class="form-control form-control-sm" style="width: 60px;" @bind="screen.Height" @bind:after="OnChanged" />
+                        </div>
+                        <div class="d-flex align-items-center gap-1 mb-2 flex-wrap">
+                            <label class="form-label mb-0 small">BG:</label>
+                            <ColorPicker Value="@(screen.Background)" ValueChanged="(v) => { screen.Background = v; }" OnAfterChange="OnChanged" />
+                            <label class="form-label mb-0 small">BG Image:</label>
+                            <select class="form-select form-select-sm" style="width: 130px; font-size: 10px;"
+                                    value="@screen.BackgroundImageId"
+                                    @onchange="(e) => { screen.BackgroundImageId = e.Value?.ToString() ?? string.Empty; OnChanged(); }">
+                                <option value="">(none)</option>
+                                @foreach (var img in (Editor.RootModel?.Images ?? []))
+                                {
+                                    <option value="@img.Id">@img.Id</option>
+                                }
+                            </select>
+                            @if (!string.IsNullOrEmpty(screen.BackgroundImageId))
+                            {
+                                <button class="btn btn-sm btn-outline-danger py-0 px-1" style="font-size: 10px;"
+                                        @onclick="() => { screen.BackgroundImageId = string.Empty; OnChanged(); }" title="Remove background image">?</button>
+                            }
+                        </div>
+
+                        <h6 class="dropdown-header">Grid &amp; Snap</h6>
+                        <div class="d-flex align-items-center gap-1 mb-2 flex-wrap">
+                            <button class="btn btn-sm @(screen.ShowGrid ? "btn-primary" : "btn-outline-secondary")"
+                                    @onclick="() => { screen.ShowGrid = !screen.ShowGrid; OnChanged(); }" title="Toggle Grid">
+                                Grid
+                            </button>
+                            @if (screen.ShowGrid)
+                            {
+                                <input type="number" class="form-control form-control-sm" style="width: 50px;" min="5" max="100"
+                                       @bind="screen.EditorGridSize" @bind:after="OnChanged" title="Grid size (px)" />
+                            }
+                            <button class="btn btn-sm @(screen.SnapToGrid ? "btn-primary" : "btn-outline-secondary")"
+                                    @onclick="() => { screen.SnapToGrid = !screen.SnapToGrid; OnChanged(); }" title="Snap to Grid">
+                                Snap
+                            </button>
+                            <button class="btn btn-sm @(screen.SmartSnap ? "btn-primary" : "btn-outline-secondary")"
+                                    @onclick="() => { screen.SmartSnap = !screen.SmartSnap; OnChanged(); }" title="Smart Snap (align to other objects)">
+                                Smart
+                            </button>
+                        </div>
+
+                        <h6 class="dropdown-header">Tools</h6>
+                        <div class="d-flex align-items-center gap-1 mb-2 flex-wrap">
+                            <button class="btn btn-sm @(_isConnectMode ? "btn-warning" : "btn-outline-warning")"
+                                    @onclick="ToggleConnectMode" title="Connect mode – click a port then click another to create a connection">
+                                🔗 Connect
+                            </button>
+                            <button class="btn btn-sm btn-outline-info" @onclick="() => _showThemeDialog = true" title="Apply a common font/color theme to objects on this screen or the whole project">
+                                🎨 Theme
+                            </button>
+                            @if (_selectedSymbols.Count > 1)
+                            {
+                                <button class="btn btn-sm btn-outline-info" @onclick="() => _showDistributeDialog = true" title="Distribute selected symbols into columns">
+                                    Distribute
+                                </button>
+                            }
+                        </div>
+
+                        <h6 class="dropdown-header">Layout &amp; Export</h6>
+                        <div class="d-flex align-items-center gap-1 flex-wrap">
+                            <button class="btn btn-sm btn-outline-secondary" @onclick="() => SwitchToResponsive(screen)" title="Switch to responsive HTML layout">
+                                📐 Responsive
+                            </button>
+                            <button class="btn btn-sm btn-outline-secondary" @onclick="CopyAsPng" title="Copy screen as PNG to clipboard">📷 PNG</button>
+                        </div>
+                    </div>
+                </details>
             </div>
         </div>
 
-        @* Screen thumbnail strip *@
+        @* Screen thumbnail strip — collapses into a toggle at narrow widths *@
         @if ((Editor.RootModel?.Screens?.Count ?? 0) > 1)
         {
-            <div class="screen-thumbnail-strip">
-                @foreach (var s in Editor.RootModel!.Screens)
-                {
-                    var isActive = s.Name == screen.Name;
-                    <div class="screen-thumbnail @(isActive ? "active" : "")" title="@s.Name"
-                         @onclick="() => OnSwitchScreen(s)">
-                        <svg xmlns="http://www.w3.org/2000/svg"
-                             viewBox="0 0 @(s.Width) @(s.Height)"
-                             style="background:@s.Background;width:80px;height:50px;display:block;">
-                            @foreach (var sym in s.Symbols.Take(60))
-                            {
-                                <rect x="@sym.X" y="@sym.Y" width="@sym.Width" height="@sym.Height"
-                                      fill="rgba(100,160,240,0.4)" stroke="rgba(80,120,200,0.6)" stroke-width="1" rx="1" />
-                            }
-                        </svg>
-                        <span class="screen-thumb-label">@s.Name</span>
-                    </div>
-                }
-            </div>
+            <details class="screen-thumbnail-details">
+                <summary class="screen-thumbnail-summary">🖥 Screens (@Editor.RootModel!.Screens.Count)</summary>
+                <div class="screen-thumbnail-strip">
+                    @foreach (var s in Editor.RootModel!.Screens)
+                    {
+                        var isActive = s.Name == screen.Name;
+                        <div class="screen-thumbnail @(isActive ? "active" : "")" title="@s.Name"
+                             @onclick="() => OnSwitchScreen(s)">
+                            <svg xmlns="http://www.w3.org/2000/svg"
+                                 viewBox="0 0 @(s.Width) @(s.Height)"
+                                 style="background:@s.Background;width:80px;height:50px;display:block;">
+                                @foreach (var sym in s.Symbols.Take(60))
+                                {
+                                    <rect x="@sym.X" y="@sym.Y" width="@sym.Width" height="@sym.Height"
+                                          fill="rgba(100,160,240,0.4)" stroke="rgba(80,120,200,0.6)" stroke-width="1" rx="1" />
+                                }
+                            </svg>
+                            <span class="screen-thumb-label">@s.Name</span>
+                        </div>
+                    }
+                </div>
+            </details>
         }
 
         <div class="screen-editor-body">
             @* QW-8: Zoom/Pan viewport *@
             <div class="screen-canvas-viewport" id="screen-canvas-viewport"
-                 @onwheel="OnCanvasWheel" @onwheel:preventDefault>
+                 @onwheel="OnCanvasWheel" @onwheel:preventDefault="_ctrlWheelActive">
                 @* SVG Canvas *@
                 <div class="screen-canvas-wrap"
                      style="transform: scale(@(_zoom.ToString("F3", System.Globalization.CultureInfo.InvariantCulture))) translate(@(_panX.ToString("F1",System.Globalization.CultureInfo.InvariantCulture))px, @(_panY.ToString("F1",System.Globalization.CultureInfo.InvariantCulture))px); transform-origin: top left;">
@@ -1794,8 +1814,15 @@ Right-click a symbol for actions</div>
     private void ZoomOut() { _zoom = Math.Max(ZoomMin, _zoom - ZoomStep); }
     private void ZoomReset() { _zoom = 1.0; _panX = 0; _panY = 0; }
 
+    // Tracks whether Ctrl is currently held, so the wheel handler only
+    // suppresses the browser's default scroll when Ctrl+wheel is used to zoom.
+    // Without this, the unconditional preventDefault blocked normal mouse-wheel
+    // scrolling of the canvas viewport.
+    private bool _ctrlWheelActive;
+
     private void OnCanvasWheel(WheelEventArgs e)
     {
+        _ctrlWheelActive = e.CtrlKey;
         if (!e.CtrlKey) return;
         // Zoom toward cursor
         var delta = e.DeltaY < 0 ? ZoomStep : -ZoomStep;

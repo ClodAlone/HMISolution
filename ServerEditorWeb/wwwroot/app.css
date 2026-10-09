@@ -1094,6 +1094,8 @@ h1:focus {
     flex-direction: column;
     height: 100%;
     min-height: 0;
+    container-type: inline-size;
+    container-name: screen-editor;
 }
 
 .screen-toolbar {
@@ -1102,6 +1104,121 @@ h1:focus {
     background: var(--bg-secondary);
     flex-shrink: 0;
 }
+
+/* Overflow "More" menu for the screen toolbar — keeps secondary
+   screen/grid/tool controls out of the way on narrow panels.
+   Implemented with native <details>/<summary> (no component state), so it
+   always starts closed and never gets stuck open when the panel is resized. */
+.screen-toolbar-more {
+    display: inline-block;
+    position: relative;
+}
+
+.screen-toolbar-more > summary {
+    list-style: none;
+    cursor: pointer;
+}
+
+.screen-toolbar-more > summary::-webkit-details-marker {
+    display: none;
+}
+
+.screen-toolbar-more-backdrop {
+    display: none;
+}
+
+.screen-toolbar-more[open] > .screen-toolbar-more-backdrop {
+    display: block;
+}
+
+.screen-toolbar-more-menu {
+    display: none;
+}
+
+.screen-toolbar-more[open] > .screen-toolbar-more-menu {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 2px);
+    z-index: 9999;
+    display: block;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    box-shadow: 0 6px 20px var(--shadow-strong);
+    padding: 8px;
+}
+
+/* At wide panel widths there's room to show everything inline, so the
+   "More" toggle is hidden and its content is always rendered expanded. */
+@container screen-editor (min-width: 900px) {
+    .screen-toolbar-more > summary {
+        display: none;
+    }
+
+    .screen-toolbar-more-backdrop {
+        display: none !important;
+    }
+
+    .screen-toolbar-more-menu {
+        display: flex !important;
+        position: static;
+        box-shadow: none;
+        border: none;
+        background: transparent;
+        padding: 0;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 2px;
+    }
+
+    .screen-toolbar-more-menu h6.dropdown-header {
+        display: none;
+    }
+
+    .screen-toolbar-more-menu > div {
+        margin-bottom: 0 !important;
+    }
+
+    .screen-toolbar-more-menu > div::after {
+        content: "|";
+        margin: 0 4px;
+        color: var(--text-muted);
+    }
+
+    .screen-toolbar-more-menu > div:last-child::after {
+        content: none;
+    }
+}
+
+/* Screen thumbnail strip — collapsed behind a toggle at narrow widths */
+.screen-thumbnail-details {
+    border-bottom: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+    flex-shrink: 0;
+}
+
+.screen-thumbnail-summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 3px 8px;
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.screen-thumbnail-summary::-webkit-details-marker {
+    display: none;
+}
+
+@container screen-editor (min-width: 700px) {
+    .screen-thumbnail-summary {
+        display: none;
+    }
+
+    .screen-thumbnail-details .screen-thumbnail-strip {
+        display: flex !important;
+    }
+}
+
 
 .screen-editor-body {
     display: flex;
