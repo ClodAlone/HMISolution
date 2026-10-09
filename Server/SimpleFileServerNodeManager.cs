@@ -40,6 +40,7 @@ namespace SimpleOpcFileServer
         private EventManager? _eventManager;
         private AutomationRuleManager? _automationRuleManager;
         private AiAgentManager? _aiAgentManager;
+        private McpClientManager? _mcpClientManager;
 
         // Cached configs for deferred start on redundancy failover
         private List<ScriptConfig>? _cachedScripts;
@@ -515,6 +516,7 @@ namespace SimpleOpcFileServer
             if (_recipeManager != null) { _recipeManager.Dispose(); _recipeManager = null; }
             if (_automationRuleManager != null) { _automationRuleManager.Dispose(); _automationRuleManager = null; }
             if (_aiAgentManager != null) { _aiAgentManager.Dispose(); _aiAgentManager = null; }
+            if (_mcpClientManager != null) { _mcpClientManager.Dispose(); _mcpClientManager = null; }
 
             if (_assetManager != null)
             _variables.Clear();
@@ -1005,7 +1007,9 @@ namespace SimpleOpcFileServer
                               // AI Agents
                               if (nodeModel.AiAgents != null && nodeModel.AiAgents.Count > 0)
                               {
-                                  _aiAgentManager = new AiAgentManager(this);
+                                  _mcpClientManager = new McpClientManager();
+                                  _mcpClientManager.Initialize(nodeModel.McpConnections ?? new List<McpConnectionConfig>());
+                                  _aiAgentManager = new AiAgentManager(this, _mcpClientManager);
                                   _aiAgentManager.Initialize(nodeModel.AiAgents);
                               }
 
@@ -3088,6 +3092,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 _schedulerManager?.Dispose();
                 _automationRuleManager?.Dispose();
                 _aiAgentManager?.Dispose();
+                _mcpClientManager?.Dispose();
                 _reportManager?.Dispose();
                 _assetManager?.Dispose();
                 _notificationService?.Dispose();

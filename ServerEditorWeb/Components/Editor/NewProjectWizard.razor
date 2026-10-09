@@ -288,6 +288,20 @@
                 - If the description has no real hardware/protocol context (e.g. a pure demo/simulation), use "Simulation" DriverConfigs on live-looking variables instead of leaving them static.
 
                 Make variable names clear and descriptive. Use a dark theme (#1a1a2e) for screen backgrounds.
+
+                OPTIONAL — AI Agents and MCP Connections (only add these if the description clearly calls for autonomous
+                decision-making or explicitly mentions an external tool/API/knowledge base; otherwise omit them entirely):
+                - "AiAgents" is a list of AiAgentConfig objects: Name, Enabled (bool), Description, Engine (OpenAI/Claude/Gemini/Ollama),
+                  Model (string, optional), Instructions (plain-English natural-language rules for the agent to reason over),
+                  ReadableVariables (string[] of variable paths the agent can see each cycle), WritableVariables (string[] allow-list of
+                  variables the agent may write), AllowedScripts (string[] allow-list of script Names the agent may trigger),
+                  AllowedMcpTools (string[] in the form "ConnectionName.toolName", only if an McpConnections entry exists),
+                  PollingIntervalSeconds (int, minimum 5), CooldownSeconds (int), DryRun (bool, default true for safety), MaxActionsPerCycle (int).
+                - "McpConnections" is a list of McpConnectionConfig objects for calling EXTERNAL MCP tool servers: Name, Enabled (bool),
+                  Description, TransportType ("Sse" for remote HTTP/SSE endpoints — the only currently supported transport), Endpoint (URL),
+                  ApiKeyEnvVar (name of an environment variable holding a bearer token, never a raw secret), TimeoutSeconds (int, default 15).
+                - Keep agents conservative: ship with DryRun: true, narrow ReadableVariables/WritableVariables allow-lists, and only
+                  reference AllowedMcpTools entries that match a connection you actually defined in McpConnections.
                 """;
 
             _generationStatus = "AI is generating your project...";

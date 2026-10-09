@@ -180,6 +180,39 @@
                     }
                 </div>
 
+                @* ── Allowed MCP tools ── *@
+                <div class="ar-section">
+                    <div class="ar-section-header">
+                        <span class="ar-section-title">🔌 Allowed MCP Tools</span>
+                        <span class="small text-muted ms-2">(format: "ConnectionName.toolName")</span>
+                        <button class="btn btn-sm btn-outline-success ms-auto" @onclick="AddMcpTool">➕ Tool</button>
+                    </div>
+                    @if (!_selected.AllowedMcpTools.Any())
+                    {
+                        <div class="ar-empty-hint small text-muted">No MCP tools allowed — CallMcpTool actions will always be rejected.</div>
+                    }
+                    else
+                    {
+                        @for (int i = 0; i < _selected.AllowedMcpTools.Count; i++)
+                        {
+                            var idx = i;
+                            <div class="ar-card">
+                                <div class="ar-row">
+                                    <input type="text" class="form-control form-control-sm"
+                                           placeholder="ConnectionName.toolName"
+                                           value="@_selected.AllowedMcpTools[idx]"
+                                           @onchange="e => { _selected.AllowedMcpTools[idx] = e.Value?.ToString() ?? string.Empty; NotifyChanged(); }" />
+                                    <button class="btn btn-link p-0 ms-auto" @onclick="() => RemoveMcpTool(idx)">🗑</button>
+                                </div>
+                            </div>
+                        }
+                    }
+                    @if (!_connections.Any())
+                    {
+                        <div class="small text-muted px-2 pb-2">No MCP Connections configured yet — open the "MCP Connections" panel to add one.</div>
+                    }
+                </div>
+
                 @* ── Timing & limits ── *@
                 <div class="ar-section">
                     <div class="ar-section-header">
@@ -238,6 +271,7 @@
 
 @code {
     private List<AiAgentConfig> _agents = new();
+    private List<McpConnectionConfig> _connections = new();
     private AiAgentConfig? _selected;
 
     protected override void OnInitialized()
@@ -251,6 +285,7 @@
     private void LoadAgents()
     {
         _agents = Editor.RootModel?.AiAgents ?? new();
+        _connections = Editor.RootModel?.McpConnections ?? new();
         if (_selected != null && !_agents.Contains(_selected))
             _selected = null;
     }
@@ -307,6 +342,22 @@
         if (index >= 0 && index < _selected.AllowedScripts.Count)
         {
             _selected.AllowedScripts.RemoveAt(index);
+            NotifyChanged();
+        }
+    }
+
+    private void AddMcpTool()
+    {
+        _selected?.AllowedMcpTools.Add("");
+        NotifyChanged();
+    }
+
+    private void RemoveMcpTool(int index)
+    {
+        if (_selected == null) return;
+        if (index >= 0 && index < _selected.AllowedMcpTools.Count)
+        {
+            _selected.AllowedMcpTools.RemoveAt(index);
             NotifyChanged();
         }
     }

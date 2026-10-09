@@ -504,6 +504,8 @@ public class AiService
         AddSection(result, "BatchSequences", model.BatchSequences);
         AddSection(result, "Events", model.Events);
         AddSection(result, "AutomationRules", model.AutomationRules);
+        AddSection(result, "AiAgents", model.AiAgents);
+        AddSection(result, "McpConnections", model.McpConnections);
         AddSection(result, "Strings", model.Strings);
         AddSection(result, "Images", model.Images);
         AddSection(result, "AliasMaps", model.AliasMaps);
@@ -527,6 +529,8 @@ public class AiService
             "Schedulers" => "⏰",
             "Reports" => "📊",
             "Images" => "🖼",
+            "AiAgents" => "🤖",
+            "McpConnections" => "🔌",
             _ => "📦"
         };
         results.Add(new ScopeEntry($"section:{sectionName}", $"{icon} {sectionName}  ({count} item(s))", count, approx));

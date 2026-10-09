@@ -43,6 +43,13 @@ namespace SharedModels
         public List<AiAgentConfig> AiAgents { get; set; } = new();
 
         /// <summary>
+        /// Configured connections to external Model Context Protocol (MCP) tool servers.
+        /// AI Agents can be granted access to specific connections' tools via
+        /// <see cref="AiAgentConfig.AllowedMcpTools"/>.
+        /// </summary>
+        public List<McpConnectionConfig> McpConnections { get; set; } = new();
+
+        /// <summary>
         /// Augmented Reality object-to-screen mappings. Each entry associates a recognized
         /// object class (from the local object-recognition server) with a screen/alias map
         /// and optional parameter file for variable substitution.
@@ -4086,6 +4093,14 @@ namespace SharedModels
         /// <summary>Script names the agent is allowed to trigger via ExecuteScript actions.</summary>
         public List<string> AllowedScripts { get; set; } = new();
 
+        /// <summary>
+        /// MCP tools the agent is allowed to call, in the form "ConnectionName.toolName"
+        /// (ConnectionName must match a <see cref="McpConnectionConfig.Name"/>). Any CallMcpTool
+        /// action targeting a tool outside this allow-list is rejected and logged.
+        /// Empty = the agent has no MCP tool access.
+        /// </summary>
+        public List<string> AllowedMcpTools { get; set; } = new();
+
         /// <summary>Seconds between evaluation cycles (LLM calls). Minimum enforced at 5s.</summary>
         public int PollingIntervalSeconds { get; set; } = 60;
 
@@ -4106,15 +4121,63 @@ namespace SharedModels
     /// <summary>A single action requested by the AI Agent for a given cycle (mirrors AutomationAction's vocabulary).</summary>
     public class AiAgentAction
     {
-        /// <summary>WriteVariable | SendNotification | ExecuteScript | LogEvent.</summary>
+        /// <summary>WriteVariable | SendNotification | ExecuteScript | LogEvent | CallMcpTool.</summary>
         public string Type { get; set; } = "LogEvent";
         public string VariablePath { get; set; } = "";
         public string Value { get; set; } = "";
         public string Message { get; set; } = "";
         public string ScriptName { get; set; } = "";
 
+        /// <summary>
+        /// For Type == "CallMcpTool": the MCP connection + tool name as "ConnectionName.toolName",
+        /// matching one of the agent's <see cref="AiAgentConfig.AllowedMcpTools"/> entries.
+        /// </summary>
+        public string McpTool { get; set; } = "";
+
+        /// <summary>For Type == "CallMcpTool": JSON-encoded arguments object to pass to the tool.</summary>
+        public string McpArguments { get; set; } = "";
+
         /// <summary>Model's stated rationale for this action; always logged for auditability.</summary>
         public string Reasoning { get; set; } = "";
+    }
+
+    /// <summary>
+    /// Configuration for a connection to an external Model Context Protocol (MCP) tool server.
+    /// Lets AI Agents (and future platform features) discover and invoke tools exposed by
+    /// third-party or in-house MCP servers (e.g. a maintenance ticketing system, a weather API,
+    /// a knowledge-base/RAG server), in addition to the platform's built-in actions.
+    /// </summary>
+    public class McpConnectionConfig
+    {
+        public string Id { get; set; } = Guid.NewGuid().ToString("N")[..8];
+
+        /// <summary>Unique, human-readable name used to qualify tool references, e.g. "Weather" -&gt; "Weather.getForecast".</summary>
+        public string Name { get; set; } = "New MCP Connection";
+
+        public bool Enabled { get; set; } = true;
+        public string Description { get; set; } = "";
+
+        /// <summary>Transport: "Stdio" (spawn a local process) or "Sse"/"Http" (remote server URL).</summary>
+        public string TransportType { get; set; } = "Sse";
+
+        /// <summary>For Stdio transport: the command/executable to launch the MCP server.</summary>
+        public string Command { get; set; } = "";
+
+        /// <summary>For Stdio transport: command-line arguments passed to <see cref="Command"/>.</summary>
+        public string Arguments { get; set; } = "";
+
+        /// <summary>For Sse/Http transport: the base URL of the remote MCP server (e.g. "http://localhost:3000/sse").</summary>
+        public string Endpoint { get; set; } = "";
+
+        /// <summary>
+        /// Optional bearer token or API key sent when connecting to a remote MCP server.
+        /// Prefer referencing an environment variable name here (resolved at connection time)
+        /// over storing raw secrets in the project file.
+        /// </summary>
+        public string ApiKeyEnvVar { get; set; } = "";
+
+        /// <summary>Connection/initialize timeout in seconds. Default 15.</summary>
+        public int TimeoutSeconds { get; set; } = 15;
     }
 
 }

@@ -560,6 +560,22 @@ public class AiAgentNode : TreeNode
     public void SyncName() => Agent.Name = Name;
 }
 
+public class McpConnectionGroupNode : TreeNode
+{
+    public override string TypeName => "McpConnectionGroup";
+    public override string Icon => "🔌";
+    public McpConnectionGroupNode() { Name = "MCP Connections"; }
+}
+
+public class McpConnectionNode : TreeNode
+{
+    public override string TypeName => "McpConnection";
+    public override string Icon => "🔌";
+    public McpConnectionConfig Connection { get; }
+    public McpConnectionNode(McpConnectionConfig connection) { Connection = connection; Name = connection.Name; }
+    public void SyncName() => Connection.Name = Name;
+}
+
 public class ArObjectMappingGroupNode : TreeNode
 {
     public override string TypeName => "ArObjectMappingGroup";

@@ -715,6 +715,17 @@ public class NodeEditorService
         }
         proj.Children.Add(aiAgentGroup);
 
+        var mcpConnectionGroup = new McpConnectionGroupNode() { Parent = proj };
+        if (proj.Model.McpConnections != null)
+        {
+            foreach (var conn in proj.Model.McpConnections)
+            {
+                var mNode = new McpConnectionNode(conn) { Parent = mcpConnectionGroup };
+                mcpConnectionGroup.Children.Add(mNode);
+            }
+        }
+        proj.Children.Add(mcpConnectionGroup);
+
         var screenGroup = new ScreenGroupNode() { Parent = proj };        if (proj.Model.Screens != null)
         {
             BuildResourceTree(screenGroup, proj.Model.Screens, "Screen",
@@ -1100,6 +1111,7 @@ public class NodeEditorService
             else if (root is AliasMapGroupNode amg) { model.AliasMaps.Clear(); foreach (var c in amg.Children) { if (c is AliasMapNode mn) { mn.SyncName(); model.AliasMaps.Add(mn.AliasMap); } } }
             else if (root is AutomationRuleGroupNode arg) { model.AutomationRules.Clear(); foreach (var c in arg.Children) { if (c is AutomationRuleNode rn) { rn.SyncName(); model.AutomationRules.Add(rn.Rule); } } }
             else if (root is AiAgentGroupNode aag) { model.AiAgents.Clear(); foreach (var c in aag.Children) { if (c is AiAgentNode an) { an.SyncName(); model.AiAgents.Add(an.Agent); } } }
+            else if (root is McpConnectionGroupNode mcg) { model.McpConnections.Clear(); foreach (var c in mcg.Children) { if (c is McpConnectionNode mn) { mn.SyncName(); model.McpConnections.Add(mn.Connection); } } }
             else if (root is UserGroupListNode ugln)
             {
                 model.UserGroups.Clear(); model.Users.Clear();
@@ -1594,6 +1606,21 @@ public class NodeEditorService
             parent.Children.Add(newNode);
             parent.IsExpanded = true;
             _rootModel?.AiAgents.Add(newAgent);
+            SetSingleSelection(newNode);
+            HasUnsavedChanges = true;
+            NotifyStateChanged();
+        }
+    }
+
+    public void AddMcpConnection()
+    {
+        if (SelectedItem is McpConnectionGroupNode parent)
+        {
+            var newConn = new McpConnectionConfig { Name = "New MCP Connection" };
+            var newNode = new McpConnectionNode(newConn) { Parent = parent };
+            parent.Children.Add(newNode);
+            parent.IsExpanded = true;
+            _rootModel?.McpConnections.Add(newConn);
             SetSingleSelection(newNode);
             HasUnsavedChanges = true;
             NotifyStateChanged();
@@ -2639,6 +2666,18 @@ public class NodeEditorService
                     {
                         aNode.SyncName();
                         _rootModel.AiAgents.Add(aNode.Agent);
+                    }
+                }
+            }
+            else if (root is McpConnectionGroupNode mcpGrpNode && _rootModel != null)
+            {
+                _rootModel.McpConnections.Clear();
+                foreach (var child in mcpGrpNode.Children)
+                {
+                    if (child is McpConnectionNode mNode)
+                    {
+                        mNode.SyncName();
+                        _rootModel.McpConnections.Add(mNode.Connection);
                     }
                 }
             }

@@ -33,13 +33,15 @@ namespace SimpleOpcFileServer
     public sealed class AiAgentManager : IDisposable
     {
         private readonly SimpleFileServerNodeManager _nodeManager;
+        private readonly McpClientManager _mcpClients;
         private readonly List<AgentState> _states = new();
         private readonly CancellationTokenSource _cts = new();
         private static readonly HttpClient s_http = new() { Timeout = TimeSpan.FromSeconds(60) };
 
-        public AiAgentManager(SimpleFileServerNodeManager nodeManager)
+        public AiAgentManager(SimpleFileServerNodeManager nodeManager, McpClientManager? mcpClients = null)
         {
             _nodeManager = nodeManager;
+            _mcpClients = mcpClients ?? new McpClientManager();
         }
 
         public void Initialize(List<AiAgentConfig> agents)
@@ -88,7 +90,7 @@ namespace SimpleOpcFileServer
             try
             {
                 var snapshot = ReadContext(cfg);
-                var prompt = BuildPrompt(cfg, snapshot);
+                var prompt = await BuildPromptAsync(cfg, snapshot);
 
                 string? rawResponse;
                 try
@@ -113,7 +115,7 @@ namespace SimpleOpcFileServer
                     (DateTime.Now - state.LastAppliedAt.Value).TotalSeconds < cfg.CooldownSeconds;
 
                 foreach (var action in actions)
-                    ExecuteAction(cfg, action, dryRunOverride: withinCooldown && !cfg.DryRun);
+                    await ExecuteActionAsync(cfg, action, dryRunOverride: withinCooldown && !cfg.DryRun);
 
                 if (!withinCooldown)
                     state.LastAppliedAt = DateTime.Now;
@@ -144,7 +146,7 @@ namespace SimpleOpcFileServer
             return values;
         }
 
-        private static string BuildPrompt(AiAgentConfig cfg, Dictionary<string, string> context)
+        private async Task<string> BuildPromptAsync(AiAgentConfig cfg, Dictionary<string, string> context)
         {
             var sb = new StringBuilder();
             sb.AppendLine("You are an industrial automation AI agent embedded in an HMI/SCADA platform.");
@@ -158,9 +160,18 @@ namespace SimpleOpcFileServer
             sb.AppendLine();
             sb.AppendLine("You may ONLY write to these variables: " + string.Join(", ", cfg.WritableVariables));
             sb.AppendLine("You may ONLY execute these scripts: " + string.Join(", ", cfg.AllowedScripts));
+
+            if (cfg.AllowedMcpTools.Count > 0)
+            {
+                sb.AppendLine("You may ONLY call these external MCP tools: " + string.Join(", ", cfg.AllowedMcpTools));
+                sb.AppendLine("To call one, use action type \"CallMcpTool\" with \"mcpTool\" set to one of the names above " +
+                               "(exact \"Connection.toolName\" string) and \"mcpArguments\" set to a JSON-encoded arguments object " +
+                               "(as a string), e.g. \"mcpArguments\":\"{\\\"city\\\":\\\"Rome\\\"}\".");
+            }
+
             sb.AppendLine();
             sb.AppendLine("Respond with ONLY a JSON array (no prose, no markdown fences) of actions using this schema:");
-            sb.AppendLine("""[{"type":"WriteVariable|SendNotification|ExecuteScript|LogEvent","variablePath":"","value":"","message":"","scriptName":"","reasoning":""}]""");
+            sb.AppendLine("""[{"type":"WriteVariable|SendNotification|ExecuteScript|LogEvent|CallMcpTool","variablePath":"","value":"","message":"","scriptName":"","mcpTool":"","mcpArguments":"","reasoning":""}]""");
             sb.AppendLine("If no action is needed, respond with an empty JSON array: []");
             return sb.ToString();
         }
@@ -280,7 +291,7 @@ namespace SimpleOpcFileServer
 
         // ─── Action execution with allow-list enforcement ──────────────────────
 
-        private void ExecuteAction(AiAgentConfig cfg, AiAgentAction action, bool dryRunOverride)
+        private async Task ExecuteActionAsync(AiAgentConfig cfg, AiAgentAction action, bool dryRunOverride)
         {
             bool dryRun = cfg.DryRun || dryRunOverride;
             string outcome;
@@ -320,6 +331,24 @@ namespace SimpleOpcFileServer
                         outcome = dryRun ? "DryRun" : "Applied";
                         break;
 
+                    case "CallMcpTool":
+                        if (string.IsNullOrEmpty(action.McpTool) ||
+                            !cfg.AllowedMcpTools.Contains(action.McpTool, StringComparer.OrdinalIgnoreCase))
+                        {
+                            outcome = "Rejected (MCP tool not in allow-list)";
+                            break;
+                        }
+                        if (!dryRun)
+                        {
+                            var mcpResult = await _mcpClients.CallToolAsync(action.McpTool, action.McpArguments);
+                            outcome = $"Applied | result: {Truncate(mcpResult, 300)}";
+                        }
+                        else
+                        {
+                            outcome = "DryRun";
+                        }
+                        break;
+
                     case "LogEvent":
                         outcome = "Applied"; // Logging always happens below regardless of dry-run.
                         break;
@@ -342,6 +371,8 @@ namespace SimpleOpcFileServer
 
             Log.Debug("AiAgent '{Agent}' action {Type} -> {Outcome}", cfg.Name, action.Type, outcome);
         }
+
+        private static string Truncate(string s, int max) => s.Length <= max ? s : s[..max] + "…";
 
         public void Dispose()
         {
