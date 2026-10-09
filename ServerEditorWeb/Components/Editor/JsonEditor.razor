@@ -207,6 +207,32 @@
                 </div>
 
                 <div class="d-flex gap-2 align-items-center">
+                    <div class="dropdown">
+                        <button class="btn btn-sm btn-outline-secondary" type="button" title="Recent &amp; common prompts"
+                                @onclick="ToggleSuggestions">🕘</button>
+                        @if (_showSuggestions)
+                        {
+                            <div class="dropdown-menu show p-1" style="max-height: 300px; overflow-y: auto; font-size: 11px; min-width: 320px;">
+                                @if (_recentPrompts.Count > 0)
+                                {
+                                    <h6 class="dropdown-header">Recent</h6>
+                                    @foreach (var p in _recentPrompts)
+                                    {
+                                        <div class="d-flex align-items-center">
+                                            <button class="dropdown-item text-truncate" style="max-width: 260px;" type="button" title="@p" @onclick="() => SelectSuggestion(p)">@p</button>
+                                            <button class="btn btn-sm btn-link text-danger p-0 px-1" type="button" title="Remove" @onclick="() => RemoveRecent(p)">✕</button>
+                                        </div>
+                                    }
+                                    <div class="dropdown-divider"></div>
+                                }
+                                <h6 class="dropdown-header">Common Commands</h6>
+                                @foreach (var p in CommonPrompts)
+                                {
+                                    <button class="dropdown-item" type="button" @onclick="() => SelectSuggestion(p)">@p</button>
+                                }
+                            </div>
+                        }
+                    </div>
                     <input type="text" class="form-control form-control-sm flex-grow-1" @bind="_prompt"
                            @bind:event="oninput"
                            @onkeydown="OnPromptKeyDown"
@@ -361,10 +387,81 @@
 
     private static readonly string DefaultSamplesPath = Path.Combine("C:", "Work", "samples");
 
-    protected override void OnInitialized()
+    private const string RecentPromptsKey = "jsonEditor.recentPrompts";
+    private const int MaxRecentPrompts = 10;
+    private bool _showSuggestions;
+    private List<string> _recentPrompts = new();
+
+    private static readonly string[] CommonPrompts =
+    {
+        "Import all variables from the reference project",
+        "Add alarm limits (HighHigh, High, Low, LowLow) to all numeric variables",
+        "Create a screen with a trend chart for all variables in this folder",
+        "Add data logging to all critical process variables",
+        "Organize variables into folders by equipment area",
+        "Add a Modbus TCP driver connection for all variables in this folder",
+        "Generate realistic initial values for all variables",
+        "Add an alarm summary screen listing all configured alarms",
+        "Create a script that averages the values of these variables",
+        "Rename variables to follow a consistent naming convention"
+    };
+
+    protected override async Task OnInitializedAsync()
     {
         _ollamaUrl = AiService.OllamaBaseUrl;
         _sampleFiles = AiService.GetSampleFiles(DefaultSamplesPath);
+        try
+        {
+            var stored = await JS.InvokeAsync<string?>("localStorage.getItem", RecentPromptsKey);
+            if (!string.IsNullOrEmpty(stored))
+            {
+                _recentPrompts = System.Text.Json.JsonSerializer.Deserialize<List<string>>(stored) ?? new();
+            }
+        }
+        catch
+        {
+            // ignore storage errors (e.g. prerendering)
+        }
+    }
+
+    private void ToggleSuggestions()
+    {
+        _showSuggestions = !_showSuggestions;
+    }
+
+    private void SelectSuggestion(string text)
+    {
+        _prompt = text;
+        _showSuggestions = false;
+    }
+
+    private async Task RemoveRecent(string text)
+    {
+        _recentPrompts.Remove(text);
+        await SaveRecentPrompts();
+    }
+
+    private async Task SaveRecentPrompts()
+    {
+        try
+        {
+            var json = System.Text.Json.JsonSerializer.Serialize(_recentPrompts);
+            await JS.InvokeVoidAsync("localStorage.setItem", RecentPromptsKey, json);
+        }
+        catch
+        {
+            // ignore storage errors
+        }
+    }
+
+    private async Task RememberPrompt(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return;
+        _recentPrompts.RemoveAll(p => string.Equals(p, text, StringComparison.OrdinalIgnoreCase));
+        _recentPrompts.Insert(0, text);
+        if (_recentPrompts.Count > MaxRecentPrompts)
+            _recentPrompts = _recentPrompts.Take(MaxRecentPrompts).ToList();
+        await SaveRecentPrompts();
     }
 
     private async Task OnJsonChanged()
@@ -460,6 +557,7 @@
     {
         if (string.IsNullOrWhiteSpace(_prompt)) return;
 
+        await RememberPrompt(_prompt);
         _isProcessing = true;
         _aiComments = "";
         _aiError = "";

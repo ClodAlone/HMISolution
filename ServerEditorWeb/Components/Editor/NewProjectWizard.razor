@@ -4,6 +4,7 @@
 @using SharedModels
 @using System.Text.Json
 @using System.Text.Json.Serialization
+@using Microsoft.AspNetCore.Components.Forms
 @inject IJSRuntime JS
 
 <div class="modal-backdrop show" @onclick="OnClose"></div>
@@ -76,6 +77,35 @@
                             </select>
                         </div>
                         <div class="mb-2">
+                            <label class="form-label small mb-1 d-flex align-items-center gap-1">
+                                <span>Description</span>
+                                <div class="dropdown d-inline-block">
+                                    <button class="btn btn-link btn-sm p-0 dropdown-toggle" style="font-size: 11px;" type="button"
+                                            @onclick="ToggleSuggestions">🕘 Recent &amp; Common</button>
+                                    @if (_showSuggestions)
+                                    {
+                                        <div class="dropdown-menu show p-1" style="max-height: 300px; overflow-y: auto; font-size: 11px; min-width: 320px;">
+                                            @if (_recentPrompts.Count > 0)
+                                            {
+                                                <h6 class="dropdown-header">Recent</h6>
+                                                @foreach (var p in _recentPrompts)
+                                                {
+                                                    <div class="d-flex align-items-center">
+                                                        <button class="dropdown-item text-truncate" style="max-width: 260px;" type="button" title="@p" @onclick="() => SelectSuggestion(p)">@p</button>
+                                                        <button class="btn btn-sm btn-link text-danger p-0 px-1" type="button" title="Remove" @onclick="() => RemoveRecent(p)">✕</button>
+                                                    </div>
+                                                }
+                                                <div class="dropdown-divider"></div>
+                                            }
+                                            <h6 class="dropdown-header">Common Projects</h6>
+                                            @foreach (var p in CommonPrompts)
+                                            {
+                                                <button class="dropdown-item" type="button" @onclick="() => SelectSuggestion(p)">@p</button>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                            </label>
                             <textarea class="form-control form-control-sm" rows="5"
                                       placeholder="Describe your HMI/SCADA project in natural language. For example:&#10;&#10;• A home automation system with lighting, HVAC, and security sensors for a 3-floor building&#10;• An industrial bottling line with 4 stations, conveyor belt monitoring, and alarm management&#10;• A solar farm monitoring system with 50 inverters, weather station, and energy dashboards"
                                       @bind="_aiPrompt"></textarea>
@@ -105,12 +135,30 @@
                                                 <option value="@_customFilePath">@System.IO.Path.GetFileName(System.IO.Path.GetDirectoryName(_customFilePath))/@System.IO.Path.GetFileName(_customFilePath)</option>
                                             </optgroup>
                                         }
+                                        @if (!string.IsNullOrEmpty(_uploadedFileName))
+                                        {
+                                            <optgroup label="Uploaded File">
+                                                <option value="@UploadedMarker">📤 @_uploadedFileName</option>
+                                            </optgroup>
+                                        }
                                     </select>
                                 </div>
-                                <button class="btn btn-sm btn-outline-secondary" type="button" title="Browse for a custom reference file" @onclick="BrowseCustomFile">
-                                    📁
+                                <button class="btn btn-sm btn-outline-secondary" type="button" title="Enter a server file path" @onclick="BrowseCustomFile">
+                                    📁 Path
                                 </button>
+                                <div class="position-relative">
+                                    <button class="btn btn-sm btn-outline-secondary" type="button" title="Upload a file from your computer">
+                                        📤 Upload
+                                    </button>
+                                    <InputFile OnChange="OnUploadReferenceFile"
+                                               class="position-absolute top-0 start-0 w-100 h-100"
+                                               style="opacity:0; cursor:pointer;" />
+                                </div>
                             </div>
+                            @if (_uploadError is not null)
+                            {
+                                <div class="text-danger" style="font-size: 10px;">@_uploadError</div>
+                            }
                             @if (!string.IsNullOrEmpty(_selectedSamplePath))
                             {
                                 <div class="mt-1 d-flex align-items-center gap-1">
@@ -239,17 +287,111 @@
     private bool _showBrowse;
     private string _browseInput = "";
 
+    private const string UploadedMarker = "__uploaded__";
+    private string? _uploadedFileName;
+    private string? _uploadedContent;
+    private string? _uploadError;
+
     private static readonly string DefaultSamplesPath = System.IO.Path.Combine("C:", "Work", "samples");
 
-    protected override void OnInitialized()
+    private const string RecentPromptsKey = "wizard.recentPrompts";
+    private const int MaxRecentPrompts = 10;
+    private bool _showSuggestions;
+    private List<string> _recentPrompts = new();
+
+    private static readonly string[] CommonPrompts =
+    {
+        "A home automation system with lighting, HVAC, and security sensors for a 3-floor building",
+        "An industrial bottling line with 4 stations, conveyor belt monitoring, and alarm management",
+        "A solar farm monitoring system with 50 inverters, weather station, and energy dashboards",
+        "A water treatment plant with pumps, tanks, flow meters, and chemical dosing control",
+        "A warehouse with conveyor belts, sorting stations, and inventory tracking sensors",
+        "A HVAC system for a commercial building with zones, temperature sensors, and dampers",
+        "A packaging line with filling, capping, labeling stations and reject handling",
+        "A wind farm with multiple turbines, SCADA alarms, and power output trending"
+    };
+
+    protected override async Task OnInitializedAsync()
     {
         _sampleFiles = Ai.GetSampleFiles(DefaultSamplesPath);
+        try
+        {
+            var stored = await JS.InvokeAsync<string?>("localStorage.getItem", RecentPromptsKey);
+            if (!string.IsNullOrEmpty(stored))
+            {
+                _recentPrompts = System.Text.Json.JsonSerializer.Deserialize<List<string>>(stored) ?? new();
+            }
+        }
+        catch
+        {
+            // ignore storage errors (e.g. prerendering)
+        }
+    }
+
+    private void ToggleSuggestions()
+    {
+        _showSuggestions = !_showSuggestions;
+    }
+
+    private void SelectSuggestion(string text)
+    {
+        _aiPrompt = text;
+        _showSuggestions = false;
+    }
+
+    private async Task RemoveRecent(string text)
+    {
+        _recentPrompts.Remove(text);
+        await SaveRecentPrompts();
+    }
+
+    private async Task SaveRecentPrompts()
+    {
+        try
+        {
+            var json = System.Text.Json.JsonSerializer.Serialize(_recentPrompts);
+            await JS.InvokeVoidAsync("localStorage.setItem", RecentPromptsKey, json);
+        }
+        catch
+        {
+            // ignore storage errors
+        }
+    }
+
+    private async Task RememberPrompt(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return;
+        _recentPrompts.RemoveAll(p => string.Equals(p, text, StringComparison.OrdinalIgnoreCase));
+        _recentPrompts.Insert(0, text);
+        if (_recentPrompts.Count > MaxRecentPrompts)
+            _recentPrompts = _recentPrompts.Take(MaxRecentPrompts).ToList();
+        await SaveRecentPrompts();
+    }
+
+    private async Task OnUploadReferenceFile(InputFileChangeEventArgs e)
+    {
+        _uploadError = null;
+        try
+        {
+            using var stream = e.File.OpenReadStream(maxAllowedSize: 16 * 1024 * 1024);
+            using var reader = new StreamReader(stream);
+            _uploadedContent = await reader.ReadToEndAsync();
+            _uploadedFileName = e.File.Name;
+            _selectedSamplePath = UploadedMarker;
+            _showPreview = false;
+        }
+        catch (Exception ex)
+        {
+            _uploadError = $"Upload failed: {ex.Message}";
+        }
     }
 
     private void PreviewReference()
     {
         if (string.IsNullOrEmpty(_selectedSamplePath)) return;
-        var content = Ai.ReadReferenceFile(_selectedSamplePath);
+        string? content = _selectedSamplePath == UploadedMarker
+            ? _uploadedContent
+            : Ai.ReadReferenceFile(_selectedSamplePath);
         if (content != null)
         {
             _referencePreview = content.Length > 2000
@@ -264,6 +406,9 @@
         _selectedSamplePath = "";
         _referencePreview = "";
         _showPreview = false;
+        _uploadedFileName = null;
+        _uploadedContent = null;
+        _uploadError = null;
     }
 
     private void BrowseCustomFile()
@@ -354,6 +499,7 @@
     {
         _step = WizardStep.Generating;
         _generationStatus = $"Sending request to {_aiEngine}...";
+        await RememberPrompt(_aiPrompt);
         StateHasChanged();
 
         try
@@ -370,7 +516,12 @@
 
             string? referenceJson = null;
             string? referenceFileName = null;
-            if (!string.IsNullOrEmpty(_selectedSamplePath))
+            if (_selectedSamplePath == UploadedMarker)
+            {
+                referenceJson = _uploadedContent;
+                referenceFileName = _uploadedFileName;
+            }
+            else if (!string.IsNullOrEmpty(_selectedSamplePath))
             {
                 referenceJson = Ai.ReadReferenceFile(_selectedSamplePath);
                 referenceFileName = System.IO.Path.GetFileName(_selectedSamplePath);
