@@ -1021,6 +1021,66 @@ public class AiService
         sb.Append("You are a JSON editor helper for an OPC UA Server configuration. The user wants to modify the following JSON:\n\n");
         sb.Append(CompactJsonBeforeSend ? CompactJson(oldJson) : oldJson);
 
+        sb.Append("""
+
+
+--- OUTPUT SCHEMA CONTRACT (MANDATORY — DO NOT DEVIATE) ---
+The JSON you return MUST be a single object matching EXACTLY this shape. Do NOT invent new top-level
+sections such as "connections", "externalConnections", "deviceMappings", or similar — there is no such
+concept in this schema. Every connection to a field device/protocol lives INSIDE the owning Variable's
+"DriverConfigs" property. Unknown/extra properties are silently dropped by the loader, so anything you
+add outside this contract will be lost and the project will fail to build correctly.
+
+Top-level object properties (all optional, omit ones you are not changing — but keep existing ones from
+the current JSON above untouched unless the instruction says otherwise):
+  Server: object (EndpointUrl, EnableAnonymous, EnableEditorLogin, EnableRuntimeLogin, StartupScreen, ShowNavigationBar, DiagnosticsPort, ...)
+  Folder: object — the ROOT folder node: { "Name": string, "Folders": [Folder, ...], "Variables": [Variable, ...] } (recursive)
+  Screens: array of ScreenConfig
+  Scripts: array of ScriptConfig: { "Name", "Code", "Enabled", "IntervalMs", "Language" }
+  Users, UserGroups, Recipes, Reports, Schedulers, Cameras, Assets, Events, etc. — other optional top-level arrays.
+
+Folder object: { "Name": string, "Folders": [nested Folder objects], "Variables": [Variable objects] }
+  - There is NO other way to express hierarchy. Do not add a "Connections" or "Devices" array inside a Folder.
+
+Variable object (each item inside a Folder's "Variables" array):
+  {
+    "Name": string,
+    "Type": "Double" | "Int32" | "Boolean" | "String",
+    "Access": "Read" | "Write" | "ReadWrite",
+    "Value": <initial value matching Type>,
+    "EngineeringUnit": string (optional, e.g. "°C", "bar", "m3/h"),
+    "Description": string (optional),
+    "Alarm": AlarmConfig object (optional),
+    "DataLogging": { "Enabled": bool, "Hysteresis": number } (optional),
+    "DriverConfigs": { "<DriverName>": { ...driver fields... } } (optional — THIS is where device/protocol connections go, not a separate list)
+  }
+
+DriverConfigs is a dictionary keyed by driver name. Supported keys and their exact field names:
+  - "Modbus": { "IpAddress", "Port" (default 502), "UnitId" (1-247), "Register", "RegisterType" ("HoldingRegister"|"InputRegister"|"Coil"|"DiscreteInput"), "PollTime" (ms) }
+  - "S7": { "IpAddress", "Rack", "Slot", "Address" (e.g. "DB1.DBD0"), "PollTime" (ms) }
+  - "OpcUaClient": { "EndpointUrl" (e.g. "opc.tcp://host:4840"), "NodeId" (e.g. "ns=2;s=Tag1"), "PollTime" (ms) }
+  - "Mqtt": { "Broker", "Port" (default 1883), "Topic", "JsonPath" }
+  - "Rest": { "Url", "JsonPath", "PollTime" (ms) }
+  - "Csv": { "FilePath", "RowIndex", "ColumnIndex", "Key", "PollTime" (ms) }
+  - "Tcp": { "IpAddress", "Port", "Command", "Regex", "PollTime" (ms) }
+  - "Sql": { "ConnectionString", "Query", "PollTime" (ms) }
+  - "EtherNetIP": { "IpAddress", "Path" (e.g. "1,0"), "Tag", "Type" ("DINT"|"REAL"|"BOOL"|"SINT"|"INT"|"LINT"|"STRING"), "PollTime" (ms) }
+  - "Knx": { "IpAddress", "Port" (default 3671), "GroupAddress" (e.g. "1/2/3"), "DptType" (e.g. "9.001") }
+  - "Simulation": { "Function" ("Sine"|"Cosine"|"Sawtooth"|"Square"|"Triangle"|"Random"|"RandomInt"|"Counter"|"Pulse"), "Period", "Amplitude", "Offset", "Phase", "PollTime", "Min", "Max" }
+
+Example variable wired to a Modbus device (this is the ONLY correct way to express a driver connection):
+  { "Name": "InletValve_Open", "Type": "Boolean", "Access": "ReadWrite", "Value": false,
+     "DriverConfigs": { "Modbus": { "IpAddress": "192.168.0.21", "Port": 502, "UnitId": 1, "Register": 40001, "RegisterType": "Coil", "PollTime": 1000 } } }
+
+ScreenConfig object (each item in "Screens"): { "Name", "Width", "Height", "Background", "StartupScreen"-eligible, "Symbols": [ScreenSymbol, ...] }
+ScreenSymbol object: { "Id", "Type" (e.g. "gauge","switch","numericdisplay","text","rect"), "X", "Y", "Width", "Height", "Label", "VariablePath" (dot-separated path matching the Folder hierarchy, e.g. "Intake.Level"), "Fill", "Stroke" }
+  - "VariablePath" must reference an actual variable by its Folder.Variable dot-path (root folder name is NOT included in the path).
+
+Return ONLY this schema. If you are unsure where something goes, prefer putting it inside the closest matching existing array/object above rather than inventing a new one.
+--- END OUTPUT SCHEMA CONTRACT ---
+
+""");
+
         if (!string.IsNullOrEmpty(referenceJson))
         {
             var truncated = false;

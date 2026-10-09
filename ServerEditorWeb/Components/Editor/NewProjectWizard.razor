@@ -80,9 +80,70 @@
                                       placeholder="Describe your HMI/SCADA project in natural language. For example:&#10;&#10;• A home automation system with lighting, HVAC, and security sensors for a 3-floor building&#10;• An industrial bottling line with 4 stations, conveyor belt monitoring, and alarm management&#10;• A solar farm monitoring system with 50 inverters, weather station, and energy dashboards"
                                       @bind="_aiPrompt"></textarea>
                         </div>
+
+                        <div class="mb-2">
+                            <label class="form-label small mb-1 d-flex align-items-center gap-1">
+                                <span>Reference File</span>
+                                <span class="text-muted" style="font-size: 10px;">(optional — import from AutomationML, GSDML, EDS, PLC/KNX/Modbus exports, or a sample project)</span>
+                            </label>
+                            <div class="d-flex gap-1 align-items-start">
+                                <div class="flex-grow-1">
+                                    <select class="form-select form-select-sm" @bind="_selectedSamplePath">
+                                        <option value="">— None —</option>
+                                        @foreach (var group in _sampleFiles.GroupBy(f => f.Group))
+                                        {
+                                            <optgroup label="@group.Key">
+                                                @foreach (var (name, path, _) in group)
+                                                {
+                                                    <option value="@path">@name</option>
+                                                }
+                                            </optgroup>
+                                        }
+                                        @if (!string.IsNullOrEmpty(_customFilePath))
+                                        {
+                                            <optgroup label="Custom File">
+                                                <option value="@_customFilePath">@System.IO.Path.GetFileName(System.IO.Path.GetDirectoryName(_customFilePath))/@System.IO.Path.GetFileName(_customFilePath)</option>
+                                            </optgroup>
+                                        }
+                                    </select>
+                                </div>
+                                <button class="btn btn-sm btn-outline-secondary" type="button" title="Browse for a custom reference file" @onclick="BrowseCustomFile">
+                                    📁
+                                </button>
+                            </div>
+                            @if (!string.IsNullOrEmpty(_selectedSamplePath))
+                            {
+                                <div class="mt-1 d-flex align-items-center gap-1">
+                                    <span class="badge bg-success" style="font-size: 10px;">✓ Reference loaded</span>
+                                    <button class="btn btn-link btn-sm p-0" style="font-size: 10px;" type="button" @onclick="PreviewReference">Preview</button>
+                                    <button class="btn btn-link btn-sm p-0 text-danger" style="font-size: 10px;" type="button" @onclick="ClearReference">Clear</button>
+                                </div>
+                            }
+                        </div>
+
+                        @if (_showPreview && !string.IsNullOrEmpty(_referencePreview))
+                        {
+                            <div class="mb-2 p-2 border rounded" style="max-height: 180px; overflow-y: auto; font-size: 10px; font-family: monospace; background: #1e1e1e; color: #d4d4d4;">
+                                <pre class="mb-0" style="white-space: pre-wrap; word-break: break-all;">@_referencePreview</pre>
+                            </div>
+                        }
+
+                        @if (_showBrowse)
+                        {
+                            <div class="mb-2 p-2 border rounded bg-body-secondary">
+                                <label class="form-label small">Custom file path</label>
+                                <div class="d-flex gap-1">
+                                    <input type="text" class="form-control form-control-sm" @bind="_browseInput"
+                                           placeholder="C:\path\to\device-export.aml" />
+                                    <button class="btn btn-sm btn-primary" type="button" @onclick="ConfirmBrowse">OK</button>
+                                    <button class="btn btn-sm btn-outline-secondary" type="button" @onclick="CancelBrowse">✕</button>
+                                </div>
+                            </div>
+                        }
+
                         <div class="d-flex gap-2 small text-muted">
                             <span>💡</span>
-                            <span>The more detail you provide, the better the result. Include information about equipment, variables, screens, and alarms you need.</span>
+                            <span>The more detail you provide, the better the result. Include information about equipment, variables, screens, and alarms you need. If you attach a reference file, mention what to do with it (e.g. "import all variables from the reference file").</span>
                         </div>
                     }
                 }
@@ -169,6 +230,67 @@
     private string _generationStatus = "";
     private string _errorMessage = "";
 
+    // Reference file state (AutomationML / GSDML / EDS / PLC exports / sample projects)
+    private List<(string Name, string Path, string Group)> _sampleFiles = new();
+    private string _selectedSamplePath = "";
+    private string _customFilePath = "";
+    private string _referencePreview = "";
+    private bool _showPreview;
+    private bool _showBrowse;
+    private string _browseInput = "";
+
+    private static readonly string DefaultSamplesPath = System.IO.Path.Combine("C:", "Work", "samples");
+
+    protected override void OnInitialized()
+    {
+        _sampleFiles = Ai.GetSampleFiles(DefaultSamplesPath);
+    }
+
+    private void PreviewReference()
+    {
+        if (string.IsNullOrEmpty(_selectedSamplePath)) return;
+        var content = Ai.ReadReferenceFile(_selectedSamplePath);
+        if (content != null)
+        {
+            _referencePreview = content.Length > 2000
+                ? content[..2000] + "\n... (truncated)"
+                : content;
+            _showPreview = !_showPreview;
+        }
+    }
+
+    private void ClearReference()
+    {
+        _selectedSamplePath = "";
+        _referencePreview = "";
+        _showPreview = false;
+    }
+
+    private void BrowseCustomFile()
+    {
+        _showBrowse = !_showBrowse;
+        _browseInput = _customFilePath;
+    }
+
+    private void ConfirmBrowse()
+    {
+        if (!string.IsNullOrWhiteSpace(_browseInput) && File.Exists(_browseInput))
+        {
+            _customFilePath = _browseInput;
+            _selectedSamplePath = _browseInput;
+            _showBrowse = false;
+        }
+        else
+        {
+            _errorMessage = $"File not found: {_browseInput}";
+        }
+    }
+
+    private void CancelBrowse()
+    {
+        _showBrowse = false;
+    }
+
     private CancellationTokenSource? _generationCts;
     private int _streamCharCount;
     private string _streamTail = "";
@@ -246,6 +368,14 @@
 
             var baseJson = JsonSerializer.Serialize(baseModel, new JsonSerializerOptions { WriteIndented = true });
 
+            string? referenceJson = null;
+            string? referenceFileName = null;
+            if (!string.IsNullOrEmpty(_selectedSamplePath))
+            {
+                referenceJson = Ai.ReadReferenceFile(_selectedSamplePath);
+                referenceFileName = System.IO.Path.GetFileName(_selectedSamplePath);
+            }
+
             var prompt = $"""
                 Create a complete OPC UA HMI/SCADA project based on this description:
 
@@ -317,7 +447,7 @@
             var startedAt = DateTime.UtcNow;
 
             var (newJson, comments) = await Ai.AskStreamingAsync(
-                _aiEngine, prompt, baseJson, null, null,
+                _aiEngine, prompt, baseJson, referenceJson, referenceFileName,
                 async accumulated =>
                 {
                     _streamCharCount = accumulated.Length;
