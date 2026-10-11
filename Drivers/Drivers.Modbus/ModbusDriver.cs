@@ -7,6 +7,7 @@ using System.Linq;
 using System.Net.Sockets;
 using System.Text.Json;
 using System.Threading;
+using System.Threading.Tasks;
 using Opc.Ua;
 using NModbus;
 using Serilog;
@@ -21,6 +22,13 @@ namespace SimpleOpcFileServer
         public ushort Register { get; set; }
         public string? RegisterType { get; set; }
         public int PollTime { get; set; } = 1000;
+
+        /// <summary>
+        /// Maximum gap (in registers/coils) allowed between two items for them to be merged
+        /// into a single block read. 0 means only strictly contiguous items are merged.
+        /// Can be set per-item; the device uses the maximum value configured across its items.
+        /// </summary>
+        public int AggregationGapThreshold { get; set; } = 10;
     }
 
     public class ModbusDriver : IDriver, IDisposable
@@ -106,6 +114,12 @@ namespace SimpleOpcFileServer
             private int _consecutiveErrors;
             private const int MaxBackoffMs = 30_000;
 
+            // Aggregation tuning: how many "empty" registers/coils between two items are tolerated
+            // before they are read as separate blocks, and the protocol-imposed max block size.
+            private int _gapThreshold = 10;
+            private const int MaxRegisterBlockSize = 120;  // Modbus limit is 125 registers per read
+            private const int MaxCoilBlockSize = 2000;     // Modbus limit is 2000 coils/bits per read
+
             public ModbusDevice(string key, ISystemContext context, Action<string, string>? onError = null, Action<double>? onCycle = null)
             {
                 _key = key;
@@ -122,6 +136,8 @@ namespace SimpleOpcFileServer
                     if (item.Config.PollTime > 0 && item.Config.PollTime < _minPollTime)
                         _minPollTime = item.Config.PollTime;
                     _pollInterval = _minPollTime < int.MaxValue ? _minPollTime : 1000;
+                    if (item.Config.AggregationGapThreshold > _gapThreshold)
+                        _gapThreshold = item.Config.AggregationGapThreshold;
                 }
             }
 
@@ -129,13 +145,14 @@ namespace SimpleOpcFileServer
             {
                 lock (_deviceLock)
                 {
+                    // The timer callback kicks off an async poll and returns immediately;
+                    // the Timer thread is never blocked waiting on network I/O.
                     if (_timer == null && _items.Count > 0)
-                        _timer = new Timer(Poll, null, _pollInterval, Timeout.Infinite);
+                        _timer = new Timer(_ => _ = PollAsync(), null, _pollInterval, Timeout.Infinite);
                 }
             }
 
-
-            private void Poll(object? state)
+            private async Task PollAsync()
             {
                 if (_disposed) return;
                 var _sw = System.Diagnostics.Stopwatch.StartNew();
@@ -161,7 +178,7 @@ namespace SimpleOpcFileServer
                         var newClient = new TcpClient();
                         try
                         {
-                            newClient.Connect(split[0], int.Parse(split[1]));
+                            await newClient.ConnectAsync(split[0], int.Parse(split[1])).ConfigureAwait(false);
                             var factory = new ModbusFactory();
                             var newMaster = factory.CreateMaster(newClient);
                             lock (_deviceLock)
@@ -193,19 +210,20 @@ namespace SimpleOpcFileServer
                     if (client != null && client.Connected && master != null)
                     {
                         bool connectionFailed = false;
-                        foreach (var item in itemsToPoll)
+                        foreach (var block in BuildReadBlocks(itemsToPoll))
                         {
-                            try { ReadItem(master, item); }
+                            try { await ReadItemsBlockAsync(master, block).ConfigureAwait(false); }
                             catch (Exception ex)
                             {
                                 if (ex.Message != _lastLoggedError)
                                 {
-                                    Log.Error(ex, "Modbus read error for {Name}: {Message}", item.Variable.DisplayName, ex.Message);
+                                    Log.Error(ex, "Modbus read error for block {Key} (unit {UnitId}, {Type} {Start}-{End}): {Message}",
+                                        _key, block.UnitId, block.RegisterType, block.Start, block.Start + block.Length - 1, ex.Message);
                                     _lastLoggedError = ex.Message;
                                 }
-                                else Log.Debug("Modbus read error (repeated) for {Name}: {Message}", item.Variable.DisplayName, ex.Message);
-                                _onError?.Invoke(_key, $"Read error ({item.Variable.DisplayName}): {ex.Message}");
-                                UpdateError(item.Variable, ex.Message);
+                                else Log.Debug("Modbus read error (repeated) for block {Key}: {Message}", _key, ex.Message);
+                                _onError?.Invoke(_key, $"Read error (block {block.Start}-{block.Start + block.Length - 1}): {ex.Message}");
+                                foreach (var item in block.Items) UpdateError(item.Variable, ex.Message);
                                 connectionFailed = true;
                                 anyError = true;
                             }
@@ -241,51 +259,153 @@ namespace SimpleOpcFileServer
                 }
             }
 
-            private void ReadItem(IModbusMaster master, ModbusItem item)
+            // Cache of OPC UA DataType NodeId -> register length (in 16-bit words), so the
+            // mapping does not need to be recomputed via chained equality checks on every poll.
+            private static readonly Dictionary<NodeId, int> RegisterLengthByDataType = new()
             {
-                ushort start = item.Config.Register;
-                byte unitId = item.Config.UnitId;
+                [DataTypeIds.Double] = 4,
+                [DataTypeIds.Float] = 2,
+                [DataTypeIds.Int32] = 2,
+                [DataTypeIds.UInt32] = 2,
+            };
 
-                if (item.Config.RegisterType == "Coil")
-                {
-                    bool[] res = master.ReadCoils(unitId, start, 1);
-                    if (res.Length > 0) Update(item.Variable, res[0]);
-                }
-                else if (item.Config.RegisterType == "DiscreteInput")
-                {
-                    bool[] res = master.ReadInputs(unitId, start, 1);
-                    if (res.Length > 0) Update(item.Variable, res[0]);
-                }
-                else
-                {
-                    ushort count = 1;
-                    if (item.Variable.DataType == DataTypeIds.Double) count = 4;
-                    else if (item.Variable.DataType == DataTypeIds.Float) count = 2;
-                    else if (item.Variable.DataType == DataTypeIds.Int32 || item.Variable.DataType == DataTypeIds.UInt32) count = 2;
+            /// <summary>
+            /// Returns the number of registers (or coils/bits) that the given item occupies,
+            /// starting at its configured address.
+            /// </summary>
+            private static int GetItemLength(ModbusItem item)
+            {
+                if (item.Config.RegisterType == "Coil" || item.Config.RegisterType == "DiscreteInput")
+                    return 1;
 
-                    ushort[] res = item.Config.RegisterType == "InputRegister"
-                        ? master.ReadInputRegisters(unitId, start, count)
-                        : master.ReadHoldingRegisters(unitId, start, count);
+                return RegisterLengthByDataType.TryGetValue(item.Variable.DataType, out var len) ? len : 1;
+            }
 
-                    if (res.Length == count)
+            /// <summary>
+            /// Groups items sharing the same unit id and register kind (Coil / DiscreteInput /
+            /// InputRegister / HoldingRegister) into contiguous read blocks. Items whose address
+            /// gap (relative to the end of the previous item) is within the configured
+            /// aggregation gap threshold are merged into one block read, up to the protocol's
+            /// maximum block size. This reduces the number of round-trips to the device when
+            /// many variables map to nearby addresses.
+            /// </summary>
+            private List<ReadBlock> BuildReadBlocks(List<ModbusItem> items)
+            {
+                var blocks = new List<ReadBlock>();
+
+                var groups = items
+                    .GroupBy(i => (i.Config.UnitId, Type: NormalizeType(i.Config.RegisterType)))
+                    .OrderBy(g => g.Key.UnitId).ThenBy(g => g.Key.Type);
+
+                foreach (var group in groups)
+                {
+                    var maxBlockSize = (group.Key.Type == "Coil" || group.Key.Type == "DiscreteInput")
+                        ? MaxCoilBlockSize : MaxRegisterBlockSize;
+
+                    var sorted = group
+                        .Select(i => (Item: i, Start: i.Config.Register, Len: GetItemLength(i)))
+                        .OrderBy(x => x.Start)
+                        .ToList();
+
+                    ReadBlock? current = null;
+                    foreach (var entry in sorted)
                     {
-                        var bytes = new List<byte>();
-                        foreach (var r in res) { bytes.Add((byte)(r >> 8)); bytes.Add((byte)(r & 0xFF)); }
-                        var buffer = bytes.ToArray();
-                        if (BitConverter.IsLittleEndian) Array.Reverse(buffer);
+                        int entryEnd = entry.Start + entry.Len;
+                        if (current != null)
+                        {
+                            int currentEnd = current.Start + current.Length;
+                            int gap = entry.Start - currentEnd;
+                            int candidateLength = entryEnd - current.Start;
+                            if (gap >= 0 && gap <= _gapThreshold && candidateLength <= maxBlockSize)
+                            {
+                                current.Length = candidateLength;
+                                current.Items.Add(entry.Item);
+                                continue;
+                            }
+                        }
 
-                        object? val = null;
-                        if (item.Variable.DataType == DataTypeIds.Double) val = BitConverter.ToDouble(buffer, 0);
-                        else if (item.Variable.DataType == DataTypeIds.Float) val = BitConverter.ToSingle(buffer, 0);
-                        else if (item.Variable.DataType == DataTypeIds.Int32) val = BitConverter.ToInt32(buffer, 0);
-                        else if (item.Variable.DataType == DataTypeIds.UInt32) val = BitConverter.ToUInt32(buffer, 0);
-                        else if (item.Variable.DataType == DataTypeIds.Int16) val = BitConverter.ToInt16(buffer, 0);
-                        else if (item.Variable.DataType == DataTypeIds.UInt16) val = BitConverter.ToUInt16(buffer, 0);
-
-                        if (val != null) Update(item.Variable, val);
+                        current = new ReadBlock
+                        {
+                            UnitId = group.Key.UnitId,
+                            RegisterType = group.Key.Type,
+                            Start = entry.Start,
+                            Length = entry.Len,
+                        };
+                        current.Items.Add(entry.Item);
+                        blocks.Add(current);
                     }
                 }
+
+                return blocks;
             }
+
+            private static string NormalizeType(string? registerType) => registerType switch
+            {
+                "Coil" => "Coil",
+                "DiscreteInput" => "DiscreteInput",
+                "InputRegister" => "InputRegister",
+                _ => "HoldingRegister",
+            };
+
+            private async Task ReadItemsBlockAsync(IModbusMaster master, ReadBlock block)
+            {
+                if (block.RegisterType == "Coil" || block.RegisterType == "DiscreteInput")
+                {
+                    bool[] res = block.RegisterType == "Coil"
+                        ? await master.ReadCoilsAsync(block.UnitId, (ushort)block.Start, (ushort)block.Length).ConfigureAwait(false)
+                        : await master.ReadInputsAsync(block.UnitId, (ushort)block.Start, (ushort)block.Length).ConfigureAwait(false);
+
+                    foreach (var item in block.Items)
+                    {
+                        int idx = item.Config.Register - block.Start;
+                        if (idx >= 0 && idx < res.Length) Update(item.Variable, res[idx]);
+                    }
+                    return;
+                }
+
+                ushort[] regs = block.RegisterType == "InputRegister"
+                    ? await master.ReadInputRegistersAsync(block.UnitId, (ushort)block.Start, (ushort)block.Length).ConfigureAwait(false)
+                    : await master.ReadHoldingRegistersAsync(block.UnitId, (ushort)block.Start, (ushort)block.Length).ConfigureAwait(false);
+
+                if (regs.Length != block.Length) return;
+
+                foreach (var item in block.Items)
+                {
+                    int itemLen = GetItemLength(item);
+                    int offset = item.Config.Register - block.Start;
+                    if (offset < 0 || offset + itemLen > regs.Length) continue;
+
+                    var bytes = new List<byte>();
+                    for (int i = 0; i < itemLen; i++)
+                    {
+                        var r = regs[offset + i];
+                        bytes.Add((byte)(r >> 8));
+                        bytes.Add((byte)(r & 0xFF));
+                    }
+                    var buffer = bytes.ToArray();
+                    if (BitConverter.IsLittleEndian) Array.Reverse(buffer);
+
+                    object? val = null;
+                    if (item.Variable.DataType == DataTypeIds.Double) val = BitConverter.ToDouble(buffer, 0);
+                    else if (item.Variable.DataType == DataTypeIds.Float) val = BitConverter.ToSingle(buffer, 0);
+                    else if (item.Variable.DataType == DataTypeIds.Int32) val = BitConverter.ToInt32(buffer, 0);
+                    else if (item.Variable.DataType == DataTypeIds.UInt32) val = BitConverter.ToUInt32(buffer, 0);
+                    else if (item.Variable.DataType == DataTypeIds.Int16) val = BitConverter.ToInt16(buffer, 0);
+                    else if (item.Variable.DataType == DataTypeIds.UInt16) val = BitConverter.ToUInt16(buffer, 0);
+
+                    if (val != null) Update(item.Variable, val);
+                }
+            }
+
+            private class ReadBlock
+            {
+                public byte UnitId { get; set; }
+                public string RegisterType { get; set; } = "HoldingRegister";
+                public int Start { get; set; }
+                public int Length { get; set; }
+                public List<ModbusItem> Items { get; } = new();
+            }
+
 
             private void Update(BaseDataVariableState variable, object value)
             {

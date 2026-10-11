@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Threading;
+using System.Threading.Tasks;
 using Opc.Ua;
 using libplctag;
 using Serilog;
@@ -101,70 +102,94 @@ namespace SimpleOpcFileServer
             {
                 lock (_deviceLock)
                 {
+                    // The timer callback kicks off an async poll and returns immediately;
+                    // the Timer thread is never blocked waiting on network I/O.
                     if (_timer == null && _items.Count > 0)
-                        _timer = new Timer(Poll, null, _pollInterval, Timeout.Infinite);
+                        _timer = new Timer(_ => _ = PollAsync(), null, _pollInterval, Timeout.Infinite);
                 }
             }
 
-            private void Poll(object? state)
+            private async Task PollAsync()
             {
                 if (_disposed) return;
                 var _sw = System.Diagnostics.Stopwatch.StartNew();
                 bool anyError = false;
+
+                List<EipItem> itemsToPoll;
                 lock (_deviceLock)
                 {
                     if (_disposed) return;
-                    foreach (var item in _items)
-                    {
-                        try
-                        {
-                            if (item.LibTag == null)
-                            {
-                                int elemSize = item.Config.Type switch
-                                {
-                                    "BOOL" or "SINT" => 1,
-                                    "INT" => 2,
-                                    _ => 4
-                                };
-                                item.LibTag = new Tag
-                                {
-                                    Gateway = _ip, Path = item.Config.Path, Name = item.Config.Tag,
-                                    PlcType = PlcType.ControlLogix, Protocol = Protocol.ab_eip,
-                                    ElementSize = elemSize, ElementCount = 1, Timeout = TimeSpan.FromSeconds(2)
-                                };
-                            }
-                            item.LibTag.Read();
-                            object? val = item.Config.Type switch
-                            {
-                                "DINT" => item.LibTag.GetInt32(0),
-                                "REAL" => item.LibTag.GetFloat32(0),
-                                "BOOL" => item.LibTag.GetUInt8(0) > 0,
-                                "INT" => item.LibTag.GetInt16(0),
-                                "SINT" => item.LibTag.GetInt8(0),
-                                _ => null
-                            };
-                            if (val != null) Update(item.Variable, val);
-                        }
-                        catch (Exception ex)
-                        {
-                            if (ex.Message != _lastLoggedError)
-                            {
-                                Log.Error(ex, "EtherNetIP Error: {Message}", ex.Message);
-                                _lastLoggedError = ex.Message;
-                            }
-                            else Log.Debug("EtherNetIP Error (repeated): {Message}", ex.Message);
-                            _onError?.Invoke(_ip, $"Error: {ex.Message}");
-                            UpdateError(item.Variable, ex.Message);
-                            try { item.LibTag?.Dispose(); } catch { }
-                            item.LibTag = null;
-                            anyError = true;
-                        }
-                    }
+                    itemsToPoll = new List<EipItem>(_items);
                 }
+
+                // libplctag 1.5.2 does not expose a TagGroup batching API, so each tag still
+                // requires its own CIP request. Reading all tags concurrently (instead of one
+                // at a time, sequentially blocking) significantly reduces total poll wall-clock
+                // time for devices with many tags, since round-trips overlap.
+                var readTasks = itemsToPoll.Select(item => ReadItemAsync(item)).ToArray();
+                var results = await Task.WhenAll(readTasks).ConfigureAwait(false);
+                anyError = results.Any(ok => !ok);
+
                 if (anyError) _consecutiveErrors++; else { _consecutiveErrors = 0; _lastLoggedError = null; }
                 var delay = _consecutiveErrors > 0 ? Math.Min(_pollInterval * (1 << Math.Min(_consecutiveErrors, 10)), MaxBackoffMs) : _pollInterval;
                 _onCycle?.Invoke(_sw.Elapsed.TotalMilliseconds);
                 if (!_disposed) _timer?.Change(delay, Timeout.Infinite);
+            }
+
+            /// <summary>
+            /// Reads a single EtherNet/IP tag asynchronously. Returns true on success, false on error.
+            /// </summary>
+            private async Task<bool> ReadItemAsync(EipItem item)
+            {
+                try
+                {
+                    lock (_deviceLock)
+                    {
+                        if (_disposed) return true;
+                        if (item.LibTag == null)
+                        {
+                            int elemSize = item.Config.Type switch
+                            {
+                                "BOOL" or "SINT" => 1,
+                                "INT" => 2,
+                                _ => 4
+                            };
+                            item.LibTag = new Tag
+                            {
+                                Gateway = _ip, Path = item.Config.Path, Name = item.Config.Tag,
+                                PlcType = PlcType.ControlLogix, Protocol = Protocol.ab_eip,
+                                ElementSize = elemSize, ElementCount = 1, Timeout = TimeSpan.FromSeconds(2)
+                            };
+                        }
+                    }
+
+                    await item.LibTag!.ReadAsync().ConfigureAwait(false);
+                    object? val = item.Config.Type switch
+                    {
+                        "DINT" => item.LibTag.GetInt32(0),
+                        "REAL" => item.LibTag.GetFloat32(0),
+                        "BOOL" => item.LibTag.GetUInt8(0) > 0,
+                        "INT" => item.LibTag.GetInt16(0),
+                        "SINT" => item.LibTag.GetInt8(0),
+                        _ => null
+                    };
+                    if (val != null) Update(item.Variable, val);
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    if (ex.Message != _lastLoggedError)
+                    {
+                        Log.Error(ex, "EtherNetIP Error: {Message}", ex.Message);
+                        _lastLoggedError = ex.Message;
+                    }
+                    else Log.Debug("EtherNetIP Error (repeated): {Message}", ex.Message);
+                    _onError?.Invoke(_ip, $"Error: {ex.Message}");
+                    UpdateError(item.Variable, ex.Message);
+                    try { item.LibTag?.Dispose(); } catch { }
+                    item.LibTag = null;
+                    return false;
+                }
             }
 
             private void Update(BaseDataVariableState variable, object value)

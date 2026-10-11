@@ -30,9 +30,11 @@ namespace SimpleOpcFileServer
 
         private readonly List<MqttItem> _items = new();
         private readonly Dictionary<string, IMqttClient> _clients = new();
+        private readonly Dictionary<string, MqttConfig> _brokerConfigs = new();
         private readonly MqttClientFactory _factory = new();
         private readonly object _lock = new();
         private bool _disposed;
+        private bool _started;
         private readonly ISystemContext _context;
 
         public MqttDriver(ISystemContext context) { _context = context; }
@@ -42,8 +44,16 @@ namespace SimpleOpcFileServer
             var mqttConfig = JsonSerializer.Deserialize<MqttConfig>(configJson);
             if (mqttConfig == null) return;
 
-            lock (_lock) { _items.Add(new MqttItem { Variable = variable, Config = mqttConfig }); }
-            Task.Run(() => InitializeClient(mqttConfig));
+            var key = $"{mqttConfig.Broker}:{mqttConfig.Port}";
+            lock (_lock)
+            {
+                _items.Add(new MqttItem { Variable = variable, Config = mqttConfig });
+                // Remember one representative config per broker; actual connection + batched
+                // subscription of all topics for this broker happens once in Start(), rather
+                // than firing a separate connect/subscribe task for every single item added.
+                _brokerConfigs[key] = mqttConfig;
+                if (_started) Task.Run(() => InitializeClient(key));
+            }
 
             // Publish to MQTT when an OPC UA client writes this variable.
             variable.OnSimpleWriteValue = (ISystemContext ctx, NodeState node, ref Variant valueVariant) =>
@@ -58,7 +68,7 @@ namespace SimpleOpcFileServer
                         if (!_clients.TryGetValue(key, out client) || client == null || !client.IsConnected)
                         {
                             // Try to (re)initialize the client in background and report not connected now.
-                            Task.Run(() => InitializeClient(mqttConfig));
+                            Task.Run(() => InitializeClient(key));
                             return ServiceResult.Create(StatusCodes.BadNotConnected, "MQTT client not connected");
                         }
                     }
@@ -128,21 +138,37 @@ namespace SimpleOpcFileServer
             };
         }
 
-        private async Task InitializeClient(MqttConfig config)
+        /// <summary>
+        /// Connects to every distinct broker referenced by added items, subscribing to all of
+        /// that broker's distinct topics in a single batched MQTT SUBSCRIBE request per broker
+        /// instead of one connection + subscribe round-trip per item.
+        /// </summary>
+        public void Start()
         {
-            var key = $"{config.Broker}:{config.Port}";
+            List<string> keys;
+            lock (_lock)
+            {
+                _started = true;
+                keys = _brokerConfigs.Keys.ToList();
+            }
+            foreach (var key in keys) Task.Run(() => InitializeClient(key));
+        }
+
+        private async Task InitializeClient(string key)
+        {
+            MqttConfig? config;
             IMqttClient client;
             bool newClient = false;
 
             lock (_lock)
             {
-                if (!_clients.ContainsKey(key))
+                if (!_brokerConfigs.TryGetValue(key, out config) || config == null) return;
+                if (!_clients.TryGetValue(key, out client!))
                 {
                     client = _factory.CreateMqttClient();
                     _clients[key] = client;
                     newClient = true;
                 }
-                else client = _clients[key];
             }
 
             if (newClient)
@@ -169,13 +195,36 @@ namespace SimpleOpcFileServer
                         foreach (var item in _items)
                             if ($"{item.Config.Broker}:{item.Config.Port}" == key) UpdateError(item.Variable, ex.Message);
                     }
+                    return;
                 }
             }
 
             if (client.IsConnected)
             {
-                var subscribeOptions = new MqttClientSubscribeOptionsBuilder().WithTopicFilter(config.Topic).Build();
-                await client.SubscribeAsync(subscribeOptions);
+                // Batch every distinct topic for this broker into one SubscribeAsync call
+                // (MQTT's SUBSCRIBE packet natively supports multiple topic filters in one
+                // request), instead of issuing a separate subscribe round-trip per item/topic.
+                List<string> topics;
+                lock (_lock)
+                {
+                    topics = _items
+                        .Where(i => $"{i.Config.Broker}:{i.Config.Port}" == key)
+                        .Select(i => i.Config.Topic)
+                        .Where(t => !string.IsNullOrEmpty(t))
+                        .Distinct()
+                        .ToList();
+                }
+                if (topics.Count > 0)
+                {
+                    var subscribeBuilder = new MqttClientSubscribeOptionsBuilder();
+                    foreach (var topic in topics) subscribeBuilder.WithTopicFilter(topic);
+                    try { await client.SubscribeAsync(subscribeBuilder.Build()); }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex, "MQTT subscribe error for {Key}: {Message}", key, ex.Message);
+                        OnError?.Invoke(key, $"Subscribe error: {ex.Message}");
+                    }
+                }
             }
         }
 

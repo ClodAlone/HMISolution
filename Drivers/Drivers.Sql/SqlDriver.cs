@@ -7,6 +7,7 @@ using System.Data;
 using System.Linq;
 using System.Text.Json;
 using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Data.SqlClient;
 using Opc.Ua;
 using Serilog;
@@ -100,12 +101,14 @@ namespace SimpleOpcFileServer
             {
                 lock (_deviceLock)
                 {
+                    // The timer callback kicks off an async poll and returns immediately;
+                    // the Timer thread is never blocked waiting on network/DB I/O.
                     if (_timer == null && _items.Count > 0)
-                        _timer = new Timer(Poll, null, _pollInterval, Timeout.Infinite);
+                        _timer = new Timer(_ => _ = PollAsync(), null, _pollInterval, Timeout.Infinite);
                 }
             }
 
-            private void Poll(object? state)
+            private async Task PollAsync()
             {
                 if (_disposed) return;
                 var _sw = System.Diagnostics.Stopwatch.StartNew();
@@ -116,27 +119,53 @@ namespace SimpleOpcFileServer
                 try
                 {
                     using var conn = new SqlConnection(_connectionString);
-                    conn.Open();
-                    foreach (var item in itemsToPoll)
+                    await conn.OpenAsync().ConfigureAwait(false);
+
+                    // Multiple variables often point at the same query (e.g. one row returning
+                    // several columns, or several variables watching the same scalar). Execute
+                    // each distinct query text only once per poll cycle and fan the single result
+                    // out to all items sharing it, instead of re-running identical SQL repeatedly.
+                    var resultsByQuery = new Dictionary<string, (object? Result, Exception? Error)>(StringComparer.Ordinal);
+                    foreach (var group in itemsToPoll.GroupBy(i => i.Config.Query))
                     {
-                        try
+                        if (!resultsByQuery.TryGetValue(group.Key, out var cached))
                         {
-                            using var cmd = new SqlCommand(item.Config.Query, conn);
-                            var result = cmd.ExecuteScalar();
-                            if (result != null && result != DBNull.Value) Update(item.Variable, result);
-                            else UpdateError(item.Variable, "No result");
-                        }
-                        catch (Exception ex)
-                        {
-                            if (ex.Message != _lastLoggedError)
+                            try
                             {
-                                Log.Error(ex, "SQL query error for {Name}: {Message}", item.Variable.DisplayName, ex.Message);
-                                _lastLoggedError = ex.Message;
+                                using var cmd = new SqlCommand(group.Key, conn);
+                                var result = await cmd.ExecuteScalarAsync().ConfigureAwait(false);
+                                cached = (result, null);
                             }
-                            else Log.Debug("SQL query error (repeated) for {Name}: {Message}", item.Variable.DisplayName, ex.Message);
-                            _onError?.Invoke(_connectionString, $"Query error ({item.Variable.DisplayName}): {ex.Message}");
-                            UpdateError(item.Variable, ex.Message);
-                            anyError = true;
+                            catch (Exception ex)
+                            {
+                                cached = (null, ex);
+                            }
+                            resultsByQuery[group.Key] = cached;
+                        }
+
+                        foreach (var item in group)
+                        {
+                            if (cached.Error != null)
+                            {
+                                var ex = cached.Error;
+                                if (ex.Message != _lastLoggedError)
+                                {
+                                    Log.Error(ex, "SQL query error for {Name}: {Message}", item.Variable.DisplayName, ex.Message);
+                                    _lastLoggedError = ex.Message;
+                                }
+                                else Log.Debug("SQL query error (repeated) for {Name}: {Message}", item.Variable.DisplayName, ex.Message);
+                                _onError?.Invoke(_connectionString, $"Query error ({item.Variable.DisplayName}): {ex.Message}");
+                                UpdateError(item.Variable, ex.Message);
+                                anyError = true;
+                            }
+                            else if (cached.Result != null && cached.Result != DBNull.Value)
+                            {
+                                Update(item.Variable, cached.Result);
+                            }
+                            else
+                            {
+                                UpdateError(item.Variable, "No result");
+                            }
                         }
                     }
                 }

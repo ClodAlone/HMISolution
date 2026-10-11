@@ -7,6 +7,7 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Threading;
+using System.Threading.Tasks;
 using Opc.Ua;
 using Serilog;
 
@@ -107,13 +108,15 @@ namespace SimpleOpcFileServer
             {
                 lock (_deviceLock)
                 {
+                    // The timer callback kicks off an async poll and returns immediately;
+                    // the Timer thread is never blocked waiting on file I/O.
                     if (_timer == null && _items.Count > 0)
-                        _timer = new Timer(Poll, null, _pollInterval, Timeout.Infinite);
+                        _timer = new Timer(_ => _ = PollAsync(), null, _pollInterval, Timeout.Infinite);
                 }
             }
 
 
-            private void Poll(object? state)
+            private async Task PollAsync()
             {
                 if (_disposed) return;
                 var _sw = System.Diagnostics.Stopwatch.StartNew();
@@ -129,11 +132,13 @@ namespace SimpleOpcFileServer
                 {
                     if (File.Exists(_filePath))
                     {
-                        using var fs = new FileStream(_filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                        // All items for this device share a single file read per poll cycle
+                        // (already aggregated); this just makes that read non-blocking.
+                        await using var fs = new FileStream(_filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, bufferSize: 4096, useAsync: true);
                         using var sr = new StreamReader(fs);
                         var lines = new List<string[]>();
                         string? line;
-                        while ((line = sr.ReadLine()) != null)
+                        while ((line = await sr.ReadLineAsync().ConfigureAwait(false)) != null)
                             lines.Add(line.Split(new[] { ',', ';' }));
 
                         foreach (var item in itemsToPoll)

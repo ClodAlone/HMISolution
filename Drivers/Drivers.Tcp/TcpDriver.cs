@@ -9,6 +9,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
+using System.Threading.Tasks;
 using Opc.Ua;
 using Serilog;
 
@@ -106,12 +107,14 @@ namespace SimpleOpcFileServer
             {
                 lock (_deviceLock)
                 {
+                    // The timer callback kicks off an async poll and returns immediately;
+                    // the Timer thread is never blocked waiting on network round trips.
                     if (_timer == null && _items.Count > 0)
-                        _timer = new Timer(Poll, null, _pollInterval, Timeout.Infinite);
+                        _timer = new Timer(_ => _ = PollAsync(), null, _pollInterval, Timeout.Infinite);
                 }
             }
 
-            private void Poll(object? state)
+            private async Task PollAsync()
             {
                 if (_disposed) return;
                 var _sw = System.Diagnostics.Stopwatch.StartNew();
@@ -121,20 +124,27 @@ namespace SimpleOpcFileServer
 
                 try
                 {
+                    // Each item issues its own request/response exchange (this simple line-oriented
+                    // TCP protocol has no concept of multi-command batching), but each exchange now
+                    // uses non-blocking async I/O instead of blocking the shared Timer thread.
                     foreach (var item in itemsToPoll)
                     {
                         try
                         {
                             using var client = new TcpClient();
-                            if (client.ConnectAsync(_ip, _port).Wait(1000))
+                            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(1));
+                            bool connected = true;
+                            try { await client.ConnectAsync(_ip, _port, cts.Token).ConfigureAwait(false); }
+                            catch (OperationCanceledException) { connected = false; }
+
+                            if (connected)
                             {
                                 using var stream = client.GetStream();
                                 var cmdStr = item.Config.Command.Replace("\\r", "\r").Replace("\\n", "\n");
                                 var data = Encoding.ASCII.GetBytes(cmdStr);
-                                stream.Write(data, 0, data.Length);
-                                stream.ReadTimeout = 1000;
+                                await stream.WriteAsync(data, cts.Token).ConfigureAwait(false);
                                 var buffer = new byte[1024];
-                                int bytesRead = stream.Read(buffer, 0, buffer.Length);
+                                int bytesRead = await stream.ReadAsync(buffer, cts.Token).ConfigureAwait(false);
                                 if (bytesRead > 0)
                                 {
                                     var response = Encoding.ASCII.GetString(buffer, 0, bytesRead);
@@ -149,6 +159,11 @@ namespace SimpleOpcFileServer
                                 else UpdateError(item.Variable, "No response");
                             }
                             else UpdateError(item.Variable, "Connection timeout");
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            UpdateError(item.Variable, "Timeout");
+                            anyError = true;
                         }
                         catch (Exception ex)
                         {

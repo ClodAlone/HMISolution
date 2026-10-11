@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Threading;
+using System.Threading.Tasks;
 using Opc.Ua;
 using Opc.Ua.Client;
 using Serilog;
@@ -94,16 +95,22 @@ namespace SimpleOpcFileServer
                 }
             }
 
+            // Maximum number of NodeIds to request in a single OPC UA Read service call.
+            // Kept well under typical server MaxNodesPerRead limits (commonly 1000+).
+            private const int MaxNodesPerRead = 200;
+
             public void Start()
             {
                 lock (_deviceLock)
                 {
+                    // The timer callback kicks off an async poll and returns immediately;
+                    // the Timer thread is never blocked waiting on network I/O.
                     if (_timer == null && _items.Count > 0)
-                        _timer = new Timer(Poll, null, _pollInterval, Timeout.Infinite);
+                        _timer = new Timer(_ => _ = PollAsync(), null, _pollInterval, Timeout.Infinite);
                 }
             }
 
-            private void Poll(object? state)
+            private async Task PollAsync()
             {
                 if (_disposed) return;
                 var _sw = System.Diagnostics.Stopwatch.StartNew();
@@ -113,30 +120,58 @@ namespace SimpleOpcFileServer
 
                 try
                 {
-                    EnsureConnected();
+                    await EnsureConnectedAsync().ConfigureAwait(false);
                     if (_session == null || !_session.Connected)
                     {
                         foreach (var item in itemsToPoll) UpdateError(item.Variable, "Not connected");
                         return;
                     }
-                    foreach (var item in itemsToPoll)
+
+                    // OPC UA's Read service supports reading many NodeIds in a single request.
+                    // Instead of issuing one ReadValueAsync round-trip per item, batch all items
+                    // belonging to this session into chunked ReadValueIdCollection requests.
+                    foreach (var chunk in itemsToPoll.Chunk(MaxNodesPerRead))
                     {
+                        var nodesToRead = new List<ReadValueId>();
+                        foreach (var item in chunk)
+                        {
+                            try
+                            {
+                                nodesToRead.Add(new ReadValueId
+                                {
+                                    NodeId = Opc.Ua.NodeId.Parse(item.Config.NodeId),
+                                    AttributeId = Attributes.Value
+                                });
+                            }
+                            catch (Exception ex)
+                            {
+                                UpdateError(item.Variable, ex.Message);
+                                anyError = true;
+                            }
+                        }
+                        if (nodesToRead.Count == 0) continue;
+
                         try
                         {
-                            var nodeId = Opc.Ua.NodeId.Parse(item.Config.NodeId);
-                            var dv = _session.ReadValueAsync(nodeId).GetAwaiter().GetResult();
-                            Update(item.Variable, dv.WrappedValue, dv.StatusCode);
+                            var response = await _session.ReadAsync(null, 0, TimestampsToReturn.Both, nodesToRead, default).ConfigureAwait(false);
+                            var results = response.Results;
+                            for (int i = 0; i < chunk.Length && i < results.Count; i++)
+                            {
+                                var dv = results[i];
+                                if (StatusCode.IsGood(dv.StatusCode)) Update(chunk[i].Variable, dv.WrappedValue, dv.StatusCode);
+                                else UpdateError(chunk[i].Variable, dv.StatusCode.ToString());
+                            }
                         }
                         catch (Exception ex)
                         {
                             if (ex.Message != _lastLoggedError)
                             {
-                                Log.Error(ex, "OPC UA client read error for {NodeId}: {Message}", item.Config.NodeId, ex.Message);
+                                Log.Error(ex, "OPC UA client batch read error ({Count} nodes): {Message}", nodesToRead.Count, ex.Message);
                                 _lastLoggedError = ex.Message;
                             }
-                            else Log.Debug("OPC UA client read error (repeated) for {NodeId}: {Message}", item.Config.NodeId, ex.Message);
-                            _onError?.Invoke(_endpointUrl, $"Read error ({item.Config.NodeId}): {ex.Message}");
-                            UpdateError(item.Variable, ex.Message);
+                            else Log.Debug("OPC UA client batch read error (repeated, {Count} nodes): {Message}", nodesToRead.Count, ex.Message);
+                            _onError?.Invoke(_endpointUrl, $"Batch read error: {ex.Message}");
+                            foreach (var item in chunk) UpdateError(item.Variable, ex.Message);
                             anyError = true;
                         }
                     }
@@ -163,7 +198,7 @@ namespace SimpleOpcFileServer
                 }
             }
 
-            private void EnsureConnected()
+            private async Task EnsureConnectedAsync()
             {
                 if (_session != null && _session.Connected) return;
                 Disconnect();
@@ -171,9 +206,9 @@ namespace SimpleOpcFileServer
                 var endpointDescription = GetEndpointDescription(_endpointUrl);
                 var endpointConfiguration = EndpointConfiguration.Create(_config);
                 var endpoint = new ConfiguredEndpoint(null, endpointDescription, endpointConfiguration);
-                _session = new DefaultSessionFactory().CreateAsync(_config, endpoint, false,
+                _session = await new DefaultSessionFactory().CreateAsync(_config, endpoint, false,
                     $"SimpleOpcFileServer-{Utils.GetHostName()}", 60000,
-                    new UserIdentity(new AnonymousIdentityToken()), default).GetAwaiter().GetResult() as Session;
+                    new UserIdentity(new AnonymousIdentityToken()), default).ConfigureAwait(false) as Session;
             }
 
             private EndpointDescription GetEndpointDescription(string url)
@@ -223,7 +258,7 @@ namespace SimpleOpcFileServer
             {
                 try
                 {
-                    EnsureConnected();
+                    EnsureConnectedAsync().GetAwaiter().GetResult();
                     if (_session == null || !_session.Connected)
                         return ServiceResult.Create(StatusCodes.BadNotConnected, "OPC UA session not connected");
 

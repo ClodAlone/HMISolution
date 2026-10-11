@@ -6,8 +6,10 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Threading;
+using System.Threading.Tasks;
 using Opc.Ua;
 using S7.Net;
+using DataItem = S7.Net.Types.DataItem;
 using Serilog;
 
 namespace SimpleOpcFileServer
@@ -77,7 +79,7 @@ namespace SimpleOpcFileServer
             private readonly Action<string, string>? _onError;
             private readonly Action<double>? _onCycle;
             private readonly List<S7Item> _items = new();
-            private Timer? _timer;
+            private System.Threading.Timer? _timer;
             private Plc? _plc;
             private int _pollInterval = 1000;
             private int _minPollTime = int.MaxValue;
@@ -101,17 +103,23 @@ namespace SimpleOpcFileServer
                 }
             }
 
+            // The S7 protocol limits the number of variables that can be requested in a single
+            // "read multiple vars" PDU (bound by the negotiated PDU size, typically 240-960 bytes).
+            // 15 is a conservative item count that stays well within that limit for typical PLCs.
+            private const int MaxItemsPerMultiRead = 15;
+
             public void Start()
             {
                 lock (_deviceLock)
                 {
+                    // The timer callback kicks off an async poll and returns immediately;
+                    // the Timer thread is never blocked waiting on network I/O.
                     if (_timer == null && _items.Count > 0)
-                        _timer = new Timer(Poll, null, _pollInterval, Timeout.Infinite);
+                        _timer = new System.Threading.Timer(_ => _ = PollAsync(), null, _pollInterval, Timeout.Infinite);
                 }
             }
 
-
-            private void Poll(object? state)
+            private async Task PollAsync()
             {
                 if (_disposed) return;
                 var _sw = System.Diagnostics.Stopwatch.StartNew();
@@ -131,7 +139,7 @@ namespace SimpleOpcFileServer
                 {
                     if (!plc.IsConnected)
                     {
-                        try { plc.Open(); }
+                        try { await plc.OpenAsync().ConfigureAwait(false); }
                         catch (Exception ex)
                         {
                             if (ex.Message != _lastLoggedError)
@@ -148,23 +156,49 @@ namespace SimpleOpcFileServer
                     }
                     if (plc.IsConnected)
                     {
-                        foreach (var item in itemsToPoll)
+                        // Parse each item's address once (cached on the item) and batch them into
+                        // "read multiple vars" requests to minimize round-trips to the PLC.
+                        foreach (var batch in itemsToPoll.Chunk(MaxItemsPerMultiRead))
                         {
+                            var dataItems = new List<DataItem>(batch.Length);
+                            var batchItems = new List<S7Item>(batch.Length);
+                            foreach (var item in batch)
+                            {
+                                try
+                                {
+                                    item.ParsedAddress ??= DataItem.FromAddress(item.Config.Address);
+                                    dataItems.Add(item.ParsedAddress);
+                                    batchItems.Add(item);
+                                }
+                                catch (Exception ex)
+                                {
+                                    Log.Error(ex, "S7 address parse error for {Name}: {Message}", item.Variable.DisplayName, ex.Message);
+                                    _onError?.Invoke(_key, $"Address parse error ({item.Variable.DisplayName}): {ex.Message}");
+                                    UpdateError(item.Variable, ex.Message);
+                                    anyError = true;
+                                }
+                            }
+                            if (dataItems.Count == 0) continue;
+
                             try
                             {
-                                var val = plc.Read(item.Config.Address);
-                                if (val != null) Update(item.Variable, val);
+                                await plc.ReadMultipleVarsAsync(dataItems).ConfigureAwait(false);
+                                for (int i = 0; i < batchItems.Count; i++)
+                                {
+                                    var val = dataItems[i].Value;
+                                    if (val != null) Update(batchItems[i].Variable, val);
+                                }
                             }
                             catch (Exception ex)
                             {
                                 if (ex.Message != _lastLoggedError)
                                 {
-                                    Log.Error(ex, "S7 read error for {Name}: {Message}", item.Variable.DisplayName, ex.Message);
+                                    Log.Error(ex, "S7 read error for batch ({Count} items) on {Key}: {Message}", batchItems.Count, _key, ex.Message);
                                     _lastLoggedError = ex.Message;
                                 }
-                                else Log.Debug("S7 read error (repeated) for {Name}: {Message}", item.Variable.DisplayName, ex.Message);
-                                _onError?.Invoke(_key, $"Read error ({item.Variable.DisplayName}): {ex.Message}");
-                                UpdateError(item.Variable, ex.Message);
+                                else Log.Debug("S7 read error (repeated) for batch on {Key}: {Message}", _key, ex.Message);
+                                _onError?.Invoke(_key, $"Read error (batch of {batchItems.Count}): {ex.Message}");
+                                foreach (var item in batchItems) UpdateError(item.Variable, ex.Message);
                                 anyError = true;
                             }
                         }
@@ -252,6 +286,13 @@ namespace SimpleOpcFileServer
         {
             public BaseDataVariableState Variable { get; set; } = null!;
             public S7Config Config { get; set; } = null!;
+
+            /// <summary>
+            /// Cached parsed representation of <see cref="S7Config.Address"/> (DB number, byte
+            /// offset, bit offset, VarType, element count). Parsed once on first poll and reused
+            /// on subsequent polls to avoid re-parsing the address string every cycle.
+            /// </summary>
+            public DataItem? ParsedAddress { get; set; }
         }
     }
 }
