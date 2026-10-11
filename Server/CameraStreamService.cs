@@ -17,11 +17,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
 using SharedModels;
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.Formats.Jpeg;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Processing;
-using SixLabors.ImageSharp.Drawing.Processing;
+using SkiaSharp;
 
 namespace SimpleOpcFileServer;
 
@@ -504,28 +500,35 @@ using (response)
         {
             const int ModelInputSize = 640;
 
-            using var image = Image.Load<Rgb24>(jpegBytes);
+            using var codecBitmap = SKBitmap.Decode(jpegBytes) ?? throw new InvalidOperationException("Failed to decode JPEG frame");
+            using var image = codecBitmap.ColorType == SKColorType.Rgba8888
+                ? codecBitmap
+                : codecBitmap.Copy(SKColorType.Rgba8888);
             int origW = image.Width;
             int origH = image.Height;
 
             // Resize to model input
-            using var resized = image.Clone(ctx => ctx.Resize(ModelInputSize, ModelInputSize));
+            using var resized = image.Resize(new SKImageInfo(ModelInputSize, ModelInputSize), SKSamplingOptions.Default)
+                ?? throw new InvalidOperationException("Failed to resize frame");
 
             // Build input tensor [1, 3, 640, 640]
             var input = new DenseTensor<float>(new[] { 1, 3, ModelInputSize, ModelInputSize });
-            resized.ProcessPixelRows(accessor =>
+            unsafe
             {
+                var pixelsPtr = (byte*)resized.GetPixels().ToPointer();
+                int rowBytes = resized.RowBytes;
                 for (int y = 0; y < ModelInputSize; y++)
                 {
-                    var row = accessor.GetRowSpan(y);
+                    byte* row = pixelsPtr + y * rowBytes;
                     for (int x = 0; x < ModelInputSize; x++)
                     {
-                        input[0, 0, y, x] = row[x].R / 255f;
-                        input[0, 1, y, x] = row[x].G / 255f;
-                        input[0, 2, y, x] = row[x].B / 255f;
+                        byte* px = row + x * 4;
+                        input[0, 0, y, x] = px[0] / 255f;
+                        input[0, 1, y, x] = px[1] / 255f;
+                        input[0, 2, y, x] = px[2] / 255f;
                     }
                 }
-            });
+            }
 
             var inputName = _yoloSession!.InputNames.FirstOrDefault() ?? "images";
             var inputs = new List<NamedOnnxValue> { NamedOnnxValue.CreateFromTensor(inputName, input) };
@@ -541,23 +544,29 @@ using (response)
             // Draw bounding boxes
             if (_config.DrawDetections && detections.Count > 0)
             {
+                using var surface = SKSurface.Create(new SKImageInfo(origW, origH, SKColorType.Rgba8888, SKAlphaType.Premul));
+                var canvas = surface.Canvas;
+                canvas.DrawBitmap(image, 0, 0);
+
+                using var boxPaint = new SKPaint { Color = SKColors.LimeGreen, Style = SKPaintStyle.Stroke, StrokeWidth = 2, IsAntialias = true };
+                using var labelPaint = new SKPaint { Color = new SKColor(0, 0, 0, 160), Style = SKPaintStyle.Fill };
+
                 foreach (var det in detections)
                 {
-                    var rect = new SixLabors.ImageSharp.Drawing.RectangularPolygon(det.X, det.Y, det.W, det.H);
-                    var color = SixLabors.ImageSharp.Color.LimeGreen;
-                    image.Mutate(ctx =>
-                    {
-                        ctx.Draw(color, 2, rect);
-                    });
-                    // Label text is drawn as a simple rect overlay
-                    var labelRect = new SixLabors.ImageSharp.Drawing.RectangularPolygon(det.X, Math.Max(0, det.Y - 16), det.Label.Length * 8 + 8, 16);
-                    image.Mutate(ctx => ctx.Fill(SixLabors.ImageSharp.Color.FromRgba(0, 0, 0, 160), labelRect));
+                    canvas.DrawRect(new SKRect(det.X, det.Y, det.X + det.W, det.Y + det.H), boxPaint);
+
+                    var labelRect = new SKRect(det.X, Math.Max(0, det.Y - 16), det.X + det.Label.Length * 8 + 8, Math.Max(0, det.Y - 16) + 16);
+                    canvas.DrawRect(labelRect, labelPaint);
                 }
+
+                using var snapshot = surface.Snapshot();
+                using var encoded = snapshot.Encode(SKEncodedImageFormat.Jpeg, 80);
+                return (encoded.ToArray(), detections);
             }
 
-            using var outMs = new MemoryStream();
-            image.SaveAsJpeg(outMs, new JpegEncoder { Quality = 80 });
-            return (outMs.ToArray(), detections);
+            using var outImage = SKImage.FromBitmap(image);
+            using var outEncoded = outImage.Encode(SKEncodedImageFormat.Jpeg, 80);
+            return (outEncoded.ToArray(), detections);
         }
 
         private static List<Detection> ParseYoloOutput(Tensor<float> output, int origW, int origH, int modelSize, float confThreshold)

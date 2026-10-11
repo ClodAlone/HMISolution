@@ -4,11 +4,8 @@
 using System.Linq;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Processing;
+using SkiaSharp;
 using ZXing;
-using ZXing.ImageSharp;
 
 namespace ArObjectServer;
 
@@ -146,27 +143,32 @@ public class ArDetectionEngine : IDisposable
         var sw = System.Diagnostics.Stopwatch.StartNew();
         long t0 = sw.ElapsedMilliseconds;
 
-        using var image = Image.Load<Rgb24>(imageBytes);
+        using var bitmap = SKBitmap.Decode(imageBytes) ?? throw new InvalidOperationException("Failed to decode image frame");
+        using var image = bitmap.ColorType == SKColorType.Rgba8888 ? bitmap : bitmap.Copy(SKColorType.Rgba8888);
         int origW = image.Width;
         int origH = image.Height;
         long tDecode = sw.ElapsedMilliseconds;
 
-        using var resized = image.Clone(ctx => ctx.Resize(ModelInputSize, ModelInputSize));
+        using var resized = image.Resize(new SKImageInfo(ModelInputSize, ModelInputSize), SKSamplingOptions.Default)
+            ?? throw new InvalidOperationException("Failed to resize frame");
 
         var input = new DenseTensor<float>(new[] { 1, 3, ModelInputSize, ModelInputSize });
-        resized.ProcessPixelRows(accessor =>
+        unsafe
         {
+            var pixelsPtr = (byte*)resized.GetPixels().ToPointer();
+            int rowBytes = resized.RowBytes;
             for (int y = 0; y < ModelInputSize; y++)
             {
-                var row = accessor.GetRowSpan(y);
+                byte* row = pixelsPtr + y * rowBytes;
                 for (int x = 0; x < ModelInputSize; x++)
                 {
-                    input[0, 0, y, x] = row[x].R / 255f;
-                    input[0, 1, y, x] = row[x].G / 255f;
-                    input[0, 2, y, x] = row[x].B / 255f;
+                    byte* px = row + x * 4;
+                    input[0, 0, y, x] = px[0] / 255f;
+                    input[0, 1, y, x] = px[1] / 255f;
+                    input[0, 2, y, x] = px[2] / 255f;
                 }
             }
-        });
+        }
         long tPreprocess = sw.ElapsedMilliseconds;
 
         var inputs = new List<NamedOnnxValue> { NamedOnnxValue.CreateFromTensor(_inputName, input) };
@@ -206,7 +208,7 @@ public class ArDetectionEngine : IDisposable
     /// just outside the object's tightest bounding box) and attempts to decode a QR/barcode
     /// marker. Returns the decoded text, or null if no marker was found.
     /// </summary>
-    private string? TryDecodeInstanceMarker(Image<Rgb24> image, Detection det, int origW, int origH)
+    private string? TryDecodeInstanceMarker(SKBitmap image, Detection det, int origW, int origH)
     {
         try
         {
@@ -219,8 +221,35 @@ public class ArDetectionEngine : IDisposable
             int cropW = Math.Clamp((int)det.W + marginX * 2, 1, origW - cropX);
             int cropH = Math.Clamp((int)det.H + marginY * 2, 1, origH - cropY);
 
-            using var crop = image.Clone(ctx => ctx.Crop(new Rectangle(cropX, cropY, cropW, cropH)));
-            var result = _qrReader.Decode(crop);
+            using var crop = new SKBitmap(cropW, cropH, image.ColorType, image.AlphaType);
+            using (var canvas = new SKCanvas(crop))
+            {
+                var srcRect = new SKRectI(cropX, cropY, cropX + cropW, cropY + cropH);
+                var destRect = new SKRectI(0, 0, cropW, cropH);
+                canvas.DrawBitmap(image, srcRect, destRect);
+            }
+
+            var rgbBytes = new byte[cropW * cropH * 3];
+            unsafe
+            {
+                var pixelsPtr = (byte*)crop.GetPixels().ToPointer();
+                int rowBytes = crop.RowBytes;
+                int offset = 0;
+                for (int y = 0; y < cropH; y++)
+                {
+                    byte* row = pixelsPtr + y * rowBytes;
+                    for (int x = 0; x < cropW; x++)
+                    {
+                        byte* px = row + x * 4;
+                        rgbBytes[offset++] = px[0];
+                        rgbBytes[offset++] = px[1];
+                        rgbBytes[offset++] = px[2];
+                    }
+                }
+            }
+
+            var luminanceSource = new RGBLuminanceSource(rgbBytes, cropW, cropH, RGBLuminanceSource.BitmapFormat.RGB24);
+            var result = _qrReader.Decode(luminanceSource);
             return result?.Text;
         }
         catch
