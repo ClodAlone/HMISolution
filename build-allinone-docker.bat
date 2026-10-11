@@ -32,7 +32,17 @@ REM ============================================================================
 REM Configuration
 REM ============================================================================
 set "DOCKER_USERNAME=clodprogea"
+set "VERSION_PROPS=%SCRIPT_DIR%\HMISolution\Version.props"
+
+REM Read HMIVersion from Version.props (falls back to 1.0.0 if not found)
 set "VERSION=1.0.0"
+if exist "%VERSION_PROPS%" (
+    for /f "tokens=2 delims=<>" %%V in ('findstr /i "<HMIVersion>" "%VERSION_PROPS%"') do set "VERSION=%%V"
+) else (
+    echo [WARNING] Version.props not found at: %VERSION_PROPS%
+    echo [WARNING] Falling back to default version: %VERSION%
+)
+
 set "ALLINONE_IMAGE=%DOCKER_USERNAME%/aicorehmi"
 set "DOCKERFILE=%SCRIPT_DIR%\Dockerfile.allinone"
 
