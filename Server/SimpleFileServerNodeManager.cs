@@ -2033,7 +2033,10 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
 
         // Script Accessors
         /// <summary>
-        /// Resolves a variable by name, trying the exact key first then prepending the root folder name.
+        /// Resolves a variable by name, trying the exact key first, then prepending the root folder
+        /// name (for user-facing paths that omit it), then stripping a leading root folder name
+        /// (for PLC/script code that fully-qualifies paths with the root, e.g. "Lab.PLC.PID.Enabled",
+        /// while internal keys are stored without the transparent root prefix).
         /// </summary>
         private bool TryResolveVariable(string variableName, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out BaseDataVariableState? variable)
         {
@@ -2041,8 +2044,16 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 return true;
             // Fallback: user-facing paths omit the root folder name
             var rootName = _lastModel?.Folder?.Name;
-            if (!string.IsNullOrEmpty(rootName) && _variables.TryGetValue(rootName + "." + variableName, out variable!))
-                return true;
+            if (!string.IsNullOrEmpty(rootName))
+            {
+                if (_variables.TryGetValue(rootName + "." + variableName, out variable!))
+                    return true;
+                // Fallback: fully-qualified paths include the (transparent) root folder name
+                var prefix = rootName + ".";
+                if (variableName.StartsWith(prefix, StringComparison.Ordinal) &&
+                    _variables.TryGetValue(variableName.Substring(prefix.Length), out variable!))
+                    return true;
+            }
             variable = null;
             return false;
         }
