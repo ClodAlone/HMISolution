@@ -62,7 +62,8 @@ else if (Editor.ActiveProject == null && !_showFileBrowser)
         OnNewProjectClicked="NewFileMenu"
         OnOpenProjectClicked="OpenFileBrowser"
         OnOpenSamplesClicked="OpenSamplesDialog"
-        OnOpenRecentClicked="QuickLoadFile" />
+        OnOpenRecentClicked="QuickLoadFile"
+        OnImportMoviconClicked="ImportMoviconProjectMenu" />
 }
 else
 {
@@ -135,7 +136,6 @@ else
                     </div>
                 }
             </div>
-            <InputFile id="moviconImportFileInput" OnChange="OnMoviconProjectFileSelected" accept=".xml" style="display: none;" />
             <InputFile id="ignitionTagsImportFileInput" OnChange="OnIgnitionTagsFileSelected" accept=".json" style="display: none;" />
             <InputFile id="ignitionViewImportFileInput" OnChange="OnIgnitionViewFileSelected" accept=".json" style="display: none;" />
 
@@ -883,7 +883,7 @@ else
         <div class="modal-dialog modal-dialog-centered modal-lg">
             <div class="modal-content">
                 <div class="modal-header py-2">
-                    <h6 class="modal-title">📂 @L["dialog.open.title"]</h6>
+                    <h6 class="modal-title">📂 @(_browseMode == "moviconImport" ? "Import Movicon 11 Project (.movprj)" : L["dialog.open.title"])</h6>
                     <button type="button" class="btn-close btn-close-sm" @onclick="() => _showFileBrowser = false"></button>
                 </div>
                 <div class="modal-body p-0" style="max-height: 450px; display: flex; flex-direction: column;">
@@ -1278,6 +1278,8 @@ else
     private string _browseSelectedFile = "";
     private string[] _browseDrives = [];
     private bool _showDriveList;
+    /// <summary>"open" (default: load a project JSON file) or "moviconImport" (pick a .movprj to import).</summary>
+    private string _browseMode = "open";
 
     // Child project dialog state
     private bool _showChildProjectBrowser;
@@ -2051,28 +2053,36 @@ private void UnsavedDialogCancel()
     private void SaveMenu() { CloseMenus(); Save(); }
     private void SaveAsMenu() { CloseMenus(); _saveAsPath = Editor.CurrentFilePath ?? ""; _showSaveAsDialog = true; }
 
-    private async Task ImportMoviconProjectMenu()
+    /// <summary>
+    /// Opens the server-side file browser in "moviconImport" mode, letting the user navigate to and pick a
+    /// .movprj file on the server's filesystem. Unlike the browser-only Ignition JSON imports, a Movicon 11
+    /// project is split across several sibling files/folders (.movrealtimedb, .movalr, RESOURCES\...) that
+    /// must be read directly from disk, so a plain &lt;InputFile&gt; (which only exposes one uploaded file's
+    /// bytes) cannot be used here.
+    /// </summary>
+    private void ImportMoviconProjectMenu()
     {
         CloseMenus();
-        await JS.InvokeVoidAsync("eval", "document.getElementById('moviconImportFileInput').click()");
+        _browseMode = "moviconImport";
+        _browseDrives = Editor.GetDrives();
+        _browsePath = Editor.GetBrowseStartPath();
+        _browseSelectedFile = "";
+        _showDriveList = false;
+        RefreshBrowseList();
+        _showFileBrowser = true;
     }
 
-    private async Task OnMoviconProjectFileSelected(InputFileChangeEventArgs e)
+    private void ImportMoviconProjectFromPath(string movprjPath)
     {
         try
         {
-            using var stream = e.File.OpenReadStream(maxAllowedSize: 32 * 1024 * 1024);
-            using var reader = new StreamReader(stream);
-            var xml = await reader.ReadToEndAsync();
-
-            var result = SharedModels.Import.MoviconProjectImporter.ImportFromXml(xml);
-            if (string.IsNullOrWhiteSpace(result.Project.Folder.Name) || result.Project.Folder.Name == "Root")
-                result.Project.Folder.Name = Path.GetFileNameWithoutExtension(e.File.Name);
+            var result = SharedModels.Import.MoviconProjectImporter.ImportFromProjectFile(movprjPath);
 
             Editor.NewFileFromModel(result.Project);
 
-            var summary = $"Imported {result.TagCount} tag(s), {result.ScreenCount} screen(s), " +
-                          $"{result.SymbolCount} symbol(s), {result.AlarmCount} alarm(s).";
+            var summary = $"Imported {result.TagCount} tag(s), {result.FolderCount} folder(s), {result.ScreenCount} screen(s), " +
+                          $"{result.SymbolCount} symbol(s), {result.AlarmCount} alarm(s), " +
+                          $"{result.DataLoggerGroupCount} data logger group(s), {result.RecipeCount} recipe(s).";
             if (result.Warnings.Count > 0)
                 summary += $" {result.Warnings.Count} warning(s) — see console for details.";
             foreach (var w in result.Warnings)
@@ -2317,6 +2327,7 @@ private void UnsavedDialogCancel()
     private void OpenFileBrowser()
     {
         CloseMenus();
+        _browseMode = "open";
         _browseDrives = Editor.GetDrives();
         _browsePath = Editor.GetBrowseStartPath();
         _browseSelectedFile = "";
@@ -2370,13 +2381,19 @@ private void UnsavedDialogCancel()
 
     private void RefreshBrowseList()
     {
-        (_browseDirs, _browseFiles) = Editor.ListDirectory(_browsePath);
+        var pattern = _browseMode == "moviconImport" ? "*.movprj" : "*.json";
+        (_browseDirs, _browseFiles) = Editor.ListDirectory(_browsePath, pattern);
     }
 
     private async Task BrowseLoadFile(string path)
     {
         if (string.IsNullOrEmpty(path)) return;
         _showFileBrowser = false;
+        if (_browseMode == "moviconImport")
+        {
+            ImportMoviconProjectFromPath(path);
+            return;
+        }
         _selectedFile = path;
         await LoadFile();
     }

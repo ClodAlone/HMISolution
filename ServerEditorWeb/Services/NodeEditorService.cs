@@ -321,7 +321,13 @@ public class NodeEditorService
     /// Lists directories and JSON files in the given path.
     /// Returns (directories, files) as full paths.
     /// </summary>
-    public (string[] directories, string[] files) ListDirectory(string path)
+    public (string[] directories, string[] files) ListDirectory(string path) => ListDirectory(path, "*.json");
+
+    /// <summary>
+    /// Lists directories and files matching <paramref name="filePattern"/> (e.g. "*.movprj") in the given path.
+    /// Returns (directories, files) as full paths.
+    /// </summary>
+    public (string[] directories, string[] files) ListDirectory(string path, string filePattern)
     {
         try
         {
@@ -337,7 +343,7 @@ public class NodeEditorService
                 .OrderBy(d => Path.GetFileName(d), StringComparer.OrdinalIgnoreCase)
                 .ToArray();
 
-            var files = Directory.GetFiles(path, "*.json", SearchOption.TopDirectoryOnly)
+            var files = Directory.GetFiles(path, filePattern, SearchOption.TopDirectoryOnly)
                 .OrderBy(f => Path.GetFileName(f), StringComparer.OrdinalIgnoreCase)
                 .ToArray();
 
