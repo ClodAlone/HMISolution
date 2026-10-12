@@ -292,7 +292,7 @@ public class OpcUaServerApp
                 {
                     StoreType = CertificateStoreType.Directory,
                     StorePath = $"{pkiRoot}/own",
-                    SubjectName = null
+                    SubjectName = $"CN={application.ApplicationName}"
                 },
                 TrustedPeerCertificates = new CertificateTrustList
                 {
