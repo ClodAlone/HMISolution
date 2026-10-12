@@ -107,7 +107,7 @@ RUN dotnet publish RuntimeViewer/RuntimeViewer.csproj -c Release -o /app/viewer 
 # This stage is isolated — if it fails the final image still works (YOLO just
 # won't be available until the user places a model file manually).
 FROM python:3.12-slim AS model-exporter
-RUN pip install --no-cache-dir ultralytics onnx onnxruntime 2>/dev/null
+RUN pip install --no-cache-dir ultralytics onnx onnxruntime || true
 RUN python -c "from ultralytics import YOLO; m = YOLO('yolov8n.pt'); m.export(format='onnx', imgsz=640)" \
     && mv yolov8n.onnx /yolov8n.onnx \
     || touch /yolov8n.onnx
@@ -208,7 +208,6 @@ EXPOSE 14840 14841 8080 8081 8088 5432 11434
 
 # ── Environment defaults ─────────────────────────────────────────────────
 ENV POSTGRES_USER=postgres
-ENV POSTGRES_PASSWORD=hmipass
 ENV POSTGRES_DB=hmi
 ENV PGDATA=/var/lib/postgresql/data
 ENV OLLAMA_MODEL=mistral
