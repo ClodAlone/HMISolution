@@ -15,8 +15,8 @@
         }
         else
         {
-            <div class="editbox-display" @onclick="StartEdit" title="Click to edit — @VariablePath">
-                @DisplayValue
+            <div class="editbox-display @(IsShowingPlaceholder ? "editbox-placeholder" : "")" @onclick="StartEdit" title="Click to edit — @VariablePath">
+                @(IsShowingPlaceholder ? Placeholder : DisplayValue)
             </div>
         }
         @if (_isNumeric)
@@ -63,6 +63,7 @@
         text-overflow: ellipsis; font-family: monospace; font-size: 1.1em;
     }
     .editbox-display:hover { background: rgba(255,255,255,0.05); }
+    .editbox-placeholder { color: var(--editbox-placeholder, #64748b); font-style: italic; }
     .editbox-input {
         flex: 1; border: none; outline: none;
         background: #0f172a; color: #f1f5f9;
@@ -101,6 +102,7 @@
     [Parameter] public double? Min { get; set; }
     [Parameter] public double? Max { get; set; }
     [Parameter] public bool ShowStatistics { get; set; }
+    [Parameter] public string? Placeholder { get; set; }
 
     [Inject] private OpcRuntimeClient Opc { get; set; } = default!;
 
@@ -128,6 +130,8 @@
     }
 
     private string StepDisplay => Step.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    private bool IsShowingPlaceholder => !string.IsNullOrEmpty(Placeholder) && string.IsNullOrEmpty(Opc.GetValue(VariablePath ?? ""));
 
     protected override void OnInitialized()
     {
