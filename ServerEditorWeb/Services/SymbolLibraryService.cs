@@ -55,16 +55,50 @@ public class SymbolLibraryService
     }
 
     /// <summary>
+    /// Deletes an entire category (its on-disk folder, all SVGs, and animation sidecars).
+    /// Returns true if the category existed and was removed.
+    /// </summary>
+    public bool DeleteCategory(string category)
+    {
+        if (string.IsNullOrWhiteSpace(category)) return false;
+
+        // Resolve to an actual on-disk directory name rather than trusting the caller's
+        // string directly, so this can't be tricked into deleting something outside
+        // _libraryPath (e.g. via "..\\" segments) and only matches an existing category.
+        var dirName = Directory.Exists(_libraryPath)
+            ? Directory.GetDirectories(_libraryPath)
+                .Select(Path.GetFileName)
+                .FirstOrDefault(n => string.Equals(n, category, StringComparison.OrdinalIgnoreCase))
+            : null;
+        if (dirName is null) return false;
+
+        var categoryDir = Path.Combine(_libraryPath, dirName);
+        Directory.Delete(categoryDir, recursive: true);
+        _items = null;
+        return true;
+    }
+
+    /// <summary>
     /// Saves uploaded SVG files into the given category folder.
     /// Creates the category directory if it doesn't exist.
-    /// Returns the number of files saved.
+    /// Returns the number of files saved and the actual (sanitized/trimmed) category
+    /// name used on disk, which may differ from the input if it contained invalid
+    /// filename characters or leading/trailing whitespace.
     /// </summary>
-    public int ImportSvgFiles(string category, IReadOnlyList<(string FileName, byte[] Content)> files)
+    /// <param name="progress">Optional callback invoked with the number of files written so far.</param>
+    public (int Count, string Category) ImportSvgFiles(string category, IReadOnlyList<(string FileName, byte[] Content)> files, IProgress<int>? progress = null)
     {
-        if (string.IsNullOrWhiteSpace(category)) return 0;
+        if (string.IsNullOrWhiteSpace(category)) return (0, category);
 
-        var safeName = string.Concat(category.Select(c =>
-            Path.GetInvalidFileNameChars().Contains(c) ? '_' : c));
+        // Trim first: Windows silently strips trailing spaces/dots from directory names,
+        // so an un-trimmed category (e.g. "Imported ") would create a folder named
+        // "Imported" on disk while the UI kept comparing against "Imported " and never
+        // found the freshly imported symbols again.
+        var trimmed = category.Trim();
+        var safeName = string.Concat(trimmed.Select(c =>
+            Path.GetInvalidFileNameChars().Contains(c) ? '_' : c)).Trim();
+        if (string.IsNullOrEmpty(safeName)) return (0, category);
+
         var categoryDir = Path.Combine(_libraryPath, safeName);
         Directory.CreateDirectory(categoryDir);
 
@@ -76,13 +110,36 @@ public class SymbolLibraryService
 
             var safeFn = string.Concat(Path.GetFileName(fileName).Select(c =>
                 Path.GetInvalidFileNameChars().Contains(c) ? '_' : c));
+            safeFn = ShortenFileName(safeFn);
             var dest = Path.Combine(categoryDir, safeFn);
             File.WriteAllBytes(dest, content);
             count++;
+            progress?.Report(count);
         }
 
         _items = null;
-        return count;
+        return (count, safeName);
+    }
+
+    /// <summary>
+    /// Some SVG symbol sets (e.g. FUXA's widget library) ship files with very long,
+    /// descriptive names. Combined with the SymbolLibrary folder's own path depth and the
+    /// project's bin/publish output path, these can exceed Windows' legacy 260-char MAX_PATH
+    /// limit, causing MSBuild's build-time copy of Content items to fail with MSB3027
+    /// ("Exceeded retry count"). Truncate the base name (keeping the extension) and append a
+    /// short stable hash to avoid collisions between different files that share a long prefix.
+    /// </summary>
+    private static string ShortenFileName(string fileName, int maxBaseLength = 40)
+    {
+        var ext = Path.GetExtension(fileName);
+        var baseName = Path.GetFileNameWithoutExtension(fileName);
+        if (baseName.Length <= maxBaseLength)
+            return fileName;
+
+        var hash = Convert.ToHexString(System.Security.Cryptography.MD5.HashData(
+            System.Text.Encoding.UTF8.GetBytes(fileName))).Substring(0, 8);
+        var truncated = baseName.Substring(0, maxBaseLength).TrimEnd();
+        return $"{truncated}_{hash}{ext}";
     }
 
     private List<SymbolLibraryItem> LoadSymbols()

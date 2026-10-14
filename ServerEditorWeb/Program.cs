@@ -23,16 +23,22 @@ builder.Services.AddRazorComponents()
         }
     });
 
-if (builder.Environment.IsDevelopment())
+builder.Services.AddSignalR(hubOptions =>
 {
-    // Increase SignalR timeouts so the connection survives breakpoint pauses
-    builder.Services.AddSignalR(hubOptions =>
+    // Default SignalR message size limit is 32KB, which is far too small for the
+    // base64-encoded SVG batches sent during symbol library import (OnFileBatch).
+    // Without this, large batches silently break the circuit (brief "reconnecting"
+    // flash followed by a stuck/no-progress state).
+    hubOptions.MaximumReceiveMessageSize = 20 * 1024 * 1024; // 20 MB
+
+    if (builder.Environment.IsDevelopment())
     {
+        // Increase SignalR timeouts so the connection survives breakpoint pauses
         hubOptions.ClientTimeoutInterval = TimeSpan.FromMinutes(10);
         hubOptions.KeepAliveInterval = TimeSpan.FromSeconds(5);
         hubOptions.HandshakeTimeout = TimeSpan.FromMinutes(2);
-    });
-}
+    }
+});
 
 builder.Services.AddSingleton<NodeEditorService>();
 builder.Services.AddSingleton<ServerProcessService>();

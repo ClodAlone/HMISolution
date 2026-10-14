@@ -11,18 +11,44 @@
                @bind="_searchText" @bind:event="oninput" />
     </div>
 
-    <div class="symbol-library-categories">
+    <div class="symbol-library-categories-toggle">
+        <button class="btn btn-sm btn-link p-0" @onclick="() => _categoriesCollapsed = !_categoriesCollapsed">
+            @(_categoriesCollapsed ? "▶ Show categories" : "▼ Hide categories") (@Library.GetCategories().Count)
+        </button>
+    </div>
+    <div class="symbol-library-categories @(_categoriesCollapsed ? "collapsed" : "")">
         <button class="btn btn-sm @(_selectedCategory == null ? "btn-primary" : "btn-outline-secondary")"
                 @onclick="() => _selectedCategory = null">All</button>
         @foreach (var cat in Library.GetCategories())
         {
             var c = cat;
-            <button class="btn btn-sm @(_selectedCategory == c ? "btn-primary" : "btn-outline-secondary")"
-                    @onclick="() => _selectedCategory = c">@c</button>
+            <div class="btn-group btn-group-sm" role="group">
+                <button class="btn btn-sm @(_selectedCategory == c ? "btn-primary" : "btn-outline-secondary")"
+                        @onclick="() => _selectedCategory = c">@c</button>
+                <button class="btn btn-sm @(_selectedCategory == c ? "btn-primary" : "btn-outline-secondary")"
+                        @onclick="() => ConfirmDeleteCategory(c)" title="Delete category '@c'">🗑</button>
+            </div>
         }
         <button class="btn btn-sm btn-outline-success ms-auto" @onclick="ShowUploadDialog" title="Import SVG files from a folder">📤 Import</button>
         <button class="btn btn-sm btn-outline-info" @onclick="Refresh" title="Reload from disk">🔄</button>
     </div>
+    @if (_categoryToDelete != null)
+    {
+        <div class="symbol-library-upload-overlay" @onclick="CancelDeleteCategory">
+            <div class="symbol-library-upload-dialog" @onclick:stopPropagation>
+                <h6 class="mb-2">🗑 Delete Category</h6>
+                <p class="small mb-3">
+                    Delete category <strong>@_categoryToDelete</strong> and all
+                    @(Library.GetSymbols().Count(s => s.Category == _categoryToDelete)) symbol(s) in it?
+                    This cannot be undone.
+                </p>
+                <div class="d-flex gap-2 justify-content-end">
+                    <button class="btn btn-sm btn-secondary" @onclick="CancelDeleteCategory">Cancel</button>
+                    <button class="btn btn-sm btn-danger" @onclick="DoDeleteCategory">Delete</button>
+                </div>
+            </div>
+        </div>
+    }
     @if (_showUpload)
     {
         <div class="symbol-library-upload-overlay" @onclick="CancelUpload">
@@ -59,6 +85,15 @@
                 @if (!string.IsNullOrEmpty(_uploadStatus))
                 {
                     <div class="alert @(_uploadSuccess ? "alert-success" : "alert-danger") py-1 small mb-2">@_uploadStatus</div>
+                }
+
+                @if (_uploading && _importTotal > 0)
+                {
+                    var pct = _importTotal == 0 ? 0 : (int)(100.0 * _importedCount / _importTotal);
+                    <div class="progress mb-2" style="height: 8px;">
+                        <div class="progress-bar" role="progressbar" style="width: @(pct)%;"
+                             aria-valuenow="@pct" aria-valuemin="0" aria-valuemax="100"></div>
+                    </div>
                 }
 
                 <div class="d-flex gap-2 justify-content-end">
@@ -155,6 +190,8 @@
 
     private string? _selectedCategory;
     private string _searchText = "";
+    private string? _categoryToDelete;
+    private bool _categoriesCollapsed;
 
     // Upload state
     private bool _showUpload;
@@ -166,7 +203,10 @@
     private ElementReference _folderInput;
     private ElementReference _fileInput;
     private DotNetObjectReference<SymbolLibraryPanel>? _selfRef;
-    private List<(string FileName, byte[] Content)> _pendingFiles = [];
+    private List<(string FileName, byte[] Content, string? Category)> _pendingFiles = [];
+    private TaskCompletionSource? _readCompletion;
+    private int _importedCount;
+    private int _importTotal;
 
     // Animation preview state
     private SymbolLibraryItem? _previewItem;
@@ -230,10 +270,37 @@
         StateHasChanged();
     }
 
+    private void ConfirmDeleteCategory(string category)
+    {
+        _categoryToDelete = category;
+    }
+
+    private void CancelDeleteCategory()
+    {
+        _categoryToDelete = null;
+    }
+
+    private void DoDeleteCategory()
+    {
+        if (_categoryToDelete is null) return;
+
+        var deleted = Library.DeleteCategory(_categoryToDelete);
+        if (deleted && _selectedCategory == _categoryToDelete)
+            _selectedCategory = null;
+
+        _categoryToDelete = null;
+        StateHasChanged();
+    }
+
     private async Task ShowUploadDialog()
     {
         _showUpload = true;
-        _uploadCategory = _selectedCategory ?? "";
+        // Fall back to an existing category (or a sensible default) when no category
+        // is currently selected in the panel, so the Import button isn't stuck disabled
+        // just because the category field is blank.
+        _uploadCategory = _selectedCategory
+            ?? Library.GetCategories().FirstOrDefault()
+            ?? "Imported";
         _pendingFileCount = 0;
         _pendingFiles.Clear();
         _uploadStatus = "";
@@ -271,14 +338,44 @@
     [JSInvokable]
     public void OnFileData(string fileName, byte[] data)
     {
-        _pendingFiles.Add((fileName, data));
+        _pendingFiles.Add((fileName, data, null));
         InvokeAsync(StateHasChanged);
+    }
+
+    /// <summary>
+    /// Receives a batch of files (base64-encoded) read from the browser, along with the
+    /// per-file category derived from its immediate parent subfolder name (empty when the
+    /// file was picked loose, i.e. not inside a subfolder of the chosen root). Batching
+    /// avoids one JSInterop round-trip per file, which was blocking the UI/button state and
+    /// risking timeouts when importing folders with hundreds/thousands of SVGs.
+    /// </summary>
+    [JSInvokable]
+    public Task OnFileBatch(string[] names, string[] base64Data, string[]? categories = null)
+    {
+        for (int i = 0; i < names.Length; i++)
+        {
+            var cat = categories != null && i < categories.Length && !string.IsNullOrWhiteSpace(categories[i])
+                ? categories[i]
+                : null;
+            _pendingFiles.Add((names[i], Convert.FromBase64String(base64Data[i]), cat));
+        }
+        // Reading and writing are a single continuous progress phase from the user's
+        // perspective (0 → total files read, then those same files get written), so keep
+        // the bar monotonically increasing across both rather than resetting it back to 0
+        // when the write phase begins.
+        _importedCount = _pendingFiles.Count;
+        _importTotal = _pendingFileCount;
+        _uploadStatus = $"Reading files… {_pendingFiles.Count}/{_pendingFileCount}";
+        InvokeAsync(StateHasChanged);
+        return Task.CompletedTask;
     }
 
     [JSInvokable]
     public void OnAllFilesRead()
     {
         _pendingFileCount = _pendingFiles.Count;
+        _uploadStatus = "";
+        _readCompletion?.TrySetResult();
         InvokeAsync(StateHasChanged);
     }
     private async Task DoUpload()
@@ -287,24 +384,73 @@
 
         _uploading = true;
         _uploadStatus = "";
+        _importedCount = 0;
+        _importTotal = _pendingFileCount;
         StateHasChanged();
 
         // If files haven't been read yet (JS sends them via OnFileData), trigger the read
-        if (_pendingFiles.Count == 0 && _pendingFileCount > 0)
+        // and wait for completion. No artificial timeout here: large imports (thousands
+        // of files) can legitimately take longer than a fixed 30s, and giving up early
+        // previously caused a partial (or empty) import to be silently reported as a
+        // "success", making freshly imported symbols appear to vanish.
+        if (_pendingFiles.Count < _pendingFileCount)
         {
+            _readCompletion = new TaskCompletionSource();
+            _uploadStatus = $"Reading files… 0/{_pendingFileCount}";
             await JS.InvokeVoidAsync("symbolUpload.readFiles");
-            // Wait for JS to call OnFileData/OnAllFilesRead
-            var deadline = DateTime.UtcNow.AddSeconds(30);
-            while (_pendingFiles.Count < _pendingFileCount && DateTime.UtcNow < deadline)
-                await Task.Delay(100);
+            await _readCompletion.Task;
+            _readCompletion = null;
         }
 
         try
         {
-            var saved = Library.ImportSvgFiles(_uploadCategory, _pendingFiles);
+            // Group files by the category detected from their parent subfolder (when a
+            // folder-of-folders was imported), falling back to the typed/selected category
+            // for any loose files with no subfolder of their own. Previously everything was
+            // written under a single _uploadCategory, so importing a tree of subfolders
+            // never created/updated the individual subfolder categories in the UI.
+            var groups = _pendingFiles
+                .GroupBy(f => f.Category ?? _uploadCategory)
+                .ToList();
+
+            _uploadStatus = $"Writing files… 0/{_pendingFiles.Count}";
+            _importTotal = _pendingFiles.Count;
+            StateHasChanged();
+
+            int writtenSoFar = 0;
+            int totalSaved = 0;
+            string lastCategory = _uploadCategory;
+            var createdCategories = new List<string>();
+
+            foreach (var group in groups)
+            {
+                var groupFiles = group.Select(f => (f.FileName, f.Content)).ToList();
+                var baseWritten = writtenSoFar;
+
+                var progress = new Progress<int>(n =>
+                {
+                    _importedCount = baseWritten + n;
+                    _uploadStatus = $"Writing files… {_importedCount}/{_importTotal}";
+                    InvokeAsync(StateHasChanged);
+                });
+
+                var (saved, actualCategory) = await Task.Run(() =>
+                    Library.ImportSvgFiles(group.Key, groupFiles, progress));
+
+                writtenSoFar += groupFiles.Count;
+                totalSaved += saved;
+                lastCategory = actualCategory;
+                createdCategories.Add(actualCategory);
+            }
+
             _uploadSuccess = true;
-            _uploadStatus = $"Imported {saved} SVG file(s) into '{_uploadCategory}'.";
-            _selectedCategory = _uploadCategory;
+            _uploadStatus = createdCategories.Count > 1
+                ? $"Imported {totalSaved} SVG file(s) into {createdCategories.Count} categories: {string.Join(", ", createdCategories.Distinct())}."
+                : $"Imported {totalSaved} SVG file(s) into '{lastCategory}'.";
+            // Use the actual on-disk folder name (sanitized/trimmed) so the category
+            // filter matches the freshly imported symbols; otherwise a category typed
+            // with invalid chars or stray whitespace would silently hide the import.
+            _selectedCategory = lastCategory;
 
             // Auto-close after success
             await Task.Delay(1200);
