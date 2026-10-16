@@ -127,7 +127,7 @@ public class DriverTestService
             ApplicationType = Opc.Ua.ApplicationType.Client,
             SecurityConfiguration = new Opc.Ua.SecurityConfiguration
             {
-                ApplicationCertificate = new Opc.Ua.CertificateIdentifier { StoreType = Opc.Ua.CertificateStoreType.Directory, StorePath = $"{pkiRoot}/own", SubjectName = "DriverTestOpcClient" },
+                ApplicationCertificate = new Opc.Ua.CertificateIdentifier { StoreType = Opc.Ua.CertificateStoreType.Directory, StorePath = $"{pkiRoot}/own", SubjectName = "CN=DriverTestOpcClient" },
                 TrustedPeerCertificates = new Opc.Ua.CertificateTrustList { StoreType = Opc.Ua.CertificateStoreType.Directory, StorePath = $"{pkiRoot}/trusted" },
                 TrustedIssuerCertificates = new Opc.Ua.CertificateTrustList { StoreType = Opc.Ua.CertificateStoreType.Directory, StorePath = $"{pkiRoot}/issuer" },
                 RejectedCertificateStore = new Opc.Ua.CertificateTrustList { StoreType = Opc.Ua.CertificateStoreType.Directory, StorePath = $"{pkiRoot}/rejected" }
@@ -441,7 +441,7 @@ public class DriverTestService
             ApplicationType = Opc.Ua.ApplicationType.Client,
             SecurityConfiguration = new Opc.Ua.SecurityConfiguration
             {
-                ApplicationCertificate = new Opc.Ua.CertificateIdentifier { StoreType = Opc.Ua.CertificateStoreType.Directory, StorePath = $"{pkiRoot}/own", SubjectName = "DriverTestOpcClient" },
+                ApplicationCertificate = new Opc.Ua.CertificateIdentifier { StoreType = Opc.Ua.CertificateStoreType.Directory, StorePath = $"{pkiRoot}/own", SubjectName = "CN=DriverTestOpcClient" },
                 TrustedPeerCertificates = new Opc.Ua.CertificateTrustList { StoreType = Opc.Ua.CertificateStoreType.Directory, StorePath = $"{pkiRoot}/trusted" },
                 TrustedIssuerCertificates = new Opc.Ua.CertificateTrustList { StoreType = Opc.Ua.CertificateStoreType.Directory, StorePath = $"{pkiRoot}/issuer" },
                 RejectedCertificateStore = new Opc.Ua.CertificateTrustList { StoreType = Opc.Ua.CertificateStoreType.Directory, StorePath = $"{pkiRoot}/rejected" }

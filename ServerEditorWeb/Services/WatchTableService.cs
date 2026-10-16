@@ -88,7 +88,7 @@ public class WatchTableService : IDisposable
                         {
                             StoreType = CertificateStoreType.Directory,
                             StorePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ServerEditorWeb", "pki", "own"),
-                            SubjectName = "WatchTableClient"
+                            SubjectName = "CN=WatchTableClient"
                         },
                         TrustedPeerCertificates = new CertificateTrustList
                         {

@@ -110,7 +110,7 @@ public class OpcRuntimeClient : IDisposable
                     {
                         StoreType = CertificateStoreType.Directory,
                         StorePath = $"{pkiRoot}/own",
-                        SubjectName = "RuntimeViewer"
+                        SubjectName = "CN=RuntimeViewer"
                     },
                     TrustedPeerCertificates = new CertificateTrustList
                     {

@@ -228,7 +228,7 @@ public class LiveTagService : IDisposable
                 {
                     StoreType = CertificateStoreType.Directory,
                     StorePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ServerEditorWeb", "pki", "own"),
-                    SubjectName = "LiveTagClient"
+                    SubjectName = "CN=LiveTagClient"
                 },
                 TrustedPeerCertificates = new CertificateTrustList
                 {

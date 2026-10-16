@@ -147,7 +147,7 @@ public class ServerDiagnosticsClient : IDisposable
                     {
                         StoreType = CertificateStoreType.Directory,
                         StorePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ServerEditorWeb", "pki", "own"),
-                        SubjectName = "ServerEditorDiagClient"
+                        SubjectName = "CN=ServerEditorDiagClient"
                     },
                     TrustedPeerCertificates = new CertificateTrustList
                     {

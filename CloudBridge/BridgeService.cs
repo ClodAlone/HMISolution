@@ -154,7 +154,7 @@ public sealed class BridgeService : IDisposable
                 {
                     StoreType = CertificateStoreType.Directory,
                     StorePath = Path.Combine(pkiRoot, "own"),
-                    SubjectName = "CloudBridge"
+                    SubjectName = "CN=CloudBridge"
                 },
                 TrustedPeerCertificates = new CertificateTrustList
                 {

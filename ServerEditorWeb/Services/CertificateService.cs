@@ -361,7 +361,7 @@ public class CertificateService
                 {
                     StoreType = CertificateStoreType.Directory,
                     StorePath = Path.Combine(_editorPkiRoot, "own"),
-                    SubjectName = "ServerEditorWebGdsClient"
+                    SubjectName = "CN=ServerEditorWebGdsClient"
                 },
                 TrustedPeerCertificates = new CertificateTrustList
                 {

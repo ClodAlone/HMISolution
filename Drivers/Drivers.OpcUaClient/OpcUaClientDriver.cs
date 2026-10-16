@@ -231,7 +231,7 @@ namespace SimpleOpcFileServer
                     ApplicationType = ApplicationType.Client,
                     SecurityConfiguration = new SecurityConfiguration
                     {
-                        ApplicationCertificate = new CertificateIdentifier { StoreType = CertificateStoreType.Directory, StorePath = $"{pkiRoot}/own", SubjectName = "SimpleOpcFileServer" },
+                        ApplicationCertificate = new CertificateIdentifier { StoreType = CertificateStoreType.Directory, StorePath = $"{pkiRoot}/own", SubjectName = "CN=SimpleOpcFileServer" },
                         TrustedPeerCertificates = new CertificateTrustList { StoreType = CertificateStoreType.Directory, StorePath = $"{pkiRoot}/trusted" },
                         TrustedIssuerCertificates = new CertificateTrustList { StoreType = CertificateStoreType.Directory, StorePath = $"{pkiRoot}/issuer" },
                         RejectedCertificateStore = new CertificateTrustList { StoreType = CertificateStoreType.Directory, StorePath = $"{pkiRoot}/rejected" }
