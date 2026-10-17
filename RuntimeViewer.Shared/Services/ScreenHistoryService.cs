@@ -50,6 +50,16 @@ public class ScreenHistoryService
         return _history[^1];
     }
 
+    /// <summary>Recognizes a browser return to an earlier route without adding a duplicate history entry.</summary>
+    public bool ReturnToExisting(string route)
+    {
+        if (string.Equals(CurrentRoute, route, StringComparison.OrdinalIgnoreCase)) return false;
+        var index = _history.FindLastIndex(r => string.Equals(r, route, StringComparison.OrdinalIgnoreCase));
+        if (index < 0) return false;
+        _history.RemoveRange(index + 1, _history.Count - index - 1);
+        return true;
+    }
+
     /// <summary>Clears all recorded history (e.g. on logout or project reload).</summary>
     public void Clear() => _history.Clear();
 }

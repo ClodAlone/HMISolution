@@ -213,6 +213,10 @@ Design rich HMI screens with 21+ built-in widget types:
 - Command Button, Animated Text
 - Radio Group
 
+Runtime screens support configurable slide/fade transitions, reverse Back effects,
+swipe navigation, and fixed or swipe-revealed edge layouts. See the
+[runtime screen navigation guide](docs/RUNTIME-SCREEN-NAVIGATION.md) for properties and examples.
+
 ## ⚡ IEC 61131-3 PLC Runtime
 
 Built-in PLC runtime supporting:

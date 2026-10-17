@@ -1387,6 +1387,52 @@ namespace SharedModels
         [AllowedStringValues("contain", "fill", "scroll")]
         public string FitMode { get; set; } = "contain";
 
+        [System.ComponentModel.Category("Runtime Navigation")]
+        [System.ComponentModel.Description("Entrance effect for forward navigation. Back navigation reverses the outgoing screen's slide direction.")]
+        [AllowedStringValues("none", "fade", "slide-left", "slide-right", "slide-up", "slide-down")]
+        public string NavigationTransition { get; set; } = "none";
+
+        [System.ComponentModel.Category("Runtime Navigation")]
+        [System.ComponentModel.Description("Transition duration in milliseconds (0-2000). Reduced-motion preferences disable animation.")]
+        public int NavigationDurationMs { get; set; } = 280;
+
+        [System.ComponentModel.Category("Runtime Navigation")]
+        [System.ComponentModel.Description("Destination for an upward swipe. Empty disables; $back returns to the previous screen.")]
+        public string SwipeUpScreen { get; set; } = "";
+
+        [System.ComponentModel.Category("Runtime Navigation")]
+        [System.ComponentModel.Description("Destination for a downward swipe. Empty disables; $back returns to the previous screen.")]
+        public string SwipeDownScreen { get; set; } = "";
+
+        [System.ComponentModel.Category("Runtime Navigation")]
+        [System.ComponentModel.Description("Destination for a leftward swipe. Empty disables; $back returns to the previous screen.")]
+        public string SwipeLeftScreen { get; set; } = "";
+
+        [System.ComponentModel.Category("Runtime Navigation")]
+        [System.ComponentModel.Description("Destination for a rightward swipe. Empty disables; $back returns to the previous screen.")]
+        public string SwipeRightScreen { get; set; } = "";
+
+        [System.ComponentModel.Category("Runtime Layout")]
+        [System.ComponentModel.Description("None is a normal page. Edge layouts appear across runtime pages, subject to allowed groups.")]
+        [AllowedStringValues("none", "top", "bottom", "left", "right")]
+        public string RuntimeDock { get; set; } = "none";
+
+        [System.ComponentModel.Category("Runtime Layout")]
+        [System.ComponentModel.Description("Fixed layouts reserve space. Swipe layouts overlay the page and open from their edge or handle.")]
+        [AllowedStringValues("fixed", "swipe")]
+        public string DockMode { get; set; } = "fixed";
+
+        [System.ComponentModel.Category("Runtime Layout")]
+        [System.ComponentModel.Description("Docked height (top/bottom) or width (left/right) in CSS pixels. Clamped to 24-1200 and the viewport.")]
+        public int DockSize { get; set; } = 160;
+
+        [System.ComponentModel.Category("Runtime Layout")]
+        [System.ComponentModel.Description("Layout order, ascending within each edge. Multiple layouts on an edge are supported.")]
+        public int DockOrder { get; set; }
+
+        [JsonIgnore, System.ComponentModel.Browsable(false)]
+        public bool IsLayoutScreen => RuntimeDock is "top" or "bottom" or "left" or "right";
+
         public List<ScreenSymbol> Symbols { get; set; } = new();
 
         /// <summary>Screen-level connections between symbol ports (auto-routed pipes/wires).</summary>

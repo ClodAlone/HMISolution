@@ -305,28 +305,17 @@ else
         </div>
     }
 
-    @* -- Canvas -- *@
-    <div class="rv-viewport">
-        @if (ScreenPreload.Enabled && _currentScreen != null)
+    @* -- Canvas and shared edge layouts -- *@
+    <div class="rv-viewport rv-workspace-viewport">
+        @if (_currentScreen != null)
         {
-            @* Pre-loaded screens: render all cached screens, toggle visibility via CSS *@
-            @foreach (var cached in ScreenPreload.Cache)
-            {
-                var screen = Project.Screens.FirstOrDefault(s => s.Name.Equals(cached.Name, StringComparison.OrdinalIgnoreCase));
-                if (screen != null)
-                {
-                    var isVisible = ScreenPreload.IsVisible(cached.Name);
-                    <div style="@(isVisible ? "" : "display:none")">
-                        <ScreenRenderer Screen="screen" IsKiosk="Project.IsKiosk" BestFit="_bestFit" OnRequestLogin="ShowAccessLoginPrompt" />
-                    </div>
-                }
-            }
+            <ScreenWorkspace @ref="_workspace" Screen="_currentScreen" AvailableScreens="AccessibleScreens"
+                             CachedScreenNames="@(ScreenPreload.Enabled ? ScreenPreload.GetAliveScreenNames() : [])"
+                             IsKiosk="Project.IsKiosk" BestFit="_bestFit" VariableAliases="_currentAliasMap"
+                             Transition="@_screenTransition" DurationMs="_screenDuration"
+                             OnNavigate="OnSwipeNavigation" OnRequestLogin="ShowAccessLoginPrompt" />
         }
-        else if (_currentScreen != null)
-        {
-            <ScreenRenderer Screen="_currentScreen" IsKiosk="Project.IsKiosk" BestFit="_bestFit" OnRequestLogin="ShowAccessLoginPrompt" VariableAliases="_currentAliasMap" />
-        }
-        else if (Project.Screens.Count == 0)
+        else if (Project.Screens.All(s => s.IsLayoutScreen))
         {
             <div class="rv-empty">
                 <h3>No screens found</h3>
@@ -547,6 +536,13 @@ else
     private Dictionary<string, string>? _currentAliasMap;
     private Dictionary<string, string>? _popupAliasMap;
     private Dictionary<string, string>? _modalAliasMap;
+    private ScreenWorkspace? _workspace;
+    private string _screenTransition = "none";
+    private int _screenDuration;
+    private readonly Dictionary<string, (string Transition, int Duration)> _entryTransitions = new(StringComparer.OrdinalIgnoreCase);
+    private string? _swipeTransition;
+    private bool _goingBack;
+    private bool _navigationRequested;
     private bool _connecting;
     private bool _isFullscreen;
     private IJSObjectReference? _kioskModule;
@@ -792,23 +788,48 @@ else
 
     protected override async Task OnParametersSetAsync()
     {
+        var outgoing = _currentScreen;
         if (!string.IsNullOrEmpty(ScreenName))
         {
-            _currentScreen = Project.Screens.FirstOrDefault(s =>
+            _currentScreen = Project.Screens.FirstOrDefault(s => !s.IsLayoutScreen &&
                 s.Name.Equals(ScreenName, StringComparison.OrdinalIgnoreCase));
+            if (_currentScreen == null)
+                ShowToast("error", "Screen unavailable", $"'{ScreenName}' is not a runtime page.");
+        }
+        else
+        {
+            _currentScreen = Project.StartupScreen;
         }
 
         _currentScreen ??= Project.StartupScreen;
-
-        // If the resolved screen is restricted for the current user's group, fall back
         if (_currentScreen != null && !Auth.IsGroupAllowed(_currentScreen.AllowedGroups))
-        {
             _currentScreen = NavigableScreens.FirstOrDefault();
-        }
 
-        // Record this route in navigation history so a GoBackScreen command can return here
         if (_currentScreen != null)
-            History.Push($"/screen/{_currentScreen.Name}");
+        {
+            var route = $"/screen/{Uri.EscapeDataString(_currentScreen.Name)}";
+            var returning = _goingBack || (!_navigationRequested && History.ReturnToExisting(route));
+            if (!ReferenceEquals(outgoing, _currentScreen))
+            {
+                var presentation = returning && outgoing != null ? outgoing : _currentScreen;
+                if (returning && outgoing != null && _entryTransitions.TryGetValue(outgoing.Name, out var entry))
+                {
+                    _screenTransition = ScreenPresentation.Reverse(entry.Transition);
+                    _screenDuration = entry.Duration;
+                }
+                else
+                {
+                    _screenTransition = _swipeTransition ?? ScreenPresentation.Transition(presentation, returning);
+                    _screenDuration = ScreenPresentation.Duration(presentation);
+                }
+                if (!returning) _entryTransitions[_currentScreen.Name] = (_screenTransition, _screenDuration);
+                if (!_navigationRequested) _currentAliasMap = null;
+            }
+            History.Push(route);
+        }
+        _goingBack = false;
+        _navigationRequested = false;
+        _swipeTransition = null;
 
         // Record navigation for predictive pre-connection learning
         if (_currentScreen != null && Project.Settings.EnablePredictivePreconnect)
@@ -858,6 +879,22 @@ else
     {
         InvokeAsync(() =>
         {
+            var target = Project.Screens.FirstOrDefault(s => s.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+            if (target == null || !Auth.IsGroupAllowed(target.AllowedGroups))
+            {
+                ShowToast("error", "Screen unavailable", $"Screen '{name}' does not exist or is not permitted for this user.");
+                _swipeTransition = null;
+                StateHasChanged();
+                return;
+            }
+            if (target.IsLayoutScreen)
+            {
+                _workspace?.ShowLayout(target);
+                _swipeTransition = null;
+                return;
+            }
+            _goingBack = false;
+            _navigationRequested = true;
             // Record navigation for predictive pre-connection
             if (Project.Settings.EnablePredictivePreconnect)
             {
@@ -883,12 +920,28 @@ else
         InvokeAsync(() =>
         {
             var previous = History.PopToPrevious();
+            _goingBack = true;
+            _currentAliasMap = null;
             if (!string.IsNullOrEmpty(previous))
                 Nav.NavigateTo(previous);
             else if (Project.StartupScreen != null)
                 Nav.NavigateTo($"/screen/{Uri.EscapeDataString(Project.StartupScreen.Name)}");
             StateHasChanged();
         });
+    }
+
+    private Task OnSwipeNavigation(ScreenSwipeNavigation navigation)
+    {
+        if (navigation.Target == "$back")
+        {
+            DoGoBack();
+        }
+        else
+        {
+            _swipeTransition = $"slide-{navigation.Direction}";
+            DoNavigateScreen(navigation.Target, "", null);
+        }
+        return Task.CompletedTask;
     }
 
     private void DoOpenPopup(string name, string aliasMapName, Dictionary<string, string>? fallbackAliases)
@@ -1320,9 +1373,10 @@ else
         _ => "\u2139\uFE0F"
     };
 
-    private List<ScreenConfig> NavigableScreens => Project.Screens
-        .Where(s => s.ShowInNavigation && Auth.IsGroupAllowed(s.AllowedGroups))
-        .ToList();
+    private List<ScreenConfig> AccessibleScreens => Project.Screens
+        .Where(s => Auth.IsGroupAllowed(s.AllowedGroups)).ToList();
+    private List<ScreenConfig> NavigableScreens => AccessibleScreens
+        .Where(s => !s.IsLayoutScreen && s.ShowInNavigation).ToList();
     private string NavStyle => Project.Settings.NavigationStyle?.ToLowerInvariant() ?? "tabs";
 
     public async void Dispose()

@@ -1,0 +1,96 @@
+@* Copyright (c) 2026 Claudio Fiorani - All rights reserved. *@
+@using SharedModels
+
+<fieldset class="mb-3">
+    <legend class="fs-6">Runtime navigation</legend>
+    <label class="form-label">Screen transition
+        <select class="form-select" @bind="Screen.NavigationTransition" @bind:after="Changed"
+                @onfocus="() => Capture(nameof(Screen.NavigationTransition))">
+            <option value="none">None (instant)</option>
+            <option value="fade">Fade</option>
+            <option value="slide-left">Slide left</option>
+            <option value="slide-right">Slide right</option>
+            <option value="slide-up">Slide up</option>
+            <option value="slide-down">Slide down</option>
+        </select>
+    </label>
+    <div class="form-text mb-2">Back reverses the previous slide. System reduced-motion preferences are respected.</div>
+    <label class="form-label">Transition duration (ms)
+        <input type="number" class="form-control" min="0" max="2000" @bind="Screen.NavigationDurationMs"
+               @bind:after="Changed" @onfocus="() => Capture(nameof(Screen.NavigationDurationMs))" />
+    </label>
+    @foreach (var direction in Directions)
+    {
+        var propertyName = $"Swipe{direction}Screen";
+        <div class="mb-2" @onfocusin="() => Capture(propertyName)">
+            <label class="form-label">Swipe @direction.ToLowerInvariant() destination</label>
+            <ScreenPicker Value="@GetSwipe(direction)" ValueChanged="value => SetSwipe(direction, value ?? string.Empty)"
+                          OnChanged="Changed" Placeholder="(disabled, screen name, or $back)" />
+        </div>
+    }
+    <div class="form-text">Use $back to return to the previous page. Swipes start on non-interactive, non-scrolling areas; controls and scrollable widgets keep their normal gestures.</div>
+</fieldset>
+<fieldset class="mb-3">
+    <legend class="fs-6">Runtime layout</legend>
+    <label class="form-label">Dock edge
+        <select class="form-select" @bind="Screen.RuntimeDock" @bind:after="Changed"
+                @onfocus="() => Capture(nameof(Screen.RuntimeDock))">
+            <option value="none">None (normal page)</option>
+            <option value="top">Top</option>
+            <option value="bottom">Bottom</option>
+            <option value="left">Left</option>
+            <option value="right">Right</option>
+        </select>
+    </label>
+    @if (Screen.IsLayoutScreen)
+    {
+        <div class="mb-2">
+            <label class="form-label">Display mode
+                <select class="form-select" @bind="Screen.DockMode" @bind:after="Changed"
+                        @onfocus="() => Capture(nameof(Screen.DockMode))">
+                    <option value="fixed">Fixed (reserve space)</option>
+                    <option value="swipe">Swipe panel (overlay)</option>
+                </select>
+            </label>
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Dock size (CSS pixels)
+                <input type="number" class="form-control" min="24" max="1200" @bind="Screen.DockSize"
+                       @bind:after="Changed" @onfocus="() => Capture(nameof(Screen.DockSize))" />
+            </label>
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Order within edge
+                <input type="number" class="form-control" @bind="Screen.DockOrder" @bind:after="Changed"
+                       @onfocus="() => Capture(nameof(Screen.DockOrder))" />
+            </label>
+        </div>
+        <div class="form-text">Layout screens appear across all runtime pages, subject to Allowed Groups, and are excluded from page navigation. Swipe inward from the edge or use its handle; swipe outward, press Escape, or use Close to dismiss.</div>
+    }
+</fieldset>
+
+@code {
+    [Parameter, EditorRequired] public ScreenConfig Screen { get; set; } = default!;
+    [Parameter] public EventCallback OnChanged { get; set; }
+    [Parameter] public EventCallback<string> OnCapture { get; set; }
+    private static readonly string[] Directions = ["Up", "Down", "Left", "Right"];
+    private Task Changed() => OnChanged.InvokeAsync();
+    private Task Capture(string property) => OnCapture.InvokeAsync(property);
+    private string GetSwipe(string direction) => direction switch
+    {
+        "Up" => Screen.SwipeUpScreen,
+        "Down" => Screen.SwipeDownScreen,
+        "Left" => Screen.SwipeLeftScreen,
+        _ => Screen.SwipeRightScreen
+    };
+    private void SetSwipe(string direction, string value)
+    {
+        switch (direction)
+        {
+            case "Up": Screen.SwipeUpScreen = value; break;
+            case "Down": Screen.SwipeDownScreen = value; break;
+            case "Left": Screen.SwipeLeftScreen = value; break;
+            case "Right": Screen.SwipeRightScreen = value; break;
+        }
+    }
+}

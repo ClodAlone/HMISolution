@@ -89,6 +89,24 @@ public class ProjectValidationService
             if (screen.Symbols.Count == 0)
                 issues.Add(new(IssueSeverity.Info, "Screen", "Screen has no symbols.", loc, $"screen:{screen.Name}"));
 
+            if (screen.NavigationTransition is not ("none" or "fade" or "slide-left" or "slide-right" or "slide-up" or "slide-down"))
+                issues.Add(new(IssueSeverity.Error, "Screen", "Unknown navigation transition.", loc, $"screen:{screen.Name}"));
+            if (screen.NavigationDurationMs is < 0 or > 2000)
+                issues.Add(new(IssueSeverity.Warning, "Screen", "Navigation duration must be 0-2000 ms; runtime clamps this value.", loc, $"screen:{screen.Name}"));
+            if (screen.RuntimeDock is not ("none" or "top" or "bottom" or "left" or "right"))
+                issues.Add(new(IssueSeverity.Error, "Screen", "Unknown runtime dock edge.", loc, $"screen:{screen.Name}"));
+            if (screen.IsLayoutScreen && screen.DockMode is not ("fixed" or "swipe"))
+                issues.Add(new(IssueSeverity.Error, "Screen", "Dock mode must be fixed or swipe.", loc, $"screen:{screen.Name}"));
+            if (screen.IsLayoutScreen && screen.DockSize is < 24 or > 1200)
+                issues.Add(new(IssueSeverity.Warning, "Screen", "Dock size must be 24-1200 pixels; runtime clamps this value.", loc, $"screen:{screen.Name}"));
+            foreach (var (direction, target) in new[] { ("up", screen.SwipeUpScreen), ("down", screen.SwipeDownScreen),
+                ("left", screen.SwipeLeftScreen), ("right", screen.SwipeRightScreen) })
+            {
+                if (!string.IsNullOrWhiteSpace(target) && target != "$back" &&
+                    !model.Screens.Any(s => s.Name.Equals(target, StringComparison.OrdinalIgnoreCase)))
+                    issues.Add(new(IssueSeverity.Error, "Screen", $"Swipe {direction} destination '{target}' does not exist.", loc, $"screen:{screen.Name}"));
+            }
+
             var symIds = new HashSet<string>();
             foreach (var sym in screen.Symbols)
             {

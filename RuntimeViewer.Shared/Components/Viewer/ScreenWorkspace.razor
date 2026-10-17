@@ -1,0 +1,234 @@
+@* Copyright (c) 2026 Claudio Fiorani - All rights reserved. *@
+@using SharedModels
+@using RuntimeViewer.Shared.Services
+@using Microsoft.JSInterop
+@using Microsoft.Extensions.Logging
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+@inject ILogger<ScreenWorkspace> Logger
+
+<div class="rv-screen-workspace" @ref="_root" data-swipe-up="@HasSwipe("up")" data-swipe-down="@HasSwipe("down")"
+     data-swipe-left="@HasSwipe("left")" data-swipe-right="@HasSwipe("right")"
+     data-drawer-open="@(_drawer != null ? "true" : "false")">
+    @FixedEdge("top")
+    @FixedEdge("left")
+    <div class="rv-screen-stage" data-transition="@(_previous != null && DurationMs > 0 ? Transition : "none")">
+        @foreach (var frame in _frames)
+        {
+            var active = ReferenceEquals(frame, _active);
+            var outgoing = ReferenceEquals(frame, _previous);
+            <div @key="frame" class="rv-screen-frame @(active ? "rv-screen-active" : "") @(outgoing ? "rv-screen-outgoing" : "")"
+                 hidden="@(!active && !outgoing)" inert="@(!active)" aria-hidden="@(!active ? "true" : null)">
+                <ScreenRenderer Screen="frame.Screen" IsKiosk="IsKiosk" BestFit="BestFit"
+                                OnRequestLogin="OnRequestLogin" VariableAliases="frame.Aliases" />
+            </div>
+        }
+    </div>
+    @FixedEdge("right")
+    @FixedEdge("bottom")
+    @foreach (var edge in Edges)
+    {
+        var panels = Layouts.Where(s => s.RuntimeDock == edge && s.DockMode == "swipe").ToList();
+        @if (panels.Count > 0)
+        {
+            <div class="rv-layout-handles rv-layout-handles-@edge" data-edge="@edge" data-no-swipe>
+                @foreach (var panel in panels)
+                {
+                    <button type="button" class="rv-layout-handle" aria-label="@($"Open {panel.Name}")"
+                            aria-expanded="@(ReferenceEquals(_drawer, panel) ? "true" : "false")"
+                            @onclick="() => OpenDrawer(panel)">@panel.Name</button>
+                }
+            </div>
+        }
+    }
+    @if (_drawer != null)
+    {
+        <button type="button" class="rv-layout-backdrop" aria-label="Close layout panel" @onclick="CloseDrawer"></button>
+        <section @key="_drawer" class="rv-layout-drawer rv-layout-drawer-@_drawer.RuntimeDock"
+                 style="@DockStyle(_drawer)" role="dialog" aria-modal="true" aria-label="@_drawer.Name"
+                 data-drawer-edge="@_drawer.RuntimeDock" tabindex="-1" @onkeydown="OnDrawerKeyDown">
+            <button type="button" class="rv-layout-close" aria-label="@($"Close {_drawer.Name}")" @onclick="CloseDrawer">&#215;</button>
+            <div class="rv-layout-content">
+                <ScreenRenderer Screen="_drawer" IsKiosk="IsKiosk" BestFit="true" OnRequestLogin="OnRequestLogin" />
+            </div>
+        </section>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public ScreenConfig Screen { get; set; } = default!;
+    [Parameter] public IReadOnlyList<ScreenConfig> AvailableScreens { get; set; } = [];
+    [Parameter] public IReadOnlyList<string> CachedScreenNames { get; set; } = [];
+    [Parameter] public Dictionary<string, string>? VariableAliases { get; set; }
+    [Parameter] public bool IsKiosk { get; set; }
+    [Parameter] public bool BestFit { get; set; } = true;
+    [Parameter] public string Transition { get; set; } = "none";
+    [Parameter] public int DurationMs { get; set; } = 280;
+    [Parameter] public EventCallback OnRequestLogin { get; set; }
+    [Parameter] public EventCallback<ScreenSwipeNavigation> OnNavigate { get; set; }
+
+    private static readonly string[] Edges = ["top", "bottom", "left", "right"];
+    private ElementReference _root;
+    private IJSObjectReference? _module;
+    private DotNetObjectReference<ScreenWorkspace>? _reference;
+    private readonly List<Frame> _frames = [];
+    private Frame? _active;
+    private Frame? _previous;
+    private ScreenConfig? _drawer;
+    private bool _pendingAnimation;
+    private bool _closingDrawer;
+    private bool _disposed;
+    private int _revision;
+    private List<ScreenConfig> Layouts => AvailableScreens.Where(s => s.IsLayoutScreen)
+        .OrderBy(s => s.DockOrder).ThenBy(s => s.Name, StringComparer.OrdinalIgnoreCase).ToList();
+
+    private sealed class Frame(ScreenConfig screen)
+    {
+        public ScreenConfig Screen { get; } = screen;
+        public Dictionary<string, string>? Aliases { get; set; }
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (!ReferenceEquals(_active?.Screen, Screen))
+        {
+            _previous = _active;
+            _active = _frames.FirstOrDefault(f => ReferenceEquals(f.Screen, Screen)) ?? new Frame(Screen);
+            if (!_frames.Contains(_active)) _frames.Add(_active);
+            _revision++;
+            _pendingAnimation = true;
+            _drawer = null;
+        }
+        _active.Aliases = VariableAliases == null ? null : new(VariableAliases);
+        if (_drawer != null && !Layouts.Contains(_drawer)) _drawer = null;
+        foreach (var screen in AvailableScreens.Where(s => !s.IsLayoutScreen && CachedScreenNames.Contains(s.Name, StringComparer.OrdinalIgnoreCase)))
+        {
+            if (!_frames.Any(f => ReferenceEquals(f.Screen, screen))) _frames.Add(new Frame(screen));
+        }
+        PruneFrames();
+    }
+
+    private void PruneFrames() => _frames.RemoveAll(f => !AvailableScreens.Contains(f.Screen) ||
+        (!ReferenceEquals(f, _active) && !ReferenceEquals(f, _previous) && !CachedScreenNames.Contains(f.Screen.Name, StringComparer.OrdinalIgnoreCase)));
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        try
+        {
+            if (_module == null)
+            {
+                _module = await JS.InvokeAsync<IJSObjectReference>("import", "./_content/RuntimeViewer.Shared/screen-navigation.js");
+                if (_disposed) return;
+                _reference = DotNetObjectReference.Create(this);
+                await _module.InvokeVoidAsync("attach", _root, _reference);
+            }
+            await _module.InvokeVoidAsync("update", _root);
+            if (_pendingAnimation)
+            {
+                _pendingAnimation = false;
+                var revision = _revision;
+                await _module.InvokeVoidAsync("animate", _root, _previous == null ? "none" : Transition, Math.Clamp(DurationMs, 0, 2000));
+                if (!_disposed && revision == _revision)
+                {
+                    _previous = null;
+                    PruneFrames();
+                    StateHasChanged();
+                }
+            }
+        }
+        catch (JSDisconnectedException)
+        {
+            Logger.LogDebug("Runtime disconnected while updating screen presentation.");
+        }
+    }
+
+    private string HasSwipe(string direction) => !string.IsNullOrWhiteSpace(ScreenPresentation.SwipeTarget(Screen, direction)) ? "true" : "false";
+
+    private static string DockStyle(ScreenConfig screen) => $"--rv-dock-size:{ScreenPresentation.DockSize(screen)}px; --rv-drawer-duration:{ScreenPresentation.Duration(screen)}ms";
+
+    private RenderFragment FixedEdge(string edge) => @<div class="rv-layout-edge rv-layout-edge-@edge">
+        @foreach (var panel in Layouts.Where(s => s.RuntimeDock == edge && s.DockMode != "swipe"))
+        {
+            <section @key="panel" class="rv-layout-fixed" style="@DockStyle(panel)" aria-label="@panel.Name">
+                <ScreenRenderer Screen="panel" IsKiosk="IsKiosk" BestFit="true" OnRequestLogin="OnRequestLogin" />
+            </section>
+        }
+    </div>;
+
+    public void ShowLayout(ScreenConfig panel)
+    {
+        if (panel.DockMode == "swipe" && Layouts.Contains(panel))
+        {
+            OpenDrawer(panel);
+            StateHasChanged();
+        }
+    }
+
+    private void OpenDrawer(ScreenConfig panel) => _drawer = panel;
+    private async Task CloseDrawer()
+    {
+        if (_closingDrawer || _drawer == null) return;
+        var closing = _drawer;
+        _closingDrawer = true;
+        try
+        {
+            if (_module != null) await _module.InvokeVoidAsync("closeDrawer", _root);
+            if (ReferenceEquals(closing, _drawer)) _drawer = null;
+        }
+        catch (JSDisconnectedException)
+        {
+            Logger.LogDebug("Runtime disconnected while closing a layout panel.");
+        }
+        finally
+        {
+            _closingDrawer = false;
+        }
+    }
+    private async Task OnDrawerKeyDown(KeyboardEventArgs args)
+    {
+        if (args.Key == "Escape") await CloseDrawer();
+    }
+
+    [JSInvokable]
+    public async Task OnSwipe(string direction, string edge)
+    {
+        if (_disposed) return;
+        if (_drawer != null)
+        {
+            if (direction == ScreenPresentation.OpeningDirection(_drawer.RuntimeDock switch
+                { "top" => "bottom", "bottom" => "top", "left" => "right", _ => "left" }))
+                await CloseDrawer();
+        }
+        else
+        {
+            var panel = Layouts.FirstOrDefault(s => s.DockMode == "swipe" && s.RuntimeDock == edge &&
+                direction == ScreenPresentation.OpeningDirection(edge));
+            if (panel != null) OpenDrawer(panel);
+            else
+            {
+                var target = ScreenPresentation.SwipeTarget(Screen, direction);
+                if (!string.IsNullOrWhiteSpace(target))
+                    await OnNavigate.InvokeAsync(new(target, direction));
+            }
+        }
+        StateHasChanged();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _disposed = true;
+        if (_module != null)
+        {
+            try
+            {
+                await _module.InvokeVoidAsync("dispose", _root);
+                await _module.DisposeAsync();
+            }
+            catch (JSDisconnectedException)
+            {
+                Logger.LogDebug("Runtime disconnected while disposing screen presentation.");
+            }
+        }
+        _reference?.Dispose();
+    }
+}

@@ -240,7 +240,7 @@ public class OpcRuntimeClient : IDisposable
             Log($"CONNECT: Session created. Connected={_session.Connected}, SessionId={_session.SessionId}");
             Log($"CONNECT: Server namespaces: [{string.Join(", ", _session.NamespaceUris.ToArray())}]");
 
-            _subscription = new Subscription(_session.DefaultSubscription)
+            var subscription = new Subscription(_session.DefaultSubscription)
             {
                 PublishingInterval = 250,
                 KeepAliveCount = 10,
@@ -248,10 +248,18 @@ public class OpcRuntimeClient : IDisposable
                 MaxNotificationsPerPublish = 1000
             };
 
-            _session.AddSubscription(_subscription);
-            await _subscription.CreateAsync();
+            _session.AddSubscription(subscription);
+            await subscription.CreateAsync();
 
+            // Publish only once created: components rendering during CreateAsync must not apply items to it.
+            _subscription = subscription;
             Log($"CONNECT: Subscription created. Id={_subscription.Id}, PublishingInterval={_subscription.CurrentPublishingInterval}ms");
+
+            var pendingPaths = new HashSet<string>();
+            foreach (var kv in _callerPaths)
+                pendingPaths.UnionWith(kv.Value);
+            if (pendingPaths.Count > 0)
+                MonitorVariablesCore(pendingPaths);
 
             ErrorMessage = null;
             Log("CONNECT: âœ“ Connected successfully");

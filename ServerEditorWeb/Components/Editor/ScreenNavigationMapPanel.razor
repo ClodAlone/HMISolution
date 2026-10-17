@@ -269,11 +269,22 @@
             }
         }
 
-        // Detect orphans (screens with no incoming links, excluding those hidden from nav)
+        foreach (var screen in model.Screens)
+        {
+            foreach (var target in new[] { screen.SwipeUpScreen, screen.SwipeDownScreen, screen.SwipeLeftScreen, screen.SwipeRightScreen })
+            {
+                var destination = model.Screens.FirstOrDefault(s => s.Name.Equals(target, StringComparison.OrdinalIgnoreCase));
+                if (target != "$back" && destination != null && destination != screen &&
+                    !_edges.Any(e => e.From == screen.Name && e.To == destination.Name))
+                    _edges.Add(new NavEdge(screen.Name, destination.Name));
+            }
+        }
+
+        // Global layouts do not need incoming page-navigation links.
         var hasIncoming = _edges.Select(e => e.To).ToHashSet();
         foreach (var screen in model.Screens)
         {
-            if (!hasIncoming.Contains(screen.Name))
+            if (!screen.IsLayoutScreen && !hasIncoming.Contains(screen.Name))
                 _orphans.Add(screen.Name);
         }
 

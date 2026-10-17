@@ -29,10 +29,9 @@ public class ProjectService
     public List<ArObjectMapping> ArObjectMappings => _model?.ArObjectMappings ?? [];
 
     public ScreenConfig? StartupScreen =>
-        !string.IsNullOrEmpty(Settings.StartupScreen)
-            ? Screens.FirstOrDefault(s => s.Name.Equals(Settings.StartupScreen, StringComparison.OrdinalIgnoreCase))
-              ?? Screens.FirstOrDefault()
-            : Screens.FirstOrDefault();
+        Screens.FirstOrDefault(s => !s.IsLayoutScreen && !string.IsNullOrEmpty(Settings.StartupScreen) &&
+            s.Name.Equals(Settings.StartupScreen, StringComparison.OrdinalIgnoreCase))
+        ?? Screens.FirstOrDefault(s => !s.IsLayoutScreen);
 
     public (bool Success, string Message) Load(string path)
     {
