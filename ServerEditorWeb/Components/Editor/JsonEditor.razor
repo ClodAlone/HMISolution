@@ -1,12 +1,18 @@
 @* Copyright (c) 2026 Claudio Fiorani - All rights reserved. *@
 
 @using ServerEditorWeb.Services
+@using ServerEditorWeb.Models
 @inject IJSRuntime JS
+@implements IDisposable
 
 <div class="json-editor-panel d-flex flex-column">
     <div class="d-flex gap-2 mb-2" style="order:2;">
         <button class="btn btn-sm btn-outline-secondary" @onclick="Refresh">&#x27F3; Refresh from Tree</button>
-        <button class="btn btn-sm btn-outline-primary" @onclick="Apply">&#x2714; Apply to Tree</button>
+        <button class="btn btn-sm btn-outline-primary" @onclick="Apply" disabled="@_jsonNeedsRefresh">&#x2714; Apply to Tree</button>
+        @if (_jsonNeedsRefresh)
+        {
+            <span class="small text-warning">New resources were added. Refresh from Tree before applying full JSON edits.</span>
+        }
     </div>
     <div style="order:3;">
         <CodeEditor @bind-Value="JsonText" @bind-Value:after="OnJsonChanged" Language="json" Height="@(_aiExpanded ? "calc(100vh - 520px)" : "calc(100vh - 260px)")" />
@@ -59,18 +65,23 @@
                     }
                 </div>
 
+                <label class="small d-flex align-items-center gap-2 mb-2">
+                    <input type="checkbox" class="form-check-input" checked="@_resourceOnly"
+                           @onchange="OnResourceOnlyChanged" disabled="@_isProcessing" />
+                    Generate new resources only (does not send or replace the current project)
+                </label>
                 <div class="d-flex gap-1 align-items-center mb-2">
                     <label class="small text-muted text-nowrap mb-0" style="min-width:90px;">Edit scope:</label>
-                    <select class="form-select form-select-sm flex-grow-1"
+                    <select class="form-select form-select-sm flex-grow-1" disabled="@(_resourceOnly || _isProcessing)"
                             @bind="_scopePath"
                             title="Restrict the edit to a folder subtree or a top-level section (Screens, Scripts, etc.). Only that slice is sent to the AI; the rest is preserved locally.">
-                        <option value="">-- Whole project (sends full JSON) --</option>
+                        <option value="">@(_resourceOnly ? "-- New resources only (current project not sent) --" : "-- Whole project (sends full JSON) --")</option>
                         @foreach (var s in _folderScopes)
                         {
                             <option value="@s.Key">@s.Label</option>
                         }
                     </select>
-                    <button class="btn btn-sm btn-outline-secondary" title="Refresh scope list from the current JSON" @onclick="RefreshFolderScopes">&#x27F3;</button>
+                    <button class="btn btn-sm btn-outline-secondary" disabled="@(_resourceOnly || _isProcessing)" title="Refresh scope list from the current JSON" @onclick="RefreshFolderScopes">&#x27F3;</button>
                     @if (_scopePath.StartsWith("folder:"))
                     {
                         <label class="d-flex align-items-center gap-1 m-0 small text-nowrap"
@@ -185,7 +196,7 @@
                     <label class="d-flex align-items-center gap-1 m-0"
                            title="Split large reference files into multiple sequential AI calls. Only takes effect when a reference file is selected and its size exceeds the chunk size.">
                         <input type="checkbox" class="form-check-input m-0" checked="@_chunkedMode"
-                               @onchange="OnChunkedChanged" />
+                               @onchange="OnChunkedChanged" disabled="@(_resourceOnly || _isProcessing)" />
                         Chunked import
                     </label>
                     @if (_chunkedMode)
@@ -202,6 +213,54 @@
                         else
                         {
                             <span class="text-warning">(select a reference file to activate)</span>
+                        }
+                    }
+                </div>
+
+                <div class="mb-2">
+                    <label for="json-ai-common-task" class="small fw-semibold">Common task</label>
+                    <select id="json-ai-common-task" class="form-select form-select-sm" value="@_selectedTaskId"
+                            @onchange="OnTaskChanged" disabled="@_isProcessing">
+                        <option value="">-- Choose a task, then customize the request --</option>
+                        @foreach (var category in AiTaskCatalog.Tasks.GroupBy(task => task.Category))
+                        {
+                            <optgroup label="@category.Key">
+                                @foreach (var task in category)
+                                {
+                                    <option value="@task.Id">@task.Title</option>
+                                }
+                            </optgroup>
+                        }
+                    </select>
+                    <div class="small text-muted mt-1">Customize the request below. Enter adds a line; Ctrl+Enter (Cmd+Enter on Mac) sends it.</div>
+                    @if (!string.IsNullOrEmpty(_selectedTaskId))
+                    {
+                        <div class="small text-muted mt-1" role="status">
+                            Task loaded, not sent. @(_resourceOnly ? "Resource-only generation selected; review the bundle, then Add resources." : "Whole-project scope selected to edit existing resources.")
+                            Edit names, paths, and values below, review any selected reference file, then click Ask AI.
+                            Executable demo resources are requested disabled for review.
+                        </div>
+                    }
+                    @if (_resourceOnly)
+                    {
+                        <div class="small text-muted mt-1">
+                            Variables are added inside a fresh AI_Task folder. Other resource names get the same unique prefix;
+                            scripts, PLC programs, and screens also get an editor group. Internal references are updated together.
+                            The __TASK__ placeholder in the preview is replaced only when you add the resources.
+                        </div>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(_resourceJson))
+                    {
+                        <label class="small fw-semibold mt-2" for="json-ai-resource-preview">New resource bundle (editable preview)</label>
+                        <textarea id="json-ai-resource-preview" class="form-control form-control-sm font-monospace"
+                                  rows="10" @bind="_resourceJson" @bind:event="oninput" disabled="@_isProcessing"></textarea>
+                        <button class="btn btn-sm btn-success mt-1" @onclick="ImportResources"
+                                disabled="@(_isProcessing || _resourceTarget != ResourceProject || ResourceProject == null || ResourceProject.IsLocked)">
+                            Add resources to @(_resourceTarget?.Name)
+                        </button>
+                        @if (_resourceTarget != ResourceProject)
+                        {
+                            <div class="small text-warning">The target project changed. Return to the original project or generate a new bundle.</div>
                         }
                     }
                 </div>
@@ -233,13 +292,17 @@
                             </div>
                         }
                     </div>
-                    <input type="text" class="form-control form-control-sm flex-grow-1" @bind="_prompt"
-                           @bind:event="oninput"
-                           @onkeydown="OnPromptKeyDown"
-                           placeholder="@(_selectedSamplePath != "" ? "e.g. Import all variables from the reference..." : "Describe what you want the AI to do...")" />
+                    <textarea class="form-control form-control-sm flex-grow-1" @bind="_prompt"
+                              @bind:event="oninput" rows="5" aria-label="AI task request" disabled="@_isProcessing"
+                              @onkeydown="OnPromptKeyDown"
+                              placeholder="@(_selectedSamplePath != "" ? "e.g. Import all variables from the reference..." : "Describe what you want the AI to do...")"></textarea>
                     @{
                         int jsonCharsEstimate;
-                        if (!string.IsNullOrEmpty(_scopePath))
+                        if (_resourceOnly)
+                        {
+                            jsonCharsEstimate = AiService.BuildResourceBundlePrompt("").Length;
+                        }
+                        else if (!string.IsNullOrEmpty(_scopePath))
                         {
                             var scope = _folderScopes.FirstOrDefault(s => s.Key == _scopePath);
                             jsonCharsEstimate = scope.ApproxChars + _folderScopes.Count * 40; // subtree + outline overhead
@@ -340,57 +403,59 @@
     [Parameter] public EventCallback OnRefresh { get; set; }
     [Parameter] public EventCallback<(bool success, string message)> OnApply { get; set; }
     [Parameter] public EventCallback<string> OnAiJsonResult { get; set; }
+    [Parameter] public ProjectNode? ResourceProject { get; set; }
+    [Parameter] public EventCallback<AiResourceImportRequest> OnImportResources { get; set; }
+    [Parameter] public JsonEditorSession Session { get; set; } = new();
 
     [Inject] private AiService AiService { get; set; } = default!;
 
-    private string _message = "";
-    private bool _success;
-
-    // AI state
-    private bool _aiExpanded;
-    private string _selectedEngine = "OpenAI";
-    private string _prompt = "";
-    private string _aiComments = "";
-    private string _aiError = "";
-    private bool _isProcessing;
-    private List<(string Name, string Path, string Group)> _sampleFiles = new();
-    private string _selectedSamplePath = "";
-    private string _customFilePath = "";
-    private string _referencePreview = "";
-    private bool _showPreview;
-    private bool _showBrowse;
-    private string _browseInput = "";
-
-    // Ollama state
-    private string _ollamaModel = "mistral";
-    private string _ollamaUrl = "";
-    private string[] _ollamaModels = [];
-    private string _trainFolder = Path.Combine("C:", "Work", "samples");
-
-    // Live streaming state
-    private CancellationTokenSource? _streamCts;
-    private int _streamCharCount;
-    private string _streamTail = "";
-    private TimeSpan _streamElapsed;
-    private SimpleJsonDiff.Stats _diffStats;
-    private DateTime _lastUiUpdateUtc;
-    private string? _copyStatusMsg;
-    private int _referenceCharCount;
-    private bool _chunkedMode;
-    private int _chunkChars = 20_000;
-    private int _currentChunk;
-    private int _totalChunks;
+    private bool _resourceOnly { get => Session.ResourceOnly; set => Session.ResourceOnly = value; }
+    private bool _jsonNeedsRefresh { get => Session.JsonNeedsRefresh; set => Session.JsonNeedsRefresh = value; }
+    private string _resourceJson { get => Session.ResourceJson; set => Session.ResourceJson = value; }
+    private ProjectNode? _resourceTarget { get => Session.ResourceTarget; set => Session.ResourceTarget = value; }
+    private string _message { get => Session.Message; set => Session.Message = value; }
+    private bool _success { get => Session.Success; set => Session.Success = value; }
+    private bool _aiExpanded { get => Session.AiExpanded; set => Session.AiExpanded = value; }
+    private string _selectedEngine { get => Session.SelectedEngine; set => Session.SelectedEngine = value; }
+    private string _prompt { get => Session.Prompt; set => Session.Prompt = value; }
+    private string _aiComments { get => Session.AiComments; set => Session.AiComments = value; }
+    private string _aiError { get => Session.AiError; set => Session.AiError = value; }
+    private bool _isProcessing { get => Session.IsProcessing; set => Session.IsProcessing = value; }
+    private List<(string Name, string Path, string Group)> _sampleFiles { get => Session.SampleFiles; set => Session.SampleFiles = value; }
+    private string _selectedSamplePath { get => Session.SelectedSamplePath; set => Session.SelectedSamplePath = value; }
+    private string _customFilePath { get => Session.CustomFilePath; set => Session.CustomFilePath = value; }
+    private string _referencePreview { get => Session.ReferencePreview; set => Session.ReferencePreview = value; }
+    private bool _showPreview { get => Session.ShowPreview; set => Session.ShowPreview = value; }
+    private bool _showBrowse { get => Session.ShowBrowse; set => Session.ShowBrowse = value; }
+    private string _browseInput { get => Session.BrowseInput; set => Session.BrowseInput = value; }
+    private string _ollamaModel { get => Session.OllamaModel; set => Session.OllamaModel = value; }
+    private string _ollamaUrl { get => Session.OllamaUrl; set => Session.OllamaUrl = value; }
+    private string[] _ollamaModels { get => Session.OllamaModels; set => Session.OllamaModels = value; }
+    private string _trainFolder { get => Session.TrainFolder; set => Session.TrainFolder = value; }
+    private CancellationTokenSource? _streamCts { get => Session.StreamCts; set => Session.StreamCts = value; }
+    private int _streamCharCount { get => Session.StreamCharCount; set => Session.StreamCharCount = value; }
+    private string _streamTail { get => Session.StreamTail; set => Session.StreamTail = value; }
+    private TimeSpan _streamElapsed { get => Session.StreamElapsed; set => Session.StreamElapsed = value; }
+    private SimpleJsonDiff.Stats _diffStats { get => Session.DiffStats; set => Session.DiffStats = value; }
+    private DateTime _lastUiUpdateUtc { get => Session.LastUiUpdateUtc; set => Session.LastUiUpdateUtc = value; }
+    private string? _copyStatusMsg { get => Session.CopyStatusMsg; set => Session.CopyStatusMsg = value; }
+    private int _referenceCharCount { get => Session.ReferenceCharCount; set => Session.ReferenceCharCount = value; }
+    private bool _chunkedMode { get => Session.ChunkedMode; set => Session.ChunkedMode = value; }
+    private int _chunkChars { get => Session.ChunkChars; set => Session.ChunkChars = value; }
+    private int _currentChunk { get => Session.CurrentChunk; set => Session.CurrentChunk = value; }
+    private int _totalChunks { get => Session.TotalChunks; set => Session.TotalChunks = value; }
     private int _estimatedChunks => _referenceCharCount == 0 || _chunkChars <= 0 ? 0 : (int)Math.Ceiling(_referenceCharCount / (double)_chunkChars);
-    private string _scopePath = "";
-    private List<AiService.ScopeEntry> _folderScopes = new();
-    private bool _additionsOnly = true;
+    private string _scopePath { get => Session.ScopePath; set => Session.ScopePath = value; }
+    private List<AiService.ScopeEntry> _folderScopes { get => Session.FolderScopes; set => Session.FolderScopes = value; }
+    private bool _additionsOnly { get => Session.AdditionsOnly; set => Session.AdditionsOnly = value; }
 
     private static readonly string DefaultSamplesPath = Path.Combine("C:", "Work", "samples");
 
     private const string RecentPromptsKey = "jsonEditor.recentPrompts";
     private const int MaxRecentPrompts = 10;
-    private bool _showSuggestions;
-    private List<string> _recentPrompts = new();
+    private bool _showSuggestions { get => Session.ShowSuggestions; set => Session.ShowSuggestions = value; }
+    private List<string> _recentPrompts { get => Session.RecentPrompts; set => Session.RecentPrompts = value; }
+    private string _selectedTaskId { get => Session.SelectedTaskId; set => Session.SelectedTaskId = value; }
 
     private static readonly string[] CommonPrompts =
     {
@@ -408,6 +473,9 @@
 
     protected override async Task OnInitializedAsync()
     {
+        Session.Changed += OnSessionChangedAsync;
+        if (Session.IsInitialized) return;
+        Session.IsInitialized = true;
         _ollamaUrl = AiService.OllamaBaseUrl;
         _sampleFiles = AiService.GetSampleFiles(DefaultSamplesPath);
         try
@@ -424,6 +492,15 @@
         }
     }
 
+    private Task OnSessionChangedAsync() => InvokeAsync(StateHasChanged);
+
+    private Task RefreshSessionAsync() => Session.NotifyChangedAsync();
+
+    public void Dispose()
+    {
+        Session.Changed -= OnSessionChangedAsync;
+    }
+
     private void ToggleSuggestions()
     {
         _showSuggestions = !_showSuggestions;
@@ -431,8 +508,80 @@
 
     private void SelectSuggestion(string text)
     {
+        if (_isProcessing) return;
         _prompt = text;
+        _selectedTaskId = "";
         _showSuggestions = false;
+        if (CommonPrompts.Contains(text) || text.Contains(AiTaskCatalog.CommonInstructions, StringComparison.Ordinal))
+            OnResourceOnlyChanged(new ChangeEventArgs { Value = false });
+        else if (text.Contains(AiTaskCatalog.ResourceInstructions, StringComparison.Ordinal))
+            OnResourceOnlyChanged(new ChangeEventArgs { Value = true });
+    }
+
+    private void OnTaskChanged(ChangeEventArgs e)
+    {
+        if (_isProcessing) return;
+        var id = e.Value?.ToString() ?? "";
+        if (string.IsNullOrEmpty(id))
+        {
+            _selectedTaskId = "";
+            return;
+        }
+
+        var task = AiTaskCatalog.Tasks.FirstOrDefault(task => task.Id == id);
+        if (task == null)
+        {
+            _aiError = "The selected common task is not available. Choose another task.";
+            return;
+        }
+
+        _selectedTaskId = task.Id;
+        _resourceOnly = task.CreatesResources;
+        _prompt = task.Prompt + "\n\n" + (_resourceOnly ? AiTaskCatalog.ResourceInstructions : AiTaskCatalog.CommonInstructions);
+        _scopePath = "";
+        _chunkedMode = false;
+        _resourceJson = "";
+        _showSuggestions = false;
+        _aiError = "";
+        _aiComments = "";
+        if (!_resourceOnly) RefreshFolderScopes();
+    }
+
+    private void OnResourceOnlyChanged(ChangeEventArgs e)
+    {
+        if (_isProcessing) return;
+        _resourceOnly = e.Value is true;
+        _scopePath = "";
+        _chunkedMode = false;
+        _resourceJson = "";
+        if (!_resourceOnly) RefreshFolderScopes();
+    }
+
+    private Task ImportResources()
+    {
+        if (_isProcessing || !OnImportResources.HasDelegate)
+        {
+            _aiError = _isProcessing ? "Wait for generation to complete before adding resources." : "Resource import is not available in this editor.";
+            return Task.CompletedTask;
+        }
+        if (_resourceTarget == null || _resourceTarget != ResourceProject || _resourceTarget.IsLocked)
+        {
+            _aiError = "Select and unlock the original target project before adding these resources.";
+            return Task.CompletedTask;
+        }
+        return OnImportResources.InvokeAsync(new AiResourceImportRequest(_resourceTarget, _resourceJson));
+    }
+
+    public void ShowResourceImportResult(bool success, string message)
+    {
+        _aiError = success ? "" : message;
+        if (success)
+        {
+            _resourceJson = "";
+            _jsonNeedsRefresh = true;
+            _aiComments = message;
+        }
+        ShowMessage(success, message);
     }
 
     private async Task RemoveRecent(string text)
@@ -473,10 +622,16 @@
     {
         _message = "";
         await OnRefresh.InvokeAsync();
+        _jsonNeedsRefresh = false;
     }
 
     private async Task Apply()
     {
+        if (_jsonNeedsRefresh)
+        {
+            _aiError = "Refresh from Tree before applying full JSON edits; new resources have been added.";
+            return;
+        }
         await OnApply.InvokeAsync();
     }
 
@@ -542,12 +697,12 @@
     {
         AiService.OllamaModel = _ollamaModel;
         AiService.OllamaBaseUrl = _ollamaUrl;
-        await AiService.TrainOllamaAsync(_trainFolder, _ => InvokeAsync(StateHasChanged));
+        await AiService.TrainOllamaAsync(_trainFolder, _ => RefreshSessionAsync());
     }
 
     private async Task OnPromptKeyDown(KeyboardEventArgs e)
     {
-        if (e.Key == "Enter" && !e.ShiftKey && !_isProcessing && !string.IsNullOrWhiteSpace(_prompt))
+        if (e.Key == "Enter" && (e.CtrlKey || e.MetaKey) && !_isProcessing && !string.IsNullOrWhiteSpace(_prompt))
         {
             await Ask();
         }
@@ -555,10 +710,26 @@
 
     private async Task Ask()
     {
-        if (string.IsNullOrWhiteSpace(_prompt)) return;
+        if (_isProcessing || string.IsNullOrWhiteSpace(_prompt)) return;
+        var resourceOnly = _resourceOnly;
+        if (!resourceOnly && _jsonNeedsRefresh)
+        {
+            _aiError = "Refresh from Tree before asking AI to edit the full project; new resources have been added.";
+            return;
+        }
+        if (resourceOnly)
+        {
+            if (ResourceProject == null || ResourceProject.IsLocked)
+            {
+                _aiError = "Open and unlock a project before generating new resources.";
+                return;
+            }
+            _resourceTarget = ResourceProject;
+            _resourceJson = "";
+        }
 
-        await RememberPrompt(_prompt);
         _isProcessing = true;
+        await RememberPrompt(_prompt);
         _aiComments = "";
         _aiError = "";
         _streamCharCount = 0;
@@ -582,6 +753,8 @@
             {
                 referenceJson = AiService.ReadReferenceFile(_selectedSamplePath);
                 referenceFileName = Path.GetFileName(_selectedSamplePath);
+                if (resourceOnly && string.IsNullOrWhiteSpace(referenceJson))
+                    throw new InvalidOperationException("The selected reference file is missing or empty. Choose a readable reference or select No reference file before generating resources.");
             }
 
             if (_selectedEngine == "Ollama")
@@ -601,7 +774,13 @@
                 if ((DateTime.UtcNow - _lastUiUpdateUtc).TotalMilliseconds < 250) return;
                 _lastUiUpdateUtc = DateTime.UtcNow;
 
-                // Live JSON preview into the CodeEditor so the user watches the AI edit in real time.
+                if (resourceOnly)
+                {
+                    await RefreshSessionAsync();
+                    return;
+                }
+
+                // Live JSON preview
                 var isAdditionsMode =
                     (_scopePath.StartsWith("folder:") && _additionsOnly) ||
                     (_chunkedMode && !string.IsNullOrEmpty(_selectedSamplePath) && _referenceCharCount > _chunkChars);
@@ -636,13 +815,18 @@
                     _diffStats = SimpleJsonDiff.Compare(originalJson, pending);
                 }
 
-                await InvokeAsync(StateHasChanged);
+                await RefreshSessionAsync();
             };
 
             string newJson;
             string comments;
 
-            if (_chunkedMode && !string.IsNullOrEmpty(referenceJson) && referenceJson.Length > _chunkChars)
+            if (resourceOnly)
+            {
+                (newJson, comments) = await AiService.AskResourcesAsync(
+                    _selectedEngine, _prompt, referenceJson, referenceFileName, onDelta, _streamCts.Token);
+            }
+            else if (_chunkedMode && !string.IsNullOrEmpty(referenceJson) && referenceJson.Length > _chunkChars)
             {
                 (newJson, comments) = await AiService.AskInChunksAsync(
                     _selectedEngine, _prompt, JsonText, referenceJson, referenceFileName,
@@ -651,7 +835,7 @@
                     {
                         _currentChunk = currentChunk;
                         _totalChunks = totalChunks;
-                        await InvokeAsync(StateHasChanged);
+                        await RefreshSessionAsync();
                     },
                     onDelta,
                     _streamCts.Token);
@@ -680,7 +864,12 @@
                     _streamCts.Token);
             }
 
-            if (!string.IsNullOrEmpty(newJson))
+            if (resourceOnly && !string.IsNullOrWhiteSpace(newJson))
+            {
+                _resourceJson = newJson;
+                _aiComments = comments;
+            }
+            else if (!resourceOnly && !string.IsNullOrEmpty(newJson))
             {
                 _aiComments = comments;
                 _diffStats = SimpleJsonDiff.Compare(originalJson, newJson);
@@ -691,14 +880,14 @@
                 // change on its next OnParametersSetAsync pass (Value != _lastValue).
                 JsonText = newJson;
                 await JsonTextChanged.InvokeAsync(newJson);
-                await InvokeAsync(StateHasChanged);
+                await RefreshSessionAsync();
                 await OnAiJsonResult.InvokeAsync(newJson);
             }
             else
             {
                 // AI produced no usable merged JSON — restore the editor to the pre-stream state
                 // so a stale streaming preview doesn't linger and confuse the user.
-                if (JsonText != originalJson)
+                if (!resourceOnly && JsonText != originalJson)
                 {
                     JsonText = originalJson;
                     await JsonTextChanged.InvokeAsync(originalJson);
@@ -720,6 +909,7 @@
             _isProcessing = false;
             _streamCts?.Dispose();
             _streamCts = null;
+            await RefreshSessionAsync();
         }
     }
 
@@ -770,7 +960,7 @@
 
     protected override void OnParametersSet()
     {
-        if (_folderScopes.Count == 0 && !string.IsNullOrEmpty(JsonText))
+        if (!_resourceOnly && _folderScopes.Count == 0 && !string.IsNullOrEmpty(JsonText))
             RefreshFolderScopes();
     }
 
@@ -781,12 +971,12 @@
         {
             await JS.InvokeVoidAsync("navigator.clipboard.writeText", text);
             _copyStatusMsg = key;
-            StateHasChanged();
+            await RefreshSessionAsync();
             await Task.Delay(1500);
             if (_copyStatusMsg == key)
             {
                 _copyStatusMsg = null;
-                StateHasChanged();
+                await RefreshSessionAsync();
             }
         }
         catch

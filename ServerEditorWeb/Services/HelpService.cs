@@ -430,6 +430,9 @@ This is a web-based editor for configuring the **Simple OPC File Server** — an
 - **Redundancy** — Primary/standby high-availability with automatic failover
 - **Sparkplug B** — Standard MQTT-based SCADA interoperability protocol
 
+### Adding Resources
+Use the toolbar or **Edit** menu to add resources from any tree selection in an unlocked project. The matching folder is used when selected; otherwise the resource is added to its group in the active project. The new node is selected, its tree branch is expanded, and its editor or Properties panel opens automatically.
+
 ### Panels
 Use **View** menu to show/hide panels. Drag panel tabs to reorganize the layout.
 """),
@@ -466,9 +469,9 @@ Variables are organized in **Folders**. The folder hierarchy defines the OPC UA 
 Example: `Plant.Furnace.Temperature` → OPC UA NodeId `"Plant.Furnace.Temperature"`.
 
 ### Adding Variables
-- Select a folder or the Variables group node
-- Click the 🏷️ button in the toolbar (or Edit → Add Variable)
-- The new variable is created with a default `Double` type
+- Click the 🏷️ button in the toolbar (or Edit → Add Variable) from any tree selection
+- The selected variable folder is used when applicable; otherwise the root Variables folder is used
+- The new variable is selected with a default `Double` type and the Properties panel opens
 
 ### Variable Types
 `Double`, `Int32`, `Int64`, `Boolean`, `String`, `DateTime`, `Float`, `UInt16`, `UInt32`, `Byte`
@@ -533,9 +536,9 @@ OnChanged("Plant.Temp", e => { ... }) // React to changes
 ```
 
 ### Creating Scripts
-1. Select the Scripts group in the tree
-2. Click ⚡ in the toolbar or Edit → Add Script
-3. Double-click the script to open the Script Editor
+1. Click ⚡ in the toolbar or Edit → Add Script from any tree selection
+2. The matching script folder is used when applicable; otherwise the Scripts group is used
+3. The new script is selected and the Script Editor opens automatically
 
 ### Configuration
 - **Language** — C# or VB.NET
@@ -616,9 +619,9 @@ HMI screens with interactive visualizations.
 - **Responsive** — CSS Grid layout that adapts to screen size
 
 ### Creating Screens
-1. Select the Screens group
-2. Click 🖼️ in the toolbar
-3. Double-click to open the Screen Editor
+1. Click 🖼️ in the toolbar or Edit → Add Screen from any tree selection
+2. The matching screen folder is used when applicable; otherwise the Screens group is used
+3. The new screen is selected and the Screen Editor opens automatically
 
 ### Symbol Types
 Rect, Circle, Ellipse, Text, Line, Gauge, Indicator, SVG, Alarm List, HDA Chart, HDA Grid, Event Log, EditBox, IP Camera, Recipe, Weekly Planner, Screen Embed, Image Map, Trend, Switch, Rotary Switch, Knob, Slider, Button, Animated Text
@@ -810,9 +813,40 @@ Direct JSON editing of the project tree with AI assistance.
 - Click **Apply** to write changes back
 
 ### AI Assistant
-- Type a natural language request (e.g., "Add 10 temperature variables")
-- The AI generates the modified JSON
-- Review the diff and click Apply
+- Expand **AI Assistant** and choose a provider/model configured for your environment.
+- Requests, generated bundles, settings, and status remain available when switching, closing/reopening, or moving the dock panel.
+  Generation continues while the panel is hidden; reopen it to review progress/results or cancel. Leaving/reloading the
+  editor workspace ends this in-memory session and cancels pending generation; it is not saved into the project file.
+- Choose a categorized **Common task** or type your own request. Tasks cover scripts, screens, variables,
+  calculated tags, PLC programs, recipes, schedules, reports, assets, events, automation rules, batch sequences,
+  user groups, localization, and project-wide tasks.
+- Examples include **Read and write variables in a loop**, **Two tanks connected by a pipe**, and a complete
+  two-tank demo combining tags, a script, a screen, a recipe definition, and a report.
+- Choosing a task only fills the editable request; it does not contact the provider or change the project.
+- Creation tasks select **Generate new resources only**. The AI receives the task/schema and optional reference file,
+  not the current project JSON. Review any reference before sending; choose one explicitly for import tasks.
+  Oversized references produce an error rather than being silently truncated; increase **Max ref chars** or use a smaller reference.
+- Customize names, paths, units, layout, and values in the multiline request. Enter adds a line;
+  **Ctrl+Enter** (or **Cmd+Enter**) and **Ask AI** send the request.
+- Review the separate editable resource bundle, then click **Add resources**. Only this fragment is parsed and appended;
+  existing project objects, unsaved tree edits, and server settings are preserved. Invalid bundles add nothing.
+  IDs should be quoted strings. Numeric IDs returned by a provider for string identifier fields (including symbol and
+  connection references) are imported as their exact string representation; other field types remain strictly validated.
+  Common generated screen aliases are translated: **Text → Label**, **Color → Fill**, **BorderColor → Stroke**;
+  numeric displays also translate **Unit**, **BackgroundColor**, and **DecimalPlaces** into their NumericDisplay properties.
+  Centered alignment is already built in for text/numeric displays. Conflicting aliases and unsupported alignment are rejected.
+- The literal **__TASK__** placeholder becomes a fresh namespace on each import (**AI_Task**, **AI_Task_2**, etc.).
+  Variables go inside that new child folder; global resource names and localization/image keys use its prefix.
+  Scripts, PLC programs, and screens also get a matching editor folder. Resources without editor folders use unique prefixed names.
+  References inside the bundle, including script source and expressions, get the same namespace substitution.
+- Executable scripts, PLC programs, schedules, events, automation rules, batches, AI agents, and MCP connections are imported disabled.
+  Review before enabling and save the project normally. **Refresh from Tree** updates the full JSON view when needed.
+  Applying or generating replacement full-project JSON is blocked until that refresh, preventing stale JSON from removing new resources.
+- **Organize resource folders** edits existing resources and therefore selects whole-project mode. You can turn off
+  resource-only generation explicitly for other existing-resource edits; completed project edits use the original full-JSON apply flow.
+- A generated bundle stays tied to its original project. Switch back to that unlocked project to import it, or generate again.
+- Script loops process a finite set of variables once per invocation; **IntervalMs** supplies repetition.
+- Existing recent prompts and quick suggestions remain available from the history button.
 """),
 
         ["git"] = new("🔀 Git Version Control", """

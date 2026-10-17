@@ -379,6 +379,7 @@
 @code {
     private List<AutomationRule> _rules = new();
     private AutomationRule? _selected;
+    private AutomationRuleNode? _treeSelection;
 
     protected override void OnInitialized()
     {
@@ -393,6 +394,13 @@
         _rules = Editor.RootModel?.AutomationRules ?? new();
         if (_selected != null && !_rules.Contains(_selected))
             _selected = null;
+        var treeSelection = Editor.SelectedItem as AutomationRuleNode;
+        if (treeSelection != _treeSelection)
+        {
+            _treeSelection = treeSelection;
+            if (treeSelection != null && _rules.Contains(treeSelection.Rule))
+                _selected = treeSelection.Rule;
+        }
     }
 
     private void OnEditorChanged()

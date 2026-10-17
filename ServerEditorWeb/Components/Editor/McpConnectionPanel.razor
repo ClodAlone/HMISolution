@@ -177,6 +177,7 @@
 @code {
     private List<McpConnectionConfig> _connections = new();
     private McpConnectionConfig? _selected;
+    private McpConnectionNode? _treeSelection;
 
     protected override void OnInitialized()
     {
@@ -191,6 +192,13 @@
         _connections = Editor.RootModel?.McpConnections ?? new();
         if (_selected != null && !_connections.Contains(_selected))
             _selected = null;
+        var treeSelection = Editor.SelectedItem as McpConnectionNode;
+        if (treeSelection != _treeSelection)
+        {
+            _treeSelection = treeSelection;
+            if (treeSelection != null && _connections.Contains(treeSelection.Connection))
+                _selected = treeSelection.Connection;
+        }
     }
 
     private void OnEditorChanged()

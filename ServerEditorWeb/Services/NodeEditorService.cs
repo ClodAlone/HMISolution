@@ -7,7 +7,7 @@ using ServerEditorWeb.Models;
 
 namespace ServerEditorWeb.Services;
 
-public class NodeEditorService
+public partial class NodeEditorService
 {
     private UndoRedoService? _undoRedo;
 
@@ -1272,17 +1272,45 @@ public class NodeEditorService
         }
     }
 
+    private TreeNode? FindAddParent<TGroup>(string? resourceKind = null) where TGroup : TreeNode
+    {
+        if (ActiveProject == null) return null;
+
+        if (FindAncestorTopLevelProject(SelectedItem) == ActiveProject)
+        {
+            for (var node = SelectedItem; node != null && node is not ProjectNode; node = node.Parent)
+            {
+                if (node is TGroup || node is ResourceFolderNode folder && folder.ResourceKind == resourceKind)
+                    return node;
+            }
+        }
+
+        return ActiveProject.Children.OfType<TGroup>().FirstOrDefault();
+    }
+
+    private FolderNode? FindVariableParent()
+    {
+        if (FindAncestorTopLevelProject(SelectedItem) == ActiveProject)
+        {
+            for (var node = SelectedItem; node != null && node is not ProjectNode; node = node.Parent)
+            {
+                if (node is FolderNode folder) return folder;
+            }
+        }
+
+        return FindAddParent<VariableGroupNode>()?.Children.OfType<FolderNode>().FirstOrDefault();
+    }
+
     public void AddFolder()
     {
-        var parent = SelectedItem as FolderNode
-            ?? (SelectedItem is VariableGroupNode vg ? vg.Children.OfType<FolderNode>().FirstOrDefault() : null);
+        var parent = FindVariableParent();
         if (parent != null)
         {
             var newFolder = new Folder { Name = "New Folder" };
             var newNode = new FolderNode(newFolder) { Parent = parent };
             parent.Children.Add(newNode);
             parent.IsExpanded = true;
-            SelectedItem = newNode;
+            SetSingleSelection(newNode);
             HasUnsavedChanges = true;
             NotifyStateChanged();
         }
@@ -1290,8 +1318,7 @@ public class NodeEditorService
 
     public void AddVariable()
     {
-        var parent = SelectedItem as FolderNode
-            ?? (SelectedItem is VariableGroupNode vg ? vg.Children.OfType<FolderNode>().FirstOrDefault() : null);
+        var parent = FindVariableParent();
         if (parent != null)
         {
             var newVar = new Variable { Name = "New Variable", Type = "Double", Value = 0.0, Access = "ReadWrite" };
@@ -1378,9 +1405,7 @@ public class NodeEditorService
 
     public void AddScript()
     {
-        var parent = SelectedItem is ResourceFolderNode rf && rf.ResourceKind == "Script"
-            ? (TreeNode)rf
-            : SelectedItem is ScriptGroupNode ? SelectedItem : null;
+        var parent = FindAddParent<ScriptGroupNode>("Script");
         if (parent != null)
         {
             var newScript = new ScriptConfig { Name = "New Script", Code = "var val = Read(\"MyVar\");\nWrite(\"MyVar\", 123);", IntervalMs = 1000, Enabled = true };
@@ -1395,9 +1420,7 @@ public class NodeEditorService
 
     public void AddPlcProgram()
     {
-        var parent = SelectedItem is ResourceFolderNode rf && rf.ResourceKind == "PlcProgram"
-            ? (TreeNode)rf
-            : SelectedItem is PlcGroupNode ? SelectedItem : null;
+        var parent = FindAddParent<PlcGroupNode>("PlcProgram");
         if (parent != null)
         {
             var newPlc = new PlcProgramConfig
@@ -1418,9 +1441,7 @@ public class NodeEditorService
 
     public void AddScreen()
     {
-        var parent = SelectedItem is ResourceFolderNode rf && rf.ResourceKind == "Screen"
-            ? (TreeNode)rf
-            : SelectedItem is ScreenGroupNode ? SelectedItem : null;
+        var parent = FindAddParent<ScreenGroupNode>("Screen");
         if (parent != null)
         {
             var newScreen = new ScreenConfig { Name = "New Screen", Width = 800, Height = 600 };
@@ -1435,7 +1456,7 @@ public class NodeEditorService
 
     public void AddRecipe()
     {
-        if (SelectedItem is RecipeGroupNode parent)
+        if (FindAddParent<RecipeGroupNode>() is { } parent)
         {
             var newRecipe = new RecipeConfig
             {
@@ -1454,7 +1475,7 @@ public class NodeEditorService
 
     public void AddScheduler()
     {
-        if (SelectedItem is SchedulerGroupNode parent)
+        if (FindAddParent<SchedulerGroupNode>() is { } parent)
         {
             var newScheduler = new SchedulerConfig
             {
@@ -1475,7 +1496,7 @@ public class NodeEditorService
 
     public void AddReport()
     {
-        if (SelectedItem is ReportGroupNode parent)
+        if (FindAddParent<ReportGroupNode>() is { } parent)
         {
             var newReport = new ReportConfig
             {
@@ -1495,7 +1516,7 @@ public class NodeEditorService
 
     public void AddCalculated()
     {
-        if (SelectedItem is CalculatedGroupNode parent)
+        if (FindAddParent<CalculatedGroupNode>() is { } parent)
         {
             var newCalc = new CalculatedVariableConfig
             {
@@ -1509,7 +1530,7 @@ public class NodeEditorService
             var newNode = new CalculatedNode(newCalc) { Parent = parent };
             parent.Children.Add(newNode);
             parent.IsExpanded = true;
-            SelectedItem = newNode;
+            SetSingleSelection(newNode);
             HasUnsavedChanges = true;
             NotifyStateChanged();
         }
@@ -1517,7 +1538,7 @@ public class NodeEditorService
 
     public void AddAsset()
     {
-        if (SelectedItem is AssetGroupNode parent)
+        if (FindAddParent<AssetGroupNode>() is { } parent)
         {
             var newAsset = new AssetConfig
             {
@@ -1527,7 +1548,7 @@ public class NodeEditorService
             var newNode = new AssetNode(newAsset) { Parent = parent };
             parent.Children.Add(newNode);
             parent.IsExpanded = true;
-            SelectedItem = newNode;
+            SetSingleSelection(newNode);
             HasUnsavedChanges = true;
             NotifyStateChanged();
         }
@@ -1535,7 +1556,7 @@ public class NodeEditorService
 
     public void AddBatch()
     {
-        if (SelectedItem is BatchGroupNode parent)
+        if (FindAddParent<BatchGroupNode>() is { } parent)
         {
             var newBatch = new BatchSequenceConfig
             {
@@ -1554,7 +1575,7 @@ public class NodeEditorService
 
     public void AddEvent()
     {
-        if (SelectedItem is EventGroupNode parent)
+        if (FindAddParent<EventGroupNode>() is { } parent)
         {
             var newEvent = new EventConfig
             {
@@ -1572,7 +1593,7 @@ public class NodeEditorService
 
     public void AddAliasMap()
     {
-        if (SelectedItem is AliasMapGroupNode parent)
+        if (FindAddParent<AliasMapGroupNode>() is { } parent)
         {
             var newMap = new VariableAliasMap
             {
@@ -1590,7 +1611,7 @@ public class NodeEditorService
 
     public void AddAutomationRule()
     {
-        if (SelectedItem is AutomationRuleGroupNode parent)
+        if (FindAddParent<AutomationRuleGroupNode>() is { } parent)
         {
             var newRule = new AutomationRule { Name = "New Rule" };
             var newNode = new AutomationRuleNode(newRule) { Parent = parent };
@@ -1605,7 +1626,7 @@ public class NodeEditorService
 
     public void AddAiAgent()
     {
-        if (SelectedItem is AiAgentGroupNode parent)
+        if (FindAddParent<AiAgentGroupNode>() is { } parent)
         {
             var newAgent = new AiAgentConfig { Name = "New AI Agent" };
             var newNode = new AiAgentNode(newAgent) { Parent = parent };
@@ -1620,7 +1641,7 @@ public class NodeEditorService
 
     public void AddMcpConnection()
     {
-        if (SelectedItem is McpConnectionGroupNode parent)
+        if (FindAddParent<McpConnectionGroupNode>() is { } parent)
         {
             var newConn = new McpConnectionConfig { Name = "New MCP Connection" };
             var newNode = new McpConnectionNode(newConn) { Parent = parent };
@@ -1668,7 +1689,7 @@ public class NodeEditorService
 
     public void AddUserGroup()
     {
-        if (SelectedItem is UserGroupListNode parent)
+        if (FindAddParent<UserGroupListNode>() is { } parent)
         {
             var newGroup = new UserGroupConfig { Name = "New Group", AccessLevel = "Read" };
             var newNode = new UserGroupNode(newGroup) { Parent = parent };

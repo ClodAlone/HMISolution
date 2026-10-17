@@ -145,16 +145,16 @@ else
                 @if (_openMenu == "edit")
                 {
                     <div class="menubar-dropdown">
-                        <div class="menu-item @(Editor.SelectedItem is not (FolderNode or VariableGroupNode) ? "disabled" : "")" @onclick="AddFolderMenu" @onclick:stopPropagation>
+                        <div class="menu-item @(!CanAddResource() ? "disabled" : "")" @onclick="AddFolderMenu" @onclick:stopPropagation>
                             <span class="menu-icon">📁</span><span class="menu-label">@L["menu.edit.addFolder"]</span>
                         </div>
-                        <div class="menu-item @(Editor.SelectedItem is not (FolderNode or VariableGroupNode) ? "disabled" : "")" @onclick="AddVariableMenu" @onclick:stopPropagation>
+                        <div class="menu-item @(!CanAddResource() ? "disabled" : "")" @onclick="AddVariableMenu" @onclick:stopPropagation>
                             <span class="menu-icon">🏷️</span><span class="menu-label">@L["menu.edit.addVariable"]</span>
                         </div>
-                        <div class="menu-item @(Editor.SelectedItem is not ScriptGroupNode ? "disabled" : "")" @onclick="AddScriptMenu" @onclick:stopPropagation>
+                        <div class="menu-item @(!CanAddResource() ? "disabled" : "")" @onclick="AddScriptMenu" @onclick:stopPropagation>
                             <span class="menu-icon">⚡</span><span class="menu-label">@L["menu.edit.addScript"]</span>
                         </div>
-                        <div class="menu-item @(Editor.SelectedItem is not ScreenGroupNode ? "disabled" : "")" @onclick="AddScreenMenu" @onclick:stopPropagation>
+                        <div class="menu-item @(!CanAddResource() ? "disabled" : "")" @onclick="AddScreenMenu" @onclick:stopPropagation>
                             <span class="menu-icon">🖼️</span><span class="menu-label">@L["menu.edit.addScreen"]</span>
                         </div>
                         <div class="menu-separator"></div>
@@ -464,23 +464,23 @@ else
 
         @* Add operations *@
         <button class="iconbar-btn" title="@L["toolbar.addFolder"]" @onclick="AddFolder"
-                disabled="@(!CanAddFolder())">📁</button>
+                disabled="@(!CanAddResource())">📁</button>
         <button class="iconbar-btn" title="@L["toolbar.addVariable"]" @onclick="AddVariable"
-                disabled="@(Editor.SelectedItem is not (FolderNode or VariableGroupNode))">🏷️</button>
+                disabled="@(!CanAddResource())">🏷️</button>
         <button class="iconbar-btn" title="@L["toolbar.addScript"]" @onclick="AddScript"
-                disabled="@(Editor.SelectedItem is not (ScriptGroupNode or ResourceFolderNode { ResourceKind: "Script" }))">⚡</button>
+                disabled="@(!CanAddResource())">⚡</button>
         <button class="iconbar-btn" title="@L["toolbar.addPlc"]" @onclick="AddPlcProgram"
-                disabled="@(Editor.SelectedItem is not (PlcGroupNode or ResourceFolderNode { ResourceKind: "PlcProgram" }))">⚙️</button>
+                disabled="@(!CanAddResource())">⚙️</button>
         <button class="iconbar-btn" title="@L["toolbar.addRecipe"]" @onclick="AddRecipe"
-                disabled="@(Editor.SelectedItem is not RecipeGroupNode)">📦</button>
+                disabled="@(!CanAddResource())">📦</button>
         <button class="iconbar-btn" title="@L["toolbar.addScheduler"]" @onclick="AddScheduler"
-                disabled="@(Editor.SelectedItem is not SchedulerGroupNode)">📅</button>
+                disabled="@(!CanAddResource())">📅</button>
         <button class="iconbar-btn" title="@L["toolbar.addReport"]" @onclick="AddReport"
-                disabled="@(Editor.SelectedItem is not ReportGroupNode)">📄</button>
+                disabled="@(!CanAddResource())">📄</button>
         <button class="iconbar-btn" title="Add Calculated Tag" @onclick="AddCalculated"
-                disabled="@(Editor.SelectedItem is not CalculatedGroupNode)">📐</button>
+                disabled="@(!CanAddResource())">📐</button>
         <button class="iconbar-btn" title="@L["toolbar.addScreen"]" @onclick="AddScreen"
-                disabled="@(Editor.SelectedItem is not (ScreenGroupNode or ResourceFolderNode { ResourceKind: "Screen" }))">🖼️</button>
+                disabled="@(!CanAddResource())">🖼️</button>
 
         <span class="iconbar-sep"></span>
 
@@ -542,6 +542,12 @@ else
                     OnUnpinVariable="OnUnpinVariable"
                     OnFindInEditor="FindInEditorMenu"
                     OnFindInProject="FindInProjectMenu" />
+            <div class="tree-item-header" role="button" tabindex="0" title="Open JSON / AI Editor"
+                 @onclick="OpenJsonEditor" @onkeydown="OnJsonEditorKeyDown">
+                <span class="tree-toggle"></span>
+                <span class="tree-icon">📝</span>
+                <span class="tree-name">JSON / AI Editor</span>
+            </div>
         </div>
         <div class="tree-splitter" id="tree-splitter" title="Drag to resize"
              @onmousedown="OnTreeSplitterDown" @onmousedown:preventDefault></div>
@@ -575,7 +581,10 @@ else
                                 @bind-JsonText="Editor.JsonEditorText"
                                 OnRefresh="RefreshJson"
                                 OnApply="ApplyJson"
-                                OnAiJsonResult="OnAiJsonResult" />
+                                OnAiJsonResult="OnAiJsonResult"
+                                ResourceProject="Editor.ActiveProject"
+                                Session="_jsonEditorSession"
+                                OnImportResources="ImportAiResources" />
                 }
                 else if (context.Id == "server")
                 {
@@ -1240,6 +1249,7 @@ else
     private bool _showUndoHistory;    // QW-20
     private bool _showShortcutCheatsheet; // QW-26
     private JsonEditor? _jsonEditor;
+    private readonly JsonEditorSession _jsonEditorSession = new();
     private DockContainer? _dockContainer;
     private int _treeWidth = 300;
     private DotNetObjectReference<Home>? _treeDotNetRef;
@@ -1369,31 +1379,30 @@ else
         new() { Id = "projectdoc", Title = "Project Documentation", Icon = "📚", Zone = "center" },
     ];
 
-private void OnAddFolder(TreeNode node)
+private void AddFromTree(TreeNode node, Action command)
 {
-    Editor.SelectNode(node);
-    if (node is FolderNode or VariableGroupNode)
-        Editor.AddFolder();
-    else
-        Editor.AddResourceFolder();
+    SelectNode(new TreeNodeClickArgs(node, false, false));
+    command();
 }
-private void OnAddVariable(TreeNode node) { Editor.SelectNode(node); Editor.AddVariable(); }
-private void OnAddScript(TreeNode node) { Editor.SelectNode(node); Editor.AddScript(); }
-private void OnAddPlcProgram(TreeNode node) { Editor.SelectNode(node); Editor.AddPlcProgram(); }
-private void OnAddRecipe(TreeNode node) { Editor.SelectNode(node); Editor.AddRecipe(); }
-private void OnAddScheduler(TreeNode node) { Editor.SelectNode(node); Editor.AddScheduler(); }
-    private void OnAddReport(TreeNode node) { Editor.SelectNode(node); Editor.AddReport(); }
-private void OnAddCalculated(TreeNode node) { Editor.SelectNode(node); Editor.AddCalculated(); }
-private void OnAddScreen(TreeNode node) { Editor.SelectNode(node); Editor.AddScreen(); }
-private void OnAddAsset(TreeNode node) { Editor.SelectNode(node); Editor.AddAsset(); }
-private void OnAddBatch(TreeNode node) { Editor.SelectNode(node); Editor.AddBatch(); }
-private void OnAddEvent(TreeNode node) { Editor.SelectNode(node); Editor.AddEvent(); }
-    private void OnAddAliasMap(TreeNode node) { Editor.SelectNode(node); Editor.AddAliasMap(); }
-    private void OnAddAutomationRule(TreeNode node) { Editor.SelectNode(node); Editor.AddAutomationRule(); }
-    private void OnAddAiAgent(TreeNode node) { Editor.SelectNode(node); Editor.AddAiAgent(); }
-    private void OnAddMcpConnection(TreeNode node) { Editor.SelectNode(node); Editor.AddMcpConnection(); }
-private void OnAddUserGroup(TreeNode node) { Editor.SelectNode(node); Editor.AddUserGroup(); }
-private void OnAddUser(TreeNode node) { Editor.SelectNode(node); Editor.AddUser(); }
+
+private void OnAddFolder(TreeNode node) => AddFromTree(node, AddFolder);
+private void OnAddVariable(TreeNode node) => AddFromTree(node, AddVariable);
+private void OnAddScript(TreeNode node) => AddFromTree(node, AddScript);
+private void OnAddPlcProgram(TreeNode node) => AddFromTree(node, AddPlcProgram);
+private void OnAddRecipe(TreeNode node) => AddFromTree(node, AddRecipe);
+private void OnAddScheduler(TreeNode node) => AddFromTree(node, AddScheduler);
+private void OnAddReport(TreeNode node) => AddFromTree(node, AddReport);
+private void OnAddCalculated(TreeNode node) => AddFromTree(node, AddCalculated);
+private void OnAddScreen(TreeNode node) => AddFromTree(node, AddScreen);
+private void OnAddAsset(TreeNode node) => AddFromTree(node, () => AddResource(Editor.AddAsset));
+private void OnAddBatch(TreeNode node) => AddFromTree(node, () => AddResource(Editor.AddBatch));
+private void OnAddEvent(TreeNode node) => AddFromTree(node, () => AddResource(Editor.AddEvent));
+private void OnAddAliasMap(TreeNode node) => AddFromTree(node, () => AddResource(Editor.AddAliasMap));
+private void OnAddAutomationRule(TreeNode node) => AddFromTree(node, () => AddResource(Editor.AddAutomationRule));
+private void OnAddAiAgent(TreeNode node) => AddFromTree(node, () => AddResource(Editor.AddAiAgent));
+private void OnAddMcpConnection(TreeNode node) => AddFromTree(node, () => AddResource(Editor.AddMcpConnection));
+private void OnAddUserGroup(TreeNode node) => AddFromTree(node, () => AddResource(Editor.AddUserGroup));
+private void OnAddUser(TreeNode node) => AddFromTree(node, () => AddResource(Editor.AddUser));
 // ─── Rename ─────────────────────────────────────────────
 private TreeNode? _renameNode;
 private string _renameText = "";
@@ -2006,29 +2015,67 @@ private void UnsavedDialogCancel()
             _ => "properties"
         };
 
+        if (_dockContainer?.IsMaximized == true)
+            _dockContainer.ToggleMaximize();
+        if (panelId == "properties" && _panels.First(p => p.Id == panelId).Zone == "hidden")
+            _dockContainer?.ShowPanel(panelId, "right");
         _dockContainer?.ActivatePanel(panelId);
+    }
+
+    private void AddResource(Action add)
+    {
+        if (Editor.ActiveProject == null)
+        {
+            ShowToast(false, "No project is open.");
+            return;
+        }
+        if (GuardLocked()) return;
+
+        var previous = Editor.SelectedItem;
+        add();
+        if (Editor.SelectedItem is not { } created || ReferenceEquals(created, previous))
+        {
+            ShowToast(false, "Unable to create the resource in the current project.");
+            return;
+        }
+
+        for (var parent = created.Parent; parent != null; parent = parent.Parent)
+            parent.IsExpanded = true;
+        Editor.SetScreenSelection(null, []);
+        _helpPanel?.UpdateForNode(created);
+        OnNodeDoubleClick(created);
     }
 
     private void AddFolder()
     {
-        if (GuardLocked()) return;
-        if (Editor.SelectedItem is FolderNode or VariableGroupNode)
+        AddResource(() =>
+        {
+            if (FindAncestorProject(Editor.SelectedItem) == Editor.ActiveProject)
+            {
+                for (var node = Editor.SelectedItem; node != null && node is not ProjectNode; node = node.Parent)
+                {
+                    if (node is ScriptGroupNode or PlcGroupNode or ScreenGroupNode or ResourceFolderNode)
+                    {
+                        Editor.SelectNode(node);
+                        Editor.AddResourceFolder();
+                        return;
+                    }
+                }
+            }
             Editor.AddFolder();
-        else
-            Editor.AddResourceFolder();
+        });
     }
-    private void AddVariable() { if (GuardLocked()) return; Editor.AddVariable(); }
-    private void AddScript() { if (GuardLocked()) return; Editor.AddScript(); }
-    private void AddPlcProgram() { if (GuardLocked()) return; Editor.AddPlcProgram(); }
-    private void AddRecipe() { if (GuardLocked()) return; Editor.AddRecipe(); }
-    private void AddScheduler() { if (GuardLocked()) return; Editor.AddScheduler(); }
-    private void AddReport() { if (GuardLocked()) return; Editor.AddReport(); }
-    private void AddCalculated() { if (GuardLocked()) return; Editor.AddCalculated(); }
-    private void AddScreen() { if (GuardLocked()) return; Editor.AddScreen(); }
+    private void AddVariable() => AddResource(Editor.AddVariable);
+    private void AddScript() => AddResource(Editor.AddScript);
+    private void AddPlcProgram() => AddResource(Editor.AddPlcProgram);
+    private void AddRecipe() => AddResource(Editor.AddRecipe);
+    private void AddScheduler() => AddResource(Editor.AddScheduler);
+    private void AddReport() => AddResource(Editor.AddReport);
+    private void AddCalculated() => AddResource(Editor.AddCalculated);
+    private void AddScreen() => AddResource(Editor.AddScreen);
     private void Delete() { if (GuardLocked()) return; Editor.DeleteSelected(); }
 
-    private bool CanAddFolder() => Editor.SelectedItem is FolderNode or VariableGroupNode
-        or ScriptGroupNode or PlcGroupNode or ScreenGroupNode or ResourceFolderNode;
+    private bool CanAddResource() => Editor.ActiveProject != null && !Editor.IsActiveProjectLocked;
 
     private bool CanCopySelection()
     {
@@ -2306,6 +2353,18 @@ private void UnsavedDialogCancel()
         CloseMenus();
         _dockContainer?.ShowPanel("server", "center");
         _dockContainer?.ActivatePanel("server");
+    }
+
+    private void OpenJsonEditor()
+    {
+        _dockContainer?.ShowPanel("json", "center");
+        _dockContainer?.ActivatePanel("json");
+    }
+
+    private void OnJsonEditorKeyDown(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs e)
+    {
+        if (e.Key is "Enter" or " ")
+            OpenJsonEditor();
     }
 
     private void GenerateDocumentationMenu()
@@ -2772,6 +2831,18 @@ private void UnsavedDialogCancel()
         _jsonEditor?.ShowMessage(success, msg);
     }
 
+    private void ImportAiResources(AiResourceImportRequest request)
+    {
+        var (success, message) = Editor.ImportAiResources(request.Project, request.Json);
+        _jsonEditor?.ShowResourceImportResult(success, message);
+        _appLogService.AddLog(success ? "INF" : "WRN", message);
+        if (success)
+        {
+            Editor.SetScreenSelection(null, []);
+            if (Editor.SelectedItem != null) _helpPanel?.UpdateForNode(Editor.SelectedItem);
+        }
+    }
+
     private void OnAiJsonResult(string newJson)
     {
         if (GuardLocked()) return;
@@ -3042,6 +3113,7 @@ private void UnsavedDialogCancel()
 
     public void Dispose()
     {
+        _jsonEditorSession.Dispose();
         Editor.StateChanged -= OnEditorStateChanged;
         Editor.ScreenSelectionChanged -= OnScreenSelectionChanged;
         Editor.ReportSectionSelectionChanged -= OnReportSectionSelectionChanged;

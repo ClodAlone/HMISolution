@@ -116,9 +116,53 @@ public class AiService
             "Claude" => await CallClaudeStreamingAsync(prompt, currentJson, referenceJson, referenceFileName, onDelta, cancellationToken, rawMode),
             "Ollama" => await CallOllamaStreamingAsync(prompt, currentJson, referenceJson, referenceFileName, onDelta, cancellationToken, rawMode),
             "Gemini" =>
-                await CallAndReportAsync(() => CallGeminiAsync(prompt, currentJson, referenceJson, referenceFileName), onDelta),
+                await CallAndReportAsync(() => CallGeminiAsync(prompt, currentJson, referenceJson, referenceFileName, rawMode, cancellationToken), onDelta),
             _ => ("", $"Engine '{engine}' is not supported.")
         };
+    }
+
+    public Task<(string newJson, string comments)> AskResourcesAsync(
+        string engine, string request, string? referenceJson, string? referenceFileName,
+        Func<string, Task> onDelta, CancellationToken cancellationToken = default)
+        => AskStreamingAsync(engine, BuildResourceBundlePrompt(request, referenceJson, referenceFileName), "",
+            null, null, onDelta, cancellationToken, rawMode: true);
+
+    public string BuildResourceBundlePrompt(string request, string? referenceJson = null, string? referenceFileName = null)
+    {
+        if (!string.IsNullOrEmpty(referenceJson) && referenceJson.Length > MaxReferenceChars)
+            throw new InvalidOperationException($"The reference contains {referenceJson.Length:N0} characters, exceeding Max ref chars ({MaxReferenceChars:N0}). Increase Max ref chars or choose a smaller reference. Resource-only mode does not truncate or chunk reference files.");
+        var reference = string.IsNullOrEmpty(referenceJson) ? "" :
+            $"\nREFERENCE INPUT ({referenceFileName}):\n{referenceJson}\nEND REFERENCE INPUT\n";
+        return ResourceGenerationGuidance + reference + "\nTASK:\n" + request + "\n" + """
+            RESOURCE BUNDLE CONTRACT (overrides whole-project instructions in the task):
+            Generate ONLY NEW resources. No existing project JSON is supplied or required. Do not modify existing resources.
+            Return one JSON object with only the needed resource sections from:
+            Folder, Scripts, PlcPrograms, Screens, Recipes, Schedulers, Reports, CalculatedVariables, Assets,
+            BatchSequences, Events, AutomationRules, Users, UserGroups, Strings, Images, Cameras, AliasMaps,
+            UserSymbolGroups, AiAgents, McpConnections. Omit unused sections. Do not return Server, Database,
+            project settings, startup settings, child projects, or a wrapper containing a full project.
+            Use the literal placeholder __TASK__ everywhere a resource namespace is needed; the editor replaces it
+            consistently with a fresh unique namespace at import time, including inside code, expressions, and references.
+            Folder is a NEW child folder, not the project root: { "Name":"__TASK__", "Folders":[], "Variables":[] }.
+            Put all variables and their subfolders inside it. All variable paths MUST include __TASK__ as their first segment.
+            Example: task path DemoLoop.Input1 becomes __TASK__.DemoLoop.Input1; ReadDouble("__TASK__.DemoLoop.Input1").
+            Folder/variable names are unique locally and cannot contain dots or path separators.
+            Variable fields: Name, Type (Double/Int32/Boolean/String), Access (Read/Write/ReadWrite), Value,
+            EngineeringUnit, Description, Alarm, DataLogging, DriverConfigs. DriverConfigs is a dictionary keyed by
+            driver name; local examples omit it or use Simulation (Period/PollTime in milliseconds).
+            Prefix EVERY global resource Name with __TASK___ (token plus underscore), even when the task suggests a name.
+            Also prefix Users.Username, Strings.Key, Images.Id, Cameras.CameraId, UserSymbolGroups.Id and resource identity Id fields.
+            Cameras use CameraId (not Name/Id), Url, Protocol and must be hosted by a matching new ipcamera ScreenSymbol.Camera.
+            Use the same prefixed names in cross-resource references (script/recipe/report/screen names, user Group,
+            AllowedGroups, navigation targets, localized string keys, etc.). Symbol/step/command IDs are unique per resource.
+            All string identifiers and their references must be quoted JSON strings, never numeric IDs:
+            for example { "Id":"tank1" }, { "SourceSymbolId":"tank1", "TargetSymbolId":"tank2" }.
+            Use Group="__TASK__" for organizational groups. Calculated FolderPath MUST be "__TASK__.Calculated";
+            calculated runtime paths include their prefixed Name: __TASK__.Calculated.__TASK___Average.
+            Create every referenced variable/resource within this bundle. Do not reference or repurpose real device outputs.
+            Generated executable resources must have Enabled=false. Scripts must use bounded loops and host IntervalMs.
+            Return valid JSON, then optionally ///COMMENTS/// and setup/review notes. No markdown fences.
+            """;
     }
 
     private static async Task<(string, string)> CallAndReportAsync(
@@ -715,6 +759,7 @@ public class AiService
         sb.Append("Other sections of the project are not shown and must not be affected.\n\n");
         sb.Append("User instruction: ").Append(userPrompt).Append("\n\n");
         sb.Append("Current JSON of this section (a JSON array):\n").Append(currentJson).Append("\n\n");
+        sb.Append(ResourceGenerationGuidance);
         sb.Append(
             "IMPORTANT: Return ONLY the modified JSON array for this section (same schema). " +
             "Do NOT return the whole project. Do NOT include markdown fences. " +
@@ -1015,6 +1060,72 @@ public class AiService
         }
     }
 
+    private const string ResourceGenerationGuidance = """
+
+        --- RESOURCE GENERATION GUIDANCE ---
+        Preserve all existing resources, variable paths, and settings unless the user explicitly requests a change.
+        When creating resources, choose unique names/IDs. In whole-project edits, create missing dependent variables
+        under Folder, and ensure every new binding resolves without including the root folder name in the path.
+        In scoped edits, stay inside the requested section and report dependencies that cannot be created there.
+
+        Scripts: use { Name, Language: "CSharp", Code, IntervalMs, Enabled, Group } in Scripts.
+        Code is a C# script body, not a Program/Main class. Available globals include Read(path), ReadDouble(path),
+        ReadInt(path), ReadBool(path), ReadString(path), Write(path, value), and Log(message).
+        The host invokes Code cyclically at IntervalMs. To read/write variables in a loop, use a bounded for/foreach
+        over a finite list of paths once per invocation. Do not use while(true), Thread.Sleep, background tasks,
+        or repeatedly register OnChanged subscriptions. New write examples use local demo tags and Enabled=false.
+        PlcPrograms: { Name, Language: "ST", Code, IntervalMs, Enabled, Group }; ST uses VAR/END_VAR declarations.
+
+        Screens: { Name, Width, Height, Background, LayoutMode: "svg", Group, Symbols: [...] }.
+        StartupScreen belongs to Server, not ScreenConfig. Preserve an existing startup screen unless asked.
+        Supported symbol Type values include tank, pipe, text, numericdisplay, gauge, indicator, motorcontrol,
+        switch, button, navbutton, hdachart, alarmlist, alarmbanner, recipe, weeklyplanner, and reportviewer.
+        Every symbol has a unique string Id (e.g. "tank1", not 1) and numeric X, Y, Width, Height.
+        Connection SourceSymbolId, TargetSymbolId, SourcePortId, TargetPortId and symbol GroupId are strings too;
+        use the exact same quoted IDs for references. Use VariablePath for an actual variable binding.
+        Text symbols use Label (NOT Text), Fill for text color (NOT Color), FontSize (integer), FontWeight.
+        Text and numericdisplay are centered within their bounds; do NOT add HorizontalAlignment.
+        Numeric displays use NumericDisplayFormat (e.g. "F1" or "F2"), NumericDisplayDecimals (integer),
+        NumericDisplayUnit, NumericDisplayBackground, Fill for text color, Stroke for border color.
+        Do NOT use DecimalPlaces, Unit, Color, BackgroundColor, or BorderColor as symbol property names.
+        Example: { "Id":"levelDisplay", "Type":"numericdisplay", "X":100, "Y":425, "Width":160, "Height":40,
+          "VariablePath":"Demo.Level", "NumericDisplayFormat":"F1", "NumericDisplayDecimals":1,
+          "NumericDisplayUnit":"%", "NumericDisplayBackground":"#1e293b", "Fill":"#3b82f6", "Stroke":"#475569" }.
+        Tank properties: TankMin, TankMax, TankUnit, TankShowLevel, TankLiquidColor, TankBodyColor, TankStyle.
+        Pipe properties: PipeOrientation (horizontal/vertical), PipeColor, PipeFlowColor, PipeShowFlow, PipeFlowSpeed.
+        A pipe must geometrically meet the tank sides; do not substitute text labels for equipment symbols.
+        For two tanks on a 1000x600 screen: tanks at (100,140,160,240) and (700,140,160,240),
+        and a horizontal pipe at (260,310,440,20). Bind tank levels to local Double variables in the 0..100 range.
+        Historical charts use HdaVariablePaths, HdaTimeRangeMinutes, HdaMaxPoints; log their source variables.
+        Navigation buttons use NavButtonTarget. Display symbols need readable labels and non-overlapping bounds.
+
+        Alarm fields: TriggerType (Limit/Condition), LowLowLimit, LowLimit, HighLimit, HighHighLimit, Hysteresis, Message.
+        DataLogging fields: Enabled, Hysteresis. Simulation driver Period and PollTime are in milliseconds.
+        Recipes: { Name, Enabled, DbPath, Variables: [{ Index, VariablePath, DisplayName }] }; Index values are unique.
+        CalculatedVariables: { Name, Type, IntervalMs, Enabled, FolderPath, Expression, EngineeringUnit,
+          AggregateFunction, AggregateSourcePath }; aggregate paths are semicolon-separated; functions include Avg/Sum/Min/Max.
+        Schedulers: { Name, Enabled, SlotMinutes, WeeklySlots, WeekendMode, HolidayMode, Commands, DeactivateCommands }.
+        WeeklySlots entries use DayOfWeek (0=Sunday..6=Saturday), StartMinute, EndMinute (minutes since midnight).
+        SymbolCommand entries use { Id, Action: "WriteVariable", VariablePath, Value: "true" }; Value is a string.
+        Events: { Name, Enabled, ConditionVariablePath, ConditionOperator, ConditionValue, TriggerMode,
+          HoldTimeSeconds, Commands, ClearCommands }; ConditionValue is a string; TriggerMode can be RisingEdge.
+        AutomationRules: { Id, Name, Enabled, ConditionLogic, Conditions, Actions, ClearActions, CooldownSeconds }.
+        Conditions: { Id, Type: "VariableThreshold", VariablePath, Operator, ThresholdValue }.
+        Automation actions: { Id, Type: "WriteVariable", VariablePath, Value }; threshold/value fields are strings.
+        Reports: { Name, Enabled, Format: "HTML", Title, Sections: [...] }.
+        Report sections use Id, Type (Header/Text/Chart/Table/Value), Title, Content, ChartVariablePaths,
+          ChartTimeRangeMinutes, TableVariablePaths, ValueVariablePath as appropriate.
+        Assets: { Name, Enabled, RunningVariablePath, FaultVariablePath, InitialRuntimeHours, MaintenanceSchedules }.
+        MaintenanceSchedules: [{ Id, Name, IntervalHours, IntervalDays }].
+        BatchSequences: { Name, Enabled, Steps, Transitions, AutoRestart, StartVariablePath, AbortVariablePath, HoldVariablePath }.
+        Steps: [{ Id, Name, Description, TimeoutSeconds }]. Transitions: [{ FromStepId, ToStepId, ConditionVariablePath,
+          ConditionOperator, ConditionValue, DelaySeconds }]. Empty ConditionVariablePath means use the source step timeout.
+        Strings: [{ Key, Translations: { "en": "English text", "it": "Italian text" } }].
+        UserGroups: [{ Name, AccessLevel: "Read", CanAccessEditor, CanAccessRuntime }]. Do not invent credentials.
+        --- END RESOURCE GENERATION GUIDANCE ---
+
+        """;
+
     private string BuildPrompt(string userPrompt, string oldJson, string? referenceJson, string? referenceFileName)
     {
         var sb = new System.Text.StringBuilder();
@@ -1031,8 +1142,8 @@ concept in this schema. Every connection to a field device/protocol lives INSIDE
 "DriverConfigs" property. Unknown/extra properties are silently dropped by the loader, so anything you
 add outside this contract will be lost and the project will fail to build correctly.
 
-Top-level object properties (all optional, omit ones you are not changing — but keep existing ones from
-the current JSON above untouched unless the instruction says otherwise):
+Top-level object properties (retain every existing property and its contents, including sections you are not
+changing; optional sections absent from the current JSON may remain absent):
   Server: object (EndpointUrl, EnableAnonymous, EnableEditorLogin, EnableRuntimeLogin, StartupScreen, ShowNavigationBar, DiagnosticsPort, ...)
   Folder: object — the ROOT folder node: { "Name": string, "Folders": [Folder, ...], "Variables": [Variable, ...] } (recursive)
   Screens: array of ScreenConfig
@@ -1072,7 +1183,7 @@ Example variable wired to a Modbus device (this is the ONLY correct way to expre
   { "Name": "InletValve_Open", "Type": "Boolean", "Access": "ReadWrite", "Value": false,
      "DriverConfigs": { "Modbus": { "IpAddress": "192.168.0.21", "Port": 502, "UnitId": 1, "Register": 40001, "RegisterType": "Coil", "PollTime": 1000 } } }
 
-ScreenConfig object (each item in "Screens"): { "Name", "Width", "Height", "Background", "StartupScreen"-eligible, "Symbols": [ScreenSymbol, ...] }
+ScreenConfig object (each item in "Screens"): { "Name", "Width", "Height", "Background", "LayoutMode", "Symbols": [ScreenSymbol, ...] }
 ScreenSymbol object: { "Id", "Type" (e.g. "gauge","switch","numericdisplay","text","rect"), "X", "Y", "Width", "Height", "Label", "VariablePath" (dot-separated path matching the Folder hierarchy, e.g. "Intake.Level"), "Fill", "Stroke" }
   - "VariablePath" must reference an actual variable by its Folder.Variable dot-path (root folder name is NOT included in the path).
 
@@ -1080,6 +1191,7 @@ Return ONLY this schema. If you are unsure where something goes, prefer putting 
 --- END OUTPUT SCHEMA CONTRACT ---
 
 """);
+        sb.Append(ResourceGenerationGuidance);
 
         if (!string.IsNullOrEmpty(referenceJson))
         {
@@ -1219,7 +1331,8 @@ Lines starting with # or ## are comments — read them for IP/port info. Parse d
         return ParseAiResponse(contentText);
     }
 
-    private async Task<(string, string)> CallGeminiAsync(string userPrompt, string oldJson, string? referenceJson = null, string? referenceFileName = null)
+    private async Task<(string, string)> CallGeminiAsync(string userPrompt, string oldJson, string? referenceJson = null, string? referenceFileName = null,
+        bool rawMode = false, CancellationToken cancellationToken = default)
     {
         string apiKey = Environment.GetEnvironmentVariable("GEMINI_API_KEY") ?? "";
         if (string.IsNullOrEmpty(apiKey))
@@ -1229,7 +1342,7 @@ Lines starting with # or ## are comments — read them for IP/port info. Parse d
 
         using var client = new HttpClient();
 
-        var prompt = BuildPrompt(userPrompt, oldJson, referenceJson, referenceFileName);
+        var prompt = rawMode ? userPrompt : BuildPrompt(userPrompt, oldJson, referenceJson, referenceFileName);
 
         var requestBody = new
         {
@@ -1240,10 +1353,10 @@ Lines starting with # or ## are comments — read them for IP/port info. Parse d
         };
 
         var content = new StringContent(JsonSerializer.Serialize(requestBody), System.Text.Encoding.UTF8, "application/json");
-        var response = await client.PostAsync(endpoint, content);
+        var response = await client.PostAsync(endpoint, content, cancellationToken);
         response.EnsureSuccessStatusCode();
 
-        var responseString = await response.Content.ReadAsStringAsync();
+        var responseString = await response.Content.ReadAsStringAsync(cancellationToken);
         using var doc = JsonDocument.Parse(responseString);
         var contentText = doc.RootElement.GetProperty("candidates")[0].GetProperty("content").GetProperty("parts")[0].GetProperty("text").GetString();
 
