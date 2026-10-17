@@ -8,29 +8,29 @@
 <div class="symbol-library-panel">
     <div class="symbol-library-toolbar">
         <input type="text" class="form-control form-control-sm" placeholder="Search symbols…"
-               @bind="_searchText" @bind:event="oninput" />
+               @bind:get="_searchText" @bind:set="SetSearchText" @bind:event="oninput" />
     </div>
 
     <div class="symbol-library-categories-toggle">
         <button class="btn btn-sm btn-link p-0" @onclick="() => _categoriesCollapsed = !_categoriesCollapsed">
-            @(_categoriesCollapsed ? "▶ Show categories" : "▼ Hide categories") (@Library.GetCategories().Count)
+            @(_categoriesCollapsed ? "▶ Show categories" : "▼ Hide categories") (@_categories.Count)
         </button>
     </div>
     <div class="symbol-library-categories @(_categoriesCollapsed ? "collapsed" : "")">
         <button class="btn btn-sm @(_selectedCategory == null ? "btn-primary" : "btn-outline-secondary")"
-                @onclick="() => _selectedCategory = null">All</button>
-        @foreach (var cat in Library.GetCategories())
+                @onclick="() => SelectCategory(null)">All</button>
+        @foreach (var cat in _categories)
         {
             var c = cat;
             <div class="btn-group btn-group-sm" role="group">
                 <button class="btn btn-sm @(_selectedCategory == c ? "btn-primary" : "btn-outline-secondary")"
-                        @onclick="() => _selectedCategory = c">@c</button>
+                        @onclick="() => SelectCategory(c)">@c</button>
                 <button class="btn btn-sm @(_selectedCategory == c ? "btn-primary" : "btn-outline-secondary")"
                         @onclick="() => ConfirmDeleteCategory(c)" title="Delete category '@c'">🗑</button>
             </div>
         }
-        <button class="btn btn-sm btn-outline-success ms-auto" @onclick="ShowUploadDialog" title="Import SVG files from a folder">📤 Import</button>
-        <button class="btn btn-sm btn-outline-info" @onclick="Refresh" title="Reload from disk">🔄</button>
+        <button class="btn btn-sm btn-outline-success ms-auto" @onclick="ShowUploadDialog" disabled="@_isLoading" title="Import SVG files from a folder">📤 Import</button>
+        <button class="btn btn-sm btn-outline-info" @onclick="Refresh" disabled="@_isLoading" title="Reload from disk">🔄</button>
     </div>
     @if (_categoryToDelete != null)
     {
@@ -39,7 +39,7 @@
                 <h6 class="mb-2">🗑 Delete Category</h6>
                 <p class="small mb-3">
                     Delete category <strong>@_categoryToDelete</strong> and all
-                    @(Library.GetSymbols().Count(s => s.Category == _categoryToDelete)) symbol(s) in it?
+                    @(_symbols.Count(s => s.Category == _categoryToDelete)) symbol(s) in it?
                     This cannot be undone.
                 </p>
                 <div class="d-flex gap-2 justify-content-end">
@@ -59,7 +59,7 @@
                 <div class="mb-2">
                     <label class="form-label small mb-1">Category</label>
                     <div class="d-flex gap-1 flex-wrap mb-1">
-                        @foreach (var cat in Library.GetCategories())
+                        @foreach (var cat in _categories)
                         {
                             var c = cat;
                             <button class="btn btn-xs @(_uploadCategory == c ? "btn-primary" : "btn-outline-secondary")"
@@ -110,8 +110,24 @@
             </div>
         </div>
     }
+    @if (_isLoading)
+    {
+        <div class="text-muted small p-2" role="status">Loading symbol library...</div>
+    }
+    else if (_loadError != null)
+    {
+        <div class="alert alert-danger py-1 small m-2" role="alert">@_loadError</div>
+    }
+    @if (_filteredSymbols.Count > 0)
+    {
+        <div class="d-flex gap-2 align-items-center p-2" aria-label="Symbol library pages">
+            <button class="btn btn-sm btn-outline-secondary" @onclick="PreviousPage" disabled="@(_pageIndex == 0)">Previous</button>
+            <span class="small" role="status">Page @(_pageIndex + 1) of @PageCount (@_filteredSymbols.Count symbols)</span>
+            <button class="btn btn-sm btn-outline-secondary" @onclick="NextPage" disabled="@(_pageIndex + 1 >= PageCount)">Next</button>
+        </div>
+    }
     <div class="symbol-library-grid">
-        @foreach (var sym in GetFilteredSymbols())
+        @foreach (var sym in _filteredSymbols.Skip(_pageIndex * PageSize).Take(PageSize))
         {
             var item = sym;
             var animClass = GetGridAnimClass(item);
@@ -132,7 +148,7 @@
             </div>
         }
 
-        @if (!GetFilteredSymbols().Any())
+        @if (!_isLoading && _loadError == null && _filteredSymbols.Count == 0)
         {
             <div class="text-muted small p-2">No symbols found.</div>
         }
@@ -179,6 +195,7 @@
 @code {
     [Inject] private SymbolLibraryService Library { get; set; } = default!;
     [Inject] private IJSRuntime JS { get; set; } = default!;
+    [Inject] private ILogger<SymbolLibraryPanel> Logger { get; set; } = default!;
 
     [Parameter] public EventCallback<SymbolLibraryItem> OnSymbolSelected { get; set; }
 
@@ -211,20 +228,82 @@
     // Animation preview state
     private SymbolLibraryItem? _previewItem;
     private bool _previewPlaying = true;
-    private IEnumerable<SymbolLibraryItem> GetFilteredSymbols()
-    {
-        var symbols = Library.GetSymbols().AsEnumerable();
+    private const int PageSize = 60;
+    private IReadOnlyList<SymbolLibraryItem> _symbols = [];
+    private List<SymbolLibraryItem> _filteredSymbols = [];
+    private List<string> _categories = [];
+    private int _pageIndex;
+    private int PageCount => (_filteredSymbols.Count + PageSize - 1) / PageSize;
+    private bool _isLoading = true;
+    private bool _disposed;
+    private string? _loadError;
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) await LoadSymbolsAsync();
+    }
+
+    private async Task LoadSymbolsAsync()
+    {
+        _isLoading = true;
+        _loadError = null;
+        try
+        {
+            // Disk reads must not block the circuit that is restoring the project.
+            var symbols = await Task.Run(Library.GetSymbols);
+            if (_disposed) return;
+            _symbols = symbols;
+            _categories = symbols.Select(s => s.Category).Distinct().OrderBy(c => c).ToList();
+            UpdateFilter();
+        }
+        catch (IOException ex)
+        {
+            ReportLoadError(ex);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            ReportLoadError(ex);
+        }
+        finally
+        {
+            _isLoading = false;
+            if (!_disposed) StateHasChanged();
+        }
+    }
+
+    private void ReportLoadError(Exception ex)
+    {
+        Logger.LogError(ex, "Could not load the symbol library.");
+        _loadError = $"Could not load the symbol library: {ex.Message}";
+    }
+
+    private void SetSearchText(string value)
+    {
+        _searchText = value;
+        UpdateFilter();
+    }
+
+    private void SelectCategory(string? category)
+    {
+        _selectedCategory = category;
+        UpdateFilter();
+    }
+
+    private void UpdateFilter()
+    {
+        var symbols = _symbols.AsEnumerable();
         if (!string.IsNullOrEmpty(_selectedCategory))
             symbols = symbols.Where(s => s.Category == _selectedCategory);
-
         if (!string.IsNullOrWhiteSpace(_searchText))
             symbols = symbols.Where(s =>
                 s.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase) ||
                 s.Category.Contains(_searchText, StringComparison.OrdinalIgnoreCase));
-
-        return symbols;
+        _filteredSymbols = symbols.ToList();
+        _pageIndex = 0;
     }
+
+    private void PreviousPage() => _pageIndex = Math.Max(0, _pageIndex - 1);
+    private void NextPage() => _pageIndex = Math.Min(Math.Max(0, PageCount - 1), _pageIndex + 1);
 
     private string GetGridAnimClass(SymbolLibraryItem item)
     {
@@ -264,10 +343,10 @@
 
     private void CloseAnimPreview() => _previewItem = null;
     private void TogglePreview() => _previewPlaying = !_previewPlaying;
-    private void Refresh()
+    private async Task Refresh()
     {
         Library.Refresh();
-        StateHasChanged();
+        await LoadSymbolsAsync();
     }
 
     private void ConfirmDeleteCategory(string category)
@@ -280,7 +359,7 @@
         _categoryToDelete = null;
     }
 
-    private void DoDeleteCategory()
+    private async Task DoDeleteCategory()
     {
         if (_categoryToDelete is null) return;
 
@@ -289,7 +368,7 @@
             _selectedCategory = null;
 
         _categoryToDelete = null;
-        StateHasChanged();
+        await LoadSymbolsAsync();
     }
 
     private async Task ShowUploadDialog()
@@ -299,7 +378,7 @@
         // is currently selected in the panel, so the Import button isn't stuck disabled
         // just because the category field is blank.
         _uploadCategory = _selectedCategory
-            ?? Library.GetCategories().FirstOrDefault()
+            ?? _categories.FirstOrDefault()
             ?? "Imported";
         _pendingFileCount = 0;
         _pendingFiles.Clear();
@@ -451,6 +530,7 @@
             // filter matches the freshly imported symbols; otherwise a category typed
             // with invalid chars or stray whitespace would silently hide the import.
             _selectedCategory = lastCategory;
+            await LoadSymbolsAsync();
 
             // Auto-close after success
             await Task.Delay(1200);
@@ -472,6 +552,7 @@
 
     public void Dispose()
     {
+        _disposed = true;
         _selfRef?.Dispose();
     }
 }

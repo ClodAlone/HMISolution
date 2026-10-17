@@ -423,6 +423,7 @@
 
     [Inject] private IJSRuntime JS { get; set; } = default!;
     [Inject] private DockLayoutService LayoutService { get; set; } = default!;
+    [Inject] private ILogger<DockContainer> Logger { get; set; } = default!;
 
     private string _activeCenterTab = "";
     private string _activeCenter2Tab = "";
@@ -1245,9 +1246,24 @@
 
     public async ValueTask DisposeAsync()
     {
-        try { await JS.InvokeVoidAsync("dockManager.stop"); } catch { }
-        _saveDebounce?.Stop();
-        _saveDebounce?.Dispose();
-        _dotNetRef?.Dispose();
+        try
+        {
+            if (_dotNetRef != null)
+                await JS.InvokeVoidAsync("dockManager.stop");
+        }
+        catch (JSDisconnectedException)
+        {
+            Logger.LogDebug("Browser disconnected before dock drag handlers could be removed.");
+        }
+        catch (JSException ex)
+        {
+            Logger.LogWarning(ex, "Could not remove dock drag handlers.");
+        }
+        finally
+        {
+            _saveDebounce?.Stop();
+            _saveDebounce?.Dispose();
+            _dotNetRef?.Dispose();
+        }
     }
 }

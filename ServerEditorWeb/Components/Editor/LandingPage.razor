@@ -4,6 +4,7 @@
 @using ServerEditorWeb.Services
 @inject NodeEditorService Editor
 @inject IJSRuntime JS
+@inject ILogger<LandingPage> Logger
 
 @if (_showQuickStart)
 {
@@ -139,19 +140,28 @@
     private List<string> _recentFiles = new();
     private bool _showQuickStart = false;
 
-    protected override async Task OnInitializedAsync()
+    protected override void OnInitialized()
     {
         _recentFiles = Editor.RecentFiles.ToList();
-        
-        // Auto-show quick start guide on first load if user hasn't disabled it
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
         try
         {
             var hideQuickStart = await JS.InvokeAsync<string>("localStorage.getItem", "hideQuickStart");
             _showQuickStart = hideQuickStart != "true" && _recentFiles.Count == 0;
+            if (_showQuickStart) StateHasChanged();
         }
-        catch
+        catch (JSDisconnectedException)
         {
-            _showQuickStart = false;
+            Logger.LogDebug("Browser disconnected before the quick-start preference could be read.");
+        }
+        catch (JSException ex)
+        {
+            Logger.LogWarning(ex, "Could not read the quick-start preference from browser storage.");
         }
     }
 

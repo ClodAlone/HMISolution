@@ -79,6 +79,12 @@ After starting the container, access the services at:
 | **Ollama AI** | http://localhost:11434 | Local LLM service (Mistral) |
 | **PostgreSQL** | localhost:5432 | Historical database (TimescaleDB) |
 
+The editor loads its symbol library in the background after interactive rendering, so
+restoring a project does not wait for SVG library reads. The gallery shows 60 symbols
+per page; **Previous** and **Next** navigate the results. Search and category filters
+apply to the entire library and return to the first page. **Reload from disk** refreshes
+the library; loading failures are shown in the panel and logged.
+
 ### 📦 Available Docker Images
 
 Choose the deployment that fits your needs:
