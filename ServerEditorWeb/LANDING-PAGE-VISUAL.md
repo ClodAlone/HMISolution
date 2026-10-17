@@ -78,14 +78,30 @@ Footer:          Fade In (0.6s, delay 0.6s)
 Action Cards:    Lift up (-8px) + Shadow increase
 Recent Items:    Slide right (8px) + Background gradient
 Info Cards:      Lift up (-4px) + Shadow increase
-Action Icons:    Faster bounce animation
+Action Icons:    Single bounce (0.5s)
 ```
 
-### Continuous
+### Decorative Motion
 ```
-Logo:            Subtle pulse (scale 1 → 1.05)
-Action Icons:    Slow bounce (up 10px)
+Logo:            One subtle pulse on entry (0.8s)
+Action Icons:    Stationary until hovered
+Reduced Motion: Entry animations, hover movement and transitions disabled
 ```
+
+## Editor Workspace
+
+The workspace uses coordinated cool-toned light and dark surfaces, soft toolbar
+shading, and theme-aware dock separators. Selected tree rows have a tinted
+background and an inset accent; active tabs reveal a short animated underline.
+Toolbar buttons provide subtle lift and press feedback. Menus, dialogs and
+auto-hide flyouts have brief entrance effects with soft shadows.
+
+Shared motion tokens in `wwwroot\app.css` keep feedback at 140ms and entrances at
+200ms. `prefers-reduced-motion: reduce` disables these effects and the loading,
+notification and live-status animations; static status indicators remain visible.
+Landing-page motion is also disabled by its scoped stylesheet. Dragging, resizing,
+canvas coordinates and authored symbol animations are not changed. No animation
+library or JavaScript event listeners are required.
 
 ## Responsive Breakpoints
 
