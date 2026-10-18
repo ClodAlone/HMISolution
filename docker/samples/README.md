@@ -22,6 +22,7 @@ that showcases specific features and driver integrations.
 | **SchedulerDemo** | Facilities / BMS | Simulation | Weekly schedulers, HVAC/lighting/equipment time-based control, 15-min granularity, weekend/holiday modes, runtime editing |
 | **WidgetShowcase** | Demo / Reference | Simulation | Comprehensive widget gallery: gauges, trends, sliders, switches, buttons, knobs, edit-boxes, alarm/event lists |
 | **AlarmDemo** | Demo / Reference | Simulation | Alarm configuration, limit alarms (High/Low), active alarm list, event log history, sliders & edit boxes, real-time trend |
+| **StyledInstruments** | Demo / Reference | Simulation (C# scripts) | Styled gauges/displays, isometric tanks, pipes and pumps, screen transitions, Quick Controls, and animated Tank Transfer, Solar Farm, HVAC, EV Charging, Water Treatment, Conveyor, Microgrid and Compressed-Air simulations |
 
 ---
 
