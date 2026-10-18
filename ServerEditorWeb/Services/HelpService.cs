@@ -672,6 +672,32 @@ Select **EditBox** or **Numeric Display**, then open **Display Appearance**.
 - Editable displays keep click-to-edit, Enter to write, Escape to cancel, spin step, placeholders and statistics. While editing, text uses a standard input for keyboard accessibility.
 - Numeric displays keep format strings and units. Missing values show a dash in styled readouts, not a fabricated zero.
 - Existing displays remain unchanged until styled. Appearance and formatting survive save/load, copy/paste, duplicate and preset undo/redo.
+
+### Pipe Appearance and Flow
+Select a pipe and open **Pipe Settings**.
+- **Rounded gradient surface** adds cylindrical light/shadow shading using the Pipe color; corners are shaded along the bend. Disabled by default for a solid surface.
+- Flow covers the entire pipe path, including corners. Its stripe width and spacing scale with the pipe diameter when resized; extending a pipe adds more stripes instead of stretching five fixed markers.
+- **Flow cycle duration (seconds)** is the time to advance one stripe spacing. Lower values mean faster flow, with a seamless repeat.
+- **Flow direction** selects forward/reverse. Corners follow their path from the first endpoint to the second; reverse runs back along it.
+- **Show flow** hides/shows the indicators; **Enable flow animation** changes moving indicators to static ones when unchecked.
+- Boolean false or numeric zero on the bound variable stops visible flow. With no value, flow runs when enabled. Reduced-motion preferences stop movement.
+- The editor canvas, property preview and fixed/responsive runtime use the same rendering. Copy/paste and duplicate retain all pipe settings.
+
+### Tank Styles and Filling
+Select a tank and open **Tank Settings**.
+- Choose **Rectangular**, **Rounded**, **Cylinder**, **Isometric 3D (square)**, or **Isometric cylinder / conical base**. Cylinders have elliptical rims and liquid surfaces. The conical-base style narrows the liquid surface as the level drops into its hopper; the percentage remains a linear level indication, not a calculated volume.
+- **3D gradient shading** adds light and shadow to the shell. **Liquid fill style: Gradient** blends the Liquid color into the Liquid gradient surface color. These effects are opt-in; existing tanks keep solid fills.
+- Bind a numeric variable. The common **Min** and **Max** properties define empty and full. When blank, saved TankMin/TankMax values are used (default 0-100). Out-of-range values clamp to empty/full, including ranges with a negative minimum or zero maximum.
+- Missing/non-numeric values show a dash and no liquid, rather than a measured zero. An invalid range displays **Invalid range**. **Show level percentage** controls the readout, not the liquid fill.
+- **Preview Filling** provides a simulated 0-100% slider without writing to the bound variable. Unbound editor tanks show a 65% preview identified in the tooltip; runtime never invents a level.
+- Level changes smoothly animate the liquid and percentage readout over 400 ms, in both directions. A new value arriving mid-transition starts from the currently displayed level. Initial values and unavailable/invalid states appear immediately. Reduced-motion preferences disable these transitions. Animation is visual only and never writes intermediate values to the variable.
+- All styles and fills work in both fixed and responsive screens. Responsive tanks fit proportionally within their cells to preserve perspective and readable text. Copy/paste, duplicate and save/load retain tank appearance and range settings.
+
+### Pump Appearance and Motion
+In **Motor Control Settings**, choose **Motor Style: Pump**, then **Pump appearance: Centrifugal** or **Isometric 3D**. Optional **3D gradient shading** uses the Pump body color to show a metallic curved shell. Classic remains the default.
+- Enhanced pumps have inlet/outlet ports and a visible impeller. The impeller rotates only when the bound variable is true/nonzero and rotation is enabled. The housing and status label remain stationary.
+- An active **Fault Variable Path** takes precedence over running, uses the fault color and stops the impeller. Runtime monitors this path and resolves screen/instance aliases.
+- Fixed/responsive editor, property preview and runtime use the same enhanced pump. Reduced-motion preferences stop rotation. Copy/paste, duplicate and save/load retain all settings.
 """),
 
         ["screeneditor"] = new("🖼️ Screen Editor Panel", """
@@ -844,6 +870,37 @@ Direct JSON editing of the project tree with AI assistance.
 - Examples include **Read and write variables in a loop**, **Two tanks connected by a pipe**, and a complete
   two-tank demo combining tags, a script, a screen, a recipe definition, and a report.
 - Choosing a task only fills the editable request; it does not contact the provider or change the project.
+- Under **Screens**, choose **Styled tank transfer - exact sample with simulation** to reproduce the StyledInstruments
+  Tank Transfer page with conical cylindrical tanks, shaded pipes, an isometric pump, both buttons, six variables,
+  and the 250 ms transfer script. Click **Load exact sample resources** for the built-in editable bundle without an AI
+  call or local sample-file dependency, then **Add resources**. This loads the original template, not customizations
+  in the request; use **Ask AI** for those. Review and enable the imported script, save, and run the server/viewer.
+  The script starts paused; Start / Stop runs/pauses it and Refill & Restart resets it. Filling animates automatically.
+  Startup settings and other sample screens are not imported; each copy receives its own namespace.
+- **Solar farm - energy flows and battery simulation** provides the Solar Farm page, original vector PV panels,
+  dual inverters, house, grid and battery/BMS, 18 local variables, and a 250 ms simulation. Use **Load exact sample resources**
+  then **Add resources**, or customize the request and **Ask AI**. Review and enable SolarFarmSimulation, save and run
+  the server/viewer. **Start / Pause** operates the model; **Reset** restores 55% SOC and pauses. Scenario buttons select
+  an automatic accelerated day, sunny surplus, cloudy import or evening discharge. Grid import is cyan / export orange;
+  BMS charging is purple / discharging green. Power is balanced and SOC stays within 10-95%; no devices are connected.
+- **HVAC plant - heat pump and building simulation** provides the heat pump/fan, thermal buffer, isometric pump,
+  building coil, thermostat and manual speed editors, local Hvac variables and 250 ms script. Use **Load exact sample resources**
+  then **Add resources**. Review and enable HvacPlantSimulation, save and run the server/viewer. Start / Pause freezes/resumes
+  simulated time; Reset restores defaults and pauses. Auto uses +/-0.3 C hysteresis; Manual conditions continuously at
+  the chosen pump speed. Cold morning and Open window select heating; Hot afternoon selects cooling. Pump fault
+  interlocks the compressor while the room continues drifting. Red/cyan supply indicates heating/cooling; blue flow returns.
+  One simulated minute passes per invocation. The educational energy-balance model does not control real devices.
+- Five additional exact **Screens** tasks provide complete independent local simulations: **EV charging station - arrivals
+  and shared site power**, **Water treatment plant - filtration and backwash**, **Conveyor production line - sorting
+  and jam detection**, **Microgrid control center - tariffs and island operation**, and **Compressed-air station - staged
+  pressure control and leaks**. Each includes original embedded artwork, bound equipment/flows, controls, all tags
+  and a 250 ms script. Use **Load exact sample resources**, review, then **Add resources**; no AI call is needed.
+  Review/enable the imported script, save and run the server/viewer. All start paused; Start / Pause freezes/resumes
+  simulated time and Reset restores initial state and pauses. Imports use independent namespaces and preserve startup settings.
+  EVs share a bounded site supply; treatment models filter loading and clean-water backwash; conveyor packages/counts
+  freeze on a jam; microgrid island mode reports unmet demand and curtailment rather than inventing grid supply;
+  compressed-air pressure uses staged compressors, peak demand and a simulated leak. These are educational examples,
+  not equipment controllers or safety systems. Scenario controls and model assumptions are detailed in the sample README.
 - Creation tasks select **Generate new resources only**. The AI receives the task/schema and optional reference file,
   not the current project JSON. Review any reference before sending; choose one explicitly for import tasks.
   Oversized references produce an error rather than being silently truncated; increase **Max ref chars** or use a smaller reference.

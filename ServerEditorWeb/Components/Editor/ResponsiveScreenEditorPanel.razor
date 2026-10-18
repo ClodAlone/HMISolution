@@ -281,13 +281,20 @@
                                 <div class="responsive-placeholder">LED Array (@(s.LedArrayCount) LEDs)</div>
                                 break;
                             case "pipe":
-                                <div class="responsive-placeholder">Pipe (@(s.PipeOrientation ?? "horizontal"))</div>
+                                @((MarkupString)PipeVisuals.Render(s, liveValue, responsive: true))
                                 break;
                             case "tank":
-                                <div class="responsive-placeholder">Tank @(sym.TankShowLevel ? "(level)" : "")</div>
+                                @((MarkupString)TankVisuals.Render(s, liveValue, responsive: true, previewLevel: string.IsNullOrWhiteSpace(s.VariablePath) ? 0.65 : null))
                                 break;
                             case "motorcontrol":
-                                <div class="responsive-placeholder">Motor (@(s.MotorStyle ?? "motor"))</div>
+                                @if (PumpVisuals.IsEnhanced(s))
+                                {
+                                    @((MarkupString)PumpVisuals.Render(s, liveValue, GetLiveValue(s, s.MotorFaultPath), responsive: true))
+                                }
+                                else
+                                {
+                                    <div class="responsive-placeholder">Motor (@(s.MotorStyle ?? "motor"))</div>
+                                }
                                 break;
                             case "valve":
                                 <div class="responsive-placeholder">Valve (@(s.ValveStyle ?? "gate"))</div>
@@ -669,13 +676,14 @@
 
     // ─── Live values ────────────────────────────────────────
 
-    private string? GetLiveValue(ScreenSymbol sym)
+    private string? GetLiveValue(ScreenSymbol sym, string? variablePath = null)
     {
-        if (string.IsNullOrEmpty(sym.VariablePath)) return null;
+        var path = variablePath ?? sym.VariablePath;
+        if (string.IsNullOrEmpty(path)) return null;
         foreach (var item in Opc.MonitoredItems)
         {
-            if (item.DisplayName == sym.VariablePath ||
-                item.NodeIdString.EndsWith(sym.VariablePath, StringComparison.OrdinalIgnoreCase))
+            if (item.DisplayName == path ||
+                item.NodeIdString.EndsWith(path, StringComparison.OrdinalIgnoreCase))
                 return item.Value;
         }
         return null;

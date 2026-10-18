@@ -5,6 +5,7 @@ namespace ServerEditorWeb.Services;
 public sealed record AiTaskTemplate(string Id, string Category, string Title, string Prompt)
 {
     public bool CreatesResources => Id != "project-organize";
+    public string? ResourceBundle { get; init; }
 }
 
 public static class AiTaskCatalog
@@ -62,6 +63,97 @@ public static class AiTaskCatalog
             Create the three local Double variables with initial values 65, 30, and 1 respectively.
             Use TankLiquidColor, TankBodyColor, PipeColor, and PipeFlowColor for styling. No real-device writes.
             """),
+        new("screen-styled-tank-transfer", "Screens", "Styled tank transfer - exact sample with simulation", """
+            Create the Tank Transfer screen exactly as the StyledInstruments sample: two cylindrical isometric
+            tanks with conical bases, gradient shells and liquid, shaded animated pipes behind the tanks,
+            a central isometric pump, status display, Start / Stop and Refill & Restart buttons.
+            Use the complete resource bundle below as the authoritative template. Preserve symbol order,
+            coordinates, sizes, colors, bindings, commands, initial values, and the 250 ms CSharp simulation.
+            Include all six local Transfer variables and the simulation script. Retain __TASK__ placeholders.
+            Do not add navigation references to other sample pages, change the startup screen, or add devices.
+            Keep the script disabled for review; explain that it must be enabled and the project saved before
+            running the server and viewer. Tank filling transitions are automatic; percentages indicate level, not volume.
+            Return this bundle unchanged unless the request explicitly customizes it:
+
+            """ + StyledTankTransferTemplate.Json) { ResourceBundle = StyledTankTransferTemplate.Json },
+        new("screen-solar-farm", "Screens", "Solar farm - energy flows and battery simulation", """
+            Create the Solar Farm screen exactly as the StyledInstruments example using the complete bundle below.
+            Include the original vector solar arrays, two hybrid inverters, house, utility network and battery/BMS,
+            gradient equipment and displays, animated pipe flows, six controls, all Solar variables and the 250 ms simulation.
+            Preserve coordinates, SVG artwork, symbol ordering, initial values and commands unless explicitly customized.
+            Grid positive imports cyan toward the AC bus; grid negative exports orange toward the network.
+            Battery positive charges purple toward BMS; battery negative discharges green toward the bus.
+            Solar flow is gold; house load is blue. Do not animate zero flow. Retain the __TASK__ namespace placeholders.
+            Keep the script disabled for review. Explain how to enable it, save and run the server/viewer, then Start / Pause.
+            Auto day cycle compresses 24 h into 120 seconds; scenario buttons select sunny, cloudy or evening operation.
+            Preserve PV + grid = load + battery and battery SOC bounds 10..95%. This is a local simulation, not real device control.
+            Do not import other sample pages or change the project's startup screen. Return this bundle unless customized:
+
+            """ + SolarFarmTemplate.Json) { ResourceBundle = SolarFarmTemplate.Json },
+        new("screen-hvac-plant", "Screens", "HVAC plant - heat pump and building simulation", """
+            Create the HVAC Plant screen exactly as the StyledInstruments sample using the authoritative bundle below.
+            Preserve the original vector heat pump with animated fan, shaded buffer, isometric circulation pump,
+            building cutaway and coil, red heating / cyan cooling supply and blue returning flow, live displays,
+            thermostat and manual speed editors, all controls, local Hvac variables and the 250 ms simulation.
+            Auto uses +/-0.3 C thermostat hysteresis and variable-speed circulation; Manual conditions continuously
+            at the chosen pump speed, still regulating buffer temperature. Heating/cooling target 45/8 C buffer water.
+            Cold morning and open window select heating; hot afternoon selects cooling. Pump fault stops circulation
+            and interlocks the compressor while the building continues losing/gaining heat. Reset restores defaults and pauses.
+            One invocation advances one simulated minute. Preserve the buffer and room energy balances, 12 kW limit,
+            and COP-based electrical consumption. This is an educational local model, not external device control.
+            Use __TASK__ namespaces and keep the script disabled for review. Explain how to enable it, save and run
+            the server/viewer, then Start / Pause. Do not change startup settings or link unrelated sample pages.
+            Return this bundle unchanged unless the request explicitly customizes it:
+
+            """ + HvacPlantTemplate.Json) { ResourceBundle = HvacPlantTemplate.Json },
+        new("screen-ev-charging", "Screens", "EV charging station - arrivals and shared site power", """
+            Reproduce the EV Charging Station from the authoritative bundle below, including isometric cars,
+            chargers, arrival/departure simulation, independent batteries, shared site-power allocation, flows,
+            live readouts and all controls. Preserve energy accounting, capacity limits and the arrival queue.
+            Keep the simulation disabled for review. Explain enable/save/run and Start / Pause / Reset.
+            Preserve __TASK__ placeholders, symbol order and embedded SVG artwork. No external devices or startup changes.
+            Return the complete bundle unchanged unless the request explicitly customizes it:
+
+            """ + EvChargingTemplate.Json) { ResourceBundle = EvChargingTemplate.Json },
+        new("screen-water-treatment", "Screens", "Water treatment plant - filtration and backwash", """
+            Reproduce the Water Treatment Plant from the authoritative bundle below: tanks, filters, valves,
+            pumps, colored stage flows, filter loading and backwash. Include every local variable and script.
+            Preserve water balance, clean-water consumption during backwash, dry-pump interlocks and all controls.
+            Keep the simulation disabled for review. Explain enable/save/run and Start / Pause / Reset.
+            Preserve __TASK__ placeholders, symbol order and embedded artwork. No external devices or startup changes.
+            Return the complete bundle unchanged unless the request explicitly customizes it:
+
+            """ + WaterTreatmentTemplate.Json) { ResourceBundle = WaterTreatmentTemplate.Json },
+        new("screen-conveyor-line", "Screens", "Conveyor production line - sorting and jam detection", """
+            Reproduce the Conveyor Production Line from the authoritative bundle below: moving packages, motor,
+            sensors, diverter and sorted outputs. Include all controls, local variables and the bounded simulation.
+            Preserve package tracking, exactly-once good/reject counts and jam detection/recovery. Packages must
+            stop when the line is paused or jammed. Keep the script disabled for review; explain enable/save/run.
+            Preserve __TASK__ placeholders, symbol order and embedded artwork. No external devices or startup changes.
+            Return the complete bundle unchanged unless the request explicitly customizes it:
+
+            """ + ConveyorLineTemplate.Json) { ResourceBundle = ConveyorLineTemplate.Json },
+        new("screen-microgrid", "Screens", "Microgrid control center - tariffs and island operation", """
+            Reproduce the Microgrid Control Center from the authoritative bundle below: PV, storage, house,
+            EV and utility network with directional flows. Include every control, local variable and script.
+            Preserve tariff-aware dispatch, peak-shaving import limits, SOC/efficiency accounting, and island
+            operation with zero utility exchange and explicitly reported unmet demand / curtailed PV.
+            Keep the script disabled for review; explain enable/save/run and Start / Pause / Reset.
+            Preserve __TASK__ placeholders, symbol order and embedded artwork. No external devices or startup changes.
+            Return the complete bundle unchanged unless the request explicitly customizes it:
+
+            """ + MicrogridTemplate.Json) { ResourceBundle = MicrogridTemplate.Json },
+        new("screen-compressed-air", "Screens", "Compressed-air station - staged pressure control and leaks", """
+            Reproduce the Compressed-Air Station using the authoritative bundle below: lead and standby compressors,
+            shaded receiver with pressure gauge, industrial air load, simulated leak branch, actual motor/flow states,
+            controls and local variables. The 250 ms script advances 0.05 simulated minutes, balancing normal-air volume
+            in a 2 m3 receiver. Preserve independent compressor hysteresis, peak load, leak, C1 fault, unmet demand,
+            energy accounting and receiver bounds. This is an educational model, not a physical safety controller.
+            Keep the script disabled for review; explain enable/save/run and Start / Pause / Reset.
+            Preserve __TASK__ placeholders, symbol order and embedded artwork. No external devices or startup changes.
+            Return the complete bundle unchanged unless the request explicitly customizes it:
+
+            """ + CompressedAirTemplate.Json) { ResourceBundle = CompressedAirTemplate.Json },
         new("screen-equipment", "Screens", "Equipment status overview", """
             Create an SVG screen named EquipmentOverviewDemo with three labeled equipment cards.
             Each card contains a Type motorcontrol symbol, a Boolean status indicator, and a numeric runtime display.

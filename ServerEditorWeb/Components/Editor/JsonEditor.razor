@@ -240,6 +240,14 @@
                             Edit names, paths, and values below, review any selected reference file, then click Ask AI.
                             Executable demo resources are requested disabled for review.
                         </div>
+                        @if (AiTaskCatalog.Tasks.FirstOrDefault(task => task.Id == _selectedTaskId)?.ResourceBundle != null)
+                        {
+                            <button class="btn btn-sm btn-outline-success mt-1" @onclick="LoadTaskTemplate"
+                                    disabled="@(_isProcessing || ResourceProject == null || ResourceProject.IsLocked)">
+                                Load exact sample resources
+                            </button>
+                            <div class="small text-muted mt-1">No AI call needed. Loads the built-in sample into the editable preview below; it does not apply request customizations. Review it, then Add resources. Enable the simulation script after review.</div>
+                        }
                     }
                     @if (_resourceOnly)
                     {
@@ -545,6 +553,30 @@
         _aiError = "";
         _aiComments = "";
         if (!_resourceOnly) RefreshFolderScopes();
+    }
+
+    private void LoadTaskTemplate()
+    {
+        if (_isProcessing) return;
+        var task = AiTaskCatalog.Tasks.FirstOrDefault(task => task.Id == _selectedTaskId);
+        var template = task?.ResourceBundle;
+        if (template == null)
+        {
+            _aiError = "The selected task has no built-in resource template.";
+            return;
+        }
+        if (ResourceProject == null || ResourceProject.IsLocked)
+        {
+            _aiError = "Select and unlock a target project before loading sample resources.";
+            return;
+        }
+        _resourceOnly = true;
+        _scopePath = "";
+        _chunkedMode = false;
+        _resourceTarget = ResourceProject;
+        _resourceJson = template;
+        _aiError = "";
+        _aiComments = $"Exact sample for '{task!.Title}' loaded locally, not imported. Review the bundle, then Add resources. Review and enable the imported simulation script, save the project, and run the server and viewer. Existing project settings and startup screen are preserved.";
     }
 
     private void OnResourceOnlyChanged(ChangeEventArgs e)

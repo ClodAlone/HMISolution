@@ -865,61 +865,17 @@
                                             }
                                             break;
                                         case "pipe":
-                                            var pipeC = sym.PipeColor ?? "#64748b";
-                                            var pipeF = sym.PipeFlowColor ?? "#94a3b8";
-                                            var pipeHz = (sym.PipeOrientation ?? "horizontal") == "horizontal";
-                                            var pipeIsCorner = (sym.PipeOrientation ?? "").StartsWith("corner");
-                                            @if (pipeIsCorner)
-                                            {
-                                                var cDir = sym.PipeOrientation;
-                                                var cThk = Math.Min(sym.Width, sym.Height) * 0.3;
-                                                var cMid = cThk / 2;
-                                                @if (cDir == "corner-tl")
-                                                {
-                                                    <path d="M @sym.Width,@F(cMid) L @F(cMid),@F(cMid) L @F(cMid),@sym.Height" stroke="@pipeC" stroke-width="@F(cThk)" fill="none" stroke-linejoin="round" stroke-linecap="round" />
-                                                }
-                                                else if (cDir == "corner-tr")
-                                                {
-                                                    <path d="M 0,@F(cMid) L @F(sym.Width-cMid),@F(cMid) L @F(sym.Width-cMid),@sym.Height" stroke="@pipeC" stroke-width="@F(cThk)" fill="none" stroke-linejoin="round" stroke-linecap="round" />
-                                                }
-                                                else if (cDir == "corner-bl")
-                                                {
-                                                    <path d="M @F(cMid),0 L @F(cMid),@F(sym.Height-cMid) L @sym.Width,@F(sym.Height-cMid)" stroke="@pipeC" stroke-width="@F(cThk)" fill="none" stroke-linejoin="round" stroke-linecap="round" />
-                                                }
-                                                else
-                                                {
-                                                    <path d="M @F(sym.Width-cMid),0 L @F(sym.Width-cMid),@F(sym.Height-cMid) L 0,@F(sym.Height-cMid)" stroke="@pipeC" stroke-width="@F(cThk)" fill="none" stroke-linejoin="round" stroke-linecap="round" />
-                                                }
-                                            }
-                                            else if (pipeHz)
-                                            {
-                                                var pipeH2 = sym.Height / 2;
-                                                <rect x="0" y="@F(pipeH2 / 2)" width="@sym.Width" height="@F(pipeH2)" rx="3" fill="@pipeC" />
-                                                <line x1="@(sym.Width * 0.2)" y1="@F(pipeH2 * 0.7)" x2="@(sym.Width * 0.35)" y2="@F(pipeH2 * 0.7)" stroke="@pipeF" stroke-width="2" stroke-dasharray="6,4" />
-                                                <line x1="@(sym.Width * 0.45)" y1="@F(pipeH2 * 0.7)" x2="@(sym.Width * 0.6)" y2="@F(pipeH2 * 0.7)" stroke="@pipeF" stroke-width="2" stroke-dasharray="6,4" />
-                                                <line x1="@(sym.Width * 0.7)" y1="@F(pipeH2 * 0.7)" x2="@(sym.Width * 0.85)" y2="@F(pipeH2 * 0.7)" stroke="@pipeF" stroke-width="2" stroke-dasharray="6,4" />
-                                            }
-                                            else
-                                            {
-                                                var pipeW2 = sym.Width / 2;
-                                                <rect x="@F(pipeW2 / 2)" y="0" width="@F(pipeW2)" height="@sym.Height" rx="3" fill="@pipeC" />
-                                                <line x1="@F(pipeW2 * 0.7)" y1="@(sym.Height * 0.15)" x2="@F(pipeW2 * 0.7)" y2="@(sym.Height * 0.3)" stroke="@pipeF" stroke-width="2" stroke-dasharray="6,4" />
-                                                <line x1="@F(pipeW2 * 0.7)" y1="@(sym.Height * 0.4)" x2="@F(pipeW2 * 0.7)" y2="@(sym.Height * 0.55)" stroke="@pipeF" stroke-width="2" stroke-dasharray="6,4" />
-                                                <line x1="@F(pipeW2 * 0.7)" y1="@(sym.Height * 0.65)" x2="@F(pipeW2 * 0.7)" y2="@(sym.Height * 0.8)" stroke="@pipeF" stroke-width="2" stroke-dasharray="6,4" />
-                                            }
+                                            @((MarkupString)PipeVisuals.Render(sym, liveValue))
                                             break;
                                         case "tank":
-                                            var tankLC = sym.TankLiquidColor ?? "#3b82f6";
-                                            var tankBC = sym.TankBodyColor ?? "#64748b";
-                                            var tankFrac = 0.65;
-                                            <rect x="2" y="2" width="@(sym.Width - 4)" height="@(sym.Height - 4)" rx="4" fill="#0f172a" stroke="@tankBC" stroke-width="2" />
-                                            <rect x="4" y="@F((sym.Height - 4) * (1 - tankFrac) + 2)" width="@(sym.Width - 8)" height="@F((sym.Height - 4) * tankFrac)" rx="2" fill="@tankLC" opacity="0.8" />
-                                            @if (sym.TankShowLevel)
-                                            {
-                                                @RenderSvgText(sym.Width / 2, sym.Height / 2, "middle", "middle", "#ffffff", 12, "65%")
-                                            }
+                                            @((MarkupString)TankVisuals.Render(sym, liveValue, previewLevel: string.IsNullOrWhiteSpace(sym.VariablePath) ? 0.65 : null))
                                             break;
                                         case "motorcontrol":
+                                            @if (PumpVisuals.IsEnhanced(sym))
+                                            {
+                                                @((MarkupString)PumpVisuals.Render(sym, liveValue, GetLiveValue(sym, sym.MotorFaultPath)))
+                                                break;
+                                            }
                                             var mcRun = sym.MotorRunColor ?? "#22c55e";
                                             var mcR = Math.Min(sym.Width, sym.Height) / 2 - 4;
                                             var mcCx = sym.Width / 2;
@@ -2934,7 +2890,37 @@ Right-click a symbol for actions</div>
                 NumericDisplayColor = src.NumericDisplayColor,
                 NumericDisplayLowWarn = src.NumericDisplayLowWarn,
                 NumericDisplayHighWarn = src.NumericDisplayHighWarn,
-                NumericDisplayWarnColor = src.NumericDisplayWarnColor
+                NumericDisplayWarnColor = src.NumericDisplayWarnColor,
+                PipeOrientation = src.PipeOrientation,
+                PipeColor = src.PipeColor,
+                PipeUseGradient = src.PipeUseGradient,
+                PipeFlowColor = src.PipeFlowColor,
+                PipeShowFlow = src.PipeShowFlow,
+                PipeFlowSpeed = src.PipeFlowSpeed,
+                PipeFlowDirection = src.PipeFlowDirection,
+                PipeAnimate = src.PipeAnimate,
+                PipeThickness = src.PipeThickness,
+                PipeFluidColor = src.PipeFluidColor,
+                TankStyle = src.TankStyle,
+                TankBodyColor = src.TankBodyColor,
+                TankLiquidColor = src.TankLiquidColor,
+                TankFillColor = src.TankFillColor,
+                TankUseGradient = src.TankUseGradient,
+                TankFillStyle = src.TankFillStyle,
+                TankGradientEndColor = src.TankGradientEndColor,
+                TankMin = src.TankMin,
+                TankMax = src.TankMax,
+                TankShowLevel = src.TankShowLevel,
+                TankUnit = src.TankUnit,
+                MotorStyle = src.MotorStyle,
+                MotorAppearance = src.MotorAppearance,
+                MotorUseGradient = src.MotorUseGradient,
+                MotorBodyColor = src.MotorBodyColor,
+                MotorRunColor = src.MotorRunColor,
+                MotorStopColor = src.MotorStopColor,
+                MotorFaultColor = src.MotorFaultColor,
+                MotorFaultPath = src.MotorFaultPath,
+                MotorAnimateRotation = src.MotorAnimateRotation
             };
             screen.Symbols.Add(pasted);
             newSelection.Add(pasted);
@@ -3046,7 +3032,37 @@ Right-click a symbol for actions</div>
                 NumericDisplayColor = src.NumericDisplayColor,
                 NumericDisplayLowWarn = src.NumericDisplayLowWarn,
                 NumericDisplayHighWarn = src.NumericDisplayHighWarn,
-                NumericDisplayWarnColor = src.NumericDisplayWarnColor
+                NumericDisplayWarnColor = src.NumericDisplayWarnColor,
+                PipeOrientation = src.PipeOrientation,
+                PipeColor = src.PipeColor,
+                PipeUseGradient = src.PipeUseGradient,
+                PipeFlowColor = src.PipeFlowColor,
+                PipeShowFlow = src.PipeShowFlow,
+                PipeFlowSpeed = src.PipeFlowSpeed,
+                PipeFlowDirection = src.PipeFlowDirection,
+                PipeAnimate = src.PipeAnimate,
+                PipeThickness = src.PipeThickness,
+                PipeFluidColor = src.PipeFluidColor,
+                TankStyle = src.TankStyle,
+                TankBodyColor = src.TankBodyColor,
+                TankLiquidColor = src.TankLiquidColor,
+                TankFillColor = src.TankFillColor,
+                TankUseGradient = src.TankUseGradient,
+                TankFillStyle = src.TankFillStyle,
+                TankGradientEndColor = src.TankGradientEndColor,
+                TankMin = src.TankMin,
+                TankMax = src.TankMax,
+                TankShowLevel = src.TankShowLevel,
+                TankUnit = src.TankUnit,
+                MotorStyle = src.MotorStyle,
+                MotorAppearance = src.MotorAppearance,
+                MotorUseGradient = src.MotorUseGradient,
+                MotorBodyColor = src.MotorBodyColor,
+                MotorRunColor = src.MotorRunColor,
+                MotorStopColor = src.MotorStopColor,
+                MotorFaultColor = src.MotorFaultColor,
+                MotorFaultPath = src.MotorFaultPath,
+                MotorAnimateRotation = src.MotorAnimateRotation
             };
             screen.Symbols.Add(dup);
             newSelection.Add(dup);
@@ -3649,14 +3665,15 @@ Right-click a symbol for actions</div>
 
     // ─── OPC live values
 
-    private string? GetLiveValue(ScreenSymbol sym)
+    private string? GetLiveValue(ScreenSymbol sym, string? variablePath = null)
     {
-        if (string.IsNullOrEmpty(sym.VariablePath)) return null;
+        var path = variablePath ?? sym.VariablePath;
+        if (string.IsNullOrEmpty(path)) return null;
 
         foreach (var item in Opc.MonitoredItems)
         {
-            if (item.DisplayName == sym.VariablePath ||
-                item.NodeIdString.EndsWith(sym.VariablePath, StringComparison.OrdinalIgnoreCase))
+            if (item.DisplayName == path ||
+                item.NodeIdString.EndsWith(path, StringComparison.OrdinalIgnoreCase))
                 return item.Value;
         }
         return null;

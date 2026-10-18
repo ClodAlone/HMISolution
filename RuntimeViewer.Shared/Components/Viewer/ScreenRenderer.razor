@@ -1129,6 +1129,8 @@ else
             // Also monitor variables referenced by commands
             foreach (var sym in Screen.Symbols)
             {
+                if (sym.Type == "motorcontrol" && !string.IsNullOrEmpty(sym.MotorFaultPath))
+                    paths.Add(ResolveAlias(sym.MotorFaultPath, sym.InstanceAliases is { Count: > 0 } ? sym.InstanceAliases : null));
                 foreach (var cmd in sym.Commands)
                 {
                     if (!string.IsNullOrEmpty(cmd.VariablePath))
@@ -4426,165 +4428,7 @@ else
     // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Pipe rendering Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
     private RenderFragment RenderPipe(ScreenSymbol sym, string? liveValue) => builder =>
     {
-        int seq = 0;
-        var w = sym.Width;
-        var h = sym.Height;
-        var pipeColor = sym.PipeColor ?? "#64748b";
-        var flowColor = sym.PipeFlowColor ?? "#94a3b8";
-        var showFlow = sym.PipeShowFlow;
-        var speed = sym.PipeFlowSpeed > 0 ? sym.PipeFlowSpeed : 1;
-        var isHoriz = (sym.PipeOrientation ?? "horizontal") == "horizontal";
-        var isCorner = (sym.PipeOrientation ?? "").StartsWith("corner");
-
-        // Check if flow should be active from bound variable
-        bool flowActive = showFlow;
-        if (!string.IsNullOrEmpty(liveValue))
-        {
-            flowActive = showFlow && liveValue is not "0" and not "false" and not "False";
-        }
-
-        if (isCorner)
-        {
-            var cornerDir = sym.PipeOrientation ?? "corner-tl";
-            var cThk = Math.Min(w, h) * 0.3;
-            var cMid = cThk / 2;
-            string pathD = cornerDir switch
-            {
-                "corner-tl" => $"M {F(w)},{F(cMid)} L {F(cMid)},{F(cMid)} L {F(cMid)},{F(h)}",
-                "corner-tr" => $"M 0,{F(cMid)} L {F(w - cMid)},{F(cMid)} L {F(w - cMid)},{F(h)}",
-                "corner-bl" => $"M {F(cMid)},0 L {F(cMid)},{F(h - cMid)} L {F(w)},{F(h - cMid)}",
-                _ =>           $"M {F(w - cMid)},0 L {F(w - cMid)},{F(h - cMid)} L 0,{F(h - cMid)}"
-            };
-            // Corner pipe body
-            builder.OpenElement(seq++, "path");
-            builder.AddAttribute(seq++, "d", pathD);
-            builder.AddAttribute(seq++, "stroke", pipeColor);
-            builder.AddAttribute(seq++, "stroke-width", F(cThk));
-            builder.AddAttribute(seq++, "fill", "none");
-            builder.AddAttribute(seq++, "stroke-linejoin", "round");
-            builder.AddAttribute(seq++, "stroke-linecap", "round");
-            builder.CloseElement();
-            // Highlight along the outer edge
-            var hlThk = cThk * 0.25;
-            var hlOff = cThk * 0.35;
-            string hlD = cornerDir switch
-            {
-                "corner-tl" => $"M {F(w)},{F(cMid - hlOff)} L {F(cMid - hlOff)},{F(cMid - hlOff)} L {F(cMid - hlOff)},{F(h)}",
-                "corner-tr" => $"M 0,{F(cMid - hlOff)} L {F(w - cMid + hlOff)},{F(cMid - hlOff)} L {F(w - cMid + hlOff)},{F(h)}",
-                "corner-bl" => $"M {F(cMid - hlOff)},0 L {F(cMid - hlOff)},{F(h - cMid + hlOff)} L {F(w)},{F(h - cMid + hlOff)}",
-                _ =>           $"M {F(w - cMid + hlOff)},0 L {F(w - cMid + hlOff)},{F(h - cMid + hlOff)} L 0,{F(h - cMid + hlOff)}"
-            };
-            builder.OpenElement(seq++, "path");
-            builder.AddAttribute(seq++, "d", hlD);
-            builder.AddAttribute(seq++, "stroke", "rgba(255,255,255,0.15)");
-            builder.AddAttribute(seq++, "stroke-width", F(hlThk));
-            builder.AddAttribute(seq++, "fill", "none");
-            builder.AddAttribute(seq++, "stroke-linejoin", "round");
-            builder.AddAttribute(seq++, "stroke-linecap", "round");
-            builder.CloseElement();
-            // Flow stripes along corner path
-            if (flowActive)
-            {
-                var animDur = $"{F(speed)}s";
-                builder.OpenElement(seq++, "path");
-                builder.AddAttribute(seq++, "d", pathD);
-                builder.AddAttribute(seq++, "stroke", flowColor);
-                builder.AddAttribute(seq++, "stroke-width", 2);
-                builder.AddAttribute(seq++, "fill", "none");
-                builder.AddAttribute(seq++, "stroke-dasharray", "6,4");
-                builder.AddAttribute(seq++, "stroke-linejoin", "round");
-                builder.AddAttribute(seq++, "style", $"animation: pipeFlow {animDur} linear infinite;");
-                builder.CloseElement();
-            }
-        }
-        else if (isHoriz)
-        {
-            var pipeH = h * 0.6;
-            var pipeY = (h - pipeH) / 2;
-            // Pipe body
-            builder.OpenElement(seq++, "rect");
-            builder.AddAttribute(seq++, "x", 0);
-            builder.AddAttribute(seq++, "y", F(pipeY));
-            builder.AddAttribute(seq++, "width", w);
-            builder.AddAttribute(seq++, "height", F(pipeH));
-            builder.AddAttribute(seq++, "rx", F(pipeH / 2));
-            builder.AddAttribute(seq++, "fill", pipeColor);
-            builder.CloseElement();
-
-            // Highlight
-            builder.OpenElement(seq++, "rect");
-            builder.AddAttribute(seq++, "x", F(pipeH / 2));
-            builder.AddAttribute(seq++, "y", F(pipeY + 2));
-            builder.AddAttribute(seq++, "width", F(w - pipeH));
-            builder.AddAttribute(seq++, "height", F(pipeH * 0.25));
-            builder.AddAttribute(seq++, "rx", 2);
-            builder.AddAttribute(seq++, "fill", "rgba(255,255,255,0.15)");
-            builder.CloseElement();
-
-            // Flow stripes
-            if (flowActive)
-            {
-                var animDur = $"{F(speed)}s";
-                for (var i = 0; i < 5; i++)
-                {
-                    var sx = w * 0.1 + i * w * 0.2;
-                    builder.OpenElement(seq++, "line");
-                    builder.AddAttribute(seq++, "x1", F(sx));
-                    builder.AddAttribute(seq++, "y1", F(pipeY + pipeH * 0.3));
-                    builder.AddAttribute(seq++, "x2", F(sx + w * 0.08));
-                    builder.AddAttribute(seq++, "y2", F(pipeY + pipeH * 0.3));
-                    builder.AddAttribute(seq++, "stroke", flowColor);
-                    builder.AddAttribute(seq++, "stroke-width", 2);
-                    builder.AddAttribute(seq++, "stroke-dasharray", "6,4");
-                    builder.AddAttribute(seq++, "style", $"animation: pipeFlow {animDur} linear infinite;");
-                    builder.CloseElement();
-                }
-            }
-        }
-        else
-        {
-            var pipeW = w * 0.6;
-            var pipeX = (w - pipeW) / 2;
-            // Pipe body
-            builder.OpenElement(seq++, "rect");
-            builder.AddAttribute(seq++, "x", F(pipeX));
-            builder.AddAttribute(seq++, "y", 0);
-            builder.AddAttribute(seq++, "width", F(pipeW));
-            builder.AddAttribute(seq++, "height", h);
-            builder.AddAttribute(seq++, "rx", F(pipeW / 2));
-            builder.AddAttribute(seq++, "fill", pipeColor);
-            builder.CloseElement();
-
-            // Highlight
-            builder.OpenElement(seq++, "rect");
-            builder.AddAttribute(seq++, "x", F(pipeX + 2));
-            builder.AddAttribute(seq++, "y", F(pipeW / 2));
-            builder.AddAttribute(seq++, "width", F(pipeW * 0.25));
-            builder.AddAttribute(seq++, "height", F(h - pipeW));
-            builder.AddAttribute(seq++, "rx", 2);
-            builder.AddAttribute(seq++, "fill", "rgba(255,255,255,0.15)");
-            builder.CloseElement();
-
-            // Flow stripes
-            if (flowActive)
-            {
-                var animDur = $"{F(speed)}s";
-                for (var i = 0; i < 5; i++)
-                {
-                    var sy = h * 0.1 + i * h * 0.2;
-                    builder.OpenElement(seq++, "line");
-                    builder.AddAttribute(seq++, "x1", F(pipeX + pipeW * 0.3));
-                    builder.AddAttribute(seq++, "y1", F(sy));
-                    builder.AddAttribute(seq++, "x2", F(pipeX + pipeW * 0.3));
-                    builder.AddAttribute(seq++, "y2", F(sy + h * 0.08));
-                    builder.AddAttribute(seq++, "stroke", flowColor);
-                    builder.AddAttribute(seq++, "stroke-width", 2);
-                    builder.AddAttribute(seq++, "stroke-dasharray", "6,4");
-                    builder.AddAttribute(seq++, "style", $"animation: pipeFlowV {animDur} linear infinite;");
-                    builder.CloseElement();
-                }
-            }
-        }
+        builder.AddMarkupContent(0, PipeVisuals.Render(sym, liveValue));
     };
 
     // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Responsive Progress Bar Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
@@ -4691,121 +4535,23 @@ else
     // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Responsive Pipe Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
     private RenderFragment RenderResponsivePipe(ScreenSymbol sym, string? liveValue) => builder =>
     {
-        int seq = 0;
-        var pipeColor = sym.PipeColor ?? "#64748b";
-        var isHoriz = (sym.PipeOrientation ?? "horizontal") == "horizontal";
-        var isCorner = (sym.PipeOrientation ?? "").StartsWith("corner");
-
-        if (isCorner)
-        {
-            // For responsive mode, render an inline SVG corner inside a div
-            builder.OpenElement(seq++, "div");
-            builder.AddAttribute(seq++, "style", "width:100%;height:100%;display:flex;align-items:center;justify-content:center;");
-            builder.OpenElement(seq++, "svg");
-            builder.AddAttribute(seq++, "viewBox", "0 0 100 100");
-            builder.AddAttribute(seq++, "style", "width:100%;height:100%;");
-            builder.AddAttribute(seq++, "xmlns", "http://www.w3.org/2000/svg");
-            var cDir = sym.PipeOrientation;
-            var cThk = 30.0;
-            var cMid = 15.0;
-            string cPath = cDir switch
-            {
-                "corner-tl" => $"M 100,{F(cMid)} L {F(cMid)},{F(cMid)} L {F(cMid)},100",
-                "corner-tr" => $"M 0,{F(cMid)} L {F(100 - cMid)},{F(cMid)} L {F(100 - cMid)},100",
-                "corner-bl" => $"M {F(cMid)},0 L {F(cMid)},{F(100 - cMid)} L 100,{F(100 - cMid)}",
-                _ =>           $"M {F(100 - cMid)},0 L {F(100 - cMid)},{F(100 - cMid)} L 0,{F(100 - cMid)}"
-            };
-            builder.OpenElement(seq++, "path");
-            builder.AddAttribute(seq++, "d", cPath);
-            builder.AddAttribute(seq++, "stroke", pipeColor);
-            builder.AddAttribute(seq++, "stroke-width", F(cThk));
-            builder.AddAttribute(seq++, "fill", "none");
-            builder.AddAttribute(seq++, "stroke-linejoin", "round");
-            builder.AddAttribute(seq++, "stroke-linecap", "round");
-            builder.CloseElement();
-            builder.CloseElement(); // svg
-            builder.CloseElement(); // div
-        }
-        else
-        {
-        builder.OpenElement(seq++, "div");
-        builder.AddAttribute(seq++, "style",
-            $"width:100%;height:100%;display:flex;align-items:center;justify-content:center;");
-
-        builder.OpenElement(seq++, "div");
-        builder.AddAttribute(seq++, "style",
-            isHoriz
-                ? $"width:100%;height:60%;background:{pipeColor};border-radius:999px;position:relative;overflow:hidden;"
-                : $"width:60%;height:100%;background:{pipeColor};border-radius:999px;position:relative;overflow:hidden;");
-
-        // Highlight bar
-        builder.OpenElement(seq++, "div");
-        builder.AddAttribute(seq++, "style",
-            isHoriz
-                ? "position:absolute;top:2px;left:10%;right:10%;height:25%;background:rgba(255,255,255,0.15);border-radius:2px;"
-                : "position:absolute;left:2px;top:10%;bottom:10%;width:25%;background:rgba(255,255,255,0.15);border-radius:2px;");
-        builder.CloseElement();
-
-        builder.CloseElement(); // pipe body
-        builder.CloseElement(); // wrapper
-        }
+        builder.AddMarkupContent(0, PipeVisuals.Render(sym, liveValue, responsive: true));
     };
 
     // â”€â”€â”€ Tank rendering â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     private RenderFragment RenderTank(ScreenSymbol sym, string? liveValue) => builder =>
     {
-        int seq = 0;
-        var w = sym.Width;
-        var h = sym.Height;
-        var liquidColor = sym.TankLiquidColor ?? "#3b82f6";
-        var bodyColor = sym.TankBodyColor ?? "#64748b";
-        var minV = sym.MinValue ?? 0;
-        var maxV = sym.MaxValue is null or 0 ? 100.0 : sym.MaxValue.Value;
-        double.TryParse(liveValue, System.Globalization.NumberStyles.Float,
-            System.Globalization.CultureInfo.InvariantCulture, out var rawVal);
-        var frac = (maxV - minV) > 0 ? Math.Clamp((rawVal - minV) / (maxV - minV), 0, 1) : 0;
-
-        // Body
-        builder.OpenElement(seq++, "rect");
-        builder.AddAttribute(seq++, "x", 2); builder.AddAttribute(seq++, "y", 2);
-        builder.AddAttribute(seq++, "width", w - 4); builder.AddAttribute(seq++, "height", h - 4);
-        builder.AddAttribute(seq++, "rx", 4);
-        builder.AddAttribute(seq++, "fill", "#0f172a");
-        builder.AddAttribute(seq++, "stroke", bodyColor);
-        builder.AddAttribute(seq++, "stroke-width", 2);
-        builder.CloseElement();
-
-        // Liquid fill
-        var fillH = (h - 8) * frac;
-        builder.OpenElement(seq++, "rect");
-        builder.AddAttribute(seq++, "x", 4);
-        builder.AddAttribute(seq++, "y", F(h - 4 - fillH));
-        builder.AddAttribute(seq++, "width", w - 8);
-        builder.AddAttribute(seq++, "height", F(fillH));
-        builder.AddAttribute(seq++, "rx", 2);
-        builder.AddAttribute(seq++, "fill", liquidColor);
-        builder.AddAttribute(seq++, "opacity", "0.8");
-        builder.CloseElement();
-
-        // Level text
-        if (sym.TankShowLevel)
-        {
-            builder.OpenElement(seq++, "text");
-            builder.AddAttribute(seq++, "x", F(w / 2.0));
-            builder.AddAttribute(seq++, "y", F(h / 2.0));
-            builder.AddAttribute(seq++, "text-anchor", "middle");
-            builder.AddAttribute(seq++, "dominant-baseline", "middle");
-            builder.AddAttribute(seq++, "fill", "#ffffff");
-            builder.AddAttribute(seq++, "font-size", 12);
-            builder.AddAttribute(seq++, "font-family", "system-ui, sans-serif");
-            builder.AddContent(seq++, $"{frac * 100:F0}%");
-            builder.CloseElement();
-        }
+        builder.AddMarkupContent(0, TankVisuals.Render(sym, liveValue));
     };
 
     // â”€â”€â”€ Motor Control rendering â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     private RenderFragment RenderMotorControl(ScreenSymbol sym, string? liveValue) => builder =>
     {
+        if (PumpVisuals.IsEnhanced(sym))
+        {
+            builder.AddMarkupContent(0, PumpVisuals.Render(sym, liveValue, OpcGet(sym.MotorFaultPath, sym)));
+            return;
+        }
         int seq = 0;
         var w = sym.Width;
         var h = sym.Height;
@@ -5347,31 +5093,16 @@ else
 
     private RenderFragment RenderResponsiveTank(ScreenSymbol sym, string? liveValue) => builder =>
     {
-        int seq = 0;
-        var liquidColor = sym.TankLiquidColor ?? "#3b82f6";
-        var bodyColor = sym.TankBodyColor ?? "#64748b";
-        var minV = sym.MinValue ?? 0;
-        var maxV = sym.MaxValue is null or 0 ? 100.0 : sym.MaxValue.Value;
-        double.TryParse(liveValue, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var rawVal);
-        var frac = (maxV - minV) > 0 ? Math.Clamp((rawVal - minV) / (maxV - minV), 0, 1) : 0;
-
-        builder.OpenElement(seq++, "div");
-        builder.AddAttribute(seq++, "style", $"width:100%;height:100%;background:#0f172a;border:2px solid {bodyColor};border-radius:4px;position:relative;overflow:hidden;");
-        builder.OpenElement(seq++, "div");
-        builder.AddAttribute(seq++, "style", $"position:absolute;bottom:0;left:0;right:0;height:{frac*100:F1}%;background:{liquidColor};opacity:0.8;transition:height 0.3s ease;");
-        builder.CloseElement();
-        if (sym.TankShowLevel)
-        {
-            builder.OpenElement(seq++, "span");
-            builder.AddAttribute(seq++, "style", "position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px;font-weight:600;z-index:1;");
-            builder.AddContent(seq++, $"{frac*100:F0}%");
-            builder.CloseElement();
-        }
-        builder.CloseElement();
+        builder.AddMarkupContent(0, TankVisuals.Render(sym, liveValue, responsive: true));
     };
 
     private RenderFragment RenderResponsiveMotorControl(ScreenSymbol sym, string? liveValue) => builder =>
     {
+        if (PumpVisuals.IsEnhanced(sym))
+        {
+            builder.AddMarkupContent(0, PumpVisuals.Render(sym, liveValue, OpcGet(sym.MotorFaultPath, sym), responsive: true));
+            return;
+        }
         int seq = 0;
         var isOn = liveValue is "True" or "true" or "1";
         var runColor = sym.MotorRunColor ?? "#22c55e";

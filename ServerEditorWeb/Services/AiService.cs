@@ -1091,7 +1091,13 @@ public class AiService
         Example: { "Id":"levelDisplay", "Type":"numericdisplay", "X":100, "Y":425, "Width":160, "Height":40,
           "VariablePath":"Demo.Level", "NumericDisplayFormat":"F1", "NumericDisplayDecimals":1,
           "NumericDisplayUnit":"%", "NumericDisplayBackground":"#1e293b", "Fill":"#3b82f6", "Stroke":"#475569" }.
-        Tank properties: TankMin, TankMax, TankUnit, TankShowLevel, TankLiquidColor, TankBodyColor, TankStyle.
+        Tank properties: TankMin, TankMax, TankShowLevel, TankLiquidColor, TankBodyColor,
+        TankStyle (rect/rectangular, round, cylinder, isometric for square, isometric-cone for a cylinder with conical base),
+        TankUseGradient (3D shell shading), TankFillStyle (solid/gradient), TankGradientEndColor (liquid surface color).
+        MinValue/MaxValue override TankMin/TankMax when set. Tank readouts display the fill percentage.
+        Pumps use Type=motorcontrol, MotorStyle=pump, MotorAppearance (classic/centrifugal/isometric),
+        MotorUseGradient, MotorBodyColor, MotorRunColor, MotorStopColor, MotorFaultColor, MotorFaultPath, MotorAnimateRotation.
+        Bind a pump to its actual running boolean. Enhanced pump impellers stop when a fault is active.
         Pipe properties: PipeOrientation (horizontal/vertical), PipeColor, PipeFlowColor, PipeShowFlow, PipeFlowSpeed.
         A pipe must geometrically meet the tank sides; do not substitute text labels for equipment symbols.
         For two tanks on a 1000x600 screen: tanks at (100,140,160,240) and (700,140,160,240),

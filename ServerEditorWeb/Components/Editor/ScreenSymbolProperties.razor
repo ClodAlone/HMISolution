@@ -1153,172 +1153,68 @@
 
 
         @if (_selectedSymbol.Type is "pipe")
-
         {
-
             <hr class="my-2" />
-
-            <h6 class="mb-2 small" style="color: #64748b;">ðŸ”§ Pipe Settings</h6>
-
-
-
+            <h6 class="mb-2 small" style="color: #94a3b8;">Pipe Settings</h6>
             <div class="mb-2">
-
                 <label class="form-label mb-0 small">Orientation</label>
-
-                <select class="form-select form-select-sm" style="font-size: 10px;"
-
-                        @bind="_selectedSymbol.PipeOrientation" @bind:after="OnChanged">
-
-                    <option value="horizontal">â†”ï¸ Horizontal</option>
-
-                    <option value="vertical">â†•ï¸ Vertical</option>
-                    <option value="corner-tl">&#x2B10; Corner &#x2196; (top-left)</option>
-                    <option value="corner-tr">&#x2B10; Corner &#x2197; (top-right)</option>
-                    <option value="corner-bl">&#x2B10; Corner &#x2199; (bottom-left)</option>
-                    <option value="corner-br">&#x2B10; Corner &#x2198; (bottom-right)</option>
-
+                <select class="form-select form-select-sm" @bind="_selectedSymbol.PipeOrientation" @bind:after="OnChanged">
+                    <option value="horizontal">Horizontal</option>
+                    <option value="vertical">Vertical</option>
+                    <option value="corner-tl">Corner (top-left)</option>
+                    <option value="corner-tr">Corner (top-right)</option>
+                    <option value="corner-bl">Corner (bottom-left)</option>
+                    <option value="corner-br">Corner (bottom-right)</option>
                 </select>
-
             </div>
-
-
-
             <div class="d-flex gap-1 mb-2">
-
                 <div>
-
-                    <label class="form-label mb-0 small">Pipe</label>
-
-                    <ColorPicker Value="@(_selectedSymbol.PipeColor)" ValueChanged="(v) => { _selectedSymbol.PipeColor = v; }" OnAfterChange="OnChanged" />
-
+                    <label class="form-label mb-0 small">Pipe color</label>
+                    <ColorPicker Value="@_selectedSymbol.PipeColor" ValueChanged="v => _selectedSymbol.PipeColor = v" OnAfterChange="OnChanged" />
                 </div>
-
                 <div>
-
-                    <label class="form-label mb-0 small">Flow</label>
-
-                    <ColorPicker Value="@(_selectedSymbol.PipeFlowColor)" ValueChanged="(v) => { _selectedSymbol.PipeFlowColor = v; }" OnAfterChange="OnChanged" />
-
+                    <label class="form-label mb-0 small">Flow color</label>
+                    <ColorPicker Value="@_selectedSymbol.PipeFlowColor" ValueChanged="v => _selectedSymbol.PipeFlowColor = v" OnAfterChange="OnChanged" />
                 </div>
-
             </div>
-
-
-
-            <div class="form-check mb-2" style="font-size: 10px;">
-
-                <input class="form-check-input" type="checkbox"
-
-                       @bind="_selectedSymbol.PipeShowFlow" @bind:after="OnChanged" />
-
-                <label class="form-check-label">Show flow animation</label>
-
+            <div class="form-check mb-2">
+                <input id="pipeGradient" class="form-check-input" type="checkbox" @bind="_selectedSymbol.PipeUseGradient" @bind:after="OnChanged" />
+                <label class="form-check-label small" for="pipeGradient">Rounded gradient surface</label>
             </div>
-
-
-
+            <div class="form-check mb-2">
+                <input id="pipeShowFlow" class="form-check-input" type="checkbox" @bind="_selectedSymbol.PipeShowFlow" @bind:after="OnChanged" />
+                <label class="form-check-label small" for="pipeShowFlow">Show flow</label>
+            </div>
+            <div class="form-check mb-2">
+                <input id="pipeAnimate" class="form-check-input" type="checkbox" @bind="_selectedSymbol.PipeAnimate" @bind:after="OnChanged" />
+                <label class="form-check-label small" for="pipeAnimate">Enable flow animation</label>
+            </div>
             <div class="mb-2">
-
-                <label class="form-label mb-0 small">Flow Speed (seconds)</label>
-
-                <input type="number" class="form-control form-control-sm" style="width: 70px; font-size: 10px;"
-
-                       min="0.1" max="10" step="0.1"
-
-                       @bind="_selectedSymbol.PipeFlowSpeed" @bind:after="OnChanged" />
-
+                <label class="form-label mb-0 small">Flow direction</label>
+                <select class="form-select form-select-sm" @bind="_selectedSymbol.PipeFlowDirection" @bind:after="OnChanged">
+                    <option value="left-right">Forward (left to right)</option>
+                    <option value="right-left">Reverse (right to left)</option>
+                    <option value="top-bottom">Forward (top to bottom)</option>
+                    <option value="bottom-top">Reverse (bottom to top)</option>
+                </select>
+                <div class="form-text small">For corners, Forward follows the pipe path; Reverse runs back along it.</div>
             </div>
-
-
-
-            <div class="form-text" style="font-size: 9px;">Optionally bind a boolean variable to control flow on/off. If no variable is bound, flow always animates when enabled.</div>
-
-
-
-            <button class="btn btn-sm btn-outline-info w-100 py-0 mt-2" style="font-size: 10px;" @onclick="ToggleWidgetPreview">
-                @(_widgetPreviewActive ? "\u23f9 Hide Preview" : "\u25b6 Preview Animation")
+            <div class="mb-2">
+                <label class="form-label mb-0 small">Flow cycle duration (seconds)</label>
+                <input type="number" class="form-control form-control-sm" min="0.1" max="10" step="0.1"
+                       @bind="_selectedSymbol.PipeFlowSpeed" @bind:after="OnChanged" />
+                <div class="form-text small">Lower duration means faster flow. Stripes and spacing scale with pipe diameter and cover its full length.</div>
+            </div>
+            <div class="form-text small">Optionally bind a boolean or numeric variable: false or zero stops flow. Without a value, flow runs when enabled.</div>
+            <button type="button" class="btn btn-sm btn-outline-info w-100 py-0 mt-2" @onclick="ToggleWidgetPreview">
+                @(_widgetPreviewActive ? "Hide Preview" : "Preview Animation")
             </button>
             @if (_widgetPreviewActive)
             {
-                var prevW = 200.0; var prevH = 60.0;
-                var pPipeC = _selectedSymbol.PipeColor ?? "#64748b";
-                var pFlowC = _selectedSymbol.PipeFlowColor ?? "#94a3b8";
-                var pSpeed = _selectedSymbol.PipeFlowSpeed > 0 ? _selectedSymbol.PipeFlowSpeed : 1;
-                var pIsH = (_selectedSymbol.PipeOrientation ?? "horizontal") == "horizontal";
-                var pIsCorner = (_selectedSymbol.PipeOrientation ?? "").StartsWith("corner");
-                <div class="mt-2 rounded" style="background: #0f172a; border: 1px solid #334155; padding: 4px; text-align: center;">
-                    @if (pIsH)
-                    {
-                        <svg width="@prevW" height="@prevH" viewBox="0 0 @prevW @prevH" xmlns="http://www.w3.org/2000/svg">
-                            <defs>
-                                <style>
-                                    @@keyframes pipeFlowPreview { 0% { stroke-dashoffset: 20; } 100% { stroke-dashoffset: 0; } }
-                                </style>
-                            </defs>
-                            <rect x="0" y="@Fmt(prevH*0.25)" width="@prevW" height="@Fmt(prevH*0.5)" rx="@Fmt(prevH*0.25)" fill="@pPipeC" />
-                            <rect x="2" y="@Fmt(prevH*0.25+2)" width="@Fmt(prevW*0.25)" height="@Fmt(prevH*0.5-4)" rx="2" fill="rgba(255,255,255,0.15)" />
-                            @for (int pi = 0; pi < 5; pi++)
-                            {
-                                var lx = prevW * 0.1 + pi * prevW * 0.2;
-                                <line x1="@Fmt(lx)" y1="@Fmt(prevH*0.35)" x2="@Fmt(lx + prevW*0.08)" y2="@Fmt(prevH*0.35)"
-                                      stroke="@pFlowC" stroke-width="2" stroke-dasharray="6,4"
-                                      style="animation: pipeFlowPreview @(Fmt(pSpeed))s linear infinite;" />
-                            }
-                        </svg>
-                    }
-                    else
-                    {
-                        var pvW = 60.0; var pvH = 120.0;
-                        <svg width="@pvW" height="@pvH" viewBox="0 0 @pvW @pvH" xmlns="http://www.w3.org/2000/svg">
-                            <defs>
-                                <style>
-                                    @@keyframes pipeFlowVPreview { 0% { stroke-dashoffset: 20; } 100% { stroke-dashoffset: 0; } }
-                                </style>
-                            </defs>
-                            <rect x="@Fmt(pvW*0.2)" y="0" width="@Fmt(pvW*0.6)" height="@pvH" rx="@Fmt(pvW*0.3)" fill="@pPipeC" />
-                            @for (int pi = 0; pi < 5; pi++)
-                            {
-                                var ly = pvH * 0.1 + pi * pvH * 0.2;
-                                <line x1="@Fmt(pvW*0.45)" y1="@Fmt(ly)" x2="@Fmt(pvW*0.45)" y2="@Fmt(ly + pvH*0.08)"
-                                      stroke="@pFlowC" stroke-width="2" stroke-dasharray="6,4"
-                                      style="animation: pipeFlowVPreview @(Fmt(pSpeed))s linear infinite;" />
-                            }
-                        </svg>
-                    }
-                    @if (pIsCorner)
-                    {
-                        var cDir = _selectedSymbol.PipeOrientation ?? "corner-tl";
-                        var cW = 100.0; var cH = 100.0;
-                        var cThk = cH * 0.3;
-                        var cMid = cThk / 2;
-                        <svg width="@cW" height="@cH" viewBox="0 0 @cW @cH" xmlns="http://www.w3.org/2000/svg">
-                            <defs>
-                                <style>
-                                    @@keyframes pipeFlowCornerPreview { 0% { stroke-dashoffset: 20; } 100% { stroke-dashoffset: 0; } }
-                                </style>
-                            </defs>
-                            @if (cDir == "corner-tl")
-                            {
-                                <path d="M @Fmt(cW),@Fmt(cMid) L @Fmt(cMid),@Fmt(cMid) L @Fmt(cMid),@cH" stroke="@pPipeC" stroke-width="@Fmt(cThk)" fill="none" stroke-linejoin="round" stroke-linecap="round" />
-                            }
-                            else if (cDir == "corner-tr")
-                            {
-                                <path d="M 0,@Fmt(cMid) L @Fmt(cW-cMid),@Fmt(cMid) L @Fmt(cW-cMid),@cH" stroke="@pPipeC" stroke-width="@Fmt(cThk)" fill="none" stroke-linejoin="round" stroke-linecap="round" />
-                            }
-                            else if (cDir == "corner-bl")
-                            {
-                                <path d="M @Fmt(cMid),0 L @Fmt(cMid),@Fmt(cH-cMid) L @cW,@Fmt(cH-cMid)" stroke="@pPipeC" stroke-width="@Fmt(cThk)" fill="none" stroke-linejoin="round" stroke-linecap="round" />
-                            }
-                            else
-                            {
-                                <path d="M @Fmt(cW-cMid),0 L @Fmt(cW-cMid),@Fmt(cH-cMid) L 0,@Fmt(cH-cMid)" stroke="@pPipeC" stroke-width="@Fmt(cThk)" fill="none" stroke-linejoin="round" stroke-linecap="round" />
-                            }
-                        </svg>
-                    }
+                <div class="mt-2 rounded" style="background: #0f172a; border: 1px solid #334155; padding: 8px; height: 160px;">
+                    @((MarkupString)PipeVisuals.Render(_selectedSymbol, GetLiveValue(_selectedSymbol), responsive: true))
                 </div>
             }
-
         }
 
         @if (_selectedSymbol.Type is "screenembed")
@@ -2013,14 +1909,35 @@
             <hr class="my-2" />
             <h6 class="mb-2 small" style="color: #3b82f6;">Tank Settings</h6>
             <div class="mb-2">
-                <label class="form-label mb-0 small">Tank Style</label>
-                <select class="form-select form-select-sm" style="font-size: 10px;"
-                        @bind="_selectedSymbol.TankStyle" @bind:after="OnChanged">
+                <label class="form-label mb-0 small">Tank style</label>
+                <select class="form-select form-select-sm"
+                        @bind:get='(_selectedSymbol.TankStyle == "rectangular" ? "rect" : _selectedSymbol.TankStyle)'
+                        @bind:set="(string v) => { _selectedSymbol.TankStyle = v; OnChanged(); }">
                     <option value="rect">Rectangular</option>
                     <option value="round">Rounded</option>
                     <option value="cylinder">Cylinder</option>
+                    <option value="isometric">Isometric 3D (square)</option>
+                    <option value="isometric-cone">Isometric cylinder / conical base</option>
                 </select>
             </div>
+            <div class="form-check mb-2">
+                <input id="tankGradient" class="form-check-input" type="checkbox" @bind="_selectedSymbol.TankUseGradient" @bind:after="OnChanged" />
+                <label class="form-check-label small" for="tankGradient">3D gradient shading</label>
+            </div>
+            <div class="mb-2">
+                <label class="form-label mb-0 small">Liquid fill style</label>
+                <select class="form-select form-select-sm" @bind="_selectedSymbol.TankFillStyle" @bind:after="OnChanged">
+                    <option value="solid">Solid</option>
+                    <option value="gradient">Gradient</option>
+                </select>
+            </div>
+            @if (_selectedSymbol.TankFillStyle == "gradient")
+            {
+                <div class="mb-2">
+                    <label class="form-label mb-0 small">Liquid gradient surface color</label>
+                    <ColorPicker Value="@_selectedSymbol.TankGradientEndColor" ValueChanged="v => _selectedSymbol.TankGradientEndColor = v" OnAfterChange="OnChanged" />
+                </div>
+            }
             <div class="d-flex gap-1 mb-2">
                 <div>
                     <label class="form-label mb-0 small">Body</label>
@@ -2031,12 +1948,26 @@
                     <ColorPicker Value="@(_selectedSymbol.TankLiquidColor)" ValueChanged="(v) => { _selectedSymbol.TankLiquidColor = v; }" OnAfterChange="OnChanged" />
                 </div>
             </div>
-            <div class="form-check mb-2" style="font-size: 10px;">
-                <input class="form-check-input" type="checkbox"
+            <div class="form-check mb-2">
+                <input id="tankShowLevel" class="form-check-input" type="checkbox"
                        @bind="_selectedSymbol.TankShowLevel" @bind:after="OnChanged" />
-                <label class="form-check-label">Show level percentage</label>
+                <label class="form-check-label small" for="tankShowLevel">Show level percentage</label>
             </div>
-            <div class="form-text" style="font-size: 9px;">Bind a numeric variable (0-100) for the fill level.</div>
+            <div class="form-text small">Bind a numeric variable for the fill level. Min and Max above define empty and full; when blank, the tank range is @_selectedSymbol.TankMin to @_selectedSymbol.TankMax. Values outside the range are clamped. Missing or invalid values show a dash, not a measured zero.</div>
+            <button type="button" class="btn btn-sm btn-outline-info w-100 py-0 mt-2" @onclick="ToggleWidgetPreview">
+                @(_widgetPreviewActive ? "Hide Preview" : "Preview Filling")
+            </button>
+            @if (_widgetPreviewActive)
+            {
+                <div class="mt-2 rounded" style="background: #0f172a; border: 1px solid #334155; padding: 8px;">
+                    <label class="form-label small" for="tankPreviewLevel">Simulated fill: @(_tankPreviewLevel.ToString("F0"))%</label>
+                    <input id="tankPreviewLevel" class="form-range" type="range" min="0" max="100" step="1" @bind="_tankPreviewLevel" @bind:event="oninput" />
+                    <div style="height: 190px;">
+                        @((MarkupString)TankVisuals.Render(_selectedSymbol, responsive: true, previewLevel: _tankPreviewLevel / 100))
+                    </div>
+                    <div class="form-text small">Preview only; does not write to the bound variable.</div>
+                </div>
+            }
         }
 
         @if (_selectedSymbol.Type is "motorcontrol")
@@ -2052,6 +1983,25 @@
                     <option value="fan">Fan</option>
                 </select>
             </div>
+            @if (_selectedSymbol.MotorStyle == "pump")
+            {
+                <div class="mb-2">
+                    <label class="form-label mb-0 small">Pump appearance</label>
+                    <select class="form-select form-select-sm" @bind="_selectedSymbol.MotorAppearance" @bind:after="OnChanged">
+                        <option value="classic">Classic</option>
+                        <option value="centrifugal">Centrifugal</option>
+                        <option value="isometric">Isometric 3D</option>
+                    </select>
+                </div>
+                <div class="form-check mb-2">
+                    <input id="pumpGradient" class="form-check-input" type="checkbox" @bind="_selectedSymbol.MotorUseGradient" @bind:after="OnChanged" />
+                    <label class="form-check-label small" for="pumpGradient">3D gradient shading</label>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label mb-0 small">Pump body color</label>
+                    <ColorPicker Value="@_selectedSymbol.MotorBodyColor" ValueChanged="v => _selectedSymbol.MotorBodyColor = v" OnAfterChange="OnChanged" />
+                </div>
+            }
             <div class="d-flex gap-1 mb-2">
                 <div>
                     <label class="form-label mb-0 small">Run</label>
@@ -2084,7 +2034,14 @@
             <button class="btn btn-sm btn-outline-info w-100 py-0 mt-2" style="font-size: 10px;" @onclick="ToggleWidgetPreview">
                 @(_widgetPreviewActive ? "\u23f9 Hide Preview" : "\u25b6 Preview Animation")
             </button>
-            @if (_widgetPreviewActive)
+            @if (_widgetPreviewActive && PumpVisuals.IsEnhanced(_selectedSymbol))
+            {
+                <div class="mt-2 rounded" style="background: #0f172a; border: 1px solid #334155; padding: 8px; height: 150px;">
+                    @((MarkupString)PumpVisuals.Render(_selectedSymbol, GetLiveValue(_selectedSymbol) ?? "true", GetLiveValue(_selectedSymbol, _selectedSymbol.MotorFaultPath), responsive: true))
+                </div>
+                <div class="form-text small">With no live value, this preview simulates running without writing to the variable.</div>
+            }
+            else if (_widgetPreviewActive)
             {
                 var mR = 28.0;
                 var mCx = 40.0; var mCy = 40.0;
@@ -3882,6 +3839,7 @@ else
     private string? _previewOriginalStroke;
 
     private bool _widgetPreviewActive;
+    private double _tankPreviewLevel = 65;
     private void ToggleWidgetPreview() => _widgetPreviewActive = !_widgetPreviewActive;
     private static readonly System.Globalization.CultureInfo _fmtCi = System.Globalization.CultureInfo.InvariantCulture;
     private static string Fmt(double v) => v.ToString("F1", _fmtCi);
@@ -3940,14 +3898,15 @@ else
         OnPropertyChanged.InvokeAsync();
     }
 
-    private string? GetLiveValue(ScreenSymbol sym)
+    private string? GetLiveValue(ScreenSymbol sym, string? variablePath = null)
     {
-        if (string.IsNullOrEmpty(sym.VariablePath)) return null;
+        var path = variablePath ?? sym.VariablePath;
+        if (string.IsNullOrEmpty(path)) return null;
 
         foreach (var item in Opc.MonitoredItems)
         {
-            if (item.DisplayName == sym.VariablePath ||
-                item.NodeIdString.EndsWith(sym.VariablePath, StringComparison.OrdinalIgnoreCase))
+            if (item.DisplayName == path ||
+                item.NodeIdString.EndsWith(path, StringComparison.OrdinalIgnoreCase))
                 return item.Value;
         }
         return null;

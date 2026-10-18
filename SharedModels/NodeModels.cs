@@ -1929,11 +1929,13 @@ namespace SharedModels
         public string PipeFlowDirection { get; set; } = "left-right";
         /// <summary>Pipe body color.</summary>
         public string PipeColor { get; set; } = "#64748b";
+        /// <summary>Shade the pipe across its diameter to show a rounded cylindrical surface. Default false keeps a solid fill.</summary>
+        public bool PipeUseGradient { get; set; }
         /// <summary>Fluid/flow indicator color.</summary>
         public string PipeFluidColor { get; set; } = "#3b82f6";
         /// <summary>Pipe wall thickness in px.</summary>
         public double PipeThickness { get; set; } = 6;
-        /// <summary>Animate the flow when value is truthy.</summary>
+        /// <summary>Animate visible flow stripes; false keeps them static. A false/zero bound value hides flow.</summary>
         public bool PipeAnimate { get; set; } = true;
 
         // â”€â”€ Tank â”€â”€
@@ -1941,9 +1943,15 @@ namespace SharedModels
         public string TankFillColor { get; set; } = "#3b82f6";
         /// <summary>Tank body/shell color.</summary>
         public string TankBodyColor { get; set; } = "#1e293b";
-        /// <summary>Scale minimum (empty).</summary>
+        /// <summary>Add light and shadow across the tank shell for a rounded 3D appearance.</summary>
+        public bool TankUseGradient { get; set; }
+        /// <summary>Liquid fill appearance: solid or gradient.</summary>
+        public string TankFillStyle { get; set; } = "solid";
+        /// <summary>Liquid gradient color at the surface.</summary>
+        public string TankGradientEndColor { get; set; } = "#22d3ee";
+        /// <summary>Scale minimum (empty), unless the common MinValue is configured.</summary>
         public double TankMin { get; set; } = 0;
-        /// <summary>Scale maximum (full).</summary>
+        /// <summary>Scale maximum (full), unless the common MaxValue is configured.</summary>
         public double TankMax { get; set; } = 100;
         /// <summary>Show level percentage text.</summary>
         public bool TankShowLevel { get; set; } = true;
@@ -2195,6 +2203,7 @@ namespace SharedModels
         public double PipeFlowSpeed { get; set; } = 1;
         public string PipeOrientation { get; set; } = "horizontal";
         public string TankLiquidColor { get; set; } = "#3b82f6";
+        /// <summary>Tank shape: rectangular (or rect), round, cylinder, isometric (square), or isometric-cone (cylinder with conical base).</summary>
         public string TankStyle { get; set; } = "rectangular";
         public string MotorRunColor { get; set; } = "#22c55e";
         public string MotorStopColor { get; set; } = "#64748b";
@@ -2202,6 +2211,10 @@ namespace SharedModels
         public string MotorFaultPath { get; set; } = "";
         public bool MotorAnimateRotation { get; set; } = true;
         public string MotorStyle { get; set; } = "motor";
+        /// <summary>Pump appearance: classic, centrifugal, or isometric. Other motor styles retain their classic rendering.</summary>
+        public string MotorAppearance { get; set; } = "classic";
+        public bool MotorUseGradient { get; set; }
+        public string MotorBodyColor { get; set; } = "#475569";
         public int SparklinePoints { get; set; } = 50;
         public string DropdownValues { get; set; } = "";
         public string DataTableBackground { get; set; } = "#0f172a";
