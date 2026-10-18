@@ -314,6 +314,45 @@
                 </select>
             </div>
 
+            <label class="form-label mb-1 small">Appearance presets</label>
+            <div class="d-flex gap-1 mb-2 flex-wrap">
+                <button type="button" class="btn btn-sm btn-outline-secondary" @onclick='() => ApplyGaugePreset("classic")'>Classic</button>
+                <button type="button" class="btn btn-sm" style="background: #0f172a; color: #22d3ee; border: 1px solid #475569;" @onclick='() => ApplyGaugePreset("slate")'>Midnight</button>
+                <button type="button" class="btn btn-sm" style="background: #f5f0e6; color: #92400e; border: 1px solid #d6cbb8;" @onclick='() => ApplyGaugePreset("ivory")'>Ivory</button>
+                <button type="button" class="btn btn-sm" style="background: linear-gradient(135deg, #f8fafc, #94a3b8, #e2e8f0); color: #0f172a;" @onclick='() => ApplyGaugePreset("metallic")'>Brushed Metal</button>
+            </div>
+            <div class="mb-2">
+                <label class="form-label mb-0 small">Background</label>
+                <select class="form-select form-select-sm" @bind="_selectedSymbol.GaugeBackground" @bind:after="OnChanged">
+                    <option value="none">None (classic)</option>
+                    <option value="slate">Midnight radial</option>
+                    <option value="ivory">Ivory radial</option>
+                    <option value="metallic">Brushed metal</option>
+                </select>
+            </div>
+            <div class="mb-2">
+                <label class="form-label mb-0 small">Progress fill</label>
+                <select class="form-select form-select-sm" @bind="_selectedSymbol.GaugeFillStyle" @bind:after="OnChanged">
+                    <option value="solid">Solid</option>
+                    <option value="gradient">Gradient</option>
+                </select>
+            </div>
+            @if (_selectedSymbol.GaugeFillStyle == "gradient")
+            {
+                <div class="mb-2">
+                    <label class="form-label mb-0 small">Gradient end color (start uses Fill)</label>
+                    <ColorPicker Value="@_selectedSymbol.GaugeGradientEndColor" ValueChanged="(v) => { _selectedSymbol.GaugeGradientEndColor = v; }" OnAfterChange="OnChanged" />
+                </div>
+            }
+            @if (_selectedSymbol.GaugeStyle is "needle" or "arc" or "semicircle")
+            {
+                <div class="mb-2">
+                    <label class="form-label mb-0 small">Arc thickness (% radius)</label>
+                    <input type="number" class="form-control form-control-sm" min="6" max="30" step="1"
+                           @bind="_selectedSymbol.GaugeArcThickness" @bind:after="OnChanged" />
+                </div>
+            }
+
             <div class="d-flex gap-1 mb-2 flex-wrap">
                 <div>
                     <label class="form-label mb-0 small">Ticks</label>
@@ -363,6 +402,48 @@
                     <label class="form-check-label" for="@($"gsv_{_selectedSymbol.Id}")">Show Value</label>
                 </div>
             </div>
+        }
+
+        @if (_selectedSymbol.Type is "editbox" or "numericdisplay")
+        {
+            <hr class="my-2" />
+            <h6 class="mb-2 small text-info">Display Appearance</h6>
+            <div class="d-flex gap-1 mb-2 flex-wrap">
+                @foreach (var preset in new[] { "classic", "midnight", "ivory", "metallic", "lcd" })
+                {
+                    <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => ApplyDisplayPreset(preset)">@DisplayVisuals.PresetLabel(preset)</button>
+                }
+            </div>
+            <div class="mb-2">
+                <label class="form-label mb-0 small">Background style</label>
+                <select class="form-select form-select-sm" @bind="_selectedSymbol.DisplayBackgroundStyle" @bind:after="OnChanged">
+                    <option value="classic">Classic (custom color)</option>
+                    <option value="midnight">Midnight glass</option>
+                    <option value="ivory">Ivory</option>
+                    <option value="metallic">Brushed Metal</option>
+                    <option value="lcd">LCD panel</option>
+                </select>
+            </div>
+            <div class="mb-2">
+                <label class="form-label mb-0 small">Readout font</label>
+                <select class="form-select form-select-sm" @bind="_selectedSymbol.DisplayFontStyle" @bind:after="OnChanged">
+                    <option value="default">Standard (Font property)</option>
+                    <option value="terminal">Digital terminal (monospace)</option>
+                    <option value="seven-segment">Seven-segment digits</option>
+                </select>
+            </div>
+            <div class="form-check mb-2">
+                <input type="checkbox" class="form-check-input" id="displayAutoFit" @bind="_selectedSymbol.DisplayAutoFit" @bind:after="OnChanged" />
+                <label class="form-check-label small" for="displayAutoFit">Auto-fit value to width and height</label>
+            </div>
+            <div class="small text-muted mb-2">Auto-fit includes value length. Disable to use the Font Size property. Seven-segment supports digits, signs and decimal points; other text uses the terminal font.</div>
+            @if (_selectedSymbol.Type == "editbox")
+            {
+                <div class="mb-2">
+                    <label class="form-label mb-0 small">Readout color</label>
+                    <ColorPicker Value="@_selectedSymbol.DisplayTextColor" ValueChanged="v => _selectedSymbol.DisplayTextColor = v" OnAfterChange="OnChanged" />
+                </div>
+            }
         }
 
         @if (_selectedSymbol.Type is "hdachart" or "hdagrid")
@@ -3826,6 +3907,22 @@ else
             _symbolSnapshot = System.Text.Json.JsonSerializer.Serialize(_selectedSymbol);
         else
             _symbolSnapshot = null;
+    }
+
+    private void ApplyGaugePreset(string preset)
+    {
+        if (_selectedSymbol == null) return;
+        CaptureSymbolSnapshot();
+        GaugeVisuals.ApplyPreset(_selectedSymbol, preset);
+        OnChanged();
+    }
+
+    private void ApplyDisplayPreset(string preset)
+    {
+        if (_selectedSymbol == null) return;
+        CaptureSymbolSnapshot();
+        DisplayVisuals.ApplyPreset(_selectedSymbol, preset);
+        OnChanged();
     }
 
     private void OnChanged()

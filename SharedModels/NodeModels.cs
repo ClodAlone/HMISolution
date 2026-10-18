@@ -1533,6 +1533,18 @@ namespace SharedModels
         /// <summary>When true, the EditBox widget shows a statistics bar (Min/Max/Avg) read from the variable's .Statistics.* OPC sub-variables.</summary>
         public bool EditBoxShowStatistics { get; set; }
 
+        /// <summary>Display face for EditBox and Numeric Display: classic, midnight, ivory, metallic, or lcd.</summary>
+        public string DisplayBackgroundStyle { get; set; } = "classic";
+
+        /// <summary>Readout typography: default, terminal, or seven-segment (no external font required).</summary>
+        public string DisplayFontStyle { get; set; } = "default";
+
+        /// <summary>Fit the value to both the available width and height, including changes in value length.</summary>
+        public bool DisplayAutoFit { get; set; }
+
+        /// <summary>Foreground color of styled editable displays. Numeric displays use Fill.</summary>
+        public string DisplayTextColor { get; set; } = "#e2e8f0";
+
         // ─── Plant Status Overview widget properties (Type == "plantoverview") ─────────
 
         /// <summary>
@@ -1597,6 +1609,18 @@ namespace SharedModels
 
         /// <summary>Value format string for the readout (e.g. "F1", "F0"). Default "F1".</summary>
         public string GaugeValueFormat { get; set; } = "F1";
+
+        /// <summary>Gauge progress paint: "solid" or "gradient". Defaults preserve legacy rendering.</summary>
+        public string GaugeFillStyle { get; set; } = "solid";
+
+        /// <summary>End color of the progress gradient; the start uses the symbol Fill and its binding.</summary>
+        public string GaugeGradientEndColor { get; set; } = "#22d3ee";
+
+        /// <summary>Gauge face background: "none" (legacy), "slate", "ivory", or "metallic".</summary>
+        public string GaugeBackground { get; set; } = "none";
+
+        /// <summary>Arc thickness as a percentage of radius, from 6 to 30. Default 18.</summary>
+        public double GaugeArcThickness { get; set; } = 18;
 
         /// <summary>Commands executed at runtime when the user interacts with this symbol.</summary>
         public List<SymbolCommand> Commands { get; set; } = new();

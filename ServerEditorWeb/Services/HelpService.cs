@@ -651,6 +651,27 @@ The visual screen designer for creating HMI layouts.
 - **Fill/Stroke/Label** — Visual appearance
 - **Animations** — Dynamic color, visibility, rotation
 - **Commands** — Click actions (write value, navigate, toggle)
+
+### Gauge Appearance
+Select a gauge, then open **Gauge Settings** in Symbol Properties.
+- Choose Needle, Arc, Semicircle, Horizontal Bar, Vertical Bar, or Thermometer.
+- Apply **Midnight**, **Ivory**, or **Brushed Metal** for coordinated colors and a shaded face.
+- Customize **Background**, **Progress fill** (Solid/Gradient), **Gradient end color**, and **Arc thickness** (6–30% of radius).
+- Gradient starts use the symbol **Fill**, including live Fill Binding colors. Track and Needle colors remain customizable.
+- Tick labels, value format, units, min/max, and variable bindings continue to work with styled gauges.
+- Styled gauges use the same visuals in the canvas and runtime, including responsive screens.
+- **Classic** resets the visual options to the original flat appearance; existing projects stay classic until changed.
+- Gauge appearance is saved with the project and retained by copy/paste and duplicate.
+
+### Editable and Numeric Display Appearance
+Select **EditBox** or **Numeric Display**, then open **Display Appearance**.
+- Presets: **Midnight**, **Ivory**, **Brushed Metal**, **LCD**, or **Classic**.
+- Choose a background independently of typography: **Standard** (Font property), **Digital terminal**, or **Seven-segment**.
+- Seven-segment digits are drawn locally as vectors, with no downloaded fonts. Signs and decimal points are supported; other text uses a terminal font.
+- **Auto-fit value to width and height** uses the actual display container and value length, including responsive layouts. Disable it to use **Font Size**.
+- Editable displays keep click-to-edit, Enter to write, Escape to cancel, spin step, placeholders and statistics. While editing, text uses a standard input for keyboard accessibility.
+- Numeric displays keep format strings and units. Missing values show a dash in styled readouts, not a fabricated zero.
+- Existing displays remain unchanged until styled. Appearance and formatting survive save/load, copy/paste, duplicate and preset undo/redo.
 """),
 
         ["screeneditor"] = new("🖼️ Screen Editor Panel", """

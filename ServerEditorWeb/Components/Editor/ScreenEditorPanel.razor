@@ -360,6 +360,13 @@
                                         string.IsNullOrEmpty(sym.EventLogCategories) ? "All categories" : sym.EventLogCategories)
                                     break;
                                 case "editbox":
+                                    @if (DisplayVisuals.IsEnhanced(sym))
+                                    {
+                                        <foreignObject width="@sym.Width" height="@sym.Height">
+                                            @((MarkupString)DisplayVisuals.Render(sym, DisplayVisuals.FormatValue(sym, liveValue ?? "42.5"), customBackground: fillColor))
+                                        </foreignObject>
+                                        break;
+                                    }
                                     <rect width="@sym.Width" height="@sym.Height"
                                           fill="@(sym.Fill ?? "#1e293b")" stroke="@sym.Stroke" stroke-width="@sym.StrokeWidth" rx="4" />
                                     @RenderSvgText(10, sym.Height / 2 + 1, "start", "middle", "#94a3b8", ScaledFontSize(10, sym),
@@ -817,6 +824,13 @@
                                             @RenderSvgText(sym.Width / 2, sym.Height / 2 + 4, "middle", "middle", "#ffffff", ScaledFontSize(11, sym), "60%")
                                             break;
                                         case "numericdisplay":
+                                            @if (DisplayVisuals.IsEnhanced(sym))
+                                            {
+                                                <foreignObject width="@sym.Width" height="@sym.Height">
+                                                    @((MarkupString)DisplayVisuals.Render(sym, DisplayVisuals.FormatValue(sym, liveValue ?? "42.7"), fillColor))
+                                                </foreignObject>
+                                                break;
+                                            }
                                             var ndBg = sym.NumericDisplayBackground ?? "#111827";
                                             <rect width="@sym.Width" height="@sym.Height" rx="4" fill="@ndBg" stroke="@sym.Stroke" stroke-width="@sym.StrokeWidth" />
                                             var ndUnit = sym.NumericDisplayUnit ?? "";
@@ -2888,7 +2902,39 @@ Right-click a symbol for actions</div>
                 RotationBinding = src.RotationBinding,
                 LabelBinding = src.LabelBinding,
                 MinValue = src.MinValue,
-                MaxValue = src.MaxValue
+                MaxValue = src.MaxValue,
+                GaugeStyle = src.GaugeStyle,
+                GaugeTicks = src.GaugeTicks,
+                GaugeShowTickLabels = src.GaugeShowTickLabels,
+                GaugeShowValue = src.GaugeShowValue,
+                GaugeUnit = src.GaugeUnit,
+                GaugeTrackColor = src.GaugeTrackColor,
+                GaugeNeedleColor = src.GaugeNeedleColor,
+                GaugeValueFormat = src.GaugeValueFormat,
+                GaugeFillStyle = src.GaugeFillStyle,
+                GaugeGradientEndColor = src.GaugeGradientEndColor,
+                GaugeBackground = src.GaugeBackground,
+                GaugeArcThickness = src.GaugeArcThickness,
+                DisplayBackgroundStyle = src.DisplayBackgroundStyle,
+                DisplayFontStyle = src.DisplayFontStyle,
+                DisplayAutoFit = src.DisplayAutoFit,
+                DisplayTextColor = src.DisplayTextColor,
+                FontFamily = src.FontFamily,
+                FontSize = src.FontSize,
+                FontWeight = src.FontWeight,
+                FontStyle = src.FontStyle,
+                EditBoxStep = src.EditBoxStep,
+                EditBoxFormat = src.EditBoxFormat,
+                EditBoxShowStatistics = src.EditBoxShowStatistics,
+                NumericDisplayFormat = src.NumericDisplayFormat,
+                NumericDisplayUnit = src.NumericDisplayUnit,
+                NumericDisplayBackground = src.NumericDisplayBackground,
+                NumericDisplayDigits = src.NumericDisplayDigits,
+                NumericDisplayDecimals = src.NumericDisplayDecimals,
+                NumericDisplayColor = src.NumericDisplayColor,
+                NumericDisplayLowWarn = src.NumericDisplayLowWarn,
+                NumericDisplayHighWarn = src.NumericDisplayHighWarn,
+                NumericDisplayWarnColor = src.NumericDisplayWarnColor
             };
             screen.Symbols.Add(pasted);
             newSelection.Add(pasted);
@@ -2968,7 +3014,39 @@ Right-click a symbol for actions</div>
                 RotationBinding = src.RotationBinding,
                 LabelBinding = src.LabelBinding,
                 MinValue = src.MinValue,
-                MaxValue = src.MaxValue
+                MaxValue = src.MaxValue,
+                GaugeStyle = src.GaugeStyle,
+                GaugeTicks = src.GaugeTicks,
+                GaugeShowTickLabels = src.GaugeShowTickLabels,
+                GaugeShowValue = src.GaugeShowValue,
+                GaugeUnit = src.GaugeUnit,
+                GaugeTrackColor = src.GaugeTrackColor,
+                GaugeNeedleColor = src.GaugeNeedleColor,
+                GaugeValueFormat = src.GaugeValueFormat,
+                GaugeFillStyle = src.GaugeFillStyle,
+                GaugeGradientEndColor = src.GaugeGradientEndColor,
+                GaugeBackground = src.GaugeBackground,
+                GaugeArcThickness = src.GaugeArcThickness,
+                DisplayBackgroundStyle = src.DisplayBackgroundStyle,
+                DisplayFontStyle = src.DisplayFontStyle,
+                DisplayAutoFit = src.DisplayAutoFit,
+                DisplayTextColor = src.DisplayTextColor,
+                FontFamily = src.FontFamily,
+                FontSize = src.FontSize,
+                FontWeight = src.FontWeight,
+                FontStyle = src.FontStyle,
+                EditBoxStep = src.EditBoxStep,
+                EditBoxFormat = src.EditBoxFormat,
+                EditBoxShowStatistics = src.EditBoxShowStatistics,
+                NumericDisplayFormat = src.NumericDisplayFormat,
+                NumericDisplayUnit = src.NumericDisplayUnit,
+                NumericDisplayBackground = src.NumericDisplayBackground,
+                NumericDisplayDigits = src.NumericDisplayDigits,
+                NumericDisplayDecimals = src.NumericDisplayDecimals,
+                NumericDisplayColor = src.NumericDisplayColor,
+                NumericDisplayLowWarn = src.NumericDisplayLowWarn,
+                NumericDisplayHighWarn = src.NumericDisplayHighWarn,
+                NumericDisplayWarnColor = src.NumericDisplayWarnColor
             };
             screen.Symbols.Add(dup);
             newSelection.Add(dup);
@@ -4181,6 +4259,12 @@ Right-click a symbol for actions</div>
 
     private RenderFragment RenderGauge(ScreenSymbol sym, string fill, string? liveValue) => builder =>
     {
+        if (GaugeVisuals.IsEnhanced(sym))
+        {
+            var (_, min, max, pct, valText) = GaugeCalc(sym, liveValue);
+            builder.AddMarkupContent(0, GaugeVisuals.Render(sym, fill, pct, valText, min, max));
+            return;
+        }
         var style = sym.GaugeStyle ?? "needle";
         switch (style)
         {

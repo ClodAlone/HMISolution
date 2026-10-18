@@ -66,15 +66,24 @@ else if (Screen.LayoutMode == "responsive")
                         <div class="rv-responsive-text" style="color: @fillColor;">@resolvedLabel</div>
                         break;
                     case "gauge":
-                        var gaugeValStr = liveValue;
-                        var gaugeNum = ParseDouble(gaugeValStr);
-                        var gMin = sym.MinValue ?? 0;
-                        var gMax = sym.MaxValue ?? 100;
-                        var gPct = gMax > gMin ? (gaugeNum - gMin) / (gMax - gMin) * 100 : 0;
-                        <div class="rv-responsive-gauge">
-                            <div class="rv-responsive-gauge-bar" style="width: @F(gPct)%; background: @fillColor;"></div>
-                            <span class="rv-responsive-gauge-label">@F(gaugeNum) / @gMax</span>
-                        </div>
+                        @if (GaugeVisuals.IsEnhanced(sym))
+                        {
+                            <svg viewBox="0 0 @sym.Width @sym.Height" class="rv-responsive-svg" preserveAspectRatio="xMidYMid meet">
+                                @RenderGauge(sym, fillColor, liveValue)
+                            </svg>
+                        }
+                        else
+                        {
+                            var gaugeValStr = liveValue;
+                            var gaugeNum = ParseDouble(gaugeValStr);
+                            var gMin = sym.MinValue ?? 0;
+                            var gMax = sym.MaxValue ?? 100;
+                            var gPct = gMax > gMin ? (gaugeNum - gMin) / (gMax - gMin) * 100 : 0;
+                            <div class="rv-responsive-gauge">
+                                <div class="rv-responsive-gauge-bar" style="width: @F(gPct)%; background: @fillColor;"></div>
+                                <span class="rv-responsive-gauge-label">@F(gaugeNum) / @gMax</span>
+                            </div>
+                        }
                         break;
                     case "indicator":
                         <div class="rv-responsive-indicator" style="background: @fillColor; transition: background 0.4s ease;">@resolvedLabel</div>
@@ -114,6 +123,8 @@ else if (Screen.LayoutMode == "responsive")
                                        Min="@sym.MinValue"
                                        Max="@sym.MaxValue"
                                        Placeholder="@sym.Label"
+                                       Appearance="@sym"
+                                       BackgroundColor="@fillColor"
                                        ShowStatistics="@sym.EditBoxShowStatistics" />
                         </div>
                         break;
@@ -603,6 +614,8 @@ else
                                                Min="@sym.MinValue"
                                                Max="@sym.MaxValue"
                                                Placeholder="@sym.Label"
+                                               Appearance="@sym"
+                                               BackgroundColor="@fillColor"
                                        ShowStatistics="@sym.EditBoxShowStatistics" />
                             </div>
                         </foreignObject>
@@ -3151,6 +3164,12 @@ else
 
     private RenderFragment RenderGauge(ScreenSymbol sym, string fill, string? liveValue) => builder =>
     {
+        if (GaugeVisuals.IsEnhanced(sym))
+        {
+            var (_, min, max, pct, valText) = GaugeCalc(sym, liveValue);
+            builder.AddMarkupContent(0, GaugeVisuals.Render(sym, fill, pct, valText, min, max));
+            return;
+        }
         var style = sym.GaugeStyle ?? "needle";
         switch (style)
         {
@@ -4292,6 +4311,15 @@ else
     // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Numeric Display rendering Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
     private RenderFragment RenderNumericDisplay(ScreenSymbol sym, string? liveValue) => builder =>
     {
+        if (DisplayVisuals.IsEnhanced(sym))
+        {
+            builder.OpenElement(0, "foreignObject");
+            builder.AddAttribute(1, "width", sym.Width);
+            builder.AddAttribute(2, "height", sym.Height);
+            builder.AddMarkupContent(3, DisplayVisuals.Render(sym, DisplayVisuals.FormatValue(sym, liveValue), EvalFillBinding(sym, liveValue)));
+            builder.CloseElement();
+            return;
+        }
         int seq = 0;
         var w = sym.Width;
         var h = sym.Height;
@@ -4598,6 +4626,11 @@ else
     // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Responsive Numeric Display Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
     private RenderFragment RenderResponsiveNumericDisplay(ScreenSymbol sym, string? liveValue) => builder =>
     {
+        if (DisplayVisuals.IsEnhanced(sym))
+        {
+            builder.AddMarkupContent(0, DisplayVisuals.Render(sym, DisplayVisuals.FormatValue(sym, liveValue), EvalFillBinding(sym, liveValue)));
+            return;
+        }
         int seq = 0;
         var bg = sym.NumericDisplayBackground ?? "#111827";
         var fillColor = sym.Fill ?? "#00e5ff";

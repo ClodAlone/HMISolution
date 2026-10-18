@@ -1,13 +1,16 @@
 @* Copyright (c) 2026 Claudio Fiorani - All rights reserved. *@
 
 @using RuntimeViewer.Shared.Services
+@using SharedModels
 @implements IDisposable
 
-<div class="editbox-widget" @onclick:stopPropagation @onmousedown:stopPropagation @onmouseup:stopPropagation>
-    <div class="editbox-inner">
+<div class="editbox-widget @(IsStyled ? "editbox-styled" : "")" style="@(IsStyled ? DisplayVisuals.FrameStyle(Appearance!, BackgroundColor) : null)" @onclick:stopPropagation @onmousedown:stopPropagation @onmouseup:stopPropagation>
+    <div class="editbox-inner" style="@(IsStyled ? "container-type:size;" : null)">
         @if (_isEditing)
         {
             <input class="editbox-input" type="text"
+                   style="@(IsStyled ? DisplayVisuals.FontCss(Appearance!, _editValue, 65, _isNumeric ? 48 : 20) + $"color:{Appearance!.DisplayTextColor};background:transparent;" : null)"
+                   aria-label="@($"Edit {VariablePath}")"
                    @bind="_editValue" @bind:event="oninput"
                    @onkeydown="OnKeyDown"
                    @onblur="OnBlur"
@@ -15,8 +18,15 @@
         }
         else
         {
-            <div class="editbox-display @(IsShowingPlaceholder ? "editbox-placeholder" : "")" @onclick="StartEdit" title="Click to edit — @VariablePath">
-                @(IsShowingPlaceholder ? Placeholder : DisplayValue)
+            <div class="editbox-display @(IsShowingPlaceholder ? "editbox-placeholder" : "")" style="@(IsStyled ? "position:relative;container-type:size;padding:0;min-width:0;" : null)" @onclick="StartEdit" title="Click to edit — @VariablePath">
+                @if (IsStyled)
+                {
+                    @((MarkupString)DisplayVisuals.Readout(Appearance!, (IsShowingPlaceholder ? Placeholder : DisplayValue) ?? ""))
+                }
+                else
+                {
+                    @(IsShowingPlaceholder ? Placeholder : DisplayValue)
+                }
             </div>
         }
         @if (_isNumeric)
@@ -103,9 +113,12 @@
     [Parameter] public double? Max { get; set; }
     [Parameter] public bool ShowStatistics { get; set; }
     [Parameter] public string? Placeholder { get; set; }
+    [Parameter] public ScreenSymbol? Appearance { get; set; }
+    [Parameter] public string? BackgroundColor { get; set; }
 
     [Inject] private OpcRuntimeClient Opc { get; set; } = default!;
 
+    private bool IsStyled => Appearance != null && DisplayVisuals.IsEnhanced(Appearance);
     private bool _isEditing;
     private string _editValue = "";
     private string _statusMessage = "";
