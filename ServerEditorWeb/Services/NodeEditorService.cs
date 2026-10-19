@@ -10,6 +10,10 @@ namespace ServerEditorWeb.Services;
 public partial class NodeEditorService
 {
     private UndoRedoService? _undoRedo;
+    private System.Threading.SynchronizationContext? _autoSaveSynchronizationContext;
+    private readonly object _recoveryFileLock = new();
+    private int _autoSaveGeneration;
+    private int _recoveryWriteInProgress;
 
     // --- Multi-project state ------------------------------------
     private readonly List<ProjectNode> _openProjects = new();
@@ -84,7 +88,18 @@ public partial class NodeEditorService
     public void StartAutoSave()
     {
         _autoSaveTimer?.Dispose();
-        _autoSaveTimer = new System.Threading.Timer(_ => WriteRecovery(),
+        var generation = System.Threading.Interlocked.Increment(ref _autoSaveGeneration);
+        var synchronizationContext = System.Threading.SynchronizationContext.Current;
+        if (synchronizationContext is null)
+        {
+            _autoSaveSynchronizationContext = null;
+            _autoSaveTimer = null;
+            Console.Error.WriteLine("Auto-save recovery was not started because no UI synchronization context is available.");
+            return;
+        }
+
+        _autoSaveSynchronizationContext = synchronizationContext;
+        _autoSaveTimer = new System.Threading.Timer(_ => QueueRecoveryWrite(synchronizationContext, generation),
             null, AutoSaveIntervalMs, AutoSaveIntervalMs);
     }
 
@@ -95,35 +110,93 @@ public partial class NodeEditorService
     {
         _autoSaveTimer?.Dispose();
         _autoSaveTimer = null;
+        _autoSaveSynchronizationContext = null;
+        System.Threading.Interlocked.Increment(ref _autoSaveGeneration);
         if (deleteRecovery && !string.IsNullOrEmpty(_nodesPath))
         {
-            var rec = RecoveryPath(_nodesPath);
-            if (File.Exists(rec)) try { File.Delete(rec); } catch { }
+            lock (_recoveryFileLock)
+            {
+                var rec = RecoveryPath(_nodesPath);
+                if (File.Exists(rec)) try { File.Delete(rec); } catch { }
+            }
         }
     }
 
     /// <summary>
-    /// Writes a recovery snapshot next to the project file (.json.recovery).
+    /// Schedules a recovery snapshot of the active project.
     /// </summary>
     public void WriteRecovery()
     {
-        if (_rootModel == null || string.IsNullOrEmpty(_nodesPath) || !HasUnsavedChanges) return;
+        var synchronizationContext = _autoSaveSynchronizationContext;
+        if (synchronizationContext is null)
+        {
+            Console.Error.WriteLine("Auto-save recovery was skipped because no UI synchronization context is available.");
+            return;
+        }
+
+        QueueRecoveryWrite(synchronizationContext, System.Threading.Volatile.Read(ref _autoSaveGeneration));
+    }
+
+    private void QueueRecoveryWrite(System.Threading.SynchronizationContext synchronizationContext, int generation)
+    {
+        if (generation != System.Threading.Volatile.Read(ref _autoSaveGeneration)
+            || System.Threading.Interlocked.CompareExchange(ref _recoveryWriteInProgress, 1, 0) != 0)
+            return;
+
         try
         {
-            RebuildModelStructure();
-            var snapshot = ResourceFileManager.DetachResources(_rootModel);
-            try
-            {
-                var options = new JsonSerializerOptions { WriteIndented = true };
-                var json = JsonSerializer.Serialize(_rootModel, options);
-                File.WriteAllText(RecoveryPath(_nodesPath), json);
-            }
-            finally
-            {
-                ResourceFileManager.ReattachResources(_rootModel, snapshot);
-            }
+            synchronizationContext.Post(_ => _ = CaptureAndWriteRecoveryAsync(generation), null);
         }
-        catch { }
+        catch (Exception ex)
+        {
+            System.Threading.Interlocked.Exchange(ref _recoveryWriteInProgress, 0);
+            Console.Error.WriteLine($"Could not schedule auto-save recovery: {ex}");
+        }
+    }
+
+    private async Task CaptureAndWriteRecoveryAsync(int generation)
+    {
+        try
+        {
+            if (generation != System.Threading.Volatile.Read(ref _autoSaveGeneration)) return;
+            var snapshot = CaptureRecoverySnapshot();
+            if (snapshot is null || generation != System.Threading.Volatile.Read(ref _autoSaveGeneration)) return;
+
+            await Task.Run(() => WriteRecoverySnapshot(snapshot.Value, generation)).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Auto-save recovery failed: {ex}");
+        }
+        finally
+        {
+            System.Threading.Interlocked.Exchange(ref _recoveryWriteInProgress, 0);
+        }
+    }
+
+    private (string Path, string ModelJson)? CaptureRecoverySnapshot()
+    {
+        var model = _rootModel;
+        var path = _nodesPath;
+        if (model is null || string.IsNullOrEmpty(path) || !HasUnsavedChanges) return null;
+
+        RebuildModelStructure();
+        return (path, JsonSerializer.Serialize(model));
+    }
+
+    private void WriteRecoverySnapshot((string Path, string ModelJson) snapshot, int generation)
+    {
+        var model = JsonSerializer.Deserialize<NodeModel>(snapshot.ModelJson)
+            ?? throw new InvalidOperationException("Could not deserialize the captured recovery model.");
+        ResourceFileManager.DetachResources(model);
+
+        var options = new JsonSerializerOptions { WriteIndented = true };
+        var json = JsonSerializer.Serialize(model, options);
+        lock (_recoveryFileLock)
+        {
+            if (generation != System.Threading.Volatile.Read(ref _autoSaveGeneration)) return;
+            File.WriteAllText(RecoveryPath(snapshot.Path), json);
+        }
     }
 
     /// <summary>
