@@ -1,0 +1,51 @@
+# Build from the repository root:
+# docker build -f Dockerfile.styledinstruments -t hmi-styledinstruments:demo .
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+WORKDIR /src
+
+COPY HMISolution/Version.props HMISolution/Version.props
+COPY SharedModels/ SharedModels/
+COPY Drivers/Directory.Build.props Drivers/Directory.Build.props
+COPY Drivers/Drivers.Abstractions/ Drivers/Drivers.Abstractions/
+COPY Drivers/Drivers.Simulation/ Drivers/Drivers.Simulation/
+COPY Server/ Server/
+COPY RuntimeViewer.Shared/ RuntimeViewer.Shared/
+COPY RuntimeViewer/ RuntimeViewer/
+
+# Drivers are discovered dynamically rather than referenced by the server.
+RUN dotnet build Drivers/Drivers.Simulation/Drivers.Simulation.csproj -c Release && \
+    dotnet publish Server/Server.csproj -c Release -o /app/server && \
+    mkdir -p /app/server/drivers && \
+    cp Drivers/Drivers.Simulation/bin/Release/net10.0/Drivers.Simulation.dll /app/server/drivers/ && \
+    dotnet publish RuntimeViewer/RuntimeViewer.csproj -c Release -o /app/viewer -p:BuildingOtherConfiguration=true
+
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
+LABEL org.opencontainers.image.source="https://github.com/ClodAlone/HMISolution"
+LABEL org.opencontainers.image.description="Styled Instruments demo - HMI Server and RuntimeViewer"
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends bash curl libfontconfig1 && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /opt/hmi
+COPY --from=build --chown=app:app /app/server ./server
+COPY --from=build --chown=app:app /app/viewer ./viewer
+COPY docker/samples/StyledInstruments/nodes.json ./sample/nodes.json
+COPY docker/styledinstruments-entrypoint.sh ./entrypoint.sh
+# Accept scripts checked out by Windows editors, as in the all-in-one image.
+RUN sed -i 's/\r$//' entrypoint.sh && \
+    sed -i '1s/^\xEF\xBB\xBF//' entrypoint.sh && \
+    mkdir -p /data && chown app:app /data
+
+# OPC UA uses LocalApplicationData for certificate stores on Linux.
+ENV XDG_DATA_HOME=/data
+ENV ASPNETCORE_URLS=http://+:8081
+ENV ASPNETCORE_ENVIRONMENT=Production
+USER $APP_UID
+
+EXPOSE 8081
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl --fail --silent --max-time 4 http://127.0.0.1:8081/auth/user-info > /dev/null && \
+        curl --fail --silent --max-time 4 http://127.0.0.1:14931/ > /dev/null || exit 1
+
+ENTRYPOINT ["/bin/bash", "/opt/hmi/entrypoint.sh"]

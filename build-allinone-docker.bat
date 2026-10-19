@@ -132,7 +132,7 @@ echo     %ALLINONE_IMAGE%:latest
 echo.
 echo Access:
 echo   - Web Editor: http://localhost:8080
-echo   - Runtime Viewer: http://localhost:8088
+echo   - Runtime Viewer: http://localhost:8081
 echo   - OPC-UA: opc.tcp://localhost:14840
 echo   - REST API: http://localhost:14841
 echo   - PostgreSQL: localhost:5432

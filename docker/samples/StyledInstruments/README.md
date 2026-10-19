@@ -34,6 +34,64 @@ It requires the updated editor and runtime that include display, gauge, pipe, ta
 Temperature, pressure and flow use the built-in Simulation driver.
 Setpoint, long signed value and batch-name fields are writable local variables. The setpoint is shared by all four styled fields, so a write in one updates the others.
 
+## Run with Docker (server + web runtime)
+
+Docker Desktop must be running Linux containers. From the repository root, build
+and start the self-contained demo image:
+
+```powershell
+docker build -f Dockerfile.styledinstruments -t hmi-styledinstruments:demo .
+docker run -d --name hmi-styledinstruments -p 127.0.0.1:8081:8081 hmi-styledinstruments:demo
+```
+
+Open <http://localhost:8081>. Both the HMI Server and RuntimeViewer start
+with this sample automatically, including the Simulation driver and server-side
+scripts. No editor, external database, AI model, or physical device is required.
+The viewer connects to `opc.tcp://localhost:14930/StyledInstruments` inside the
+same container; OPC UA and diagnostics are deliberately not published to the host.
+The image runs as the non-root .NET `app` user.
+
+`build-and-push-all.bat` also builds and publishes this demo to Docker Hub as
+`clodprogea/hmi-styledinstruments:<HMIVersion>` and
+`clodprogea/hmi-styledinstruments:latest`, using `HMISolution\Version.props`.
+The script stops if any build or push fails. Docker Hub authentication is handled
+by the existing push scripts.
+
+```powershell
+docker run -d --name hmi-styledinstruments -p 127.0.0.1:8081:8081 clodprogea/hmi-styledinstruments:latest
+```
+
+The runtime listens on container port **8081**, matching `RuntimeViewer\Dockerfile`.
+Port 8088 in the all-in-one image is reserved for camera streaming. To access this
+demo at <http://localhost:8088> instead, use `-p 127.0.0.1:8088:8081` when creating
+the container; the container port and health check remain 8081.
+
+```powershell
+docker logs -f hmi-styledinstruments
+docker inspect --format '{{.State.Health.Status}}' hmi-styledinstruments
+docker stop hmi-styledinstruments
+docker start hmi-styledinstruments
+```
+
+The health check probes both the viewer and server diagnostics. If either process
+exits, the other is stopped and the container exits with an error. Normal
+`docker stop` shuts down both services gracefully.
+
+`/data/nodes.json` is seeded on first startup and is not overwritten on restart.
+To preserve project data and logs when replacing the container, add
+`--mount type=volume,source=hmi-styledinstruments-data,target=/data` to `docker run`.
+Use a fresh volume to pick up a new bundled sample after rebuilding the image.
+Without a volume, removing the container also removes its project data.
+
+Existing licensing is unchanged: without a license file, full features are
+available for 10 minutes, then Trial limits apply. For a longer licensed demo,
+mount your valid license alongside the project by adding
+`--mount "type=bind,source=C:\Demo\license.json,target=/data/license.json,readonly"`
+to `docker run`. Never bake a private license into the image.
+
+Login is disabled for this demonstration. The command binds the viewer to the
+local machine only; do not expose this sample to an untrusted network.
+
 ## Run live
 
 From `C:\Users\cfior\source\repos`, in two terminals:
