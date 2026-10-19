@@ -66,6 +66,24 @@
             </div>
         </div>
 
+        @if (_styledInstrumentsPath != null)
+        {
+            <div class="landing-section">
+                <h2 class="section-title">Featured Sample</h2>
+                <div class="recent-files">
+                    <div class="recent-file-item featured-sample-item" title="@_styledInstrumentsPath" @onclick="OnOpenStyledInstruments">
+                        <div class="recent-file-icon">🎛️</div>
+                        <div class="recent-file-info">
+                            <div class="recent-file-name">Styled Instruments</div>
+                            <div class="featured-sample-description">Styled gauges, isometric tanks, pipes and pumps with animated Tank Transfer, Solar, HVAC, EV, Water, Conveyor, Microgrid and Compressed-Air simulations</div>
+                            <div class="recent-file-path">@_styledInstrumentsPath</div>
+                        </div>
+                        <div class="recent-file-arrow">→</div>
+                    </div>
+                </div>
+            </div>
+        }
+
         @if (_recentFiles.Count > 0)
         {
             <div class="landing-section">
@@ -138,11 +156,13 @@
     [Parameter] public EventCallback OnImportMoviconClicked { get; set; }
 
     private List<string> _recentFiles = new();
+    private string? _styledInstrumentsPath;
     private bool _showQuickStart = false;
 
     protected override void OnInitialized()
     {
         _recentFiles = Editor.RecentFiles.ToList();
+        _styledInstrumentsPath = FeaturedSampleLocator.FindStyledInstruments();
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -188,6 +208,12 @@
     private async Task OnOpenRecent(string filePath)
     {
         await OnOpenRecentClicked.InvokeAsync(filePath);
+    }
+
+    private async Task OnOpenStyledInstruments()
+    {
+        if (_styledInstrumentsPath != null)
+            await OnOpenRecentClicked.InvokeAsync(_styledInstrumentsPath);
     }
 
     private void OpenQuickStart()

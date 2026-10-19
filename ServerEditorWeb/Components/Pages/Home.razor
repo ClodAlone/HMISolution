@@ -2398,8 +2398,10 @@ private void UnsavedDialogCancel()
     private void OpenSamplesDialog()
     {
         CloseMenus();
-        // Navigate to samples directory if it exists
-        var samplesPath = Path.Combine(Editor.GetBrowseStartPath(), "samples");
+        // In Docker the entrypoint seeds the bundled samples directly into $HMI_DATA.
+        var samplesPath = ServerProcessService.IsDocker
+            ? FeaturedSampleLocator.DockerDataDirectory(Environment.GetEnvironmentVariable("HMI_DATA"))
+            : Path.Combine(Editor.GetBrowseStartPath(), "samples");
         if (Directory.Exists(samplesPath))
         {
             _browseDrives = Editor.GetDrives();
