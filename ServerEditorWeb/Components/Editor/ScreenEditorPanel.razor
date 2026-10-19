@@ -76,6 +76,7 @@
                 <span class="small px-1" style="min-width:42px;text-align:center;cursor:pointer" title="Reset zoom (Ctrl+0)" @onclick="ZoomReset">@(_zoom.ToString("P0"))</span>
                 <button class="btn btn-sm btn-outline-secondary py-0 px-1" @onclick="ZoomIn" title="Zoom In (Ctrl++)">+</button>
 
+                <button class="btn btn-sm @(_showLayoutTree ? "btn-primary" : "btn-outline-secondary")" @onclick="() => _showLayoutTree = !_showLayoutTree" title="Browse and select items in the layout tree">☷ Layers</button>
                 <span class="ms-auto small text-muted d-none d-lg-inline">Symbols: @screen.Symbols.Count</span>
 
                 @* ── Overflow "More" menu: collapses screen-level settings/tools
@@ -193,6 +194,10 @@
         }
 
         <div class="screen-editor-body">
+            @if (_showLayoutTree)
+            {
+                <ScreenLayoutTree Screen="screen" SelectedSymbols="_selectedSymbols" OnSelect="SelectSymbolFromLayoutTree" OnClose="() => _showLayoutTree = false" />
+            }
             @* QW-8: Zoom/Pan viewport *@
             <div class="screen-canvas-viewport" id="screen-canvas-viewport"
                  @onwheel="OnCanvasWheel" @onwheel:preventDefault="_ctrlWheelActive">
@@ -247,7 +252,7 @@
 
                         if (!visible) continue;
 
-                        <g transform="translate(@sym.X, @sym.Y) rotate(@rotation.ToString("F1"), @((sym.Width / 2).ToString("F1")), @((sym.Height / 2).ToString("F1")))"
+                        <g id="screen-symbol-@sym.Id" transform="translate(@sym.X, @sym.Y) rotate(@rotation.ToString("F1"), @((sym.Width / 2).ToString("F1")), @((sym.Height / 2).ToString("F1")))"
                            @onmousedown="(e) => OnSymbolMouseDown(e, sym)" @onmousedown:stopPropagation
                            class="screen-symbol @(isSelected ? "selected" : "")"
                            style="cursor: move; @SymbolFontStyle(sym)">
@@ -1696,6 +1701,7 @@ Right-click a symbol for actions</div>
 
     private ScreenSymbol? _selectedSymbol;
     private HashSet<ScreenSymbol> _selectedSymbols = new();
+    private bool _showLayoutTree;
     private bool _isDragging;
     private bool _isRotating;
     private bool _isResizing;
@@ -2539,7 +2545,7 @@ Right-click a symbol for actions</div>
         await Task.Yield();
         try
         {
-            await JS.InvokeVoidAsync("eval", $"document.querySelector('.screen-canvas-wrap')?.scrollTo({{ left: {F(Math.Max(0, sym.X - 60))}, top: {F(Math.Max(0, sym.Y - 60))}, behavior: 'smooth' }})");
+            await JS.InvokeVoidAsync("editorShortcuts.scrollElementIntoView", $"screen-symbol-{sym.Id}");
         }
         catch { /* ignore if JS not available */ }
     }
@@ -3146,6 +3152,16 @@ Right-click a symbol for actions</div>
         _multiDragStarts.Clear();
         foreach (var s in _selectedSymbols)
             _multiDragStarts[s] = (s.X, s.Y);
+    }
+
+    private async Task SelectSymbolFromLayoutTree(ScreenSymbol symbol)
+    {
+        _selectedSymbols.Clear();
+        _selectedSymbols.Add(symbol);
+        _selectedSymbol = symbol;
+        ExpandSelectionToGroups();
+        NotifySelectionChanged();
+        await ScrollToSymbolAsync(symbol);
     }
 
     private void ExpandSelectionToGroups()

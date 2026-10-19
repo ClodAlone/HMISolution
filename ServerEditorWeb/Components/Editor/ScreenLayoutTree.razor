@@ -1,0 +1,99 @@
+@using SharedModels
+
+<aside class="screen-layout-tree" aria-label="Screen layout tree">
+    <div class="screen-layout-tree-header">
+        <strong>Layout</strong>
+        <span class="small text-muted">@Screen.Symbols.Count</span>
+        <button type="button" class="btn btn-sm btn-outline-secondary ms-auto" title="Close layout tree" aria-label="Close layout tree" @onclick="OnClose">×</button>
+    </div>
+    <div class="screen-layout-tree-items" role="tree">
+        @if (Screen.Symbols.Count == 0)
+        {
+            <p class="small text-muted p-2 mb-0">No items in this layout.</p>
+        }
+        else
+        {
+            @foreach (var entry in GetEntries())
+            {
+                @if (entry.GroupId is { } groupId)
+                {
+                    <div class="screen-layout-tree-group" role="treeitem" aria-expanded="@(!_collapsedGroups.Contains(groupId))">
+                        <button type="button" class="screen-layout-tree-group-toggle" @onclick="() => ToggleGroup(groupId)" title="Toggle group">
+                            <span class="screen-layout-tree-chevron">@(_collapsedGroups.Contains(groupId) ? "▸" : "▾")</span>
+                            <span>Group</span>
+                            <span class="small text-muted ms-auto">@entry.Symbols.Count</span>
+                        </button>
+                        @if (!_collapsedGroups.Contains(groupId))
+                        {
+                            <div class="screen-layout-tree-children" role="group">
+                                @foreach (var symbol in entry.Symbols)
+                                {
+                                    @RenderSymbolRow(symbol)
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    @RenderSymbolRow(entry.Symbols[0])
+                }
+            }
+        }
+    </div>
+</aside>
+
+@code {
+    [Parameter, EditorRequired] public ScreenConfig Screen { get; set; } = default!;
+    [Parameter] public IEnumerable<ScreenSymbol> SelectedSymbols { get; set; } = Array.Empty<ScreenSymbol>();
+    [Parameter] public EventCallback<ScreenSymbol> OnSelect { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private readonly HashSet<string> _collapsedGroups = new();
+
+    private List<LayoutEntry> GetEntries()
+    {
+        var entries = new List<LayoutEntry>();
+        var seenGroups = new HashSet<string>();
+
+        foreach (var symbol in Screen.Symbols)
+        {
+            if (string.IsNullOrWhiteSpace(symbol.GroupId))
+            {
+                entries.Add(new LayoutEntry(null, new[] { symbol }));
+            }
+            else if (seenGroups.Add(symbol.GroupId))
+            {
+                entries.Add(new LayoutEntry(symbol.GroupId, Screen.Symbols.Where(item => item.GroupId == symbol.GroupId).ToList()));
+            }
+        }
+
+        return entries;
+    }
+
+    private RenderFragment RenderSymbolRow(ScreenSymbol symbol) => builder =>
+    {
+        var sequence = 0;
+        var isSelected = SelectedSymbols.Contains(symbol);
+        var label = string.IsNullOrWhiteSpace(symbol.Label) ? symbol.Type : symbol.Label;
+        builder.OpenElement(sequence++, "button");
+        builder.AddAttribute(sequence++, "type", "button");
+        builder.AddAttribute(sequence++, "role", "treeitem");
+        builder.AddAttribute(sequence++, "aria-selected", isSelected);
+        builder.AddAttribute(sequence++, "class", $"screen-layout-tree-item {(isSelected ? "selected" : string.Empty)}");
+        builder.AddAttribute(sequence++, "title", $"{symbol.Type}: {label}");
+        builder.AddAttribute(sequence++, "onclick", EventCallback.Factory.Create(this, () => OnSelect.InvokeAsync(symbol)));
+        builder.AddContent(sequence++, symbol.Type);
+        builder.AddContent(sequence++, " · ");
+        builder.AddContent(sequence++, label);
+        builder.CloseElement();
+    };
+
+    private void ToggleGroup(string groupId)
+    {
+        if (!_collapsedGroups.Add(groupId))
+            _collapsedGroups.Remove(groupId);
+    }
+
+    private sealed record LayoutEntry(string? GroupId, IReadOnlyList<ScreenSymbol> Symbols);
+}

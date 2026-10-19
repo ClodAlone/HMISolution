@@ -23,6 +23,11 @@ window.editorShortcuts = {
         if (element) element.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     },
 
+    scrollElementIntoView: function (elementId) {
+        var element = document.getElementById(elementId);
+        if (element) element.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' });
+    },
+
     clampPopup: function (element) {
         if (!element) return;
         var rect = element.getBoundingClientRect();
