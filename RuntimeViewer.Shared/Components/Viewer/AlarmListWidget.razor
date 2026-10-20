@@ -10,16 +10,16 @@
         <span style="font-weight: bold; font-size: 1.1em;">🔔 Alarms</span>
         <span style="font-size: 0.9em; color: #888;">(@_alarms.Count)</span>
         <span style="flex: 1;"></span>
-        <button class="alarm-btn" @onclick="RefreshAlarms" disabled="@_loading" title="Refresh alarms">🔄</button>
+        <button class="alarm-btn" @onclick="RefreshAlarms" disabled="@IsBusy" title="Refresh alarms">🔄</button>
         <span style="width: 1px; height: 14px; background: #444;"></span>
-        <button class="alarm-btn" @onclick="AckSelected" disabled="@(!HasSelected || _loading)" title="Acknowledge selected">✔ Ack</button>
-        <button class="alarm-btn" @onclick="ConfirmSelected" disabled="@(!HasSelected || _loading)" title="Confirm/Reset selected">✔✔ Reset</button>
+        <button class="alarm-btn" @onclick="AckSelected" disabled="@(!HasSelected || IsBusy)" title="Acknowledge selected">✔ Ack</button>
+        <button class="alarm-btn" @onclick="ConfirmSelected" disabled="@(!HasSelected || IsBusy)" title="Confirm/Reset selected">✔✔ Reset</button>
         <span style="width: 1px; height: 14px; background: #444;"></span>
-        <button class="alarm-btn" @onclick="ShowShelveDialog" disabled="@(!HasSelected || _loading)" title="Shelve selected alarms">🔇 Shelve</button>
-        <button class="alarm-btn" @onclick="UnshelveSelected" disabled="@(!HasShelvedSelected || _loading)" title="Unshelve selected alarms">🔔 Unshelve</button>
+        <button class="alarm-btn" @onclick="ShowShelveDialog" disabled="@(!HasSelected || IsBusy)" title="Shelve selected alarms">🔇 Shelve</button>
+        <button class="alarm-btn" @onclick="UnshelveSelected" disabled="@(!HasShelvedSelected || IsBusy)" title="Unshelve selected alarms">🔔 Unshelve</button>
         <span style="width: 1px; height: 14px; background: #444;"></span>
-        <button class="alarm-btn alarm-btn-danger" @onclick="AckAll" disabled="@(_alarms.Count == 0 || _loading)" title="Acknowledge all">✔ Ack All</button>
-        <button class="alarm-btn alarm-btn-danger" @onclick="ConfirmAll" disabled="@(_alarms.Count == 0 || _loading)" title="Confirm/Reset all">✔✔ Reset All</button>
+        <button class="alarm-btn alarm-btn-danger" @onclick="AckAll" disabled="@(_alarms.Count == 0 || IsBusy)" title="Acknowledge all">✔ Ack All</button>
+        <button class="alarm-btn alarm-btn-danger" @onclick="ConfirmAll" disabled="@(_alarms.Count == 0 || IsBusy)" title="Confirm/Reset all">✔✔ Reset All</button>
     </div>
 
     @* Shelve duration dialog *@
@@ -35,9 +35,14 @@
                 <option value="480">8 hours</option>
                 <option value="1440">24 hours</option>
             </select>
-            <button class="alarm-btn" @onclick="ShelveSelected" style="background: #4a3a00; color: #ffc107;">🔇 Confirm Shelve</button>
+            <button class="alarm-btn" @onclick="ShelveSelected" disabled="@(!HasSelected || IsBusy)" style="background: #4a3a00; color: #ffc107;">🔇 Confirm Shelve</button>
             <button class="alarm-btn" @onclick="() => _showShelveDialog = false">✕ Cancel</button>
         </div>
+    }
+
+    @if (!string.IsNullOrEmpty(_errorMessage ?? _refreshError))
+    {
+        <div role="alert" style="padding: 6px 8px; color: #ff8a80;">@(_errorMessage ?? _refreshError)</div>
     }
 
     @* Table *@
@@ -78,7 +83,7 @@
                         var a = alarm;
                         var severityClass = GetSeverityClass(a.Severity);
                         var shelvedClass = a.IsShelved ? "alarm-shelved" : "";
-                        <tr class="@severityClass @shelvedClass @(a.IsSelected ? "alarm-selected" : "") @(!a.IsAcked ? "alarm-unacked" : "") @(!a.IsActive ? "alarm-inactive" : "")" @onclick="() => ToggleSelection(a)">
+                        <tr @key="a.ConditionId" class="@severityClass @shelvedClass @(a.IsSelected ? "alarm-selected" : "") @(!a.IsAcked ? "alarm-unacked" : "") @(!a.IsActive ? "alarm-inactive" : "")" @onclick="() => ToggleSelection(a)">
                             <td @onclick:stopPropagation>
                                 <input type="checkbox" checked="@a.IsSelected" @onchange="() => ToggleSelection(a)" />
                             </td>
@@ -101,7 +106,7 @@
                             <td>
                                 @if (a.IsShelved)
                                 {
-                                    <span title="@($"Shelved by {a.ShelvedBy} until {a.ShelvedUntil:HH:mm}")" style="color: #ffc107;">🔇</span>
+                                    <span title="Temporarily shelved" style="color: #ffc107;">🔇</span>
                                 }
                                 else
                                 {
@@ -150,6 +155,11 @@
     private System.Threading.Timer? _refreshTimer;
     private bool _showShelveDialog;
     private int _shelveDurationMinutes = 60;
+    private bool _refreshing;
+    private bool _actionInProgress;
+    private string? _errorMessage;
+    private string? _refreshError;
+    private bool IsBusy => _loading || _refreshing || _actionInProgress;
 
     private bool HasSelected => _alarms.Any(a => a.IsSelected);
     private bool HasShelvedSelected => _alarms.Any(a => a.IsSelected && a.IsShelved);
@@ -173,82 +183,96 @@
 
     private async Task RefreshAlarms()
     {
-        if (!Opc.IsConnected) return;
-        if (!_initialLoadDone) { _loading = true; StateHasChanged(); }
-
-        var fresh = await Opc.CollectDetailedAlarmsAsync();
-
-        // Preserve selection state across refreshes
-        var selectedIds = _alarms.Where(a => a.IsSelected).Select(a => a.Id).ToHashSet();
-        foreach (var a in fresh)
+        if (_refreshing || _actionInProgress) return;
+        _refreshing = true;
+        try
         {
-            if (selectedIds.Contains(a.Id))
-                a.IsSelected = true;
-        }
+            if (!_initialLoadDone) { _loading = true; StateHasChanged(); }
+            var fresh = await Opc.CollectDetailedAlarmsAsync();
 
-        _alarms = fresh;
-        _loading = false;
-        _initialLoadDone = true;
+            var selectedIds = _alarms.Where(a => a.IsSelected).Select(a => a.ConditionId).ToHashSet();
+            foreach (var a in fresh)
+                a.IsSelected = selectedIds.Contains(a.ConditionId);
+
+            _alarms = fresh;
+            _initialLoadDone = true;
+            _refreshError = null;
+        }
+        catch (Exception ex)
+        {
+            _refreshError = $"Unable to refresh alarms: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+            _refreshing = false;
+        }
     }
 
     private void ToggleSelection(AlarmEntry alarm)
     {
-        alarm.IsSelected = !alarm.IsSelected;
+        if (!IsBusy) alarm.IsSelected = !alarm.IsSelected;
     }
 
     private void ToggleAll(ChangeEventArgs e)
     {
+        if (IsBusy) return;
         var check = e.Value is true;
         foreach (var a in _alarms) a.IsSelected = check;
     }
 
-    private async Task AckSelected()
-    {
-        var selected = _alarms.Where(a => a.IsSelected).ToList();
-        foreach (var a in selected)
-            await Opc.AcknowledgeAlarmAsync(a.ConditionId, a.EventId);
-        await RefreshAlarms();
-    }
+    private Task AckSelected() => RunAlarmActionAsync("Ack", _alarms.Where(a => a.IsSelected && !a.IsAcked),
+        a => Opc.AcknowledgeAlarmAsync(a.ConditionId, a.EventId));
 
-    private async Task ConfirmSelected()
-    {
-        var selected = _alarms.Where(a => a.IsSelected).ToList();
-        foreach (var a in selected)
-            await Opc.ConfirmAlarmAsync(a.ConditionId, a.EventId);
-        await RefreshAlarms();
-    }
+    private Task ConfirmSelected() => RunAlarmActionAsync("Reset", _alarms.Where(a => a.IsSelected && !a.IsConfirmed),
+        a => Opc.ConfirmAlarmAsync(a.ConditionId, a.EventId));
 
-    private async Task AckAll()
-    {
-        await Opc.AcknowledgeAllAlarmsAsync();
-        await RefreshAlarms();
-    }
+    private Task AckAll() => RunAlarmActionAsync("Ack", _alarms.Where(a => !a.IsAcked),
+        a => Opc.AcknowledgeAlarmAsync(a.ConditionId, a.EventId));
 
-    private async Task ConfirmAll()
-    {
-        await Opc.ResetAllAlarmsAsync();
-        await RefreshAlarms();
-    }
+    private Task ConfirmAll() => RunAlarmActionAsync("Reset", _alarms.Where(a => !a.IsConfirmed),
+        a => Opc.ConfirmAlarmAsync(a.ConditionId, a.EventId));
 
     private void ShowShelveDialog()
     {
         _showShelveDialog = true;
     }
 
-    private async Task ShelveSelected()
+    private Task ShelveSelected()
     {
         _showShelveDialog = false;
-        var selected = _alarms.Where(a => a.IsSelected && !a.IsShelved).ToList();
-        foreach (var a in selected)
-            await Opc.ShelveAlarmAsync(a.SourceName, _shelveDurationMinutes);
-        await RefreshAlarms();
+        return RunAlarmActionAsync("Shelve", _alarms.Where(a => a.IsSelected && !a.IsShelved),
+            a => Opc.ShelveAlarmAsync(a.ConditionId, _shelveDurationMinutes));
     }
 
-    private async Task UnshelveSelected()
+    private Task UnshelveSelected() => RunAlarmActionAsync("Unshelve", _alarms.Where(a => a.IsSelected && a.IsShelved),
+        a => Opc.UnshelveAlarmAsync(a.ConditionId));
+
+    private async Task RunAlarmActionAsync(string name, IEnumerable<AlarmEntry> alarms, Func<AlarmEntry, Task<bool>> action)
     {
-        var selected = _alarms.Where(a => a.IsSelected && a.IsShelved).ToList();
-        foreach (var a in selected)
-            await Opc.UnshelveAlarmAsync(a.SourceName);
+        if (IsBusy) return;
+        var targets = alarms.ToList();
+        _actionInProgress = true;
+        _errorMessage = null;
+        var failures = new List<string>();
+        try
+        {
+            foreach (var alarm in targets)
+            {
+                if (!await action(alarm))
+                    failures.Add($"{alarm.SourceName}: {Opc.AlarmErrorMessage ?? "Server rejected the operation."}");
+            }
+            if (failures.Count > 0)
+                _errorMessage = $"{name} failed for {failures.Count} alarm(s). {string.Join(" ", failures)}";
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"{name} failed: {ex.Message}";
+        }
+        finally
+        {
+            _actionInProgress = false;
+        }
         await RefreshAlarms();
     }
 

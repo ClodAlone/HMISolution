@@ -58,6 +58,7 @@ public class OpcRuntimeClient : IDisposable
 
     public bool IsConnected => _session?.Connected == true;
     public string? ErrorMessage { get; private set; }
+    public string? AlarmErrorMessage { get; private set; }
 
     public event Action? ValuesChanged;
     public event Action<string>? ValueChanged;
@@ -667,28 +668,14 @@ public class OpcRuntimeClient : IDisposable
     /// </summary>
     public async Task<(int Succeeded, int Failed)> AcknowledgeAllAlarmsAsync(string comment = "Acknowledged from RuntimeViewer")
     {
-        if (_session == null || !_session.Connected) return (0, 0);
-
-        try
+        var alarms = await CollectDetailedAlarmsAsync();
+        int ok = 0, fail = 0;
+        foreach (var alarm in alarms.Where(a => !a.IsAcked))
         {
-            var alarms = await CollectActiveAlarmsAsync();
-            int ok = 0, fail = 0;
-
-            foreach (var (conditionId, eventId) in alarms)
-            {
-                try
-                {
-                    var methodId = MethodIds.AcknowledgeableConditionType_Acknowledge;
-                    var inputArgs = new object[] { eventId, new LocalizedText(comment) };
-                    await SessionCallAsync(conditionId, methodId, inputArgs);
-                    ok++;
-                }
-                catch { fail++; }
-            }
-
-            return (ok, fail);
+            if (await AcknowledgeAlarmAsync(alarm.ConditionId, alarm.EventId, comment)) ok++;
+            else fail++;
         }
-        catch { return (0, 0); }
+        return (ok, fail);
     }
 
     /// <summary>
@@ -696,115 +683,14 @@ public class OpcRuntimeClient : IDisposable
     /// </summary>
     public async Task<(int Succeeded, int Failed)> ResetAllAlarmsAsync(string comment = "Confirmed from RuntimeViewer")
     {
-        if (_session == null || !_session.Connected) return (0, 0);
-
-        try
+        var alarms = await CollectDetailedAlarmsAsync();
+        int ok = 0, fail = 0;
+        foreach (var alarm in alarms.Where(a => !a.IsConfirmed))
         {
-            var alarms = await CollectActiveAlarmsAsync();
-            int ok = 0, fail = 0;
-
-            foreach (var (conditionId, eventId) in alarms)
-            {
-                try
-                {
-                    var methodId = MethodIds.AcknowledgeableConditionType_Confirm;
-                    var inputArgs = new object[] { eventId, new LocalizedText(comment) };
-                    await SessionCallAsync(conditionId, methodId, inputArgs);
-                    ok++;
-                }
-                catch { fail++; }
-            }
-
-            return (ok, fail);
+            if (await ConfirmAlarmAsync(alarm.ConditionId, alarm.EventId, comment)) ok++;
+            else fail++;
         }
-        catch { return (0, 0); }
-    }
-
-    private async Task<List<(NodeId ConditionId, byte[] EventId)>> CollectActiveAlarmsAsync()
-    {
-        var alarms = new List<(NodeId, byte[])>();
-        if (_session == null) return alarms;
-
-        try
-        {
-            // Use ConditionRefresh via a temporary event subscription to collect active alarms
-            var filter = new EventFilter
-            {
-                SelectClauses = new ArrayOf<SimpleAttributeOperand>(new[]
-                {
-                    new SimpleAttributeOperand(ObjectTypeIds.BaseEventType, new QualifiedName(BrowseNames.EventId)),
-                    new SimpleAttributeOperand(ObjectTypeIds.ConditionType, new QualifiedName(BrowseNames.Retain)),
-                    new SimpleAttributeOperand(ObjectTypeIds.BaseEventType, new QualifiedName(BrowseNames.SourceNode)),
-                    new SimpleAttributeOperand(ObjectTypeIds.ConditionType, new QualifiedName(BrowseNames.NodeId))
-                })
-            };
-
-            var sub = new Subscription(_session.DefaultSubscription)
-            {
-                PublishingInterval = 100,
-                KeepAliveCount = 5,
-                LifetimeCount = 20,
-                MaxNotificationsPerPublish = 1000
-            };
-            _session.AddSubscription(sub);
-            await sub.CreateAsync();
-
-            var monitoredItem = new MonitoredItem(sub.DefaultItem)
-            {
-                StartNodeId = ObjectIds.Server,
-                AttributeId = Attributes.EventNotifier,
-                Filter = filter,
-                QueueSize = 1000,
-                DiscardOldest = true
-            };
-
-            var events = new List<EventFieldList>();
-            monitoredItem.Notification += (item, e) =>
-            {
-                if (e.NotificationValue is EventNotificationList enl)
-                {
-                    foreach (var evt in enl.Events)
-                        events.Add(evt);
-                }
-                else if (e.NotificationValue is EventFieldList efl)
-                {
-                    events.Add(efl);
-                }
-            };
-
-            sub.AddItem(monitoredItem);
-            await sub.ApplyChangesAsync(default);
-
-            // Request ConditionRefresh to get all active conditions
-            await SessionCallAsync(ObjectTypeIds.ConditionType,
-                MethodIds.ConditionType_ConditionRefresh,
-                new object[] { sub.Id });
-
-            // Wait briefly for events to arrive
-            await Task.Delay(1000);
-
-            foreach (var evt in events)
-            {
-                if (evt.EventFields.Count < 4) continue;
-
-                var retain = evt.EventFields[1].Value;
-                bool isRetained = retain is bool b ? b : false;
-                if (!isRetained) continue;
-
-                var eventId = evt.EventFields[0].Value is ByteString bs0 && !bs0.IsNull ? bs0.Memory.ToArray() : evt.EventFields[0].Value as byte[];
-                var conditionId = evt.EventFields[3].Value is NodeId cid ? cid : NodeId.Null;
-
-                if (conditionId != NodeId.Null && eventId != null)
-                    alarms.Add((conditionId, eventId));
-            }
-
-            // Clean up temporary subscription
-            await sub.DeleteAsync(true);
-            await _session.RemoveSubscriptionAsync(sub);
-        }
-        catch { }
-
-        return alarms;
+        return (ok, fail);
     }
 
     /// <summary>
@@ -814,7 +700,10 @@ public class OpcRuntimeClient : IDisposable
     public async Task<List<AlarmEntry>> CollectDetailedAlarmsAsync()
     {
         var result = new List<AlarmEntry>();
-        if (_session == null) return result;
+        var session = _session;
+        if (session == null || !session.Connected)
+            throw new InvalidOperationException("Not connected to the alarm server.");
+        Subscription? sub = null;
 
         try
         {
@@ -827,7 +716,7 @@ public class OpcRuntimeClient : IDisposable
                 // [2] SourceName
                 new SimpleAttributeOperand(ObjectTypeIds.BaseEventType, new QualifiedName(BrowseNames.SourceName)),
                 // [3] ConditionNodeId
-                new SimpleAttributeOperand(ObjectTypeIds.ConditionType, new QualifiedName(BrowseNames.NodeId)),
+                new SimpleAttributeOperand { TypeDefinitionId = ObjectTypeIds.ConditionType, AttributeId = Attributes.NodeId },
                 // [4] Message
                 new SimpleAttributeOperand(ObjectTypeIds.BaseEventType, new QualifiedName(BrowseNames.Message)),
                 // [5] Severity
@@ -842,23 +731,22 @@ public class OpcRuntimeClient : IDisposable
                 new SimpleAttributeOperand(
                     ObjectTypeIds.AcknowledgeableConditionType,
                     new ArrayOf<QualifiedName>(new[] { new QualifiedName(BrowseNames.ConfirmedState), new QualifiedName(BrowseNames.Id) })),
-                // [9] SuppressedState/Id (shelving)
+                // [9] ShelvingState/CurrentState/Id (shelving is distinct from suppression)
                 new SimpleAttributeOperand(
                     ObjectTypeIds.AlarmConditionType,
-                    new ArrayOf<QualifiedName>(new[] { new QualifiedName(BrowseNames.SuppressedState), new QualifiedName(BrowseNames.Id) })),
+                    new ArrayOf<QualifiedName>(new[] { new QualifiedName(BrowseNames.ShelvingState), new QualifiedName(BrowseNames.CurrentState), new QualifiedName(BrowseNames.Id) })),
                 // [10] ActiveState/Id (whether the alarm condition is currently active/in-alarm, vs. returned to normal and awaiting ack)
                 new SimpleAttributeOperand(
                     ObjectTypeIds.AlarmConditionType,
                     new ArrayOf<QualifiedName>(new[] { new QualifiedName(BrowseNames.ActiveState), new QualifiedName(BrowseNames.Id) }))
             };
             var filter = new EventFilter { SelectClauses = new ArrayOf<SimpleAttributeOperand>(selectClauses.ToArray()) };
-            var sub = new Subscription(_session.DefaultSubscription)
-
+            sub = new Subscription(session.DefaultSubscription)
             {
                 PublishingInterval = 100, KeepAliveCount = 5,
                 LifetimeCount = 20, MaxNotificationsPerPublish = 1000
             };
-            _session.AddSubscription(sub);
+            session.AddSubscription(sub);
             await sub.CreateAsync();
 
             var mi = new MonitoredItem(sub.DefaultItem)
@@ -868,13 +756,13 @@ public class OpcRuntimeClient : IDisposable
                 Filter = filter, QueueSize = 1000, DiscardOldest = true
             };
 
-            var events = new List<EventFieldList>();
+            var events = new ConcurrentQueue<EventFieldList>();
             mi.Notification += (item, e) =>
             {
                 if (e.NotificationValue is EventNotificationList enl)
-                    foreach (var evt in enl.Events) events.Add(evt);
+                    foreach (var evt in enl.Events) events.Enqueue(evt);
                 else if (e.NotificationValue is EventFieldList efl)
-                    events.Add(efl);
+                    events.Enqueue(efl);
             };
 
             sub.AddItem(mi);
@@ -886,17 +774,21 @@ public class OpcRuntimeClient : IDisposable
 
             await Task.Delay(1000);
 
-            int idx = 0;
-            foreach (var evt in events)
+            var conditions = new Dictionary<NodeId, AlarmEntry>();
+            foreach (var evt in events.ToArray())
             {
                 if (evt.EventFields.Count < 7) continue;
 
-                var retain = evt.EventFields[1].Value;
-                if (retain is not true) continue;
+                var conditionId = evt.EventFields[3].Value is NodeId cid ? cid : NodeId.Null;
+                if (conditionId.IsNull) continue;
+                if (evt.EventFields[1].Value is not true)
+                {
+                    conditions.Remove(conditionId);
+                    continue;
+                }
 
                 var eventId = evt.EventFields[0].Value is ByteString bs && !bs.IsNull ? bs.Memory.ToArray() : evt.EventFields[0].Value as byte[];
-                var conditionId = evt.EventFields[3].Value is NodeId cid ? cid : NodeId.Null;
-                if (eventId == null) continue;
+                if (eventId == null || eventId.Length == 0) continue;
 
                 var sourceName = evt.EventFields[2].Value?.ToString() ?? "";
                 var message = evt.EventFields[4].Value is LocalizedText lt ? lt.Text : evt.EventFields[4].Value?.ToString() ?? "";
@@ -905,13 +797,15 @@ public class OpcRuntimeClient : IDisposable
                 var isAcked = evt.EventFields.Count > 7 && evt.EventFields[7].Value is true;
                 var isConfirmed = evt.EventFields.Count > 8 && evt.EventFields[8].Value is true;
 
-                var isShelved = evt.EventFields.Count > 9 && evt.EventFields[9].Value is true;
+                var isShelved = evt.EventFields.Count > 9 && evt.EventFields[9].Value is NodeId shelvingState
+                    && (shelvingState == ObjectIds.ShelvedStateMachineType_TimedShelved
+                        || shelvingState == ObjectIds.ShelvedStateMachineType_OneShotShelved);
                 // ActiveState may be absent for non-alarm conditions; default to true (active) when not reported
                 var isActive = evt.EventFields.Count <= 10 || evt.EventFields[10].Value is null || evt.EventFields[10].Value is true;
 
-                result.Add(new AlarmEntry
+                conditions[conditionId] = new AlarmEntry
                 {
-                    Id = $"alarm_{idx++}",
+                    Id = conditionId.ToString(),
                     ConditionId = conditionId,
                     EventId = eventId,
                     SourceName = sourceName,
@@ -922,75 +816,104 @@ public class OpcRuntimeClient : IDisposable
                     IsConfirmed = isConfirmed,
                     IsActive = isActive,
                     IsShelved = isShelved
-                });
+                };
 
             }
-            await sub.DeleteAsync(true);
-            await _session.RemoveSubscriptionAsync(sub);
+            result.AddRange(conditions.Values);
         }
-        catch { }
+        catch (Exception ex)
+        {
+            Log($"ALARMS: Failed to refresh alarms — {ex.Message}");
+            throw;
+        }
+        finally
+        {
+            if (sub != null)
+            {
+                try
+                {
+                    if (sub.Id != 0) await sub.DeleteAsync(true);
+                    await session.RemoveSubscriptionAsync(sub);
+                }
+                catch (Exception ex)
+                {
+                    Log($"ALARMS: Subscription cleanup failed — {ex.Message}");
+                }
+                sub.Dispose();
+            }
+        }
 
         return result;
     }
 
     /// <summary>Acknowledge a single alarm by its condition NodeId and EventId.</summary>
-    public async Task<bool> AcknowledgeAlarmAsync(NodeId conditionId, byte[] eventId, string comment = "Acknowledged")
+    public Task<bool> AcknowledgeAlarmAsync(NodeId conditionId, byte[] eventId, string comment = "Acknowledged")
+        => CallAlarmMethodAsync(conditionId, [BrowseNames.Acknowledge], [(ByteString)eventId, new LocalizedText(comment)]);
+
+    /// <summary>Confirm (reset) an alarm. An active process condition remains active until it returns to normal.</summary>
+    public Task<bool> ConfirmAlarmAsync(NodeId conditionId, byte[] eventId, string comment = "Confirmed")
+        => CallAlarmMethodAsync(conditionId, [BrowseNames.Confirm], [(ByteString)eventId, new LocalizedText(comment)]);
+
+    /// <summary>Temporarily shelve the selected condition using the standard OPC UA timed shelving method.</summary>
+    public Task<bool> ShelveAlarmAsync(NodeId conditionId, int durationMinutes)
     {
-        if (_session == null || !_session.Connected) return false;
-        try
+        if (durationMinutes <= 0)
         {
-            await SessionCallAsync(conditionId, MethodIds.AcknowledgeableConditionType_Acknowledge,
-                new object[] { eventId, new LocalizedText(comment) });
-            return true;
+            AlarmErrorMessage = "Shelving duration must be positive.";
+            Log($"SHELVE: {AlarmErrorMessage}");
+            return Task.FromResult(false);
         }
-        catch { return false; }
+        return CallAlarmMethodAsync(conditionId, [BrowseNames.ShelvingState, BrowseNames.TimedShelve],
+            [TimeSpan.FromMinutes(durationMinutes).TotalMilliseconds]);
     }
 
-    /// <summary>Confirm (reset) a single alarm by its condition NodeId and EventId.</summary>
-    public async Task<bool> ConfirmAlarmAsync(NodeId conditionId, byte[] eventId, string comment = "Confirmed")
-    {
-        if (_session == null || !_session.Connected) return false;
-        try
-        {
-            await SessionCallAsync(conditionId, MethodIds.AcknowledgeableConditionType_Confirm,
-                new object[] { eventId, new LocalizedText(comment) });
-            return true;
-        }
-        catch { return false; }
-    }
+    /// <summary>Unshelve the selected condition using its standard shelving state machine.</summary>
+    public Task<bool> UnshelveAlarmAsync(NodeId conditionId)
+        => CallAlarmMethodAsync(conditionId, [BrowseNames.ShelvingState, BrowseNames.Unshelve], []);
 
-    /// <summary>Shelve an alarm by calling the server's ShelveAlarm OPC UA method.</summary>
-    public async Task<bool> ShelveAlarmAsync(string variablePath, int durationMinutes, string username = "operator")
+    private async Task<bool> CallAlarmMethodAsync(NodeId conditionId, string[] path, object[] arguments)
     {
-        if (_session == null || !_session.Connected) return false;
+        AlarmErrorMessage = null;
         try
         {
-            var methodId = new NodeId("_AlarmManagement.ShelveAlarm", _session.NamespaceUris.GetIndexOrAppend("http://simpleopcfileserver.org/UA"));
-            var objectId = new NodeId("_AlarmManagement", _session.NamespaceUris.GetIndexOrAppend("http://simpleopcfileserver.org/UA"));
-            var result = await SessionCallAsync(objectId, methodId, new object[] { variablePath, durationMinutes, username });
-            return result != null && result.Count > 0 && result[0] is true;
+            if (_session == null || !_session.Connected)
+                throw new InvalidOperationException("Not connected to the alarm server.");
+            if (conditionId.IsNull)
+                throw new ArgumentException("The alarm has no condition NodeId.", nameof(conditionId));
+
+            var objectId = conditionId;
+            var methodId = conditionId;
+            foreach (var name in path)
+            {
+                objectId = methodId;
+                var browse = await _session.BrowseAsync(null, null, objectId, 0u, BrowseDirection.Forward,
+                    ReferenceTypeIds.HasComponent, true, 0u, CancellationToken.None);
+                if (StatusCode.IsBad(browse.Item1.ServiceResult))
+                    throw new ServiceResultException(browse.Item1.ServiceResult);
+                NodeId resolved = NodeId.Null;
+                if (browse.Item3 != null)
+                {
+                    foreach (var reference in browse.Item3)
+                    {
+                        if (reference.BrowseName == new QualifiedName(name))
+                        {
+                            resolved = ExpandedNodeId.ToNodeId(reference.NodeId, _session.NamespaceUris);
+                            break;
+                        }
+                    }
+                }
+                if (resolved.IsNull)
+                    throw new ServiceResultException(StatusCodes.BadMethodInvalid, $"Alarm method {name} is not available on {objectId}.");
+                methodId = resolved;
+            }
+
+            await SessionCallAsync(objectId, methodId, arguments);
+            return true;
         }
         catch (Exception ex)
         {
-            Log($"SHELVE: Failed to shelve {variablePath} — {ex.Message}");
-            return false;
-        }
-    }
-
-    /// <summary>Unshelve an alarm by calling the server's UnshelveAlarm OPC UA method.</summary>
-    public async Task<bool> UnshelveAlarmAsync(string variablePath, string username = "operator")
-    {
-        if (_session == null || !_session.Connected) return false;
-        try
-        {
-            var methodId = new NodeId("_AlarmManagement.UnshelveAlarm", _session.NamespaceUris.GetIndexOrAppend("http://simpleopcfileserver.org/UA"));
-            var objectId = new NodeId("_AlarmManagement", _session.NamespaceUris.GetIndexOrAppend("http://simpleopcfileserver.org/UA"));
-            var result = await SessionCallAsync(objectId, methodId, new object[] { variablePath, username });
-            return result != null && result.Count > 0 && result[0] is true;
-        }
-        catch (Exception ex)
-        {
-            Log($"UNSHELVE: Failed to unshelve {variablePath} — {ex.Message}");
+            AlarmErrorMessage = $"{path[^1]} failed for {conditionId}: {ex.Message}";
+            Log($"ALARM ACTION: {AlarmErrorMessage}");
             return false;
         }
     }
@@ -1205,9 +1128,10 @@ public class OpcRuntimeClient : IDisposable
 
 
     /// <summary>Calls an OPC UA method and returns the output arguments.</summary>
-    private async Task<IList<object>?> SessionCallAsync(NodeId objectId, NodeId methodId, object[] inputArgs)
+    private async Task<IList<object>> SessionCallAsync(NodeId objectId, NodeId methodId, object[] inputArgs)
     {
-        if (_session == null) return null;
+        if (_session == null || !_session.Connected)
+            throw new InvalidOperationException("Not connected to the alarm server.");
         var requests = new ArrayOf<CallMethodRequest>(new[]
         {
             new CallMethodRequest { ObjectId = objectId, MethodId = methodId,
@@ -1215,8 +1139,10 @@ public class OpcRuntimeClient : IDisposable
         });
         var response = await _session.CallAsync(null, requests, CancellationToken.None);
         if (response.Results.IsNull || response.Results.IsEmpty)
-            return null;
+            throw new ServiceResultException(StatusCodes.BadUnexpectedError, "The server returned no method result.");
         var res = response.Results[0];
+        if (StatusCode.IsBad(res.StatusCode))
+            throw new ServiceResultException(res.StatusCode, $"OPC UA method {methodId} on {objectId} failed: {res.StatusCode}");
         if (res.OutputArguments.IsNull || res.OutputArguments.IsEmpty)
             return [];
         return res.OutputArguments.ToArray().Select(v => v.Value).ToList<object>();

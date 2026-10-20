@@ -225,6 +225,12 @@ column and CSV/printable exports show this stored snapshot, not the current tag 
 Existing event databases are upgraded automatically; older records without a captured
 value remain unavailable rather than being backfilled from live values.
 
+The Alarm List's **Ack**, **Reset**, **Shelve**, and **Unshelve** actions apply to the
+selected conditions; selection is preserved across refreshes. Reset confirms an alarm
+but does not clear an ongoing process condition. Shelving suppresses notifications for
+the chosen duration and automatically expires; shelved alarms remain identifiable in
+the list. Failed operations display an error instead of silently reporting success.
+
 ## ⚡ IEC 61131-3 PLC Runtime
 
 Built-in PLC runtime supporting:

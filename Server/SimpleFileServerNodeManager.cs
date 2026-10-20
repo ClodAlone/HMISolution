@@ -61,8 +61,8 @@ namespace SimpleOpcFileServer
 
         // Pre-built alarm templates — created once, then cloned for each variable.
         // Avoids 100K Ãƒâ€” base64-decode + binary-deserialize + 7 recursive walks per alarm.
-        [ThreadStatic] private static ExclusiveLimitAlarmState? t_limitAlarmTemplate;
-        [ThreadStatic] private static OffNormalAlarmState? t_conditionAlarmTemplate;
+        [ThreadStatic] private static RuntimeLimitAlarmState? t_limitAlarmTemplate;
+        [ThreadStatic] private static RuntimeConditionAlarmState? t_conditionAlarmTemplate;
         private IDictionary<NodeId, IList<IReference>>? _deferredExternalRefs;
         private FileSystemWatcher? _watcher;
         private System.Threading.Timer? _reloadTimer;
@@ -523,7 +523,7 @@ namespace SimpleOpcFileServer
             if (_batchManager != null) { _batchManager.Dispose(); _batchManager = null; }
             _users.Clear();
             _userGroups.Clear();
-            _alarmConditions.Clear();
+            ClearAlarmConditions();
             _statsTrackers.Clear();
 
             // Cleanup drivers
@@ -2469,17 +2469,43 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             return state;
         }
 
+        // SDK method delegates on a cloned template still target the template. Rebind them
+        // to each instance so calls operate on the selected condition, not the shared template.
+        private sealed class RuntimeLimitAlarmState : ExclusiveLimitAlarmState
+        {
+            public RuntimeLimitAlarmState() : base(null) { }
+            protected override NodeState CreateCopy() => new RuntimeLimitAlarmState();
+            public void BindMethods(ISystemContext context) => base.OnAfterCreate(context, null, CancellationToken.None);
+        }
+
+        private sealed class RuntimeConditionAlarmState : OffNormalAlarmState
+        {
+            public RuntimeConditionAlarmState() : base(null) { }
+            protected override NodeState CreateCopy() => new RuntimeConditionAlarmState();
+            public void BindMethods(ISystemContext context) => base.OnAfterCreate(context, null, CancellationToken.None);
+        }
+
+        private void InitializeAlarmTemplate(AlarmConditionState alarm)
+        {
+            alarm.AddConfirm(SystemContext, NodeId.Null);
+            alarm.AddShelvingState(SystemContext, NodeId.Null);
+            alarm.ShelvingState.Create(SystemContext, NodeId.Null, new QualifiedName(BrowseNames.ShelvingState),
+                new LocalizedText(BrowseNames.ShelvingState), true);
+            alarm.ShelvingState.ReferenceTypeId = ReferenceTypeIds.HasComponent;
+        }
+
         private void CreateConditionAlarm(BaseDataVariableState variableState, AlarmConfig alarmConfig, string variablePath, BaseObjectState parent, List<NodeState>? batch = null)
         {
             var alarmNodeId = new NodeId(variablePath + ".Alarm", _namespaceIndex);
 
             if (t_conditionAlarmTemplate == null)
             {
-                t_conditionAlarmTemplate = new OffNormalAlarmState(null);
+                t_conditionAlarmTemplate = new RuntimeConditionAlarmState();
                 t_conditionAlarmTemplate.Create(SystemContext, NodeId.Null, QualifiedName.Null, LocalizedText.Null, false);
+                InitializeAlarmTemplate(t_conditionAlarmTemplate);
             }
 
-            var alarm = (OffNormalAlarmState)t_conditionAlarmTemplate.Clone();
+            var alarm = (RuntimeConditionAlarmState)t_conditionAlarmTemplate.Clone();
 
             alarm.NodeId = alarmNodeId;
             var prefix = variablePath + ".Alarm";
@@ -2557,8 +2583,8 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             alarm.Time.Value = DateTime.UtcNow;
             alarm.ReceiveTime = EnsureConditionProperty(alarm, alarm.ReceiveTime, new QualifiedName(BrowseNames.ReceiveTime), DataTypeIds.UtcTime, prefix + ".ReceiveTime");
             alarm.ReceiveTime.Value = DateTime.UtcNow;
-            alarm.OnAcknowledge = OnAlarmAcknowledge;
-            alarm.OnConfirm = OnAlarmConfirm;
+            alarm.BindMethods(SystemContext);
+            ConfigureAlarmCallbacks(alarm);
 
             RegisterChildNode(SystemContext, alarm, parent, batch);
             variableState.AddReference(ReferenceTypeIds.HasCondition, false, alarm.NodeId);
@@ -2590,11 +2616,12 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             // The template is [ThreadStatic] so there is zero lock contention.
             if (t_limitAlarmTemplate == null)
             {
-                t_limitAlarmTemplate = new ExclusiveLimitAlarmState(null);
+                t_limitAlarmTemplate = new RuntimeLimitAlarmState();
                 t_limitAlarmTemplate.Create(SystemContext, NodeId.Null, QualifiedName.Null, LocalizedText.Null, false);
+                InitializeAlarmTemplate(t_limitAlarmTemplate);
             }
 
-            var alarm = (ExclusiveLimitAlarmState)t_limitAlarmTemplate.Clone();
+            var alarm = (RuntimeLimitAlarmState)t_limitAlarmTemplate.Clone();
 
             // Assign unique NodeIds to the alarm and all its children.
             alarm.NodeId = alarmNodeId;
@@ -2751,9 +2778,8 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             alarm.ReceiveTime = EnsureConditionProperty(alarm, alarm.ReceiveTime, new QualifiedName(BrowseNames.ReceiveTime), DataTypeIds.UtcTime, prefix + ".ReceiveTime");
             alarm.ReceiveTime.Value = DateTime.UtcNow;
 
-            // Wire up Acknowledge handler
-            alarm.OnAcknowledge = OnAlarmAcknowledge;
-            alarm.OnConfirm = OnAlarmConfirm;
+            alarm.BindMethods(SystemContext);
+            ConfigureAlarmCallbacks(alarm);
 
             // Add to parent and address space
             RegisterChildNode(SystemContext, alarm, parent, batch);
@@ -2861,7 +2887,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 {
                     RecordAlarmAnalyticsEvent(AlarmAnalyticsEventKind.Activated, info.VariablePath, message);
 
-                    if (cfg.NotifyOnActivation)
+                    if (cfg.NotifyOnActivation && alarm.SuppressedOrShelved?.Value != true)
                         _notificationService?.NotifyAlarmActivated(info.VariablePath, message, severity);
                 }
             }
@@ -2936,7 +2962,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                     info.VariablePath, message, $"Operator={cfg.Operator} Compare={cfg.CompareValue} Value={valueStr} Hyst={cfg.Hysteresis}", valueStr);
                 RecordAlarmAnalyticsEvent(AlarmAnalyticsEventKind.Activated, info.VariablePath, message);
 
-                if (cfg.NotifyOnActivation)
+                if (cfg.NotifyOnActivation && alarm.SuppressedOrShelved?.Value != true)
                     _notificationService?.NotifyAlarmActivated(info.VariablePath, message, cfg.ConditionSeverity, cfg.SpeakerOverride, cfg.VolumeOverride);
             }
             else if (shouldDeactivate)
@@ -2982,6 +3008,43 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             }
         }
 
+        private void ClearAlarmConditions()
+        {
+            lock (Lock)
+            {
+                foreach (var info in _alarmConditions.Values)
+                {
+                    info.AlarmState.OnTimedUnshelve = null;
+                    info.AlarmState.AutoReportStateChanges = false;
+                    info.AlarmState.SetShelvingState(SystemContext, false, false, 0);
+                }
+                _alarmConditions.Clear();
+            }
+        }
+
+        private void ConfigureAlarmCallbacks(AlarmConditionState alarm)
+        {
+            alarm.OnAcknowledge = OnAlarmAcknowledge;
+            alarm.OnConfirm = OnAlarmConfirm;
+            alarm.OnShelve = OnAlarmShelve;
+            alarm.OnTimedUnshelve = (context, condition) => OnAlarmShelve(context, condition, false, false, 0);
+        }
+
+        private ServiceResult OnAlarmShelve(ISystemContext context, AlarmConditionState alarm, bool shelving, bool oneShot, double shelvingTime)
+        {
+            lock (Lock)
+            {
+                alarm.SetShelvingState(context, shelving, oneShot, shelvingTime);
+                alarm.Time.Value = DateTime.UtcNow;
+                alarm.ReceiveTime.Value = DateTime.UtcNow;
+                alarm.EventId.Value = (ByteString)Guid.NewGuid().ToByteArray();
+                ReportAlarmEvent(alarm);
+                _eventLogger?.LogAlarm("Info", alarm.SourceName.Value,
+                    shelving ? $"Alarm shelved for {shelvingTime / 60000:G} minutes" : "Alarm unshelved");
+            }
+            return ServiceResult.Good;
+        }
+
         private ServiceResult OnAlarmAcknowledge(
             ISystemContext context,
             ConditionState condition,
@@ -2994,7 +3057,6 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 if (comment != null && !string.IsNullOrEmpty(comment.Text))
                     ackCondition.Comment.Value = comment;
 
-                ackCondition.Message.Value = new LocalizedText($"Acknowledged: {ackCondition.ConditionName.Value}");
                 ackCondition.Time.Value = DateTime.UtcNow;
 
                 // Clear retain if both acked and confirmed AND inactive
@@ -3033,7 +3095,6 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 if (comment != null && !string.IsNullOrEmpty(comment.Text))
                     ackCondition.Comment.Value = comment;
 
-                ackCondition.Message.Value = new LocalizedText($"Confirmed: {ackCondition.ConditionName.Value}");
                 ackCondition.Time.Value = DateTime.UtcNow;
 
                 // Clear retain if both acked and confirmed AND inactive
@@ -3105,6 +3166,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
         {
             if (disposing)
             {
+                ClearAlarmConditions();
                 _eventLogger?.LogSystem("Info", "Server", $"Server shutting down at {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC");
                 foreach(var d in _drivers) d.Dispose();
                 _logger?.Dispose();
@@ -3630,9 +3692,10 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             if (info == null || info.AlarmState == null)
                 throw new ArgumentException($"Alarm not found: {alarmId}");
 
-            // Simplified shelving - sets retained to false to hide from active alarm list
-            info.AlarmState.Retain.Value = false;
-            ReportAlarmEvent(info.AlarmState);
+            if (durationMinutes <= 0)
+                throw new ArgumentOutOfRangeException(nameof(durationMinutes), "Shelving duration must be positive.");
+
+            OnAlarmShelve(SystemContext, info.AlarmState, true, false, TimeSpan.FromMinutes(durationMinutes).TotalMilliseconds);
         }
 
         /// <summary>
@@ -3644,12 +3707,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             if (info == null || info.AlarmState == null)
                 throw new ArgumentException($"Alarm not found: {alarmId}");
 
-            // Restore retention
-            if (info.IsActive)
-            {
-                info.AlarmState.Retain.Value = true;
-                ReportAlarmEvent(info.AlarmState);
-            }
+            OnAlarmShelve(SystemContext, info.AlarmState, false, false, 0);
         }
 
     }
