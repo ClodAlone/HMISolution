@@ -2,7 +2,12 @@
 
 @using SharedModels
 @using RuntimeViewer.Shared.Services
-@implements IDisposable
+@implements IAsyncDisposable
+
+@{
+    var chartTime = DateTime.UtcNow;
+    var cursorTime = ShowCursor && _cursorX.HasValue ? XToTime(_cursorX.Value, chartTime) : (DateTime?)null;
+}
 
 <div style="width: 100%; height: 100%; display: flex; flex-direction: column; font-family: var(--widget-font-family, sans-serif); font-size: var(--widget-font-size, 11px); font-weight: var(--widget-font-weight, normal); font-style: var(--widget-font-style, normal); background: @Background; color: #e0e0e0; border: 1px solid #333; border-radius: 4px; overflow: hidden;">
     @* Toolbar *@
@@ -17,7 +22,7 @@
 
     @* Chart *@
     <div style="flex: 1; position: relative; min-height: 0;" @onmousemove="OnChartMouseMove" @onmouseleave="OnChartMouseLeave">
-        <svg viewBox="0 0 @_chartW @_chartH" width="100%" height="100%" preserveAspectRatio="none"
+        <svg @ref="_svgRef" viewBox="0 0 @_chartW @_chartH" width="100%" height="100%" preserveAspectRatio="none"
              xmlns="http://www.w3.org/2000/svg" style="display: block;">
 
             @* Background *@
@@ -102,7 +107,7 @@
                 if (buf.Length < 2) continue;
                 var color = GetPenColor(pen, p);
                 var lw = pen.LineWidth > 0 ? pen.LineWidth : 1.5;
-                var pts = BuildPolyline(buf, p);
+                var pts = BuildPolyline(buf, p, chartTime);
                 <polyline points="@pts" fill="none" stroke="@color" stroke-width="@Fmt(lw)"
                           stroke-linejoin="round" vector-effect="non-scaling-stroke" />
             }
@@ -114,13 +119,12 @@
                 <line x1="@Fmt(cx)" y1="@_mTop" x2="@Fmt(cx)" y2="@(_chartH - _mBottom)"
                       stroke="#ffffff40" stroke-width="1" stroke-dasharray="3,2" />
 
-                var cursorTime = XToTime(cx);
                 var labelY = _mTop + 12.0;
                 @for (int p = 0; p < Pens.Count; p++)
                 {
                     var pen2 = Pens[p];
                     var buf2 = GetBuffer(p);
-                    var val2 = InterpolateAtTime(buf2, cursorTime);
+                    var val2 = InterpolateAtTime(buf2, cursorTime!.Value);
                     if (val2 == null) continue;
                     var color2 = GetPenColor(pen2, p);
                     var cy = ValueToY(val2.Value, pen2.YAxisId);
@@ -142,7 +146,9 @@
                 var pen = Pens[p];
                 var color = GetPenColor(pen, p);
                 var buf = GetBuffer(p);
-                var lastVal = buf.Length > 0 ? buf[^1].Value : (double?)null;
+                var lastVal = cursorTime.HasValue
+                    ? InterpolateAtTime(buf, cursorTime.Value)
+                    : buf.Length > 0 ? buf[^1].Value : (double?)null;
                 <span>
                     <span style="display:inline-block;width:12px;height:3px;background:@color;vertical-align:middle;margin-right:3px;"></span>
                     @GetPenLabel(pen)
@@ -182,6 +188,11 @@
     private bool _paused;
     private int _timeWindowSec = 60;
     private double? _cursorX;
+    private ElementReference _svgRef;
+    private Task<IJSObjectReference>? _coordinateModule;
+    private long _cursorMoveVersion;
+    private bool _disposed;
+    private record struct SvgPoint(double X, double Y);
 
     // Chart layout
     private const int _chartW = 800;
@@ -375,18 +386,26 @@
         return idx >= 0 && idx < snap.Length ? snap[idx] : [];
     }
 
-    private string BuildPolyline(Sample[] buf, int penIndex)
+    private string BuildPolyline(Sample[] buf, int penIndex, DateTime chartTime)
     {
         var sb = new System.Text.StringBuilder();
-        var now = DateTime.UtcNow;
         var axisId = penIndex < Pens.Count ? Pens[penIndex].YAxisId : 0;
         var (yLo, yHi) = GetAxisRange(axisId);
         var rangeY = yHi - yLo;
         if (rangeY == 0) rangeY = 1;
 
+        var windowStart = chartTime.AddSeconds(-_timeWindowSec);
+        if (buf.Length >= 2 && buf[0].Time < windowStart && buf[^1].Time > windowStart)
+        {
+            // Retain the segment crossing the window edge so cursor readings stay on the curve.
+            var boundaryValue = InterpolateAtTime(buf, windowStart);
+            if (boundaryValue.HasValue)
+                sb.Append(Fmt(_mLeft)).Append(',').Append(Fmt(ValueToY(boundaryValue.Value, axisId)));
+        }
+
         foreach (var s in buf)
         {
-            var secAgo = (now - s.Time).TotalSeconds;
+            var secAgo = (chartTime - s.Time).TotalSeconds;
             if (secAgo > _timeWindowSec) continue;
             var xFrac = 1.0 - secAgo / _timeWindowSec;
             var yFrac = (s.Value - yLo) / rangeY;
@@ -413,18 +432,18 @@
     private (double min, double max) GetAxisRange(int axisId) =>
         _hasDualAxes && axisId == 1 ? (_yMinRight, _yMaxRight) : (_yMin, _yMax);
 
-    private DateTime XToTime(double x)
+    private DateTime XToTime(double x, DateTime chartTime)
     {
         var frac = (x - _mLeft) / _plotW;
         var secAgo = (1 - frac) * _timeWindowSec;
-        return DateTime.UtcNow.AddSeconds(-secAgo);
+        return chartTime.AddSeconds(-secAgo);
     }
 
     private double? InterpolateAtTime(Sample[] buf, DateTime t)
     {
-        if (buf.Length == 0) return null;
-        if (t <= buf[0].Time) return buf[0].Value;
-        if (t >= buf[^1].Time) return buf[^1].Value;
+        if (buf.Length < 2 || t < buf[0].Time || t > buf[^1].Time) return null;
+        if (t == buf[0].Time) return buf[0].Value;
+        if (t == buf[^1].Time) return buf[^1].Value;
 
         for (int i = 1; i < buf.Length; i++)
         {
@@ -439,21 +458,24 @@
         return buf[^1].Value;
     }
 
-    private void OnChartMouseMove(Microsoft.AspNetCore.Components.Web.MouseEventArgs e)
+    private async Task OnChartMouseMove(Microsoft.AspNetCore.Components.Web.MouseEventArgs e)
     {
-        // Map from offsetX (pixels relative to the div) to SVG viewBox coordinates.
-        // Since the SVG has preserveAspectRatio="none" and fills the container,
-        // we store raw OffsetX. This is approximate when the container != 800px,
-        // but provides good-enough cursor tracking without JS interop.
-        var x = e.OffsetX;
-        if (x >= _mLeft && x <= _chartW - _mRight)
-            _cursorX = x;
-        else
-            _cursorX = null;
+        if (!ShowCursor || _disposed) return;
+        var version = ++_cursorMoveVersion;
+        _coordinateModule ??= JS.InvokeAsync<IJSObjectReference>(
+            "import", "./_content/RuntimeViewer.Shared/screenrenderer.js").AsTask();
+        var module = await _coordinateModule;
+        if (_disposed || version != _cursorMoveVersion) return;
+        var point = await module.InvokeAsync<SvgPoint>("clientToSvg", _svgRef, e.ClientX, e.ClientY);
+        if (_disposed || version != _cursorMoveVersion) return;
+
+        _cursorX = point.X >= _mLeft && point.X <= _chartW - _mRight
+            && point.Y >= _mTop && point.Y <= _chartH - _mBottom ? point.X : null;
     }
 
     private void OnChartMouseLeave(Microsoft.AspNetCore.Components.Web.MouseEventArgs e)
     {
+        ++_cursorMoveVersion;
         _cursorX = null;
     }
 
@@ -496,9 +518,23 @@
         builder.CloseElement();
     };
 
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
+        _disposed = true;
+        ++_cursorMoveVersion;
         _sampleTimer?.Dispose();
+        if (_coordinateModule is not null)
+        {
+            try
+            {
+                var module = await _coordinateModule;
+                await module.DisposeAsync();
+            }
+            catch (JSDisconnectedException)
+            {
+                // The browser connection may already be closed during teardown.
+            }
+        }
     }
 
     private async Task ExportCsv()

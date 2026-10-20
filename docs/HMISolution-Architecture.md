@@ -435,6 +435,8 @@ Browser ◄──── SignalR ────► Blazor Server (RuntimeViewer)
 | `RecipeWidget` | `recipe` | Recipe load/save/activate/delete UI |
 | `ScreenEmbedWidget` | `screenembed` | Embed other screens (single or tabbed) |
 
+Trend cursors use SVG coordinates so selection stays aligned when a widget is resized or its screen is scaled. Curve markers and legend readings show interpolated values at the same selected timestamp, including on dual-axis charts. Pens without data at that timestamp show no cursor reading; leaving the plot restores the latest values in the legend.
+
 ---
 
 ## 9. RuntimeViewer.Desktop — Native Desktop Shell
