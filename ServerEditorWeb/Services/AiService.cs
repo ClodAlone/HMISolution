@@ -161,7 +161,7 @@ public class AiService
             calculated runtime paths include their prefixed Name: __TASK__.Calculated.__TASK___Average.
             Create every referenced variable/resource within this bundle. Do not reference or repurpose real device outputs.
             Generated executable resources must have Enabled=false. Scripts must use bounded loops and host IntervalMs.
-            Return valid JSON, then optionally ///COMMENTS/// and setup/review notes. No markdown fences.
+            Return valid JSON only. No introductory text, markdown fences, comments, or content outside the JSON structure.
             """;
     }
 
@@ -301,7 +301,7 @@ public class AiService
             " - Do NOT re-add variables that already exist.\n" +
             " - Variable schema: Name, Type (Double|Int32|Boolean|String), Access (Read|Write|ReadWrite), EngineeringUnit, Description, InitialValue.\n" +
             " - Return ONLY the JSON, nothing else. Keep it small.\n" +
-            "Optionally append '///COMMENTS///' and a one-line summary after the JSON.");
+            "No introductory text, markdown fences, comments, or content outside the JSON structure.");
 
         var (rawText, err) = await AskStreamingAsync(
             engine, sb.ToString(), currentJson: "", referenceJson: null, referenceFileName: null,
@@ -362,7 +362,7 @@ public class AiService
             " - Do not re-add items that already exist (see folder listing above).\n" +
             " - Do not include markdown fences. Output pure JSON only.\n" +
             " - variable objects follow the Variable schema (Name, Type, Access, EngineeringUnit, Description, InitialValue, etc.).\n" +
-            "After the JSON, optionally add the delimiter '///COMMENTS///' followed by a one-line summary.\n");
+            "No introductory text, comments, or content outside the JSON structure.\n");
         return sb.ToString();
     }
 
@@ -693,7 +693,7 @@ public class AiService
             "IMPORTANT: Return ONLY the modified JSON for this ONE folder object (same schema as above). " +
             "Do NOT return the full project. Do NOT include markdown fences. " +
             "Keep the 'Name' property equal to the current folder name. " +
-            "After the JSON, optionally add '///COMMENTS///' followed by a one-line summary.");
+            "No introductory text, comments, or content outside the JSON structure.");
 
         var (rawText, err) = await AskStreamingAsync(
             engine, sb.ToString(), currentJson: "", referenceJson: null, referenceFileName: null,
@@ -763,7 +763,7 @@ public class AiService
         sb.Append(
             "IMPORTANT: Return ONLY the modified JSON array for this section (same schema). " +
             "Do NOT return the whole project. Do NOT include markdown fences. " +
-            "After the JSON, optionally add '///COMMENTS///' followed by a one-line summary.");
+            "No introductory text, comments, or content outside the JSON structure.");
 
         var (rawText, err) = await AskStreamingAsync(
             engine, sb.ToString(), currentJson: "", referenceJson: null, referenceFileName: null,
@@ -1302,7 +1302,7 @@ Lines starting with # or ## are comments — read them for IP/port info. Parse d
 
         sb.Append("\n\nUser Instruction: ");
         sb.Append(userPrompt);
-        sb.Append("\n\nReturn the FULL valid JSON content as the result, incorporating the requested changes. Do not return just the difference or a snippet. Do not use markdown blocks around the JSON.\n\nAt the end of the JSON, print the delimiter '///COMMENTS///', followed by a summary of what has been changed.");
+        sb.Append("\n\nReturn ONLY the FULL valid JSON content, incorporating the requested changes. Do not return just the difference or a snippet. No introductory text, Markdown fences, comments, delimiters, summaries, or other content outside the JSON structure.");
         return sb.ToString();
     }
 
@@ -1404,13 +1404,35 @@ Lines starting with # or ## are comments — read them for IP/port info. Parse d
 
     private static (string newJson, string comments) ParseAiResponse(string? contentText)
     {
-        if (contentText == null)
-            return ("", "");
+        if (string.IsNullOrWhiteSpace(contentText))
+            return ("", "AI returned an empty response.");
 
-        var parts = contentText.Split(["///COMMENTS///"], StringSplitOptions.None);
-        string newJson = parts[0].Replace("```json", "").Replace("```", "").Trim();
-        string comments = parts.Length > 1 ? parts[1].Trim() : "";
-        return (newJson, comments);
+        var start = contentText.IndexOfAny(['{', '[']);
+        if (start < 0)
+            return ("", "AI response did not contain a JSON object or array.");
+
+        try
+        {
+            var bytes = Encoding.UTF8.GetBytes(contentText[start..]);
+            var reader = new Utf8JsonReader(bytes);
+            using var document = JsonDocument.ParseValue(ref reader);
+            var trailing = Encoding.UTF8.GetString(bytes.AsSpan((int)reader.BytesConsumed)).Trim();
+            if (trailing.StartsWith("```", StringComparison.Ordinal))
+                trailing = trailing[3..].TrimStart();
+            if (trailing.StartsWith('{') || trailing.StartsWith('['))
+                return ("", "AI response contained multiple JSON values; expected one object or array.");
+
+            // Accept legacy summaries without splitting delimiters inside JSON strings.
+            const string delimiter = "///COMMENTS///";
+            var comments = trailing.StartsWith(delimiter, StringComparison.Ordinal)
+                ? trailing[delimiter.Length..].Trim()
+                : "";
+            return (document.RootElement.GetRawText(), comments);
+        }
+        catch (JsonException ex)
+        {
+            return ("", $"AI response contained invalid or incomplete JSON: {ex.Message}");
+        }
     }
 
 
@@ -1430,6 +1452,7 @@ Lines starting with # or ## are comments — read them for IP/port info. Parse d
         {
             model = _ollamaModel,
             prompt,
+            format = "json",
             stream = false,
             options = new { temperature = 0.1 }
         };
@@ -1624,6 +1647,7 @@ Lines starting with # or ## are comments — read them for IP/port info. Parse d
         {
             model = _ollamaModel,
             prompt,
+            format = "json",
             stream = true,
             options = new { temperature = 0.1 }
         };

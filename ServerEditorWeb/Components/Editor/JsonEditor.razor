@@ -72,16 +72,18 @@
                 </label>
                 <div class="d-flex gap-1 align-items-center mb-2">
                     <label class="small text-muted text-nowrap mb-0" style="min-width:90px;">Edit scope:</label>
-                    <select class="form-select form-select-sm flex-grow-1" disabled="@(_resourceOnly || _isProcessing)"
-                            @bind="_scopePath"
-                            title="Restrict the edit to a folder subtree or a top-level section (Screens, Scripts, etc.). Only that slice is sent to the AI; the rest is preserved locally.">
-                        <option value="">@(_resourceOnly ? "-- New resources only (current project not sent) --" : "-- Whole project (sends full JSON) --")</option>
+                    <select class="form-select form-select-sm flex-grow-1" disabled="@_isProcessing"
+                            value="@(_resourceOnly ? "resources:" : _scopePath)"
+                            @onchange="OnScopeChanged"
+                            title="Choose new resources only, the whole project, or a folder/section. Only the selected scope is sent to the AI; the rest is preserved locally.">
+                        <option value="resources:">-- New resources only (current project not sent) --</option>
+                        <option value="">-- Whole project (sends full JSON) --</option>
                         @foreach (var s in _folderScopes)
                         {
                             <option value="@s.Key">@s.Label</option>
                         }
                     </select>
-                    <button class="btn btn-sm btn-outline-secondary" disabled="@(_resourceOnly || _isProcessing)" title="Refresh scope list from the current JSON" @onclick="RefreshFolderScopes">&#x27F3;</button>
+                    <button class="btn btn-sm btn-outline-secondary" disabled="@_isProcessing" title="Refresh scope list from the current JSON" @onclick="RefreshFolderScopes">&#x27F3;</button>
                     @if (_scopePath.StartsWith("folder:"))
                     {
                         <label class="d-flex align-items-center gap-1 m-0 small text-nowrap"
@@ -589,6 +591,14 @@
         if (!_resourceOnly) RefreshFolderScopes();
     }
 
+    private void OnScopeChanged(ChangeEventArgs e)
+    {
+        if (_isProcessing) return;
+        var scope = e.Value?.ToString() ?? "";
+        OnResourceOnlyChanged(new ChangeEventArgs { Value = scope == "resources:" });
+        if (!_resourceOnly) _scopePath = scope;
+    }
+
     private Task ImportResources()
     {
         if (_isProcessing || !OnImportResources.HasDelegate)
@@ -992,7 +1002,7 @@
 
     protected override void OnParametersSet()
     {
-        if (!_resourceOnly && _folderScopes.Count == 0 && !string.IsNullOrEmpty(JsonText))
+        if (_folderScopes.Count == 0 && !string.IsNullOrEmpty(JsonText))
             RefreshFolderScopes();
     }
 

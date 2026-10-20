@@ -861,6 +861,10 @@ Direct JSON editing of the project tree with AI assistance.
 
 ### AI Assistant
 - Expand **AI Assistant** and choose a provider/model configured for your environment.
+- **Edit scope** is available immediately. It defaults to **New resources only**; select **Whole project** or a folder/section
+  to edit existing resources. The resource-only checkbox stays synchronized with this selection. Scope changes are disabled during generation.
+- AI generation requests JSON only, without introductions or Markdown fences. Ollama uses JSON output mode;
+  completed responses are validated before use, and invalid or incomplete JSON is reported as an error.
 - Requests, generated bundles, settings, and status remain available when switching, closing/reopening, or moving the dock panel.
   Generation continues while the panel is hidden; reopen it to review progress/results or cancel. Leaving/reloading the
   editor workspace ends this in-memory session and cancels pending generation; it is not saved into the project file.

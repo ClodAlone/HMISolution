@@ -170,7 +170,8 @@ public class AiTaskCatalogTests
         Assert.Contains("PipeFlowColor", prompt);
         Assert.Contains("NavButtonTarget", prompt);
         Assert.Contains("VariablePath", prompt);
-        Assert.Contains("Return the FULL valid JSON", prompt);
+        Assert.Contains("Return ONLY the FULL valid JSON", prompt);
+        Assert.DoesNotContain("///COMMENTS///", prompt);
     }
 
     private static void SelectTask(JsonEditor editor, string id)
