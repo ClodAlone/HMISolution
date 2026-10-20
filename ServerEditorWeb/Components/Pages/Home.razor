@@ -315,6 +315,9 @@ else
                         <div class="menu-item @(!ViewerProcess.IsViewerRunning ? "disabled" : "")" @onclick="StopRuntimeCmd" @onclick:stopPropagation>
                             <span class="menu-icon">&#x23F9;&#xFE0F;</span><span class="menu-label">Stop Runtime</span>
                         </div>
+                        <div class="menu-item @(!ViewerProcess.IsViewerRunning ? "disabled" : "")" @onclick="OpenRuntimeCmd" @onclick:stopPropagation>
+                            <span class="menu-icon">&#x1F310;</span><span class="menu-label">Open Runtime</span>
+                        </div>
                         <div class="menu-separator"></div>
                         <div class="menu-item" @onclick="ShowServerPanel" @onclick:stopPropagation>
                             <span class="menu-icon">&#x1F5A5;&#xFE0F;</span><span class="menu-label">Server Panel</span>
@@ -497,6 +500,8 @@ else
                 disabled="@(_runtimeBusy || _serverBusy || (!ViewerProcess.IsViewerRunning && string.IsNullOrEmpty(Editor.CurrentFilePath)))">
             @if (_runtimeBusy) { <span class="spinner"></span> } else { @(ViewerProcess.IsViewerRunning ? "⏹" : "🖥️") }
         </button>
+        <button class="iconbar-btn" title="Open Runtime" @onclick="OpenRuntimeCmd"
+                disabled="@(!ViewerProcess.IsViewerRunning)">🌐</button>
 
         <span class="iconbar-sep"></span>
 
@@ -1263,6 +1268,7 @@ else
     private bool _showSplash;
     private bool _showNewProjectWizard;
     private bool _isFullScreen;
+    private const int RuntimeViewerPort = 8081;
 
     private string _selectedFile = "";
     private string[] _availableFiles = [];
@@ -2312,11 +2318,20 @@ private void UnsavedDialogCancel()
         try
         {
             var minDelay = Task.Delay(500);
-            var (success, msg) = await Task.Run(() => ViewerProcess.StartViewer(Editor.CurrentFilePath, 8081, false, "web"));
+            var (success, msg) = await Task.Run(() => ViewerProcess.StartViewer(Editor.CurrentFilePath, RuntimeViewerPort, false, "web"));
             ShowToast(success, msg);
             await minDelay;
         }
         finally { _runtimeBusy = false; }
+    }
+
+    private async Task OpenRuntimeCmd()
+    {
+        CloseMenus();
+        if (!ViewerProcess.IsViewerRunning)
+            return;
+
+        await JS.InvokeVoidAsync("open", $"http://localhost:{RuntimeViewerPort}", "_blank");
     }
 
     private async Task StopRuntimeCmd()
