@@ -56,7 +56,7 @@ public class NaturalLanguageQueryService
             var (start, end) = ParseTimeRange(question, cfg.DefaultTimeRangeMinutes);
 
             // 4. Fetch historical data for relevant variables
-            var dataSummary = await BuildDataContextAsync(relevant, start, end, cfg.MaxDataPoints);
+            var dataSummary = await BuildDataContextAsync(relevant, start, end, cfg.MaxDataPoints, ct);
 
             // 5. Build the AI prompt
             var prompt = BuildPrompt(question, dataSummary, loggedVars);
@@ -195,19 +195,15 @@ public class NaturalLanguageQueryService
 
     /// <summary>Read historical data and build a compact textual summary for the AI context.</summary>
     private async Task<string> BuildDataContextAsync(
-        List<string> variables, DateTime start, DateTime end, int maxPoints)
+        List<string> variables, DateTime start, DateTime end, int maxPoints, CancellationToken ct)
     {
         var sb = new StringBuilder();
         sb.AppendLine($"Time range: {start:yyyy-MM-dd HH:mm} UTC to {end:yyyy-MM-dd HH:mm} UTC");
         sb.AppendLine();
 
-        var seriesList = await _hda.ReadHistoryAsync(variables, 0, maxPoints);
-
-        // Apply time filter manually since ReadHistoryAsync with 0 minutes reads all
-        // We actually need to pass the correct timeRangeMinutes
-        var totalMinutes = (int)(end - start).TotalMinutes;
-        if (totalMinutes <= 0) totalMinutes = 1440;
-        seriesList = await _hda.ReadHistoryAsync(variables, totalMinutes, maxPoints);
+        var seriesList = await _hda.ReadHistoryAsync(variables, start, end, maxPoints, ct);
+        if (!seriesList.Any(series => series.Points.Count > 0))
+            throw new InvalidOperationException("No historical data was found for the selected variables and time range.");
 
         foreach (var series in seriesList)
         {
@@ -218,7 +214,8 @@ public class NaturalLanguageQueryService
             }
 
             // Compute statistics
-            var numericPoints = series.Points.Where(p => p.Value.HasValue).Select(p => p.Value!.Value).ToList();
+            var numericSamples = series.Points.Where(p => p.Value.HasValue).ToList();
+            var numericPoints = numericSamples.Select(p => p.Value!.Value).ToList();
 
             sb.AppendLine($"Variable: {series.VariableName}");
             sb.AppendLine($"  Data points: {series.Points.Count}");
@@ -240,15 +237,15 @@ public class NaturalLanguageQueryService
                 sb.AppendLine($"  Average: {avg:G6}");
                 sb.AppendLine($"  Std Dev: {stdDev:G6}");
                 sb.AppendLine($"  Sum: {sum:G6}");
-                sb.AppendLine($"  First value: {first:G6} at {series.Points.First().Time:yyyy-MM-dd HH:mm:ss}");
-                sb.AppendLine($"  Last value: {last:G6} at {series.Points.Last().Time:yyyy-MM-dd HH:mm:ss}");
+                sb.AppendLine($"  First value: {first:G6} at {numericSamples.First().Time:yyyy-MM-dd HH:mm:ss}");
+                sb.AppendLine($"  Last value: {last:G6} at {numericSamples.Last().Time:yyyy-MM-dd HH:mm:ss}");
                 sb.AppendLine($"  Min at: {series.Points.Where(p => p.Value.HasValue).OrderBy(p => p.Value!.Value).First().Time:yyyy-MM-dd HH:mm:ss}");
                 sb.AppendLine($"  Max at: {series.Points.Where(p => p.Value.HasValue).OrderByDescending(p => p.Value!.Value).First().Time:yyyy-MM-dd HH:mm:ss}");
 
                 // Include a sample of raw data points (first 10 + last 10)
                 sb.AppendLine("  Sample data (time → value):");
                 var sample = series.Points.Take(10)
-                    .Concat(series.Points.Count > 20 ? series.Points.Skip(series.Points.Count - 10) : [])
+                    .Concat(series.Points.Skip(Math.Max(10, series.Points.Count - 10)))
                     .Distinct()
                     .OrderBy(p => p.Time)
                     .ToList();

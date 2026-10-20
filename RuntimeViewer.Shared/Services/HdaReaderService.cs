@@ -63,6 +63,26 @@ public class HdaReaderService
     }
 
     /// <summary>
+    /// Read an explicit UTC interval, surfacing configuration and database errors to the caller.
+    /// </summary>
+    public async Task<List<HdaSeries>> ReadHistoryAsync(
+        List<string> variablePaths, DateTime startTime, DateTime endTime, int maxPoints,
+        CancellationToken ct = default)
+    {
+        if (startTime >= endTime)
+            throw new ArgumentException("The historical query start must precede its end.", nameof(startTime));
+        if (maxPoints <= 0)
+            throw new ArgumentOutOfRangeException(nameof(maxPoints), "Max Data Points must be greater than zero.");
+
+        ct.ThrowIfCancellationRequested();
+        var connInfo = ResolveConnection()
+            ?? throw new InvalidOperationException("Historical database is not configured or its file is unavailable on the RuntimeViewer host.");
+        var tasks = variablePaths.Select(path => Task.Run(
+            () => ReadSeries(connInfo, path, startTime, endTime, maxPoints, throwOnError: true), ct));
+        return (await Task.WhenAll(tasks)).ToList();
+    }
+
+    /// <summary>
     /// Collects all variable paths that have DataLogging enabled.
     /// </summary>
     public List<string> GetLoggedVariables()
@@ -87,7 +107,7 @@ public class HdaReaderService
     }
 
     private HdaSeries ReadSeries(ConnectionInfo connInfo, string variableName,
-        DateTime startTime, DateTime endTime, int maxPoints)
+        DateTime startTime, DateTime endTime, int maxPoints, bool throwOnError = false)
     {
         var series = new HdaSeries { VariableName = variableName };
         series.Points = new List<HdaDataPoint>(maxPoints);
@@ -167,7 +187,7 @@ public class HdaReaderService
             series.MinValue = min == double.MaxValue ? 0 : min;
             series.MaxValue = max == double.MinValue ? 100 : max;
         }
-        catch (Exception ex)
+        catch (Exception ex) when (!throwOnError)
         {
             Console.Error.WriteLine($"HDA read error for '{variableName}': {ex.Message}");
         }

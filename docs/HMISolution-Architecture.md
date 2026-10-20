@@ -434,8 +434,11 @@ Browser ◄──── SignalR ────► Blazor Server (RuntimeViewer)
 | `RealtimeTrendWidget` | `trend` | Real-time scrolling trend chart with multiple pens |
 | `RecipeWidget` | `recipe` | Recipe load/save/activate/delete UI |
 | `ScreenEmbedWidget` | `screenembed` | Embed other screens (single or tabbed) |
+| `NlQueryWidget` | `nlquery` | Natural-language historical process data queries in SVG and responsive layouts |
 
 Trend cursors use SVG coordinates so selection stays aligned when a widget is resized or its screen is scaled. Curve markers and legend readings show interpolated values at the same selected timestamp, including on dual-axis charts. Pens without data at that timestamp show no cursor reading; leaving the plot restores the latest values in the legend.
+
+NLQuery requires Natural Language Query to be enabled in project settings, variables with data logging enabled, and access to the historical database from the RuntimeViewer host. Configure an accessible Ollama endpoint/model or the selected cloud engine's API key. Calendar references such as "yesterday" query the requested UTC interval, not a rolling window ending now. Missing databases, database read failures, and empty historical ranges are reported in the conversation without sending an AI request.
 
 ---
 
