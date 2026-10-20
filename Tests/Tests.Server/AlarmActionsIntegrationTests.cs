@@ -216,6 +216,58 @@ public class AlarmActionsIntegrationTests : IAsyncLifetime
         Assert.All(rows, a => Assert.True(a.IsActive));
     }
 
+    [Fact]
+    public async Task Analytics_AggregatesDifferentConditionsByVariableWithoutEventSpecificMessage()
+    {
+        var manager = _server!.Manager!;
+        var source = manager.AddAlarm("Temperature", AlarmTriggerType.Limit);
+        var other = manager.AddAlarm("Pressure", AlarmTriggerType.Limit);
+        var build = typeof(SimpleFileServerNodeManager).GetMethod("BuildAlarmAnalytics", BindingFlags.NonPublic | BindingFlags.Instance);
+        Assert.NotNull(build);
+        AlarmAnalyticsSnapshot Snapshot() => Assert.IsType<AlarmAnalyticsSnapshot>(build.Invoke(manager, null));
+
+        manager.SetValue(source, 90);
+        manager.SetValue(source, 91);
+        var first = Snapshot();
+        var firstRow = Assert.Single(first.TopAlarms);
+        Assert.Equal("Temperature", firstRow.VariablePath);
+        Assert.Equal(1, firstRow.ActivationCount);
+        Assert.Equal("", firstRow.Message);
+        Assert.Null(firstRow.AvgAcknowledgeSeconds);
+
+        manager.SetValue(source, 50);
+        manager.SetValue(source, 10);
+        manager.SetValue(source, 50);
+        manager.SetValue(source, 100);
+        manager.SetValue(source, 50);
+        manager.SetValue(source, 3);
+        manager.SetValue(other, 90);
+        var snapshot = Snapshot();
+        Assert.Equal(5, snapshot.TotalActivations);
+        Assert.Equal(5, snapshot.FloodWindowActivations);
+        Assert.Equal(0, snapshot.TotalAcknowledgements);
+        Assert.Equal(2, snapshot.TopAlarms.Count);
+        var row = snapshot.TopAlarms[0];
+        Assert.Equal("Temperature", row.VariablePath);
+        Assert.Equal(4, row.ActivationCount);
+        Assert.Equal("", row.Message);
+        Assert.Equal("Pressure", snapshot.TopAlarms[1].VariablePath);
+        Assert.Equal(1, snapshot.TopAlarms[1].ActivationCount);
+        Assert.All(snapshot.TopAlarms, a => Assert.Equal("", a.Message));
+
+        var alarm = Assert.Single(await _client.CollectDetailedAlarmsAsync(), a => a.SourceName == "Temperature");
+        Assert.True(await _client.AcknowledgeAlarmAsync(alarm.ConditionId, alarm.EventId), _client.AlarmErrorMessage);
+        snapshot = Snapshot();
+        Assert.Equal(5, snapshot.TotalActivations);
+        Assert.Equal(1, snapshot.TotalAcknowledgements);
+        Assert.NotNull(snapshot.MeanTimeToAcknowledgeSeconds);
+        row = Assert.Single(snapshot.TopAlarms, a => a.VariablePath == "Temperature");
+        Assert.Equal(4, row.ActivationCount);
+        Assert.Equal("", row.Message);
+        Assert.NotNull(row.AvgAcknowledgeSeconds);
+        Assert.Null(Assert.Single(snapshot.TopAlarms, a => a.VariablePath == "Pressure").AvgAcknowledgeSeconds);
+    }
+
     private static async Task InvokeViewerAsync(object viewer, string name)
     {
         var method = viewer.GetType().GetMethod(name, BindingFlags.NonPublic | BindingFlags.Instance);

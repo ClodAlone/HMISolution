@@ -2975,7 +2975,7 @@ namespace SharedModels
         /// <summary>Total alarm acknowledgements tracked in the current window.</summary>
         public int TotalAcknowledgements { get; set; }
 
-        /// <summary>Top-10 most frequently activated alarms.</summary>
+        /// <summary>Top-10 variable sources by activation count, aggregated across all alarm conditions.</summary>
         public List<AlarmFrequencyEntry> TopAlarms { get; set; } = new();
 
         /// <summary>
@@ -3006,10 +3006,11 @@ namespace SharedModels
         /// <summary>Variable path of the alarm source.</summary>
         public string VariablePath { get; set; } = "";
 
-        /// <summary>Alarm message template.</summary>
+        /// <summary>Legacy field retained for diagnostics compatibility. Empty for variable-level aggregates;
+        /// an individual event message cannot represent all conditions counted for a source.</summary>
         public string Message { get; set; } = "";
 
-        /// <summary>Number of activations in the window.</summary>
+        /// <summary>Number of activations across all conditions for this variable in the window.</summary>
         public int ActivationCount { get; set; }
 
         /// <summary>Average time-to-acknowledge in seconds for this source. Null if never acknowledged.</summary>

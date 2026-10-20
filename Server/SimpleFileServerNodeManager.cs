@@ -2287,7 +2287,6 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                         return new AlarmFrequencyEntry
                         {
                             VariablePath = g.Key,
-                            Message = g.First().Message,
                             ActivationCount = g.Count(),
                             AvgAcknowledgeSeconds = avgAckSec
                         };

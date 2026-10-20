@@ -231,6 +231,10 @@ but does not clear an ongoing process condition. Shelving suppresses notificatio
 the chosen duration and automatically expires; shelved alarms remain identifiable in
 the list. Failed operations display an error instead of silently reporting success.
 
+Alarm Analytics aggregates activation counts and acknowledgment metrics **by variable**
+across all alarm conditions. Aggregate rows do not display a single alarm level or trigger
+value; use event history to inspect individual HH, H, L, LL, or condition-alarm events.
+
 ## ⚡ IEC 61131-3 PLC Runtime
 
 Built-in PLC runtime supporting:
