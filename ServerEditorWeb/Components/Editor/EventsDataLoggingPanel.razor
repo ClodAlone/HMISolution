@@ -129,6 +129,7 @@
                             <th style="width: 80px; font-size: 10px;">Category</th>
                             <th style="width: 70px; font-size: 10px;">Severity</th>
                             <th style="width: 100px; font-size: 10px;">Source</th>
+                            <th style="font-size: 10px;">Value at event</th>
                             <th style="font-size: 10px;">Message</th>
                             <th style="width: 40px; font-size: 10px;"></th>
                         </tr>
@@ -142,17 +143,19 @@
                                 <td style="font-size: 9px;"><span class="badge bg-secondary">@evt.Category</span></td>
                                 <td style="font-size: 9px;"><span class="badge @SeverityBadgeClass(evt.Severity)">@evt.Severity</span></td>
                                 <td style="font-size: 9px;">@evt.Source</td>
+                                <td style="font-size: 9px;">@(evt.Value ?? "—")</td>
                                 <td style="font-size: 9px; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">@evt.Message</td>
                                 <td style="text-align: center; padding: 2px;">@(isExpanded ? "▼" : "▶")</td>
                             </tr>
                             @if (isExpanded)
                             {
                                 <tr style="background: var(--bg-tertiary);">
-                                    <td colspan="6" style="padding: 8px;">
+                                    <td colspan="7" style="padding: 8px;">
                                         <div style="font-size: 10px; font-family: monospace;">
                                             <div><strong>Category:</strong> @evt.Category</div>
                                             <div><strong>Severity:</strong> @evt.Severity</div>
                                             <div><strong>Source:</strong> @evt.Source</div>
+                                            <div><strong>Value at event:</strong> @(evt.Value ?? "—")</div>
                                             <div><strong>Time (UTC):</strong> @evt.Time.ToString("o")</div>
                                             <div style="margin-top: 4px;"><strong>Message:</strong></div>
                                             <div style="white-space: pre-wrap; word-break: break-word; margin-left: 8px;">@evt.Message</div>
@@ -363,6 +366,7 @@
         public string Source { get; set; } = "";
         public string Message { get; set; } = "";
         public string? Details { get; set; }
+        public string? Value { get; set; }
     }
 
     private class DataLogStatus
@@ -555,6 +559,15 @@
             using var conn = new SqliteConnection($"Data Source={dbPath};Mode=ReadOnly");
             conn.Open();
 
+            bool hasValue = false;
+            using (var columns = conn.CreateCommand())
+            {
+                columns.CommandText = "PRAGMA table_info(server_events)";
+                using var columnReader = columns.ExecuteReader();
+                while (columnReader.Read())
+                    hasValue |= string.Equals(columnReader.GetString(1), "value", StringComparison.OrdinalIgnoreCase);
+            }
+
             var conditions = new List<string>();
 
             if (_timeRangeMinutes > 0)
@@ -584,7 +597,7 @@
             // Fetch page of results
             using var cmd = conn.CreateCommand();
             cmd.CommandText = $@"
-                SELECT id, time, category, severity, source, message, details
+                SELECT id, time, category, severity, source, message, details, {(hasValue ? "value" : "NULL")}
                 FROM server_events
                 {whereClause}
                 ORDER BY time DESC
@@ -610,7 +623,8 @@
                     Severity = reader.GetString(3),
                     Source = reader.GetString(4),
                     Message = reader.GetString(5),
-                    Details = reader.IsDBNull(6) ? null : reader.GetString(6)
+                    Details = reader.IsDBNull(6) ? null : reader.GetString(6),
+                    Value = reader.IsDBNull(7) ? null : reader.GetString(7)
                 });
             }
         }

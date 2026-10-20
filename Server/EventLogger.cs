@@ -53,7 +53,8 @@ public sealed class EventLogger : IDisposable
                     severity    TEXT    NOT NULL,
                     source      TEXT    NOT NULL,
                     message     TEXT    NOT NULL,
-                    details     TEXT
+                    details     TEXT,
+                    value       TEXT
                 );
                 CREATE INDEX IF NOT EXISTS idx_{TableName}_time
                     ON {TableName} (time);
@@ -61,6 +62,22 @@ public sealed class EventLogger : IDisposable
                     ON {TableName} (category, time);
             ";
             cmd.ExecuteNonQuery();
+
+            using (var columns = _connection.CreateCommand())
+            {
+                columns.CommandText = $"PRAGMA table_info({TableName})";
+                bool hasValue = false;
+                using (var reader = columns.ExecuteReader())
+                {
+                    while (reader.Read())
+                        hasValue |= string.Equals(reader.GetString(1), "value", StringComparison.OrdinalIgnoreCase);
+                }
+                if (!hasValue)
+                {
+                    columns.CommandText = $"ALTER TABLE {TableName} ADD COLUMN value TEXT";
+                    columns.ExecuteNonQuery();
+                }
+            }
 
             _initialized = true;
 
@@ -81,9 +98,9 @@ public sealed class EventLogger : IDisposable
 
     // ─── Public logging methods ─────────────────────────────────────────
 
-    /// <summary>Log an alarm activation or state change.</summary>
-    public void LogAlarm(string severity, string source, string message, string? details = null)
-        => Log("Alarm", severity, source, message, details);
+    /// <summary>Log an alarm activation or state change with the captured event-time variable value.</summary>
+    public void LogAlarm(string severity, string source, string message, string? details = null, string? value = null)
+        => Log("Alarm", severity, source, message, details, value);
 
     /// <summary>Log a user authentication event (login, logout, failed login).</summary>
     public void LogAuth(string severity, string source, string message, string? details = null)
@@ -106,16 +123,17 @@ public sealed class EventLogger : IDisposable
     /// <summary>
     /// Optional callback invoked after each event is logged.
     /// Used by redundancy to enqueue events for replication to the partner.
-    /// Parameters: category, severity, source, message, details.
+    /// Parameters: category, severity, source, message, details, value.
     /// </summary>
-    public Action<string, string, string, string, string?>? OnEventLogged { get; set; }
+    public Action<string, string, string, string, string?, string?>? OnEventLogged { get; set; }
 
-    private void Log(string category, string severity, string source, string message, string? details)
+    private void Log(string category, string severity, string source, string message, string? details, string? value = null)
     {
         if (!_initialized) return;
+        var eventTime = DateTime.UtcNow;
 
         // Notify replication hook (non-blocking, before async write)
-        try { OnEventLogged?.Invoke(category, severity, source, message, details); }
+        try { OnEventLogged?.Invoke(category, severity, source, message, details, value); }
         catch { /* replication hook must not break logging */ }
 
         Task.Run(() =>
@@ -128,14 +146,15 @@ public sealed class EventLogger : IDisposable
 
                     using var cmd = _connection.CreateCommand();
                     cmd.CommandText = $@"
-                        INSERT INTO {TableName} (time, category, severity, source, message, details)
-                        VALUES (@t, @cat, @sev, @src, @msg, @det)";
-                    cmd.Parameters.AddWithValue("@t", DateTime.UtcNow.ToString("o"));
+                        INSERT INTO {TableName} (time, category, severity, source, message, details, value)
+                        VALUES (@t, @cat, @sev, @src, @msg, @det, @val)";
+                    cmd.Parameters.AddWithValue("@t", eventTime.ToString("o"));
                     cmd.Parameters.AddWithValue("@cat", category);
                     cmd.Parameters.AddWithValue("@sev", severity);
                     cmd.Parameters.AddWithValue("@src", source);
                     cmd.Parameters.AddWithValue("@msg", message);
                     cmd.Parameters.AddWithValue("@det", (object?)details ?? DBNull.Value);
+                    cmd.Parameters.AddWithValue("@val", (object?)value ?? DBNull.Value);
                     cmd.ExecuteNonQuery();
                 }
             }
@@ -210,7 +229,7 @@ public sealed class EventLogger : IDisposable
                 var whereClause = conditions.Count > 0 ? "WHERE " + string.Join(" AND ", conditions) : "";
 
                 using var cmd = _connection.CreateCommand();
-                cmd.CommandText = $"SELECT time, category, severity, source, message, details FROM {TableName} {whereClause} ORDER BY time DESC LIMIT @limit";
+                cmd.CommandText = $"SELECT time, category, severity, source, message, details, value FROM {TableName} {whereClause} ORDER BY time DESC LIMIT @limit";
 
                 if (!string.IsNullOrEmpty(category))
                     cmd.Parameters.AddWithValue("@category", category);
@@ -232,7 +251,8 @@ public sealed class EventLogger : IDisposable
                         ["severity"] = reader.GetString(2),
                         ["source"] = reader.GetString(3),
                         ["message"] = reader.GetString(4),
-                        ["details"] = reader.IsDBNull(5) ? "" : reader.GetString(5)
+                        ["details"] = reader.IsDBNull(5) ? "" : reader.GetString(5),
+                        ["value"] = reader.IsDBNull(6) ? "" : reader.GetString(6)
                     });
                 }
             }
@@ -324,7 +344,7 @@ public sealed class EventLogger : IDisposable
             {
                 if (_connection == null) return entries;
                 using var cmd = _connection.CreateCommand();
-                cmd.CommandText = $"SELECT time, category, severity, source, message, details FROM {TableName} WHERE time > @since ORDER BY time ASC LIMIT @limit";
+                cmd.CommandText = $"SELECT time, category, severity, source, message, details, value FROM {TableName} WHERE time > @since ORDER BY time ASC LIMIT @limit";
                 cmd.Parameters.AddWithValue("@since", sinceUtc.ToString("o"));
                 cmd.Parameters.AddWithValue("@limit", maxRows);
                 using var reader = cmd.ExecuteReader();
@@ -337,7 +357,8 @@ public sealed class EventLogger : IDisposable
                         Severity = reader.GetString(2),
                         Source = reader.GetString(3),
                         Message = reader.GetString(4),
-                        Details = reader.IsDBNull(5) ? null : reader.GetString(5)
+                        Details = reader.IsDBNull(5) ? null : reader.GetString(5),
+                        Value = reader.IsDBNull(6) ? null : reader.GetString(6)
                     });
                 }
             }
@@ -363,7 +384,7 @@ public sealed class EventLogger : IDisposable
             {
                 using var tx = _connection.BeginTransaction();
                 using var cmd = _connection.CreateCommand();
-                cmd.CommandText = $"INSERT INTO {TableName} (time, category, severity, source, message, details) VALUES (@t, @cat, @sev, @src, @msg, @det)";
+                cmd.CommandText = $"INSERT INTO {TableName} (time, category, severity, source, message, details, value) VALUES (@t, @cat, @sev, @src, @msg, @det, @val)";
 
                 var pTime = cmd.Parameters.Add("@t", SqliteType.Text);
                 var pCat = cmd.Parameters.Add("@cat", SqliteType.Text);
@@ -371,6 +392,7 @@ public sealed class EventLogger : IDisposable
                 var pSrc = cmd.Parameters.Add("@src", SqliteType.Text);
                 var pMsg = cmd.Parameters.Add("@msg", SqliteType.Text);
                 var pDet = cmd.Parameters.Add("@det", SqliteType.Text);
+                var pVal = cmd.Parameters.Add("@val", SqliteType.Text);
 
                 foreach (var e in events)
                 {
@@ -380,6 +402,7 @@ public sealed class EventLogger : IDisposable
                     pSrc.Value = e.Source;
                     pMsg.Value = e.Message;
                     pDet.Value = e.Details != null ? (object)e.Details : DBNull.Value;
+                    pVal.Value = (object?)e.Value ?? DBNull.Value;
                     cmd.ExecuteNonQuery();
                 }
 

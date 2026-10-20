@@ -219,6 +219,12 @@ Design rich HMI screens with 21+ built-in widget types:
 - Command Button, Animated Text
 - Radio Group
 
+Alarm event history stores the variable value captured during alarm evaluation, including
+activation, limit-level changes, and return to normal. The Event Log's **Value at event**
+column and CSV/printable exports show this stored snapshot, not the current tag value.
+Existing event databases are upgraded automatically; older records without a captured
+value remain unavailable rather than being backfilled from live values.
+
 ## ⚡ IEC 61131-3 PLC Runtime
 
 Built-in PLC runtime supporting:

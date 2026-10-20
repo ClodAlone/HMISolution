@@ -176,7 +176,8 @@ namespace SimpleOpcFileServer
 
                             Log.Warning(message);
                             _eventLogger?.LogAlarm("Warning", entry.VariablePath, message,
-                                $"ZScore={zScore:F2} Mean={mean:G6} StdDev={stdDev:G4} Window={entry.Config.WindowMinutes}min Samples={points.Count}");
+                                $"ZScore={zScore:F2} Mean={mean:G6} StdDev={stdDev:G4} Window={entry.Config.WindowMinutes}min Samples={points.Count}",
+                                latest.Value.ToString(System.Globalization.CultureInfo.InvariantCulture));
 
                             if (entry.AlarmConfig is { NotifyOnActivation: true })
                                 _notificationService?.NotifyAlarmActivated(entry.VariablePath, message, entry.Config.Severity);
@@ -275,7 +276,8 @@ namespace SimpleOpcFileServer
                                 Log.Warning(message);
                                 _eventLogger?.LogAlarm("Warning", entry.VariablePath, message,
                                     $"Prediction: {predictedLimit} breach in {minutesToBreach:F1}min, slope={slope:G4}/min, " +
-                                    $"current={latest.Value:G6}, limit={highLimit}/{lowLimit}");
+                                    $"current={latest.Value:G6}, limit={highLimit}/{lowLimit}",
+                                    latest.Value.ToString(System.Globalization.CultureInfo.InvariantCulture));
 
                                 if (entry.AlarmConfig is { NotifyOnActivation: true })
                                     _notificationService?.NotifyAlarmActivated(entry.VariablePath, message, entry.Config.Severity);

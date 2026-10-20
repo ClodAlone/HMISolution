@@ -15,6 +15,7 @@ public class EventLogEntry
     public string Source { get; set; } = "";
     public string Message { get; set; } = "";
     public string? Details { get; set; }
+    public string? Value { get; set; }
 }
 
 /// <summary>
@@ -53,6 +54,15 @@ public class EventLogReaderService
             using var conn = new SqliteConnection($"Data Source={dbPath};Mode=ReadOnly");
             conn.Open();
 
+            bool hasValue = false;
+            using (var columns = conn.CreateCommand())
+            {
+                columns.CommandText = "PRAGMA table_info(server_events)";
+                using var columnReader = columns.ExecuteReader();
+                while (columnReader.Read())
+                    hasValue |= string.Equals(columnReader.GetString(1), "value", StringComparison.OrdinalIgnoreCase);
+            }
+
             // Build query
             var conditions = new List<string>();
             var cmd = conn.CreateCommand();
@@ -81,7 +91,7 @@ public class EventLogReaderService
 
             var whereClause = conditions.Count > 0 ? "WHERE " + string.Join(" AND ", conditions) : "";
             cmd.CommandText = $@"
-                SELECT id, time, category, severity, source, message, details
+                SELECT id, time, category, severity, source, message, details, {(hasValue ? "value" : "NULL")}
                 FROM server_events
                 {whereClause}
                 ORDER BY time DESC
@@ -99,7 +109,8 @@ public class EventLogReaderService
                     Severity = reader.GetString(3),
                     Source = reader.GetString(4),
                     Message = reader.GetString(5),
-                    Details = reader.IsDBNull(6) ? null : reader.GetString(6)
+                    Details = reader.IsDBNull(6) ? null : reader.GetString(6),
+                    Value = reader.IsDBNull(7) ? null : reader.GetString(7)
                 });
             }
         }

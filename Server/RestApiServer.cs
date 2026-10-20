@@ -770,7 +770,7 @@ public sealed partial class RestApiServer : IDisposable
             var events = _eventLogger.QueryEvents(category, "", DateTime.MinValue, DateTime.MaxValue, limit);
 
             var csv = new StringBuilder();
-            csv.AppendLine("Time,Category,Severity,Source,Message,Details");
+            csv.AppendLine("Time,Category,Severity,Source,Message,Details,Value at event");
 
             foreach (var evt in events)
             {
@@ -780,8 +780,9 @@ public sealed partial class RestApiServer : IDisposable
                 var src = evt.GetValueOrDefault("source")?.ToString() ?? "";
                 var msg = evt.GetValueOrDefault("message")?.ToString()?.Replace("\"", "\"\"") ?? "";
                 var det = evt.GetValueOrDefault("details")?.ToString()?.Replace("\"", "\"\"") ?? "";
+                var value = evt.GetValueOrDefault("value")?.ToString()?.Replace("\"", "\"\"") ?? "";
 
-                csv.AppendLine($"{time},{cat},{sev},{src},\"{msg}\",\"{det}\"");
+                csv.AppendLine($"{time},{cat},{sev},{src},\"{msg}\",\"{det}\",\"{value}\"");
             }
 
             var bytes = Encoding.UTF8.GetBytes(csv.ToString());

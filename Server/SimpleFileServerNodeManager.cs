@@ -820,8 +820,8 @@ namespace SimpleOpcFileServer
                      if (_eventLogger != null)
                      {
                          var red = _redundancy;
-                         _eventLogger.OnEventLogged = (cat, sev, src, msg, det) =>
-                             red.EnqueueEventReplication(cat, sev, src, msg, det);
+                         _eventLogger.OnEventLogged = (cat, sev, src, msg, det, value) =>
+                             red.EnqueueEventReplication(cat, sev, src, msg, det, value);
                      }
 
                      // When role changes, start/stop drivers, scripts, PLC accordingly
@@ -2799,10 +2799,11 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
 
         private void EvaluateLimitAlarm(AlarmConditionInfo info)
         {
-            var result = AlarmEvaluator.EvaluateLimitAlarm(info.SourceVariable.Value.Value, info.Config, info.IsActive);
+            var value = info.SourceVariable.Value.Value;
+            var result = AlarmEvaluator.EvaluateLimitAlarm(value, info.Config, info.IsActive);
             if (result == null) return;
 
-            double val = AlarmEvaluator.GetNumericValue(info.SourceVariable.Value.Value)!.Value;
+            string valueStr = Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture) ?? "null";
             var cfg = info.Config;
             double highHigh = cfg.HighHighLimit ?? cfg.HighLimit;
             double lowLow = cfg.LowLowLimit ?? cfg.LowLimit;
@@ -2830,8 +2831,8 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 string limitText = result.LimitText;
 
                 string message = string.IsNullOrEmpty(cfg.Message)
-                    ? $"{info.VariablePath}: {limitText} — value={val:G6}"
-                    : $"{cfg.Message} — {limitText} — value={val:G6}";
+                    ? $"{info.VariablePath}: {limitText} — value={valueStr}"
+                    : $"{cfg.Message} — {limitText} — value={valueStr}";
 
                 if (shouldActivate)
                 {
@@ -2855,7 +2856,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
 
                 ReportAlarmEvent(alarm);
                 _eventLogger?.LogAlarm(severity >= 800 ? "Critical" : "Warning", info.VariablePath, message,
-                    $"Value={val:G6} HH={highHigh} H={cfg.HighLimit} L={cfg.LowLimit} LL={lowLow} Hyst={hyst}");
+                    $"Value={valueStr} HH={highHigh} H={cfg.HighLimit} L={cfg.LowLimit} LL={lowLow} Hyst={hyst}", valueStr);
                 if (shouldActivate)
                 {
                     RecordAlarmAnalyticsEvent(AlarmAnalyticsEventKind.Activated, info.VariablePath, message);
@@ -2873,7 +2874,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 alarm.SetActiveState(SystemContext, false);
 
                 alarm.Severity.Value = 1;
-                alarm.Message.Value = new LocalizedText($"{info.VariablePath}: Returned to normal — value={val:G6}");
+                alarm.Message.Value = new LocalizedText($"{info.VariablePath}: Returned to normal — value={valueStr}");
                 alarm.Time.Value = DateTime.UtcNow;
                 alarm.ReceiveTime.Value = DateTime.UtcNow;
 
@@ -2884,13 +2885,14 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 alarm.EventType.Value = ObjectTypeIds.ExclusiveLimitAlarmType;
 
                 ReportAlarmEvent(alarm);
-                _eventLogger?.LogAlarm("Info", info.VariablePath, $"Returned to normal — value={val:G6}");
+                _eventLogger?.LogAlarm("Info", info.VariablePath, $"Returned to normal — value={valueStr}", value: valueStr);
             }
         }
 
         private void EvaluateConditionAlarm(AlarmConditionInfo info)
         {
             var value = info.SourceVariable.Value.Value;
+            string valueStr = value == null ? "null" : Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture) ?? "null";
             var cfg = info.Config;
             bool shouldActivate = AlarmEvaluator.EvaluateConditionActivation(cfg.Operator, cfg.CompareValue, value);
 
@@ -2911,7 +2913,6 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 info.IsActive = true;
                 var alarm = info.AlarmState;
 
-                string valueStr = value?.ToString() ?? "null";
                 string conditionText = $"{cfg.Operator} {cfg.CompareValue}".Trim();
                 string message = string.IsNullOrEmpty(cfg.Message)
                     ? $"{info.VariablePath}: Condition met ({conditionText}) — value={valueStr}"
@@ -2932,7 +2933,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
 
                 ReportAlarmEvent(alarm);
                 _eventLogger?.LogAlarm(cfg.ConditionSeverity >= 800 ? "Critical" : "Warning",
-                    info.VariablePath, message, $"Operator={cfg.Operator} Compare={cfg.CompareValue} Value={valueStr} Hyst={cfg.Hysteresis}");
+                    info.VariablePath, message, $"Operator={cfg.Operator} Compare={cfg.CompareValue} Value={valueStr} Hyst={cfg.Hysteresis}", valueStr);
                 RecordAlarmAnalyticsEvent(AlarmAnalyticsEventKind.Activated, info.VariablePath, message);
 
                 if (cfg.NotifyOnActivation)
@@ -2943,7 +2944,6 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 info.IsActive = false;
                 var alarm = info.AlarmState;
 
-                string valueStr = value?.ToString() ?? "null";
                 alarm.SetActiveState(SystemContext, false);
 
                 alarm.Severity.Value = 1;
@@ -2958,7 +2958,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 alarm.EventType.Value = ObjectTypeIds.OffNormalAlarmType;
 
                 ReportAlarmEvent(alarm);
-                _eventLogger?.LogAlarm("Info", info.VariablePath, $"Condition cleared — value={valueStr}");
+                _eventLogger?.LogAlarm("Info", info.VariablePath, $"Condition cleared — value={valueStr}", value: valueStr);
             }
         }
 

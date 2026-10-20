@@ -293,7 +293,7 @@ public sealed class RedundancyService : IDisposable
     /// Enqueue an event log entry for replication to the standby.
     /// Called by the event logger on the active server.
     /// </summary>
-    public void EnqueueEventReplication(string category, string severity, string source, string message, string? details)
+    public void EnqueueEventReplication(string category, string severity, string source, string message, string? details, string? value = null)
     {
         if (!IsActive || _eventReplicationQueue.Count >= MaxEventReplicationQueueSize) return;
         _eventReplicationQueue.Enqueue(new EventEntry
@@ -303,7 +303,8 @@ public sealed class RedundancyService : IDisposable
             Severity = severity,
             Source = source,
             Message = message,
-            Details = details
+            Details = details,
+            Value = value
         });
     }
 
@@ -709,6 +710,7 @@ public sealed class RedundancyService : IDisposable
         public string Source { get; set; } = "";
         public string Message { get; set; } = "";
         public string? Details { get; set; }
+        public string? Value { get; set; }
     }
 
     public class RedundancyDiagnostics

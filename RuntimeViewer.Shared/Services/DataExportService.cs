@@ -110,7 +110,7 @@ public class DataExportService
         if (events.Count == 0) return "";
 
         var sb = new StringBuilder();
-        sb.AppendLine("Timestamp,Category,Severity,Source,Message,Details");
+        sb.AppendLine("Timestamp,Category,Severity,Source,Message,Details,Value at event");
 
         foreach (var e in events)
         {
@@ -120,6 +120,7 @@ public class DataExportService
             sb.Append(',').Append(CsvEscape(e.Source));
             sb.Append(',').Append(CsvEscape(e.Message));
             sb.Append(',').Append(CsvEscape(e.Details ?? ""));
+            sb.Append(',').Append(CsvEscape(e.Value ?? ""));
             sb.AppendLine();
         }
 
@@ -143,7 +144,7 @@ public class DataExportService
         sb.AppendLine("</div>");
 
         // Table
-        sb.AppendLine("<table><thead><tr><th>Time</th><th>Category</th><th>Severity</th><th>Source</th><th>Message</th></tr></thead><tbody>");
+        sb.AppendLine("<table><thead><tr><th>Time</th><th>Category</th><th>Severity</th><th>Source</th><th>Value at event</th><th>Message</th></tr></thead><tbody>");
 
         foreach (var e in events)
         {
@@ -157,6 +158,7 @@ public class DataExportService
             sb.Append($"<td>{Esc(e.Category)}</td>");
             sb.Append($"<td{severityClass}>{Esc(e.Severity)}</td>");
             sb.Append($"<td>{Esc(e.Source)}</td>");
+            sb.Append($"<td>{Esc(e.Value ?? "")}</td>");
             sb.Append($"<td>{Esc(e.Message)}</td></tr>\n");
         }
 
