@@ -1,3 +1,6 @@
+using System.Globalization;
+using System.Text.RegularExpressions;
+using System.Xml.Linq;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.DependencyInjection;
@@ -44,6 +47,44 @@ public class GaugeRenderingTests
         });
         Assert.Contains("rv-responsive-gauge-bar", html);
         Assert.DoesNotContain("linearGradient", html);
+    }
+
+    [Theory]
+    [InlineData("needle")]
+    [InlineData("arc")]
+    [InlineData("semicircle")]
+    [InlineData("hbar")]
+    [InlineData("vbar")]
+    [InlineData("thermometer")]
+    public async Task ClassicGauge_ResizesAsOneProportionalDrawing(string style)
+    {
+        string? originalDrawing = null;
+        foreach (var (width, height) in new[] { (80, 80), (800, 800), (1600, 400), (400, 1600) })
+        {
+            var symbol = new ScreenSymbol
+            {
+                Id = "classic", Type = "gauge", GaugeStyle = style, Width = width, Height = height,
+                GaugeTicks = 5, GaugeUnit = "bar"
+            };
+            var html = await RenderAsync(new ScreenConfig { LayoutMode = "svg", Symbols = [symbol] });
+            var svg = XElement.Parse(Regex.Match(html, "<svg class=\"classic-gauge\"[\\s\\S]*?</svg>").Value);
+            Assert.Equal(width, double.Parse(svg.Attribute("width")!.Value, CultureInfo.InvariantCulture));
+            Assert.Equal(height, double.Parse(svg.Attribute("height")!.Value, CultureInfo.InvariantCulture));
+            Assert.Equal("0 0 80 80", svg.Attribute("viewBox")!.Value);
+            Assert.Equal("xMidYMid meet", svg.Attribute("preserveAspectRatio")!.Value);
+            Assert.Equal("visible", svg.Attribute("overflow")!.Value);
+            var drawing = string.Concat(svg.Elements().Select(e => e.ToString(SaveOptions.DisableFormatting)));
+            originalDrawing ??= drawing;
+            Assert.Equal(originalDrawing, drawing);
+            Assert.Contains("0.0 bar", drawing);
+            Assert.DoesNotContain("linearGradient", drawing);
+            foreach (var circle in svg.Descendants("circle").Where(c => c.Attribute("stroke-dasharray") != null || ((string?)c.Attribute("style"))?.Contains("stroke-dasharray") == true))
+            {
+                var circumference = 2 * Math.PI * double.Parse(circle.Attribute("r")!.Value, CultureInfo.InvariantCulture);
+                Assert.True(circumference < 999, "Dash gap must exceed the complete circle to avoid repeated progress segments.");
+            }
+            Assert.All(svg.Descendants("rect").Attributes("height"), a => Assert.True(double.Parse(a.Value, CultureInfo.InvariantCulture) >= 0));
+        }
     }
 
     private static async Task<string> RenderAsync(ScreenConfig screen)

@@ -440,6 +440,8 @@ Trend cursors use SVG coordinates so selection stays aligned when a widget is re
 
 NLQuery requires Natural Language Query to be enabled in project settings, variables with data logging enabled, and access to the historical database from the RuntimeViewer host. Configure an accessible Ollama endpoint/model or the selected cloud engine's API key. Calendar references such as "yesterday" query the requested UTC interval, not a rolling window ending now. Missing databases, database read failures, and empty historical ranges are reported in the conversation without sending an AI request.
 
+Classic SVG gauges use a fixed design viewport in the editor and runtime. Resizing scales the complete drawing uniformly, including text, strokes, ticks, and needles; non-square bounds center the gauge with unused space rather than stretching it. Styled gauge presets and the legacy responsive gauge bar retain their existing rendering.
+
 ---
 
 ## 9. RuntimeViewer.Desktop — Native Desktop Shell

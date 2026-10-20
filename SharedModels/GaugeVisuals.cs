@@ -6,6 +6,8 @@ namespace SharedModels;
 /// <summary>Shared SVG appearance for opt-in styled gauges in the editor and runtime.</summary>
 public static class GaugeVisuals
 {
+    public const double ClassicDesignSize = 80;
+
     private static readonly XNamespace Svg = "http://www.w3.org/2000/svg";
 
     public static bool IsEnhanced(ScreenSymbol symbol) =>

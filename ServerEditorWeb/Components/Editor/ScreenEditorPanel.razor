@@ -4298,6 +4298,14 @@ Right-click a symbol for actions</div>
             builder.AddMarkupContent(0, GaugeVisuals.Render(sym, fill, pct, valText, min, max));
             return;
         }
+        builder.OpenElement(0, "svg");
+        builder.AddAttribute(1, "class", "classic-gauge");
+        builder.AddAttribute(2, "width", sym.Width.ToString("F1", _ci));
+        builder.AddAttribute(3, "height", sym.Height.ToString("F1", _ci));
+        builder.AddAttribute(4, "viewBox", $"0 0 {GaugeVisuals.ClassicDesignSize} {GaugeVisuals.ClassicDesignSize}");
+        builder.AddAttribute(5, "preserveAspectRatio", "xMidYMid meet");
+        builder.AddAttribute(6, "overflow", "visible");
+        builder.OpenRegion(7);
         var style = sym.GaugeStyle ?? "needle";
         switch (style)
         {
@@ -4308,13 +4316,15 @@ Right-click a symbol for actions</div>
             case "thermometer": RenderGaugeThermometer(builder, sym, fill, liveValue); break;
             default: RenderGaugeNeedle(builder, sym, fill, liveValue); break;
         }
+        builder.CloseRegion();
+        builder.CloseElement();
     };
 
     private void RenderGaugeNeedle(Microsoft.AspNetCore.Components.Rendering.RenderTreeBuilder builder, ScreenSymbol sym, string fill, string? liveValue)
     {
         int seq = 0;
         var (_, min, max, pct, valText) = GaugeCalc(sym, liveValue);
-        var cx = sym.Width / 2; var cy = sym.Height / 2;
+        var cx = GaugeVisuals.ClassicDesignSize / 2; var cy = cx;
         var r = Math.Min(cx, cy) - 4;
         var trackColor = sym.GaugeTrackColor ?? "#e0e0e0";
         var needleColor = sym.GaugeNeedleColor ?? "#333333";
@@ -4392,7 +4402,7 @@ Right-click a symbol for actions</div>
     {
         int seq = 0;
         var (_, min, max, pct, valText) = GaugeCalc(sym, liveValue);
-        var cx = sym.Width / 2; var cy = sym.Height / 2;
+        var cx = GaugeVisuals.ClassicDesignSize / 2; var cy = cx;
         var r = Math.Min(cx, cy) - 6;
         var trackColor = sym.GaugeTrackColor ?? "#e0e0e0";
         var sw = Math.Max(6, r * 0.18);
@@ -4433,8 +4443,8 @@ Right-click a symbol for actions</div>
     {
         int seq = 0;
         var (_, min, max, pct, valText) = GaugeCalc(sym, liveValue);
-        var cx = sym.Width / 2; var cy = sym.Height * 0.7;
-        var r = Math.Min(sym.Width / 2, sym.Height * 0.65) - 4;
+        var cx = GaugeVisuals.ClassicDesignSize / 2; var cy = GaugeVisuals.ClassicDesignSize * 0.7;
+        var r = Math.Min(cx, GaugeVisuals.ClassicDesignSize * 0.65) - 4;
         var trackColor = sym.GaugeTrackColor ?? "#e0e0e0";
         var sw = Math.Max(6, r * 0.18);
         var halfCirc = Math.PI * r;
@@ -4474,7 +4484,7 @@ Right-click a symbol for actions</div>
     {
         int seq = 0;
         var (_, min, max, pct, valText) = GaugeCalc(sym, liveValue);
-        var w = sym.Width; var h = sym.Height;
+        var w = GaugeVisuals.ClassicDesignSize; var h = w;
         var trackColor = sym.GaugeTrackColor ?? "#e0e0e0";
         var barH = h * 0.45; var barY = (h - barH) / 2;
 
@@ -4508,7 +4518,7 @@ Right-click a symbol for actions</div>
     {
         int seq = 0;
         var (_, min, max, pct, valText) = GaugeCalc(sym, liveValue);
-        var w = sym.Width; var h = sym.Height;
+        var w = GaugeVisuals.ClassicDesignSize; var h = w;
         var trackColor = sym.GaugeTrackColor ?? "#e0e0e0";
         var barW = w * 0.45; var barX = (w - barW) / 2;
         var fillH = pct * h;
@@ -4543,7 +4553,7 @@ Right-click a symbol for actions</div>
     {
         int seq = 0;
         var (_, min, max, pct, valText) = GaugeCalc(sym, liveValue);
-        var w = sym.Width; var h = sym.Height;
+        var w = GaugeVisuals.ClassicDesignSize; var h = w;
         var trackColor = sym.GaugeTrackColor ?? "#e0e0e0";
         var tubeW = Math.Max(10, w * 0.25);
         var bulbR = tubeW * 0.9;
