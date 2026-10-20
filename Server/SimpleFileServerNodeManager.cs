@@ -2215,6 +2215,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
             public required BaseDataVariableState SourceVariable { get; init; }
             public required string VariablePath { get; init; }
             public bool IsActive { get; set; }
+            public string ActiveLimitState { get; set; } = "";
         }
 
         // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Alarm analytics helpers Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
@@ -2809,10 +2810,13 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
 
             bool shouldActivate = result.ShouldActivate;
             bool shouldDeactivate = result.ShouldDeactivate;
+            bool shouldUpdate = info.IsActive && !string.IsNullOrEmpty(result.LimitState)
+                && result.LimitState != info.ActiveLimitState;
 
-            if (shouldActivate)
+            if (shouldActivate || shouldUpdate)
             {
                 info.IsActive = true;
+                info.ActiveLimitState = result.LimitState;
                 var alarm = info.AlarmState;
 
                 ushort severity = result.Severity;
@@ -2829,9 +2833,12 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                     ? $"{info.VariablePath}: {limitText} — value={val:G6}"
                     : $"{cfg.Message} — {limitText} — value={val:G6}";
 
-                alarm.SetActiveState(SystemContext, true);
-                alarm.SetAcknowledgedState(SystemContext, false);
-                alarm.SetConfirmedState(SystemContext, false);
+                if (shouldActivate)
+                {
+                    alarm.SetActiveState(SystemContext, true);
+                    alarm.SetAcknowledgedState(SystemContext, false);
+                    alarm.SetConfirmedState(SystemContext, false);
+                }
 
                 alarm.Severity.Value = severity;
                 alarm.Message.Value = new LocalizedText(message);
@@ -2849,14 +2856,18 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 ReportAlarmEvent(alarm);
                 _eventLogger?.LogAlarm(severity >= 800 ? "Critical" : "Warning", info.VariablePath, message,
                     $"Value={val:G6} HH={highHigh} H={cfg.HighLimit} L={cfg.LowLimit} LL={lowLow} Hyst={hyst}");
-                RecordAlarmAnalyticsEvent(AlarmAnalyticsEventKind.Activated, info.VariablePath, message);
+                if (shouldActivate)
+                {
+                    RecordAlarmAnalyticsEvent(AlarmAnalyticsEventKind.Activated, info.VariablePath, message);
 
-                if (cfg.NotifyOnActivation)
-                    _notificationService?.NotifyAlarmActivated(info.VariablePath, message, severity);
+                    if (cfg.NotifyOnActivation)
+                        _notificationService?.NotifyAlarmActivated(info.VariablePath, message, severity);
+                }
             }
             else if (shouldDeactivate)
             {
                 info.IsActive = false;
+                info.ActiveLimitState = "";
                 var alarm = info.AlarmState;
 
                 alarm.SetActiveState(SystemContext, false);

@@ -23,7 +23,8 @@ public static class AlarmEvaluator
 
     /// <summary>
     /// Evaluate a limit alarm for the given numeric value against the alarm configuration.
-    /// Returns activation/deactivation decision, severity, and descriptive text.
+    /// Returns activation/deactivation decisions and the current limit state, severity, and descriptive text
+    /// whenever a limit is exceeded, including while the alarm is already active.
     /// </summary>
     public static LimitResult? EvaluateLimitAlarm(object? value, AlarmConfig cfg, bool isCurrentlyActive)
     {
@@ -42,7 +43,7 @@ public static class AlarmEvaluator
         string limitState = "";
         string limitText = "";
 
-        if (shouldActivate && !isCurrentlyActive)
+        if (shouldActivate)
         {
             if (val >= highHigh)
             {

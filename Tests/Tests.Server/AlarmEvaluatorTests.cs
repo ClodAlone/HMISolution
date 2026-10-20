@@ -157,6 +157,64 @@ public class AlarmEvaluatorTests
         Assert.False(result.ShouldActivate);
     }
 
+    [Theory]
+    [InlineData(85.0, 100.0, "High", "HighHigh", 900, "High-High limit (95) exceeded")]
+    [InlineData(100.0, 85.0, "HighHigh", "High", 700, "High limit (80) exceeded")]
+    [InlineData(10.0, 3.0, "Low", "LowLow", 900, "Low-Low limit (5) violated")]
+    [InlineData(3.0, 10.0, "LowLow", "Low", 500, "Low limit (20) violated")]
+    [InlineData(85.0, 95.0, "High", "HighHigh", 900, "High-High limit (95) exceeded")]
+    [InlineData(10.0, 5.0, "Low", "LowLow", 900, "Low-Low limit (5) violated")]
+    [InlineData(100.0, 3.0, "HighHigh", "LowLow", 900, "Low-Low limit (5) violated")]
+    [InlineData(3.0, 100.0, "LowLow", "HighHigh", 900, "High-High limit (95) exceeded")]
+    public void LimitAlarm_ActiveLevelChanges_ReturnCurrentLimitDetails(
+        double initialValue, double currentValue, string initialState, string expectedState,
+        int expectedSeverity, string expectedText)
+    {
+        var cfg = new AlarmConfig
+        {
+            HighLimit = 80, HighHighLimit = 95,
+            LowLimit = 20, LowLowLimit = 5, Hysteresis = 2
+        };
+        var initial = AlarmEvaluator.EvaluateLimitAlarm(initialValue, cfg, isCurrentlyActive: false);
+        Assert.NotNull(initial);
+        Assert.True(initial.ShouldActivate);
+        Assert.Equal(initialState, initial.LimitState);
+
+        var result = AlarmEvaluator.EvaluateLimitAlarm(currentValue, cfg, isCurrentlyActive: true);
+
+        Assert.NotNull(result);
+        Assert.False(result.ShouldActivate);
+        Assert.False(result.ShouldDeactivate);
+        Assert.Equal(expectedState, result.LimitState);
+        Assert.Equal((ushort)expectedSeverity, result.Severity);
+        Assert.Equal(expectedText, result.LimitText);
+    }
+
+    [Theory]
+    [InlineData(78.0, false)]
+    [InlineData(22.0, false)]
+    [InlineData(80.0, false)]
+    [InlineData(20.0, false)]
+    [InlineData(75.0, true)]
+    [InlineData(25.0, true)]
+    public void LimitAlarm_ActiveWithinLimits_PreservesHysteresis(double value, bool shouldDeactivate)
+    {
+        var cfg = new AlarmConfig
+        {
+            HighLimit = 80, HighHighLimit = 95,
+            LowLimit = 20, LowLowLimit = 5, Hysteresis = 5
+        };
+
+        var result = AlarmEvaluator.EvaluateLimitAlarm(value, cfg, isCurrentlyActive: true);
+
+        Assert.NotNull(result);
+        Assert.False(result.ShouldActivate);
+        Assert.Equal(shouldDeactivate, result.ShouldDeactivate);
+        Assert.Equal("", result.LimitState);
+        Assert.Equal((ushort)0, result.Severity);
+        Assert.Equal("", result.LimitText);
+    }
+
     // ──────────────────────────────────────────────────────────────
     // EvaluateLimitAlarm — Deactivation
     // ──────────────────────────────────────────────────────────────
