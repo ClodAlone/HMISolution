@@ -136,11 +136,11 @@ namespace SimpleOpcFileServer
             _deferLoading = true;
             SystemContext.NodeIdFactory = this;
 
-            // Hook up user validation
-            if (server.SessionManager != null)
+            server.IdentityRegistry.Register(new UserNamePasswordAuthenticator((token, ct) =>
             {
-                server.SessionManager.ImpersonateUser += (s, e) => SessionManager_ImpersonateUser(s, e);
-            }
+                ct.ThrowIfCancellationRequested();
+                return new ValueTask<IUserIdentity>(AuthenticateUser(token));
+            }));
 
             InitializeDrivers();
             SetupWatcher();
@@ -570,51 +570,36 @@ namespace SimpleOpcFileServer
             Log.Debug("Configuration reloaded fully.");
         }
 
-        private void SessionManager_ImpersonateUser(ISession session, ImpersonateEventArgs args)
+        private IUserIdentity AuthenticateUser(UserNameIdentityTokenHandler userNameToken)
         {
-            if (args.NewIdentity is UserNameIdentityToken userNameToken)
+            var username = userNameToken.UserName;
+
+            if (_users.TryGetValue(username, out var userConfig))
             {
-                var username = userNameToken.UserName;
+                // SDK 2.0 keeps the decrypted password on the handler, not the wire token.
+                var password = System.Text.Encoding.UTF8.GetString(userNameToken.DecryptedPassword);
 
-                if (_users.TryGetValue(username, out var userConfig))
+                // Try hashed password first, then fall back to legacy plain-text
+                bool valid = false;
+                if (!string.IsNullOrEmpty(userConfig.PasswordHash))
                 {
-                    string? password = null;
-                    if (userNameToken.Password.Length > 0)
-                    {
-                         password = System.Text.Encoding.UTF8.GetString(userNameToken.Password.ToArray());
-                    }
-
-                    // Try hashed password first, then fall back to legacy plain-text
-                    bool valid = false;
-                    if (!string.IsNullOrEmpty(userConfig.PasswordHash))
-                    {
-                        valid = PasswordHasher.Verify(password ?? "", userConfig.PasswordHash);
-                    }
-                    else if (userConfig.Password == password)
-                    {
-                        valid = true;
-                    }
-
-                    if (valid)
-                    {
-                        args.Identity = new UserIdentity(userNameToken);
-                        Log.Debug("User {Username} logged in.", username);
-                        _eventLogger?.LogAuth("Info", username, $"User '{username}' logged in");
-                        return;
-                    }
+                    valid = PasswordHasher.Verify(password, userConfig.PasswordHash);
+                }
+                else if (userConfig.Password == password)
+                {
+                    valid = true;
                 }
 
-                _eventLogger?.LogAuth("Warning", username, $"Login failed for user '{username}' — invalid credentials");
-                throw new ServiceResultException(StatusCodes.BadUserAccessDenied, "Invalid username or password.");
+                if (valid)
+                {
+                    Log.Debug("User {Username} logged in.", username);
+                    _eventLogger?.LogAuth("Info", username, $"User '{username}' logged in");
+                    return new UserIdentity(userNameToken);
+                }
             }
-            else if (args.NewIdentity is AnonymousIdentityToken)
-            {
-                // Allow anonymous if the server is configured to accept it.
-                // Anonymous users will still be constrained by variable AccessLevel/UserAccessLevel.
-                args.Identity = new UserIdentity(new AnonymousIdentityToken());
-                _eventLogger?.LogAuth("Info", "anonymous", "Anonymous session established");
-                return;
-            }
+
+            _eventLogger?.LogAuth("Warning", username, $"Login failed for user '{username}' — invalid credentials");
+            throw new ServiceResultException(StatusCodes.BadUserAccessDenied, "Invalid username or password.");
         }
 
         /// <summary>

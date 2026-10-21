@@ -261,6 +261,15 @@ The server is a .NET Generic Host application that:
 14. Enter host.Run() loop
 ```
 
+With OPC UA SDK 2.0, server username authentication registers a
+`UserNamePasswordAuthenticator` with `IServerInternal.IdentityRegistry` and decodes
+`UserNameIdentityTokenHandler.DecryptedPassword` as UTF-8 before verifying the
+stored password hash (or legacy password). The registry runs before the legacy
+`ImpersonateUser` event, and the wire token's `Password` field is not the decrypted
+credential. Anonymous access remains governed by the advertised token policies.
+RuntimeViewer login and OPC session authentication are separate checks; a
+successful browser login does not imply an OPC connection.
+
 ---
 
 ## 6. Communication Drivers
