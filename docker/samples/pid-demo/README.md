@@ -47,6 +47,16 @@ Configurable parameters:
    - Increase **Cooling Disturbance** to test disturbance rejection
    - Toggle **PID Enable** off to see the process drift
 
+### PID gains Bar Chart
+
+The Dashboard chart reads `PID.Kp`, `PID.Ki`, and `PID.Kd` independently from
+its **Bars Definition**. It does not need a main **Variable** binding. Each gain
+change updates its bar in both SVG and responsive screens.
+
+The chart's **Max Value** (`BarChartMax`) is 20 in this demo, so a gain of 10
+fills half the available scale. Older projects that only configured
+`BarChartMaxValue` retain that setting when `BarChartMax` is left at its default.
+
 ## Auto-Tuning
 
 1. Navigate to the **Auto-Tune** screen

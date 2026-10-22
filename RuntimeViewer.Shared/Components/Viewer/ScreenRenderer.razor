@@ -512,12 +512,9 @@ else
             var isPressed = _pressedSymbolId == sym.Id;
             var isLocked = hasCmd && !canExecute && !string.IsNullOrEmpty(sym.RequiredAccess);
 
-            // rangeslider has no single VariablePath - track its two bound values plus drag state so it re-renders
-            var liveSymbolValue = sym.Type == "rangeslider"
-                ? $"{OpcGet(sym.RangeLowPath, sym)}|{OpcGet(sym.RangeHighPath, sym)}|{(_isDraggingRangeSlider && _dragRangeSliderSymbol == sym ? "d" : "")}"
-                : liveValue;
+            var liveSymbolValue = GetLiveSymbolValue(sym, liveValue);
 
-            <LiveSymbol @key="sym.Id" Value="@liveSymbolValue"><g transform="translate(@sym.X, @sym.Y) rotate(@F(rotation), @F(sym.Width / 2), @F(sym.Height / 2))"
+            <LiveSymbol @key="(Screen, sym.Id)" Value="@liveSymbolValue"><g transform="translate(@sym.X, @sym.Y) rotate(@F(rotation), @F(sym.Width / 2), @F(sym.Height / 2))"
                class="@(isInteractive ? "rv-interactive" : "") @(isPressed ? "rv-pressed" : "") @(isLocked ? "rv-locked" : "")"
                style="@(isInteractive ? "cursor: pointer;" : "") @BuildPositionAnimStyle(sym)"
                @onmousedown="(e) => OnSymbolMouseDown(e, sym)" @onmousedown:stopPropagation
@@ -1123,9 +1120,17 @@ else
         Localization.LanguageChanged += OnLanguageChanged;
     }
 
+    private ScreenConfig? _xyPlotScreen;
+    private readonly Dictionary<string, (string X, string Y, List<(double X, double Y)> Points)> _xyPlotData = new();
+
     protected override void OnParametersSet()
     {
-        if (Screen != null && Opc.IsConnected)
+        if (!ReferenceEquals(_xyPlotScreen, Screen))
+        {
+            _xyPlotScreen = Screen;
+            _xyPlotData.Clear();
+        }
+        if (Screen != null)
         {
             var paths = Screen.Symbols
                 .Where(s => !string.IsNullOrEmpty(s.VariablePath))
@@ -1136,8 +1141,8 @@ else
             // Also monitor variables referenced by commands
             foreach (var sym in Screen.Symbols)
             {
-                if (sym.Type == "motorcontrol" && !string.IsNullOrEmpty(sym.MotorFaultPath))
-                    paths.Add(ResolveAlias(sym.MotorFaultPath, sym.InstanceAliases is { Count: > 0 } ? sym.InstanceAliases : null));
+                foreach (var path in GetSymbolDependencies(sym))
+                    paths.Add(ResolveAlias(path, sym.InstanceAliases));
                 foreach (var cmd in sym.Commands)
                 {
                     if (!string.IsNullOrEmpty(cmd.VariablePath))
@@ -1176,15 +1181,8 @@ else
                     foreach (var pen in sym.TrendPens)
                     {
                         if (!string.IsNullOrEmpty(pen.VariablePath))
-                            paths.Add(pen.VariablePath);
+                            paths.Add(ResolveAlias(pen.VariablePath, sym.InstanceAliases));
                     }
-                }
-
-                // Monitor animation trigger variables
-                foreach (var anim in sym.Animations)
-                {
-                    if (!string.IsNullOrEmpty(anim.TriggerVariable))
-                        paths.Add(ResolveAlias(anim.TriggerVariable, sym.InstanceAliases is { Count: > 0 } ? sym.InstanceAliases : null));
                 }
             }
 
@@ -1197,6 +1195,12 @@ else
                 _lastMonitoredPaths = distinctPaths;
                 Opc.MonitorVariables(distinctPaths, _callerId);
             }
+        }
+        else
+        {
+            _lastMonitoredScreenName = null;
+            _lastMonitoredPaths.Clear();
+            Opc.UnregisterCaller(_callerId);
         }
     }
 
@@ -1244,6 +1248,90 @@ else
     {
         var aliases = sym.InstanceAliases is { Count: > 0 } ? sym.InstanceAliases : null;
         return Opc.GetValue(ResolveAlias(path, aliases));
+    }
+
+    private static (string Label, string Path) ParseVariableBinding(string definition)
+    {
+        var separator = definition.IndexOf('=');
+        return separator >= 0
+            ? (definition[..separator].Trim(), definition[(separator + 1)..].Trim())
+            : (definition.Trim(), definition.Trim());
+    }
+
+    private static IEnumerable<(string Label, string Path, string Color)> ParseChartBindings(string? definitions)
+    {
+        foreach (var definition in (definitions ?? "").Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var separator = definition.LastIndexOfAny([' ', '\t']);
+            if (separator < 0) continue;
+            var (label, path) = ParseVariableBinding(definition[..separator]);
+            yield return (label, path, definition[(separator + 1)..].Trim());
+        }
+    }
+
+    private static IEnumerable<(string Label, string Path)> ParseTableBindings(ScreenSymbol sym) =>
+        (sym.DataTableColumns ?? "").Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(definition => definition.Contains('='))
+            .Select(ParseVariableBinding);
+
+    private static IEnumerable<string> GetSymbolDependencies(ScreenSymbol sym)
+    {
+        IEnumerable<string> paths = sym.Type switch
+        {
+            "rangeslider" => [sym.RangeLowPath, sym.RangeHighPath],
+            "motorcontrol" => [sym.MotorFaultPath],
+            "conveyor" => [sym.ConveyorFaultPath],
+            "datatable" => ParseTableBindings(sym).Select(column => column.Path).Concat(sym.HdaVariablePaths),
+            "piechart" => ParseChartBindings(sym.PieChartSlices).Select(slice => slice.Path),
+            "barchart" => ParseChartBindings(sym.BarChartBars).Select(bar => bar.Path),
+            "heatexchanger" => [sym.HeatExchangerHotInPath, sym.HeatExchangerColdInPath],
+            "flowmeter" => [sym.FlowMeterTotalizerPath],
+            "xyplot" => [sym.XYPlotXPath, sym.XYPlotYPath],
+            "popup" => sym.PopupVariables.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+            "setpointramp" => [sym.SetpointTargetPath, sym.SetpointRatePath],
+            "kpiwidget" => [sym.KpiAvailabilityPath, sym.KpiPerformancePath, sym.KpiQualityPath,
+                sym.KpiUptimePath, sym.KpiThroughputPath, sym.KpiThroughputTargetPath],
+            _ => []
+        };
+        return paths.Concat(sym.Animations.Select(animation => animation.TriggerVariable)).OfType<string>()
+            .Where(path => !string.IsNullOrWhiteSpace(path)).Distinct();
+    }
+
+    private string? GetLiveSymbolValue(ScreenSymbol sym, string? liveValue)
+    {
+        var dependencies = GetSymbolDependencies(sym).Select(path => ResolveAlias(path, sym.InstanceAliases)).ToArray();
+        if (dependencies.Length == 0) return liveValue;
+        // Include path identity for alias changes; length-prefix values to avoid delimiter collisions.
+        static string Encode(string? value) => $"{value?.Length ?? -1}:{value}";
+        var value = Encode(liveValue) + string.Concat(dependencies.Select(path => Encode(path) + Encode(Opc.GetValue(path))));
+        return sym.Type == "rangeslider"
+            ? value + (_isDraggingRangeSlider && _dragRangeSliderSymbol == sym ? "d" : "")
+            : value;
+    }
+
+    private static double GetBarChartMax(ScreenSymbol sym, IEnumerable<double> values)
+    {
+        // Prefer the editor setting; retain projects that only configured the legacy property.
+        var maximum = sym.BarChartMax != 100 ? sym.BarChartMax : sym.BarChartMaxValue;
+        return maximum > 0 ? maximum : Math.Max(1, values.DefaultIfEmpty(0).Max());
+    }
+
+    private List<(double X, double Y)> GetXYPlotPoints(ScreenSymbol sym, string? liveValue)
+    {
+        var xPath = ResolveAlias(string.IsNullOrWhiteSpace(sym.XYPlotXPath) ? sym.VariablePath : sym.XYPlotXPath, sym.InstanceAliases);
+        var yPath = ResolveAlias(sym.XYPlotYPath, sym.InstanceAliases);
+        if (!_xyPlotData.TryGetValue(sym.Id, out var data) || data.X != xPath || data.Y != yPath)
+            _xyPlotData[sym.Id] = data = (xPath, yPath, []);
+        var xValue = string.IsNullOrWhiteSpace(sym.XYPlotXPath) ? liveValue : Opc.GetValue(xPath);
+        if (double.TryParse(xValue, NumberStyles.Float, CultureInfo.InvariantCulture, out var x)
+            && double.TryParse(Opc.GetValue(yPath), NumberStyles.Float, CultureInfo.InvariantCulture, out var y)
+            && double.IsFinite(x) && double.IsFinite(y)
+            && (data.Points.Count == 0 || data.Points[^1] != (x, y)))
+            data.Points.Add((x, y));
+        var capacity = Math.Max(1, sym.XYPlotMaxPoints);
+        if (data.Points.Count > capacity)
+            data.Points.RemoveRange(0, data.Points.Count - capacity);
+        return data.Points;
     }
 
     /// <summary>
@@ -4581,7 +4669,7 @@ else
         var isFault = false;
         if (!string.IsNullOrEmpty(sym.MotorFaultPath))
         {
-            var faultVal = Opc.GetValue(sym.MotorFaultPath);
+            var faultVal = OpcGet(sym.MotorFaultPath, sym);
             isFault = faultVal is "True" or "true" or "1";
         }
 
@@ -5008,77 +5096,11 @@ else
     // â”€â”€â”€ Data Table rendering (SVG via foreignObject) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     private RenderFragment RenderDataTable(ScreenSymbol sym, string? liveValue) => builder =>
     {
-        int seq = 0;
-        var w = sym.Width;
-        var h = sym.Height;
-        var bg = sym.DataTableBackground ?? "#111827";
-        var columns = (sym.DataTableColumns ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        if (columns.Length == 0) columns = new[] { "Variable", "Value" };
-
-        // Background
-        builder.OpenElement(seq++, "rect");
-        builder.AddAttribute(seq++, "width", w); builder.AddAttribute(seq++, "height", h);
-        builder.AddAttribute(seq++, "rx", 4); builder.AddAttribute(seq++, "fill", bg);
-        builder.AddAttribute(seq++, "stroke", "#334155"); builder.AddAttribute(seq++, "stroke-width", 1);
+        builder.OpenElement(0, "foreignObject");
+        builder.AddAttribute(1, "width", F(sym.Width));
+        builder.AddAttribute(2, "height", F(sym.Height));
+        builder.AddContent(3, RenderResponsiveDataTable(sym, liveValue));
         builder.CloseElement();
-
-        var y = 0.0;
-        // Header
-        if (sym.DataTableShowHeader)
-        {
-            builder.OpenElement(seq++, "rect");
-            builder.AddAttribute(seq++, "width", w); builder.AddAttribute(seq++, "height", 24);
-            builder.AddAttribute(seq++, "rx", 4); builder.AddAttribute(seq++, "fill", "#1e293b");
-            builder.CloseElement();
-            var colW = (w - 8.0) / columns.Length;
-            for (var i = 0; i < columns.Length; i++)
-            {
-                builder.OpenElement(seq++, "text");
-                builder.AddAttribute(seq++, "x", F(4 + colW * i + colW / 2));
-                builder.AddAttribute(seq++, "y", 15);
-                builder.AddAttribute(seq++, "text-anchor", "middle");
-                builder.AddAttribute(seq++, "fill", "#94a3b8"); builder.AddAttribute(seq++, "font-size", 10);
-                builder.AddContent(seq++, columns[i]);
-                builder.CloseElement();
-            }
-            y = 28;
-        }
-
-        // Data rows from HdaVariablePaths
-        var paths = sym.HdaVariablePaths;
-        var maxRows = Math.Min(sym.DataTableMaxRows > 0 ? sym.DataTableMaxRows : 10, (int)((h - y) / 20));
-        for (var r = 0; r < Math.Min(paths.Count, maxRows); r++)
-        {
-            var rowY = y + 4 + r * 20;
-            if (rowY + 16 > h) break;
-            var varPath = paths[r];
-            var varVal = Opc.GetValue(varPath) ?? "---";
-            var varName = varPath.Contains('/') ? varPath[(varPath.LastIndexOf('/') + 1)..] : varPath;
-
-            // Separator line
-            if (r > 0)
-            {
-                builder.OpenElement(seq++, "line");
-                builder.AddAttribute(seq++, "x1", 4); builder.AddAttribute(seq++, "y1", F(rowY));
-                builder.AddAttribute(seq++, "x2", F(w - 4)); builder.AddAttribute(seq++, "y2", F(rowY));
-                builder.AddAttribute(seq++, "stroke", "#1e293b"); builder.AddAttribute(seq++, "stroke-width", 1);
-                builder.CloseElement();
-            }
-
-            // Variable name
-            builder.OpenElement(seq++, "text");
-            builder.AddAttribute(seq++, "x", 8); builder.AddAttribute(seq++, "y", F(rowY + 13));
-            builder.AddAttribute(seq++, "text-anchor", "start"); builder.AddAttribute(seq++, "fill", "#94a3b8"); builder.AddAttribute(seq++, "font-size", 10);
-            builder.AddContent(seq++, varName);
-            builder.CloseElement();
-
-            // Value
-            builder.OpenElement(seq++, "text");
-            builder.AddAttribute(seq++, "x", F(w - 8)); builder.AddAttribute(seq++, "y", F(rowY + 13));
-            builder.AddAttribute(seq++, "text-anchor", "end"); builder.AddAttribute(seq++, "fill", "#e2e8f0"); builder.AddAttribute(seq++, "font-size", 10);
-            builder.AddContent(seq++, varVal);
-            builder.CloseElement();
-        }
     };
 
     // Sparkline data buffer helper
@@ -5126,7 +5148,7 @@ else
         var stopColor = sym.MotorStopColor ?? "#64748b";
         var faultColor = sym.MotorFaultColor ?? "#ef4444";
         var isFault = false;
-        if (!string.IsNullOrEmpty(sym.MotorFaultPath)) { var fv = Opc.GetValue(sym.MotorFaultPath); isFault = fv is "True" or "true" or "1"; }
+        if (!string.IsNullOrEmpty(sym.MotorFaultPath)) { var fv = OpcGet(sym.MotorFaultPath, sym); isFault = fv is "True" or "true" or "1"; }
         var color = isFault ? faultColor : isOn ? runColor : stopColor;
         var label = (sym.MotorStyle ?? "motor") switch { "pump" => "P", "fan" => "F", _ => "M" };
 
@@ -5258,28 +5280,63 @@ else
     private RenderFragment RenderResponsiveDataTable(ScreenSymbol sym, string? liveValue) => builder =>
     {
         int seq = 0;
-        var bg = sym.DataTableBackground ?? "#111827";
+        var columns = ParseTableBindings(sym).ToArray();
+        var headers = columns.Length > 0 ? columns.Select(column => column.Label).ToArray()
+            : (sym.DataTableColumns ?? "").Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (headers.Length == 0) headers = ["Variable", "Value"];
+        var cellStyle = $"padding:4px 8px;text-align:left;{(sym.DataTableShowBorders ? "border:1px solid #334155;" : "")}";
         builder.OpenElement(seq++, "div");
-        builder.AddAttribute(seq++, "style", $"width:100%;height:100%;background:{bg};border:1px solid #334155;border-radius:4px;overflow:auto;font-size:11px;color:#e2e8f0;");
-        builder.OpenElement(seq++, "div");
-        builder.AddAttribute(seq++, "style", "padding:4px 8px;color:#94a3b8;font-weight:600;background:#1e293b;");
-        builder.AddContent(seq++, string.IsNullOrEmpty(sym.DataTableColumns) ? "Data Table" : sym.DataTableColumns.Replace(",", " | "));
-        builder.CloseElement();
-        foreach (var path in sym.HdaVariablePaths.Take(sym.DataTableMaxRows > 0 ? sym.DataTableMaxRows : 10))
+        builder.AddAttribute(seq++, "xmlns", "http://www.w3.org/1999/xhtml");
+        builder.AddAttribute(seq++, "style", $"width:100%;height:100%;box-sizing:border-box;background:{sym.DataTableBackground};border:1px solid #334155;border-radius:4px;overflow:auto;font-size:11px;color:{sym.DataTableTextColor};");
+        builder.OpenElement(seq++, "table");
+        builder.AddAttribute(seq++, "style", "width:100%;border-collapse:collapse;");
+        if (sym.DataTableShowHeader)
         {
-            var varVal = Opc.GetValue(path) ?? "---";
-            var varName = path.Contains('/') ? path[(path.LastIndexOf('/') + 1)..] : path;
-            builder.OpenElement(seq++, "div");
-            builder.AddAttribute(seq++, "style", "display:flex;justify-content:space-between;padding:2px 8px;border-top:1px solid #1e293b;");
-            builder.OpenElement(seq++, "span");
-            builder.AddAttribute(seq++, "style", "color:#94a3b8;");
-            builder.AddContent(seq++, varName);
-            builder.CloseElement();
-            builder.OpenElement(seq++, "span");
-            builder.AddContent(seq++, varVal);
+            builder.OpenElement(seq++, "thead");
+            builder.AddAttribute(seq++, "style", $"background:{sym.DataTableHeaderBg};");
+            builder.OpenElement(seq++, "tr");
+            foreach (var header in headers)
+            {
+                builder.OpenElement(seq++, "th");
+                builder.AddAttribute(seq++, "style", cellStyle);
+                builder.AddContent(seq++, header);
+                builder.CloseElement();
+            }
             builder.CloseElement();
             builder.CloseElement();
         }
+        builder.OpenElement(seq++, "tbody");
+        builder.AddAttribute(seq++, "style", $"background:{sym.DataTableRowBg};");
+        if (columns.Length > 0)
+        {
+            builder.OpenElement(seq++, "tr");
+            foreach (var column in columns)
+            {
+                builder.OpenElement(seq++, "td");
+                builder.AddAttribute(seq++, "style", cellStyle);
+                builder.AddContent(seq++, OpcGet(column.Path, sym) ?? "---");
+                builder.CloseElement();
+            }
+            builder.CloseElement();
+        }
+        else
+        {
+            foreach (var path in sym.HdaVariablePaths.Take(sym.DataTableMaxRows > 0 ? sym.DataTableMaxRows : 10))
+            {
+                var name = path.Contains('/') ? path[(path.LastIndexOf('/') + 1)..] : path;
+                builder.OpenElement(seq++, "tr");
+                foreach (var cell in new[] { name, OpcGet(path, sym) ?? "---" })
+                {
+                    builder.OpenElement(seq++, "td");
+                    builder.AddAttribute(seq++, "style", cellStyle);
+                    builder.AddContent(seq++, cell);
+                    builder.CloseElement();
+                }
+                builder.CloseElement();
+            }
+        }
+        builder.CloseElement();
+        builder.CloseElement();
         builder.CloseElement();
     };
 
@@ -5313,7 +5370,7 @@ else
         var isFault = false;
         if (!string.IsNullOrEmpty(sym.ConveyorFaultPath))
         {
-            var fv = Opc.GetValue(sym.ConveyorFaultPath);
+            var fv = OpcGet(sym.ConveyorFaultPath, sym);
             isFault = fv is "1" or "true" or "True";
         }
         var beltColor = isFault ? sym.ConveyorFaultColor : (isRunning ? sym.ConveyorRunColor : sym.ConveyorBeltColor);
@@ -5381,19 +5438,11 @@ else
         var r = Math.Min(w, h) / 2.0 - 10;
         if (r < 5) r = 5;
 
-        var sliceDefs = (sym.PieChartSlices ?? "").Split(';', StringSplitOptions.RemoveEmptyEntries);
         var values = new List<(string label, double val, string color)>();
-        foreach (var sd in sliceDefs)
+        foreach (var (label, path, color) in ParseChartBindings(sym.PieChartSlices))
         {
-            var parts = sd.Trim().Split(' ', 2);
-            if (parts.Length < 2) continue;
-            var labelPath = parts[0]; var color = parts[1];
-            var eqIdx = labelPath.IndexOf('=');
-            string label, path;
-            if (eqIdx > 0) { label = labelPath[..eqIdx]; path = labelPath[(eqIdx + 1)..]; }
-            else { label = labelPath; path = labelPath; }
-            var raw = Opc.GetValue(path) ?? "0";
-            if (double.TryParse(raw, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var v) && v > 0)
+            var raw = OpcGet(path, sym);
+            if (double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var v) && double.IsFinite(v) && v > 0)
                 values.Add((label, v, color));
         }
 
@@ -5415,8 +5464,17 @@ else
                 var largeArc = angle > Math.PI ? 1 : 0;
                 var x1 = cx + r * Math.Cos(startAngle); var y1 = cy + r * Math.Sin(startAngle);
                 var x2 = cx + r * Math.Cos(endAngle); var y2 = cy + r * Math.Sin(endAngle);
-                builder.OpenElement(seq++, "path");
-                builder.AddAttribute(seq++, "d", $"M {F(cx)},{F(cy)} L {F(x1)},{F(y1)} A {F(r)},{F(r)} 0 {largeArc},1 {F(x2)},{F(y2)} Z");
+                if (values.Count == 1)
+                {
+                    builder.OpenElement(seq++, "circle");
+                    builder.AddAttribute(seq++, "cx", F(cx)); builder.AddAttribute(seq++, "cy", F(cy));
+                    builder.AddAttribute(seq++, "r", F(r));
+                }
+                else
+                {
+                    builder.OpenElement(seq++, "path");
+                    builder.AddAttribute(seq++, "d", $"M {F(cx)},{F(cy)} L {F(x1)},{F(y1)} A {F(r)},{F(r)} 0 {largeArc},1 {F(x2)},{F(y2)} Z");
+                }
                 builder.AddAttribute(seq++, "fill", color);
                 builder.CloseElement();
                 if (sym.PieChartShowLabels)
@@ -5438,7 +5496,7 @@ else
             {
                 builder.OpenElement(seq++, "circle");
                 builder.AddAttribute(seq++, "cx", F(cx)); builder.AddAttribute(seq++, "cy", F(cy));
-                builder.AddAttribute(seq++, "r", F(r * 0.5)); builder.AddAttribute(seq++, "fill", sym.PieChartBackground);
+                builder.AddAttribute(seq++, "r", F(r * Math.Clamp(sym.PieChartInnerRadius, 0, 0.9))); builder.AddAttribute(seq++, "fill", sym.PieChartBackground);
                 builder.CloseElement();
             }
         }
@@ -5455,25 +5513,16 @@ else
         builder.AddAttribute(seq++, "stroke", "#334155"); builder.AddAttribute(seq++, "stroke-width", 1);
         builder.CloseElement();
 
-        var barDefs = (sym.BarChartBars ?? "").Split(';', StringSplitOptions.RemoveEmptyEntries);
         var values = new List<(string label, double val, string color)>();
-        foreach (var bd in barDefs)
+        foreach (var (label, path, color) in ParseChartBindings(sym.BarChartBars))
         {
-            var parts = bd.Trim().Split(' ', 2);
-            if (parts.Length < 2) continue;
-            var labelPath = parts[0]; var color = parts[1];
-            var eqIdx = labelPath.IndexOf('=');
-            string label, path;
-            if (eqIdx > 0) { label = labelPath[..eqIdx]; path = labelPath[(eqIdx + 1)..]; }
-            else { label = labelPath; path = labelPath; }
-            var raw = Opc.GetValue(path) ?? "0";
-            double.TryParse(raw, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var v);
+            var raw = OpcGet(path, sym);
+            double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var v);
             values.Add((label, Math.Abs(v), color));
         }
 
         if (values.Count == 0) return;
-        var maxVal = sym.BarChartMaxValue > 0 ? sym.BarChartMaxValue : values.Max(v => v.val);
-        if (maxVal == 0) maxVal = 1;
+        var maxVal = GetBarChartMax(sym, values.Select(v => v.val));
         var isVert = sym.BarChartOrientation == "vertical";
         var pad = 8.0;
         var barCount = values.Count;
@@ -5568,7 +5617,7 @@ else
         var isFault = false;
         if (!string.IsNullOrEmpty(sym.ConveyorFaultPath))
         {
-            var fv = Opc.GetValue(sym.ConveyorFaultPath);
+            var fv = OpcGet(sym.ConveyorFaultPath, sym);
             isFault = fv is "1" or "true" or "True";
         }
         var statusColor = isFault ? sym.ConveyorFaultColor : (isRunning ? sym.ConveyorRunColor : "#64748b");
@@ -5589,93 +5638,20 @@ else
     // --- Responsive Pie Chart ---
     private RenderFragment RenderResponsivePieChart(ScreenSymbol sym, string? liveValue) => builder =>
     {
-        int seq = 0;
-        builder.OpenElement(seq++, "div");
-        builder.AddAttribute(seq++, "style", $"width:100%;height:100%;background:{sym.PieChartBackground};border:1px solid #334155;border-radius:4px;display:flex;align-items:center;justify-content:center;");
-        builder.OpenElement(seq++, "svg");
-        builder.AddAttribute(seq++, "viewBox", "0 0 100 100");
-        builder.AddAttribute(seq++, "style", "width:80%;height:80%;");
-
-        var sliceDefs = (sym.PieChartSlices ?? "").Split(';', StringSplitOptions.RemoveEmptyEntries);
-        var values = new List<(string label, double val, string color)>();
-        foreach (var sd in sliceDefs)
-        {
-            var parts = sd.Trim().Split(' ', 2);
-            if (parts.Length < 2) continue;
-            var labelPath = parts[0]; var color = parts[1];
-            var eqIdx = labelPath.IndexOf('=');
-            string path = eqIdx > 0 ? labelPath[(eqIdx + 1)..] : labelPath;
-            var raw = Opc.GetValue(path) ?? "0";
-            if (double.TryParse(raw, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var v) && v > 0)
-                values.Add((labelPath, v, color));
-        }
-
-        if (values.Count == 0)
-        {
-            builder.OpenElement(seq++, "circle");
-            builder.AddAttribute(seq++, "cx", "50"); builder.AddAttribute(seq++, "cy", "50");
-            builder.AddAttribute(seq++, "r", "40"); builder.AddAttribute(seq++, "fill", "#334155");
-            builder.CloseElement();
-        }
-        else
-        {
-            var total = values.Sum(v => v.val);
-            var startAngle = -Math.PI / 2;
-            foreach (var (_, val, color) in values)
-            {
-                var angle = val / total * 2 * Math.PI;
-                var endAngle = startAngle + angle;
-                var largeArc = angle > Math.PI ? 1 : 0;
-                var x1 = 50 + 40 * Math.Cos(startAngle); var y1 = 50 + 40 * Math.Sin(startAngle);
-                var x2 = 50 + 40 * Math.Cos(endAngle); var y2 = 50 + 40 * Math.Sin(endAngle);
-                builder.OpenElement(seq++, "path");
-                builder.AddAttribute(seq++, "d", $"M 50,50 L {F(x1)},{F(y1)} A 40,40 0 {largeArc},1 {F(x2)},{F(y2)} Z");
-                builder.AddAttribute(seq++, "fill", color);
-                builder.CloseElement();
-                startAngle = endAngle;
-            }
-            if (sym.PieChartStyle == "doughnut")
-            {
-                builder.OpenElement(seq++, "circle");
-                builder.AddAttribute(seq++, "cx", "50"); builder.AddAttribute(seq++, "cy", "50");
-                builder.AddAttribute(seq++, "r", "20"); builder.AddAttribute(seq++, "fill", sym.PieChartBackground);
-                builder.CloseElement();
-            }
-        }
-        builder.CloseElement(); // svg
-        builder.CloseElement(); // div
+        builder.OpenElement(0, "svg");
+        builder.AddAttribute(1, "viewBox", $"0 0 {F(sym.Width)} {F(sym.Height)}");
+        builder.AddAttribute(2, "class", "rv-responsive-svg");
+        builder.AddContent(3, RenderPieChart(sym, liveValue));
+        builder.CloseElement();
     };
 
     // --- Responsive Bar Chart ---
     private RenderFragment RenderResponsiveBarChart(ScreenSymbol sym, string? liveValue) => builder =>
     {
-        int seq = 0;
-        builder.OpenElement(seq++, "div");
-        builder.AddAttribute(seq++, "style", $"width:100%;height:100%;background:{sym.BarChartBackground};border:1px solid #334155;border-radius:4px;display:flex;align-items:flex-end;gap:2px;padding:8px;");
-
-        var barDefs = (sym.BarChartBars ?? "").Split(';', StringSplitOptions.RemoveEmptyEntries);
-        var values = new List<(string label, double val, string color)>();
-        foreach (var bd in barDefs)
-        {
-            var parts = bd.Trim().Split(' ', 2);
-            if (parts.Length < 2) continue;
-            var labelPath = parts[0]; var color = parts[1];
-            var eqIdx = labelPath.IndexOf('=');
-            string path = eqIdx > 0 ? labelPath[(eqIdx + 1)..] : labelPath;
-            var raw = Opc.GetValue(path) ?? "0";
-            double.TryParse(raw, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var v);
-            values.Add((labelPath, Math.Abs(v), color));
-        }
-
-        var maxVal = sym.BarChartMaxValue > 0 ? sym.BarChartMaxValue : (values.Count > 0 ? values.Max(v => v.val) : 1);
-        if (maxVal == 0) maxVal = 1;
-        foreach (var (label, val, color) in values)
-        {
-            var pct = Math.Min(val / maxVal * 100, 100);
-            builder.OpenElement(seq++, "div");
-            builder.AddAttribute(seq++, "style", $"flex:1;background:{color};border-radius:2px 2px 0 0;height:{F(pct)}%;min-height:2px;");
-            builder.CloseElement();
-        }
+        builder.OpenElement(0, "svg");
+        builder.AddAttribute(1, "viewBox", $"0 0 {F(sym.Width)} {F(sym.Height)}");
+        builder.AddAttribute(2, "class", "rv-responsive-svg");
+        builder.AddContent(3, RenderBarChart(sym, liveValue));
         builder.CloseElement();
     };
 
@@ -5767,8 +5743,8 @@ else
 
         if (sym.HeatExchangerShowTemps)
         {
-            var hotVal = !string.IsNullOrEmpty(sym.HeatExchangerHotInPath) ? Opc.GetValue(sym.HeatExchangerHotInPath) ?? "--" : "--";
-            var coldVal = !string.IsNullOrEmpty(sym.HeatExchangerColdInPath) ? Opc.GetValue(sym.HeatExchangerColdInPath) ?? "--" : "--";
+            var hotVal = OpcGet(sym.HeatExchangerHotInPath, sym) ?? "--";
+            var coldVal = OpcGet(sym.HeatExchangerColdInPath, sym) ?? "--";
             if (isVert)
             {
                 builder.OpenElement(seq++, "text");
@@ -5832,7 +5808,7 @@ else
             for (int i = 0; i < vars.Length && i < 5; i++)
             {
                 var path = vars[i].Trim();
-                var val = Opc.GetValue(path) ?? "--";
+                var val = OpcGet(path, sym) ?? "--";
                 var label = path.Contains('.') ? path[(path.LastIndexOf('.') + 1)..] : path;
                 builder.OpenElement(seq++, "text");
                 builder.AddAttribute(seq++, "x", F(8)); builder.AddAttribute(seq++, "y", F(32 + i * 14));
@@ -5852,7 +5828,7 @@ else
         if (range <= 0) range = 100;
 
         double.TryParse(liveValue, NumberStyles.Float, CultureInfo.InvariantCulture, out var current);
-        var targetStr = !string.IsNullOrEmpty(sym.SetpointTargetPath) ? Opc.GetValue(sym.SetpointTargetPath) : null;
+        var targetStr = OpcGet(sym.SetpointTargetPath, sym);
         double.TryParse(targetStr, NumberStyles.Float, CultureInfo.InvariantCulture, out var target);
 
         // Background
@@ -5905,7 +5881,7 @@ else
 
         if (sym.SetpointShowRate && !string.IsNullOrEmpty(sym.SetpointRatePath))
         {
-            var rateVal = Opc.GetValue(sym.SetpointRatePath) ?? "--";
+            var rateVal = OpcGet(sym.SetpointRatePath, sym) ?? "--";
             builder.OpenElement(seq++, "text");
             builder.AddAttribute(seq++, "x", F(w / 2.0)); builder.AddAttribute(seq++, "y", F(h - 4));
             builder.AddAttribute(seq++, "text-anchor", "middle");
@@ -5977,7 +5953,7 @@ else
         // Totalizer
         if (sym.FlowMeterShowTotalizer && !string.IsNullOrEmpty(sym.FlowMeterTotalizerPath))
         {
-            var totVal = Opc.GetValue(sym.FlowMeterTotalizerPath) ?? "0";
+            var totVal = OpcGet(sym.FlowMeterTotalizerPath, sym) ?? "--";
             builder.OpenElement(seq++, "text");
             builder.AddAttribute(seq++, "x", F(cx)); builder.AddAttribute(seq++, "y", F(h - 3));
             builder.AddAttribute(seq++, "text-anchor", "middle"); builder.AddAttribute(seq++, "fill", "#64748b");
@@ -6053,18 +6029,26 @@ else
             builder.CloseElement();
         }
 
-        // Current point marker
-        double.TryParse(liveValue, NumberStyles.Float, CultureInfo.InvariantCulture, out var xVal);
-        var yStr = !string.IsNullOrEmpty(sym.XYPlotYPath) ? Opc.GetValue(sym.XYPlotYPath) : null;
-        double.TryParse(yStr, NumberStyles.Float, CultureInfo.InvariantCulture, out var yVal);
-
-        // Simple cross at current point (normalized 0-100 by default)
-        var px = pad + (w - 2 * pad) * Math.Clamp(xVal / 100.0, 0, 1);
-        var py = (h - pad) - (h - 2 * pad) * Math.Clamp(yVal / 100.0, 0, 1);
-        builder.OpenElement(seq++, "circle");
-        builder.AddAttribute(seq++, "cx", F(px)); builder.AddAttribute(seq++, "cy", F(py));
-        builder.AddAttribute(seq++, "r", 4); builder.AddAttribute(seq++, "fill", sym.XYPlotColor);
-        builder.CloseElement();
+        var points = GetXYPlotPoints(sym, liveValue);
+        double PlotX(double x) => pad + (w - 2 * pad) * Math.Clamp(x / 100.0, 0, 1);
+        double PlotY(double y) => h - pad - (h - 2 * pad) * Math.Clamp(y / 100.0, 0, 1);
+        if (points.Count > 1)
+        {
+            builder.OpenElement(seq++, "polyline");
+            builder.AddAttribute(seq++, "points", string.Join(" ", points.Select(point => $"{F(PlotX(point.X))},{F(PlotY(point.Y))}")));
+            builder.AddAttribute(seq++, "fill", "none");
+            builder.AddAttribute(seq++, "stroke", sym.XYPlotColor);
+            builder.AddAttribute(seq++, "stroke-width", F(sym.XYPlotStrokeWidth));
+            builder.CloseElement();
+        }
+        if (points.Count > 0)
+        {
+            var point = points[^1];
+            builder.OpenElement(seq++, "circle");
+            builder.AddAttribute(seq++, "cx", F(PlotX(point.X))); builder.AddAttribute(seq++, "cy", F(PlotY(point.Y)));
+            builder.AddAttribute(seq++, "r", 4); builder.AddAttribute(seq++, "fill", sym.XYPlotColor);
+            builder.CloseElement();
+        }
 
         // Title
         builder.OpenElement(seq++, "text");
@@ -6122,8 +6106,8 @@ else
     private RenderFragment RenderResponsiveHeatExchanger(ScreenSymbol sym, string? liveValue) => builder =>
     {
         int seq = 0;
-        var hotVal = !string.IsNullOrEmpty(sym.HeatExchangerHotInPath) ? Opc.GetValue(sym.HeatExchangerHotInPath) ?? "--" : "--";
-        var coldVal = !string.IsNullOrEmpty(sym.HeatExchangerColdInPath) ? Opc.GetValue(sym.HeatExchangerColdInPath) ?? "--" : "--";
+        var hotVal = OpcGet(sym.HeatExchangerHotInPath, sym) ?? "--";
+        var coldVal = OpcGet(sym.HeatExchangerColdInPath, sym) ?? "--";
 
         builder.OpenElement(seq++, "div");
         builder.AddAttribute(seq++, "style", $"width:100%;height:100%;background:{sym.HeatExchangerBodyColor};border-radius:6px;display:flex;overflow:hidden;");
@@ -6168,7 +6152,7 @@ else
             foreach (var v in vars)
             {
                 var path = v.Trim();
-                var val = Opc.GetValue(path) ?? "--";
+                var val = OpcGet(path, sym) ?? "--";
                 var label = path.Contains('.') ? path[(path.LastIndexOf('.') + 1)..] : path;
                 builder.OpenElement(seq++, "div");
                 builder.AddAttribute(seq++, "style", "color:#94a3b8;font-size:10px;");
@@ -6184,7 +6168,7 @@ else
     {
         int seq = 0;
         double.TryParse(liveValue, NumberStyles.Float, CultureInfo.InvariantCulture, out var current);
-        var targetStr = !string.IsNullOrEmpty(sym.SetpointTargetPath) ? Opc.GetValue(sym.SetpointTargetPath) : null;
+        var targetStr = OpcGet(sym.SetpointTargetPath, sym);
         double.TryParse(targetStr, NumberStyles.Float, CultureInfo.InvariantCulture, out var target);
         var range = sym.SetpointMax - sym.SetpointMin;
         if (range <= 0) range = 100;
@@ -6211,7 +6195,7 @@ else
 
         if (sym.SetpointShowRate && !string.IsNullOrEmpty(sym.SetpointRatePath))
         {
-            var rateVal = Opc.GetValue(sym.SetpointRatePath) ?? "--";
+            var rateVal = OpcGet(sym.SetpointRatePath, sym) ?? "--";
             builder.OpenElement(seq++, "div");
             builder.AddAttribute(seq++, "style", "color:#64748b;font-size:9px;margin-top:2px;text-align:center;");
             builder.AddContent(seq++, $"Rate: {rateVal}/min");
@@ -6241,7 +6225,7 @@ else
 
         if (sym.FlowMeterShowTotalizer && !string.IsNullOrEmpty(sym.FlowMeterTotalizerPath))
         {
-            var totVal = Opc.GetValue(sym.FlowMeterTotalizerPath) ?? "0";
+            var totVal = OpcGet(sym.FlowMeterTotalizerPath, sym) ?? "--";
             builder.OpenElement(seq++, "span");
             builder.AddAttribute(seq++, "style", "color:#64748b;font-size:9px;margin-top:2px;");
             builder.AddContent(seq++, $"\u03A3 {totVal} {sym.FlowMeterTotalizerUnit}");
@@ -6253,27 +6237,10 @@ else
     // â”€â”€ Responsive XY Plot â”€â”€
     private RenderFragment RenderResponsiveXYPlot(ScreenSymbol sym, string? liveValue) => builder =>
     {
-        int seq = 0;
-        double.TryParse(liveValue, NumberStyles.Float, CultureInfo.InvariantCulture, out var xVal);
-        var yStr = !string.IsNullOrEmpty(sym.XYPlotYPath) ? Opc.GetValue(sym.XYPlotYPath) : null;
-        double.TryParse(yStr, NumberStyles.Float, CultureInfo.InvariantCulture, out var yVal);
-
-        builder.OpenElement(seq++, "div");
-        builder.AddAttribute(seq++, "style", $"width:100%;height:100%;background:{sym.XYPlotBackground};border-radius:6px;padding:8px;display:flex;flex-direction:column;");
-
-        builder.OpenElement(seq++, "div");
-        builder.AddAttribute(seq++, "style", "color:#94a3b8;font-size:10px;font-weight:600;margin-bottom:4px;");
-        builder.AddContent(seq++, !string.IsNullOrEmpty(sym.Label) ? sym.Label : "XY Plot");
-        builder.CloseElement();
-
-        builder.OpenElement(seq++, "div");
-        builder.AddAttribute(seq++, "style", $"flex:1;border:1px solid #334155;border-radius:4px;display:flex;align-items:center;justify-content:center;");
-        builder.OpenElement(seq++, "span");
-        builder.AddAttribute(seq++, "style", $"color:{sym.XYPlotColor};font-size:13px;font-weight:700;");
-        builder.AddContent(seq++, $"{sym.XYPlotXLabel}={F(xVal)}  {sym.XYPlotYLabel}={F(yVal)}");
-        builder.CloseElement();
-        builder.CloseElement();
-
+        builder.OpenElement(0, "svg");
+        builder.AddAttribute(1, "viewBox", $"0 0 {F(sym.Width)} {F(sym.Height)}");
+        builder.AddAttribute(2, "class", "rv-responsive-svg");
+        builder.AddContent(3, RenderXYPlot(sym, liveValue));
         builder.CloseElement();
     };
 
@@ -6319,21 +6286,21 @@ else
         double availability = 0, performance = 0, quality = 0;
         if (mode == "oee")
         {
-            availability = ParseOpc(Opc.GetValue(sym.KpiAvailabilityPath));
-            performance = ParseOpc(Opc.GetValue(sym.KpiPerformancePath));
-            quality = ParseOpc(Opc.GetValue(sym.KpiQualityPath));
+            availability = ParseOpc(OpcGet(sym.KpiAvailabilityPath, sym));
+            performance = ParseOpc(OpcGet(sym.KpiPerformancePath, sym));
+            quality = ParseOpc(OpcGet(sym.KpiQualityPath, sym));
             kpiValue = availability * performance * quality / 10000.0;
         }
         else if (mode == "uptime")
         {
-            kpiValue = ParseOpc(Opc.GetValue(sym.KpiUptimePath));
+            kpiValue = ParseOpc(OpcGet(sym.KpiUptimePath, sym));
         }
         else // throughput
         {
-            kpiValue = ParseOpc(Opc.GetValue(sym.KpiThroughputPath));
+            kpiValue = ParseOpc(OpcGet(sym.KpiThroughputPath, sym));
             if (!string.IsNullOrEmpty(sym.KpiThroughputTargetPath))
             {
-                var t = ParseOpc(Opc.GetValue(sym.KpiThroughputTargetPath));
+                var t = ParseOpc(OpcGet(sym.KpiThroughputTargetPath, sym));
                 if (t > 0) target = t;
             }
         }
@@ -6463,21 +6430,21 @@ else
         double availability = 0, performance = 0, quality = 0;
         if (mode == "oee")
         {
-            availability = ParseOpc(Opc.GetValue(sym.KpiAvailabilityPath));
-            performance = ParseOpc(Opc.GetValue(sym.KpiPerformancePath));
-            quality = ParseOpc(Opc.GetValue(sym.KpiQualityPath));
+            availability = ParseOpc(OpcGet(sym.KpiAvailabilityPath, sym));
+            performance = ParseOpc(OpcGet(sym.KpiPerformancePath, sym));
+            quality = ParseOpc(OpcGet(sym.KpiQualityPath, sym));
             kpiValue = availability * performance * quality / 10000.0;
         }
         else if (mode == "uptime")
         {
-            kpiValue = ParseOpc(Opc.GetValue(sym.KpiUptimePath));
+            kpiValue = ParseOpc(OpcGet(sym.KpiUptimePath, sym));
         }
         else
         {
-            kpiValue = ParseOpc(Opc.GetValue(sym.KpiThroughputPath));
+            kpiValue = ParseOpc(OpcGet(sym.KpiThroughputPath, sym));
             if (!string.IsNullOrEmpty(sym.KpiThroughputTargetPath))
             {
-                var t = ParseOpc(Opc.GetValue(sym.KpiThroughputTargetPath));
+                var t = ParseOpc(OpcGet(sym.KpiThroughputTargetPath, sym));
                 if (t > 0) target = t;
             }
         }

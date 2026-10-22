@@ -1967,7 +1967,7 @@ namespace SharedModels
         public string DropdownTextColor { get; set; } = "#e2e8f0";
 
         // â”€â”€ Data Table â”€â”€
-        /// <summary>Semicolon-separated column definitions: "Header=VarPath;Header2=VarPath2".</summary>
+        /// <summary>Live column definitions: "Header=VarPath,Header2=VarPath2". Semicolon separators are also supported.</summary>
         public string DataTableColumns { get; set; } = "";
         /// <summary>Header background color.</summary>
         public string DataTableHeaderBg { get; set; } = "#1e293b";
