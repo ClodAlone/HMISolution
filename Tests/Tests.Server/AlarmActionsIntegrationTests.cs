@@ -268,6 +268,108 @@ public class AlarmActionsIntegrationTests : IAsyncLifetime
         Assert.Null(Assert.Single(snapshot.TopAlarms, a => a.VariablePath == "Pressure").AvgAcknowledgeSeconds);
     }
 
+    [Theory]
+    [InlineData("Enable")]
+    [InlineData("Disable")]
+    [InlineData("Remove")]
+    [InlineData("Email")]
+    [InlineData("Telegram")]
+    [InlineData("MinSeverity")]
+    [InlineData("Cooldown")]
+    public void NotificationSettingsChanges_ReloadNotificationService(string change)
+    {
+        var manager = _server!.Manager!;
+        var watcherField = typeof(SimpleFileServerNodeManager).GetField("_watcher", BindingFlags.NonPublic | BindingFlags.Instance);
+        Assert.NotNull(watcherField);
+        Assert.IsType<FileSystemWatcher>(watcherField.GetValue(manager)).EnableRaisingEvents = false;
+        var serviceField = typeof(SimpleFileServerNodeManager).GetField("_notificationService", BindingFlags.NonPublic | BindingFlags.Instance);
+        Assert.NotNull(serviceField);
+        var model = new NodeModel
+        {
+            Server = new ServerSettings
+            {
+                EventLog = new EventLogConfig { Enabled = false },
+                AlarmNotification = new AlarmNotificationConfig
+                {
+                    Enabled = change != "Enable",
+                    Email = new EmailNotificationChannel { Enabled = true, SmtpHost = "old.example.test" },
+                    Telegram = new TelegramNotificationChannel { Enabled = true, ChatId = "old-chat" }
+                }
+            }
+        };
+        Reload(model);
+        var previousService = serviceField.GetValue(manager);
+        if (change == "Enable")
+            Assert.Null(previousService);
+        else
+            Assert.NotNull(previousService);
+
+        switch (change)
+        {
+            case "Enable": model.Server.AlarmNotification.Enabled = true; break;
+            case "Disable": model.Server.AlarmNotification.Enabled = false; break;
+            case "Remove": model.Server.AlarmNotification = null; break;
+            case "Email":
+                model.Server.AlarmNotification.Email!.SmtpHost = "new.example.test";
+                model.Server.AlarmNotification.Email.Password = "updated-test-password";
+                break;
+            case "Telegram":
+                model.Server.AlarmNotification.Telegram!.ChatId = "new-chat";
+                model.Server.AlarmNotification.Telegram.BotToken = "updated-test-token";
+                break;
+            case "MinSeverity": model.Server.AlarmNotification.MinSeverity = 800; break;
+            case "Cooldown": model.Server.AlarmNotification.CooldownSeconds = 120; break;
+        }
+
+        Reload(model);
+        var currentService = serviceField.GetValue(manager);
+        if (model.Server.AlarmNotification is { Enabled: true } expected)
+        {
+            Assert.IsType<NotificationService>(currentService);
+            Assert.NotSame(previousService, currentService);
+            Assert.Equal(System.Text.Json.JsonSerializer.Serialize(expected),
+                System.Text.Json.JsonSerializer.Serialize(GetField<AlarmNotificationConfig>(currentService, "_config")));
+        }
+        else
+        {
+            Assert.Null(currentService);
+        }
+
+        void Reload(NodeModel configuration)
+        {
+            File.WriteAllText(Path.Combine(_directory, "nodes.json"),
+                System.Text.Json.JsonSerializer.Serialize(configuration, ServerJsonContext.Default.NodeModel));
+            var reload = typeof(SimpleFileServerNodeManager).GetMethod("ReloadConfiguration", BindingFlags.NonPublic | BindingFlags.Instance);
+            Assert.NotNull(reload);
+            reload.Invoke(manager, null);
+        }
+    }
+
+    [Fact]
+    public void UnchangedNotificationSettings_AllowIncrementalReload()
+    {
+        var manager = _server!.Manager!;
+        var model = new NodeModel
+        {
+            Server = new ServerSettings
+            {
+                AlarmNotification = new AlarmNotificationConfig
+                {
+                    Enabled = true,
+                    Email = new EmailNotificationChannel { Enabled = true, SmtpHost = "smtp.example.test" },
+                    Telegram = new TelegramNotificationChannel { Enabled = true, ChatId = "test-chat" }
+                }
+            }
+        };
+        var sameModel = System.Text.Json.JsonSerializer.Deserialize(
+            System.Text.Json.JsonSerializer.Serialize(model, ServerJsonContext.Default.NodeModel), ServerJsonContext.Default.NodeModel)!;
+        var check = typeof(SimpleFileServerNodeManager).GetMethod("IsIncrementalChange", BindingFlags.NonPublic | BindingFlags.Instance);
+        Assert.NotNull(check);
+        object?[] arguments = [model, sameModel, null];
+        Assert.True(Assert.IsType<bool>(check.Invoke(manager, arguments)));
+        Assert.Empty(Assert.IsType<List<(Variable, string)>>(arguments[2]));
+    }
+
     private static async Task InvokeViewerAsync(object viewer, string name)
     {
         var method = viewer.GetType().GetMethod(name, BindingFlags.NonPublic | BindingFlags.Instance);

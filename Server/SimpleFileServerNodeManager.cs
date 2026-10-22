@@ -631,6 +631,8 @@ namespace SimpleOpcFileServer
             if (!AreListsEqual(oldModel.Scripts, newModel.Scripts)) return false;
             if (!AreListsEqual(oldModel.PlcPrograms, newModel.PlcPrograms)) return false;
             if (!AreListsEqual(oldModel.Recipes, newModel.Recipes)) return false;
+            if (JsonSerializer.Serialize(oldModel.Server?.AlarmNotification, ServerJsonContext.Default.AlarmNotificationConfig) !=
+                JsonSerializer.Serialize(newModel.Server?.AlarmNotification, ServerJsonContext.Default.AlarmNotificationConfig)) return false;
 
             // Check Folder Structure
             return CheckFolderStructure(oldModel.Folder, newModel.Folder, "", newVariables);

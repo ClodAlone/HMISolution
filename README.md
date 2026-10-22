@@ -146,6 +146,14 @@ Anomaly alerts delivered across multiple channels:
 - Amazon Alexa
 - IP Speakers (Sonos / UPnP)
 
+For alarm notifications, enable notifications globally in the server settings, enable and
+configure each delivery channel, and enable **Notify on activation** for each alarm.
+Save the project to apply notification settings to the running server. Notifications
+are sent on a new alarm activation, not continuously while an alarm remains active;
+the minimum severity, per-alarm cooldown, and shelving/suppression settings still apply.
+Check the server logs for SMTP delivery failures or Telegram API errors. Telegram bots
+must be started by the recipient (or added to the target group/channel) before sending.
+
 ## ⚡ Platform Features
 
 - **🖥️ Blazor Web Editor** - Full-featured browser-based project editor
