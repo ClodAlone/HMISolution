@@ -2,7 +2,8 @@
 
 @using SharedModels
 @using RuntimeViewer.Shared.Services
-@inject OpcRuntimeClient Opc
+@inject CommandService Commands
+@implements IDisposable
 
 <div class="rv-report-viewer" style="width: 100%; height: 100%; overflow: auto; background: #0f172a; border-radius: 4px; padding: 8px;"
      @onclick:stopPropagation @onmousedown:stopPropagation>
@@ -25,17 +26,16 @@
         }
     </div>
 
-    @if (!string.IsNullOrEmpty(_reportHtml))
-    {
-        <div class="rv-report-content" style="background: #1e293b; border-radius: 4px; padding: 4px; overflow: auto; max-height: calc(100% - 40px);">
-            @((MarkupString)_reportHtml)
-        </div>
-    }
-    else if (!string.IsNullOrEmpty(_error))
+    @if (!string.IsNullOrEmpty(_error))
     {
         <div class="alert alert-danger small py-1 px-2">@_error</div>
     }
-    else
+    @if (!string.IsNullOrEmpty(_reportHtml))
+    {
+        <iframe class="rv-report-content" title="@ReportName" sandbox="" srcdoc="@_reportHtml"
+                style="width: 100%; height: calc(100% - 40px); border: 0; border-radius: 4px;"></iframe>
+    }
+    else if (string.IsNullOrEmpty(_error))
     {
         <div style="color: #475569; font-size: 11px; text-align: center; padding: 20px;">
             Click <strong>Generate</strong> to create the report.
@@ -53,36 +53,18 @@
 
     private async Task GenerateReport()
     {
-        if (string.IsNullOrWhiteSpace(ReportName) || _generating) return;
+        if (_generating) return;
         _generating = true;
         _error = null;
         StateHasChanged();
 
         try
         {
-            // Write the report name to the _System.GenerateReport trigger variable
-            // The server will detect this write and generate the report
-            await Opc.WriteValueAsync("_System.GenerateReport", ReportName);
-            // Wait briefly for the server to process
-            await Task.Delay(500);
-            // Read back the generated HTML from _System.ReportOutput
-            var output = Opc.GetValue("_System.ReportOutput." + ReportName);
-            if (!string.IsNullOrEmpty(output) && output != "0" && output != "False")
-            {
-                _reportHtml = output;
-            }
-            else
-            {
-                // Fallback: generate a client-side summary from live values
-                _reportHtml = await BuildClientSideReportAsync();
-            }
-            _lastGenerated = DateTime.Now.ToString("HH:mm:ss");
+            await Commands.GenerateReportAsync(ReportName);
         }
-        catch
+        catch (Exception ex)
         {
-            // Fallback to client-side report
-            _reportHtml = await BuildClientSideReportAsync();
-            _lastGenerated = DateTime.Now.ToString("HH:mm:ss");
+            _error = $"Report generation failed: {ex.Message}";
         }
         finally
         {
@@ -91,15 +73,25 @@
         }
     }
 
-    private Task<string> BuildClientSideReportAsync()
+    protected override void OnInitialized()
     {
-        var sb = new System.Text.StringBuilder();
-        sb.AppendLine("<div style='font-family: Segoe UI, sans-serif; color: #e2e8f0; padding: 12px;'>");
-        sb.AppendLine($"<h2 style='color: #38bdf8; margin-bottom: 8px;'>📄 {System.Net.WebUtility.HtmlEncode(ReportName)}</h2>");
-        sb.AppendLine($"<p style='color: #64748b; font-size: 11px;'>Generated at {DateTime.Now:yyyy-MM-dd HH:mm:ss}</p>");
-        sb.AppendLine("<hr style='border-color: #334155; margin: 8px 0;' />");
-        sb.AppendLine("<p style='color: #94a3b8; font-size: 12px;'>This report was generated client-side. For full server-side generation with historical data charts, use the <strong>GenerateReport</strong> command action or server-side triggers.</p>");
-        sb.AppendLine("</div>");
-        return Task.FromResult(sb.ToString());
+        Commands.ReportGenerated += OnReportGenerated;
+    }
+
+    private void OnReportGenerated(string reportName, string html)
+    {
+        if (!string.Equals(reportName, ReportName, StringComparison.OrdinalIgnoreCase)) return;
+        _ = InvokeAsync(() =>
+        {
+            _reportHtml = html;
+            _error = null;
+            _lastGenerated = DateTime.Now.ToString("HH:mm:ss");
+            StateHasChanged();
+        });
+    }
+
+    public void Dispose()
+    {
+        Commands.ReportGenerated -= OnReportGenerated;
     }
 }

@@ -1003,6 +1003,7 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
 {
     _reportManager = new ReportManager(this);
     _reportManager.Initialize(nodeModel.Reports, nodeModel.Server?.NaturalLanguageQuery);
+    CreateReportMethod(references);
                               }
 
 
@@ -2070,6 +2071,56 @@ if (nodeModel.Reports != null && nodeModel.Reports.Count > 0)
                 return variable.Value.AsBoxedObject();
             }
             throw new InvalidOperationException("Variable not found: " + variableName);
+        }
+
+        private void CreateReportMethod(IList<IReference>? references)
+        {
+            var folder = new FolderState(null)
+            {
+                NodeId = new NodeId("_Reports", _namespaceIndex),
+                BrowseName = new QualifiedName("_Reports", _namespaceIndex),
+                DisplayName = new LocalizedText("Reports"),
+                TypeDefinitionId = ObjectTypeIds.FolderType,
+                ReferenceTypeId = ReferenceTypeIds.Organizes
+            };
+            folder.AddReference(ReferenceTypeIds.Organizes, true, ObjectIds.ObjectsFolder);
+            references?.Add(new NodeStateReference(ReferenceTypeIds.Organizes, false, folder.NodeId));
+            _rootNodeIds.Add(folder.NodeId);
+
+            var method = new MethodState(folder)
+            {
+                NodeId = new NodeId("_Reports.GenerateReport", _namespaceIndex),
+                BrowseName = new QualifiedName("GenerateReport", _namespaceIndex),
+                DisplayName = new LocalizedText("Generate Report"),
+                ReferenceTypeId = ReferenceTypeIds.HasComponent,
+                Executable = true,
+                UserExecutable = true
+            };
+            method.InputArguments = PropertyState<ArrayOf<Argument>>.With<StructureBuilder<Argument>>(method);
+            method.InputArguments.NodeId = new NodeId("_Reports.GenerateReport.InputArguments", _namespaceIndex);
+            method.InputArguments.BrowseName = new QualifiedName(BrowseNames.InputArguments);
+            method.InputArguments.DisplayName = new LocalizedText(BrowseNames.InputArguments);
+            method.InputArguments.Value = [new Argument { Name = "ReportName", DataType = DataTypeIds.String, ValueRank = ValueRanks.Scalar }];
+            method.OutputArguments = PropertyState<ArrayOf<Argument>>.With<StructureBuilder<Argument>>(method);
+            method.OutputArguments.NodeId = new NodeId("_Reports.GenerateReport.OutputArguments", _namespaceIndex);
+            method.OutputArguments.BrowseName = new QualifiedName(BrowseNames.OutputArguments);
+            method.OutputArguments.DisplayName = new LocalizedText(BrowseNames.OutputArguments);
+            method.OutputArguments.Value = [new Argument { Name = "Html", DataType = DataTypeIds.String, ValueRank = ValueRanks.Scalar }];
+            method.OnCallMethod = (context, calledMethod, inputs, outputs) =>
+            {
+                if (inputs.Count != 1 || inputs[0].AsBoxedObject() is not string name || string.IsNullOrWhiteSpace(name))
+                    return new ServiceResult(StatusCodes.BadInvalidArgument);
+
+                var html = GenerateReportAsync(name).GetAwaiter().GetResult();
+                if (html == null)
+                    return new ServiceResult(StatusCodes.BadUnexpectedError,
+                        new LocalizedText($"Report '{name}' could not be generated. Check the server log."));
+
+                outputs[0] = new Variant(html);
+                return ServiceResult.Good;
+            };
+            folder.AddChild(method);
+            AddPredefinedNode(SystemContext, folder);
         }
 
         public async Task<string?> GenerateReportAsync(string reportName)

@@ -37,6 +37,15 @@ public class CommandService
     /// <summary>Raised when a GenerateReport command fires with the report name.</summary>
     public event Action<string>? GenerateReport;
 
+    public event Action<string, string>? ReportGenerated;
+
+    public async Task<string> GenerateReportAsync(string reportName)
+    {
+        var html = await _opc.GenerateReportAsync(reportName);
+        ReportGenerated?.Invoke(reportName, html);
+        return html;
+    }
+
     /// <summary>Raised when a GoBackScreen command fires, requesting a return to the previous screen/route in history.</summary>
     public event Action? GoBack;
 
@@ -145,8 +154,16 @@ public class CommandService
                 break;
 
             case "GenerateReport":
-                if (!string.IsNullOrEmpty(cmd.TargetReport))
+                try
+                {
                     GenerateReport?.Invoke(cmd.TargetReport);
+                    await GenerateReportAsync(cmd.TargetReport);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Report generation error: {ex.Message}");
+                    await _js.InvokeVoidAsync("alert", $"Report generation failed: {ex.Message}");
+                }
                 break;
 
             case "GoBackScreen":

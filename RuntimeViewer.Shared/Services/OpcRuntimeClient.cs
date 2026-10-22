@@ -1127,6 +1127,30 @@ public class OpcRuntimeClient : IDisposable
     }
 
 
+    public async Task<string> GenerateReportAsync(string reportName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(reportName);
+        if (_session == null || !_session.Connected)
+            throw new InvalidOperationException("Not connected to the report server.");
+        var namespaceIndex = _session.NamespaceUris.GetIndex(ServerNamespaceUri);
+        if (namespaceIndex < 0)
+            throw new InvalidOperationException("The server does not expose the report namespace.");
+
+        try
+        {
+            var output = await SessionCallAsync(new NodeId("_Reports", (ushort)namespaceIndex),
+                new NodeId("_Reports.GenerateReport", (ushort)namespaceIndex), [reportName]);
+            if (output.Count != 1 || output[0] is not string html || string.IsNullOrWhiteSpace(html))
+                throw new InvalidOperationException("The server returned no report content.");
+            return html;
+        }
+        catch (Exception ex)
+        {
+            Log($"REPORT ERROR: {reportName} - {ex.Message}");
+            throw;
+        }
+    }
+
     /// <summary>Calls an OPC UA method and returns the output arguments.</summary>
     private async Task<IList<object>> SessionCallAsync(NodeId objectId, NodeId methodId, object[] inputArgs)
     {

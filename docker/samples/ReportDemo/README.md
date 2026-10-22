@@ -113,3 +113,24 @@ on water-quality compliance and tank-level flags via `AiSummaryInstructions`.
 5. The **DailyOperations** report is scheduled at 06:00 daily.
 6. The **ShiftHandover** report runs at each shift change (06:00, 14:00, 22:00).
 7. Check **History** to view raw historical data used by reports.
+
+### On-demand commands and troubleshooting
+
+- Select a command button, then set its command action to **Generate Report**, its trigger to
+  **Click**, and **Target Report** to the report definition (for example, `DailyOperations`).
+  The sample's four generation buttons already contain these settings.
+- Both command buttons and each report viewer's **Generate** button call the connected OPC server.
+  The matching viewer displays the server-generated HTML, including configured charts and values.
+  Errors are shown instead of substituting a client-side placeholder report.
+- For a Toggle Button, bind it to a writable Boolean variable. Configure an enabled server event
+  with that variable as its condition, `== true`, trigger mode `RisingEdge`, and a **Generate Report**
+  command with its target report selected. Toggle off and on again for another report.
+- Disk delivery runs on the server host. Use an absolute **Disk Path** to choose an unambiguous
+  destination. Relative paths are resolved from the parent of the server application's base directory;
+  the server log records the full saved path.
+- Email settings in this demo are placeholders. Configure real SMTP settings or choose **Disk**
+  delivery before testing. The AI summary additionally requires the configured AI engine.
+- Simulation scripts call `ReadBool`, `ReadDouble`, and `Write` directly; do not prefix them with
+  `Globals.` in C# scripts. Restart the server after updating this sample so history can accumulate.
+- After updating the application, restart the server, editor, and runtime together so the runtime
+  and server both support the report-generation OPC method.
