@@ -794,7 +794,17 @@ else
             _currentScreen = Project.Screens.FirstOrDefault(s => !s.IsLayoutScreen &&
                 s.Name.Equals(ScreenName, StringComparison.OrdinalIgnoreCase));
             if (_currentScreen == null)
-                ShowToast("error", "Screen unavailable", $"'{ScreenName}' is not a runtime page.");
+            {
+                // Unknown route, e.g. a URL left over from a previously running project after the
+                // reconnect handler reloaded the page. Replace it with the startup screen route so the
+                // address bar matches what is displayed. Only warn for in-session navigation.
+                if (outgoing != null)
+                    ShowToast("error", "Screen unavailable", $"'{ScreenName}' is not a runtime page.");
+                _currentScreen = outgoing;
+                var fallback = Project.StartupScreen;
+                Nav.NavigateTo(fallback != null ? $"/screen/{Uri.EscapeDataString(fallback.Name)}" : "/", replace: true);
+                return;
+            }
         }
         else
         {
