@@ -85,6 +85,11 @@ per page; **Previous** and **Next** navigate the results. Search and category fi
 apply to the entire library and return to the first page. **Reload from disk** refreshes
 the library; loading failures are shown in the panel and logged.
 
+Runtime browser zoom scales navigation and dashboards together, including fitted
+screens and docked layouts. Zoom is relative to the browser/display scale when the
+page opens; zooming in allows scrolling rather than shrinking the dashboard to fit.
+Resizing the window still updates the fitted layout. Touch pinch zoom remains native.
+
 ### 📦 Available Docker Images
 
 Choose the deployment that fits your needs:
