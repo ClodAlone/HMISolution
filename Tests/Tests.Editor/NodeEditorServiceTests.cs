@@ -54,6 +54,53 @@ public class NodeEditorServiceTests
     }
 
     [Fact]
+    public void CloseProject_ClearsSelectionFromClosedProject()
+    {
+        var svc = CreateServiceWithModel();
+        var project = svc.ActiveProject!;
+        var screenNode = new ScreenNode(new ScreenConfig { Name = "Screen" }) { Parent = project };
+        project.Children.Add(screenNode);
+        var symbol = new ScreenSymbol();
+        svc.SelectNode(screenNode);
+        svc.SetScreenSelection(symbol, [symbol]);
+
+        svc.CloseProject(project);
+
+        Assert.Null(svc.SelectedItem);
+        Assert.Empty(svc.SelectedItems);
+        Assert.Null(svc.SelectedScreenSymbol);
+        Assert.Empty(svc.SelectedScreenSymbols);
+    }
+
+    [Fact]
+    public void RemoveChildProject_ClearsSelectionFromRemovedChildProject()
+    {
+        var svc = CreateServiceWithModel();
+        var parent = svc.ActiveProject!;
+        var childGroup = parent.Children.OfType<ChildProjectsGroupNode>().First();
+        var childProject = new ProjectNode(new NodeModel(), "child.json")
+        {
+            IsChildProject = true,
+            ParentProject = parent,
+            Parent = childGroup
+        };
+        var screenNode = new ScreenNode(new ScreenConfig { Name = "ChildScreen" }) { Parent = childProject };
+        childProject.Children.Add(screenNode);
+        childGroup.Children.Add(childProject);
+        var symbol = new ScreenSymbol();
+        svc.SelectNode(screenNode);
+        svc.SetScreenSelection(symbol, [symbol]);
+
+        svc.RemoveChildProject(parent, childProject);
+
+        Assert.Null(svc.SelectedItem);
+        Assert.Empty(svc.SelectedItems);
+        Assert.Null(svc.SelectedScreenSymbol);
+        Assert.Empty(svc.SelectedScreenSymbols);
+        Assert.Empty(childGroup.Children);
+    }
+
+    [Fact]
     public void DeleteSelected_IsUndoable()
     {
         var svc = CreateServiceWithModel();

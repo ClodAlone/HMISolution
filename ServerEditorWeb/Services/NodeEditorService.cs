@@ -591,6 +591,7 @@ public partial class NodeEditorService
         {
             // Let the caller handle save prompts; for now just close
         }
+        ClearSelectionForRemovedNodes([project]);
         _openProjects.Remove(project);
         RootItems.Remove(project);
 
@@ -1012,6 +1013,7 @@ public partial class NodeEditorService
     /// </summary>
     public void RemoveChildProject(ProjectNode parent, ProjectNode childNode)
     {
+        ClearSelectionForRemovedNodes([childNode]);
         if (childNode.ChildRef != null)
             parent.Model.ChildProjects.Remove(childNode.ChildRef);
 
@@ -1809,6 +1811,7 @@ public partial class NodeEditorService
     {
         var toDelete = SelectedItems.Where(n => n.Parent != null).ToList();
         if (toDelete.Count == 0) return;
+        ClearSelectionForRemovedNodes(toDelete);
 
         // Capture state for undo: each deleted item's parent, index, and any model objects
         var deletedInfo = new List<(TreeNode Item, TreeNode Parent, int Index, UserConfig? User, UserGroupConfig? Group, List<UserConfig>? GroupUsers)>();
@@ -1906,6 +1909,31 @@ public partial class NodeEditorService
         SelectedItem = null;
         HasUnsavedChanges = true;
         NotifyStateChanged();
+    }
+
+    private void ClearSelectionForRemovedNodes(IEnumerable<TreeNode> removedNodes)
+    {
+        var removed = removedNodes.ToList();
+        bool IsRemoved(TreeNode? node) => node != null && removed.Any(root => IsWithinSubtree(node, root));
+        if (!SelectedItems.Any(IsRemoved) && !IsRemoved(SelectedItem)) return;
+
+        foreach (var item in SelectedItems)
+            item.IsSelected = false;
+        if (SelectedItem != null)
+            SelectedItem.IsSelected = false;
+        SelectedItems.Clear();
+        SelectedItem = null;
+        SetScreenSelection(null, []);
+        SetReportSectionSelection(null);
+    }
+
+    private static bool IsWithinSubtree(TreeNode node, TreeNode root)
+    {
+        for (TreeNode? current = node; current != null; current = current.Parent)
+        {
+            if (ReferenceEquals(current, root)) return true;
+        }
+        return false;
     }
 
     public void CopySelected(ClipboardService clipboard)
