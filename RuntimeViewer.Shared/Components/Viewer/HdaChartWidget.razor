@@ -8,7 +8,7 @@
     @* Toolbar *@
     <div class="hda-toolbar">
         <span style="font-weight: bold; font-size: 1.1em;">📊 HDA</span>
-        <span style="font-size: 0.9em; color: #888;">
+        <span style="font-size: 0.9em; color: @C("#888", pal => pal.Muted);">
             @if (_series.Count > 0)
             {
                 <text>(@_series.Sum(s => s.Points.Count) pts)</text>
@@ -30,7 +30,7 @@
         </button>
         @if (_series.Count > 1)
         {
-            <button class="hda-btn" @onclick="ToggleOverlay" style="background:@(_overlay ? "#2563eb" : "transparent");"
+            <button class="hda-btn" @onclick="ToggleOverlay" style="background:@(_overlay ? C("#2563eb", pal => pal.Primary) : "transparent");"
                     title="@(_overlay ? "Shared Y-axis" : "Overlay: independent Y-axes")">⇵ Overlay</button>
         }
         @if (_series.Count > 0 && _series.Any(s => s.Points.Count > 0))
@@ -44,11 +44,11 @@
     <div class="hda-chart-area" @ref="_chartRef">
         @if (_loading && _series.Count == 0)
         {
-            <div style="text-align: center; padding: 30px; color: #888;">⏳ Loading history…</div>
+            <div style="text-align: center; padding: 30px; color: @C("#888", pal => pal.Muted);">⏳ Loading history…</div>
         }
         else if (_series.Count == 0 || _series.All(s => s.Points.Count == 0))
         {
-            <div style="text-align: center; padding: 30px; color: #888;">📭 No historical data</div>
+            <div style="text-align: center; padding: 30px; color: @C("#888", pal => pal.Muted);">📭 No historical data</div>
         }
         else
         {
@@ -60,29 +60,29 @@
                 {
                     var y = _marginTop + (_plotHeight * i / 4.0);
                     <line x1="@_marginLeft" y1="@Fmt(y)" x2="@(_chartWidth - _marginRight)" y2="@Fmt(y)"
-                          stroke="#1f2937" stroke-width="1" />
+                          stroke="@C("#1f2937", pal => pal.Grid)" stroke-width="1" />
                 }
                 @for (int i = 0; i <= 6; i++)
                 {
                     var x = _marginLeft + (_plotWidth * i / 6.0);
                     <line x1="@Fmt(x)" y1="@_marginTop" x2="@Fmt(x)" y2="@(_chartHeight - _marginBottom)"
-                          stroke="#1f2937" stroke-width="1" />
+                          stroke="@C("#1f2937", pal => pal.Grid)" stroke-width="1" />
                 }
 
                 @* Left Y-axis line *@
                 <line x1="@_marginLeft" y1="@_marginTop" x2="@_marginLeft" y2="@(_chartHeight - _marginBottom)"
-                      stroke="#374151" stroke-width="1" />
+                      stroke="@C("#374151", pal => pal.Border)" stroke-width="1" />
                 @* X-axis line *@
                 <line x1="@_marginLeft" y1="@(_chartHeight - _marginBottom)"
                       x2="@(_chartWidth - _marginRight)" y2="@(_chartHeight - _marginBottom)"
-                      stroke="#374151" stroke-width="1" />
+                      stroke="@C("#374151", pal => pal.Border)" stroke-width="1" />
 
                 @if (_overlay && _series.Count > 1)
                 {
                     @* Right Y-axis line *@
                     <line x1="@(_chartWidth - _marginRight)" y1="@_marginTop"
                           x2="@(_chartWidth - _marginRight)" y2="@(_chartHeight - _marginBottom)"
-                          stroke="#374151" stroke-width="1" />
+                          stroke="@C("#374151", pal => pal.Border)" stroke-width="1" />
 
                     @* Left Y-axis labels (first series color) *@
                     var leftColor = _seriesColors[0];
@@ -113,7 +113,7 @@
                     {
                         var y = _marginTop + (_plotHeight * i / 4.0);
                         var val = _globalMax - ((_globalMax - _globalMin) * i / 4.0);
-                        @RenderSvgLabel(_marginLeft - 4, y + 3, "end", "#6b7280", 8, Fmt(val))
+                        @RenderSvgLabel(_marginLeft - 4, y + 3, "end", C("#6b7280", pal => pal.Muted), 8, Fmt(val))
                     }
                 }
 
@@ -122,7 +122,7 @@
                 {
                     var x = _marginLeft + (_plotWidth * i / 6.0);
                     var t = _timeMin.AddTicks((long)((_timeMax - _timeMin).Ticks * i / 6.0));
-                    @RenderSvgLabel(x, _chartHeight - _marginBottom + 12, "middle", "#6b7280", 7, t.ToLocalTime().ToString("HH:mm:ss"))
+                    @RenderSvgLabel(x, _chartHeight - _marginBottom + 12, "middle", C("#6b7280", pal => pal.Muted), 7, t.ToLocalTime().ToString("HH:mm:ss"))
                 }
 
                 @* Data series *@
@@ -156,11 +156,11 @@
                     @GetShortName(s.VariableName)
                     @if (lastVal.HasValue)
                     {
-                        <span style="color:#9ca3af;"> = @Fmt(lastVal.Value)</span>
+                        <span style="color:@C("#9ca3af", pal => pal.Muted);"> = @Fmt(lastVal.Value)</span>
                     }
                     @if (_overlay && _series.Count > 1)
                     {
-                        <span style="color:#555;font-size:0.8em;"> (@(legendIdx == 0 ? "L" : legendIdx == 1 ? "R" : $"#{legendIdx}"))</span>
+                        <span style="color:@C("#555", pal => pal.Muted);font-size:0.8em;"> (@(legendIdx == 0 ? "L" : legendIdx == 1 ? "R" : $"#{legendIdx}"))</span>
                     }
                 </span>
                 legendIdx++;
@@ -170,6 +170,12 @@
 </div>
 
 @code {
+    /// <summary>Widget theme (ScreenSymbol.WidgetTheme). "classic" keeps the legacy look.</summary>
+    [Parameter] public string Theme { get; set; } = WidgetThemes.Classic;
+
+    private WidgetPalette? _palette => WidgetThemes.GetPalette(Theme);
+    private string C(string classic, Func<WidgetPalette, string> themed) => WidgetThemes.Pick(_palette, classic, themed);
+
     [Parameter] public List<string> VariablePaths { get; set; } = new();
     [Parameter] public int TimeRangeMinutes { get; set; } = 60;
     [Parameter] public int MaxPoints { get; set; } = 500;

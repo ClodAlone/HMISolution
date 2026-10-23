@@ -446,6 +446,26 @@
             }
         }
 
+        @if (WidgetThemes.ThemeableTypes.Contains(_selectedSymbol.Type))
+        {
+            var activeTheme = WidgetThemes.Normalize(_selectedSymbol.WidgetTheme);
+            <hr class="my-2" />
+            <h6 class="mb-2 small text-info">🎨 Widget Theme</h6>
+            <div class="d-flex gap-1 mb-2 flex-wrap" role="group" aria-label="Widget theme">
+                @foreach (var theme in WidgetThemes.Names)
+                {
+                    var isActive = theme == activeTheme;
+                    <button type="button"
+                            class="@WidgetThemeButtonClass(theme, isActive)"
+                            style="@WidgetThemeButtonStyle(theme, isActive)"
+                            aria-pressed="@(isActive ? "true" : "false")"
+                            title="Apply the @WidgetThemes.Label(theme) theme"
+                            @onclick="() => ApplyWidgetTheme(theme)">@WidgetThemes.Label(theme)</button>
+                }
+            </div>
+            <div class="small text-muted mb-2">Modern surfaces, rounded corners and smooth animations shared by the editor and runtime. Applying a theme also sets coordinated colors, which you can still fine-tune below. Classic restores the original look.</div>
+        }
+
         @if (_selectedSymbol.Type is "hdachart" or "hdagrid")
         {
             <hr class="my-2" />
@@ -3895,6 +3915,25 @@ else
         CaptureSymbolSnapshot();
         DisplayVisuals.ApplyPreset(_selectedSymbol, preset);
         OnChanged();
+    }
+
+    private void ApplyWidgetTheme(string theme)
+    {
+        if (_selectedSymbol == null) return;
+        CaptureSymbolSnapshot();
+        WidgetThemes.ApplyPreset(_selectedSymbol, theme);
+        OnChanged();
+    }
+
+    private static string WidgetThemeButtonClass(string theme, bool isActive) =>
+        "btn btn-sm" + (WidgetThemes.IsThemed(theme) ? "" : " btn-outline-secondary") + (isActive ? " active fw-semibold" : "");
+
+    private static string? WidgetThemeButtonStyle(string theme, bool isActive)
+    {
+        var palette = WidgetThemes.GetPalette(theme);
+        if (palette is null) return null;
+        var style = $"background: {palette.Surface}; color: {palette.Text}; border: 1px solid {palette.Border};";
+        return isActive ? style + $" box-shadow: 0 0 0 2px {palette.Accent};" : style;
     }
 
     private void OnChanged()

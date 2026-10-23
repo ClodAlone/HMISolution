@@ -249,6 +249,9 @@
                         var visible = EvalVisibilityBinding(sym, liveValue);
                         var rotation = EvalRotationBinding(sym, liveValue);
                         var labelText = EvalLabelBinding(sym, liveValue);
+                        var wtPal = WidgetThemes.ThemeableTypes.Contains(sym.Type) ? WidgetThemes.GetPalette(sym.WidgetTheme) : null;
+                        var wtRx = wtPal is null ? 4 : 10;
+                        var wtShadow = wtPal is null ? null : "filter: drop-shadow(0 4px 10px rgba(0,0,0,0.25));";
 
                         if (!visible) continue;
 
@@ -259,6 +262,9 @@
 
                             @switch (sym.Type)
                             {
+                                case var _ when WidgetThemes.UsesControlVisuals(sym):
+                                    @((MarkupString)ControlVisuals.Render(sym, liveValue, sym.Width, sym.Height, $"ed_{sym.Id}"))
+                                    break;
                                 case "rect":
                                     <rect width="@sym.Width" height="@sym.Height"
                                           fill="@fillColor" stroke="@sym.Stroke" stroke-width="@sym.StrokeWidth" rx="3" />
@@ -296,20 +302,20 @@
                                     }
                                     break;
                                 case "alarmlist":
-                                    <rect width="@sym.Width" height="@sym.Height"
-                                          fill="#1a1a2e" stroke="@sym.Stroke" stroke-width="@sym.StrokeWidth" rx="4" />
-                                    @RenderSvgText(sym.Width / 2, 16, "middle", "middle", "#e0e0e0", ScaledFontSize(11, sym), "🔔 Alarm List")
-                                    <line x1="4" y1="26" x2="@(sym.Width - 4)" y2="26" stroke="#333" stroke-width="1" />
-                                    @RenderSvgText(sym.Width / 2, 40, "middle", "middle", "#888", ScaledFontSize(9, sym), "(live alarms displayed at runtime)")
+                                    <rect width="@sym.Width" height="@sym.Height" style="@wtShadow"
+                                          fill="@(wtPal?.SurfaceSolid ?? "#1a1a2e")" stroke="@(wtPal?.Border ?? sym.Stroke)" stroke-width="@sym.StrokeWidth" rx="@wtRx" />
+                                    @RenderSvgText(sym.Width / 2, 16, "middle", "middle", wtPal?.Text ?? "#e0e0e0", ScaledFontSize(11, sym), "🔔 Alarm List")
+                                    <line x1="4" y1="26" x2="@(sym.Width - 4)" y2="26" stroke="@(wtPal?.Border ?? "#333")" stroke-width="1" />
+                                    @RenderSvgText(sym.Width / 2, 40, "middle", "middle", wtPal?.Muted ?? "#888", ScaledFontSize(9, sym), "(live alarms displayed at runtime)")
                                     break;
                                 case "hdachart":
-                                    <rect width="@sym.Width" height="@sym.Height"
-                                          fill="#111827" stroke="@sym.Stroke" stroke-width="@sym.StrokeWidth" rx="4" />
-                                    @RenderSvgText(sym.Width / 2, 16, "middle", "middle", "#e0e0e0", ScaledFontSize(11, sym), "📊 HDA Chart")
-                                    <line x1="4" y1="26" x2="@(sym.Width - 4)" y2="26" stroke="#374151" stroke-width="1" />
-                                    <line x1="40" y1="32" x2="40" y2="@(sym.Height - 20)" stroke="#374151" stroke-width="1" />
-                                    <line x1="40" y1="@(sym.Height - 20)" x2="@(sym.Width - 10)" y2="@(sym.Height - 20)" stroke="#374151" stroke-width="1" />
-                                    <polyline points="@BuildFakeHdaPolyline(sym)" fill="none" stroke="#3b82f6" stroke-width="1.5" />
+                                    <rect width="@sym.Width" height="@sym.Height" style="@wtShadow"
+                                          fill="@(wtPal?.SurfaceSolid ?? "#111827")" stroke="@(wtPal?.Border ?? sym.Stroke)" stroke-width="@sym.StrokeWidth" rx="@wtRx" />
+                                    @RenderSvgText(sym.Width / 2, 16, "middle", "middle", wtPal?.Text ?? "#e0e0e0", ScaledFontSize(11, sym), "📊 HDA Chart")
+                                    <line x1="4" y1="26" x2="@(sym.Width - 4)" y2="26" stroke="@(wtPal?.Border ?? "#374151")" stroke-width="1" />
+                                    <line x1="40" y1="32" x2="40" y2="@(sym.Height - 20)" stroke="@(wtPal?.Border ?? "#374151")" stroke-width="1" />
+                                    <line x1="40" y1="@(sym.Height - 20)" x2="@(sym.Width - 10)" y2="@(sym.Height - 20)" stroke="@(wtPal?.Border ?? "#374151")" stroke-width="1" />
+                                    <polyline points="@BuildFakeHdaPolyline(sym)" fill="none" stroke="@(wtPal?.Accent ?? "#3b82f6")" stroke-width="@(wtPal is null ? "1.5" : "2")" stroke-linejoin="round" />
                                     @if (sym.HdaVariablePaths.Count > 0)
                                     {
                                         @RenderSvgText(sym.Width / 2, sym.Height - 6, "middle", null, "#6b7280", ScaledFontSize(8, sym), string.Join(", ", sym.HdaVariablePaths.Take(3)))
@@ -320,23 +326,23 @@
                                     }
                                     break;
                                 case "hdagrid":
-                                    <rect width="@sym.Width" height="@sym.Height"
-                                          fill="#111827" stroke="@sym.Stroke" stroke-width="@sym.StrokeWidth" rx="4" />
-                                    @RenderSvgText(sym.Width / 2, 16, "middle", "middle", "#e0e0e0", ScaledFontSize(11, sym), "📋 HDA Data Grid")
-                                    <line x1="4" y1="26" x2="@(sym.Width - 4)" y2="26" stroke="#374151" stroke-width="1" />
+                                    <rect width="@sym.Width" height="@sym.Height" style="@wtShadow"
+                                          fill="@(wtPal?.SurfaceSolid ?? "#111827")" stroke="@(wtPal?.Border ?? sym.Stroke)" stroke-width="@sym.StrokeWidth" rx="@wtRx" />
+                                    @RenderSvgText(sym.Width / 2, 16, "middle", "middle", wtPal?.Text ?? "#e0e0e0", ScaledFontSize(11, sym), "📋 HDA Data Grid")
+                                    <line x1="4" y1="26" x2="@(sym.Width - 4)" y2="26" stroke="@(wtPal?.Border ?? "#374151")" stroke-width="1" />
                                     @* Fake table header row *@
-                                    <rect x="8" y="32" width="@(sym.Width - 16)" height="14" fill="#0f172a" rx="1" />
-                                    @RenderSvgText(40, 42, "start", "middle", "#9ca3af", ScaledFontSize(7, sym), "Timestamp")
-                                    @RenderSvgText(sym.Width / 2, 42, "middle", "middle", "#9ca3af", ScaledFontSize(7, sym), "Variable 1")
-                                    @RenderSvgText(sym.Width - 40, 42, "end", "middle", "#9ca3af", ScaledFontSize(7, sym), "Variable 2")
+                                    <rect x="8" y="32" width="@(sym.Width - 16)" height="14" fill="@(wtPal?.Track ?? "#0f172a")" rx="@(wtPal is null ? 1 : 4)" />
+                                    @RenderSvgText(40, 42, "start", "middle", wtPal?.Muted ?? "#9ca3af", ScaledFontSize(7, sym), "Timestamp")
+                                    @RenderSvgText(sym.Width / 2, 42, "middle", "middle", wtPal?.Muted ?? "#9ca3af", ScaledFontSize(7, sym), "Variable 1")
+                                    @RenderSvgText(sym.Width - 40, 42, "end", "middle", wtPal?.Muted ?? "#9ca3af", ScaledFontSize(7, sym), "Variable 2")
                                     @* Fake data rows *@
                                     @for (int row = 0; row < 4 && row * 13 + 50 < sym.Height - 20; row++)
                                     {
                                         var ry = 50 + row * 13;
-                                        <line x1="8" y1="@ry" x2="@(sym.Width - 8)" y2="@ry" stroke="#1f2937" stroke-width="0.5" />
-                                        @RenderSvgText(40, ry + 9, "start", "middle", "#6b7280", ScaledFontSize(7, sym), "00:00:00.000")
-                                        @RenderSvgText(sym.Width / 2, ry + 9, "middle", "middle", "#d1d5db", ScaledFontSize(7, sym), "12.345")
-                                        @RenderSvgText(sym.Width - 40, ry + 9, "end", "middle", "#d1d5db", ScaledFontSize(7, sym), "67.890")
+                                        <line x1="8" y1="@ry" x2="@(sym.Width - 8)" y2="@ry" stroke="@(wtPal?.Grid ?? "#1f2937")" stroke-width="0.5" />
+                                        @RenderSvgText(40, ry + 9, "start", "middle", wtPal?.Muted ?? "#6b7280", ScaledFontSize(7, sym), "00:00:00.000")
+                                        @RenderSvgText(sym.Width / 2, ry + 9, "middle", "middle", wtPal?.Text ?? "#d1d5db", ScaledFontSize(7, sym), "12.345")
+                                        @RenderSvgText(sym.Width - 40, ry + 9, "end", "middle", wtPal?.Text ?? "#d1d5db", ScaledFontSize(7, sym), "67.890")
                                     }
                                     @if (sym.HdaVariablePaths.Count > 0)
                                     {
@@ -348,12 +354,12 @@
                                     }
                                     break;
                                 case "eventlog":
-                                    <rect width="@sym.Width" height="@sym.Height"
-                                          fill="#0f172a" stroke="@sym.Stroke" stroke-width="@sym.StrokeWidth" rx="4" />
-                                    @RenderSvgText(sym.Width / 2, 16, "middle", "middle", "#e2e8f0", ScaledFontSize(11, sym), "📓 Event Log")
-                                    <line x1="4" y1="26" x2="@(sym.Width - 4)" y2="26" stroke="#334155" stroke-width="1" />
+                                    <rect width="@sym.Width" height="@sym.Height" style="@wtShadow"
+                                          fill="@(wtPal?.SurfaceSolid ?? "#0f172a")" stroke="@(wtPal?.Border ?? sym.Stroke)" stroke-width="@sym.StrokeWidth" rx="@wtRx" />
+                                    @RenderSvgText(sym.Width / 2, 16, "middle", "middle", wtPal?.Text ?? "#e2e8f0", ScaledFontSize(11, sym), "📓 Event Log")
+                                    <line x1="4" y1="26" x2="@(sym.Width - 4)" y2="26" stroke="@(wtPal?.Border ?? "#334155")" stroke-width="1" />
                                     @* Fake table header *@
-                                    <rect x="8" y="32" width="@(sym.Width - 16)" height="14" fill="#1e293b" rx="1" />
+                                    <rect x="8" y="32" width="@(sym.Width - 16)" height="14" fill="@(wtPal?.Track ?? "#1e293b")" rx="@(wtPal is null ? 1 : 4)" />
                                     @RenderSvgText(30, 42, "start", "middle", "#94a3b8", ScaledFontSize(7, sym), "Time")
                                     @RenderSvgText(100, 42, "start", "middle", "#94a3b8", ScaledFontSize(7, sym), "Category")
                                     @RenderSvgText(160, 42, "start", "middle", "#94a3b8", ScaledFontSize(7, sym), "Severity")
@@ -529,12 +535,12 @@
                                             var tw = sym.Width - 12;
                                             var tMid = sym.Height / 2 + 4;
                                             var tAmp = (sym.Height - 40) * 0.3;
-                                            <rect width="@sym.Width" height="@sym.Height"
-                                                  fill="@(sym.TrendBackground ?? "#111827")" stroke="@sym.Stroke" stroke-width="@sym.StrokeWidth" rx="4" />
-                                            @RenderSvgText(sym.Width / 2, 14, "middle", "middle", "#e0e0e0", ScaledFontSize(10, sym), "📈 Realtime Trend")
-                                            <line x1="4" y1="22" x2="@(sym.Width - 4)" y2="22" stroke="#334155" stroke-width="1" />
+                                            <rect width="@sym.Width" height="@sym.Height" style="@wtShadow"
+                                                  fill="@(sym.TrendBackground ?? "#111827")" stroke="@(wtPal?.Border ?? sym.Stroke)" stroke-width="@sym.StrokeWidth" rx="@wtRx" />
+                                            @RenderSvgText(sym.Width / 2, 14, "middle", "middle", wtPal?.Text ?? "#e0e0e0", ScaledFontSize(10, sym), "📈 Realtime Trend")
+                                            <line x1="4" y1="22" x2="@(sym.Width - 4)" y2="22" stroke="@(wtPal?.Border ?? "#334155")" stroke-width="1" />
                                             <polyline points="@($"6,{tMid} {6 + tw * 0.15},{tMid - tAmp} {6 + tw * 0.3},{tMid + tAmp * 0.5} {6 + tw * 0.5},{tMid - tAmp * 0.7} {6 + tw * 0.7},{tMid + tAmp * 0.3} {6 + tw * 0.85},{tMid - tAmp * 0.4} {6 + tw},{tMid + tAmp * 0.1}")"
-                                                       fill="none" stroke="#3b82f6" stroke-width="1.5" />
+                                                       fill="none" stroke="@(wtPal?.Accent ?? "#3b82f6")" stroke-width="@(wtPal is null ? "1.5" : "2")" stroke-linejoin="round" />
                                             @if (sym.TrendPens.Count > 1)
                                             {
                                                 <polyline points="@($"6,{tMid + 4} {6 + tw * 0.1},{tMid + tAmp * 0.6} {6 + tw * 0.25},{tMid - tAmp * 0.3} {6 + tw * 0.45},{tMid + tAmp * 0.8} {6 + tw * 0.6},{tMid - tAmp * 0.2} {6 + tw * 0.8},{tMid + tAmp * 0.5} {6 + tw},{tMid - tAmp * 0.3}")"
@@ -1072,14 +1078,14 @@
                                                 var aaFg = string.IsNullOrWhiteSpace(sym.AlarmAnalyticsForeground) ? "#e2e8f0" : sym.AlarmAnalyticsForeground;
                                                 var aaTitle = string.IsNullOrWhiteSpace(sym.AlarmAnalyticsTitle) ? "📊 Alarm Analytics" : sym.AlarmAnalyticsTitle;
                                                 var aaTopN = Math.Clamp(sym.AlarmAnalyticsTopCount <= 0 ? 10 : sym.AlarmAnalyticsTopCount, 1, 20);
-                                                <rect width="@sym.Width" height="@sym.Height"
-                                                      fill="@aaBg" stroke="@sym.Stroke" stroke-width="@sym.StrokeWidth" rx="4" />
+                                                <rect width="@sym.Width" height="@sym.Height" style="@wtShadow"
+                                                      fill="@aaBg" stroke="@(wtPal?.Border ?? sym.Stroke)" stroke-width="@sym.StrokeWidth" rx="@wtRx" />
                                                 @if (sym.AlarmAnalyticsShowHeader)
                                                 {
-                                                    <rect x="0" y="0" width="@sym.Width" height="22" fill="#1e293b" rx="4" />
-                                                    <rect x="0" y="18" width="@sym.Width" height="4" fill="#1e293b" />
+                                                    <rect x="0" y="0" width="@sym.Width" height="22" fill="@(wtPal?.Track ?? "#1e293b")" rx="@wtRx" />
+                                                    <rect x="0" y="18" width="@sym.Width" height="4" fill="@(wtPal?.Track ?? "#1e293b")" />
                                                     @RenderSvgText(8, 15, "start", null, aaFg, ScaledFontSize(11, sym), aaTitle)
-                                                    @RenderSvgText(sym.Width - 8, 15, "end", null, "#64748b", ScaledFontSize(9, sym), "🔄")
+                                                    @RenderSvgText(sym.Width - 8, 15, "end", null, wtPal?.Muted ?? "#64748b", ScaledFontSize(9, sym), "🔄")
                                                 }
                                                 double yCursor = sym.AlarmAnalyticsShowHeader ? 30 : 6;
                                                 if (sym.AlarmAnalyticsShowKpis && sym.Width > 60 && sym.Height > yCursor + 30)
@@ -1094,9 +1100,9 @@
                                                     for (int k = 0; k < kpiCount; k++)
                                                     {
                                                         double x = 6 + k * (kpiW + gap);
-                                                        <rect x="@F(x)" y="@F(kpiTop)" width="@F(kpiW)" height="@F(kpiH)" rx="3" fill="#1e293b" stroke="#334155" stroke-width="1" />
-                                                        @RenderSvgText(x + kpiW / 2, kpiTop + kpiH * 0.55, "middle", "middle", aaFg, ScaledFontSize(10, sym), kpiValues[k])
-                                                        @RenderSvgText(x + kpiW / 2, kpiTop + kpiH - 3, "middle", null, "#64748b", ScaledFontSize(7, sym), kpiLabels[k])
+                                                        <rect x="@F(x)" y="@F(kpiTop)" width="@F(kpiW)" height="@F(kpiH)" rx="@(wtPal is null ? 3 : 7)" fill="@(wtPal?.Track ?? "#1e293b")" stroke="@(wtPal?.Border ?? "#334155")" stroke-width="1" />
+                                                        @RenderSvgText(x + kpiW / 2, kpiTop + kpiH * 0.55, "middle", "middle", wtPal?.Accent ?? aaFg, ScaledFontSize(10, sym), kpiValues[k])
+                                                        @RenderSvgText(x + kpiW / 2, kpiTop + kpiH - 3, "middle", null, wtPal?.Muted ?? "#64748b", ScaledFontSize(7, sym), kpiLabels[k])
                                                     }
                                                     yCursor = kpiTop + kpiH + 6;
                                                 }
@@ -1217,7 +1223,7 @@
                             }
                             @if (!string.IsNullOrEmpty(labelText ?? sym.Label) && sym.Type is not "text" and not "button" and not "animtext" and not "numericdisplay" and not "progressbar" and not "dropdown" and not "radiogroup" and not "sparkline" and not "colorzone" and not "alarmbanner" and not "conveyor" and not "piechart" and not "barchart" and not "navbutton" and not "heatexchanger" and not "popup" and not "setpointramp" and not "flowmeter" and not "xyplot" and not "pdfviewer" and not "alarmanalytics" and not "kpiwidget" and not "nlquery" and not "mimicpump" and not "mimicvalve" and not "mimictank" and not "mimicsensor" and not "mimiccontroller" and not "mimicmixer" and not "mimicheater" and not "mimicfilter" and not "mimiccompressor" and not "mimicreactor")
                             {
-                                @RenderSvgText(sym.Width / 2, sym.Height + 14, "middle", null, "#333", 11, labelText ?? sym.Label, sym)
+                                @RenderSvgText(sym.Width / 2, sym.Height + 14, "middle", null, WidgetThemes.CaptionColor(sym), 11, labelText ?? sym.Label, sym)
                             }
 
                             @{
@@ -2881,6 +2887,7 @@ Right-click a symbol for actions</div>
                 DisplayFontStyle = src.DisplayFontStyle,
                 DisplayAutoFit = src.DisplayAutoFit,
                 DisplayTextColor = src.DisplayTextColor,
+                WidgetTheme = src.WidgetTheme,
                 FontFamily = src.FontFamily,
                 FontSize = src.FontSize,
                 FontWeight = src.FontWeight,
@@ -3023,6 +3030,7 @@ Right-click a symbol for actions</div>
                 DisplayFontStyle = src.DisplayFontStyle,
                 DisplayAutoFit = src.DisplayAutoFit,
                 DisplayTextColor = src.DisplayTextColor,
+                WidgetTheme = src.WidgetTheme,
                 FontFamily = src.FontFamily,
                 FontSize = src.FontSize,
                 FontWeight = src.FontWeight,

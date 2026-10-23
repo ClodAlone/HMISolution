@@ -4,15 +4,15 @@
 @using RuntimeViewer.Shared.Services
 @implements IDisposable
 
-<div class="alarm-analytics-widget" style="width: 100%; height: 100%; display: flex; flex-direction: column; font-family: var(--widget-font-family, sans-serif); font-size: var(--widget-font-size, 11px); font-weight: var(--widget-font-weight, normal); font-style: var(--widget-font-style, normal); background: @Background; color: @Foreground; border: 1px solid var(--analytics-border, #334155); border-radius: 4px; overflow: hidden;">
+<div class="@(_palette is null ? "alarm-analytics-widget" : "alarm-analytics-widget wt-panel")" style="width: 100%; height: 100%; display: flex; flex-direction: column; font-family: var(--widget-font-family, sans-serif); font-size: var(--widget-font-size, 11px); font-weight: var(--widget-font-weight, normal); font-style: var(--widget-font-style, normal); background: @SurfaceBackground; color: @Foreground; border: 1px solid var(--analytics-border, #334155); border-radius: @C("4px", _ => "10px"); overflow: hidden;@C("", p => $" box-shadow: {p.Shadow};")">
     @if (ShowHeader)
     {
         @* Header *@
-        <div style="display: flex; align-items: center; padding: 4px 8px; background: #1e293b; border-bottom: 1px solid #334155; flex-shrink: 0; gap: 6px;">
+        <div class="@(_palette is null ? null : "wt-toolbar")" style="display: flex; align-items: center; padding: @C("4px 8px", _ => "6px 10px"); background: @C("#1e293b", p => p.Header); border-bottom: 1px solid @C("#334155", p => p.Border); flex-shrink: 0; gap: 6px;">
             <span style="font-weight: bold; font-size: 1.1em;">@(string.IsNullOrWhiteSpace(Title) ? "📊 Alarm Analytics" : Title)</span>
             @if (_snapshot != null)
             {
-                <span style="font-size: 0.85em; color: #64748b; margin-left: auto;">Window: @(_snapshot.WindowMinutes) min</span>
+                <span style="font-size: 0.85em; color: @Muted; margin-left: auto;">Window: @(_snapshot.WindowMinutes) min</span>
             }
             <button class="analytics-btn" @onclick="Refresh" disabled="@_loading" title="Refresh">🔄</button>
         </div>
@@ -22,20 +22,20 @@
     <div style="flex: 1; overflow-y: auto; padding: 6px 8px;">
         @if (_loading && _snapshot == null)
         {
-            <div style="text-align: center; padding: 20px; color: #64748b;">
+            <div style="text-align: center; padding: 20px; color: @Muted;">
                 <span>⏳ Loading alarm analytics…</span>
             </div>
         }
         else if (_error != null)
         {
-            <div style="text-align: center; padding: 20px; color: #64748b;">
+            <div style="text-align: center; padding: 20px; color: @Muted;">
                 <div style="font-size: 1.65em;">⚠️</div>
                 <div style="margin-top: 4px; font-size: 0.9em;">@_error</div>
             </div>
         }
         else if (_snapshot == null)
         {
-            <div style="text-align: center; padding: 20px; color: #64748b;">
+            <div style="text-align: center; padding: 20px; color: @Muted;">
                 <div style="font-size: 2em;">📊</div>
                 <div style="margin-top: 4px;">No alarm analytics available.</div>
             </div>
@@ -81,10 +81,10 @@
             @if (ShowTopTable)
             {
             <div style="font-weight: bold; font-size: 1em; margin-bottom: 4px;">🔝 Top-@Math.Clamp(TopCount, 1, 20) Alarm Sources by Variable</div>
-            <div style="font-size: 0.85em; color: #64748b; margin-bottom: 4px;">Aggregated across all alarm conditions for each variable. See event history for individual levels and trigger values.</div>
+            <div style="font-size: 0.85em; color: @Muted; margin-bottom: 4px;">Aggregated across all alarm conditions for each variable. See event history for individual levels and trigger values.</div>
             @if (_snapshot.TopAlarms.Count == 0)
             {
-                <div style="text-align: center; padding: 8px; color: #64748b; font-size: 0.9em;">No alarm activations in window.</div>
+                <div style="text-align: center; padding: 8px; color: @Muted; font-size: 0.9em;">No alarm activations in window.</div>
             }
             else
             {
@@ -105,13 +105,13 @@
                             rank++;
                             double pct = maxCount > 0 ? (double)alarm.ActivationCount / maxCount * 100 : 0;
                             <tr>
-                                <td style="color: #64748b;">@rank</td>
+                                <td style="color: @Muted;">@rank</td>
                                 <td style="font-family: monospace; font-size: 0.85em; word-break: break-all;">@alarm.VariablePath</td>
                                 <td style="text-align: right; font-weight: 600;">@alarm.ActivationCount</td>
                                 <td style="text-align: right;">@FormatMtta(alarm.AvgAcknowledgeSeconds)</td>
                                 <td>
-                                    <div style="background: #1e293b; border-radius: 2px; height: 10px; overflow: hidden;">
-                                        <div style="background: @BarColor(rank); width: @($"{pct:F0}")%; height: 100%; border-radius: 2px;"></div>
+                                    <div style="background: @C("#1e293b", p => p.Track); border-radius: @C("2px", _ => "5px"); height: 10px; overflow: hidden;">
+                                        <div class="@(_palette is null ? null : "wt-bar")" style="background: @BarColor(rank); width: @($"{pct:F0}")%; height: 100%; border-radius: @C("2px", _ => "5px");"></div>
                                     </div>
                                 </td>
                             </tr>
@@ -170,6 +170,19 @@
     [Parameter] public bool ShowFloodBanner { get; set; } = true;
     [Parameter] public int TopCount { get; set; } = 10;
     [Parameter] public string Title { get; set; } = "";
+
+    /// <summary>Widget theme (ScreenSymbol.WidgetTheme). "classic" keeps the legacy look.</summary>
+    [Parameter] public string Theme { get; set; } = WidgetThemes.Classic;
+
+    private WidgetPalette? _palette => WidgetThemes.GetPalette(Theme);
+    private string C(string classic, Func<WidgetPalette, string> themed) => WidgetThemes.Pick(_palette, classic, themed);
+    private string Muted => C("#64748b", p => p.Muted);
+
+    // The theme preset stores the solid colour (editable with a colour picker); while it is unchanged, show the themed gradient.
+    private string SurfaceBackground =>
+        _palette is not null && string.Equals(Background, _palette.SurfaceSolid, StringComparison.OrdinalIgnoreCase)
+            ? _palette.Surface
+            : Background;
 
     private AlarmAnalyticsSnapshot? _snapshot;
     private bool _loading;

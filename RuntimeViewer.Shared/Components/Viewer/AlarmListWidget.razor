@@ -4,20 +4,20 @@
 @using RuntimeViewer.Shared.Services
 @implements IDisposable
 
-<div class="alarm-list-widget" style="width: 100%; height: 100%; display: flex; flex-direction: column; font-family: var(--widget-font-family, sans-serif); font-size: var(--widget-font-size, 11px); font-weight: var(--widget-font-weight, normal); font-style: var(--widget-font-style, normal); background: var(--alarm-bg, #1a1a2e); color: var(--alarm-text, #e0e0e0); border: 1px solid var(--alarm-border, #333); border-radius: 4px; overflow: hidden;">
+<div class="@(_palette is null ? "alarm-list-widget" : "alarm-list-widget wt-panel")" style="width: 100%; height: 100%; display: flex; flex-direction: column; font-family: var(--widget-font-family, sans-serif); font-size: var(--widget-font-size, 11px); font-weight: var(--widget-font-weight, normal); font-style: var(--widget-font-style, normal); background: var(--alarm-bg, #1a1a2e); color: var(--alarm-text, #e0e0e0); border: 1px solid var(--alarm-border, #333); border-radius: @C("4px", _ => "10px"); overflow: hidden;@C("", p => $" box-shadow: {p.Shadow};")">
     @* Toolbar *@
-    <div style="display: flex; gap: 4px; align-items: center; padding: 4px 6px; background: var(--alarm-header-bg, #16213e); border-bottom: 1px solid var(--alarm-border, #333); flex-shrink: 0; flex-wrap: wrap;">
+    <div class="@(_palette is null ? null : "wt-toolbar")" style="display: flex; gap: 4px; align-items: center; padding: @C("4px 6px", _ => "6px 8px"); background: var(--alarm-header-bg, #16213e); border-bottom: 1px solid var(--alarm-border, #333); flex-shrink: 0; flex-wrap: wrap;">
         <span style="font-weight: bold; font-size: 1.1em;">🔔 Alarms</span>
-        <span style="font-size: 0.9em; color: #888;">(@_alarms.Count)</span>
+        <span class="@(_palette is null ? null : "wt-count")" style="font-size: 0.9em; color: @C("#888", p => p.Muted);">(@_alarms.Count)</span>
         <span style="flex: 1;"></span>
         <button class="alarm-btn" @onclick="RefreshAlarms" disabled="@IsBusy" title="Refresh alarms">🔄</button>
-        <span style="width: 1px; height: 14px; background: #444;"></span>
+        <span style="width: 1px; height: 14px; background: @C("#444", p => p.Border);"></span>
         <button class="alarm-btn" @onclick="AckSelected" disabled="@(!HasSelected || IsBusy)" title="Acknowledge selected">✔ Ack</button>
         <button class="alarm-btn" @onclick="ConfirmSelected" disabled="@(!HasSelected || IsBusy)" title="Confirm/Reset selected">✔✔ Reset</button>
-        <span style="width: 1px; height: 14px; background: #444;"></span>
+        <span style="width: 1px; height: 14px; background: @C("#444", p => p.Border);"></span>
         <button class="alarm-btn" @onclick="ShowShelveDialog" disabled="@(!HasSelected || IsBusy)" title="Shelve selected alarms">🔇 Shelve</button>
         <button class="alarm-btn" @onclick="UnshelveSelected" disabled="@(!HasShelvedSelected || IsBusy)" title="Unshelve selected alarms">🔔 Unshelve</button>
-        <span style="width: 1px; height: 14px; background: #444;"></span>
+        <span style="width: 1px; height: 14px; background: @C("#444", p => p.Border);"></span>
         <button class="alarm-btn alarm-btn-danger" @onclick="AckAll" disabled="@(_alarms.Count == 0 || IsBusy)" title="Acknowledge all">✔ Ack All</button>
         <button class="alarm-btn alarm-btn-danger" @onclick="ConfirmAll" disabled="@(_alarms.Count == 0 || IsBusy)" title="Confirm/Reset all">✔✔ Reset All</button>
     </div>
@@ -25,9 +25,9 @@
     @* Shelve duration dialog *@
     @if (_showShelveDialog)
     {
-        <div style="display: flex; align-items: center; gap: 6px; padding: 4px 8px; background: #1e2a4a; border-bottom: 1px solid #444; flex-shrink: 0;">
-            <span style="font-size: 1em; color: #aaa;">Shelve for:</span>
-            <select @bind="_shelveDurationMinutes" style="background: #2a2a4a; color: #e0e0e0; border: 1px solid #555; border-radius: 3px; padding: 2px 4px; font-size: 1em;">
+        <div style="display: flex; align-items: center; gap: 6px; padding: 4px 8px; background: @C("#1e2a4a", p => p.Header); border-bottom: 1px solid @C("#444", p => p.Border); flex-shrink: 0;">
+            <span style="font-size: 1em; color: @C("#aaa", p => p.Muted);">Shelve for:</span>
+            <select @bind="_shelveDurationMinutes" style="background: @C("#2a2a4a", p => p.Button); color: @C("#e0e0e0", p => p.Text); border: 1px solid @C("#555", p => p.Border); border-radius: @C("3px", _ => "6px"); padding: 2px 4px; font-size: 1em;">
                 <option value="15">15 min</option>
                 <option value="30">30 min</option>
                 <option value="60">1 hour</option>
@@ -49,13 +49,13 @@
     <div style="flex: 1; overflow-y: auto;">
         @if (_loading)
         {
-            <div style="text-align: center; padding: 20px; color: #888;">
+            <div style="text-align: center; padding: 20px; color: @C("#888", p => p.Muted);">
                 <span>⏳ Loading alarms…</span>
             </div>
         }
         else if (_alarms.Count == 0)
         {
-            <div style="text-align: center; padding: 20px; color: #888;">
+            <div class="@(_palette is null ? null : "wt-empty")" style="text-align: center; padding: 20px; color: @C("#888", p => p.Muted);">
                 <span>✅ No active alarms</span>
             </div>
         }
@@ -110,7 +110,7 @@
                                 }
                                 else
                                 {
-                                    <span style="color: #555;">—</span>
+                                    <span style="color: @C("#555", p => p.Muted);">—</span>
                                 }
                             </td>
                         </tr>
@@ -149,6 +149,12 @@
 
 @code {
     [Inject] private OpcRuntimeClient Opc { get; set; } = default!;
+
+    /// <summary>Widget theme (ScreenSymbol.WidgetTheme). "classic" keeps the legacy look.</summary>
+    [Parameter] public string Theme { get; set; } = WidgetThemes.Classic;
+
+    private WidgetPalette? _palette => WidgetThemes.GetPalette(Theme);
+    private string C(string classic, Func<WidgetPalette, string> themed) => WidgetThemes.Pick(_palette, classic, themed);
 
     private List<AlarmEntry> _alarms = new();
     private bool _loading;

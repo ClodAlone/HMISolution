@@ -1,4 +1,4 @@
-﻿@* Copyright (c) 2026 Claudio Fiorani - All rights reserved. *@
+@* Copyright (c) 2026 Claudio Fiorani - All rights reserved. *@
 
 @using SharedModels
 @using RuntimeViewer.Shared.Services
@@ -95,25 +95,34 @@ else if (Screen.LayoutMode == "responsive")
                         }
                         break;
                     case "alarmlist":
-                        <AlarmListWidget />
+                        <div class="@WidgetThemeClass(sym)" style="display: contents; @WidgetThemes.CssVariables(sym.WidgetTheme)">
+                            <AlarmListWidget Theme="@sym.WidgetTheme" />
+                        </div>
                         break;
                     case "hdachart":
-                        <HdaChartWidget VariablePaths="@sym.HdaVariablePaths"
-                                        VariableFilter="@sym.HdaVariableFilter"
-                                        TimeRangeMinutes="@sym.HdaTimeRangeMinutes"
-                                        MaxPoints="@sym.HdaMaxPoints"
-                                        OverlayMode="@sym.HdaOverlayMode" />
+                        <div class="@WidgetThemeClass(sym)" style="display: contents; @WidgetThemes.CssVariables(sym.WidgetTheme)">
+                            <HdaChartWidget VariablePaths="@sym.HdaVariablePaths"
+                                            VariableFilter="@sym.HdaVariableFilter"
+                                            TimeRangeMinutes="@sym.HdaTimeRangeMinutes"
+                                            MaxPoints="@sym.HdaMaxPoints"
+                                            OverlayMode="@sym.HdaOverlayMode"
+                                            Theme="@sym.WidgetTheme" />
+                        </div>
                         break;
                     case "hdagrid":
-                        <HdaGridWidget VariablePaths="@sym.HdaVariablePaths"
-                                       VariableFilter="@sym.HdaVariableFilter"
-                                       TimeRangeMinutes="@sym.HdaTimeRangeMinutes"
-                                       MaxPoints="@sym.HdaMaxPoints" />
+                        <div class="@WidgetThemeClass(sym)" style="display: contents; @WidgetThemes.CssVariables(sym.WidgetTheme)">
+                            <HdaGridWidget VariablePaths="@sym.HdaVariablePaths"
+                                           VariableFilter="@sym.HdaVariableFilter"
+                                           TimeRangeMinutes="@sym.HdaTimeRangeMinutes"
+                                           MaxPoints="@sym.HdaMaxPoints" />
+                        </div>
                         break;
                     case "eventlog":
-                        <EventLogWidget MaxRows="@sym.EventLogMaxRows"
-                                        TimeRangeMinutes="@sym.EventLogTimeRangeMinutes"
-                                        Categories="@sym.EventLogCategories" />
+                        <div class="@WidgetThemeClass(sym)" style="display: contents; @WidgetThemes.CssVariables(sym.WidgetTheme)">
+                            <EventLogWidget MaxRows="@sym.EventLogMaxRows"
+                                            TimeRangeMinutes="@sym.EventLogTimeRangeMinutes"
+                                            Categories="@sym.EventLogCategories" />
+                        </div>
                         break;
                     case "editbox":
                         <div style="--editbox-bg: @fillColor; --editbox-border: @(sym.Stroke ?? "#475569"); @BuildHtmlAnimStyle(sym) width: 100%; height: 100%;">
@@ -176,16 +185,24 @@ else if (Screen.LayoutMode == "responsive")
                         }
                         break;
                     case "trend":
-                        <RealtimeTrendWidget Pens="@sym.TrendPens"
-                                             TimeWindowSeconds="@sym.TrendTimeWindowSeconds"
-                                             ShowGrid="@sym.TrendShowGrid"
-                                             ShowCursor="@sym.TrendShowCursor"
-                                             ShowLegend="@sym.TrendShowLegend"
-                                             YMin="@sym.TrendYMin"
-                                             YMax="@sym.TrendYMax"
-                                             Background="@sym.TrendBackground" />
+                        <div class="@WidgetThemeClass(sym)" style="display: contents; @WidgetThemes.CssVariables(sym.WidgetTheme)">
+                            <RealtimeTrendWidget Pens="@sym.TrendPens"
+                                                 TimeWindowSeconds="@sym.TrendTimeWindowSeconds"
+                                                 ShowGrid="@sym.TrendShowGrid"
+                                                 ShowCursor="@sym.TrendShowCursor"
+                                                 ShowLegend="@sym.TrendShowLegend"
+                                                 YMin="@sym.TrendYMin"
+                                                 YMax="@sym.TrendYMax"
+                                                 Background="@sym.TrendBackground"
+                                                 Theme="@sym.WidgetTheme" />
+                        </div>
                         break;
                     case "switch":
+                        if (WidgetThemes.UsesControlVisuals(sym))
+                        {
+                            @RenderResponsiveThemedControl(sym, liveValue)
+                            break;
+                        }
                         var swIsOn = liveValue is "True" or "true" or "1";
                         var swOnCol = sym.SwitchOnColor ?? "#34c759";
                         var swOffCol = sym.SwitchOffColor ?? "#787880";
@@ -199,6 +216,11 @@ else if (Screen.LayoutMode == "responsive")
                         </div>
                         break;
                     case "rotaryswitch":
+                        if (WidgetThemes.UsesControlVisuals(sym))
+                        {
+                            @RenderResponsiveThemedControl(sym, liveValue)
+                            break;
+                        }
                         var rvPos = (int)ParseDouble(liveValue);
                         var rvN = Math.Max(2, Math.Min(12, sym.SwitchPositions));
                         rvPos = Math.Max(0, Math.Min(rvN - 1, rvPos));
@@ -232,6 +254,11 @@ else if (Screen.LayoutMode == "responsive")
                         </div>
                         break;
                     case "knob":
+                        if (WidgetThemes.UsesControlVisuals(sym))
+                        {
+                            @RenderResponsiveThemedControl(sym, liveValue)
+                            break;
+                        }
                         var rkVal = ParseDouble(liveValue);
                         var rkMin = sym.MinValue ?? 0;
                         var rkMax = sym.MaxValue ?? 100;
@@ -257,6 +284,11 @@ else if (Screen.LayoutMode == "responsive")
                         </div>
                         break;
                     case "hslider":
+                        if (WidgetThemes.UsesControlVisuals(sym))
+                        {
+                            @RenderResponsiveThemedControl(sym, liveValue)
+                            break;
+                        }
                         var hsVal2 = ParseDouble(liveValue);
                         var hsMin2 = sym.MinValue ?? 0;
                         var hsMax2 = sym.MaxValue ?? 100;
@@ -275,6 +307,11 @@ else if (Screen.LayoutMode == "responsive")
                         </div>
                         break;
                     case "vslider":
+                        if (WidgetThemes.UsesControlVisuals(sym))
+                        {
+                            @RenderResponsiveThemedControl(sym, liveValue)
+                            break;
+                        }
                         var vsVal2 = ParseDouble(liveValue);
                         var vsMin2 = sym.MinValue ?? 0;
                         var vsMax2 = sym.MaxValue ?? 100;
@@ -293,6 +330,11 @@ else if (Screen.LayoutMode == "responsive")
                         </div>
                         break;
                     case "rangeslider":
+                        if (WidgetThemes.UsesControlVisuals(sym))
+                        {
+                            @RenderResponsiveThemedControl(sym, liveValue)
+                            break;
+                        }
                         var rsMin = sym.MinValue ?? 0;
                         var rsMax = sym.MaxValue ?? 100;
                         var rsRange = rsMax > rsMin ? rsMax - rsMin : 1;
@@ -393,15 +435,18 @@ else if (Screen.LayoutMode == "responsive")
                         @RenderResponsivePdfViewer(sym, liveValue)
                         break;
                     case "alarmanalytics":
-                        <AlarmAnalyticsDashboardWidget Background="@sym.AlarmAnalyticsBackground"
-                                                       Foreground="@sym.AlarmAnalyticsForeground"
-                                                       RefreshSeconds="@sym.AlarmAnalyticsRefreshSeconds"
-                                                       ShowHeader="@sym.AlarmAnalyticsShowHeader"
-                                                       ShowKpis="@sym.AlarmAnalyticsShowKpis"
-                                                       ShowTopTable="@sym.AlarmAnalyticsShowTopTable"
-                                                       ShowFloodBanner="@sym.AlarmAnalyticsShowFloodBanner"
-                                                       TopCount="@sym.AlarmAnalyticsTopCount"
-                                                       Title="@sym.AlarmAnalyticsTitle" />
+                        <div class="@WidgetThemeClass(sym)" style="display: contents; @WidgetThemes.CssVariables(sym.WidgetTheme)">
+                            <AlarmAnalyticsDashboardWidget Background="@sym.AlarmAnalyticsBackground"
+                                                           Foreground="@sym.AlarmAnalyticsForeground"
+                                                           RefreshSeconds="@sym.AlarmAnalyticsRefreshSeconds"
+                                                           ShowHeader="@sym.AlarmAnalyticsShowHeader"
+                                                           ShowKpis="@sym.AlarmAnalyticsShowKpis"
+                                                           ShowTopTable="@sym.AlarmAnalyticsShowTopTable"
+                                                           ShowFloodBanner="@sym.AlarmAnalyticsShowFloodBanner"
+                                                           TopCount="@sym.AlarmAnalyticsTopCount"
+                                                           Title="@sym.AlarmAnalyticsTitle"
+                                                           Theme="@sym.WidgetTheme" />
+                        </div>
                         break;
                     case "kpiwidget":
                         @RenderResponsiveKpiWidget(sym, liveValue)
@@ -567,25 +612,26 @@ else
                         break;
                     case "alarmlist":
                         <foreignObject width="@sym.Width" height="@sym.Height">
-                            <div xmlns="http://www.w3.org/1999/xhtml" style="width: @(sym.Width)px; height: @(sym.Height)px; @WidgetFontStyle(sym)">
-                                <AlarmListWidget />
+                            <div xmlns="http://www.w3.org/1999/xhtml" class="@WidgetThemeClass(sym)" style="width: @(sym.Width)px; height: @(sym.Height)px; @WidgetFontStyle(sym) @WidgetThemes.CssVariables(sym.WidgetTheme)">
+                                <AlarmListWidget Theme="@sym.WidgetTheme" />
                             </div>
                         </foreignObject>
                         break;
                     case "hdachart":
                         <foreignObject width="@sym.Width" height="@sym.Height">
-                            <div xmlns="http://www.w3.org/1999/xhtml" style="width: @(sym.Width)px; height: @(sym.Height)px; @WidgetFontStyle(sym)">
+                            <div xmlns="http://www.w3.org/1999/xhtml" class="@WidgetThemeClass(sym)" style="width: @(sym.Width)px; height: @(sym.Height)px; @WidgetFontStyle(sym) @WidgetThemes.CssVariables(sym.WidgetTheme)">
                                 <HdaChartWidget VariablePaths="@sym.HdaVariablePaths"
                                                 VariableFilter="@sym.HdaVariableFilter"
                                                 TimeRangeMinutes="@sym.HdaTimeRangeMinutes"
                                                 MaxPoints="@sym.HdaMaxPoints"
-                                                OverlayMode="@sym.HdaOverlayMode" />
+                                                OverlayMode="@sym.HdaOverlayMode"
+                                                Theme="@sym.WidgetTheme" />
                             </div>
                         </foreignObject>
                         break;
                     case "hdagrid":
                         <foreignObject width="@sym.Width" height="@sym.Height">
-                            <div xmlns="http://www.w3.org/1999/xhtml" style="width: @(sym.Width)px; height: @(sym.Height)px; @WidgetFontStyle(sym)">
+                            <div xmlns="http://www.w3.org/1999/xhtml" class="@WidgetThemeClass(sym)" style="width: @(sym.Width)px; height: @(sym.Height)px; @WidgetFontStyle(sym) @WidgetThemes.CssVariables(sym.WidgetTheme)">
                                 <HdaGridWidget VariablePaths="@sym.HdaVariablePaths"
                                                VariableFilter="@sym.HdaVariableFilter"
                                                TimeRangeMinutes="@sym.HdaTimeRangeMinutes"
@@ -595,7 +641,7 @@ else
                         break;
                     case "eventlog":
                         <foreignObject width="@sym.Width" height="@sym.Height">
-                            <div xmlns="http://www.w3.org/1999/xhtml" style="width: @(sym.Width)px; height: @(sym.Height)px; @WidgetFontStyle(sym)">
+                            <div xmlns="http://www.w3.org/1999/xhtml" class="@WidgetThemeClass(sym)" style="width: @(sym.Width)px; height: @(sym.Height)px; @WidgetFontStyle(sym) @WidgetThemes.CssVariables(sym.WidgetTheme)">
                                 <EventLogWidget MaxRows="@sym.EventLogMaxRows"
                                                 TimeRangeMinutes="@sym.EventLogTimeRangeMinutes"
                                                 Categories="@sym.EventLogCategories" />
@@ -698,7 +744,7 @@ else
                         break;
                     case "trend":
                         <foreignObject width="@sym.Width" height="@sym.Height">
-                            <div xmlns="http://www.w3.org/1999/xhtml" style="width: @(sym.Width)px; height: @(sym.Height)px; @WidgetFontStyle(sym)">
+                            <div xmlns="http://www.w3.org/1999/xhtml" class="@WidgetThemeClass(sym)" style="width: @(sym.Width)px; height: @(sym.Height)px; @WidgetFontStyle(sym) @WidgetThemes.CssVariables(sym.WidgetTheme)">
                                 <RealtimeTrendWidget Pens="@sym.TrendPens"
                                                      TimeWindowSeconds="@sym.TrendTimeWindowSeconds"
                                                      ShowGrid="@sym.TrendShowGrid"
@@ -706,7 +752,8 @@ else
                                                      ShowLegend="@sym.TrendShowLegend"
                                                      YMin="@sym.TrendYMin"
                                                      YMax="@sym.TrendYMax"
-                                                     Background="@sym.TrendBackground" />
+                                                     Background="@sym.TrendBackground"
+                                                     Theme="@sym.WidgetTheme" />
                             </div>
                         </foreignObject>
                         break;
@@ -805,7 +852,7 @@ else
                         break;
                     case "alarmanalytics":
                         <foreignObject width="@sym.Width" height="@sym.Height">
-                            <div xmlns="http://www.w3.org/1999/xhtml" style="width: @(sym.Width)px; height: @(sym.Height)px; @WidgetFontStyle(sym)">
+                            <div xmlns="http://www.w3.org/1999/xhtml" class="@WidgetThemeClass(sym)" style="width: @(sym.Width)px; height: @(sym.Height)px; @WidgetFontStyle(sym) @WidgetThemes.CssVariables(sym.WidgetTheme)">
                                 <AlarmAnalyticsDashboardWidget Background="@sym.AlarmAnalyticsBackground"
                                                                Foreground="@sym.AlarmAnalyticsForeground"
                                                                RefreshSeconds="@sym.AlarmAnalyticsRefreshSeconds"
@@ -814,7 +861,8 @@ else
                                                                ShowTopTable="@sym.AlarmAnalyticsShowTopTable"
                                                                ShowFloodBanner="@sym.AlarmAnalyticsShowFloodBanner"
                                                                TopCount="@sym.AlarmAnalyticsTopCount"
-                                                               Title="@sym.AlarmAnalyticsTitle" />
+                                                               Title="@sym.AlarmAnalyticsTitle"
+                                                               Theme="@sym.WidgetTheme" />
                             </div>
                         </foreignObject>
                         break;
@@ -914,7 +962,7 @@ else
 
                 @if (!string.IsNullOrEmpty(resolvedLabel) && sym.Type is not "text" and not "button" and not "animtext" and not "numericdisplay" and not "progressbar" and not "dropdown" and not "radiogroup" and not "sparkline" and not "colorzone" and not "alarmbanner" and not "conveyor" and not "piechart" and not "barchart" and not "navbutton" and not "heatexchanger" and not "popup" and not "setpointramp" and not "flowmeter" and not "xyplot" and not "pdfviewer" and not "alarmanalytics" and not "kpiwidget" and not "mimicpump" and not "mimicvalve" and not "mimictank" and not "mimicsensor" and not "mimiccontroller" and not "mimicmixer" and not "mimicheater" and not "mimicfilter" and not "mimiccompressor" and not "mimicreactor")
                 {
-                    @RenderSvgText(sym.Width / 2, sym.Height + 14, "middle", null, "#333", 11, resolvedLabel, sym)
+                    @RenderSvgText(sym.Width / 2, sym.Height + 14, "middle", null, WidgetThemes.CaptionColor(sym), 11, resolvedLabel, sym)
                 }
 
                 @* Hover highlight outline â€” shown via CSS :hover *@
@@ -2354,6 +2402,7 @@ else
 
     private RenderFragment RenderToggleSwitch(ScreenSymbol sym, string? liveValue) => builder =>
     {
+        if (TryAddThemedControl(builder, sym, liveValue, sym.Width, sym.Height)) return;
         int seq = 0;
         var isOn = liveValue is "True" or "true" or "1";
         var w = sym.Width;
@@ -2410,6 +2459,7 @@ else
 
     private RenderFragment RenderRotarySwitch(ScreenSymbol sym, string? liveValue) => builder =>
     {
+        if (TryAddThemedControl(builder, sym, liveValue, sym.Width, sym.Height)) return;
         int seq = 0;
         var n = Math.Max(2, Math.Min(12, sym.SwitchPositions));
         var pos = (int)ParseDouble(liveValue);
@@ -2511,6 +2561,7 @@ else
 
     private RenderFragment RenderKnob(ScreenSymbol sym, string? liveValue) => builder =>
     {
+        if (TryAddThemedControl(builder, sym, liveValue, sym.Width, sym.Height)) return;
         int seq = 0;
         var val = ParseDouble(liveValue);
         var min = sym.MinValue ?? 0;
@@ -2628,6 +2679,7 @@ else
 
     private RenderFragment RenderHSlider(ScreenSymbol sym, string? liveValue) => builder =>
     {
+        if (TryAddThemedControl(builder, sym, liveValue, sym.Width, sym.Height)) return;
         int seq = 0;
         var val = ParseDouble(liveValue);
         var min = sym.MinValue ?? 0;
@@ -2741,6 +2793,7 @@ else
 
     private RenderFragment RenderVSlider(ScreenSymbol sym, string? liveValue) => builder =>
     {
+        if (TryAddThemedControl(builder, sym, liveValue, sym.Width, sym.Height)) return;
         int seq = 0;
         var val = ParseDouble(liveValue);
         var min = sym.MinValue ?? 0;
@@ -2850,10 +2903,69 @@ else
         }
     };
 
+    // ─── Themed controls (shared ControlVisuals) ─────────────────────
+
+    // Stable per-renderer prefix keeps gradient ids unique across embedded screens while letting
+    // Blazor diff attributes in place, so CSS transitions animate value changes.
+    private readonly string _widgetThemeId = Guid.NewGuid().ToString("N")[..8];
+
+    // Null for classic so Blazor omits the class attribute and legacy markup stays unchanged.
+    private static string? WidgetThemeClass(ScreenSymbol sym) =>
+        WidgetThemes.IsThemed(sym) ? $"wt-themed wt-{WidgetThemes.Normalize(sym.WidgetTheme)}" : null;
+
+    private (double Low, double High) RangeValues(ScreenSymbol sym) =>
+        (ParseDouble(OpcGet(sym.RangeLowPath, sym) ?? sym.RangeLowValue.ToString(CultureInfo.InvariantCulture)),
+         ParseDouble(OpcGet(sym.RangeHighPath, sym) ?? sym.RangeHighValue.ToString(CultureInfo.InvariantCulture)));
+
+    private bool TryAddThemedControl(Microsoft.AspNetCore.Components.Rendering.RenderTreeBuilder builder, ScreenSymbol sym, string? liveValue, double width, double height)
+    {
+        if (!WidgetThemes.UsesControlVisuals(sym)) return false;
+        double? low = null, high = null;
+        if (sym.Type == "rangeslider") (low, high) = RangeValues(sym);
+        var element = ControlVisuals.Build(sym, liveValue, width, height, $"{_widgetThemeId}_{sym.Id}", low, high);
+        if (element is null) return false;
+        AddSvgTree(builder, element);
+        return true;
+    }
+
+    /// <summary>Responsive-layout wrapper for themed controls drawn at their fixed design size.</summary>
+    private RenderFragment RenderResponsiveThemedControl(ScreenSymbol sym, string? liveValue) => builder =>
+    {
+        var (width, height) = ControlVisuals.ResponsiveSize(sym);
+        builder.OpenElement(0, "div");
+        builder.AddAttribute(1, "class", "wt-control-wrap");
+        builder.AddAttribute(2, "style", "display: inline-flex; align-items: center; justify-content: center; cursor: pointer; padding: 4px;");
+        builder.OpenRegion(3);
+        TryAddThemedControl(builder, sym, liveValue, width, height);
+        builder.CloseRegion();
+        builder.CloseElement();
+    };
+
+    private static void AddSvgTree(Microsoft.AspNetCore.Components.Rendering.RenderTreeBuilder builder, System.Xml.Linq.XElement element)
+    {
+        builder.OpenElement(0, element.Name.LocalName);
+        foreach (var attribute in element.Attributes())
+        {
+            if (!attribute.IsNamespaceDeclaration)
+                builder.AddAttribute(1, attribute.Name.LocalName, attribute.Value);
+        }
+        builder.OpenRegion(2);
+        foreach (var node in element.Nodes())
+        {
+            if (node is System.Xml.Linq.XElement child)
+                AddSvgTree(builder, child);
+            else if (node is System.Xml.Linq.XText text)
+                builder.AddContent(3, text.Value);
+        }
+        builder.CloseRegion();
+        builder.CloseElement();
+    }
+
     // ─── Range Slider rendering (dual-handle min/max band) ───────────
 
     private RenderFragment RenderRangeSlider(ScreenSymbol sym) => builder =>
     {
+        if (TryAddThemedControl(builder, sym, null, sym.Width, sym.Height)) return;
         int seq = 0;
         var min = sym.MinValue ?? 0;
         var max = sym.MaxValue ?? 100;

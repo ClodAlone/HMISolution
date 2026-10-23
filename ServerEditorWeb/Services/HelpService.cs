@@ -673,6 +673,16 @@ Select **EditBox** or **Numeric Display**, then open **Display Appearance**.
 - Numeric displays keep format strings and units. Missing values show a dash in styled readouts, not a fabricated zero.
 - Existing displays remain unchanged until styled. Appearance and formatting survive save/load, copy/paste, duplicate and preset undo/redo.
 
+### Widget Themes
+Select an **Alarm List**, **Alarm Analytics**, **Realtime Trend**, **HDA Chart**, **HDA Grid**, **Event Log**, **Switch**, **Rotary Switch**, **Knob**, **H/V Slider**, **Range Slider** or **Button**, then open **🎨 Widget Theme**.
+- Themes: **Midnight**, **Ivory**, **Brushed Metal** — the same palettes as the styled gauges and displays.
+- Panels get a gradient surface, rounded corners, a soft shadow, frosted header/toolbars, pill buttons with hover/press feedback, rounded severity badges and smooth row hover/selection. Unacknowledged alarms pulse softly instead of blinking.
+- Trends get dashed grid lines and a gradient area fill under each pen; analytics KPI cards lift on hover and their bars animate.
+- Switches, knobs and sliders are redrawn with shaded bezels, gradient fills and animated thumbs/pointers. Dragging, clicking and value writes work exactly as before.
+- Applying a theme also sets coordinated colors (trend plot, analytics colors, switch/knob/slider/range colors, button colors) that you can fine-tune afterwards.
+- Animations are disabled automatically when the operating system requests reduced motion.
+- **Classic** restores the original look and default colors. Existing projects stay classic until changed; the theme is saved with the project and kept by copy/paste and duplicate.
+
 ### Pipe Appearance and Flow
 Select a pipe and open **Pipe Settings**.
 - **Rounded gradient surface** adds cylindrical light/shadow shading using the Pipe color; corners are shaded along the bend. Disabled by default for a solid surface.

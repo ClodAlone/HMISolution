@@ -9,11 +9,11 @@
     var cursorTime = ShowCursor && _cursorX.HasValue ? XToTime(_cursorX.Value, chartTime) : (DateTime?)null;
 }
 
-<div style="width: 100%; height: 100%; display: flex; flex-direction: column; font-family: var(--widget-font-family, sans-serif); font-size: var(--widget-font-size, 11px); font-weight: var(--widget-font-weight, normal); font-style: var(--widget-font-style, normal); background: @Background; color: #e0e0e0; border: 1px solid #333; border-radius: 4px; overflow: hidden;">
+<div class="@(_wtPalette is null ? null : "wt-panel wt-trend")" style="width: 100%; height: 100%; display: flex; flex-direction: column; font-family: var(--widget-font-family, sans-serif); font-size: var(--widget-font-size, 11px); font-weight: var(--widget-font-weight, normal); font-style: var(--widget-font-style, normal); background: @C(Background, pal => pal.Surface); color: @C("#e0e0e0", pal => pal.Text); border: 1px solid @C("#333", pal => pal.Border); border-radius: @C("4px", _ => "10px"); overflow: hidden;@C("", pal => $" box-shadow: {pal.Shadow};")">
     @* Toolbar *@
-    <div style="display: flex; align-items: center; gap: 6px; padding: 2px 6px; background: #0d1117; border-bottom: 1px solid #333; flex-shrink: 0;">
+    <div class="@(_wtPalette is null ? null : "wt-toolbar")" style="display: flex; align-items: center; gap: 6px; padding: @C("2px 6px", _ => "5px 8px"); background: @C("#0d1117", pal => pal.Header); border-bottom: 1px solid @C("#333", pal => pal.Border); flex-shrink: 0;">
         <span style="font-weight: bold; font-size: 1.1em;">📈 Trend</span>
-        <span style="font-size: 0.9em; color: #888;">@Pens.Count pen(s) &middot; @(_timeWindowSec)s</span>
+        <span style="font-size: 0.9em; color: @C("#888", pal => pal.Muted);">@Pens.Count pen(s) &middot; @(_timeWindowSec)s</span>
         <span style="flex: 1;"></span>
         <button class="hda-btn" @onclick="TogglePause" title="@(_paused ? "Resume" : "Pause")">@(_paused ? "▶" : "⏸")</button>
         <button class="hda-btn" @onclick="ClearBuffers" title="Clear history">🗑</button>
@@ -35,22 +35,22 @@
                 {
                     var y = _mTop + (_plotH * i / (double)_gridYDivs);
                     <line x1="@_mLeft" y1="@Fmt(y)" x2="@(_chartW - _mRight)" y2="@Fmt(y)"
-                          stroke="#1f2937" stroke-width="1" />
+                          stroke="@GridColor" stroke-width="1" stroke-dasharray="@(_wtPalette is null ? null : "2,4")" />
                 }
                 @for (int i = 0; i <= _gridXDivs; i++)
                 {
                     var x = _mLeft + (_plotW * i / (double)_gridXDivs);
                     <line x1="@Fmt(x)" y1="@_mTop" x2="@Fmt(x)" y2="@(_chartH - _mBottom)"
-                          stroke="#1f2937" stroke-width="1" />
+                          stroke="@GridColor" stroke-width="1" stroke-dasharray="@(_wtPalette is null ? null : "2,4")" />
                 }
             }
 
             @* Axes *@
             <line x1="@_mLeft" y1="@_mTop" x2="@_mLeft" y2="@(_chartH - _mBottom)"
-                  stroke="#374151" stroke-width="1" />
+                  stroke="@AxisColor" stroke-width="1" />
             <line x1="@_mLeft" y1="@(_chartH - _mBottom)"
                   x2="@(_chartW - _mRight)" y2="@(_chartH - _mBottom)"
-                  stroke="#374151" stroke-width="1" />
+                  stroke="@AxisColor" stroke-width="1" />
 
             @* Y-axis labels *@
             @if (_hasDualAxes)
@@ -67,7 +67,7 @@
 
                 @* Right Y-axis line *@
                 <line x1="@(_chartW - _mRight)" y1="@_mTop" x2="@(_chartW - _mRight)" y2="@(_chartH - _mBottom)"
-                      stroke="#374151" stroke-width="1" />
+                      stroke="@AxisColor" stroke-width="1" />
 
                 @* Right Y-axis labels (color-matched to first right-axis pen) *@
                 var rightPenIdx = Pens.Select((p, i) => (p, i)).FirstOrDefault(x => x.p.YAxisId == 1);
@@ -85,7 +85,7 @@
                 {
                     var y = _mTop + (_plotH * i / (double)_gridYDivs);
                     var val = _yMax - ((_yMax - _yMin) * i / (double)_gridYDivs);
-                    @RenderSvgLabel(_mLeft - 4, y + 3, "end", "#6b7280", 8, Fmt(val))
+                    @RenderSvgLabel(_mLeft - 4, y + 3, "end", LabelColor, 8, Fmt(val))
                 }
             }
 
@@ -96,7 +96,7 @@
                 var secAgo = _timeWindowSec - (_timeWindowSec * i / (double)_gridXDivs);
                 var lbl = secAgo >= 60 ? $"-{secAgo / 60:F0}m" : $"-{secAgo:F0}s";
                 if (i == _gridXDivs) lbl = "now";
-                @RenderSvgLabel(x, _chartH - _mBottom + 12, "middle", "#6b7280", 7, lbl)
+                @RenderSvgLabel(x, _chartH - _mBottom + 12, "middle", LabelColor, 7, lbl)
             }
 
             @* Pen polylines *@
@@ -108,6 +108,17 @@
                 var color = GetPenColor(pen, p);
                 var lw = pen.LineWidth > 0 ? pen.LineWidth : 1.5;
                 var pts = BuildPolyline(buf, p, chartTime);
+                @if (_wtPalette is not null && !string.IsNullOrEmpty(pts))
+                {
+                    var gradId = $"{_areaId}_{p}";
+                    <defs>
+                        <linearGradient id="@gradId" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stop-color="@color" stop-opacity="0.32" />
+                            <stop offset="100%" stop-color="@color" stop-opacity="0" />
+                        </linearGradient>
+                    </defs>
+                    <polygon class="wt-trend-area" points="@BuildArea(pts)" fill="url(#@gradId)" stroke="none" />
+                }
                 <polyline points="@pts" fill="none" stroke="@color" stroke-width="@Fmt(lw)"
                           stroke-linejoin="round" vector-effect="non-scaling-stroke" />
             }
@@ -117,7 +128,7 @@
             {
                 var cx = _cursorX.Value;
                 <line x1="@Fmt(cx)" y1="@_mTop" x2="@Fmt(cx)" y2="@(_chartH - _mBottom)"
-                      stroke="#ffffff40" stroke-width="1" stroke-dasharray="3,2" />
+                      stroke="@C("#ffffff40", pal => pal.Muted)" stroke-width="1" stroke-dasharray="3,2" />
 
                 var labelY = _mTop + 12.0;
                 @for (int p = 0; p < Pens.Count; p++)
@@ -140,7 +151,7 @@
     @* Legend *@
     @if (ShowLegend && Pens.Count > 0)
     {
-        <div style="display: flex; gap: 8px; padding: 2px 6px; background: #0d1117; border-top: 1px solid #333; flex-wrap: wrap; flex-shrink: 0; font-size: 0.9em;">
+        <div style="display: flex; gap: 8px; padding: @C("2px 6px", _ => "4px 8px"); background: @C("#0d1117", pal => pal.Header); border-top: 1px solid @C("#333", pal => pal.Border); flex-wrap: wrap; flex-shrink: 0; font-size: 0.9em;">
             @for (int p = 0; p < Pens.Count; p++)
             {
                 var pen = Pens[p];
@@ -150,15 +161,15 @@
                     ? InterpolateAtTime(buf, cursorTime.Value)
                     : buf.Length > 0 ? buf[^1].Value : (double?)null;
                 <span>
-                    <span style="display:inline-block;width:12px;height:3px;background:@color;vertical-align:middle;margin-right:3px;"></span>
+                    <span style="display:inline-block;width:12px;height:3px;background:@color;vertical-align:middle;margin-right:3px;@C("", _ => "border-radius:2px;")"></span>
                     @GetPenLabel(pen)
                     @if (lastVal.HasValue)
                     {
-                        <span style="color:#9ca3af;"> = @Fmt(lastVal.Value)</span>
+                        <span style="color:@C("#9ca3af", pal => pal.Muted);"> = @Fmt(lastVal.Value)</span>
                     }
                     @if (_hasDualAxes)
                     {
-                        <span style="color:#555;font-size:0.8em;"> (@(pen.YAxisId == 0 ? "L" : "R"))</span>
+                        <span style="color:@C("#555", pal => pal.Muted);font-size:0.8em;"> (@(pen.YAxisId == 0 ? "L" : "R"))</span>
                     }
                 </span>
             }
@@ -175,6 +186,27 @@
     [Parameter] public double? YMin { get; set; }
     [Parameter] public double? YMax { get; set; }
     [Parameter] public string Background { get; set; } = "#111827";
+
+    /// <summary>Widget theme (ScreenSymbol.WidgetTheme). "classic" keeps the legacy look.</summary>
+    [Parameter] public string Theme { get; set; } = WidgetThemes.Classic;
+
+    private WidgetPalette? _wtPalette => WidgetThemes.GetPalette(Theme);
+    private string C(string classic, Func<WidgetPalette, string> themed) => WidgetThemes.Pick(_wtPalette, classic, themed);
+    private string GridColor => C("#1f2937", pal => pal.Grid);
+    private string AxisColor => C("#374151", pal => pal.Border);
+    private string LabelColor => C("#6b7280", pal => pal.Muted);
+    private readonly string _areaId = "wtarea_" + Guid.NewGuid().ToString("N")[..8];
+
+    /// <summary>Closes a polyline down to the X axis so it can be filled as an area.</summary>
+    private string BuildArea(string points)
+    {
+        var first = points.IndexOf(',');
+        var lastSpace = points.LastIndexOf(' ');
+        var lastComma = points.LastIndexOf(',');
+        if (first <= 0 || lastComma <= lastSpace) return "";
+        var baseY = Fmt(_chartH - _mBottom);
+        return $"{points[..first]},{baseY} {points} {points[(lastSpace + 1)..lastComma]},{baseY}";
+    }
 
     [Inject] private OpcRuntimeClient Opc { get; set; } = default!;
     [Inject] private IJSRuntime JS { get; set; } = default!;
@@ -224,7 +256,7 @@
     protected override void OnInitialized()
     {
         _timeWindowSec = TimeWindowSeconds > 0 ? TimeWindowSeconds : 60;
-        _hasDualAxes = Pens.Any(p => p.YAxisId == 1);
+        _hasDualAxes = Pens.Any(pal => pal.YAxisId == 1);
         EnsureBuffers();
         _sampleTimer = new System.Threading.Timer(_ =>
         {

@@ -1717,6 +1717,13 @@ namespace SharedModels
         /// <summary>Background color of the trend plot area. Default "#111827".</summary>
         public string TrendBackground { get; set; } = "#111827";
 
+        /// <summary>
+        /// Modern visual theme for panel widgets (alarm list, analytics, trend, HDA, event log)
+        /// and controls (switch, rotary, knob, sliders, button):
+        /// "classic" (legacy look, default), "midnight", "ivory" or "metallic".
+        /// </summary>
+        public string WidgetTheme { get; set; } = "classic";
+
         // --- Toggle/Rotary Switch properties ---
         /// <summary>Switch visual style (Type == "switch"): "apple" (iOS pill toggle, default), "flat" (minimal).</summary>
         public string SwitchStyle { get; set; } = "apple";
