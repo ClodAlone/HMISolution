@@ -99,6 +99,12 @@ else if (Screen.LayoutMode == "responsive")
                             <AlarmListWidget Theme="@sym.WidgetTheme" />
                         </div>
                         break;
+                    case "historicaltrend":
+                    case "historicaltable":
+                        <HistoricalTrendWidget @key="(Screen, sym.Id)" VariablePaths="@sym.HdaVariablePaths" TimeRangeMinutes="@sym.HdaTimeRangeMinutes"
+                                               SamplingIntervalSeconds="@sym.HistoricalSamplingIntervalSeconds" SyncGroup="@sym.HistoricalSyncGroup"
+                                               CursorGroup="@_historicalCursorGroup" TableOnly="@(sym.Type == "historicaltable")" Theme="@sym.WidgetTheme" />
+                        break;
                     case "hdachart":
                         <div class="@WidgetThemeClass(sym)" style="display: contents; @WidgetThemes.CssVariables(sym.WidgetTheme)">
                             <HdaChartWidget VariablePaths="@sym.HdaVariablePaths"
@@ -617,6 +623,16 @@ else
                             </div>
                         </foreignObject>
                         break;
+                    case "historicaltrend":
+                    case "historicaltable":
+                        <foreignObject width="@sym.Width" height="@sym.Height">
+                            <div xmlns="http://www.w3.org/1999/xhtml" style="width: @(sym.Width)px; height: @(sym.Height)px; @WidgetFontStyle(sym)">
+                                <HistoricalTrendWidget VariablePaths="@sym.HdaVariablePaths" TimeRangeMinutes="@sym.HdaTimeRangeMinutes"
+                                                       SamplingIntervalSeconds="@sym.HistoricalSamplingIntervalSeconds" SyncGroup="@sym.HistoricalSyncGroup"
+                                                       CursorGroup="@_historicalCursorGroup" TableOnly="@(sym.Type == "historicaltable")" Theme="@sym.WidgetTheme" />
+                            </div>
+                        </foreignObject>
+                        break;
                     case "hdachart":
                         <foreignObject width="@sym.Width" height="@sym.Height">
                             <div xmlns="http://www.w3.org/1999/xhtml" class="@WidgetThemeClass(sym)" style="width: @(sym.Width)px; height: @(sym.Height)px; @WidgetFontStyle(sym) @WidgetThemes.CssVariables(sym.WidgetTheme)">
@@ -1102,6 +1118,7 @@ else
         _sortedSymbols = Screen?.Symbols?.OrderBy(s => s.Order).ToList() ?? new();
         return _sortedSymbols;
     }
+    private HistoricalCursorGroup _historicalCursorGroup = new();
     private readonly Dictionary<string, double> _gaugeDisplayPct = new();
     private const double _gaugeLerpSpeed = 0.18;
     private ScreenSymbol? _dragSliderSymbol;
@@ -1177,6 +1194,7 @@ else
         {
             _xyPlotScreen = Screen;
             _xyPlotData.Clear();
+            _historicalCursorGroup = new();
         }
         if (Screen != null)
         {

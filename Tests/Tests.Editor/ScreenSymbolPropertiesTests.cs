@@ -13,6 +13,8 @@ public class ScreenSymbolPropertiesTests
     [Theory]
     [InlineData("nlquery", "NL Query")]
     [InlineData("rect", "Rectangle")]
+    [InlineData("historicaltrend", "Historical Trend")]
+    [InlineData("historicaltable", "Historical Table")]
     public async Task TypeDropdown_SelectsCurrentSymbolType(string type, string label)
     {
         var editor = new NodeEditorService();
@@ -33,6 +35,29 @@ public class ScreenSymbolPropertiesTests
 
         Assert.Contains($"<option value=\"{type}\" selected>{label}</option>", html);
         Assert.Equal(type, symbol.Type);
+    }
+
+    [Theory]
+    [InlineData("historicaltrend")]
+    [InlineData("historicaltable")]
+    public async Task HistoricalSettings_ShowSamplingAndSyncWithoutLegacyPointLimit(string type)
+    {
+        var editor = new NodeEditorService();
+        var symbol = new ScreenSymbol { Type = type, HistoricalSamplingIntervalSeconds = 15, HistoricalSyncGroup = "mixer-history" };
+        editor.SetScreenSelection(symbol, [symbol]);
+        using var services = new ServiceCollection().AddLogging().AddSingleton(editor)
+            .AddSingleton<OpcClientService>().AddSingleton<UndoRedoService>().BuildServiceProvider();
+        await using var renderer = new HtmlRenderer(services, services.GetRequiredService<ILoggerFactory>());
+        var html = await renderer.Dispatcher.InvokeAsync(async () =>
+            (await renderer.RenderComponentAsync<ScreenSymbolProperties>()).ToHtmlString());
+        Assert.Contains("Sampling interval (seconds)", html);
+        Assert.Contains("Range / cursor sync group", html);
+        Assert.Contains("value=\"mixer-history\"", html);
+        Assert.Contains("value=\"15\"", html);
+        Assert.DoesNotContain("Max Points", html);
+        Assert.Contains("Widget Theme", html);
+        Assert.Equal(15, symbol.HistoricalSamplingIntervalSeconds);
+        Assert.Equal("mixer-history", symbol.HistoricalSyncGroup);
     }
 
     [Fact]

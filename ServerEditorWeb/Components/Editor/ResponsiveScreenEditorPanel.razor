@@ -152,6 +152,12 @@
                             case "alarmlist":
                                 <div class="responsive-placeholder">🔔 Alarm List (live at runtime)</div>
                                 break;
+                            case "historicaltrend":
+                                <div class="responsive-placeholder">Historical Trend (@s.HdaVariablePaths.Count variables, @s.HistoricalSamplingIntervalSeconds s samples)</div>
+                                break;
+                            case "historicaltable":
+                                <div class="responsive-placeholder">Historical Table (@s.HdaVariablePaths.Count variables, @s.HistoricalSamplingIntervalSeconds s samples)</div>
+                                break;
                             case "hdachart":
                                 <div class="responsive-placeholder">📊 HDA Chart @(s.HdaVariablePaths.Count > 0 ? $"({s.HdaVariablePaths.Count} vars)" : "(configure in properties)")</div>
                                 break;
@@ -467,7 +473,7 @@
         _selectedIndex = screen?.Symbols.IndexOf(sym) ?? -1;
 
         // Sync HDA text
-        if (sym.Type is "hdachart" or "hdagrid")
+        if (sym.Type is "hdachart" or "hdagrid" or "historicaltrend" or "historicaltable")
             _hdaVarsText = string.Join("\n", sym.HdaVariablePaths);
 
         Editor.SetScreenSelection(sym, new HashSet<ScreenSymbol> { sym });
@@ -738,7 +744,7 @@
         "text" or "indicator" or "editbox" => 3,
         "gauge" => 4,
         "rect" or "circle" or "ellipse" => 3,
-        "alarmlist" or "hdachart" or "hdagrid" or "eventlog" or "alarmanalytics" => 12,
+        "alarmlist" or "hdachart" or "hdagrid" or "historicaltrend" or "historicaltable" or "eventlog" or "alarmanalytics" => 12,
         "kpiwidget" => 4,
         "ipcamera" => 6,
         "recipe" => 6,
@@ -757,6 +763,7 @@
         "indicator" => 80,
         "gauge" => 120,
         "rect" or "circle" or "ellipse" => 100,
+        "historicaltrend" or "historicaltable" => 400,
         "alarmlist" or "hdachart" or "hdagrid" or "eventlog" => 280,
         "alarmanalytics" => 300,
         "kpiwidget" => 200,
@@ -777,6 +784,7 @@
         "gauge" => 80,
         "indicator" => 30,
         "editbox" => 160,
+        "historicaltrend" or "historicaltable" => 800,
         "alarmlist" or "hdachart" or "hdagrid" or "eventlog" or "alarmanalytics" => 500,
         "kpiwidget" => 200,
         "ipcamera" => 320,
@@ -796,6 +804,7 @@
         "indicator" => 30,
         "editbox" => 32,
         "alarmlist" => 250,
+        "historicaltrend" or "historicaltable" => 400,
         "hdachart" or "hdagrid" or "eventlog" or "alarmanalytics" => 220,
         "kpiwidget" => 200,
         "ipcamera" => 240,
@@ -827,7 +836,7 @@
     {
         "indicator" => "#44cc44",
         "alarmlist" => "#1a1a2e",
-        "hdachart" or "hdagrid" => "#111827",
+        "hdachart" or "hdagrid" or "historicaltrend" or "historicaltable" => "#111827",
         "eventlog" => "#0f172a",
         "alarmanalytics" => "#0f172a",
         "kpiwidget" => "#0f172a",
@@ -852,8 +861,8 @@
         "indicator" => "🔴",
         "svg" => "🏭",
         "alarmlist" => "🔔",
-        "hdachart" => "📊",
-        "hdagrid" => "📋",
+        "hdachart" or "historicaltrend" => "📊",
+        "hdagrid" or "historicaltable" => "📋",
         "eventlog" => "📓",
         "alarmanalytics" => "📊",
         "kpiwidget" => "📊",
@@ -870,6 +879,8 @@
 
     private static string GetTypeLabel(string type) => type switch
     {
+        "historicaltrend" => "Historical Trend",
+        "historicaltable" => "Historical Table",
         "rect" => "Rectangle",
         "circle" => "Circle",
         "ellipse" => "Ellipse",

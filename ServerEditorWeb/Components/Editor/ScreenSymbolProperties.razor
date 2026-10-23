@@ -70,6 +70,8 @@
                 <option value="alarmlist">Alarm List</option>
                 <option value="hdachart">HDA Chart</option>
                 <option value="hdagrid">HDA Grid</option>
+                <option value="historicaltrend">Historical Trend</option>
+                <option value="historicaltable">Historical Table</option>
                 <option value="eventlog">Event Log</option>
                 <option value="editbox">EditBox</option>
                 <option value="ipcamera">Camera</option>
@@ -466,10 +468,18 @@
             <div class="small text-muted mb-2">Modern surfaces, rounded corners and smooth animations shared by the editor and runtime. Applying a theme also sets coordinated colors, which you can still fine-tune below. Classic restores the original look.</div>
         }
 
-        @if (_selectedSymbol.Type is "hdachart" or "hdagrid")
+        @if (_selectedSymbol.Type is "hdachart" or "hdagrid" or "historicaltrend" or "historicaltable")
         {
             <hr class="my-2" />
-            <h6 class="mb-2 small text-success">@(_selectedSymbol.Type == "hdachart" ? "📊 HDA Chart Settings" : "📋 HDA Grid Settings")</h6>
+            <h6 class="mb-2 small text-success">@(_selectedSymbol.Type switch { "historicaltrend" => "Historical Trend Settings", "historicaltable" => "Historical Table Settings", "hdachart" => "📊 HDA Chart Settings", _ => "📋 HDA Grid Settings" })</h6>
+            @if (_selectedSymbol.Type is "historicaltrend" or "historicaltable")
+            {
+                <label class="form-label small">Sampling interval (seconds)</label>
+                <input type="number" min="1" class="form-control form-control-sm" @bind="_selectedSymbol.HistoricalSamplingIntervalSeconds" @bind:after="OnChanged" />
+                <label class="form-label small">Range / cursor sync group</label>
+                <input class="form-control form-control-sm" @bind="_selectedSymbol.HistoricalSyncGroup" @bind:after="OnChanged" placeholder="Optional, e.g. process-history" />
+                <div class="form-text">Widgets with the same group on this screen share their range, interval and cursor. Samples hold the last recorded value; unknown history stays blank. Maximum 2,000 samples and 20 variables. Enable variable data logging and configure the project database.</div>
+            }
 
             <div class="mb-2">
                 <label class="form-label mb-0 small">Variables (@_selectedSymbol.HdaVariablePaths.Count series)</label>
@@ -502,11 +512,14 @@
                         <option value="1440">24 hours</option>
                     </select>
                 </div>
-                <div>
-                    <label class="form-label mb-0 small">Max Points</label>
-                    <input type="number" class="form-control form-control-sm" style="font-size: 10px; width: 80px;"
-                           @bind="_selectedSymbol.HdaMaxPoints" @bind:after="OnChanged" />
-                </div>
+                @if (_selectedSymbol.Type is "hdachart" or "hdagrid")
+                {
+                    <div>
+                        <label class="form-label mb-0 small">Max Points</label>
+                        <input type="number" class="form-control form-control-sm" style="font-size: 10px; width: 80px;"
+                               @bind="_selectedSymbol.HdaMaxPoints" @bind:after="OnChanged" />
+                    </div>
+                }
             </div>
         }
 

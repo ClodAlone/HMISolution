@@ -30,7 +30,7 @@ public class HdaSeries
 /// Reads historical data from the data-logging database (Sqlite or TimescaleDb/PostgreSQL)
 /// for display in the runtime HDA chart widget.
 /// </summary>
-public class HdaReaderService
+public partial class HdaReaderService
 {
     private readonly ProjectService _project;
 

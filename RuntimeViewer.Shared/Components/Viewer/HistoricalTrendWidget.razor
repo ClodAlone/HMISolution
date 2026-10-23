@@ -1,0 +1,294 @@
+@using System.Globalization
+@using System.Data.Common
+@using RuntimeViewer.Shared.Services
+@using SharedModels
+@implements IAsyncDisposable
+@inject HdaReaderService Hda
+@inject IJSRuntime JS
+@inject Microsoft.Extensions.Logging.ILogger<HistoricalTrendWidget> Logger
+
+<div class="historical-widget" style="@WidgetThemes.CssVariables(Theme)" @onpointerdown:stopPropagation @ontouchstart:stopPropagation>
+    <div class="historical-toolbar">
+        <strong>@(TableOnly ? "Historical Table" : "Historical Trend")</strong>
+        <label>From <input aria-label="History start" type="datetime-local" step="1" @bind="_startLocal" /></label>
+        <label>To <input aria-label="History end" type="datetime-local" step="1" @bind="_endLocal" /></label>
+        <label>Sample (s) <input aria-label="Sampling interval seconds" type="number" min="1" @bind="_interval" /></label>
+        <button type="button" @onclick="ApplyAsync" disabled="@_loading">Apply</button>
+    </div>
+    @if (_error != null)
+    {
+        <div role="alert" class="historical-message">@_error</div>
+    }
+    @if (_loading)
+    {
+        <div role="status" class="historical-message">Loading history...</div>
+    }
+    @if (_series.Count > 0)
+    {
+        @if (!TableOnly)
+        {
+            <svg class="historical-plot" viewBox="0 0 800 280" preserveAspectRatio="none" role="img" aria-label="Historical variables on a shared time axis">
+                @for (var tick = 0; tick <= 4; tick++)
+                {
+                    var y = 15 + tick * 55;
+                    <line x1="60" x2="780" y1="@y" y2="@y" stroke="var(--wt-border, #334155)" />
+                    @SvgLabel(55, y + 3, "end", Fmt(_max - (_max - _min) * tick / 4))
+                }
+                @for (var tick = 0; tick <= 4; tick++)
+                {
+                    var x = 60 + tick * 180;
+                    var time = _selection!.StartUtc.AddTicks((_selection.EndUtc - _selection.StartUtc).Ticks * tick / 4);
+                    @SvgLabel(x, 255, tick == 0 ? "start" : tick == 4 ? "end" : "middle", time.ToLocalTime().ToString("MM-dd HH:mm:ss"))
+                }
+                @for (var index = 0; index < _series.Count; index++)
+                {
+                    <path d="@BuildPath(_series[index])" fill="none" stroke="@Colors[index % Colors.Length]" stroke-width="2" vector-effect="non-scaling-stroke" />
+                    var selectedValue = _series[index].Points[_cursor].Value;
+                    if (selectedValue.HasValue && double.IsFinite(selectedValue.Value))
+                    {
+                        <circle cx="@Fmt(X(_cursor))" cy="@Fmt(235 - 220 * (selectedValue.Value - _min) / (_max - _min))" r="3" fill="@Colors[index % Colors.Length]" />
+                    }
+                }
+                <line x1="@Fmt(X(_cursor))" x2="@Fmt(X(_cursor))" y1="15" y2="235" stroke="var(--wt-text, #e2e8f0)" stroke-dasharray="4 3" />
+                @for (var index = 0; index < _series[0].Points.Count; index++)
+                {
+                    var sampleIndex = index;
+                    var width = Math.Min(720, 720.0 * _selection!.IntervalSeconds / (_selection.EndUtc - _selection.StartUtc).TotalSeconds);
+                    <rect x="@Fmt(Math.Max(60, X(index) - width / 2))" y="15" width="@Fmt(width)" height="220" fill="transparent"
+                          @onpointermove="() => SelectCursor(sampleIndex)" @onclick="() => SelectCursor(sampleIndex)" />
+                }
+            </svg>
+        }
+        <div class="historical-cursor">
+            <label>Cursor <input aria-label="Historical cursor" type="range" min="0" max="@(_series[0].Points.Count - 1)" value="@_cursor" @oninput="CursorInput" /></label>
+            <time>@_series[0].Points[_cursor].Time.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</time>
+            @for (var index = 0; index < _series.Count; index++)
+            {
+                var series = _series[index];
+                <span style="border-left:3px solid @Colors[index % Colors.Length];padding-left:5px" title="@series.VariableName">@series.VariableName: <strong>@HistoricalSampling.Format(series.Points[_cursor])</strong></span>
+            }
+        </div>
+        @if (TableOnly)
+        {
+            <div class="historical-toolbar">
+                <label><input type="checkbox" @bind="_showEmptySamples" /> Show empty samples</label>
+                @if (_populatedSampleIndices.Count < _series[0].Points.Count)
+                {
+                    var emptyCount = _series[0].Points.Count - _populatedSampleIndices.Count;
+                    <span>@emptyCount @(emptyCount == 1 ? "sample has" : "samples have") no recorded values@(_showEmptySamples ? "." : " (hidden).")</span>
+                }
+            </div>
+            <div class="historical-table-scroll" @ref="_tableScroll">
+                <table>
+                    <thead><tr><th>Timestamp (local)</th>@foreach (var series in _series) { <th>@series.VariableName</th> }</tr></thead>
+                    <tbody>
+                        @foreach (var index in _showEmptySamples ? Enumerable.Range(0, _series[0].Points.Count) : _populatedSampleIndices)
+                        {
+                            var rowIndex = index;
+                            <tr class="@(index == _cursor ? "historical-selected" : "")" @onclick="() => SelectCursor(rowIndex)">
+                                <td><button type="button" @onclick="() => SelectCursor(rowIndex)">@_series[0].Points[index].Time.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</button></td>
+                                @foreach (var series in _series) { <td>@HistoricalSampling.Format(series.Points[index])</td> }
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        @if (_series.All(s => s.Points.All(p => !p.Value.HasValue && p.StringValue == null)))
+        {
+            <div class="historical-message">No recorded values at or before the selected sample times.</div>
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public List<string> VariablePaths { get; set; } = new();
+    [Parameter] public int TimeRangeMinutes { get; set; } = 60;
+    [Parameter] public int SamplingIntervalSeconds { get; set; } = 60;
+    [Parameter] public bool TableOnly { get; set; }
+    [Parameter] public string Theme { get; set; } = WidgetThemes.Classic;
+    [Parameter] public string SyncGroup { get; set; } = "";
+    [Parameter] public HistoricalCursorGroup? CursorGroup { get; set; }
+
+    private static readonly string[] Colors = ["#38bdf8", "#f97316", "#22c55e", "#e879f9", "#eab308", "#f43f5e"];
+    private DateTime _startLocal, _endLocal;
+    private int _interval, _cursor;
+    private double _min, _max;
+    private bool _loading, _disposed;
+    private string? _error, _configuration;
+    private List<HdaSeries> _series = new();
+    private List<int> _populatedSampleIndices = new();
+    private bool _showEmptySamples;
+    private HistoricalSelection? _selection;
+    private HistoricalCursorGroup? _subscribedGroup;
+    private CancellationTokenSource? _query;
+    private ElementReference _tableScroll;
+    private IJSObjectReference? _scrollModule;
+    private (List<HdaSeries> Series, int Cursor, bool ShowEmpty)? _lastScrolled;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_disposed || !TableOnly || _series.Count == 0) return;
+        var state = (_series, _cursor, _showEmptySamples);
+        if (_lastScrolled == state) return;
+        try
+        {
+            if (_scrollModule == null)
+            {
+                var module = await JS.InvokeAsync<IJSObjectReference>("import", "./_content/RuntimeViewer.Shared/historical-trend.js");
+                if (_disposed)
+                {
+                    await module.DisposeAsync();
+                    return;
+                }
+                _scrollModule = module;
+            }
+            await _scrollModule.InvokeVoidAsync("revealSelectedRow", _tableScroll);
+            _lastScrolled = state;
+        }
+        catch (JSDisconnectedException) when (_disposed) { }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var groupChanged = _subscribedGroup != CursorGroup;
+        if (groupChanged)
+        {
+            if (_subscribedGroup != null) _subscribedGroup.Changed -= GroupChanged;
+            _subscribedGroup = CursorGroup;
+            if (_subscribedGroup != null) _subscribedGroup.Changed += GroupChanged;
+        }
+        var configuration = System.Text.Json.JsonSerializer.Serialize(new { VariablePaths, TimeRangeMinutes, SamplingIntervalSeconds, SyncGroup });
+        if (_configuration == configuration && !groupChanged) return;
+        _configuration = configuration;
+        _endLocal = DateTime.Now;
+        _interval = SamplingIntervalSeconds;
+        if (TimeRangeMinutes <= 0 || TimeRangeMinutes > (_endLocal - DateTime.MinValue).TotalMinutes)
+        {
+            _query?.Cancel();
+            _series = new();
+            _loading = false;
+            _error = "Initial history time range must be positive and within supported dates.";
+            Microsoft.Extensions.Logging.LoggerExtensions.LogWarning(Logger, "Invalid historical time range: {Minutes}", TimeRangeMinutes);
+            return;
+        }
+        _startLocal = _endLocal.AddMinutes(-TimeRangeMinutes);
+        var existing = CursorGroup?.Get(SyncGroup);
+        if (existing != null) await SetSelectionAsync(existing, forceReload: true);
+        else await ApplyAsync();
+    }
+
+    private async Task ApplyAsync()
+    {
+        var selection = new HistoricalSelection(_startLocal.ToUniversalTime(), _endLocal.ToUniversalTime(), _interval, null);
+        await SetSelectionAsync(selection, forceReload: true);
+        if (!_disposed && _error == null) CursorGroup?.Publish(SyncGroup, _selection!);
+    }
+
+    private async Task SetSelectionAsync(HistoricalSelection selection, bool forceReload = false)
+    {
+        var reload = forceReload || _selection == null || _selection.StartUtc != selection.StartUtc || _selection.EndUtc != selection.EndUtc || _selection.IntervalSeconds != selection.IntervalSeconds;
+        _selection = selection;
+        _startLocal = selection.StartUtc.ToLocalTime();
+        _endLocal = selection.EndUtc.ToLocalTime();
+        _interval = selection.IntervalSeconds;
+        if (reload)
+        {
+            _query?.Cancel();
+            var query = new CancellationTokenSource();
+            _query = query;
+            _loading = true;
+            _error = null;
+            _series = new();
+            try
+            {
+                var series = await Hda.ReadSampledHistoryAsync(VariablePaths, selection.StartUtc, selection.EndUtc, selection.IntervalSeconds, query.Token);
+                if (_disposed || query.IsCancellationRequested) return;
+                _series = series;
+                _populatedSampleIndices = Enumerable.Range(0, series[0].Points.Count)
+                    .Where(index => series.Any(s => s.Points[index].Value.HasValue || s.Points[index].StringValue != null)).ToList();
+                var values = series.SelectMany(s => s.Points).Where(p => p.Value.HasValue && double.IsFinite(p.Value.Value)).Select(p => p.Value!.Value).ToList();
+                _min = values.Count == 0 ? 0 : values.Min();
+                _max = values.Count == 0 ? 1 : values.Max();
+                if (_max == _min) { _max += 1; _min -= 1; }
+            }
+            catch (OperationCanceledException) when (query.IsCancellationRequested) { }
+            catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or DbException or System.IO.IOException)
+            {
+                if (!query.IsCancellationRequested && !_disposed)
+                {
+                    Microsoft.Extensions.Logging.LoggerExtensions.LogWarning(Logger, ex, "Historical widget query failed");
+                    _error = ex is ArgumentException or InvalidOperationException ? ex.Message : "Unable to read historical data. Check the runtime logs and database connection.";
+                }
+            }
+            finally
+            {
+                if (_query == query) { _loading = false; _query = null; }
+                query.Dispose();
+            }
+        }
+        if (_series.Count > 0 && _selection != null)
+        {
+            _cursor = _selection.CursorUtc.HasValue
+                ? (int)Math.Clamp((_selection.CursorUtc.Value - _selection.StartUtc).TotalSeconds / _selection.IntervalSeconds, 0, _series[0].Points.Count - 1)
+                : _series[0].Points.Count - 1;
+        }
+    }
+
+    private void GroupChanged(string group, HistoricalSelection selection)
+    {
+        if (group != SyncGroup || _disposed || selection == _selection) return;
+        _ = InvokeAsync(async () => { if (!_disposed) { await SetSelectionAsync(selection); StateHasChanged(); } });
+    }
+
+    private void CursorInput(ChangeEventArgs args)
+    {
+        if (int.TryParse(args.Value?.ToString(), out var index)) SelectCursor(index);
+    }
+
+    private void SelectCursor(int index)
+    {
+        if (_series.Count == 0 || _selection == null) return;
+        index = Math.Clamp(index, 0, _series[0].Points.Count - 1);
+        if (_cursor == index && _selection.CursorUtc.HasValue) return;
+        _cursor = index;
+        _selection = _selection with { CursorUtc = _series[0].Points[_cursor].Time };
+        CursorGroup?.Publish(SyncGroup, _selection);
+    }
+
+    private double X(int index) => 60 + 720.0 * (_series[0].Points[index].Time - _selection!.StartUtc).TotalSeconds / (_selection.EndUtc - _selection.StartUtc).TotalSeconds;
+    private string BuildPath(HdaSeries series)
+    {
+        var path = new System.Text.StringBuilder();
+        var connected = false;
+        for (var i = 0; i < series.Points.Count; i++)
+        {
+            var value = series.Points[i].Value;
+            if (!value.HasValue || !double.IsFinite(value.Value)) { connected = false; continue; }
+            var x = Fmt(X(i));
+            var y = Fmt(235 - 220 * (value.Value - _min) / (_max - _min));
+            path.Append(connected ? $" H{x} V{y}" : $" M{x},{y}");
+            connected = true;
+        }
+        return path.ToString();
+    }
+    private static string Fmt(double value) => value.ToString("0.###", CultureInfo.InvariantCulture);
+    private static RenderFragment SvgLabel(double x, double y, string anchor, string value) => builder =>
+    {
+        builder.OpenElement(0, "text");
+        builder.AddAttribute(1, "x", Fmt(x)); builder.AddAttribute(2, "y", Fmt(y));
+        builder.AddAttribute(3, "text-anchor", anchor); builder.AddAttribute(4, "fill", "var(--wt-text, #e2e8f0)");
+        builder.AddAttribute(5, "font-size", "10"); builder.AddContent(6, value); builder.CloseElement();
+    };
+    public async ValueTask DisposeAsync()
+    {
+        _disposed = true;
+        _query?.Cancel();
+        if (_subscribedGroup != null) _subscribedGroup.Changed -= GroupChanged;
+        if (_scrollModule != null)
+        {
+            try { await _scrollModule.DisposeAsync(); }
+            catch (JSDisconnectedException) { }
+        }
+    }
+}

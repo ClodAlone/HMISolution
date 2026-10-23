@@ -42,7 +42,7 @@ public static class WidgetThemes
     /// <summary>Symbol types that honour <see cref="ScreenSymbol.WidgetTheme"/>.</summary>
     public static IReadOnlySet<string> ThemeableTypes { get; } = new HashSet<string>(StringComparer.Ordinal)
     {
-        "alarmlist", "alarmanalytics", "trend", "hdachart", "hdagrid", "eventlog",
+        "alarmlist", "alarmanalytics", "trend", "hdachart", "hdagrid", "historicaltrend", "historicaltable", "eventlog",
         "switch", "rotaryswitch", "knob", "hslider", "vslider", "rangeslider", "button"
     };
 

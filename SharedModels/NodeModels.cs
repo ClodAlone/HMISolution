@@ -1479,16 +1479,22 @@ namespace SharedModels
         public string? VariablePath { get; set; }
 
         /// <summary>
-        /// Multiple variable paths for HDA widgets (Type == "hdachart" or "hdagrid").
+        /// Multiple variable paths for HDA and historicaltrend/historicaltable widgets.
         /// Each path corresponds to one series/column.
         /// </summary>
         public List<string> HdaVariablePaths { get; set; } = new();
 
-        /// <summary>HDA time range in minutes (0 = all). Default 60.</summary>
+        /// <summary>Initial history time range in minutes. HDA supports 0 = all; sampled history requires a positive range. Default 60.</summary>
         public int HdaTimeRangeMinutes { get; set; } = 60;
 
         /// <summary>Maximum number of data points per series.</summary>
         public int HdaMaxPoints { get; set; } = 500;
+
+        /// <summary>Periodic sample interval for historicaltrend/historicaltable, in seconds. Values are held from the last archive record.</summary>
+        public int HistoricalSamplingIntervalSeconds { get; set; } = 60;
+
+        /// <summary>Optional range/cursor synchronization group, local to the current screen renderer.</summary>
+        public string HistoricalSyncGroup { get; set; } = "";
 
         /// <summary>
         /// Variable path prefix filter for HDA widgets (hdachart/hdagrid).

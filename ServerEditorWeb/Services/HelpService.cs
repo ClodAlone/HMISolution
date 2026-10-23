@@ -683,6 +683,19 @@ Select an **Alarm List**, **Alarm Analytics**, **Realtime Trend**, **HDA Chart**
 - Animations are disabled automatically when the operating system requests reduced motion.
 - **Classic** restores the original look and default colors. Existing projects stay classic until changed; the theme is saved with the project and kept by copy/paste and duplicate.
 
+### Historical Trend and Historical Table
+These are separate Data Widgets; the existing HDA Chart/Grid still display archive records as before.
+- Add variables in Symbol Properties, set the initial time range and **Sampling interval (seconds)**. Both widgets also support Widget Themes.
+- Enable data logging for each variable and configure the project database. The RuntimeViewer host must be able to read the SQLite file or connect to the PostgreSQL/TimescaleDB archive.
+- Runtime **From** and **To** select an explicit historical range in the viewer host's local time. Press **Apply** to query or refresh the range. Times are queried in UTC; tables show local timestamps.
+- Each periodic sample uses the last recorded value at or before its timestamp, including a record before the start of the range. Constant variables therefore remain visible without repeated archive records. This is display-time sample-and-hold, not a new server logging schedule or interpolation. If no earlier record exists, the value remains unknown (a dash), never zero or a future value.
+- The trend draws multiple numeric variables as step lines on one time/value axis. The table has one row per sample with aligned columns; text values are supported in the table and cursor readout.
+- Table rows with no recorded value in any variable are hidden by default, with a count explaining the omission. Enable **Show empty samples** to include them. Partially populated rows remain visible. Filtering does not change the chart timeline or synchronized cursor timestamps.
+- Move over/click the plot, drag the keyboard-accessible cursor slider, or select a table timestamp to inspect every variable at the same instant. The table automatically scrolls its selected row into view below the sticky header without scrolling the page. Hidden empty samples do not move the table.
+- Set the same non-empty **Range / cursor sync group** on a trend and table on the same screen to link their ranges, sampling interval and cursor. Leave it blank for independent widgets. Groups are isolated per screen renderer and viewer session.
+- Up to 20 variables and 2,000 samples per variable are supported. Oversized requests show an error rather than truncating history; shorten the range or increase the interval. Database errors are shown in the widget and logged.
+- Settings are saved as `HdaVariablePaths`, `HdaTimeRangeMinutes`, `HistoricalSamplingIntervalSeconds` (default 60) and `HistoricalSyncGroup`. Existing projects and HDA widgets are unchanged.
+
 ### Pipe Appearance and Flow
 Select a pipe and open **Pipe Settings**.
 - **Rounded gradient surface** adds cylindrical light/shadow shading using the Pipe color; corners are shaded along the bend. Disabled by default for a solid surface.
