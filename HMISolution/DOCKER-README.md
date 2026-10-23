@@ -41,10 +41,11 @@ docker pull clodprogea/hmi-server:latest
 docker pull clodprogea/hmi-editor:latest
 docker pull clodprogea/hmi-viewer:latest
 
-# Run Server (OPC UA + REST API)
+# Run Server (OPC UA + REST API + camera streaming)
 docker run -d --name hmi-server \
   -p 14840:14840 \
   -p 14841:14841 \
+  -p 8088:8088 \
   -v hmi-data:/data \
   clodprogea/hmi-server:latest
 
@@ -113,6 +114,13 @@ docker pull clodprogea/hmi-viewer:latest
 ```
 
 ## Troubleshooting
+
+### Camera streaming port
+The server uses TCP port `8088` for MJPEG streaming and starts the listener only
+when cameras are configured. Publish it with `-p 8088:8088` and access
+`http://localhost:8088/camera/{id}/stream`. `EXPOSE` alone does not publish a port.
+If the separate viewer also uses host port `8088`, map it to a different host
+port (for example, `-p 8081:8088`) to avoid a conflict with the camera server.
 
 ### Ollama model loading takes time
 The first request to Ollama after container start will load the model into memory (30-90 seconds). Subsequent requests are instant.

@@ -69,8 +69,8 @@ docker pull yourusername/aicorehmi-server:latest
 # Pull editor image
 docker pull yourusername/aicorehmi-editor:latest
 
-# Run server
-docker run -d -p 8080:8080 --name aicorehmi-server yourusername/aicorehmi-server:latest
+# Run server (OPC UA, diagnostics, and camera streaming)
+docker run -d -p 14840:14840 -p 14841:14841 -p 8088:8088 --name aicorehmi-server yourusername/aicorehmi-server:latest
 
 # Run editor
 docker run -d -p 5000:5000 --name aicorehmi-editor yourusername/aicorehmi-editor:latest

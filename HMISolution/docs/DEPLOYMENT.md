@@ -106,7 +106,7 @@ docker build -f RuntimeViewer/Dockerfile -t hmi-runtime .
 ```bash
 # Server — mount your nodes.json from the host
 docker run -d --name hmi-server \
-  -p 14840:14840 -p 14841:14841 \
+  -p 14840:14840 -p 14841:14841 -p 8088:8088 \
   -v /path/to/config:/data \
   hmi-server /data/nodes.json
 

@@ -73,7 +73,8 @@ After starting the container, access the services at:
 | Service | URL | Description |
 |---------|-----|-------------|
 | **Web Editor** | http://localhost:8080 | Project editor with AI assistant |
-| **Runtime Viewer** | http://localhost:8088 | Operator interface with NL query chat |
+| **Runtime Viewer** | http://localhost:8081 | Operator interface with NL query chat |
+| **Camera Streams** | http://localhost:8088/camera/{id}/stream | Camera MJPEG streaming (requires a running server with configured cameras) |
 | **OPC UA Server** | opc.tcp://localhost:14840 | Industrial data server |
 | **REST API** | http://localhost:14841 | Diagnostics and REST endpoints |
 | **Ollama AI** | http://localhost:11434 | Local LLM service (Mistral) |

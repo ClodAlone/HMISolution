@@ -44,9 +44,10 @@ COPY --from=build /app/publish .
 # Default config / data volume mount point
 VOLUME /data
 
-# OPC UA default port (14840) + diagnostics port (14841)
+# OPC UA (14840), diagnostics (14841), and camera MJPEG streaming (8088)
 EXPOSE 14840
 EXPOSE 14841
+EXPOSE 8088
 
 # Pass nodes.json path as argument; mount your config at /data/nodes.json
 ENTRYPOINT ["dotnet", "Server.dll"]
