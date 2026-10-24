@@ -90,6 +90,14 @@ screens and docked layouts. Zoom is relative to the browser/display scale when t
 page opens; zooming in allows scrolling rather than shrinking the dashboard to fit.
 Resizing the window still updates the fitted layout. Touch pinch zoom remains native.
 
+IP camera widgets release their MJPEG connections when removed or when a cached
+screen is hidden, and resume when the screen becomes visible again. Opening video
+history also releases the live stream. This prevents screen navigation from
+exhausting the browser's per-host connection limit. Lifecycle regression tests:
+`node --test Tests\Tests.RuntimeViewer\ipcamera.test.js`; browser verification:
+`python Tests\Tests.RuntimeViewer\camera-navigation.browser.py` (requires Python
+Playwright and Microsoft Edge).
+
 ### 📦 Available Docker Images
 
 Choose the deployment that fits your needs:

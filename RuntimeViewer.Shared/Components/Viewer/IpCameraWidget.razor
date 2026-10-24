@@ -3,7 +3,9 @@
 @using RuntimeViewer.Shared.Services
 @using System.Net.Http
 @using System.Text.Json
-@implements IDisposable
+@using Microsoft.JSInterop
+@using Microsoft.Extensions.Logging
+@implements IAsyncDisposable
 
 <div class="ipcamera-widget" @onclick:stopPropagation @onmousedown:stopPropagation @onmouseup:stopPropagation>
     @if (!_showHistory)
@@ -11,7 +13,7 @@
         @* ---- Live View ---- *@
         @if (!string.IsNullOrEmpty(_streamUrl))
         {
-            <img src="@_streamUrl" alt="Camera: @CameraId"
+            <img @ref="_imageRef" alt="Camera: @CameraId"
                  class="ipcamera-img"
                  @onerror="OnImageError" />
             @if (_hasError)
@@ -213,7 +215,13 @@
 
     [Inject] private OpcRuntimeClient Opc { get; set; } = default!;
     [Inject] private ProjectService Project { get; set; } = default!;
+    [Inject] private IJSRuntime JS { get; set; } = default!;
+    [Inject] private ILogger<IpCameraWidget> Logger { get; set; } = default!;
 
+    private ElementReference _imageRef;
+    private Task<IJSObjectReference>? _cameraModule;
+    private bool _disposed;
+    private int _streamRevision;
     private string _streamUrl = "";
     private string _cameraBaseUrl = "";
     private bool _hasError;
@@ -254,6 +262,23 @@
         }
     }
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_disposed || _showHistory || string.IsNullOrEmpty(_streamUrl)) return;
+        try
+        {
+            _cameraModule ??= JS.InvokeAsync<IJSObjectReference>(
+                "import", "./_content/RuntimeViewer.Shared/ipcamera.js").AsTask();
+            var module = await _cameraModule;
+            if (!_disposed)
+                await module.InvokeVoidAsync("start", _imageRef, _streamUrl);
+        }
+        catch (JSDisconnectedException)
+        {
+            Logger.LogDebug("Runtime disconnected while starting camera {CameraId}.", CameraId);
+        }
+    }
+
     private void BuildStreamUrl()
     {
         if (string.IsNullOrEmpty(CameraId))
@@ -281,8 +306,12 @@
         }
 
         _cameraBaseUrl = $"{baseUrl.TrimEnd('/')}/camera/{Uri.EscapeDataString(CameraId)}";
-        _streamUrl = $"{_cameraBaseUrl}/stream?client={_clientToken}";
-        _hasError = false;
+        var streamUrl = $"{_cameraBaseUrl}/stream?client={_clientToken}&v={_streamRevision}";
+        if (_streamUrl != streamUrl)
+        {
+            _streamUrl = streamUrl;
+            _hasError = false;
+        }
     }
 
     private void ReadDetectionValues()
@@ -372,9 +401,8 @@
 
     private void Retry()
     {
-        _hasError = false;
+        _streamRevision++;
         BuildStreamUrl();
-        _streamUrl += $"&t={DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}";
     }
 
     private static string FormatDuration(double seconds)
@@ -392,11 +420,24 @@
         return $"{bytes / (1024.0 * 1024.0):F1} MB";
     }
 
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
+        _disposed = true;
         _detectionTimer?.Dispose();
         _recordingStatusTimer?.Dispose();
         _httpClient?.Dispose();
+        if (_cameraModule != null)
+        {
+            try
+            {
+                var module = await _cameraModule;
+                await module.DisposeAsync();
+            }
+            catch (JSDisconnectedException)
+            {
+                Logger.LogDebug("Runtime disconnected while disposing camera {CameraId}.", CameraId);
+            }
+        }
     }
 
     private class RecordingInfo
